@@ -12,7 +12,7 @@ uploads
 
 # Binary/coverage/cache
 bin/
-build/
+/build/
 .cache/
 *.coverprofile
 coverage.out
