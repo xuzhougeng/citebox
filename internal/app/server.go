@@ -73,6 +73,7 @@ func NewServer(opts Options) (*Server, error) {
 	}
 
 	httpServer := &http.Server{
+		Addr:    ":" + cfg.ServerPort,
 		Handler: buildHandler(cfg, logger, librarySvc, repo, absoluteWebRoot),
 	}
 
@@ -223,6 +224,8 @@ func buildHandler(
 
 	mux.HandleFunc("/api/figures/", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
+		case http.MethodPut:
+			figureHandler.Update(w, r)
 		case http.MethodDelete:
 			figureHandler.Delete(w, r)
 		default:
