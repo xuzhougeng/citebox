@@ -40,9 +40,11 @@ type UploadPaperParams struct {
 }
 
 type UpdatePaperParams struct {
-	Title   string
-	GroupID *int64
-	Tags    []string
+	Title        string
+	AbstractText string
+	NotesText    string
+	GroupID      *int64
+	Tags         []string
 }
 
 type extractionResult struct {
@@ -262,6 +264,8 @@ func (s *LibraryService) UploadPaper(file multipart.File, header *multipart.File
 		FileSize:         header.Size,
 		ContentType:      contentTypeOrDefault(header.Header.Get("Content-Type"), "application/pdf"),
 		PDFText:          "",
+		AbstractText:     "",
+		NotesText:        "",
 		BoxesJSON:        "",
 		ExtractionStatus: "queued",
 		ExtractorMessage: "文献已入库，等待后台解析",
@@ -290,13 +294,32 @@ func (s *LibraryService) UpdatePaper(id int64, params UpdatePaperParams) (*model
 		return nil, err
 	}
 
-	paper, err := s.repo.UpdatePaper(id, title, params.GroupID, s.normalizeTagInputs(params.Tags))
+	paper, err := s.repo.UpdatePaper(id, repository.PaperUpdateInput{
+		Title:        title,
+		AbstractText: strings.TrimSpace(params.AbstractText),
+		NotesText:    strings.TrimSpace(params.NotesText),
+		GroupID:      params.GroupID,
+		Tags:         s.normalizeTagInputs(params.Tags),
+	})
 	if err != nil {
 		return nil, err
 	}
 
 	s.decoratePaper(paper)
 	return paper, nil
+}
+
+func (s *LibraryService) PurgeLibrary() error {
+	if err := s.repo.PurgeLibrary(); err != nil {
+		return err
+	}
+	if err := clearDirectoryContents(s.config.PapersDir()); err != nil {
+		return apperr.Wrap(apperr.CodeInternal, "清理 PDF 文件失败", err)
+	}
+	if err := clearDirectoryContents(s.config.FiguresDir()); err != nil {
+		return apperr.Wrap(apperr.CodeInternal, "清理图片文件失败", err)
+	}
+	return nil
 }
 
 func (s *LibraryService) DeletePaper(id int64) error {
@@ -1108,6 +1131,24 @@ func removeFiles(paths []string) {
 		}
 		_ = os.Remove(path)
 	}
+}
+
+func clearDirectoryContents(dir string) error {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+
+	for _, entry := range entries {
+		if err := os.RemoveAll(filepath.Join(dir, entry.Name())); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func humanFileSize(size int64) string {

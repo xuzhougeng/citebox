@@ -27,6 +27,8 @@ type Paper struct {
 	FileSize         int64           `json:"file_size"`
 	ContentType      string          `json:"content_type"`
 	PDFText          string          `json:"pdf_text,omitempty"`
+	AbstractText     string          `json:"abstract_text,omitempty"`
+	NotesText        string          `json:"notes_text,omitempty"`
 	Boxes            json.RawMessage `json:"boxes,omitempty"`
 	ExtractionStatus string          `json:"extraction_status"`
 	ExtractorMessage string          `json:"extractor_message,omitempty"`

@@ -43,6 +43,8 @@ type PaperUpsertInput struct {
 	FileSize         int64
 	ContentType      string
 	PDFText          string
+	AbstractText     string
+	NotesText        string
 	BoxesJSON        string
 	ExtractionStatus string
 	ExtractorMessage string
@@ -50,6 +52,14 @@ type PaperUpsertInput struct {
 	GroupID          *int64
 	Tags             []TagUpsertInput
 	Figures          []FigureUpsertInput
+}
+
+type PaperUpdateInput struct {
+	Title        string
+	AbstractText string
+	NotesText    string
+	GroupID      *int64
+	Tags         []TagUpsertInput
 }
 
 func NewLibraryRepository(dbPath string) (*LibraryRepository, error) {
@@ -101,6 +111,8 @@ func (r *LibraryRepository) initSchema() error {
 		file_size INTEGER DEFAULT 0,
 		content_type TEXT DEFAULT 'application/pdf',
 		pdf_text TEXT DEFAULT '',
+		abstract_text TEXT DEFAULT '',
+		notes_text TEXT DEFAULT '',
 		boxes_json TEXT DEFAULT '',
 		extraction_status TEXT DEFAULT 'completed',
 		extractor_message TEXT DEFAULT '',
@@ -143,7 +155,19 @@ func (r *LibraryRepository) initSchema() error {
 }
 
 func (r *LibraryRepository) ensureSchemaColumns() error {
-	return r.ensureColumn("papers", "extractor_job_id", "TEXT DEFAULT ''")
+	for _, column := range []struct {
+		name       string
+		definition string
+	}{
+		{name: "extractor_job_id", definition: "TEXT DEFAULT ''"},
+		{name: "abstract_text", definition: "TEXT DEFAULT ''"},
+		{name: "notes_text", definition: "TEXT DEFAULT ''"},
+	} {
+		if err := r.ensureColumn("papers", column.name, column.definition); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (r *LibraryRepository) ensureColumn(tableName, columnName, definition string) error {
@@ -199,8 +223,8 @@ func (r *LibraryRepository) CreatePaper(input PaperUpsertInput) (*model.Paper, e
 	result, err := tx.Exec(`
 		INSERT INTO papers (
 			title, original_filename, stored_pdf_name, file_size, content_type,
-			pdf_text, boxes_json, extraction_status, extractor_message, extractor_job_id, group_id
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			pdf_text, abstract_text, notes_text, boxes_json, extraction_status, extractor_message, extractor_job_id, group_id
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`,
 		input.Title,
 		input.OriginalFilename,
@@ -208,6 +232,8 @@ func (r *LibraryRepository) CreatePaper(input PaperUpsertInput) (*model.Paper, e
 		input.FileSize,
 		input.ContentType,
 		input.PDFText,
+		input.AbstractText,
+		input.NotesText,
 		input.BoxesJSON,
 		input.ExtractionStatus,
 		input.ExtractorMessage,
@@ -253,7 +279,7 @@ func (r *LibraryRepository) CreatePaper(input PaperUpsertInput) (*model.Paper, e
 	return r.GetPaperDetail(paperID)
 }
 
-func (r *LibraryRepository) UpdatePaper(id int64, title string, groupID *int64, tags []TagUpsertInput) (*model.Paper, error) {
+func (r *LibraryRepository) UpdatePaper(id int64, input PaperUpdateInput) (*model.Paper, error) {
 	tx, err := r.db.Begin()
 	if err != nil {
 		return nil, wrapDBError(err, "更新文献失败")
@@ -262,9 +288,9 @@ func (r *LibraryRepository) UpdatePaper(id int64, title string, groupID *int64, 
 
 	result, err := tx.Exec(`
 		UPDATE papers
-		SET title = ?, group_id = ?, updated_at = CURRENT_TIMESTAMP
+		SET title = ?, abstract_text = ?, notes_text = ?, group_id = ?, updated_at = CURRENT_TIMESTAMP
 		WHERE id = ?
-	`, title, groupID, id)
+	`, input.Title, input.AbstractText, input.NotesText, input.GroupID, id)
 	if err != nil {
 		return nil, wrapDBError(err, "更新文献失败")
 	}
@@ -276,7 +302,7 @@ func (r *LibraryRepository) UpdatePaper(id int64, title string, groupID *int64, 
 	if _, err := tx.Exec("DELETE FROM paper_tags WHERE paper_id = ?", id); err != nil {
 		return nil, wrapDBError(err, "更新文献标签失败")
 	}
-	if err := r.syncPaperTags(tx, id, tags); err != nil {
+	if err := r.syncPaperTags(tx, id, input.Tags); err != nil {
 		return nil, wrapDBError(err, "更新文献标签失败")
 	}
 
@@ -293,6 +319,27 @@ func (r *LibraryRepository) DeletePaper(id int64) error {
 		return wrapDBError(err, "删除文献失败")
 	}
 	return ensureRowsAffected(result, "paper not found")
+}
+
+func (r *LibraryRepository) PurgeLibrary() error {
+	tx, err := r.db.Begin()
+	if err != nil {
+		return wrapDBError(err, "清空数据库失败")
+	}
+	defer tx.Rollback()
+
+	for _, stmt := range []string{
+		"DELETE FROM papers",
+		"DELETE FROM groups",
+		"DELETE FROM tags",
+		"DELETE FROM sqlite_sequence WHERE name IN ('papers', 'paper_figures', 'groups', 'tags')",
+	} {
+		if _, err := tx.Exec(stmt); err != nil {
+			return wrapDBError(err, "清空数据库失败")
+		}
+	}
+
+	return wrapDBError(tx.Commit(), "提交清空数据库事务失败")
 }
 
 func (r *LibraryRepository) UpdatePaperExtractionState(id int64, status, message, jobID string) error {
@@ -364,12 +411,12 @@ func (r *LibraryRepository) ApplyPaperExtractionResult(
 
 func (r *LibraryRepository) GetPaperDetail(id int64) (*model.Paper, error) {
 	row := r.db.QueryRow(`
-		SELECT
-			p.id, p.title, p.original_filename, p.stored_pdf_name, p.file_size, p.content_type,
-			p.pdf_text, p.boxes_json, p.extraction_status, p.extractor_message, p.extractor_job_id,
-			p.group_id, COALESCE(g.name, ''),
-			p.created_at, p.updated_at,
-			(SELECT COUNT(*) FROM paper_figures pf WHERE pf.paper_id = p.id)
+			SELECT
+				p.id, p.title, p.original_filename, p.stored_pdf_name, p.file_size, p.content_type,
+				p.pdf_text, p.abstract_text, p.notes_text, p.boxes_json, p.extraction_status, p.extractor_message, p.extractor_job_id,
+				p.group_id, COALESCE(g.name, ''),
+				p.created_at, p.updated_at,
+				(SELECT COUNT(*) FROM paper_figures pf WHERE pf.paper_id = p.id)
 		FROM papers p
 		LEFT JOIN groups g ON g.id = p.group_id
 		WHERE p.id = ?
@@ -448,12 +495,12 @@ func (r *LibraryRepository) ListPapers(filter model.PaperFilter) ([]model.Paper,
 	}
 
 	query := `
-		SELECT
-			p.id, p.title, p.original_filename, p.stored_pdf_name, p.file_size, p.content_type,
-			'', '', p.extraction_status, p.extractor_message, p.extractor_job_id,
-			p.group_id, COALESCE(g.name, ''),
-			p.created_at, p.updated_at,
-			(SELECT COUNT(*) FROM paper_figures pf WHERE pf.paper_id = p.id)
+			SELECT
+				p.id, p.title, p.original_filename, p.stored_pdf_name, p.file_size, p.content_type,
+				'', p.abstract_text, p.notes_text, '', p.extraction_status, p.extractor_message, p.extractor_job_id,
+				p.group_id, COALESCE(g.name, ''),
+				p.created_at, p.updated_at,
+				(SELECT COUNT(*) FROM paper_figures pf WHERE pf.paper_id = p.id)
 		FROM papers p
 		LEFT JOIN groups g ON g.id = p.group_id
 	` + whereClause + `
@@ -513,7 +560,7 @@ func (r *LibraryRepository) ListPapersByExtractionStatuses(statuses []string) ([
 	rows, err := r.db.Query(`
 		SELECT
 			p.id, p.title, p.original_filename, p.stored_pdf_name, p.file_size, p.content_type,
-			'', '', p.extraction_status, p.extractor_message, p.extractor_job_id,
+			'', p.abstract_text, p.notes_text, '', p.extraction_status, p.extractor_message, p.extractor_job_id,
 			p.group_id, COALESCE(g.name, ''),
 			p.created_at, p.updated_at,
 			(SELECT COUNT(*) FROM paper_figures pf WHERE pf.paper_id = p.id)
@@ -958,6 +1005,8 @@ func buildPaperWhere(filter model.PaperFilter) (string, []interface{}) {
 			p.title LIKE ? OR
 			p.original_filename LIKE ? OR
 			p.pdf_text LIKE ? OR
+			p.abstract_text LIKE ? OR
+			p.notes_text LIKE ? OR
 			EXISTS (
 				SELECT 1
 				FROM paper_tags pt
@@ -970,7 +1019,7 @@ func buildPaperWhere(filter model.PaperFilter) (string, []interface{}) {
 				WHERE g2.id = p.group_id AND g2.name LIKE ?
 			)
 		)`)
-		args = append(args, like, like, like, like, like)
+		args = append(args, like, like, like, like, like, like, like)
 	}
 
 	if filter.GroupID != nil {
@@ -1042,6 +1091,8 @@ func scanPaper(s scanner, includeHeavyFields bool) (*model.Paper, error) {
 	var groupName string
 	var boxesJSON string
 	var pdfText string
+	var abstractText string
+	var notesText string
 
 	if err := s.Scan(
 		&paper.ID,
@@ -1051,6 +1102,8 @@ func scanPaper(s scanner, includeHeavyFields bool) (*model.Paper, error) {
 		&paper.FileSize,
 		&paper.ContentType,
 		&pdfText,
+		&abstractText,
+		&notesText,
 		&boxesJSON,
 		&paper.ExtractionStatus,
 		&paper.ExtractorMessage,
@@ -1073,6 +1126,8 @@ func scanPaper(s scanner, includeHeavyFields bool) (*model.Paper, error) {
 		paper.PDFText = pdfText
 		paper.Boxes = rawJSON(boxesJSON)
 	}
+	paper.AbstractText = abstractText
+	paper.NotesText = notesText
 
 	return &paper, nil
 }

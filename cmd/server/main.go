@@ -59,6 +59,15 @@ func main() {
 		}
 	})
 
+	mux.HandleFunc("/api/papers/purge", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPost:
+			paperHandler.Purge(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
 	mux.HandleFunc("/api/papers/", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/reextract") {
 			paperHandler.Reextract(w, r)
