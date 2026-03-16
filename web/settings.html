@@ -110,17 +110,13 @@
             <section class="manager-card">
                 <div class="manager-head">
                     <h2>PDF 提取服务配置</h2>
-                    <p>如果启动进程没有通过环境变量配置提取服务，可以在这里补充并立即用于上传与重解析。</p>
+                    <p>如果启动进程没有通过环境变量配置提取服务，可以在这里补充并立即用于上传与重解析。任务接口会固定从同一服务地址自动推导。</p>
                 </div>
                 <form id="extractorSettingsForm" class="manager-form">
                     <div class="form-grid">
                         <label class="field field-span-2">
-                            <span>提取接口 URL</span>
-                            <input id="extractorURLInput" class="form-input" type="text" placeholder="例如：http://127.0.0.1:8000/api/v1/extract">
-                        </label>
-                        <label class="field field-span-2">
-                            <span>任务接口 URL</span>
-                            <input id="extractorJobsURLInput" class="form-input" type="text" placeholder="例如：http://127.0.0.1:8000/api/v1/jobs">
+                            <span>提取服务地址</span>
+                            <input id="extractorURLInput" class="form-input" type="text" placeholder="例如：http://127.0.0.1:8000">
                         </label>
                         <label class="field field-span-2">
                             <span>鉴权 Token</span>
@@ -140,6 +136,8 @@
                         </label>
                     </div>
 
+                    <p class="muted">填写 `http://127.0.0.1:8000` 这样的服务根地址即可；系统会自动补全 ` /api/v1/extract `，并始终从同一根地址推导 ` /api/v1/jobs `。</p>
+
                     <div id="extractorSummary" class="settings-summary-box"></div>
 
                     <div class="submit-row">
@@ -157,7 +155,7 @@
                     <div class="db-action-item">
                         <h3>修改密码</h3>
                         <p>更改管理员账号的登录密码</p>
-                        <form id="changePasswordForm" class="import-form">
+                        <form id="changePasswordForm" class="settings-action-form">
                             <input id="currentPassword" class="form-input" type="password" placeholder="当前密码" required>
                             <input id="newPassword" class="form-input" type="password" placeholder="新密码（至少6位）" required minlength="6">
                             <input id="confirmPassword" class="form-input" type="password" placeholder="确认新密码" required minlength="6">
@@ -186,7 +184,7 @@
                     <div class="db-action-item">
                         <h3>导入数据库</h3>
                         <p>从备份文件恢复数据库，将覆盖现有数据</p>
-                        <form id="importDbForm" class="import-form">
+                        <form id="importDbForm" class="settings-action-form">
                             <input id="importDbFile" class="form-input" type="file" accept=".db,.sqlite,.sqlite3">
                             <button id="importDbButton" class="btn btn-secondary" type="submit">导入数据库</button>
                         </form>

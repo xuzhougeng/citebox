@@ -20,7 +20,6 @@ const SettingsPage = {
 
         this.extractorSettingsForm = document.getElementById('extractorSettingsForm');
         this.extractorURLInput = document.getElementById('extractorURLInput');
-        this.extractorJobsURLInput = document.getElementById('extractorJobsURLInput');
         this.extractorTokenInput = document.getElementById('extractorTokenInput');
         this.extractorFileFieldInput = document.getElementById('extractorFileFieldInput');
         this.extractorTimeoutInput = document.getElementById('extractorTimeoutInput');
@@ -115,9 +114,9 @@ const SettingsPage = {
 
     async loadExtractorSettings() {
         const settings = await API.getExtractorSettings();
+        const extractorURLValue = this.extractorAddressValue(settings.extractor_url || '');
 
-        this.extractorURLInput.value = settings.extractor_url || '';
-        this.extractorJobsURLInput.value = settings.extractor_jobs_url || '';
+        this.extractorURLInput.value = extractorURLValue;
         this.extractorTokenInput.value = settings.extractor_token || '';
         this.extractorFileFieldInput.value = settings.extractor_file_field || 'file';
         this.extractorTimeoutInput.value = settings.timeout_seconds ?? 300;
@@ -129,7 +128,7 @@ const SettingsPage = {
     async saveExtractorSettings() {
         const payload = {
             extractor_url: this.extractorURLInput.value.trim(),
-            extractor_jobs_url: this.extractorJobsURLInput.value.trim(),
+            extractor_jobs_url: '',
             extractor_token: this.extractorTokenInput.value.trim(),
             extractor_file_field: this.extractorFileFieldInput.value.trim(),
             timeout_seconds: Number(this.extractorTimeoutInput.value || 300),
@@ -170,6 +169,17 @@ const SettingsPage = {
         `;
     },
 
+    extractorAddressValue(rawURL) {
+        const value = (rawURL || '').trim();
+        if (!value) return '';
+
+        if (value.endsWith('/api/v1/extract')) {
+            return value.slice(0, -'/api/v1/extract'.length).replace(/\/$/, '');
+        }
+
+        return value;
+    },
+
     exportDatabase() {
         const link = document.createElement('a');
         link.href = '/api/database/export';
@@ -187,16 +197,15 @@ const SettingsPage = {
             return;
         }
 
-        const confirmed = await Utils.confirm(
-            '导入数据库将覆盖现有所有数据（文献、图片、分组、标签），且不可恢复。确定要继续吗？'
-        );
+        const confirmed = await Utils.confirmTypedAction({
+            title: '覆盖导入数据库',
+            badge: 'Import Override',
+            message: '导入数据库会用备份文件覆盖当前所有文献、图片、分组和标签。确认后将立即开始恢复。',
+            keyword: 'IMPORT',
+            hint: '请输入 IMPORT 继续导入',
+            confirmLabel: '开始导入'
+        });
         if (!confirmed) return;
-
-        const token = window.prompt('为避免误操作，请输入 IMPORT 继续');
-        if (token !== 'IMPORT') {
-            Utils.showToast('未完成导入确认', 'info');
-            return;
-        }
 
         try {
             const formData = new FormData();
@@ -210,14 +219,15 @@ const SettingsPage = {
     },
 
     async purgeDatabase() {
-        const confirmed = await Utils.confirm('这会清空所有文献、提取图片、分组和标签，且不可恢复。');
+        const confirmed = await Utils.confirmTypedAction({
+            title: '清空数据库',
+            badge: 'Danger Zone',
+            message: '这会删除所有文献、提取图片、分组和标签，并且不可恢复。该操作只适合在你明确要重置整个库时使用。',
+            keyword: 'CLEAR',
+            hint: '请输入 CLEAR 继续清空数据库',
+            confirmLabel: '确认清空'
+        });
         if (!confirmed) return;
-
-        const token = window.prompt('为避免误操作，请输入 CLEAR 继续');
-        if (token !== 'CLEAR') {
-            Utils.showToast('未完成清库确认', 'info');
-            return;
-        }
 
         try {
             await API.purgeLibrary();

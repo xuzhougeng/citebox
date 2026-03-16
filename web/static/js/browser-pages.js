@@ -150,6 +150,12 @@ const FigureViewer = {
                 return;
             }
 
+            const noteButton = event.target.closest('[data-figure-ai-note]');
+            if (noteButton) {
+                await this.appendAIResultToNotes(noteButton.dataset.figureAiNote);
+                return;
+            }
+
             const metaButton = event.target.closest('[data-figure-meta-action]');
             if (metaButton) {
                 await this.handleMetaAction(metaButton);
@@ -160,6 +166,12 @@ const FigureViewer = {
             if (!tagInput || event.key !== 'Enter') return;
             event.preventDefault();
             await this.addTagFromInput();
+        });
+        this.body.addEventListener('keydown', async (event) => {
+            const notesInput = event.target.closest('#figureNotesInput');
+            if (!notesInput || event.key !== 'Enter' || (!event.metaKey && !event.ctrlKey)) return;
+            event.preventDefault();
+            await this.saveNotesFromInput();
         });
         document.addEventListener('keydown', this.handleKeydown);
     },
@@ -443,6 +455,10 @@ const FigureViewer = {
         return this.tagNames(this.currentFigure?.tags || []);
     },
 
+    currentFigureNotesDraft() {
+        return this.body.querySelector('#figureNotesInput')?.value ?? (this.currentFigure?.notes_text || '');
+    },
+
     async handleMetaAction(button) {
         if (!this.currentFigure) return;
 
@@ -456,6 +472,10 @@ const FigureViewer = {
         }
         if (button.dataset.figureMetaAction === 'remove-tag') {
             await this.removeTag(button.dataset.tagName || '');
+            return;
+        }
+        if (button.dataset.figureMetaAction === 'save-notes') {
+            await this.saveNotesFromInput();
         }
     },
 
@@ -494,7 +514,30 @@ const FigureViewer = {
 
         try {
             const payload = await API.updateFigure(this.currentFigure.id, {
-                tags
+                tags,
+                notes_text: this.currentFigureNotesDraft()
+            });
+            this.syncPaperMetadata(payload.paper);
+            Utils.showToast(successMessage);
+            this.render();
+            if (typeof this.onMetaChanged === 'function') {
+                await this.onMetaChanged(payload.paper);
+            }
+        } catch (error) {
+            Utils.showToast(error.message, 'error');
+        }
+    },
+
+    async saveNotesFromInput() {
+        await this.updateCurrentFigureNotes(this.currentFigureNotesDraft(), '图片笔记已保存');
+    },
+
+    async updateCurrentFigureNotes(notesText, successMessage) {
+        if (!this.currentFigure) return;
+
+        try {
+            const payload = await API.updateFigure(this.currentFigure.id, {
+                notes_text: notesText
             });
             this.syncPaperMetadata(payload.paper);
             Utils.showToast(successMessage);
@@ -520,7 +563,8 @@ const FigureViewer = {
                 group_name: paper.group_name || '',
                 tags: updatedFigure?.tags || [],
                 caption: updatedFigure?.caption ?? figure.caption,
-                source: updatedFigure?.source || figure.source
+                source: updatedFigure?.source || figure.source,
+                notes_text: updatedFigure?.notes_text ?? figure.notes_text ?? ''
             };
         });
     },
@@ -538,6 +582,24 @@ const FigureViewer = {
         } catch (error) {
             Utils.showToast('复制失败', 'error');
         }
+    },
+
+    async appendAIResultToNotes(kind) {
+        const text = this.copyTextForCurrentResult(kind);
+        if (!text) {
+            Utils.showToast('当前没有可写入笔记的内容', 'error');
+            return;
+        }
+
+        const normalized = text.trim();
+        if (!normalized) {
+            Utils.showToast('当前没有可写入笔记的内容', 'error');
+            return;
+        }
+
+        const currentNotes = this.currentFigureNotesDraft().trim();
+        const nextNotes = currentNotes ? `${currentNotes}\n\n${normalized}` : normalized;
+        await this.updateCurrentFigureNotes(nextNotes, 'AI 内容已写入图片笔记');
     },
 
     copyTextForCurrentResult(kind) {
@@ -595,7 +657,12 @@ const FigureViewer = {
                 <div class="figure-ai-result loading">
                     <div class="figure-ai-head">
                         <p class="figure-ai-status">${Utils.escapeHTML(activeLabel)}进行中</p>
-                        ${requestState.answer ? '<button class="btn btn-outline btn-small" type="button" data-figure-ai-copy="answer">Copy</button>' : ''}
+                        ${requestState.answer ? `
+                            <div class="figure-ai-head-actions">
+                                <button class="btn btn-outline btn-small" type="button" data-figure-ai-copy="answer">复制</button>
+                                <button class="btn btn-outline btn-small" type="button" data-figure-ai-note="answer">写入笔记</button>
+                            </div>
+                        ` : ''}
                     </div>
                     <div class="figure-ai-answer">${Utils.escapeHTML(requestState.answer || '正在结合全文、摘要、标签和图片生成结果。')}</div>
                     <div class="figure-ai-stream-actions">
@@ -610,7 +677,7 @@ const FigureViewer = {
                 <div class="figure-ai-result error">
                     <div class="figure-ai-head">
                         <p class="figure-ai-status">${Utils.escapeHTML(activeLabel)}失败</p>
-                        ${requestState.error ? '<button class="btn btn-outline btn-small" type="button" data-figure-ai-copy="answer">Copy</button>' : ''}
+                        ${requestState.error ? '<button class="btn btn-outline btn-small" type="button" data-figure-ai-copy="answer">复制</button>' : ''}
                     </div>
                     <div class="figure-ai-answer">${Utils.escapeHTML(requestState.error)}</div>
                 </div>
@@ -622,7 +689,12 @@ const FigureViewer = {
                 <div class="figure-ai-result">
                     <div class="figure-ai-head">
                         <p class="figure-ai-status">${Utils.escapeHTML(activeLabel)}已停止</p>
-                        ${requestState.answer ? '<button class="btn btn-outline btn-small" type="button" data-figure-ai-copy="answer">Copy</button>' : ''}
+                        ${requestState.answer ? `
+                            <div class="figure-ai-head-actions">
+                                <button class="btn btn-outline btn-small" type="button" data-figure-ai-copy="answer">复制</button>
+                                <button class="btn btn-outline btn-small" type="button" data-figure-ai-note="answer">写入笔记</button>
+                            </div>
+                        ` : ''}
                     </div>
                     <div class="figure-ai-answer">${Utils.escapeHTML(requestState.answer || '这次解读已被手动停止。')}</div>
                 </div>
@@ -649,7 +721,12 @@ const FigureViewer = {
             <div class="figure-ai-result">
                 <div class="figure-ai-head">
                     <p class="figure-ai-status">${Utils.escapeHTML(this.aiActionLabel(result.action))} · ${Utils.escapeHTML(result.provider)} · ${Utils.escapeHTML(result.model)} · ${Utils.escapeHTML(result.mode)}</p>
-                    ${result.answer ? '<button class="btn btn-outline btn-small" type="button" data-figure-ai-copy="answer">Copy</button>' : ''}
+                    ${result.answer ? `
+                        <div class="figure-ai-head-actions">
+                            <button class="btn btn-outline btn-small" type="button" data-figure-ai-copy="answer">复制</button>
+                            <button class="btn btn-outline btn-small" type="button" data-figure-ai-note="answer">写入笔记</button>
+                        </div>
+                    ` : ''}
                 </div>
                 <div class="figure-ai-answer">${Utils.escapeHTML(result.answer || '模型没有返回文本结果。')}</div>
                 ${(result.suggested_tags || []).length ? `
@@ -740,6 +817,16 @@ const FigureViewer = {
                                 <div class="figure-tag-add">
                                     <input id="figurePaperTagInput" class="form-input" type="text" placeholder="添加标签">
                                     <button class="btn btn-outline btn-small" type="button" data-figure-meta-action="add-tag" aria-label="添加标签">+</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="figure-lightbox-meta-item figure-lightbox-meta-item-editable">
+                            <span>图片笔记</span>
+                            <div class="figure-notes-editor">
+                                <textarea id="figureNotesInput" class="form-textarea" rows="7" placeholder="记录这张图的观察、AI 解读摘要或后续检索关键词">${Utils.escapeHTML(figure.notes_text || '')}</textarea>
+                                <div class="figure-notes-actions">
+                                    <span class="muted">支持多行内容，按 Ctrl/Cmd + Enter 可快速保存。</span>
+                                    <button class="btn btn-outline btn-small" type="button" data-figure-meta-action="save-notes">保存笔记</button>
                                 </div>
                             </div>
                         </div>
