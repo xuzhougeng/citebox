@@ -60,6 +60,21 @@ const FigureViewer = {
         this.modal = document.getElementById('figureModal');
         this.body = document.getElementById('figureModalBody');
         this.closeButton = document.getElementById('closeFigureModal');
+        if (!this.modal) {
+            const shell = document.createElement('div');
+            shell.id = 'figureModal';
+            shell.className = 'modal-shell hidden';
+            shell.innerHTML = `
+                <div class="modal-dialog figure-modal-dialog">
+                    <button id="closeFigureModal" class="modal-close" type="button" aria-label="关闭">×</button>
+                    <div id="figureModalBody"></div>
+                </div>
+            `;
+            document.body.appendChild(shell);
+            this.modal = shell;
+            this.body = shell.querySelector('#figureModalBody');
+            this.closeButton = shell.querySelector('#closeFigureModal');
+        }
         if (!this.modal || this.initialized) return;
         this.initialized = true;
         this.aiCache = new Map();
