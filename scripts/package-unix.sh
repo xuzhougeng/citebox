@@ -39,6 +39,7 @@ GOOS="${GOOS_VALUE}" GOARCH=amd64 go build \
 
 cp -R web "${PACKAGE_DIR}/"
 cp README.md "${PACKAGE_DIR}/"
+go run ./scripts/fetch_pdfjs.go "${PACKAGE_DIR}/web/static/vendor/pdfjs"
 
 cat > "${PACKAGE_DIR}/start.sh" <<'EOF'
 #!/usr/bin/env bash

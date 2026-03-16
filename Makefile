@@ -1,6 +1,6 @@
 # Paper Image Database - Cross-Platform Build Makefile
 
-.PHONY: build build-windows build-darwin build-linux package-windows package-darwin package-linux clean test version help
+.PHONY: build build-windows build-darwin build-linux package-windows package-darwin package-linux prepare-web-assets clean test version help
 
 BINARY_NAME=citebox
 VERSION=$(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
@@ -17,6 +17,9 @@ build:
 
 run:
 	go run ./cmd/server
+
+prepare-web-assets:
+	go run ./scripts/fetch_pdfjs.go web/static/vendor/pdfjs
 
 test:
 	go test ./...
@@ -352,6 +355,7 @@ help:
 	@echo "Development:"
 	@echo "  make build          - Build for current platform"
 	@echo "  make run            - Run development server"
+	@echo "  make prepare-web-assets - Download PDF.js runtime assets for source runs"
 	@echo "  make test           - Run tests"
 	@echo ""
 	@echo "Windows:"

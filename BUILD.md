@@ -27,6 +27,12 @@ git push origin v0.1.0
 - Linux: `citebox-linux-v0.1.0.tar.gz`
 - Windows: `citebox-windows-v0.1.0.zip`
 
+说明：
+
+- `pdf.js` 运行时资源不会提交到仓库。
+- 打包脚本会在构建时自动下载并提取最小运行集，再一起打进发布包。
+- 如果你要直接从源码目录运行人工处理页，可先执行 `make prepare-web-assets`。
+
 ---
 
 ## 支持的平台
