@@ -533,6 +533,14 @@
             const errorText = document.getElementById('errorText');
             const loginCard = document.getElementById('loginCard');
 
+            function clearLegacyAuthState() {
+                sessionStorage.removeItem('citebox_auth');
+                localStorage.removeItem('citebox_auth');
+                localStorage.removeItem('citebox_logged_in');
+                localStorage.removeItem('citebox_username');
+                localStorage.removeItem('citebox_password');
+            }
+
             function showError(message) {
                 errorText.textContent = message;
                 errorMessage.classList.add('show');
@@ -551,7 +559,7 @@
                 hideError();
 
                 const username = usernameInput.value.trim();
-                const password = passwordInput.value.trim();
+                const password = passwordInput.value;
 
                 if (!username || !password) {
                     showError('请输入用户名和密码');
@@ -562,22 +570,28 @@
                 loginButton.innerHTML = '<span class="button-content"><span class="spinner"></span><span>登录中...</span></span>';
 
                 try {
-                    const response = await fetch('/api/papers?page_size=1', {
+                    const response = await fetch('/api/auth/login', {
+                        method: 'POST',
+                        credentials: 'same-origin',
                         headers: {
-                            'Authorization': 'Basic ' + btoa(username + ':' + password)
-                        }
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            username,
+                            password
+                        })
                     });
+                    const payload = await response.json().catch(() => ({}));
 
                     if (response.ok) {
-                        sessionStorage.setItem('citebox_auth', btoa(username + ':' + password));
-                        localStorage.setItem('citebox_logged_in', 'true');
+                        clearLegacyAuthState();
                         window.location.href = '/';
                     } else if (response.status === 401) {
-                        showError('用户名或密码错误');
+                        showError(payload.error || '用户名或密码错误');
                         passwordInput.value = '';
                         passwordInput.focus();
                     } else {
-                        showError('登录失败，请稍后重试');
+                        showError(payload.error || '登录失败，请稍后重试');
                     }
                 } catch (error) {
                     showError('网络错误，请检查连接');
@@ -587,6 +601,7 @@
                 }
             }
 
+            clearLegacyAuthState();
             loginForm.addEventListener('submit', handleLogin);
             usernameInput.addEventListener('input', hideError);
             passwordInput.addEventListener('input', hideError);

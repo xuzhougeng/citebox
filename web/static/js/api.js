@@ -1,5 +1,20 @@
 const API_BASE = '/api';
 
+function clearLegacyAuthState() {
+    sessionStorage.removeItem('citebox_auth');
+    localStorage.removeItem('citebox_auth');
+    localStorage.removeItem('citebox_logged_in');
+    localStorage.removeItem('citebox_username');
+    localStorage.removeItem('citebox_password');
+}
+
+function handleUnauthenticatedResponse() {
+    clearLegacyAuthState();
+    if (window.location.pathname !== '/login' && window.location.pathname !== '/login.html') {
+        window.location.href = '/login';
+    }
+}
+
 async function parseJSONResponse(response) {
     let payload = {};
 
@@ -13,8 +28,15 @@ async function parseJSONResponse(response) {
 }
 
 async function requestJSON(path, options = {}) {
-    const response = await fetch(path, options);
+    const response = await fetch(path, {
+        credentials: 'same-origin',
+        ...options
+    });
     const payload = await parseJSONResponse(response);
+
+    if (response.status === 401) {
+        handleUnauthenticatedResponse();
+    }
 
     if (!response.ok) {
         throw new Error(payload.error || `请求失败 (${response.status})`);
@@ -190,6 +212,7 @@ const API = {
     async readPaperWithAIStream(data, options = {}) {
         const response = await fetch(`${API_BASE}/ai/read/stream`, {
             method: 'POST',
+            credentials: 'same-origin',
             headers: {
                 'Content-Type': 'application/json'
             },
@@ -199,6 +222,9 @@ const API = {
 
         if (!response.ok) {
             const payload = await parseJSONResponse(response);
+            if (response.status === 401) {
+                handleUnauthenticatedResponse();
+            }
             throw new Error(payload.error || `请求失败 (${response.status})`);
         }
 

@@ -1,68 +1,24 @@
 package middleware
 
 import (
+	"encoding/json"
 	"net/http"
 	"strings"
 
-	"github.com/xuzhougeng/citebox/internal/config"
+	"github.com/xuzhougeng/citebox/internal/apperr"
+	"github.com/xuzhougeng/citebox/internal/model"
 	"github.com/xuzhougeng/citebox/internal/service"
 )
 
-type AuthChecker interface {
-	ValidateCredentials(username, password string) bool
-}
-
-// BasicAuth wraps an http.Handler and enforces HTTP Basic authentication using
-// the admin credentials from configuration. OPTIONS requests bypass the check
-// so that CORS preflight can succeed.
-func BasicAuth(next http.Handler, cfg *config.Config) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodOptions {
-			next.ServeHTTP(w, r)
-			return
-		}
-
-		username, password, ok := r.BasicAuth()
-		if !ok || username != cfg.AdminUsername || password != cfg.AdminPassword {
-			w.Header().Set("WWW-Authenticate", `Basic realm="Restricted"`)
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
-			return
-		}
-
-		next.ServeHTTP(w, r)
-	})
-}
-
-// BasicAuthWithService wraps an http.Handler and enforces HTTP Basic authentication
-// using the service to validate credentials, which supports runtime password changes.
-func BasicAuthWithService(next http.Handler, svc *service.LibraryService) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodOptions {
-			next.ServeHTTP(w, r)
-			return
-		}
-
-		username, password, ok := r.BasicAuth()
-		if !ok || !svc.ValidateCredentials(username, password) {
-			w.Header().Set("WWW-Authenticate", `Basic realm="Restricted", charset="UTF-8"`)
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
-			return
-		}
-
-		next.ServeHTTP(w, r)
-	})
-}
-
-// PublicPath represents a path that can be accessed without authentication
+// PublicPath represents a path that can be accessed without authentication.
 type PublicPath struct {
-	Path      string
-	Prefix    bool // if true, matches any path starting with Path
+	Path   string
+	Prefix bool // if true, matches any path starting with Path
 }
 
-// AuthMiddleware creates a middleware that protects routes with Basic Auth,
-// but allows public paths to be accessed without authentication.
-// When authentication fails on protected HTML pages, it redirects to login.
-func AuthMiddleware(svc *service.LibraryService, publicPaths []PublicPath) func(http.Handler) http.Handler {
+// AuthMiddleware protects routes with a session cookie and redirects
+// unauthenticated HTML requests to the login page.
+func AuthMiddleware(sessionManager *service.SessionManager, publicPaths []PublicPath) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.Method == http.MethodOptions {
@@ -70,20 +26,12 @@ func AuthMiddleware(svc *service.LibraryService, publicPaths []PublicPath) func(
 				return
 			}
 
-			// Check if this is a public path
-			isPublic := false
-			for _, pp := range publicPaths {
-				if pp.Prefix {
-					if strings.HasPrefix(r.URL.Path, pp.Path) {
-						isPublic = true
-						break
-					}
-				} else {
-					if r.URL.Path == pp.Path || r.URL.Path == pp.Path+"/" {
-						isPublic = true
-						break
-					}
-				}
+			isPublic := matchesPublicPath(r.URL.Path, publicPaths)
+			_, authenticated := sessionFromRequest(r, sessionManager)
+
+			if isLoginPath(r.URL.Path) && authenticated {
+				http.Redirect(w, r, "/", http.StatusFound)
+				return
 			}
 
 			if isPublic {
@@ -91,17 +39,12 @@ func AuthMiddleware(svc *service.LibraryService, publicPaths []PublicPath) func(
 				return
 			}
 
-			// Check authentication
-			username, password, ok := r.BasicAuth()
-			if !ok || !svc.ValidateCredentials(username, password) {
-				// For HTML pages, redirect to login
+			if !authenticated {
 				if isHTMLPage(r) {
 					http.Redirect(w, r, "/login", http.StatusFound)
 					return
 				}
-				// For API requests, return 401
-				w.Header().Set("WWW-Authenticate", `Basic realm="Restricted", charset="UTF-8"`)
-				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				writeUnauthenticatedJSON(w)
 				return
 			}
 
@@ -110,17 +53,15 @@ func AuthMiddleware(svc *service.LibraryService, publicPaths []PublicPath) func(
 	}
 }
 
-// isHTMLPage checks if the request is for an HTML page
+// isHTMLPage checks if the request is for an HTML page.
 func isHTMLPage(r *http.Request) bool {
 	accept := r.Header.Get("Accept")
 	path := r.URL.Path
 
-	// Check Accept header
 	if strings.Contains(accept, "text/html") {
 		return true
 	}
 
-	// Check common HTML page paths
 	htmlPaths := []string{"/", "/index.html", "/upload", "/figures", "/groups", "/tags", "/ai", "/settings"}
 	for _, p := range htmlPaths {
 		if path == p || path == p+".html" {
@@ -131,30 +72,42 @@ func isHTMLPage(r *http.Request) bool {
 	return false
 }
 
-// OptionalBasicAuth allows requests without authentication to proceed to login page
-func OptionalBasicAuth(next http.Handler, svc *service.LibraryService, publicPaths []string) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodOptions {
-			next.ServeHTTP(w, r)
-			return
-		}
-
-		// 检查是否是公开路径
-		for _, path := range publicPaths {
-			if r.URL.Path == path || (path[len(path)-1] == '/' && len(r.URL.Path) > len(path) && r.URL.Path[:len(path)] == path) {
-				next.ServeHTTP(w, r)
-				return
+func matchesPublicPath(path string, publicPaths []PublicPath) bool {
+	for _, pp := range publicPaths {
+		if pp.Prefix {
+			if strings.HasPrefix(path, pp.Path) {
+				return true
 			}
+			continue
 		}
 
-		// 检查认证
-		username, password, ok := r.BasicAuth()
-		if !ok || !svc.ValidateCredentials(username, password) {
-			w.Header().Set("WWW-Authenticate", `Basic realm="Restricted", charset="UTF-8"`)
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
-			return
+		if path == pp.Path || path == pp.Path+"/" {
+			return true
 		}
+	}
 
-		next.ServeHTTP(w, r)
+	return false
+}
+
+func sessionFromRequest(r *http.Request, sessionManager *service.SessionManager) (service.Session, bool) {
+	cookie, err := r.Cookie(service.SessionCookieName)
+	if err != nil {
+		return service.Session{}, false
+	}
+
+	return sessionManager.Validate(cookie.Value)
+}
+
+func isLoginPath(path string) bool {
+	return path == "/login" || path == "/login.html"
+}
+
+func writeUnauthenticatedJSON(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusUnauthorized)
+	_ = json.NewEncoder(w).Encode(model.ErrorResponse{
+		Success: false,
+		Code:    string(apperr.CodeUnauthenticated),
+		Error:   "请先登录",
 	})
 }
