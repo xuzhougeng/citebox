@@ -65,6 +65,8 @@ const FigureViewer = {
         this.aiCache = new Map();
         this.activeAIByPaper = new Map();
         this.aiRequestState = null;
+        this.groups = [];
+        this.paperDetails = new Map();
 
         this.handleKeydown = (event) => {
             if (!this.modal || this.modal.classList.contains('hidden')) return;
@@ -118,12 +120,29 @@ const FigureViewer = {
             const copyButton = event.target.closest('[data-figure-ai-copy]');
             if (copyButton) {
                 await this.copyAIResult(copyButton.dataset.figureAiCopy);
+                return;
             }
+
+            const metaButton = event.target.closest('[data-figure-meta-action]');
+            if (metaButton) {
+                await this.handleMetaAction(metaButton);
+            }
+        });
+        this.body.addEventListener('change', async (event) => {
+            const groupSelect = event.target.closest('#figurePaperGroup');
+            if (!groupSelect || !this.currentFigure) return;
+            await this.updateCurrentPaperMetadata(this.currentDraftMetadata(), '文献分组已更新');
+        });
+        this.body.addEventListener('keydown', async (event) => {
+            const tagInput = event.target.closest('#figurePaperTagInput');
+            if (!tagInput || event.key !== 'Enter') return;
+            event.preventDefault();
+            await this.addTagFromInput();
         });
         document.addEventListener('keydown', this.handleKeydown);
     },
 
-    open(options = {}) {
+    async open(options = {}) {
         this.init();
         this.figures = Array.isArray(options.figures) ? options.figures : [];
         this.index = Math.max(0, Math.min(Number(options.index) || 0, this.figures.length - 1));
@@ -131,10 +150,16 @@ const FigureViewer = {
         this.totalPages = Math.max(1, Number(options.totalPages) || 1);
         this.loadPage = typeof options.loadPage === 'function' ? options.loadPage : null;
         this.onOpenPaper = options.onOpenPaper;
+        this.onMetaChanged = options.onMetaChanged;
         this.loadingPage = false;
-        this.render();
-        this.modal.classList.remove('hidden');
-        document.body.classList.add('modal-open');
+        try {
+            await this.ensureGroupsLoaded();
+            this.render();
+            this.modal.classList.remove('hidden');
+            document.body.classList.add('modal-open');
+        } catch (error) {
+            Utils.showToast(error.message, 'error');
+        }
     },
 
     close() {
@@ -218,6 +243,31 @@ const FigureViewer = {
         panel.innerHTML = this.renderAIResultPanel();
     },
 
+    refreshAIActions() {
+        if (!this.modal || this.modal.classList.contains('hidden')) return;
+        const actions = this.body.querySelector('[data-figure-ai-actions]');
+        if (!actions) return;
+        actions.innerHTML = this.renderAIActionButtons();
+    },
+
+    refreshNavigationButtons() {
+        if (!this.modal || this.modal.classList.contains('hidden')) return;
+        const prevButton = this.body.querySelector('[data-figure-action="prev"]');
+        const nextButton = this.body.querySelector('[data-figure-action="next"]');
+        if (prevButton) {
+            prevButton.disabled = !this.canMovePrevious() || this.loadingPage || Boolean(this.aiRequestState?.loading);
+        }
+        if (nextButton) {
+            nextButton.disabled = !this.canMoveNext() || this.loadingPage || Boolean(this.aiRequestState?.loading);
+        }
+    },
+
+    refreshAIState() {
+        this.refreshAIActions();
+        this.refreshAIResultPanel();
+        this.refreshNavigationButtons();
+    },
+
     async runAIAction(action) {
         if (!this.currentFigure || this.aiRequestState?.loading) return;
 
@@ -227,7 +277,7 @@ const FigureViewer = {
 
         if (this.aiCache.has(cacheKey)) {
             this.aiRequestState = null;
-            this.render();
+            this.refreshAIState();
             return;
         }
 
@@ -236,7 +286,7 @@ const FigureViewer = {
             paperID,
             action
         };
-        this.render();
+        this.refreshAIState();
 
         if (this.isStreamingAction(action)) {
             await this.runStreamingAIAction(action, paperID, cacheKey);
@@ -255,7 +305,7 @@ const FigureViewer = {
             });
             this.aiCache.set(cacheKey, result);
             this.aiRequestState = null;
-            this.render();
+            this.refreshAIState();
         } catch (error) {
             this.aiRequestState = {
                 loading: false,
@@ -263,7 +313,7 @@ const FigureViewer = {
                 action,
                 error: error.message
             };
-            this.render();
+            this.refreshAIState();
             Utils.showToast(error.message, 'error');
         }
     },
@@ -284,7 +334,7 @@ const FigureViewer = {
             discardOnAbort: false
         };
         this.aiRequestState = requestState;
-        this.render();
+        this.refreshAIState();
 
         try {
             await API.readPaperWithAIStream({
@@ -315,7 +365,7 @@ const FigureViewer = {
                     if (event.type === 'final' && event.result) {
                         this.aiCache.set(cacheKey, event.result);
                         this.aiRequestState = null;
-                        this.render();
+                        this.refreshAIState();
                     }
                 }
             });
@@ -331,7 +381,7 @@ const FigureViewer = {
                 delete requestState.abortController;
                 this.aiRequestState = requestState;
                 if (!requestState.silentAbort) {
-                    this.render();
+                    this.refreshAIState();
                 }
                 return;
             }
@@ -348,7 +398,7 @@ const FigureViewer = {
                 includedFigures: requestState.includedFigures || 0,
                 error: error.message
             };
-            this.render();
+            this.refreshAIState();
             Utils.showToast(error.message, 'error');
         }
     },
@@ -362,6 +412,138 @@ const FigureViewer = {
 
     isStreamingAction(action) {
         return action === 'figure_interpretation';
+    },
+
+    async ensureGroupsLoaded(force = false) {
+        if (!force && this.groups.length > 0) return this.groups;
+        const payload = await API.listGroups();
+        this.groups = payload.groups || [];
+        return this.groups;
+    },
+
+    async ensureCurrentPaperDetail() {
+        const paperID = Number(this.currentFigure?.paper_id);
+        if (!paperID) return null;
+        if (this.paperDetails.has(paperID)) {
+            return this.paperDetails.get(paperID);
+        }
+
+        const paper = await API.getPaper(paperID);
+        this.paperDetails.set(paperID, paper);
+        return paper;
+    },
+
+    currentDraftMetadata() {
+        const groupSelect = this.body.querySelector('#figurePaperGroup');
+        return {
+            groupID: groupSelect?.value ? Number(groupSelect.value) : null,
+            tags: Utils.splitTags(Utils.joinTags(this.currentFigure?.tags || []))
+        };
+    },
+
+    async handleMetaAction(button) {
+        if (!this.currentFigure) return;
+
+        if (button.dataset.figureMetaAction === 'apply-tag') {
+            await this.applySuggestedTag(button.dataset.tagName || '');
+            return;
+        }
+        if (button.dataset.figureMetaAction === 'apply-group') {
+            await this.applySuggestedGroup(button.dataset.groupName || '');
+            return;
+        }
+        if (button.dataset.figureMetaAction === 'add-tag') {
+            await this.addTagFromInput();
+            return;
+        }
+        if (button.dataset.figureMetaAction === 'remove-tag') {
+            await this.removeTag(button.dataset.tagName || '');
+        }
+    },
+
+    async applySuggestedTag(tagName) {
+        const normalized = tagName.trim();
+        if (!normalized) return;
+
+        const draft = this.currentDraftMetadata();
+        const existing = new Set(draft.tags.map((tag) => tag.toLowerCase()));
+        if (existing.has(normalized.toLowerCase())) {
+            Utils.showToast('这个标签已经存在', 'info');
+            return;
+        }
+
+        draft.tags.push(normalized);
+        await this.updateCurrentPaperMetadata(draft, `已添加标签：${normalized}`);
+    },
+
+    async addTagFromInput() {
+        const input = this.body.querySelector('#figurePaperTagInput');
+        const value = input?.value.trim() || '';
+        if (!value) return;
+        await this.applySuggestedTag(value);
+    },
+
+    async removeTag(tagName) {
+        const normalized = tagName.trim();
+        if (!normalized) return;
+
+        const draft = this.currentDraftMetadata();
+        draft.tags = draft.tags.filter((tag) => tag.toLowerCase() !== normalized.toLowerCase());
+        await this.updateCurrentPaperMetadata(draft, `已移除标签：${normalized}`);
+    },
+
+    async applySuggestedGroup(groupName) {
+        const normalized = groupName.trim();
+        if (!normalized) return;
+
+        await this.ensureGroupsLoaded();
+        let group = this.groups.find((item) => item.name.trim().toLowerCase() === normalized.toLowerCase());
+        if (!group) {
+            const payload = await API.createGroup({ name: normalized, description: '' });
+            group = payload.group;
+            await this.ensureGroupsLoaded(true);
+        }
+
+        const draft = this.currentDraftMetadata();
+        draft.groupID = group?.id || null;
+        await this.updateCurrentPaperMetadata(draft, `已加入分组：${normalized}`);
+    },
+
+    async updateCurrentPaperMetadata(draft, successMessage) {
+        if (!this.currentFigure) return;
+
+        try {
+            const paper = await this.ensureCurrentPaperDetail();
+            const payload = await API.updatePaper(this.currentFigure.paper_id, {
+                title: paper.title,
+                abstract_text: paper.abstract_text || '',
+                notes_text: paper.notes_text || '',
+                group_id: draft.groupID,
+                tags: draft.tags
+            });
+            this.syncPaperMetadata(payload.paper);
+            Utils.showToast(successMessage);
+            this.render();
+            if (typeof this.onMetaChanged === 'function') {
+                await this.onMetaChanged(payload.paper);
+            }
+        } catch (error) {
+            Utils.showToast(error.message, 'error');
+        }
+    },
+
+    syncPaperMetadata(paper) {
+        this.paperDetails.set(paper.id, paper);
+        this.figures = (this.figures || []).map((figure) => {
+            if (Number(figure.paper_id) !== Number(paper.id)) return figure;
+            return {
+                ...figure,
+                paper_title: paper.title,
+                group_id: paper.group_id,
+                group_name: paper.group_name || '',
+                tags: paper.tags || []
+            };
+        });
     },
 
     async copyAIResult(kind) {
@@ -429,6 +611,11 @@ const FigureViewer = {
         const requestState = this.aiRequestState;
         const isLoading = Boolean(requestState?.loading && requestState.paperID === paperID);
         const activeLabel = this.aiActionLabel(action);
+        const currentTagNames = new Set((this.currentFigure.tags || []).map((tag) => {
+            const name = typeof tag === 'string' ? tag : tag.name || '';
+            return name.trim().toLowerCase();
+        }));
+        const currentGroupName = (this.currentFigure.group_name || '').trim().toLowerCase();
 
         if (isLoading) {
             return `
@@ -480,8 +667,11 @@ const FigureViewer = {
         }
 
         const tags = (result.suggested_tags || []).map((tag) => `
-            <span class="tag-pill neutral">${Utils.escapeHTML(tag)}</span>
+            <button class="tag-pill neutral figure-ai-tag-button ${currentTagNames.has(tag.trim().toLowerCase()) ? 'is-applied' : ''}" type="button" data-figure-meta-action="apply-tag" data-tag-name="${Utils.escapeHTML(tag)}" ${currentTagNames.has(tag.trim().toLowerCase()) ? 'disabled' : ''}>
+                ${Utils.escapeHTML(tag)}
+            </button>
         `).join('');
+        const groupApplied = (result.suggested_group || '').trim().toLowerCase() === currentGroupName;
 
         return `
             <div class="figure-ai-result">
@@ -499,7 +689,12 @@ const FigureViewer = {
                 ${result.suggested_group ? `
                     <div class="figure-ai-supplement">
                         <span>Group 建议</span>
-                        <strong>${Utils.escapeHTML(result.suggested_group)}</strong>
+                        <div class="figure-ai-suggestion-row">
+                            <strong>${Utils.escapeHTML(result.suggested_group)}</strong>
+                            <button class="btn btn-outline btn-small" type="button" data-figure-meta-action="apply-group" data-group-name="${Utils.escapeHTML(result.suggested_group)}" ${groupApplied ? 'disabled' : ''}>
+                                ${groupApplied ? '已添加' : '直接添加'}
+                            </button>
+                        </div>
                     </div>
                 ` : ''}
             </div>
@@ -515,6 +710,15 @@ const FigureViewer = {
         return labels[action] || 'AI 结果';
     },
 
+    renderAIActionButtons() {
+        const aiLoading = Boolean(this.aiRequestState?.loading);
+        return `
+            <button class="btn btn-outline ${this.activeAIAction() === 'figure_interpretation' ? 'active' : ''}" type="button" data-figure-ai-action="figure_interpretation" ${aiLoading ? 'disabled' : ''}>图片解读</button>
+            <button class="btn btn-outline ${this.activeAIAction() === 'tag_suggestion' ? 'active' : ''}" type="button" data-figure-ai-action="tag_suggestion" ${aiLoading ? 'disabled' : ''}>Tag 建议</button>
+            <button class="btn btn-outline ${this.activeAIAction() === 'group_suggestion' ? 'active' : ''}" type="button" data-figure-ai-action="group_suggestion" ${aiLoading ? 'disabled' : ''}>Group 建议</button>
+        `;
+    },
+
     render() {
         this.currentFigure = this.figures?.[this.index];
         if (!this.currentFigure) {
@@ -524,10 +728,22 @@ const FigureViewer = {
 
         const figure = this.currentFigure;
         const total = this.figures.length;
-        const tags = BrowserUI.renderTagChips(figure.tags || []);
         const canPrev = this.canMovePrevious();
         const canNext = this.canMoveNext();
         const aiLoading = Boolean(this.aiRequestState?.loading);
+        const editableTags = (figure.tags || []).map((tag) => `
+            <button class="figure-editable-tag" type="button" data-figure-meta-action="remove-tag" data-tag-name="${Utils.escapeHTML(typeof tag === 'string' ? tag : tag.name || '')}" aria-label="移除标签 ${Utils.escapeHTML(typeof tag === 'string' ? tag : tag.name || '')}">
+                <span>${Utils.escapeHTML(typeof tag === 'string' ? tag : tag.name || '')}</span>
+                <span aria-hidden="true">+</span>
+            </button>
+        `).join('');
+        const groupOptions = ['<option value="">未分组</option>']
+            .concat((this.groups || []).map((group) => `
+                <option value="${group.id}" ${String(group.id) === String(figure.group_id || '') ? 'selected' : ''}>
+                    ${Utils.escapeHTML(group.name)}
+                </option>
+            `))
+            .join('');
 
         this.body.innerHTML = `
             <div class="figure-lightbox">
@@ -556,10 +772,30 @@ const FigureViewer = {
                     </div>
 
                     <div class="figure-lightbox-meta">
-                        <div><span>来源文献</span><strong>${Utils.escapeHTML(figure.paper_title)}</strong></div>
-                        <div><span>定位</span><strong>第 ${figure.page_number || '-'} 页 · #${figure.figure_index || '-'}</strong></div>
-                        <div><span>分组</span><strong>${Utils.escapeHTML(figure.group_name || '未分组')}</strong></div>
-                        <div><span>标签</span><strong>${tags}</strong></div>
+                        <div class="figure-lightbox-meta-item">
+                            <span>来源文献</span>
+                            <strong>${Utils.escapeHTML(figure.paper_title)}</strong>
+                        </div>
+                        <div class="figure-lightbox-meta-item">
+                            <span>定位</span>
+                            <strong>第 ${figure.page_number || '-'} 页 · #${figure.figure_index || '-'}</strong>
+                        </div>
+                        <label class="figure-lightbox-meta-item figure-lightbox-meta-item-editable">
+                            <span>分组</span>
+                            <select id="figurePaperGroup" class="form-input figure-meta-select">${groupOptions}</select>
+                        </label>
+                        <div class="figure-lightbox-meta-item figure-lightbox-meta-item-editable">
+                            <span>标签</span>
+                            <div class="figure-tag-editor">
+                                <div class="figure-tag-editor-list ${figure.tags?.length ? '' : 'is-empty'}">
+                                    ${figure.tags?.length ? editableTags : '<span class="figure-tag-empty">暂无标签</span>'}
+                                </div>
+                                <div class="figure-tag-add">
+                                    <input id="figurePaperTagInput" class="form-input" type="text" placeholder="添加标签">
+                                    <button class="btn btn-outline btn-small" type="button" data-figure-meta-action="add-tag" aria-label="添加标签">+</button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="figure-lightbox-actions">
@@ -576,11 +812,7 @@ const FigureViewer = {
                             </div>
                             <a class="btn btn-outline" href="/ai?paper_id=${figure.paper_id}" target="_blank" rel="noreferrer">自由提问</a>
                         </div>
-                        <div class="figure-lightbox-ai-actions">
-                            <button class="btn btn-outline ${this.activeAIAction() === 'figure_interpretation' ? 'active' : ''}" type="button" data-figure-ai-action="figure_interpretation" ${aiLoading ? 'disabled' : ''}>图片解读</button>
-                            <button class="btn btn-outline ${this.activeAIAction() === 'tag_suggestion' ? 'active' : ''}" type="button" data-figure-ai-action="tag_suggestion" ${aiLoading ? 'disabled' : ''}>Tag 建议</button>
-                            <button class="btn btn-outline ${this.activeAIAction() === 'group_suggestion' ? 'active' : ''}" type="button" data-figure-ai-action="group_suggestion" ${aiLoading ? 'disabled' : ''}>Group 建议</button>
-                        </div>
+                        <div class="figure-lightbox-ai-actions" data-figure-ai-actions>${this.renderAIActionButtons()}</div>
                         <div data-figure-ai-panel>${this.renderAIResultPanel()}</div>
                     </section>
                 </aside>
@@ -633,7 +865,7 @@ const FiguresPage = {
 
             const index = Number(card.dataset.figureIndex);
             if (action.dataset.action === 'preview') {
-                FigureViewer.open({
+                await FigureViewer.open({
                     figures: this.figures || [],
                     index,
                     page: this.state.page,
@@ -647,6 +879,9 @@ const FiguresPage = {
                         await PaperViewer.open(Number(paperID), async () => {
                             await Promise.all([this.loadGroups(), this.loadTags(), this.load(this.state.page)]);
                         });
+                    },
+                    onMetaChanged: async () => {
+                        await Promise.all([this.loadGroups(), this.loadTags(), this.load(this.state.page)]);
                     }
                 });
             }
@@ -675,12 +910,18 @@ const FiguresPage = {
 
     async loadGroups() {
         const payload = await API.listGroups();
-        this.groupFilter.innerHTML = '<option value="">全部分组</option>' + (payload.groups || []).map((group) => `<option value="${group.id}">${Utils.escapeHTML(group.name)}</option>`).join('');
+        const selected = String(this.state.filters.group_id || '');
+        this.groupFilter.innerHTML = '<option value="">全部分组</option>' + (payload.groups || []).map((group) => `
+            <option value="${group.id}" ${String(group.id) === selected ? 'selected' : ''}>${Utils.escapeHTML(group.name)}</option>
+        `).join('');
     },
 
     async loadTags() {
         const payload = await API.listTags();
-        this.tagFilter.innerHTML = '<option value="">全部标签</option>' + (payload.tags || []).map((tag) => `<option value="${tag.id}">${Utils.escapeHTML(tag.name)}</option>`).join('');
+        const selected = String(this.state.filters.tag_id || '');
+        this.tagFilter.innerHTML = '<option value="">全部标签</option>' + (payload.tags || []).map((tag) => `
+            <option value="${tag.id}" ${String(tag.id) === selected ? 'selected' : ''}>${Utils.escapeHTML(tag.name)}</option>
+        `).join('');
     },
 
     buildFigureParams(page = this.state.page) {
