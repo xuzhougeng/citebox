@@ -52,6 +52,8 @@ func createTestPaper(t *testing.T, repo *repository.LibraryRepository) *model.Pa
 		StoredPDFName:    "paper_test.pdf",
 		FileSize:         512,
 		ContentType:      "application/pdf",
+		AbstractText:     "Atlas abstract",
+		NotesText:        "Atlas notes",
 		ExtractionStatus: "completed",
 		Tags: []repository.TagUpsertInput{
 			{Name: "Atlas", Color: "#123456"},
@@ -145,5 +147,58 @@ func TestUpdatePaperValidationErrors(t *testing.T) {
 	groupID := int64(999)
 	if _, err := svc.UpdatePaper(1, UpdatePaperParams{Title: "Valid", GroupID: &groupID}); !apperr.IsCode(err, apperr.CodeNotFound) {
 		t.Fatalf("UpdatePaper() missing group code = %q, want %q", apperr.CodeOf(err), apperr.CodeNotFound)
+	}
+}
+
+func TestUpdatePaperPersistsMetadata(t *testing.T) {
+	svc, repo, _ := newTestService(t)
+	paper := createTestPaper(t, repo)
+
+	updated, err := svc.UpdatePaper(paper.ID, UpdatePaperParams{
+		Title:        "Atlas Study Revised",
+		AbstractText: "Updated abstract",
+		NotesText:    "Updated notes",
+		Tags:         []string{"Atlas", "Revised"},
+	})
+	if err != nil {
+		t.Fatalf("UpdatePaper() error = %v", err)
+	}
+
+	if updated.AbstractText != "Updated abstract" || updated.NotesText != "Updated notes" {
+		t.Fatalf("UpdatePaper() metadata = (%q, %q), want updated values", updated.AbstractText, updated.NotesText)
+	}
+	if len(updated.Tags) != 2 {
+		t.Fatalf("UpdatePaper() tags = %d, want 2", len(updated.Tags))
+	}
+}
+
+func TestPurgeLibraryRemovesStoredAssets(t *testing.T) {
+	svc, repo, cfg := newTestService(t)
+	paper := createTestPaper(t, repo)
+
+	if err := os.WriteFile(filepath.Join(cfg.PapersDir(), paper.StoredPDFName), []byte("pdf"), 0o644); err != nil {
+		t.Fatalf("WriteFile(pdf) error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(cfg.FiguresDir(), paper.Figures[0].Filename), []byte("img"), 0o644); err != nil {
+		t.Fatalf("WriteFile(figure) error = %v", err)
+	}
+
+	if err := svc.PurgeLibrary(); err != nil {
+		t.Fatalf("PurgeLibrary() error = %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(cfg.PapersDir(), paper.StoredPDFName)); !os.IsNotExist(err) {
+		t.Fatalf("paper file still exists, stat err = %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(cfg.FiguresDir(), paper.Figures[0].Filename)); !os.IsNotExist(err) {
+		t.Fatalf("figure file still exists, stat err = %v", err)
+	}
+
+	result, err := svc.ListPapers(model.PaperFilter{})
+	if err != nil {
+		t.Fatalf("ListPapers() error = %v", err)
+	}
+	if result.Total != 0 || len(result.Papers) != 0 {
+		t.Fatalf("ListPapers() after purge = total:%d len:%d", result.Total, len(result.Papers))
 	}
 }
