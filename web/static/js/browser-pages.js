@@ -259,10 +259,10 @@ const FigureViewer = {
                 this.close();
             }
             if (event.key === 'ArrowLeft') {
-                this.previous();
+                void this.previous();
             }
             if (event.key === 'ArrowRight') {
-                this.next();
+                void this.next();
             }
         };
 
@@ -277,10 +277,10 @@ const FigureViewer = {
             if (!button) return;
 
             if (button.dataset.figureAction === 'prev') {
-                this.previous();
+                await this.previous();
             }
             if (button.dataset.figureAction === 'next') {
-                this.next();
+                await this.next();
             }
             if (button.dataset.figureAction === 'open-paper' && this.currentFigure) {
                 this.close();
@@ -292,11 +292,15 @@ const FigureViewer = {
         document.addEventListener('keydown', this.handleKeydown);
     },
 
-    open(figures, index, onOpenPaper) {
+    open(options = {}) {
         this.init();
-        this.figures = Array.isArray(figures) ? figures : [];
-        this.index = Math.max(0, Math.min(index, this.figures.length - 1));
-        this.onOpenPaper = onOpenPaper;
+        this.figures = Array.isArray(options.figures) ? options.figures : [];
+        this.index = Math.max(0, Math.min(Number(options.index) || 0, this.figures.length - 1));
+        this.page = Math.max(1, Number(options.page) || 1);
+        this.totalPages = Math.max(1, Number(options.totalPages) || 1);
+        this.loadPage = typeof options.loadPage === 'function' ? options.loadPage : null;
+        this.onOpenPaper = options.onOpenPaper;
+        this.loadingPage = false;
         this.render();
         this.modal.classList.remove('hidden');
         document.body.classList.add('modal-open');
@@ -308,16 +312,55 @@ const FigureViewer = {
         document.body.classList.remove('modal-open');
     },
 
-    previous() {
-        if (!this.figures?.length || this.index <= 0) return;
-        this.index -= 1;
-        this.render();
+    canMovePrevious() {
+        return Boolean(this.figures?.length) && (this.index > 0 || this.page > 1);
     },
 
-    next() {
-        if (!this.figures?.length || this.index >= this.figures.length - 1) return;
-        this.index += 1;
+    canMoveNext() {
+        return Boolean(this.figures?.length) && (this.index < this.figures.length - 1 || this.page < this.totalPages);
+    },
+
+    async previous() {
+        if (!this.canMovePrevious() || this.loadingPage) return;
+        if (this.index > 0) {
+            this.index -= 1;
+            this.render();
+            return;
+        }
+        await this.loadAdjacentPage(this.page - 1, 'last');
+    },
+
+    async next() {
+        if (!this.canMoveNext() || this.loadingPage) return;
+        if (this.index < this.figures.length - 1) {
+            this.index += 1;
+            this.render();
+            return;
+        }
+        await this.loadAdjacentPage(this.page + 1, 'first');
+    },
+
+    async loadAdjacentPage(targetPage, targetIndex) {
+        if (!this.loadPage || targetPage < 1 || targetPage > this.totalPages) return;
+
+        this.loadingPage = true;
         this.render();
+
+        try {
+            const payload = await this.loadPage(targetPage);
+            const figures = payload?.figures || [];
+            if (!figures.length) return;
+
+            this.figures = figures;
+            this.page = targetPage;
+            this.totalPages = Math.max(1, Number(payload.total_pages) || this.totalPages);
+            this.index = targetIndex === 'last' ? figures.length - 1 : 0;
+        } catch (error) {
+            Utils.showToast(error.message, 'error');
+        } finally {
+            this.loadingPage = false;
+            this.render();
+        }
     },
 
     render() {
@@ -330,15 +373,17 @@ const FigureViewer = {
         const figure = this.currentFigure;
         const total = this.figures.length;
         const tags = BrowserUI.renderTagChips(figure.tags || []);
+        const canPrev = this.canMovePrevious();
+        const canNext = this.canMoveNext();
 
         this.body.innerHTML = `
             <div class="figure-lightbox">
                 <section class="figure-lightbox-media-panel">
                     <div class="figure-lightbox-toolbar">
-                        <div class="figure-lightbox-counter">第 ${this.index + 1} / ${total} 张</div>
+                        <div class="figure-lightbox-counter">第 ${this.index + 1} / ${total} 张 · 第 ${this.page} / ${this.totalPages} 页</div>
                         <div class="figure-lightbox-nav">
-                            <button class="btn btn-outline" type="button" data-figure-action="prev" ${this.index === 0 ? 'disabled' : ''}>上一张</button>
-                            <button class="btn btn-outline" type="button" data-figure-action="next" ${this.index === total - 1 ? 'disabled' : ''}>下一张</button>
+                            <button class="btn btn-outline" type="button" data-figure-action="prev" ${!canPrev || this.loadingPage ? 'disabled' : ''}>上一张</button>
+                            <button class="btn btn-outline" type="button" data-figure-action="next" ${!canNext || this.loadingPage ? 'disabled' : ''}>下一张</button>
                         </div>
                     </div>
                     <div class="figure-lightbox-media">
@@ -372,7 +417,7 @@ const FigureViewer = {
 };
 
 const FiguresPage = {
-    state: { page: 1, pageSize: 24, filters: { keyword: '', group_id: '', tag_id: '' } },
+    state: { page: 1, pageSize: 8, totalPages: 0, filters: { keyword: '', group_id: '', tag_id: '' } },
 
     async init() {
         PaperViewer.init();
@@ -390,24 +435,22 @@ const FiguresPage = {
         this.summaryStrip = document.getElementById('figureSummaryStrip');
         this.grid = document.getElementById('figureGrid');
         this.pagination = document.getElementById('figurePagination');
+        this.pageControls = document.getElementById('figurePageControls');
     },
 
     bind() {
         const debouncedSearch = Utils.debounce(async () => {
             this.state.filters.keyword = this.keywordInput.value.trim();
-            this.state.page = 1;
-            await this.load();
+            await this.load(1);
         }, 250);
         this.keywordInput.addEventListener('input', debouncedSearch);
         this.groupFilter.addEventListener('change', async () => {
             this.state.filters.group_id = this.groupFilter.value;
-            this.state.page = 1;
-            await this.load();
+            await this.load(1);
         });
         this.tagFilter.addEventListener('change', async () => {
             this.state.filters.tag_id = this.tagFilter.value;
-            this.state.page = 1;
-            await this.load();
+            await this.load(1);
         });
         this.grid.addEventListener('click', async (event) => {
             const action = event.target.closest('[data-action]');
@@ -417,23 +460,43 @@ const FiguresPage = {
 
             const index = Number(card.dataset.figureIndex);
             if (action.dataset.action === 'preview') {
-                FigureViewer.open(this.figures || [], index, async (paperID) => {
-                    await PaperViewer.open(Number(paperID), async () => {
-                        await Promise.all([this.loadGroups(), this.loadTags(), this.load()]);
-                    });
+                FigureViewer.open({
+                    figures: this.figures || [],
+                    index,
+                    page: this.state.page,
+                    totalPages: this.state.totalPages,
+                    loadPage: async (page) => {
+                        const payload = await this.fetchFigurePage(page);
+                        this.renderFigureResults(payload, page);
+                        return payload;
+                    },
+                    onOpenPaper: async (paperID) => {
+                        await PaperViewer.open(Number(paperID), async () => {
+                            await Promise.all([this.loadGroups(), this.loadTags(), this.load(this.state.page)]);
+                        });
+                    }
                 });
             }
             if (action.dataset.action === 'paper') {
                 await PaperViewer.open(Number(card.dataset.paperId), async () => {
-                    await Promise.all([this.loadGroups(), this.loadTags(), this.load()]);
+                    await Promise.all([this.loadGroups(), this.loadTags(), this.load(this.state.page)]);
                 });
             }
         });
         this.pagination.addEventListener('click', async (event) => {
             const button = event.target.closest('button[data-page]');
             if (!button) return;
-            this.state.page = Number(button.dataset.page);
-            await this.load();
+            await this.load(Number(button.dataset.page));
+        });
+        this.pageControls.addEventListener('click', async (event) => {
+            const button = event.target.closest('button[data-page-step]');
+            if (!button || button.disabled) return;
+
+            const step = Number(button.dataset.pageStep);
+            const nextPage = this.state.page + step;
+            if (nextPage < 1 || nextPage > this.state.totalPages) return;
+
+            await this.load(nextPage);
         });
     },
 
@@ -447,52 +510,71 @@ const FiguresPage = {
         this.tagFilter.innerHTML = '<option value="">全部标签</option>' + (payload.tags || []).map((tag) => `<option value="${tag.id}">${Utils.escapeHTML(tag.name)}</option>`).join('');
     },
 
-    async load() {
-        try {
-            const payload = await API.listFigures({
-                page: this.state.page,
-                page_size: this.state.pageSize,
-                keyword: this.state.filters.keyword,
-                group_id: this.state.filters.group_id,
-                tag_id: this.state.filters.tag_id
-            });
-            const figures = payload.figures || [];
-            this.figures = figures;
-            this.summaryStrip.innerHTML = `
-                <div class="stat-card"><span>筛选结果</span><strong>${payload.total || 0}</strong></div>
-                <div class="stat-card"><span>当前页图片</span><strong>${figures.length}</strong></div>
-                <div class="stat-card"><span>分组筛选</span><strong>${Utils.escapeHTML(this.groupFilter.selectedOptions[0]?.textContent || '全部分组')}</strong></div>
-                <div class="stat-card"><span>标签筛选</span><strong>${Utils.escapeHTML(this.tagFilter.selectedOptions[0]?.textContent || '全部标签')}</strong></div>
-            `;
-            this.grid.innerHTML = figures.length ? figures.map((figure, index) => `
-                <article class="figure-preview-card" data-paper-id="${figure.paper_id}" data-figure-index="${index}">
+    buildFigureParams(page = this.state.page) {
+        return {
+            page,
+            page_size: this.state.pageSize,
+            keyword: this.state.filters.keyword,
+            group_id: this.state.filters.group_id,
+            tag_id: this.state.filters.tag_id
+        };
+    },
+
+    async fetchFigurePage(page = this.state.page) {
+        return API.listFigures(this.buildFigureParams(page));
+    },
+
+    renderFigureResults(payload, page = this.state.page) {
+        const figures = payload.figures || [];
+        this.state.page = page;
+        this.figures = figures;
+        this.state.totalPages = payload.total_pages || 0;
+        this.summaryStrip.innerHTML = `
+            <div class="stat-card"><span>筛选结果</span><strong>${payload.total || 0}</strong></div>
+            <div class="stat-card"><span>当前页图片</span><strong>${figures.length}</strong></div>
+            <div class="stat-card"><span>分组筛选</span><strong>${Utils.escapeHTML(this.groupFilter.selectedOptions[0]?.textContent || '全部分组')}</strong></div>
+            <div class="stat-card"><span>标签筛选</span><strong>${Utils.escapeHTML(this.tagFilter.selectedOptions[0]?.textContent || '全部标签')}</strong></div>
+        `;
+        this.pageControls.innerHTML = this.state.totalPages > 1 ? `
+            <button class="btn btn-outline" type="button" data-page-step="-1" ${this.state.page <= 1 ? 'disabled' : ''}>Prev</button>
+            <span class="figure-page-indicator">第 ${this.state.page} / ${this.state.totalPages} 页</span>
+            <button class="btn btn-outline" type="button" data-page-step="1" ${this.state.page >= this.state.totalPages ? 'disabled' : ''}>Next</button>
+        ` : '';
+        this.grid.innerHTML = figures.length ? figures.map((figure, index) => `
+            <article class="figure-preview-card" data-paper-id="${figure.paper_id}" data-figure-index="${index}">
+                <div class="figure-preview-stage">
                     <button class="figure-preview-media" type="button" data-action="preview" aria-label="查看大图">
-                        <img src="${figure.image_url}" alt="${Utils.escapeHTML(figure.caption || figure.paper_title)}">
+                        <img src="${figure.image_url}" alt="${Utils.escapeHTML(figure.paper_title || '提取图片')}">
                     </button>
-                    <div class="figure-preview-body">
-                        <div class="meta-row">
-                            <span>来源文献</span>
-                            <strong>${Utils.escapeHTML(figure.paper_title)}</strong>
-                        </div>
-                        <div class="meta-row">
-                            <span>定位</span>
-                            <strong>第 ${figure.page_number || '-'} 页 · #${figure.figure_index || '-'}</strong>
-                        </div>
-                        <p class="figure-caption">${Utils.escapeHTML(figure.caption || '未提供图片说明')}</p>
-                        <div class="meta-row">
-                            <span>分组</span>
-                            <strong>${Utils.escapeHTML(figure.group_name || '未分组')}</strong>
-                        </div>
-                        <div class="chip-row">${BrowserUI.renderTagChips(figure.tags || [])}</div>
-                        <div class="card-actions">
-                            <button class="btn btn-primary" type="button" data-action="preview">查看大图</button>
-                            <button class="btn btn-outline" type="button" data-action="paper">查看文献</button>
-                            <a class="btn btn-outline" href="${figure.image_url}" target="_blank" rel="noreferrer">原图</a>
-                        </div>
+                    <div class="figure-preview-badges">
+                        <span class="figure-badge figure-badge-strong">第 ${figure.page_number || '-'} 页</span>
+                        <span class="figure-badge">#${figure.figure_index || '-'}</span>
+                        ${figure.group_name ? `<span class="figure-badge">${Utils.escapeHTML(figure.group_name)}</span>` : ''}
                     </div>
-                </article>
-            `).join('') : '<div class="empty-state"><h3>没有可展示的图片</h3><p>先上传文献，或者调整筛选条件。</p></div>';
-            BrowserUI.renderPagination(this.pagination, this.state.page, payload.total_pages || 0);
+                </div>
+                <div class="figure-preview-body">
+                    <div class="figure-preview-head">
+                        <span class="figure-preview-label">来源文献</span>
+                        <strong class="figure-preview-title">${Utils.escapeHTML(figure.paper_title)}</strong>
+                    </div>
+                    <div class="figure-preview-tags ${figure.tags?.length ? '' : 'is-empty'}">
+                        ${figure.tags?.length ? BrowserUI.renderTagChips(figure.tags || []) : '<span class="figure-preview-empty">无标签</span>'}
+                    </div>
+                    <div class="card-actions">
+                        <button class="btn btn-primary" type="button" data-action="preview">查看大图</button>
+                        <button class="btn btn-outline" type="button" data-action="paper">查看文献</button>
+                        <a class="btn btn-outline" href="${figure.image_url}" target="_blank" rel="noreferrer">原图</a>
+                    </div>
+                </div>
+            </article>
+        `).join('') : '<div class="empty-state"><h3>没有可展示的图片</h3><p>先上传文献，或者调整筛选条件。</p></div>';
+        BrowserUI.renderPagination(this.pagination, this.state.page, this.state.totalPages);
+    },
+
+    async load(page = this.state.page) {
+        try {
+            const payload = await this.fetchFigurePage(page);
+            this.renderFigureResults(payload, page);
         } catch (error) {
             Utils.showToast(error.message, 'error');
         }
@@ -500,7 +582,7 @@ const FiguresPage = {
 };
 
 const GroupsPage = {
-    state: { selectedGroupId: '', page: 1, pageSize: 12 },
+    state: { selectedGroupId: '', page: 1, pageSize: 12, totalPaperCount: 0 },
 
     async init() {
         PaperViewer.init();
@@ -571,7 +653,9 @@ const GroupsPage = {
     },
 
     async reload() {
-        await Promise.all([this.loadGroups(), this.loadPapers()]);
+        await Promise.all([this.loadGroups(), this.loadGlobalPaperCount()]);
+        this.renderGroupCards();
+        await this.loadPapers();
     },
 
     async loadGroups() {
@@ -580,15 +664,18 @@ const GroupsPage = {
         if (this.state.selectedGroupId && !this.groups.some((group) => String(group.id) === String(this.state.selectedGroupId))) {
             this.state.selectedGroupId = '';
         }
-        this.renderGroupCards();
+    },
+
+    async loadGlobalPaperCount() {
+        const payload = await API.listPapers({ page: 1, page_size: 1 });
+        this.state.totalPaperCount = payload.total || 0;
     },
 
     renderGroupCards() {
-        const total = this.groups.reduce((sum, group) => sum + group.paper_count, 0);
         const allCard = `
             <article class="entity-card ${this.state.selectedGroupId ? '' : 'active'}" data-group-id="">
                 <div><h3>全部文献</h3><p>查看所有分组下的文献</p></div>
-                <strong>${total}</strong>
+                <strong>${this.state.totalPaperCount}</strong>
             </article>
         `;
         this.grid.innerHTML = allCard + this.groups.map((group) => `
@@ -654,7 +741,7 @@ const GroupsPage = {
 };
 
 const TagsPage = {
-    state: { selectedTagId: '', page: 1, pageSize: 12 },
+    state: { selectedTagId: '', page: 1, pageSize: 12, totalPaperCount: 0 },
 
     async init() {
         PaperViewer.init();
@@ -726,7 +813,9 @@ const TagsPage = {
     },
 
     async reload() {
-        await Promise.all([this.loadTags(), this.loadPapers()]);
+        await Promise.all([this.loadTags(), this.loadGlobalPaperCount()]);
+        this.renderTagCards();
+        await this.loadPapers();
     },
 
     async loadTags() {
@@ -735,15 +824,18 @@ const TagsPage = {
         if (this.state.selectedTagId && !this.tags.some((tag) => String(tag.id) === String(this.state.selectedTagId))) {
             this.state.selectedTagId = '';
         }
-        this.renderTagCards();
+    },
+
+    async loadGlobalPaperCount() {
+        const payload = await API.listPapers({ page: 1, page_size: 1 });
+        this.state.totalPaperCount = payload.total || 0;
     },
 
     renderTagCards() {
-        const total = this.tags.reduce((sum, tag) => sum + tag.paper_count, 0);
         const allCard = `
             <article class="entity-card ${this.state.selectedTagId ? '' : 'active'}" data-tag-id="">
                 <div><h3>全部标签</h3><p>查看所有标签下的文献</p></div>
-                <strong>${total}</strong>
+                <strong>${this.state.totalPaperCount}</strong>
             </article>
         `;
         this.grid.innerHTML = allCard + this.tags.map((tag) => `

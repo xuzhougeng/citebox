@@ -29,7 +29,14 @@
             </div>
         </section>
 
-        <section class="filters-card">
+        <section class="filters-card figure-filters-card">
+            <div class="filters-card-head">
+                <div>
+                    <p class="eyebrow">Filter Dock</p>
+                    <h2>按条件筛选图片</h2>
+                    <p>上方固定筛选条件，下方单独展示结果区，浏览时更容易把注意力放在图片本身。</p>
+                </div>
+            </div>
             <div class="filters-grid three-cols">
                 <label class="field">
                     <span>关键词</span>
@@ -50,9 +57,18 @@
             </div>
         </section>
 
-        <section id="figureSummaryStrip" class="summary-strip"></section>
-        <section id="figureGrid" class="figure-preview-grid"></section>
-        <div id="figurePagination" class="pagination"></div>
+        <section class="figure-results-shell">
+            <section id="figureSummaryStrip" class="summary-strip"></section>
+            <div class="figure-results-head">
+                <div>
+                    <p class="eyebrow">Result Gallery</p>
+                    <h2>图片结果</h2>
+                </div>
+                <div id="figurePageControls" class="figure-page-controls"></div>
+            </div>
+            <section id="figureGrid" class="figure-preview-grid"></section>
+            <div id="figurePagination" class="pagination"></div>
+        </section>
     </main>
 
     <div id="paperModal" class="modal-shell hidden">
