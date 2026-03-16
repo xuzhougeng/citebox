@@ -2015,7 +2015,7 @@ button {
     line-height: 1.5;
 }
 
-.manual-preview-image {
+.manual-preview-canvas {
     display: block;
     max-width: min(100%, 1100px);
     height: auto;
@@ -2023,6 +2023,7 @@ button {
     box-shadow: 0 24px 48px rgba(36, 27, 22, 0.12);
     user-select: none;
     -webkit-user-drag: none;
+    background: #fff;
 }
 
 .manual-overlay {

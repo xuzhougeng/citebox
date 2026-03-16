@@ -63,11 +63,12 @@ package-windows: build-windows
 		echo 'echo Username: wanglab'; \
 		echo 'echo Password: wanglab789'; \
 		echo 'echo.'; \
-		echo 'echo Press Ctrl+C to stop'; \
+		echo 'echo A browser window will open automatically.'; \
+		echo 'echo Close the "Paper Image Database" window to stop the app.'; \
 		echo 'echo.'; \
-		echo '$(BINARY_NAME).exe'; \
-		echo 'echo.'; \
-		echo 'pause'; \
+		echo 'start "Paper Image Database" $(BINARY_NAME).exe'; \
+		echo 'timeout /t 2 /nobreak >nul'; \
+		echo 'start "" http://localhost:8080'; \
 	) > dist/$(BINARY_NAME)-windows-$(VERSION)/start.bat
 	
 	@echo "Creating start-with-config.bat..."
@@ -91,8 +92,9 @@ package-windows: build-windows
 		echo 'echo Starting with custom configuration...'; \
 		echo 'echo Port: %SERVER_PORT%'; \
 		echo 'echo.'; \
-		echo '$(BINARY_NAME).exe'; \
-		echo 'pause'; \
+		echo 'start "Paper Image Database" $(BINARY_NAME).exe'; \
+		echo 'timeout /t 2 /nobreak >nul'; \
+		echo 'start "" http://localhost:%SERVER_PORT%'; \
 	) > dist/$(BINARY_NAME)-windows-$(VERSION)/start-with-config.bat
 	
 	@echo "Creating README.txt..."

@@ -6,6 +6,7 @@ type ManualExtractionRegion struct {
 	Y               float64 `json:"y"`
 	Width           float64 `json:"width"`
 	Height          float64 `json:"height"`
+	ImageData       string  `json:"image_data,omitempty"`
 	Caption         string  `json:"caption,omitempty"`
 	ReplaceFigureID *int64  `json:"replace_figure_id,omitempty"`
 }

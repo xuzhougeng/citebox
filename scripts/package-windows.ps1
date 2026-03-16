@@ -36,9 +36,12 @@ echo.
 echo Starting server...
 echo Default URL: http://localhost:8080
 echo Default account: wanglab / wanglab789
-echo Press Ctrl+C to stop
+echo A browser window will open automatically.
+echo Close the "CiteBox Server" window to stop the app.
 echo.
-citebox.exe
+start "CiteBox Server" citebox.exe
+timeout /t 2 /nobreak >nul
+start "" http://localhost:8080
 "@
 
 $configBat = @"
@@ -54,7 +57,9 @@ rem set DATABASE_PATH=.\data\library.db
 echo Starting server with custom configuration...
 echo Current port: %SERVER_PORT%
 echo.
-citebox.exe
+start "CiteBox Server" citebox.exe
+timeout /t 2 /nobreak >nul
+start "" http://localhost:%SERVER_PORT%
 "@
 
 $readmeTxt = @"

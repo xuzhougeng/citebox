@@ -1,4 +1,7 @@
 const ManualPage = {
+    previewScale: 1.25,
+    extractScale: 2.8,
+
     state: {
         paperId: null,
         paper: null,
@@ -8,7 +11,11 @@ const ManualPage = {
         nextSelectionId: 1,
         drawing: null,
         loadingPreview: false,
-        submitting: false
+        submitting: false,
+        pdfjsLib: null,
+        pdfDocument: null,
+        renderCache: new Map(),
+        previewRenderToken: 0
     },
 
     async init() {
@@ -34,7 +41,7 @@ const ManualPage = {
         this.openPDFLink = document.getElementById('manualOpenPDFLink');
         this.backLibraryLink = document.getElementById('manualBackLibraryLink');
         this.previewFrame = document.getElementById('manualPreviewFrame');
-        this.previewImage = document.getElementById('manualPreviewImage');
+        this.previewCanvas = document.getElementById('manualPreviewCanvas');
         this.overlay = document.getElementById('manualOverlay');
         this.draftBox = document.getElementById('manualDraftBox');
         this.pageIndicator = document.getElementById('manualPageIndicator');
@@ -123,20 +130,6 @@ const ManualPage = {
         this.overlay.addEventListener('pointermove', (event) => this.updateDrawing(event));
         this.overlay.addEventListener('pointerup', (event) => this.finishDrawing(event));
         this.overlay.addEventListener('pointerleave', (event) => this.finishDrawing(event));
-
-        this.previewImage.addEventListener('load', () => {
-            this.state.loadingPreview = false;
-            this.previewFrame.classList.remove('is-loading');
-            this.workspaceHint.textContent = `当前是第 ${this.state.currentPage} 页。拖拽可新增框选，右侧可补充 caption 并提交。`;
-            this.renderSelections();
-        });
-
-        this.previewImage.addEventListener('error', () => {
-            this.state.loadingPreview = false;
-            this.previewFrame.classList.remove('is-loading');
-            this.workspaceHint.textContent = '页面预览加载失败，请稍后重试。';
-            Utils.showToast('PDF 页面预览加载失败', 'error');
-        });
     },
 
     async loadWorkspace() {
@@ -144,8 +137,9 @@ const ManualPage = {
             const payload = await API.getManualExtractionWorkspace(this.state.paperId);
             const workspace = payload.workspace;
             this.state.paper = workspace.paper;
-            this.state.pageCount = workspace.page_count || 0;
+            this.renderWorkspace();
 
+            await this.loadPDFDocument();
             this.renderWorkspace();
 
             const initialPage = Number(new URLSearchParams(window.location.search).get('page')) || 1;
@@ -156,20 +150,61 @@ const ManualPage = {
         }
     },
 
+    async ensurePDFJSReady() {
+        if (this.state.pdfjsLib) {
+            return this.state.pdfjsLib;
+        }
+
+        const pdfjsLib = await import('/static/vendor/pdfjs/legacy/build/pdf.min.mjs');
+        pdfjsLib.GlobalWorkerOptions.workerSrc = '/static/vendor/pdfjs/legacy/build/pdf.worker.min.mjs';
+        this.state.pdfjsLib = pdfjsLib;
+        return pdfjsLib;
+    },
+
+    async loadPDFDocument() {
+        if (!this.state.paper?.pdf_url) {
+            throw new Error('当前文献缺少 PDF 文件地址');
+        }
+
+        this.previewFrame.classList.add('is-loading');
+        this.workspaceHint.textContent = '正在加载 PDF 文档...';
+
+        const pdfjsLib = await this.ensurePDFJSReady();
+        const loadingTask = pdfjsLib.getDocument({
+            url: this.state.paper.pdf_url,
+            cMapUrl: '/static/vendor/pdfjs/cmaps/',
+            cMapPacked: true,
+            standardFontDataUrl: '/static/vendor/pdfjs/standard_fonts/',
+            wasmUrl: '/static/vendor/pdfjs/wasm/'
+        });
+
+        const pdfDocument = await loadingTask.promise;
+        this.state.pdfDocument = pdfDocument;
+        this.state.pageCount = pdfDocument.numPages || 0;
+        this.state.renderCache = new Map();
+    },
+
     renderWorkspace() {
         const paper = this.state.paper;
+        if (!paper) return;
+
         const manualCount = (paper.figures || []).filter((figure) => figure.source === 'manual').length;
 
         this.pageTitle.textContent = `${paper.title} 的人工框选提取`;
         this.pageSubtitle.textContent = paper.extractor_message
             ? `自动处理状态：${Utils.statusLabel(paper.extraction_status)}。${paper.extractor_message}`
-            : '可直接在页图上框选图片区域，并把裁剪结果追加到当前文献。';
+            : 'PDF 预览和裁图现在直接在浏览器里完成，提交后会把结果追加到当前文献。';
 
         this.openPDFLink.href = paper.pdf_url || '/';
         this.backLibraryLink.href = '/';
+        this.pageIndicator.textContent = this.state.pageCount
+            ? `第 ${this.state.currentPage} / ${this.state.pageCount} 页`
+            : '正在读取 PDF...';
+        this.prevPageBtn.disabled = this.state.currentPage <= 1;
+        this.nextPageBtn.disabled = !this.state.pageCount || this.state.currentPage >= this.state.pageCount;
 
         this.summaryStrip.innerHTML = `
-            <div class="stat-card"><span>PDF 页数</span><strong>${this.state.pageCount || 0}</strong></div>
+            <div class="stat-card"><span>PDF 页数</span><strong>${this.state.pageCount || '...'}</strong></div>
             <div class="stat-card"><span>已有图片</span><strong>${paper.figure_count || (paper.figures || []).length || 0}</strong></div>
             <div class="stat-card"><span>人工补录</span><strong>${manualCount}</strong></div>
             <div class="stat-card"><span>自动状态</span><strong>${Utils.escapeHTML(Utils.statusLabel(paper.extraction_status || ''))}</strong></div>
@@ -200,20 +235,86 @@ const ManualPage = {
     },
 
     async loadPage(page) {
-        if (!this.state.pageCount) return;
+        if (!this.state.pdfDocument || !this.state.pageCount) return;
+
         this.state.currentPage = page;
         this.state.loadingPreview = true;
         this.previewFrame.classList.add('is-loading');
-        this.workspaceHint.textContent = `正在加载第 ${page} 页预览...`;
+        this.workspaceHint.textContent = `正在渲染第 ${page} 页...`;
         this.pageIndicator.textContent = `第 ${page} / ${this.state.pageCount} 页`;
         this.prevPageBtn.disabled = page <= 1;
         this.nextPageBtn.disabled = page >= this.state.pageCount;
-        this.previewImage.src = `${API.manualPreviewURL(this.state.paperId, page)}&t=${Date.now()}`;
         this.renderSelections();
+
+        const renderToken = ++this.state.previewRenderToken;
+        try {
+            await this.renderPDFPageToCanvas(page, this.previewScale, this.previewCanvas, window.devicePixelRatio || 1);
+            if (renderToken !== this.state.previewRenderToken) {
+                return;
+            }
+            this.state.loadingPreview = false;
+            this.previewFrame.classList.remove('is-loading');
+            this.workspaceHint.textContent = `当前是第 ${page} 页。拖拽可新增框选，右侧可补充 caption 并提交。`;
+            this.renderSelections();
+        } catch (error) {
+            if (renderToken !== this.state.previewRenderToken) {
+                return;
+            }
+            this.state.loadingPreview = false;
+            this.previewFrame.classList.remove('is-loading');
+            this.workspaceHint.textContent = 'PDF 页面渲染失败，请稍后重试。';
+            Utils.showToast(error.message || 'PDF 页面渲染失败', 'error');
+        }
+    },
+
+    async renderPDFPageToCanvas(pageNumber, scale, canvas, outputScale = 1) {
+        const page = await this.state.pdfDocument.getPage(pageNumber);
+        const viewport = page.getViewport({ scale });
+        const context = canvas.getContext('2d', { alpha: false });
+
+        const width = Math.max(1, Math.ceil(viewport.width));
+        const height = Math.max(1, Math.ceil(viewport.height));
+        const pixelRatio = Math.max(1, outputScale);
+
+        canvas.width = Math.ceil(width * pixelRatio);
+        canvas.height = Math.ceil(height * pixelRatio);
+        canvas.style.width = `${width}px`;
+        canvas.style.height = `${height}px`;
+
+        context.save();
+        context.setTransform(1, 0, 0, 1, 0, 0);
+        context.clearRect(0, 0, canvas.width, canvas.height);
+        context.fillStyle = '#ffffff';
+        context.fillRect(0, 0, canvas.width, canvas.height);
+        context.restore();
+
+        await page.render({
+            canvasContext: context,
+            viewport,
+            transform: pixelRatio === 1 ? null : [pixelRatio, 0, 0, pixelRatio, 0, 0],
+            background: 'rgba(255,255,255,1)'
+        }).promise;
+
+        return canvas;
+    },
+
+    async getExtractionCanvas(pageNumber) {
+        if (this.state.renderCache.has(pageNumber)) {
+            return this.state.renderCache.get(pageNumber);
+        }
+
+        const renderPromise = (async () => {
+            const canvas = document.createElement('canvas');
+            await this.renderPDFPageToCanvas(pageNumber, this.extractScale, canvas, 1);
+            return canvas;
+        })();
+
+        this.state.renderCache.set(pageNumber, renderPromise);
+        return renderPromise;
     },
 
     startDrawing(event) {
-        if (this.state.loadingPreview || !this.previewImage.src) return;
+        if (this.state.loadingPreview || !this.previewCanvas.width) return;
         if (event.button !== 0 && event.pointerType !== 'touch') return;
 
         const rect = this.previewFrame.getBoundingClientRect();
@@ -422,6 +523,29 @@ const ManualPage = {
         this.previewFrame.scrollIntoView({ behavior: 'smooth', block: 'center' });
     },
 
+    async buildSelectionImageData(selection) {
+        const canvas = await this.getExtractionCanvas(selection.page_number);
+        const left = Math.max(0, Math.floor(selection.x * canvas.width));
+        const top = Math.max(0, Math.floor(selection.y * canvas.height));
+        const right = Math.min(canvas.width, Math.ceil((selection.x + selection.width) * canvas.width));
+        const bottom = Math.min(canvas.height, Math.ceil((selection.y + selection.height) * canvas.height));
+        const width = right - left;
+        const height = bottom - top;
+
+        if (width < 2 || height < 2) {
+            throw new Error('框选区域过小，请重新选择');
+        }
+
+        const cropCanvas = document.createElement('canvas');
+        cropCanvas.width = width;
+        cropCanvas.height = height;
+        const context = cropCanvas.getContext('2d', { alpha: false });
+        context.fillStyle = '#ffffff';
+        context.fillRect(0, 0, width, height);
+        context.drawImage(canvas, left, top, width, height, 0, 0, width, height);
+        return cropCanvas.toDataURL('image/png');
+    },
+
     async submitSelections() {
         if (this.state.submitting) return;
         if (!this.state.selections.length) {
@@ -434,17 +558,21 @@ const ManualPage = {
         this.submitBtn.textContent = '提取中...';
 
         try {
-            const payload = await API.manualExtractFigures(this.state.paperId, {
-                regions: this.state.selections.map((selection) => ({
+            const regions = [];
+            for (const selection of this.state.selections) {
+                regions.push({
                     page_number: selection.page_number,
                     x: selection.x,
                     y: selection.y,
                     width: selection.width,
                     height: selection.height,
+                    image_data: await this.buildSelectionImageData(selection),
                     caption: selection.caption.trim(),
                     replace_figure_id: selection.replace_figure_id || null
-                }))
-            });
+                });
+            }
+
+            const payload = await API.manualExtractFigures(this.state.paperId, { regions });
 
             this.state.paper = payload.paper;
             this.state.selections = [];
