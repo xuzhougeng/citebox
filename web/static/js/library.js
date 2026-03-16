@@ -4,7 +4,6 @@ const LibraryPage = {
         pageSize: 12,
         groups: [],
         tags: [],
-        modalPaperId: null,
         filters: {
             keyword: '',
             group_id: '',
@@ -41,9 +40,7 @@ const LibraryPage = {
         this.tagNameInput = document.getElementById('tagNameInput');
         this.tagColorInput = document.getElementById('tagColorInput');
         this.tagList = document.getElementById('tagList');
-        this.paperModal = document.getElementById('paperModal');
-        this.paperModalBody = document.getElementById('paperModalBody');
-        this.closePaperModal = document.getElementById('closePaperModal');
+        this.purgeLibraryButton = document.getElementById('purgeLibraryButton');
     },
 
     bindEvents() {
@@ -132,30 +129,8 @@ const LibraryPage = {
                 await this.deleteTag(id);
             }
         });
-
-        this.closePaperModal.addEventListener('click', () => this.closeModal());
-        this.paperModal.addEventListener('click', (event) => {
-            if (event.target === this.paperModal) {
-                this.closeModal();
-            }
-        });
-
-        this.paperModalBody.addEventListener('submit', async (event) => {
-            const form = event.target.closest('#paperEditForm');
-            if (!form) return;
-            event.preventDefault();
-            await this.savePaper();
-        });
-
-        this.paperModalBody.addEventListener('click', async (event) => {
-            const button = event.target.closest('[data-modal-action]');
-            if (!button) return;
-            if (button.dataset.modalAction === 'reextract-paper') {
-                await this.reextractPaper(this.state.modalPaperId, true);
-            }
-            if (button.dataset.modalAction === 'delete-paper') {
-                await this.deletePaper(this.state.modalPaperId);
-            }
+        this.purgeLibraryButton.addEventListener('click', async () => {
+            await this.purgeLibrary();
         });
 
         window.addEventListener('beforeunload', () => this.stopAutoRefresh());
@@ -257,29 +232,31 @@ const LibraryPage = {
         this.paperList.innerHTML = this.state.papers.map((paper) => {
             const tags = (paper.tags || []).map((tag) => `<span class="chip" style="--chip-color:${tag.color}">${Utils.escapeHTML(tag.name)}</span>`).join('');
             const statusClass = Utils.statusTone(paper.extraction_status);
+            const summary = paper.abstract_text || paper.notes_text;
 
             return `
-                <article class="paper-card" data-paper-id="${paper.id}">
-                    <div class="paper-card-head">
-                        <span class="status-pill ${statusClass}">${Utils.escapeHTML(Utils.statusLabel(paper.extraction_status))}</span>
-                        <span class="muted">${Utils.formatDate(paper.created_at)}</span>
+                <article class="paper-list-row" data-paper-id="${paper.id}">
+                    <div class="paper-list-main">
+                        <div class="paper-list-head">
+                            <span class="status-pill ${statusClass}">${Utils.escapeHTML(Utils.statusLabel(paper.extraction_status))}</span>
+                            <h3>${Utils.escapeHTML(paper.title)}</h3>
+                        </div>
+                        <div class="paper-list-meta">
+                            <span>文件：${Utils.escapeHTML(paper.original_filename)}</span>
+                            <span>分组：${Utils.escapeHTML(paper.group_name || '未分组')}</span>
+                            <span>图片：${paper.figure_count || 0}</span>
+                            <span>更新：${Utils.formatDate(paper.updated_at || paper.created_at)}</span>
+                        </div>
+                        ${summary ? `<p class="paper-list-summary">${Utils.escapeHTML(summary)}</p>` : ''}
+                        ${paper.extractor_message ? `<p class="notice ${statusClass} paper-list-notice">${Utils.escapeHTML(paper.extractor_message)}</p>` : ''}
                     </div>
-                    <h3>${Utils.escapeHTML(paper.title)}</h3>
-                    <p class="paper-filename">${Utils.escapeHTML(paper.original_filename)}</p>
-                    <div class="meta-row">
-                        <span>分组</span>
-                        <strong>${Utils.escapeHTML(paper.group_name || '未分组')}</strong>
-                    </div>
-                    <div class="meta-row">
-                        <span>提取图片</span>
-                        <strong>${paper.figure_count || 0}</strong>
-                    </div>
-                    <div class="chip-row">${tags || '<span class="muted">无 Tag</span>'}</div>
-                    ${paper.extractor_message ? `<p class="notice ${statusClass}">${Utils.escapeHTML(paper.extractor_message)}</p>` : ''}
-                    <div class="card-actions">
-                        <button class="btn btn-primary" type="button" data-action="open">查看详情</button>
-                        ${(paper.extraction_status === 'failed' || paper.extraction_status === 'cancelled') ? '<button class="btn btn-outline" type="button" data-action="reextract">重新解析</button>' : ''}
-                        <button class="btn btn-outline danger" type="button" data-action="delete">删除</button>
+                    <div class="paper-list-side">
+                        <div class="paper-list-tags">${tags || '<span class="muted">无 Tag</span>'}</div>
+                        <div class="card-actions paper-list-actions">
+                            <button class="btn btn-primary" type="button" data-action="open">编辑详情</button>
+                            ${(paper.extraction_status === 'failed' || paper.extraction_status === 'cancelled') ? '<button class="btn btn-outline" type="button" data-action="reextract">重新解析</button>' : ''}
+                            <button class="btn btn-outline danger" type="button" data-action="delete">删除</button>
+                        </div>
                     </div>
                 </article>
             `;
@@ -473,128 +450,9 @@ const LibraryPage = {
     },
 
     async openPaperModal(id) {
-        try {
-            const paper = await API.getPaper(id);
-            this.state.modalPaperId = id;
-            this.renderPaperModal(paper);
-            this.paperModal.classList.remove('hidden');
-            document.body.classList.add('modal-open');
-        } catch (error) {
-            Utils.showToast(error.message, 'error');
-        }
-    },
-
-    closeModal() {
-        this.state.modalPaperId = null;
-        this.paperModal.classList.add('hidden');
-        document.body.classList.remove('modal-open');
-    },
-
-    renderPaperModal(paper) {
-        const groupOptions = ['<option value="">未分组</option>']
-            .concat(this.state.groups.map((group) => `
-                <option value="${group.id}" ${String(group.id) === String(paper.group_id || '') ? 'selected' : ''}>
-                    ${Utils.escapeHTML(group.name)}
-                </option>
-            `))
-            .join('');
-
-        const tags = (paper.tags || []).map((tag) => `<span class="chip" style="--chip-color:${tag.color}">${Utils.escapeHTML(tag.name)}</span>`).join('');
-        const figures = paper.figures || [];
-        const boxes = paper.boxes ? JSON.stringify(paper.boxes, null, 2) : '';
-        const statusClass = Utils.statusTone(paper.extraction_status);
-        const figureSection = figures.length ? figures.map((figure) => `
-                        <figure class="figure-card">
-                            <img src="${figure.image_url}" alt="${Utils.escapeHTML(figure.original_name || paper.title)}">
-                            <figcaption>
-                                <strong>第 ${figure.page_number || '-'} 页</strong>
-                                <span>${Utils.escapeHTML(figure.caption || figure.original_name || '未命名图片')}</span>
-                            </figcaption>
-                        </figure>
-                    `).join('') : `<p class="muted">${Utils.isProcessingStatus(paper.extraction_status) ? '后台解析完成后会在这里显示提取图片。' : '没有可展示的提取图片。'}</p>`;
-
-        this.paperModalBody.innerHTML = `
-            <div class="detail-head">
-                <div>
-                    <p class="eyebrow">文献详情</p>
-                    <h2>${Utils.escapeHTML(paper.title)}</h2>
-                </div>
-                <span class="status-pill ${statusClass}">
-                    ${Utils.escapeHTML(Utils.statusLabel(paper.extraction_status))}
-                </span>
-            </div>
-
-            <form id="paperEditForm" class="detail-form">
-                <label class="field">
-                    <span>标题</span>
-                    <input id="paperTitleInput" class="form-input" type="text" value="${Utils.escapeHTML(paper.title)}">
-                </label>
-                <label class="field">
-                    <span>分组</span>
-                    <select id="paperGroupInput" class="form-input">${groupOptions}</select>
-                </label>
-                <label class="field">
-                    <span>标签</span>
-                    <input id="paperTagsInput" class="form-input" type="text" value="${Utils.escapeHTML(Utils.joinTags(paper.tags || []))}">
-                </label>
-                <div class="detail-actions">
-                    <button class="btn btn-primary" type="submit">保存</button>
-                    ${(paper.extraction_status === 'failed' || paper.extraction_status === 'cancelled') ? '<button class="btn btn-outline" type="button" data-modal-action="reextract-paper">重新解析</button>' : ''}
-                    <button class="btn btn-outline danger" type="button" data-modal-action="delete-paper">删除文献</button>
-                    <a class="btn btn-outline" href="${paper.pdf_url}" target="_blank" rel="noreferrer">打开 PDF</a>
-                </div>
-            </form>
-
-            <div class="detail-meta-panel">
-                <div><span>原始文件</span><strong>${Utils.escapeHTML(paper.original_filename)}</strong></div>
-                <div><span>PDF 大小</span><strong>${Utils.formatFileSize(paper.file_size || 0)}</strong></div>
-                <div><span>提取图片</span><strong>${figures.length}</strong></div>
-                <div><span>当前标签</span><strong>${tags || '无'}</strong></div>
-            </div>
-
-            ${paper.extractor_message ? `<p class="notice ${statusClass}">${Utils.escapeHTML(paper.extractor_message)}</p>` : ''}
-
-            <section class="detail-section">
-                <div class="section-head">
-                    <h3>提取图片</h3>
-                    <span>${figures.length} 张</span>
-                </div>
-                <div class="figure-grid">
-                    ${figureSection}
-                </div>
-            </section>
-
-            <section class="detail-section">
-                <div class="section-head">
-                    <h3>框选结果</h3>
-                </div>
-                <pre class="code-block">${Utils.escapeHTML(boxes || '暂无框选结果')}</pre>
-            </section>
-
-            <section class="detail-section">
-                <div class="section-head">
-                    <h3>PDF 原文</h3>
-                </div>
-                <pre class="text-block">${Utils.escapeHTML(paper.pdf_text || '暂无 PDF 原文')}</pre>
-            </section>
-        `;
-    },
-
-    async savePaper() {
-        if (!this.state.modalPaperId) return;
-
-        try {
-            const payload = await API.updatePaper(this.state.modalPaperId, {
-                title: document.getElementById('paperTitleInput').value.trim(),
-                group_id: document.getElementById('paperGroupInput').value ? Number(document.getElementById('paperGroupInput').value) : null,
-                tags: Utils.splitTags(document.getElementById('paperTagsInput').value)
-            });
-            Utils.showToast('文献信息已更新');
+        await PaperViewer.open(id, async () => {
             await Promise.all([this.loadGroups(), this.loadTags(), this.loadPapers()]);
-            this.renderPaperModal(payload.paper);
-        } catch (error) {
-            Utils.showToast(error.message, 'error');
-        }
+        });
     },
 
     async deletePaper(id) {
@@ -604,24 +462,43 @@ const LibraryPage = {
         try {
             await API.deletePaper(id);
             Utils.showToast('文献已删除');
-            this.closeModal();
             await Promise.all([this.loadGroups(), this.loadTags(), this.loadPapers()]);
         } catch (error) {
             Utils.showToast(error.message, 'error');
         }
     },
 
-    async reextractPaper(id, keepModalOpen = false) {
+    async reextractPaper(id) {
         try {
-            const payload = await API.reextractPaper(id);
+            await API.reextractPaper(id);
             Utils.showToast('文献已重新提交解析', 'info');
             await Promise.all([this.loadGroups(), this.loadTags(), this.loadPapers()]);
-            if (keepModalOpen) {
-                this.state.modalPaperId = id;
-                this.renderPaperModal(payload.paper);
-                this.paperModal.classList.remove('hidden');
-                document.body.classList.add('modal-open');
-            }
+        } catch (error) {
+            Utils.showToast(error.message, 'error');
+        }
+    },
+
+    async purgeLibrary() {
+        const confirmed = await Utils.confirm('这会清空所有文献、提取图片、分组和标签，且不可恢复。');
+        if (!confirmed) return;
+
+        const token = window.prompt('为避免误操作，请输入 CLEAR 继续');
+        if (token !== 'CLEAR') {
+            Utils.showToast('未完成清库确认', 'info');
+            return;
+        }
+
+        try {
+            await API.purgeLibrary();
+            this.stopAutoRefresh();
+            this.keywordInput.value = '';
+            this.groupFilter.value = '';
+            this.tagFilter.value = '';
+            this.statusFilter.value = '';
+            this.state.currentPage = 1;
+            this.state.filters = { keyword: '', group_id: '', tag_id: '', status: '' };
+            Utils.showToast('数据库已清空');
+            await Promise.all([this.loadGroups(), this.loadTags(), this.loadPapers()]);
         } catch (error) {
             Utils.showToast(error.message, 'error');
         }

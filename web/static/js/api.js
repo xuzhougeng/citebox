@@ -62,6 +62,12 @@ const API = {
         });
     },
 
+    purgeLibrary() {
+        return requestJSON(`${API_BASE}/papers/purge`, {
+            method: 'POST'
+        });
+    },
+
     listFigures(params = {}) {
         const query = new URLSearchParams();
         Object.entries(params).forEach(([key, value]) => {

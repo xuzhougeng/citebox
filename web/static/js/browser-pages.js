@@ -9,26 +9,28 @@ const BrowserUI = {
     renderPaperCard(paper) {
         const tags = BrowserUI.renderTagChips(paper.tags || []);
         const statusClass = Utils.statusTone(paper.extraction_status);
+        const summary = paper.abstract_text || paper.notes_text;
         return `
-            <article class="paper-card" data-paper-id="${paper.id}">
-                <div class="paper-card-head">
-                    <span class="status-pill ${statusClass}">${Utils.escapeHTML(Utils.statusLabel(paper.extraction_status))}</span>
-                    <span class="muted">${Utils.formatDate(paper.created_at)}</span>
+            <article class="paper-list-row" data-paper-id="${paper.id}">
+                <div class="paper-list-main">
+                    <div class="paper-list-head">
+                        <span class="status-pill ${statusClass}">${Utils.escapeHTML(Utils.statusLabel(paper.extraction_status))}</span>
+                        <h3>${Utils.escapeHTML(paper.title)}</h3>
+                    </div>
+                    <div class="paper-list-meta">
+                        <span>文件：${Utils.escapeHTML(paper.original_filename)}</span>
+                        <span>分组：${Utils.escapeHTML(paper.group_name || '未分组')}</span>
+                        <span>图片：${paper.figure_count || 0}</span>
+                        <span>更新：${Utils.formatDate(paper.updated_at || paper.created_at)}</span>
+                    </div>
+                    ${summary ? `<p class="paper-list-summary">${Utils.escapeHTML(summary)}</p>` : ''}
+                    ${paper.extractor_message ? `<p class="notice ${statusClass} paper-list-notice">${Utils.escapeHTML(paper.extractor_message)}</p>` : ''}
                 </div>
-                <h3>${Utils.escapeHTML(paper.title)}</h3>
-                <p class="paper-filename">${Utils.escapeHTML(paper.original_filename)}</p>
-                <div class="meta-row">
-                    <span>分组</span>
-                    <strong>${Utils.escapeHTML(paper.group_name || '未分组')}</strong>
-                </div>
-                <div class="meta-row">
-                    <span>提取图片</span>
-                    <strong>${paper.figure_count || 0}</strong>
-                </div>
-                <div class="chip-row">${tags}</div>
-                ${paper.extractor_message ? `<p class="notice ${statusClass}">${Utils.escapeHTML(paper.extractor_message)}</p>` : ''}
-                <div class="card-actions">
-                    <button class="btn btn-primary" type="button" data-action="open">查看详情</button>
+                <div class="paper-list-side">
+                    <div class="paper-list-tags">${tags}</div>
+                    <div class="card-actions paper-list-actions">
+                        <button class="btn btn-primary" type="button" data-action="open">查看详情</button>
+                    </div>
                 </div>
             </article>
         `;
@@ -50,198 +52,6 @@ const BrowserUI = {
             `);
         }
         container.innerHTML = buttons.join('');
-    }
-};
-
-const PaperViewer = {
-    init() {
-        this.modal = document.getElementById('paperModal');
-        this.body = document.getElementById('paperModalBody');
-        this.closeButton = document.getElementById('closePaperModal');
-        if (!this.modal || this.initialized) return;
-        this.initialized = true;
-
-        this.closeButton.addEventListener('click', () => this.close());
-        this.modal.addEventListener('click', (event) => {
-            if (event.target === this.modal) {
-                this.close();
-            }
-        });
-
-        this.body.addEventListener('submit', async (event) => {
-            const form = event.target.closest('#paperViewerForm');
-            if (!form) return;
-            event.preventDefault();
-            await this.save();
-        });
-
-        this.body.addEventListener('click', async (event) => {
-            const button = event.target.closest('[data-modal-action]');
-            if (!button) return;
-            if (button.dataset.modalAction === 'reextract-paper') {
-                await this.reextract();
-            }
-            if (button.dataset.modalAction === 'delete-paper') {
-                await this.remove();
-            }
-        });
-    },
-
-    async open(id, onChanged) {
-        this.init();
-        this.onChanged = onChanged;
-        try {
-            const [paper, groupsPayload] = await Promise.all([API.getPaper(id), API.listGroups()]);
-            this.paper = paper;
-            this.groups = groupsPayload.groups || [];
-            this.render();
-            this.modal.classList.remove('hidden');
-            document.body.classList.add('modal-open');
-        } catch (error) {
-            Utils.showToast(error.message, 'error');
-        }
-    },
-
-    close() {
-        if (!this.modal) return;
-        this.modal.classList.add('hidden');
-        document.body.classList.remove('modal-open');
-    },
-
-    render() {
-        const paper = this.paper;
-        const groupOptions = ['<option value="">未分组</option>']
-            .concat(this.groups.map((group) => `
-                <option value="${group.id}" ${String(group.id) === String(paper.group_id || '') ? 'selected' : ''}>
-                    ${Utils.escapeHTML(group.name)}
-                </option>
-            `))
-            .join('');
-        const figures = paper.figures || [];
-        const boxes = paper.boxes ? JSON.stringify(paper.boxes, null, 2) : '';
-        const statusClass = Utils.statusTone(paper.extraction_status);
-        const figureSection = figures.length ? figures.map((figure) => `
-                        <figure class="figure-card">
-                            <img src="${figure.image_url}" alt="${Utils.escapeHTML(figure.original_name || paper.title)}">
-                            <figcaption>
-                                <strong>第 ${figure.page_number || '-'} 页</strong>
-                                <span>${Utils.escapeHTML(figure.caption || figure.original_name || '未命名图片')}</span>
-                            </figcaption>
-                        </figure>
-                    `).join('') : `<p class="muted">${Utils.isProcessingStatus(paper.extraction_status) ? '后台解析完成后会在这里显示提取图片。' : '没有可展示的提取图片。'}</p>`;
-
-        this.body.innerHTML = `
-            <div class="detail-head">
-                <div>
-                    <p class="eyebrow">文献详情</p>
-                    <h2>${Utils.escapeHTML(paper.title)}</h2>
-                </div>
-                <span class="status-pill ${statusClass}">
-                    ${Utils.escapeHTML(Utils.statusLabel(paper.extraction_status))}
-                </span>
-            </div>
-
-            <form id="paperViewerForm" class="detail-form">
-                <label class="field">
-                    <span>标题</span>
-                    <input id="paperViewerTitle" class="form-input" type="text" value="${Utils.escapeHTML(paper.title)}">
-                </label>
-                <label class="field">
-                    <span>分组</span>
-                    <select id="paperViewerGroup" class="form-input">${groupOptions}</select>
-                </label>
-                <label class="field">
-                    <span>标签</span>
-                    <input id="paperViewerTags" class="form-input" type="text" value="${Utils.escapeHTML(Utils.joinTags(paper.tags || []))}">
-                </label>
-                <div class="detail-actions">
-                    <button class="btn btn-primary" type="submit">保存</button>
-                    ${(paper.extraction_status === 'failed' || paper.extraction_status === 'cancelled') ? '<button class="btn btn-outline" type="button" data-modal-action="reextract-paper">重新解析</button>' : ''}
-                    <button class="btn btn-outline danger" type="button" data-modal-action="delete-paper">删除文献</button>
-                    <a class="btn btn-outline" href="${paper.pdf_url}" target="_blank" rel="noreferrer">打开 PDF</a>
-                </div>
-            </form>
-
-            <div class="detail-meta-panel">
-                <div><span>原始文件</span><strong>${Utils.escapeHTML(paper.original_filename)}</strong></div>
-                <div><span>PDF 大小</span><strong>${Utils.formatFileSize(paper.file_size || 0)}</strong></div>
-                <div><span>提取图片</span><strong>${figures.length}</strong></div>
-                <div><span>当前标签</span><strong>${BrowserUI.renderTagChips(paper.tags || [])}</strong></div>
-            </div>
-
-            ${paper.extractor_message ? `<p class="notice ${statusClass}">${Utils.escapeHTML(paper.extractor_message)}</p>` : ''}
-
-            <section class="detail-section">
-                <div class="section-head">
-                    <h3>提取图片</h3>
-                    <span>${figures.length} 张</span>
-                </div>
-                <div class="figure-grid">
-                    ${figureSection}
-                </div>
-            </section>
-
-            <section class="detail-section">
-                <div class="section-head">
-                    <h3>框选结果</h3>
-                </div>
-                <pre class="code-block">${Utils.escapeHTML(boxes || '暂无框选结果')}</pre>
-            </section>
-
-            <section class="detail-section">
-                <div class="section-head">
-                    <h3>PDF 原文</h3>
-                </div>
-                <pre class="text-block">${Utils.escapeHTML(paper.pdf_text || '暂无 PDF 原文')}</pre>
-            </section>
-        `;
-    },
-
-    async save() {
-        try {
-            const payload = await API.updatePaper(this.paper.id, {
-                title: document.getElementById('paperViewerTitle').value.trim(),
-                group_id: document.getElementById('paperViewerGroup').value ? Number(document.getElementById('paperViewerGroup').value) : null,
-                tags: Utils.splitTags(document.getElementById('paperViewerTags').value)
-            });
-            this.paper = payload.paper;
-            Utils.showToast('文献信息已更新');
-            this.render();
-            if (typeof this.onChanged === 'function') {
-                await this.onChanged();
-            }
-        } catch (error) {
-            Utils.showToast(error.message, 'error');
-        }
-    },
-
-    async remove() {
-        const confirmed = await Utils.confirm('删除后会移除 PDF、提取图片以及相关关联。');
-        if (!confirmed) return;
-        try {
-            await API.deletePaper(this.paper.id);
-            Utils.showToast('文献已删除');
-            this.close();
-            if (typeof this.onChanged === 'function') {
-                await this.onChanged();
-            }
-        } catch (error) {
-            Utils.showToast(error.message, 'error');
-        }
-    },
-
-    async reextract() {
-        try {
-            const payload = await API.reextractPaper(this.paper.id);
-            this.paper = payload.paper;
-            Utils.showToast('文献已重新提交解析', 'info');
-            this.render();
-            if (typeof this.onChanged === 'function') {
-                await this.onChanged();
-            }
-        } catch (error) {
-            Utils.showToast(error.message, 'error');
-        }
     }
 };
 
@@ -582,7 +392,7 @@ const FiguresPage = {
 };
 
 const GroupsPage = {
-    state: { selectedGroupId: '', page: 1, pageSize: 12, totalPaperCount: 0 },
+    state: { selectedGroupId: '', page: 1, pageSize: 20, totalPaperCount: 0 },
 
     async init() {
         PaperViewer.init();
@@ -741,7 +551,7 @@ const GroupsPage = {
 };
 
 const TagsPage = {
-    state: { selectedTagId: '', page: 1, pageSize: 12, totalPaperCount: 0 },
+    state: { selectedTagId: '', page: 1, pageSize: 20, totalPaperCount: 0 },
 
     async init() {
         PaperViewer.init();
