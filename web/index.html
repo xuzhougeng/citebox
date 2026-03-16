@@ -13,13 +13,15 @@
             <a href="/" class="logo">CiteBox</a>
             <ul class="nav-links">
                 <li><a href="/" class="active">文献库</a></li>
-                <li><a href="/figures">图片预览</a></li>
+                <li><a href="/figures">图片库</a></li>
                 <li><a href="/groups">分组</a></li>
                 <li><a href="/tags">标签</a></li>
                 <li><a href="/ai">AI 阅读</a></li>
                 <li><a href="/settings">配置</a></li>
-                <li><a href="/upload">上传 PDF</a></li>
             </ul>
+            <div class="nav-actions">
+                <a href="/upload" class="nav-cta">上传 PDF</a>
+            </div>
         </div>
     </nav>
 
@@ -32,15 +34,12 @@
                     上传 PDF 后，系统会为每篇文献保存原始文件、正文内容、框选结果和提取图片，并支持按分组与标签持续整理。
                 </p>
             </div>
-            <div class="hero-actions">
-                <a class="btn btn-primary" href="/upload">上传新文献</a>
-            </div>
         </section>
 
         <section class="shortcut-grid">
             <a class="shortcut-card" href="/figures">
                 <span class="eyebrow">Browse</span>
-                <h2>图片预览</h2>
+                <h2>图片库</h2>
                 <p>集中浏览所有提取图片，再回到对应文献继续查看细节。</p>
             </a>
             <a class="shortcut-card" href="/groups">
@@ -66,6 +65,13 @@
         </section>
 
         <section class="filters-card">
+            <div class="filters-card-head">
+                <div>
+                    <h2>筛选文献</h2>
+                    <p>按关键词、分组、文献标签和解析状态快速定位目标文献；需要新增内容时，再从这里继续上传。</p>
+                </div>
+                <a class="btn btn-secondary" href="/upload">上传新文献</a>
+            </div>
             <div class="filters-grid">
                 <label class="field">
                     <span>关键词</span>
@@ -78,9 +84,9 @@
                     </select>
                 </label>
                 <label class="field">
-                    <span>标签</span>
+                    <span>文献标签</span>
                     <select id="tagFilter" class="form-input">
-                        <option value="">全部标签</option>
+                        <option value="">全部文献标签</option>
                     </select>
                 </label>
                 <label class="field">
@@ -121,7 +127,7 @@
 
 	                <section class="manager-card">
 	                    <div class="manager-head">
-	                        <h2>标签</h2>
+	                        <h2>文献标签</h2>
                         <p>文献标签管理</p>
                     </div>
                     <form id="tagForm" class="manager-form inline-form">

@@ -265,7 +265,7 @@ func (s *LibraryService) UploadPaper(file multipart.File, header *multipart.File
 		return nil, apperr.Wrap(apperr.CodeInternal, "关闭 PDF 文件失败", err)
 	}
 
-	tagInputs := s.normalizeTagInputs(params.Tags)
+	tagInputs := s.normalizeTagInputs(params.Tags, model.TagScopePaper)
 	autoExtractionConfigured, err := s.autoExtractionConfigured()
 	if err != nil {
 		os.Remove(pdfPath)
@@ -323,7 +323,7 @@ func (s *LibraryService) UpdatePaper(id int64, params UpdatePaperParams) (*model
 		AbstractText: strings.TrimSpace(params.AbstractText),
 		NotesText:    strings.TrimSpace(params.NotesText),
 		GroupID:      params.GroupID,
-		Tags:         s.normalizeTagInputs(params.Tags),
+		Tags:         s.normalizeTagInputs(params.Tags, model.TagScopePaper),
 	})
 	if err != nil {
 		return nil, err
@@ -383,6 +383,19 @@ func (s *LibraryService) DeleteFigure(id int64) (*model.Paper, error) {
 	removeFiles([]string{filepath.Join(s.config.FiguresDir(), figure.Filename)})
 
 	paper, err := s.repo.GetPaperDetail(figure.PaperID)
+	if err != nil {
+		return nil, err
+	}
+	if paper == nil {
+		return nil, apperr.New(apperr.CodeNotFound, "paper not found")
+	}
+
+	s.decoratePaper(paper)
+	return paper, nil
+}
+
+func (s *LibraryService) UpdateFigureTags(id int64, tags []string) (*model.Paper, error) {
+	paper, err := s.repo.UpdateFigureTags(id, s.normalizeTagInputs(tags, model.TagScopeFigure))
 	if err != nil {
 		return nil, err
 	}
@@ -629,17 +642,17 @@ func (s *LibraryService) DeleteGroup(id int64) error {
 	return s.repo.DeleteGroup(id)
 }
 
-func (s *LibraryService) ListTags() ([]model.Tag, error) {
-	return s.repo.ListTags()
+func (s *LibraryService) ListTags(scope model.TagScope) ([]model.Tag, error) {
+	return s.repo.ListTags(scope)
 }
 
-func (s *LibraryService) CreateTag(name, color string) (*model.Tag, error) {
+func (s *LibraryService) CreateTag(scope model.TagScope, name, color string) (*model.Tag, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return nil, apperr.New(apperr.CodeInvalidArgument, "标签名称不能为空")
 	}
 	color = normalizeColor(color)
-	return s.repo.CreateTag(name, color)
+	return s.repo.CreateTag(model.NormalizeTagScope(string(scope)), name, color)
 }
 
 func (s *LibraryService) UpdateTag(id int64, name, color string) (*model.Tag, error) {
@@ -1277,6 +1290,9 @@ func (s *LibraryService) decoratePaper(paper *model.Paper) {
 		paper.PDFURL = "/files/papers/" + url.PathEscape(paper.StoredPDFName)
 	}
 	for i := range paper.Figures {
+		if paper.Figures[i].Tags == nil {
+			paper.Figures[i].Tags = []model.Tag{}
+		}
 		paper.Figures[i].ImageURL = "/files/figures/" + url.PathEscape(paper.Figures[i].Filename)
 	}
 }
@@ -1320,9 +1336,10 @@ func normalizeManualRegion(region model.ManualExtractionRegion) (model.ManualExt
 	return region, nil
 }
 
-func (s *LibraryService) normalizeTagInputs(names []string) []repository.TagUpsertInput {
+func (s *LibraryService) normalizeTagInputs(names []string, scope model.TagScope) []repository.TagUpsertInput {
 	seen := map[string]bool{}
 	result := []repository.TagUpsertInput{}
+	scope = model.NormalizeTagScope(string(scope))
 
 	for _, name := range names {
 		normalized := strings.TrimSpace(name)
@@ -1335,6 +1352,7 @@ func (s *LibraryService) normalizeTagInputs(names []string) []repository.TagUpse
 		}
 		seen[key] = true
 		result = append(result, repository.TagUpsertInput{
+			Scope: scope,
 			Name:  normalized,
 			Color: colorForName(normalized),
 		})

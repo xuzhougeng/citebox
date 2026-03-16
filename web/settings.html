@@ -13,17 +13,19 @@
             <a href="/" class="logo">CiteBox</a>
             <ul class="nav-links">
                 <li><a href="/">文献库</a></li>
-                <li><a href="/figures">图片预览</a></li>
+                <li><a href="/figures">图片库</a></li>
                 <li><a href="/groups">分组</a></li>
                 <li><a href="/tags">标签</a></li>
                 <li><a href="/ai">AI 阅读</a></li>
                 <li><a href="/settings" class="active">配置</a></li>
-                <li><a href="/upload">上传 PDF</a></li>
             </ul>
+            <div class="nav-actions">
+                <a href="/upload" class="nav-cta">上传 PDF</a>
+            </div>
         </div>
     </nav>
 
-    <main class="page-shell narrow">
+    <main class="page-shell">
         <section class="hero compact">
             <div>
                 <p class="eyebrow">Settings</p>
@@ -97,10 +99,6 @@
                     <label class="field">
                         <span>Tag 建议 Prompt</span>
                         <textarea id="aiTagPromptInput" class="form-textarea" rows="4" placeholder="标签建议模式的提示词"></textarea>
-                    </label>
-                    <label class="field">
-                        <span>Group 建议 Prompt</span>
-                        <textarea id="aiGroupPromptInput" class="form-textarea" rows="4" placeholder="分组建议模式的提示词"></textarea>
                     </label>
 
                     <div class="submit-row">

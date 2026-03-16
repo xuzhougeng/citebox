@@ -108,8 +108,8 @@ const PaperViewer = {
                         <span class="figure-preview-label">来源文献</span>
                         <strong class="figure-preview-title">${Utils.escapeHTML(paper.title)}</strong>
                     </div>
-                    <div class="figure-preview-tags ${paper.tags?.length ? '' : 'is-empty'}">
-                        ${paper.tags?.length ? this.renderTagChips(paper.tags || []) : '<span class="figure-preview-empty">无标签</span>'}
+                    <div class="figure-preview-tags ${figure.tags?.length ? '' : 'is-empty'}">
+                        ${figure.tags?.length ? this.renderTagChips(figure.tags || []) : '<span class="figure-preview-empty">无标签</span>'}
                     </div>
                     <div class="card-actions">
                         <button class="btn btn-primary" type="button" data-modal-action="preview-figure" data-figure-index="${index}">查看大图</button>
@@ -217,7 +217,7 @@ const PaperViewer = {
             paper_title: paper.title,
             group_id: paper.group_id,
             group_name: paper.group_name || '',
-            tags: paper.tags || []
+            tags: figure.tags || []
         }));
     },
 

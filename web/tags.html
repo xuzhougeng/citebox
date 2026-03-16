@@ -13,13 +13,15 @@
             <a href="/" class="logo">CiteBox</a>
             <ul class="nav-links">
                 <li><a href="/">文献库</a></li>
-                <li><a href="/figures">图片预览</a></li>
+                <li><a href="/figures">图片库</a></li>
                 <li><a href="/groups">分组</a></li>
                 <li><a href="/tags" class="active">标签</a></li>
                 <li><a href="/ai">AI 阅读</a></li>
                 <li><a href="/settings">配置</a></li>
-                <li><a href="/upload">上传 PDF</a></li>
             </ul>
+            <div class="nav-actions">
+                <a href="/upload" class="nav-cta">上传 PDF</a>
+            </div>
         </div>
     </nav>
 
@@ -27,20 +29,26 @@
         <section class="hero compact">
             <div>
                 <p class="eyebrow">Tags</p>
-                <h1>用标签补充更灵活的检索入口</h1>
-                <p class="hero-text">标签适合方法、主题、阅读状态等多维标记，同一篇文献可以挂多个标签。</p>
+                <h1>为文献和图片建立各自清晰的标签入口</h1>
+                <p class="hero-text">文献标签适合标记主题、方法和阅读状态；图片标签适合标记图像内容、实验类型和局部特征，方便分别检索。</p>
             </div>
         </section>
 
         <section class="manager-card">
             <div class="manager-head">
-                <h2>新建标签</h2>
-                <p>标签适合轻量、多维、可叠加的整理方式。</p>
+                <h2>标签视图</h2>
+                <p>切换你当前想浏览的是文献标签还是图片标签。</p>
+            </div>
+            <div id="tagScopeSwitch" class="card-actions"></div>
+            <div class="manager-card-divider"></div>
+            <div class="manager-head">
+                <h2 id="tagCreatorTitle">新建文献标签</h2>
+                <p id="tagCreatorHint">标签适合轻量、多维、可叠加的整理方式。</p>
             </div>
             <form id="tagPageForm" class="manager-form inline-form">
                 <input id="tagPageNameInput" class="form-input" type="text" placeholder="例如：review">
                 <input id="tagPageColorInput" class="color-input" type="color" value="#A45C40">
-                <button class="btn btn-primary" type="submit">创建标签</button>
+                <button id="tagPageSubmit" class="btn btn-primary" type="submit">创建文献标签</button>
             </form>
         </section>
 
@@ -48,10 +56,10 @@
             <div id="tagCardGrid" class="entity-grid page-entity-grid"></div>
             <section class="filters-card">
                 <div class="manager-head">
-                    <h2 id="tagHeadline">全部标签下的文献</h2>
-                    <p>点击上方标签卡片切换筛选结果。</p>
+                    <h2 id="tagHeadline">全部文献标签下的文献</h2>
+                    <p id="tagScopeHint">点击上方标签卡片切换筛选结果。</p>
                 </div>
-                <div id="tagPaperList" class="paper-grid paper-list-mode"></div>
+                <div id="tagResultList" class="paper-grid paper-list-mode"></div>
                 <div id="tagPagination" class="pagination"></div>
             </section>
         </section>

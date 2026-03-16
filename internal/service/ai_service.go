@@ -215,7 +215,7 @@ func (s *AIService) prepareRead(input model.AIReadRequest, structuredOutput bool
 	if err != nil {
 		return nil, err
 	}
-	tags, err := s.repo.ListTags()
+	tags, err := s.repo.ListTags(tagScopeForAIAction(action))
 	if err != nil {
 		return nil, err
 	}
@@ -491,6 +491,15 @@ func normalizeAIAction(action model.AIAction) model.AIAction {
 		return action
 	default:
 		return model.AIActionPaperQA
+	}
+}
+
+func tagScopeForAIAction(action model.AIAction) model.TagScope {
+	switch action {
+	case model.AIActionFigureInterpretation, model.AIActionTagSuggestion:
+		return model.TagScopeFigure
+	default:
+		return model.TagScopePaper
 	}
 }
 

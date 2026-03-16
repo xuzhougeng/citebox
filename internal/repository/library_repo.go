@@ -22,6 +22,7 @@ type LibraryRepository struct {
 }
 
 type TagUpsertInput struct {
+	Scope model.TagScope
 	Name  string
 	Color string
 }
@@ -98,10 +99,12 @@ func (r *LibraryRepository) initSchema() error {
 
 	CREATE TABLE IF NOT EXISTS tags (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		name TEXT NOT NULL COLLATE NOCASE UNIQUE,
+		scope TEXT NOT NULL DEFAULT 'paper',
+		name TEXT NOT NULL COLLATE NOCASE,
 		color TEXT DEFAULT '#A45C40',
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		UNIQUE(scope, name)
 	);
 
 	CREATE TABLE IF NOT EXISTS app_settings (
@@ -150,11 +153,18 @@ func (r *LibraryRepository) initSchema() error {
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
 
+	CREATE TABLE IF NOT EXISTS figure_tags (
+		figure_id INTEGER NOT NULL REFERENCES paper_figures(id) ON DELETE CASCADE,
+		tag_id INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+		PRIMARY KEY (figure_id, tag_id)
+	);
+
 	CREATE INDEX IF NOT EXISTS idx_papers_group_id ON papers(group_id);
 	CREATE INDEX IF NOT EXISTS idx_papers_created_at ON papers(created_at);
 	CREATE INDEX IF NOT EXISTS idx_papers_status ON papers(extraction_status);
 	CREATE INDEX IF NOT EXISTS idx_paper_figures_paper_id ON paper_figures(paper_id);
 	CREATE INDEX IF NOT EXISTS idx_paper_tags_tag_id ON paper_tags(tag_id);
+	CREATE INDEX IF NOT EXISTS idx_figure_tags_tag_id ON figure_tags(tag_id);
 	`
 
 	if _, err := r.db.Exec(schema); err != nil {
@@ -178,13 +188,26 @@ func (r *LibraryRepository) ensureSchemaColumns() error {
 			return err
 		}
 	}
-	return nil
+	return r.ensureTagScopeSchema()
 }
 
 func (r *LibraryRepository) ensureColumn(tableName, columnName, definition string) error {
-	rows, err := r.db.Query(fmt.Sprintf("PRAGMA table_info(%s)", tableName))
+	hasColumn, err := r.hasColumn(tableName, columnName)
 	if err != nil {
 		return err
+	}
+	if hasColumn {
+		return nil
+	}
+
+	_, err = r.db.Exec(fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", tableName, columnName, definition))
+	return err
+}
+
+func (r *LibraryRepository) hasColumn(tableName, columnName string) (bool, error) {
+	rows, err := r.db.Query(fmt.Sprintf("PRAGMA table_info(%s)", tableName))
+	if err != nil {
+		return false, err
 	}
 	defer rows.Close()
 
@@ -198,22 +221,346 @@ func (r *LibraryRepository) ensureColumn(tableName, columnName, definition strin
 			primaryKey int
 		)
 		if err := rows.Scan(&cid, &name, &columnType, &notNull, &defaultVal, &primaryKey); err != nil {
-			return err
+			return false, err
 		}
 		if strings.EqualFold(name, columnName) {
-			return nil
+			return true, nil
 		}
+	}
+	if err := rows.Err(); err != nil {
+		return false, err
+	}
+
+	return false, nil
+}
+
+func (r *LibraryRepository) Close() error {
+	return r.db.Close()
+}
+
+func (r *LibraryRepository) ensureTagScopeSchema() (err error) {
+	ready, err := r.tagScopeSchemaReady()
+	if err != nil {
+		return err
+	}
+	if ready {
+		_, err = r.db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_tags_scope_name ON tags(scope, name COLLATE NOCASE)")
+		if err != nil {
+			return err
+		}
+		_, err = r.db.Exec("CREATE INDEX IF NOT EXISTS idx_tags_scope ON tags(scope)")
+		return err
+	}
+
+	hasScope, err := r.hasColumn("tags", "scope")
+	if err != nil {
+		return err
+	}
+
+	if _, err = r.db.Exec("PRAGMA foreign_keys = OFF"); err != nil {
+		return err
+	}
+	defer func() {
+		if _, pragmaErr := r.db.Exec("PRAGMA foreign_keys = ON"); err == nil && pragmaErr != nil {
+			err = pragmaErr
+		}
+	}()
+
+	tx, err := r.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	if err := r.rebuildTagsWithScopes(tx, hasScope); err != nil {
+		return err
+	}
+
+	return tx.Commit()
+}
+
+func (r *LibraryRepository) tagScopeSchemaReady() (bool, error) {
+	hasScope, err := r.hasColumn("tags", "scope")
+	if err != nil || !hasScope {
+		return false, err
+	}
+
+	rows, err := r.db.Query("PRAGMA index_list(tags)")
+	if err != nil {
+		return false, err
+	}
+	indexNames := []string{}
+	indexUnique := map[string]bool{}
+	for rows.Next() {
+		var (
+			seq     int
+			name    string
+			unique  int
+			origin  string
+			partial int
+		)
+		if err := rows.Scan(&seq, &name, &unique, &origin, &partial); err != nil {
+			return false, err
+		}
+		indexNames = append(indexNames, name)
+		indexUnique[name] = unique != 0
+	}
+	if err := rows.Err(); err != nil {
+		return false, err
+	}
+	rows.Close()
+
+	hasScopeNameUnique := false
+	hasLegacyNameUnique := false
+	for _, name := range indexNames {
+		if !indexUnique[name] {
+			continue
+		}
+		columns, err := r.indexColumns(name)
+		if err != nil {
+			return false, err
+		}
+		switch {
+		case len(columns) == 2 && strings.EqualFold(columns[0], "scope") && strings.EqualFold(columns[1], "name"):
+			hasScopeNameUnique = true
+		case len(columns) == 1 && strings.EqualFold(columns[0], "name"):
+			hasLegacyNameUnique = true
+		}
+	}
+	return hasScopeNameUnique && !hasLegacyNameUnique, nil
+}
+
+func (r *LibraryRepository) indexColumns(indexName string) ([]string, error) {
+	query := fmt.Sprintf("PRAGMA index_info('%s')", strings.ReplaceAll(indexName, "'", "''"))
+	rows, err := r.db.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	columns := []string{}
+	for rows.Next() {
+		var (
+			seqno int
+			cid   int
+			name  string
+		)
+		if err := rows.Scan(&seqno, &cid, &name); err != nil {
+			return nil, err
+		}
+		columns = append(columns, name)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return columns, nil
+}
+
+func (r *LibraryRepository) rebuildTagsWithScopes(tx *sql.Tx, hasScope bool) error {
+	type legacyTag struct {
+		ID        int64
+		Scope     model.TagScope
+		Name      string
+		Color     string
+		CreatedAt string
+		UpdatedAt string
+	}
+
+	query := "SELECT id, name, color, created_at, updated_at FROM tags ORDER BY id"
+	if hasScope {
+		query = "SELECT id, scope, name, color, created_at, updated_at FROM tags ORDER BY id"
+	}
+
+	rows, err := tx.Query(query)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	tags := []legacyTag{}
+	for rows.Next() {
+		var tag legacyTag
+		if hasScope {
+			if err := rows.Scan(&tag.ID, &tag.Scope, &tag.Name, &tag.Color, &tag.CreatedAt, &tag.UpdatedAt); err != nil {
+				return err
+			}
+			tag.Scope = model.NormalizeTagScope(string(tag.Scope))
+		} else {
+			if err := rows.Scan(&tag.ID, &tag.Name, &tag.Color, &tag.CreatedAt, &tag.UpdatedAt); err != nil {
+				return err
+			}
+			tag.Scope = model.TagScopePaper
+		}
+		tags = append(tags, tag)
 	}
 	if err := rows.Err(); err != nil {
 		return err
 	}
 
-	_, err = r.db.Exec(fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", tableName, columnName, definition))
-	return err
+	paperUsage, err := r.loadTagUsage(tx, "paper_tags", "paper_id")
+	if err != nil {
+		return err
+	}
+	figureUsage, err := r.loadTagUsage(tx, "figure_tags", "figure_id")
+	if err != nil {
+		return err
+	}
+
+	if _, err := tx.Exec(`
+		CREATE TABLE tags_new (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			scope TEXT NOT NULL DEFAULT 'paper',
+			name TEXT NOT NULL COLLATE NOCASE,
+			color TEXT DEFAULT '#A45C40',
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(scope, name)
+		)
+	`); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`
+		CREATE TABLE paper_tags_new (
+			paper_id INTEGER NOT NULL REFERENCES papers(id) ON DELETE CASCADE,
+			tag_id INTEGER NOT NULL REFERENCES tags_new(id) ON DELETE CASCADE,
+			PRIMARY KEY (paper_id, tag_id)
+		)
+	`); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`
+		CREATE TABLE figure_tags_new (
+			figure_id INTEGER NOT NULL REFERENCES paper_figures(id) ON DELETE CASCADE,
+			tag_id INTEGER NOT NULL REFERENCES tags_new(id) ON DELETE CASCADE,
+			PRIMARY KEY (figure_id, tag_id)
+		)
+	`); err != nil {
+		return err
+	}
+
+	tagIDMap := map[int64]map[model.TagScope]int64{}
+	for _, tag := range tags {
+		scopes := desiredTagScopes(paperUsage[tag.ID], figureUsage[tag.ID], tag.Scope)
+		preferred := tag.Scope
+		if !preferred.Valid() {
+			preferred = scopes[0]
+		}
+
+		tagIDMap[tag.ID] = map[model.TagScope]int64{}
+		for _, scope := range scopes {
+			var newID int64
+			if scope == preferred {
+				if _, err := tx.Exec(`
+					INSERT INTO tags_new (id, scope, name, color, created_at, updated_at)
+					VALUES (?, ?, ?, ?, ?, ?)
+				`, tag.ID, scope, tag.Name, tag.Color, tag.CreatedAt, tag.UpdatedAt); err != nil {
+					return err
+				}
+				newID = tag.ID
+			} else {
+				result, err := tx.Exec(`
+					INSERT INTO tags_new (scope, name, color, created_at, updated_at)
+					VALUES (?, ?, ?, ?, ?)
+				`, scope, tag.Name, tag.Color, tag.CreatedAt, tag.UpdatedAt)
+				if err != nil {
+					return err
+				}
+				newID, err = result.LastInsertId()
+				if err != nil {
+					return err
+				}
+			}
+			tagIDMap[tag.ID][scope] = newID
+		}
+	}
+
+	if err := copyScopedTagLinks(tx, "paper_tags", "paper_id", "paper_tags_new", model.TagScopePaper, tagIDMap); err != nil {
+		return err
+	}
+	if err := copyScopedTagLinks(tx, "figure_tags", "figure_id", "figure_tags_new", model.TagScopeFigure, tagIDMap); err != nil {
+		return err
+	}
+
+	for _, stmt := range []string{
+		"DROP TABLE paper_tags",
+		"DROP TABLE figure_tags",
+		"DROP TABLE tags",
+		"ALTER TABLE tags_new RENAME TO tags",
+		"ALTER TABLE paper_tags_new RENAME TO paper_tags",
+		"ALTER TABLE figure_tags_new RENAME TO figure_tags",
+		"CREATE UNIQUE INDEX idx_tags_scope_name ON tags(scope, name COLLATE NOCASE)",
+		"CREATE INDEX idx_tags_scope ON tags(scope)",
+		"CREATE INDEX idx_paper_tags_tag_id ON paper_tags(tag_id)",
+		"CREATE INDEX idx_figure_tags_tag_id ON figure_tags(tag_id)",
+	} {
+		if _, err := tx.Exec(stmt); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
-func (r *LibraryRepository) Close() error {
-	return r.db.Close()
+func (r *LibraryRepository) loadTagUsage(tx *sql.Tx, tableName, ownerColumn string) (map[int64]bool, error) {
+	query := fmt.Sprintf("SELECT DISTINCT tag_id FROM %s WHERE %s IS NOT NULL", tableName, ownerColumn)
+	rows, err := tx.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	usage := map[int64]bool{}
+	for rows.Next() {
+		var tagID int64
+		if err := rows.Scan(&tagID); err != nil {
+			return nil, err
+		}
+		usage[tagID] = true
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return usage, nil
+}
+
+func desiredTagScopes(usedByPaper, usedByFigure bool, current model.TagScope) []model.TagScope {
+	switch {
+	case usedByPaper && usedByFigure:
+		return []model.TagScope{model.TagScopePaper, model.TagScopeFigure}
+	case usedByPaper:
+		return []model.TagScope{model.TagScopePaper}
+	case usedByFigure:
+		return []model.TagScope{model.TagScopeFigure}
+	case current.Valid():
+		return []model.TagScope{current}
+	default:
+		return []model.TagScope{model.TagScopePaper}
+	}
+}
+
+func copyScopedTagLinks(tx *sql.Tx, sourceTable, ownerColumn, targetTable string, scope model.TagScope, tagIDMap map[int64]map[model.TagScope]int64) error {
+	query := fmt.Sprintf("SELECT %s, tag_id FROM %s", ownerColumn, sourceTable)
+	rows, err := tx.Query(query)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	insertStmt := fmt.Sprintf("INSERT OR IGNORE INTO %s (%s, tag_id) VALUES (?, ?)", targetTable, ownerColumn)
+	for rows.Next() {
+		var ownerID, legacyTagID int64
+		if err := rows.Scan(&ownerID, &legacyTagID); err != nil {
+			return err
+		}
+		newID := tagIDMap[legacyTagID][scope]
+		if newID == 0 {
+			return fmt.Errorf("missing migrated tag for legacy tag %d and scope %s", legacyTagID, scope)
+		}
+		if _, err := tx.Exec(insertStmt, ownerID, newID); err != nil {
+			return err
+		}
+	}
+	return rows.Err()
 }
 
 func (r *LibraryRepository) GroupExists(id int64) (bool, error) {
@@ -311,9 +658,6 @@ func (r *LibraryRepository) UpdatePaper(id int64, input PaperUpdateInput) (*mode
 		return nil, err
 	}
 
-	if _, err := tx.Exec("DELETE FROM paper_tags WHERE paper_id = ?", id); err != nil {
-		return nil, wrapDBError(err, "更新文献标签失败")
-	}
 	if err := r.syncPaperTags(tx, id, input.Tags); err != nil {
 		return nil, wrapDBError(err, "更新文献标签失败")
 	}
@@ -323,6 +667,40 @@ func (r *LibraryRepository) UpdatePaper(id int64, input PaperUpdateInput) (*mode
 	}
 
 	return r.GetPaperDetail(id)
+}
+
+func (r *LibraryRepository) UpdateFigureTags(id int64, tags []TagUpsertInput) (*model.Paper, error) {
+	tx, err := r.db.Begin()
+	if err != nil {
+		return nil, wrapDBError(err, "更新图片标签失败")
+	}
+	defer tx.Rollback()
+
+	var paperID int64
+	if err := tx.QueryRow("SELECT paper_id FROM paper_figures WHERE id = ?", id).Scan(&paperID); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, notFoundError("figure not found")
+		}
+		return nil, wrapDBError(err, "更新图片标签失败")
+	}
+
+	if err := r.syncFigureTags(tx, id, tags); err != nil {
+		return nil, wrapDBError(err, "更新图片标签失败")
+	}
+
+	if _, err := tx.Exec(`
+		UPDATE papers
+		SET updated_at = CURRENT_TIMESTAMP
+		WHERE id = ?
+	`, paperID); err != nil {
+		return nil, wrapDBError(err, "更新图片标签失败")
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, wrapDBError(err, "提交图片标签事务失败")
+	}
+
+	return r.GetPaperDetail(paperID)
 }
 
 func (r *LibraryRepository) DeletePaper(id int64) error {
@@ -560,7 +938,14 @@ func (r *LibraryRepository) GetFigure(id int64) (*model.FigureListItem, error) {
 		item.GroupID = &groupID.Int64
 		item.GroupName = groupName
 	}
-	item.Tags = []model.Tag{}
+	tagsByFigure, err := r.loadTagsByFigureIDs([]int64{id})
+	if err != nil {
+		return nil, wrapDBError(err, "查询图片标签失败")
+	}
+	item.Tags = tagsByFigure[id]
+	if item.Tags == nil {
+		item.Tags = []model.Tag{}
+	}
 	return &item, nil
 }
 
@@ -634,6 +1019,7 @@ func (r *LibraryRepository) GetPaperDetail(id int64) (*model.Paper, error) {
 	defer rows.Close()
 
 	paper.Figures = []model.Figure{}
+	figureIDs := []int64{}
 	for rows.Next() {
 		var figure model.Figure
 		var bboxJSON string
@@ -652,11 +1038,23 @@ func (r *LibraryRepository) GetPaperDetail(id int64) (*model.Paper, error) {
 			return nil, wrapDBError(err, "查询文献图片失败")
 		}
 		figure.BBox = rawJSON(bboxJSON)
+		figure.Tags = []model.Tag{}
 		paper.Figures = append(paper.Figures, figure)
+		figureIDs = append(figureIDs, figure.ID)
 	}
 
 	if err := rows.Err(); err != nil {
 		return nil, wrapDBError(err, "查询文献图片失败")
+	}
+
+	tagsByFigure, err := r.loadTagsByFigureIDs(figureIDs)
+	if err != nil {
+		return nil, wrapDBError(err, "查询图片标签失败")
+	}
+	for i := range paper.Figures {
+		if tags := tagsByFigure[paper.Figures[i].ID]; tags != nil {
+			paper.Figures[i].Tags = tags
+		}
 	}
 
 	return paper, nil
@@ -815,8 +1213,7 @@ func (r *LibraryRepository) ListFigures(filter model.FigureFilter) ([]model.Figu
 	defer rows.Close()
 
 	figures := []model.FigureListItem{}
-	paperIDs := []int64{}
-	seenPaperIDs := map[int64]bool{}
+	figureIDs := []int64{}
 	for rows.Next() {
 		var item model.FigureListItem
 		var groupID sql.NullInt64
@@ -842,21 +1239,18 @@ func (r *LibraryRepository) ListFigures(filter model.FigureFilter) ([]model.Figu
 		}
 		item.Tags = []model.Tag{}
 		figures = append(figures, item)
-		if !seenPaperIDs[item.PaperID] {
-			seenPaperIDs[item.PaperID] = true
-			paperIDs = append(paperIDs, item.PaperID)
-		}
+		figureIDs = append(figureIDs, item.ID)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, 0, wrapDBError(err, "查询图片列表失败")
 	}
 
-	tagsByPaper, err := r.loadTagsByPaperIDs(paperIDs)
+	tagsByFigure, err := r.loadTagsByFigureIDs(figureIDs)
 	if err != nil {
-		return nil, 0, wrapDBError(err, "查询文献标签失败")
+		return nil, 0, wrapDBError(err, "查询图片标签失败")
 	}
 	for i := range figures {
-		if tags := tagsByPaper[figures[i].PaperID]; tags != nil {
+		if tags := tagsByFigure[figures[i].ID]; tags != nil {
 			figures[i].Tags = tags
 		}
 	}
@@ -944,16 +1338,17 @@ func (r *LibraryRepository) DeleteGroup(id int64) error {
 	return ensureRowsAffected(result, "group not found")
 }
 
-func (r *LibraryRepository) ListTags() ([]model.Tag, error) {
+func (r *LibraryRepository) ListTags(scope model.TagScope) ([]model.Tag, error) {
+	scope = model.NormalizeTagScope(string(scope))
 	rows, err := r.db.Query(`
 		SELECT
-			t.id, t.name, t.color, t.created_at, t.updated_at,
-			COUNT(pt.paper_id) AS paper_count
+			t.id, t.scope, t.name, t.color, t.created_at, t.updated_at,
+			(SELECT COUNT(*) FROM paper_tags pt WHERE pt.tag_id = t.id) AS paper_count,
+			(SELECT COUNT(*) FROM figure_tags ft WHERE ft.tag_id = t.id) AS figure_count
 		FROM tags t
-		LEFT JOIN paper_tags pt ON pt.tag_id = t.id
-		GROUP BY t.id
+		WHERE t.scope = ?
 		ORDER BY t.name COLLATE NOCASE ASC
-	`)
+	`, scope)
 	if err != nil {
 		return nil, wrapDBError(err, "查询标签列表失败")
 	}
@@ -964,11 +1359,13 @@ func (r *LibraryRepository) ListTags() ([]model.Tag, error) {
 		var tag model.Tag
 		if err := rows.Scan(
 			&tag.ID,
+			&tag.Scope,
 			&tag.Name,
 			&tag.Color,
 			&tag.CreatedAt,
 			&tag.UpdatedAt,
 			&tag.PaperCount,
+			&tag.FigureCount,
 		); err != nil {
 			return nil, wrapDBError(err, "查询标签列表失败")
 		}
@@ -982,11 +1379,12 @@ func (r *LibraryRepository) ListTags() ([]model.Tag, error) {
 	return tags, nil
 }
 
-func (r *LibraryRepository) CreateTag(name, color string) (*model.Tag, error) {
+func (r *LibraryRepository) CreateTag(scope model.TagScope, name, color string) (*model.Tag, error) {
+	scope = model.NormalizeTagScope(string(scope))
 	result, err := r.db.Exec(`
-		INSERT INTO tags (name, color)
-		VALUES (?, ?)
-	`, name, color)
+		INSERT INTO tags (scope, name, color)
+		VALUES (?, ?, ?)
+	`, scope, name, color)
 	if err != nil {
 		return nil, wrapConflictDBError(err, "标签名称已存在", "创建标签失败")
 	}
@@ -1025,33 +1423,78 @@ func (r *LibraryRepository) DeleteTag(id int64) error {
 }
 
 func (r *LibraryRepository) syncPaperTags(tx *sql.Tx, paperID int64, tags []TagUpsertInput) error {
+	return r.syncEntityTags(tx, "paper_tags", "paper_id", paperID, tags, model.TagScopePaper)
+}
+
+func (r *LibraryRepository) syncFigureTags(tx *sql.Tx, figureID int64, tags []TagUpsertInput) error {
+	return r.syncEntityTags(tx, "figure_tags", "figure_id", figureID, tags, model.TagScopeFigure)
+}
+
+func (r *LibraryRepository) syncEntityTags(tx *sql.Tx, tableName, ownerColumn string, ownerID int64, tags []TagUpsertInput, scope model.TagScope) error {
+	if _, err := tx.Exec(
+		fmt.Sprintf("DELETE FROM %s WHERE %s = ?", tableName, ownerColumn),
+		ownerID,
+	); err != nil {
+		return err
+	}
+
 	if len(tags) == 0 {
 		return nil
 	}
 
+	tagIDs, err := r.upsertTagIDs(tx, scopedTagInputs(tags, scope))
+	if err != nil {
+		return err
+	}
+
+	for _, tagID := range tagIDs {
+		if _, err := tx.Exec(
+			fmt.Sprintf("INSERT OR IGNORE INTO %s (%s, tag_id) VALUES (?, ?)", tableName, ownerColumn),
+			ownerID,
+			tagID,
+		); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func scopedTagInputs(tags []TagUpsertInput, scope model.TagScope) []TagUpsertInput {
+	scope = model.NormalizeTagScope(string(scope))
+	scoped := make([]TagUpsertInput, 0, len(tags))
+	for _, tag := range tags {
+		tag.Scope = scope
+		scoped = append(scoped, tag)
+	}
+	return scoped
+}
+
+func (r *LibraryRepository) upsertTagIDs(tx *sql.Tx, tags []TagUpsertInput) ([]int64, error) {
 	tagIDs := make([]int64, 0, len(tags))
 	for _, tag := range tags {
+		scope := model.NormalizeTagScope(string(tag.Scope))
 		result, err := tx.Exec(`
-			INSERT INTO tags (name, color)
-			VALUES (?, ?)
-			ON CONFLICT(name) DO UPDATE SET
+			INSERT INTO tags (scope, name, color)
+			VALUES (?, ?, ?)
+			ON CONFLICT(scope, name) DO UPDATE SET
 				color = CASE
 					WHEN excluded.color <> '' THEN excluded.color
 					ELSE tags.color
 				END,
 				updated_at = CURRENT_TIMESTAMP
-		`, tag.Name, tag.Color)
+		`, scope, tag.Name, tag.Color)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		id, err := result.LastInsertId()
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if id == 0 {
-			if err := tx.QueryRow("SELECT id FROM tags WHERE name = ?", tag.Name).Scan(&id); err != nil {
-				return err
+			if err := tx.QueryRow("SELECT id FROM tags WHERE scope = ? AND name = ?", scope, tag.Name).Scan(&id); err != nil {
+				return nil, err
 			}
 		}
 		tagIDs = append(tagIDs, id)
@@ -1061,16 +1504,7 @@ func (r *LibraryRepository) syncPaperTags(tx *sql.Tx, paperID int64, tags []TagU
 		return tagIDs[i] < tagIDs[j]
 	})
 
-	for _, tagID := range tagIDs {
-		if _, err := tx.Exec(`
-			INSERT OR IGNORE INTO paper_tags (paper_id, tag_id)
-			VALUES (?, ?)
-		`, paperID, tagID); err != nil {
-			return err
-		}
-	}
-
-	return nil
+	return tagIDs, nil
 }
 
 func (r *LibraryRepository) getGroupByID(id int64) (*model.Group, error) {
@@ -1105,22 +1539,23 @@ func (r *LibraryRepository) getGroupByID(id int64) (*model.Group, error) {
 func (r *LibraryRepository) getTagByID(id int64) (*model.Tag, error) {
 	row := r.db.QueryRow(`
 		SELECT
-			t.id, t.name, t.color, t.created_at, t.updated_at,
-			COUNT(pt.paper_id)
+			t.id, t.scope, t.name, t.color, t.created_at, t.updated_at,
+			(SELECT COUNT(*) FROM paper_tags pt WHERE pt.tag_id = t.id),
+			(SELECT COUNT(*) FROM figure_tags ft WHERE ft.tag_id = t.id)
 		FROM tags t
-		LEFT JOIN paper_tags pt ON pt.tag_id = t.id
 		WHERE t.id = ?
-		GROUP BY t.id
 	`, id)
 
 	var tag model.Tag
 	if err := row.Scan(
 		&tag.ID,
+		&tag.Scope,
 		&tag.Name,
 		&tag.Color,
 		&tag.CreatedAt,
 		&tag.UpdatedAt,
 		&tag.PaperCount,
+		&tag.FigureCount,
 	); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, notFoundError("tag not found")
@@ -1145,7 +1580,7 @@ func (r *LibraryRepository) loadTagsByPaperIDs(paperIDs []int64) (map[int64][]mo
 	}
 
 	query := `
-		SELECT pt.paper_id, t.id, t.name, t.color, t.created_at, t.updated_at
+		SELECT pt.paper_id, t.id, t.scope, t.name, t.color, t.created_at, t.updated_at
 		FROM paper_tags pt
 		JOIN tags t ON t.id = pt.tag_id
 		WHERE pt.paper_id IN (` + strings.Join(placeholders, ",") + `)
@@ -1163,6 +1598,7 @@ func (r *LibraryRepository) loadTagsByPaperIDs(paperIDs []int64) (map[int64][]mo
 		if err := rows.Scan(
 			&paperID,
 			&tag.ID,
+			&tag.Scope,
 			&tag.Name,
 			&tag.Color,
 			&tag.CreatedAt,
@@ -1175,6 +1611,56 @@ func (r *LibraryRepository) loadTagsByPaperIDs(paperIDs []int64) (map[int64][]mo
 
 	if err := rows.Err(); err != nil {
 		return nil, wrapDBError(err, "查询文献标签失败")
+	}
+
+	return result, nil
+}
+
+func (r *LibraryRepository) loadTagsByFigureIDs(figureIDs []int64) (map[int64][]model.Tag, error) {
+	result := make(map[int64][]model.Tag, len(figureIDs))
+	if len(figureIDs) == 0 {
+		return result, nil
+	}
+
+	placeholders := make([]string, len(figureIDs))
+	args := make([]interface{}, len(figureIDs))
+	for i, figureID := range figureIDs {
+		placeholders[i] = "?"
+		args[i] = figureID
+	}
+
+	query := `
+		SELECT ft.figure_id, t.id, t.scope, t.name, t.color, t.created_at, t.updated_at
+		FROM figure_tags ft
+		JOIN tags t ON t.id = ft.tag_id
+		WHERE ft.figure_id IN (` + strings.Join(placeholders, ",") + `)
+		ORDER BY t.name COLLATE NOCASE ASC
+	`
+	rows, err := r.db.Query(query, args...)
+	if err != nil {
+		return nil, wrapDBError(err, "查询图片标签失败")
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var figureID int64
+		var tag model.Tag
+		if err := rows.Scan(
+			&figureID,
+			&tag.ID,
+			&tag.Scope,
+			&tag.Name,
+			&tag.Color,
+			&tag.CreatedAt,
+			&tag.UpdatedAt,
+		); err != nil {
+			return nil, wrapDBError(err, "查询图片标签失败")
+		}
+		result[figureID] = append(result[figureID], tag)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, wrapDBError(err, "查询图片标签失败")
 	}
 
 	return result, nil
@@ -1241,9 +1727,9 @@ func buildFigureWhere(filter model.FigureFilter) (string, []interface{}) {
 			pf.original_name LIKE ? OR
 			EXISTS (
 				SELECT 1
-				FROM paper_tags pt
-				JOIN tags t ON t.id = pt.tag_id
-				WHERE pt.paper_id = p.id AND t.name LIKE ?
+				FROM figure_tags ft
+				JOIN tags t ON t.id = ft.tag_id
+				WHERE ft.figure_id = pf.id AND t.name LIKE ?
 			)
 		)`)
 		args = append(args, like, like, like, like)
@@ -1255,7 +1741,7 @@ func buildFigureWhere(filter model.FigureFilter) (string, []interface{}) {
 	}
 
 	if filter.TagID != nil {
-		conditions = append(conditions, "EXISTS (SELECT 1 FROM paper_tags pt WHERE pt.paper_id = p.id AND pt.tag_id = ?)")
+		conditions = append(conditions, "EXISTS (SELECT 1 FROM figure_tags ft WHERE ft.figure_id = pf.id AND ft.tag_id = ?)")
 		args = append(args, *filter.TagID)
 	}
 

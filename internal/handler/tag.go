@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	"github.com/xuzhougeng/citebox/internal/apperr"
 	"github.com/xuzhougeng/citebox/internal/model"
@@ -18,7 +19,13 @@ func NewTagHandler(svc *service.LibraryService) *TagHandler {
 }
 
 func (h *TagHandler) List(w http.ResponseWriter, r *http.Request) {
-	tags, err := h.service.ListTags()
+	scope, err := parseTagScope(r.URL.Query().Get("scope"))
+	if err != nil {
+		sendError(w, err)
+		return
+	}
+
+	tags, err := h.service.ListTags(scope)
 	if err != nil {
 		sendError(w, err)
 		return
@@ -30,6 +37,7 @@ func (h *TagHandler) List(w http.ResponseWriter, r *http.Request) {
 
 func (h *TagHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var req struct {
+		Scope string `json:"scope"`
 		Name  string `json:"name"`
 		Color string `json:"color"`
 	}
@@ -38,7 +46,13 @@ func (h *TagHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tag, err := h.service.CreateTag(req.Name, req.Color)
+	scope, err := parseTagScope(req.Scope)
+	if err != nil {
+		sendError(w, err)
+		return
+	}
+
+	tag, err := h.service.CreateTag(scope, req.Name, req.Color)
 	if err != nil {
 		sendError(w, err)
 		return
@@ -94,4 +108,12 @@ func (h *TagHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		Success: true,
 		Message: "标签已删除",
 	})
+}
+
+func parseTagScope(raw string) (model.TagScope, error) {
+	scope := model.NormalizeTagScope(raw)
+	if strings.TrimSpace(raw) != "" && !model.TagScope(raw).Valid() {
+		return "", apperr.New(apperr.CodeInvalidArgument, "标签范围无效")
+	}
+	return scope, nil
 }

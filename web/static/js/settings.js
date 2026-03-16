@@ -16,7 +16,6 @@ const SettingsPage = {
         this.qaPromptInput = document.getElementById('aiQAPromptInput');
         this.figurePromptInput = document.getElementById('aiFigurePromptInput');
         this.tagPromptInput = document.getElementById('aiTagPromptInput');
-        this.groupPromptInput = document.getElementById('aiGroupPromptInput');
         this.providerNote = document.getElementById('aiProviderNote');
 
         this.extractorSettingsForm = document.getElementById('extractorSettingsForm');
@@ -89,7 +88,6 @@ const SettingsPage = {
         this.qaPromptInput.value = settings.qa_prompt || '';
         this.figurePromptInput.value = settings.figure_prompt || '';
         this.tagPromptInput.value = settings.tag_prompt || '';
-        this.groupPromptInput.value = settings.group_prompt || '';
 
         this.updateProviderUI();
     },
@@ -107,8 +105,7 @@ const SettingsPage = {
             system_prompt: this.systemPromptInput.value.trim(),
             qa_prompt: this.qaPromptInput.value.trim(),
             figure_prompt: this.figurePromptInput.value.trim(),
-            tag_prompt: this.tagPromptInput.value.trim(),
-            group_prompt: this.groupPromptInput.value.trim()
+            tag_prompt: this.tagPromptInput.value.trim()
         };
 
         await API.updateAISettings(payload);
