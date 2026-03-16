@@ -2,6 +2,7 @@ package service
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -30,6 +31,8 @@ type LibraryService struct {
 	logger          *slog.Logger
 	startBackground bool
 }
+
+const extractorSettingsKey = "extractor_settings"
 
 type LibraryServiceOption func(*LibraryService)
 
@@ -129,9 +132,7 @@ func NewLibraryService(repo *repository.LibraryRepository, cfg *config.Config, o
 		config:          cfg,
 		logger:          slog.Default().With("component", "library_service"),
 		startBackground: true,
-		httpClient: &http.Client{
-			Timeout: time.Duration(cfg.ExtractorTimeoutSeconds) * time.Second,
-		},
+		httpClient:      &http.Client{},
 	}
 
 	for _, opt := range opts {
@@ -433,6 +434,106 @@ func (s *LibraryService) DeleteTag(id int64) error {
 	return s.repo.DeleteTag(id)
 }
 
+func (s *LibraryService) GetExtractorSettings() (*model.ExtractorSettings, error) {
+	raw, err := s.repo.GetAppSetting(extractorSettingsKey)
+	if err != nil {
+		return nil, err
+	}
+
+	settings := s.defaultExtractorSettings()
+	if strings.TrimSpace(raw) != "" {
+		if err := json.Unmarshal([]byte(raw), &settings); err != nil {
+			return nil, apperr.Wrap(apperr.CodeInternal, "解析 PDF 提取配置失败", err)
+		}
+	}
+
+	normalized, err := s.normalizeExtractorSettings(settings)
+	if err != nil {
+		return nil, err
+	}
+	return &normalized, nil
+}
+
+func (s *LibraryService) UpdateExtractorSettings(input model.ExtractorSettings) (*model.ExtractorSettings, error) {
+	settings, err := s.normalizeExtractorSettings(input)
+	if err != nil {
+		return nil, err
+	}
+
+	payload, err := json.Marshal(settings)
+	if err != nil {
+		return nil, apperr.Wrap(apperr.CodeInternal, "序列化 PDF 提取配置失败", err)
+	}
+
+	if err := s.repo.UpsertAppSetting(extractorSettingsKey, string(payload)); err != nil {
+		return nil, err
+	}
+
+	return &settings, nil
+}
+
+func (s *LibraryService) defaultExtractorSettings() model.ExtractorSettings {
+	settings := model.ExtractorSettings{
+		ExtractorURL:        strings.TrimSpace(s.config.ExtractorURL),
+		ExtractorJobsURL:    strings.TrimSpace(s.config.ExtractorJobsURL),
+		ExtractorToken:      strings.TrimSpace(s.config.ExtractorToken),
+		ExtractorFileField:  strings.TrimSpace(s.config.ExtractorFileField),
+		TimeoutSeconds:      s.config.ExtractorTimeoutSeconds,
+		PollIntervalSeconds: s.config.ExtractorPollInterval,
+	}
+
+	cfg := &config.Config{
+		ExtractorURL:     settings.ExtractorURL,
+		ExtractorJobsURL: settings.ExtractorJobsURL,
+	}
+	settings.EffectiveExtractorURL = cfg.EffectiveExtractorURL()
+	settings.EffectiveJobsURL = cfg.EffectiveExtractorJobsURL()
+	return settings
+}
+
+func (s *LibraryService) normalizeExtractorSettings(input model.ExtractorSettings) (model.ExtractorSettings, error) {
+	defaults := s.defaultExtractorSettings()
+	settings := input
+
+	if strings.TrimSpace(settings.ExtractorFileField) == "" {
+		settings.ExtractorFileField = firstNonEmpty(defaults.ExtractorFileField, "file")
+	}
+	if settings.TimeoutSeconds <= 0 {
+		if defaults.TimeoutSeconds > 0 {
+			settings.TimeoutSeconds = defaults.TimeoutSeconds
+		} else {
+			settings.TimeoutSeconds = 300
+		}
+	}
+	if settings.PollIntervalSeconds <= 0 {
+		if defaults.PollIntervalSeconds > 0 {
+			settings.PollIntervalSeconds = defaults.PollIntervalSeconds
+		} else {
+			settings.PollIntervalSeconds = 2
+		}
+	}
+	if settings.TimeoutSeconds > 3600 {
+		return model.ExtractorSettings{}, apperr.New(apperr.CodeInvalidArgument, "PDF 提取超时时间不能超过 3600 秒")
+	}
+	if settings.PollIntervalSeconds > 300 {
+		return model.ExtractorSettings{}, apperr.New(apperr.CodeInvalidArgument, "轮询间隔不能超过 300 秒")
+	}
+
+	settings.ExtractorURL = strings.TrimSpace(settings.ExtractorURL)
+	settings.ExtractorJobsURL = strings.TrimSpace(settings.ExtractorJobsURL)
+	settings.ExtractorToken = strings.TrimSpace(settings.ExtractorToken)
+	settings.ExtractorFileField = strings.TrimSpace(settings.ExtractorFileField)
+
+	cfg := &config.Config{
+		ExtractorURL:     settings.ExtractorURL,
+		ExtractorJobsURL: settings.ExtractorJobsURL,
+	}
+	settings.EffectiveExtractorURL = cfg.EffectiveExtractorURL()
+	settings.EffectiveJobsURL = cfg.EffectiveExtractorJobsURL()
+
+	return settings, nil
+}
+
 func (s *LibraryService) validateGroup(groupID *int64) error {
 	if groupID == nil {
 		return nil
@@ -449,12 +550,13 @@ func (s *LibraryService) validateGroup(groupID *int64) error {
 }
 
 func (s *LibraryService) runPaperExtraction(paperID int64, pdfPath, originalFilename string) {
-	var err error
-
-	if jobsURL := strings.TrimSpace(s.config.EffectiveExtractorJobsURL()); jobsURL != "" {
-		err = s.processPaperExtractionJob(paperID, jobsURL, pdfPath, originalFilename)
-	} else {
-		err = s.processPaperExtractionSync(paperID, pdfPath, originalFilename)
+	settings, err := s.GetExtractorSettings()
+	if err == nil {
+		if jobsURL := strings.TrimSpace(settings.EffectiveJobsURL); jobsURL != "" {
+			err = s.processPaperExtractionJob(*settings, paperID, jobsURL, pdfPath, originalFilename)
+		} else {
+			err = s.processPaperExtractionSync(*settings, paperID, pdfPath, originalFilename)
+		}
 	}
 
 	if err == nil || apperr.IsCode(err, apperr.CodeNotFound) {
@@ -476,13 +578,19 @@ func (s *LibraryService) resumePendingExtractions() {
 		return
 	}
 
-	jobsURL := strings.TrimSpace(s.config.EffectiveExtractorJobsURL())
+	settings, err := s.GetExtractorSettings()
+	if err != nil {
+		s.logger.Error("load extractor settings failed", "error", err, "code", apperr.CodeOf(err))
+		return
+	}
+
+	jobsURL := strings.TrimSpace(settings.EffectiveJobsURL)
 	for _, paper := range papers {
 		paperID := paper.ID
 		jobID := strings.TrimSpace(paper.ExtractorJobID)
 		if jobsURL != "" && jobID != "" {
 			go func() {
-				if err := s.resumeRemoteExtraction(paperID, jobID); err != nil && !apperr.IsCode(err, apperr.CodeNotFound) {
+				if err := s.resumeRemoteExtraction(*settings, paperID, jobID); err != nil && !apperr.IsCode(err, apperr.CodeNotFound) {
 					s.logger.Error("resume paper extraction failed",
 						"paper_id", paperID,
 						"job_id", jobID,
@@ -506,12 +614,12 @@ func (s *LibraryService) resumePendingExtractions() {
 	}
 }
 
-func (s *LibraryService) processPaperExtractionSync(paperID int64, pdfPath, originalFilename string) error {
+func (s *LibraryService) processPaperExtractionSync(settings model.ExtractorSettings, paperID int64, pdfPath, originalFilename string) error {
 	if err := s.repo.UpdatePaperExtractionState(paperID, "running", "解析服务正在处理 PDF", ""); err != nil {
 		return err
 	}
 
-	result, err := s.extractPDFSync(pdfPath, originalFilename)
+	result, err := s.extractPDFSync(settings, pdfPath, originalFilename)
 	if err != nil {
 		return err
 	}
@@ -519,13 +627,13 @@ func (s *LibraryService) processPaperExtractionSync(paperID int64, pdfPath, orig
 	return s.persistExtractionResult(paperID, "", result)
 }
 
-func (s *LibraryService) processPaperExtractionJob(paperID int64, jobsURL, pdfPath, originalFilename string) error {
-	jobStatus, err := s.createExtractJob(jobsURL, pdfPath, originalFilename)
+func (s *LibraryService) processPaperExtractionJob(settings model.ExtractorSettings, paperID int64, jobsURL, pdfPath, originalFilename string) error {
+	jobStatus, err := s.createExtractJob(settings, jobsURL, pdfPath, originalFilename)
 	if err != nil {
 		return err
 	}
 
-	finalStatus, err := s.pollExtractJob(paperID, jobStatus)
+	finalStatus, err := s.pollExtractJob(settings, paperID, jobStatus)
 	if err != nil {
 		return err
 	}
@@ -535,7 +643,7 @@ func (s *LibraryService) processPaperExtractionJob(paperID int64, jobsURL, pdfPa
 		if err := s.repo.UpdatePaperExtractionState(paperID, "running", "解析结果已返回，正在写入文献库", finalStatus.JobID); err != nil {
 			return err
 		}
-		result, err := s.getExtractJobResult(finalStatus.JobID)
+		result, err := s.getExtractJobResult(settings, finalStatus.JobID)
 		if err != nil {
 			return err
 		}
@@ -549,15 +657,15 @@ func (s *LibraryService) processPaperExtractionJob(paperID int64, jobsURL, pdfPa
 	}
 }
 
-func (s *LibraryService) resumeRemoteExtraction(paperID int64, jobID string) error {
-	return s.processPaperExtractionJobWithExistingJob(paperID, &extractorJobStatusResponse{
+func (s *LibraryService) resumeRemoteExtraction(settings model.ExtractorSettings, paperID int64, jobID string) error {
+	return s.processPaperExtractionJobWithExistingJob(settings, paperID, &extractorJobStatusResponse{
 		JobID:  jobID,
 		Status: "queued",
 	})
 }
 
-func (s *LibraryService) processPaperExtractionJobWithExistingJob(paperID int64, initial *extractorJobStatusResponse) error {
-	finalStatus, err := s.pollExtractJob(paperID, initial)
+func (s *LibraryService) processPaperExtractionJobWithExistingJob(settings model.ExtractorSettings, paperID int64, initial *extractorJobStatusResponse) error {
+	finalStatus, err := s.pollExtractJob(settings, paperID, initial)
 	if err != nil {
 		return err
 	}
@@ -570,14 +678,14 @@ func (s *LibraryService) processPaperExtractionJobWithExistingJob(paperID int64,
 		return err
 	}
 
-	result, err := s.getExtractJobResult(finalStatus.JobID)
+	result, err := s.getExtractJobResult(settings, finalStatus.JobID)
 	if err != nil {
 		return err
 	}
 	return s.persistExtractionResult(paperID, finalStatus.JobID, result)
 }
 
-func (s *LibraryService) pollExtractJob(paperID int64, initial *extractorJobStatusResponse) (*extractorJobStatusResponse, error) {
+func (s *LibraryService) pollExtractJob(settings model.ExtractorSettings, paperID int64, initial *extractorJobStatusResponse) (*extractorJobStatusResponse, error) {
 	current := initial
 	if current == nil {
 		return nil, apperr.New(apperr.CodeFailedPrecondition, "缺少解析任务信息")
@@ -588,7 +696,7 @@ func (s *LibraryService) pollExtractJob(paperID int64, initial *extractorJobStat
 			return nil, apperr.New(apperr.CodeUnavailable, "解析任务未返回 job_id")
 		}
 
-		status, err := s.getExtractJobStatus(current.JobID)
+		status, err := s.getExtractJobStatus(settings, current.JobID)
 		if err != nil {
 			return nil, err
 		}
@@ -620,7 +728,7 @@ func (s *LibraryService) pollExtractJob(paperID int64, initial *extractorJobStat
 			return nil, apperr.New(apperr.CodeUnavailable, fmt.Sprintf("未知的解析任务状态: %s", status.Status))
 		}
 
-		time.Sleep(time.Duration(maxInt(s.config.ExtractorPollInterval, 1)) * time.Second)
+		time.Sleep(time.Duration(maxInt(settings.PollIntervalSeconds, 1)) * time.Second)
 	}
 }
 
@@ -669,18 +777,18 @@ func (s *LibraryService) markPaperExtractionFailed(paperID int64, jobID string, 
 	}
 }
 
-func (s *LibraryService) extractPDFSync(pdfPath, originalFilename string) (*extractionResult, error) {
-	extractURL := strings.TrimSpace(s.config.EffectiveExtractorURL())
+func (s *LibraryService) extractPDFSync(settings model.ExtractorSettings, pdfPath, originalFilename string) (*extractionResult, error) {
+	extractURL := strings.TrimSpace(settings.EffectiveExtractorURL)
 	if extractURL == "" {
 		return nil, apperr.New(apperr.CodeUnavailable, "PDF_EXTRACTOR_URL 未配置，无法调用解析后端")
 	}
 
-	req, err := s.newExtractorUploadRequest(http.MethodPost, extractURL, pdfPath, originalFilename)
+	req, err := s.newExtractorUploadRequest(settings, http.MethodPost, extractURL, pdfPath, originalFilename)
 	if err != nil {
 		return nil, err
 	}
 
-	respBody, err := s.doExtractorRequest(req)
+	respBody, err := s.doExtractorRequest(req, settings)
 	if err != nil {
 		return nil, err
 	}
@@ -688,13 +796,13 @@ func (s *LibraryService) extractPDFSync(pdfPath, originalFilename string) (*extr
 	return parseExtractionResult(respBody)
 }
 
-func (s *LibraryService) createExtractJob(jobsURL, pdfPath, originalFilename string) (*extractorJobStatusResponse, error) {
-	req, err := s.newExtractorUploadRequest(http.MethodPost, jobsURL, pdfPath, originalFilename)
+func (s *LibraryService) createExtractJob(settings model.ExtractorSettings, jobsURL, pdfPath, originalFilename string) (*extractorJobStatusResponse, error) {
+	req, err := s.newExtractorUploadRequest(settings, http.MethodPost, jobsURL, pdfPath, originalFilename)
 	if err != nil {
 		return nil, err
 	}
 
-	respBody, err := s.doExtractorRequest(req)
+	respBody, err := s.doExtractorRequest(req, settings)
 	if err != nil {
 		return nil, err
 	}
@@ -707,8 +815,8 @@ func (s *LibraryService) createExtractJob(jobsURL, pdfPath, originalFilename str
 	return &payload, nil
 }
 
-func (s *LibraryService) getExtractJobStatus(jobID string) (*extractorJobStatusResponse, error) {
-	jobsURL := strings.TrimSpace(s.config.EffectiveExtractorJobsURL())
+func (s *LibraryService) getExtractJobStatus(settings model.ExtractorSettings, jobID string) (*extractorJobStatusResponse, error) {
+	jobsURL := strings.TrimSpace(settings.EffectiveJobsURL)
 	if jobsURL == "" {
 		return nil, apperr.New(apperr.CodeUnavailable, "PDF_EXTRACTOR_JOBS_URL 未配置，无法轮询解析任务")
 	}
@@ -717,9 +825,9 @@ func (s *LibraryService) getExtractJobStatus(jobID string) (*extractorJobStatusR
 	if err != nil {
 		return nil, apperr.Wrap(apperr.CodeInternal, "创建解析任务轮询请求失败", err)
 	}
-	s.authorizeExtractorRequest(req)
+	s.authorizeExtractorRequest(settings, req)
 
-	respBody, err := s.doExtractorRequest(req)
+	respBody, err := s.doExtractorRequest(req, settings)
 	if err != nil {
 		return nil, err
 	}
@@ -732,8 +840,8 @@ func (s *LibraryService) getExtractJobStatus(jobID string) (*extractorJobStatusR
 	return &payload, nil
 }
 
-func (s *LibraryService) getExtractJobResult(jobID string) (*extractionResult, error) {
-	jobsURL := strings.TrimSpace(s.config.EffectiveExtractorJobsURL())
+func (s *LibraryService) getExtractJobResult(settings model.ExtractorSettings, jobID string) (*extractionResult, error) {
+	jobsURL := strings.TrimSpace(settings.EffectiveJobsURL)
 	if jobsURL == "" {
 		return nil, apperr.New(apperr.CodeUnavailable, "PDF_EXTRACTOR_JOBS_URL 未配置，无法读取解析结果")
 	}
@@ -742,9 +850,9 @@ func (s *LibraryService) getExtractJobResult(jobID string) (*extractionResult, e
 	if err != nil {
 		return nil, apperr.Wrap(apperr.CodeInternal, "创建解析结果请求失败", err)
 	}
-	s.authorizeExtractorRequest(req)
+	s.authorizeExtractorRequest(settings, req)
 
-	respBody, err := s.doExtractorRequest(req)
+	respBody, err := s.doExtractorRequest(req, settings)
 	if err != nil {
 		return nil, err
 	}
@@ -752,8 +860,8 @@ func (s *LibraryService) getExtractJobResult(jobID string) (*extractionResult, e
 	return parseExtractionResult(respBody)
 }
 
-func (s *LibraryService) newExtractorUploadRequest(method, targetURL, pdfPath, originalFilename string) (*http.Request, error) {
-	body, contentType, err := s.buildExtractorUploadBody(pdfPath, originalFilename)
+func (s *LibraryService) newExtractorUploadRequest(settings model.ExtractorSettings, method, targetURL, pdfPath, originalFilename string) (*http.Request, error) {
+	body, contentType, err := s.buildExtractorUploadBody(settings, pdfPath, originalFilename)
 	if err != nil {
 		return nil, err
 	}
@@ -763,11 +871,11 @@ func (s *LibraryService) newExtractorUploadRequest(method, targetURL, pdfPath, o
 		return nil, apperr.Wrap(apperr.CodeInternal, "创建解析请求失败", err)
 	}
 	req.Header.Set("Content-Type", contentType)
-	s.authorizeExtractorRequest(req)
+	s.authorizeExtractorRequest(settings, req)
 	return req, nil
 }
 
-func (s *LibraryService) buildExtractorUploadBody(pdfPath, originalFilename string) (*bytes.Buffer, string, error) {
+func (s *LibraryService) buildExtractorUploadBody(settings model.ExtractorSettings, pdfPath, originalFilename string) (*bytes.Buffer, string, error) {
 	file, err := os.Open(pdfPath)
 	if err != nil {
 		return nil, "", apperr.Wrap(apperr.CodeInternal, "打开 PDF 失败", err)
@@ -776,7 +884,7 @@ func (s *LibraryService) buildExtractorUploadBody(pdfPath, originalFilename stri
 
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
-	part, err := writer.CreateFormFile(s.config.ExtractorFileField, originalFilename)
+	part, err := writer.CreateFormFile(settings.ExtractorFileField, originalFilename)
 	if err != nil {
 		return nil, "", apperr.Wrap(apperr.CodeInternal, "创建上传表单失败", err)
 	}
@@ -805,13 +913,18 @@ func (s *LibraryService) buildExtractorUploadBody(pdfPath, originalFilename stri
 	return body, writer.FormDataContentType(), nil
 }
 
-func (s *LibraryService) authorizeExtractorRequest(req *http.Request) {
-	if token := strings.TrimSpace(s.config.ExtractorToken); token != "" {
+func (s *LibraryService) authorizeExtractorRequest(settings model.ExtractorSettings, req *http.Request) {
+	if token := strings.TrimSpace(settings.ExtractorToken); token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
 }
 
-func (s *LibraryService) doExtractorRequest(req *http.Request) ([]byte, error) {
+func (s *LibraryService) doExtractorRequest(req *http.Request, settings model.ExtractorSettings) ([]byte, error) {
+	timeout := time.Duration(maxInt(settings.TimeoutSeconds, 1)) * time.Second
+	ctx, cancel := context.WithTimeout(req.Context(), timeout)
+	defer cancel()
+
+	req = req.WithContext(ctx)
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
 		return nil, apperr.Wrap(apperr.CodeUnavailable, "调用解析后端失败", err)
@@ -1162,4 +1275,66 @@ func humanFileSize(size int64) string {
 		return fmt.Sprintf("%.1f MB", float64(size)/(1024*1024))
 	}
 	return fmt.Sprintf("%.1f GB", float64(size)/(1024*1024*1024))
+}
+
+
+func (s *LibraryService) DatabasePath() string {
+	return s.config.DatabasePath
+}
+
+func (s *LibraryService) ImportDatabase(sourcePath string) error {
+	if err := s.repo.Close(); err != nil {
+		return apperr.Wrap(apperr.CodeInternal, "关闭当前数据库失败", err)
+	}
+
+	dbPath := s.config.DatabasePath
+	backupPath := dbPath + ".backup." + time.Now().Format("20060102150405")
+
+	if err := copyFile(dbPath, backupPath); err != nil {
+		_ = s.reopenRepo()
+		return apperr.Wrap(apperr.CodeInternal, "备份当前数据库失败", err)
+	}
+
+	if err := copyFile(sourcePath, dbPath); err != nil {
+		_ = copyFile(backupPath, dbPath)
+		_ = s.reopenRepo()
+		return apperr.Wrap(apperr.CodeInternal, "替换数据库文件失败", err)
+	}
+
+	if err := s.reopenRepo(); err != nil {
+		_ = copyFile(backupPath, dbPath)
+		_ = s.reopenRepo()
+		return apperr.Wrap(apperr.CodeInternal, "重新打开数据库失败", err)
+	}
+
+	return nil
+}
+
+func (s *LibraryService) reopenRepo() error {
+	repo, err := repository.NewLibraryRepository(s.config.DatabasePath)
+	if err != nil {
+		return err
+	}
+	s.repo = repo
+	return nil
+}
+
+func copyFile(src, dst string) error {
+	sourceFile, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer sourceFile.Close()
+
+	destFile, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer destFile.Close()
+
+	if _, err := io.Copy(destFile, sourceFile); err != nil {
+		return err
+	}
+
+	return destFile.Sync()
 }

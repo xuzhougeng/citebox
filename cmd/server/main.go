@@ -41,10 +41,14 @@ func main() {
 		logger.Error("failed to initialize library service", "code", apperr.CodeOf(err), "error", err)
 		os.Exit(1)
 	}
+	aiSvc := service.NewAIService(repo, cfg, logger.With("component", "ai_service"))
 	paperHandler := handler.NewPaperHandler(librarySvc)
 	figureHandler := handler.NewFigureHandler(librarySvc)
 	groupHandler := handler.NewGroupHandler(librarySvc)
 	tagHandler := handler.NewTagHandler(librarySvc)
+	aiHandler := handler.NewAIHandler(aiSvc)
+	settingsHandler := handler.NewSettingsHandler(librarySvc)
+	databaseHandler := handler.NewDatabaseHandler(librarySvc)
 
 	mux := http.NewServeMux()
 
@@ -139,6 +143,64 @@ func main() {
 		}
 	})
 
+	mux.HandleFunc("/api/ai/settings", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			aiHandler.GetSettings(w, r)
+		case http.MethodPut:
+			aiHandler.UpdateSettings(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	mux.HandleFunc("/api/ai/read", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPost:
+			aiHandler.Read(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	mux.HandleFunc("/api/ai/read/stream", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPost:
+			aiHandler.ReadStream(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	mux.HandleFunc("/api/settings/extractor", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			settingsHandler.GetExtractorSettings(w, r)
+		case http.MethodPut:
+			settingsHandler.UpdateExtractorSettings(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	mux.HandleFunc("/api/database/export", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			databaseHandler.Export(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	mux.HandleFunc("/api/database/import", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPost:
+			databaseHandler.Import(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
 	mux.Handle("/files/papers/", http.StripPrefix("/files/papers/", http.FileServer(http.Dir(cfg.PapersDir()))))
 	mux.Handle("/files/figures/", http.StripPrefix("/files/figures/", http.FileServer(http.Dir(cfg.FiguresDir()))))
 
@@ -165,6 +227,14 @@ func main() {
 			http.ServeFile(w, r, "web/tags.html")
 			return
 		}
+		if r.URL.Path == "/ai" || r.URL.Path == "/ai.html" {
+			http.ServeFile(w, r, "web/ai.html")
+			return
+		}
+		if r.URL.Path == "/settings" || r.URL.Path == "/settings.html" {
+			http.ServeFile(w, r, "web/settings.html")
+			return
+		}
 		http.NotFound(w, r)
 	})
 
@@ -178,7 +248,7 @@ func main() {
 		"database_path", cfg.DatabasePath,
 	)
 	if strings.TrimSpace(cfg.ExtractorURL) == "" {
-		logger.Info("pdf extractor disabled")
+		logger.Info("pdf extractor env config not set; runtime settings page can enable it")
 	} else {
 		logger.Info("pdf extractor enabled", "extract_url", cfg.EffectiveExtractorURL())
 		if jobsURL := strings.TrimSpace(cfg.EffectiveExtractorJobsURL()); jobsURL != "" {
