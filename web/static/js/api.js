@@ -233,5 +233,25 @@ const API = {
             method: 'POST',
             body: formData
         });
+    },
+
+    getAuthSettings() {
+        return requestJSON(`${API_BASE}/auth/settings`);
+    },
+
+    changePassword(data) {
+        return requestJSON(`${API_BASE}/auth/change-password`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        });
+    },
+
+    logout() {
+        return requestJSON(`${API_BASE}/auth/logout`, {
+            method: 'POST'
+        });
     }
 };

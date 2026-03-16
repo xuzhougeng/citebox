@@ -10,3 +10,13 @@ type ExtractorSettings struct {
 	EffectiveExtractorURL string `json:"effective_extractor_url"`
 	EffectiveJobsURL      string `json:"effective_jobs_url"`
 }
+
+type ChangePasswordRequest struct {
+	CurrentPassword string `json:"current_password"`
+	NewPassword     string `json:"new_password"`
+}
+
+type AuthSettings struct {
+	Username        string `json:"username"`
+	PasswordFromDB  bool   `json:"password_from_db"`
+}

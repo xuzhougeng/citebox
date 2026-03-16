@@ -49,6 +49,7 @@ func main() {
 	aiHandler := handler.NewAIHandler(aiSvc)
 	settingsHandler := handler.NewSettingsHandler(librarySvc)
 	databaseHandler := handler.NewDatabaseHandler(librarySvc)
+	authHandler := handler.NewAuthHandler(librarySvc)
 
 	mux := http.NewServeMux()
 
@@ -183,6 +184,33 @@ func main() {
 		}
 	})
 
+	mux.HandleFunc("/api/auth/settings", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			authHandler.GetAuthSettings(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	mux.HandleFunc("/api/auth/change-password", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPost:
+			authHandler.ChangePassword(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	mux.HandleFunc("/api/auth/logout", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPost:
+			authHandler.Logout(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
 	mux.HandleFunc("/api/database/export", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
@@ -235,10 +263,14 @@ func main() {
 			http.ServeFile(w, r, "web/settings.html")
 			return
 		}
+		if r.URL.Path == "/login" || r.URL.Path == "/login.html" {
+			http.ServeFile(w, r, "web/login.html")
+			return
+		}
 		http.NotFound(w, r)
 	})
 
-	authenticated := middleware.BasicAuth(mux, cfg)
+	authenticated := middleware.BasicAuthWithService(mux, librarySvc)
 	logged := middleware.RequestLogger(authenticated, logger.With("component", "http"))
 	handler := corsMiddleware(logged)
 

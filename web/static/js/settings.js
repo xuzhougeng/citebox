@@ -32,6 +32,11 @@ const SettingsPage = {
         this.importDbForm = document.getElementById('importDbForm');
         this.importDbFile = document.getElementById('importDbFile');
         this.purgeDbButton = document.getElementById('purgeDbButton');
+        this.changePasswordForm = document.getElementById('changePasswordForm');
+        this.currentPasswordInput = document.getElementById('currentPassword');
+        this.newPasswordInput = document.getElementById('newPassword');
+        this.confirmPasswordInput = document.getElementById('confirmPassword');
+        this.logoutButton = document.getElementById('logoutButton');
 
         this.bindEvents();
         this.bootstrap();
@@ -54,6 +59,11 @@ const SettingsPage = {
             await this.importDatabase();
         });
         this.purgeDbButton.addEventListener('click', () => this.purgeDatabase());
+        this.changePasswordForm.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            await this.changePassword();
+        });
+        this.logoutButton.addEventListener('click', () => this.logout());
     },
 
     async bootstrap() {
@@ -218,5 +228,66 @@ const SettingsPage = {
         } catch (error) {
             Utils.showToast(error.message, 'error');
         }
+    },
+
+    async changePassword() {
+        const currentPassword = this.currentPasswordInput.value.trim();
+        const newPassword = this.newPasswordInput.value.trim();
+        const confirmPassword = this.confirmPasswordInput.value.trim();
+
+        if (!currentPassword || !newPassword || !confirmPassword) {
+            Utils.showToast('请填写所有密码字段', 'error');
+            return;
+        }
+
+        if (newPassword.length < 6) {
+            Utils.showToast('新密码长度不能少于 6 位', 'error');
+            return;
+        }
+
+        if (newPassword !== confirmPassword) {
+            Utils.showToast('两次输入的新密码不一致', 'error');
+            return;
+        }
+
+        try {
+            await API.changePassword({
+                current_password: currentPassword,
+                new_password: newPassword
+            });
+            Utils.showToast('密码修改成功，请使用新密码重新登录');
+            // 清空表单
+            this.currentPasswordInput.value = '';
+            this.newPasswordInput.value = '';
+            this.confirmPasswordInput.value = '';
+            // 延迟后跳转到登录页
+            setTimeout(() => {
+                window.location.href = '/login';
+            }, 2000);
+        } catch (error) {
+            Utils.showToast(error.message, 'error');
+        }
+    },
+
+    async logout() {
+        const confirmed = await Utils.confirm('确定要登出吗？');
+        if (!confirmed) return;
+
+        try {
+            // 尝试调用登出 API
+            await API.logout();
+        } catch (error) {
+            // 忽略错误，因为 logout API 会返回 401
+        }
+
+        // 清除前端存储的凭据信息
+        sessionStorage.removeItem('citebox_auth');
+        localStorage.removeItem('citebox_logged_in');
+
+        // 显示提示并重定向到登录页
+        Utils.showToast('已登出');
+        setTimeout(() => {
+            window.location.href = '/login';
+        }, 1000);
     }
 };

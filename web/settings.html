@@ -149,6 +149,30 @@
                 </form>
             </section>
 
+            <section class="manager-card">
+                <div class="manager-head">
+                    <h2>账号管理</h2>
+                    <p>修改登录密码或登出系统。</p>
+                </div>
+                <div class="db-actions-grid">
+                    <div class="db-action-item">
+                        <h3>修改密码</h3>
+                        <p>更改管理员账号的登录密码</p>
+                        <form id="changePasswordForm" class="import-form">
+                            <input id="currentPassword" class="form-input" type="password" placeholder="当前密码" required>
+                            <input id="newPassword" class="form-input" type="password" placeholder="新密码（至少6位）" required minlength="6">
+                            <input id="confirmPassword" class="form-input" type="password" placeholder="确认新密码" required minlength="6">
+                            <button id="changePasswordButton" class="btn btn-secondary" type="submit">修改密码</button>
+                        </form>
+                    </div>
+                    <div class="db-action-item">
+                        <h3>登出</h3>
+                        <p>退出当前登录会话</p>
+                        <button id="logoutButton" class="btn btn-outline" type="button">安全登出</button>
+                    </div>
+                </div>
+            </section>
+
             <section class="manager-card danger-zone-card">
                 <div class="manager-head">
                     <h2>数据库管理</h2>

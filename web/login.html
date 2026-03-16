@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>登录 - CiteBox</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <style>
+        .login-page {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+            background:
+                radial-gradient(circle at top left, rgba(164, 92, 64, 0.2), transparent 30rem),
+                radial-gradient(circle at bottom right, rgba(79, 111, 82, 0.15), transparent 35rem),
+                linear-gradient(180deg, #f6efe5 0%, #efe6d7 50%, #eadfcf 100%);
+        }
+
+        .login-container {
+            width: 100%;
+            max-width: 420px;
+            position: relative;
+        }
+
+        .login-card {
+            padding: 2.5rem;
+            border-radius: 28px;
+            background: rgba(255, 251, 245, 0.96);
+            border: 1px solid rgba(36, 27, 22, 0.08);
+            box-shadow: 0 32px 70px rgba(35, 24, 18, 0.18);
+            backdrop-filter: blur(10px);
+        }
+
+        .login-logo {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .login-logo-icon {
+            width: 64px;
+            height: 64px;
+            margin: 0 auto 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 20px;
+            background: linear-gradient(135deg, var(--accent), var(--accent-deep));
+            color: #fff;
+            font-size: 1.8rem;
+            font-weight: 700;
+            box-shadow: 0 14px 28px rgba(164, 92, 64, 0.25);
+        }
+
+        .login-logo h1 {
+            margin: 0;
+            font-family: var(--font-display);
+            font-size: 1.8rem;
+            color: var(--ink);
+        }
+
+        .login-logo p {
+            margin: 0.4rem 0 0;
+            color: var(--muted);
+            font-size: 0.95rem;
+        }
+
+        .login-form {
+            display: grid;
+            gap: 1.2rem;
+        }
+
+        .login-form .field {
+            gap: 0.5rem;
+        }
+
+        .login-form .form-input {
+            padding: 1rem 1.2rem;
+            font-size: 1rem;
+        }
+
+        .login-form .btn {
+            width: 100%;
+            padding: 1rem;
+            font-size: 1rem;
+            margin-top: 0.5rem;
+        }
+
+        .login-error {
+            padding: 0.9rem 1rem;
+            border-radius: 14px;
+            background: rgba(159, 63, 52, 0.1);
+            color: var(--error);
+            font-size: 0.92rem;
+            text-align: center;
+            display: none;
+        }
+
+        .login-error.show {
+            display: block;
+        }
+
+        .login-footer {
+            margin-top: 1.5rem;
+            text-align: center;
+            color: var(--muted);
+            font-size: 0.88rem;
+        }
+
+        .login-footer a {
+            color: var(--accent-deep);
+            text-decoration: underline;
+            text-underline-offset: 3px;
+        }
+
+        .login-hint {
+            margin-top: 1rem;
+            padding: 1rem;
+            border-radius: 14px;
+            background: rgba(65, 103, 136, 0.08);
+            border: 1px solid rgba(65, 103, 136, 0.12);
+        }
+
+        .login-hint p {
+            margin: 0;
+            color: var(--info);
+            font-size: 0.88rem;
+            line-height: 1.6;
+        }
+
+        .login-hint strong {
+            color: var(--info);
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+
+        .login-card.error {
+            animation: shake 0.3s ease;
+        }
+
+        .loading-spinner {
+            display: inline-block;
+            width: 1.2rem;
+            height: 1.2rem;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-right: 0.5rem;
+            vertical-align: middle;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="login-page">
+    <div class="login-container">
+        <div class="login-card" id="loginCard">
+            <div class="login-logo">
+                <div class="login-logo-icon">CB</div>
+                <h1>CiteBox</h1>
+                <p>文献引用盒子</p>
+            </div>
+
+            <div class="login-error" id="loginError"></div>
+
+            <form id="loginForm" class="login-form">
+                <label class="field">
+                    <span>用户名</span>
+                    <input 
+                        id="usernameInput" 
+                        class="form-input" 
+                        type="text" 
+                        placeholder="请输入用户名"
+                        autocomplete="username"
+                        autofocus
+                    >
+                </label>
+                <label class="field">
+                    <span>密码</span>
+                    <input 
+                        id="passwordInput" 
+                        class="form-input" 
+                        type="password" 
+                        placeholder="请输入密码"
+                        autocomplete="current-password"
+                    >
+                </label>
+                <button class="btn btn-primary" type="submit" id="loginButton">
+                    登录
+                </button>
+            </form>
+
+            <div class="login-hint">
+                <p><strong>提示：</strong>首次登录请使用环境变量配置的用户名和密码。登录后可在「配置」页面修改密码。</p>
+            </div>
+
+            <div class="login-footer">
+                <p>默认账号: <strong>wanglab</strong> / 密码: <strong>wanglab789</strong></p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        (function() {
+            const loginForm = document.getElementById('loginForm');
+            const usernameInput = document.getElementById('usernameInput');
+            const passwordInput = document.getElementById('passwordInput');
+            const loginButton = document.getElementById('loginButton');
+            const loginError = document.getElementById('loginError');
+            const loginCard = document.getElementById('loginCard');
+
+            // 检查是否已经登录
+            function checkAuth() {
+                // 尝试访问一个 API 端点来检查认证状态
+                fetch('/api/papers?page_size=1', {
+                    headers: {
+                        'Authorization': 'Basic ' + btoa('test:test')
+                    }
+                }).then(response => {
+                    if (response.ok) {
+                        // 已登录，跳转到首页
+                        window.location.href = '/';
+                    }
+                }).catch(() => {
+                    // 忽略错误
+                });
+            }
+
+            // 显示错误
+            function showError(message) {
+                loginError.textContent = message;
+                loginError.classList.add('show');
+                loginCard.classList.add('error');
+                setTimeout(() => loginCard.classList.remove('error'), 300);
+            }
+
+            // 隐藏错误
+            function hideError() {
+                loginError.classList.remove('show');
+            }
+
+            // 处理登录
+            async function handleLogin(e) {
+                e.preventDefault();
+                hideError();
+
+                const username = usernameInput.value.trim();
+                const password = passwordInput.value.trim();
+
+                if (!username || !password) {
+                    showError('请输入用户名和密码');
+                    return;
+                }
+
+                loginButton.disabled = true;
+                loginButton.innerHTML = '<span class="loading-spinner"></span>登录中...';
+
+                try {
+                    // 使用 Basic Auth 测试登录
+                    const response = await fetch('/api/papers?page_size=1', {
+                        headers: {
+                            'Authorization': 'Basic ' + btoa(username + ':' + password)
+                        }
+                    });
+
+                    if (response.ok) {
+                        // 登录成功，保存凭据到 sessionStorage
+                        sessionStorage.setItem('citebox_auth', btoa(username + ':' + password));
+                        // 设置一个标记表示已登录
+                        localStorage.setItem('citebox_logged_in', 'true');
+                        window.location.href = '/';
+                    } else if (response.status === 401) {
+                        showError('用户名或密码错误');
+                        passwordInput.value = '';
+                        passwordInput.focus();
+                    } else {
+                        showError('登录失败，请稍后重试');
+                    }
+                } catch (error) {
+                    showError('网络错误，请检查连接');
+                } finally {
+                    loginButton.disabled = false;
+                    loginButton.textContent = '登录';
+                }
+            }
+
+            loginForm.addEventListener('submit', handleLogin);
+
+            // 输入时隐藏错误
+            usernameInput.addEventListener('input', hideError);
+            passwordInput.addEventListener('input', hideError);
+
+            // 页面加载时检查认证
+            // checkAuth(); // 暂时禁用，避免不必要的请求
+        })();
+    </script>
+</body>
+</html>

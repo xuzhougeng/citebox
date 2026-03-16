@@ -32,7 +32,10 @@ type LibraryService struct {
 	startBackground bool
 }
 
-const extractorSettingsKey = "extractor_settings"
+const (
+	extractorSettingsKey = "extractor_settings"
+	runtimePasswordKey = "runtime_admin_password"
+)
 
 type LibraryServiceOption func(*LibraryService)
 
@@ -1280,6 +1283,60 @@ func humanFileSize(size int64) string {
 
 func (s *LibraryService) DatabasePath() string {
 	return s.config.DatabasePath
+}
+
+// GetRuntimePassword 获取运行时密码（从数据库或环境变量）
+func (s *LibraryService) GetRuntimePassword() string {
+	password, err := s.repo.GetAppSetting(runtimePasswordKey)
+	if err != nil {
+		s.logger.Warn("failed to get runtime password", "error", err)
+	}
+	if strings.TrimSpace(password) != "" {
+		return password
+	}
+	return s.config.AdminPassword
+}
+
+// ChangePassword 修改密码
+func (s *LibraryService) ChangePassword(currentPassword, newPassword string) error {
+	currentPassword = strings.TrimSpace(currentPassword)
+	newPassword = strings.TrimSpace(newPassword)
+
+	if newPassword == "" {
+		return apperr.New(apperr.CodeInvalidArgument, "新密码不能为空")
+	}
+	if len(newPassword) < 6 {
+		return apperr.New(apperr.CodeInvalidArgument, "新密码长度不能少于 6 位")
+	}
+
+	// 验证当前密码
+	runtimePassword := s.GetRuntimePassword()
+	if currentPassword != runtimePassword {
+		return apperr.New(apperr.CodeUnauthenticated, "当前密码错误")
+	}
+
+	// 保存新密码到数据库
+	if err := s.repo.UpsertAppSetting(runtimePasswordKey, newPassword); err != nil {
+		return apperr.Wrap(apperr.CodeInternal, "保存新密码失败", err)
+	}
+
+	s.logger.Info("admin password changed successfully")
+	return nil
+}
+
+// ValidateCredentials 验证用户凭据
+func (s *LibraryService) ValidateCredentials(username, password string) bool {
+	expectedUsername := s.config.AdminUsername
+	expectedPassword := s.GetRuntimePassword()
+	return username == expectedUsername && password == expectedPassword
+}
+
+// GetAuthSettings 获取认证设置
+func (s *LibraryService) GetAuthSettings() model.AuthSettings {
+	return model.AuthSettings{
+		Username:       s.config.AdminUsername,
+		PasswordFromDB: s.GetRuntimePassword() != s.config.AdminPassword,
+	}
 }
 
 func (s *LibraryService) ImportDatabase(sourcePath string) error {
