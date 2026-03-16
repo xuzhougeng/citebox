@@ -24,6 +24,7 @@ Remove-Item Env:GOARCH
 
 Copy-Item "web" -Destination $packageDir -Recurse
 Copy-Item "README.md" -Destination $packageDir
+go run .\scripts\fetch_pdfjs.go (Join-Path $packageDir "web\static\vendor\pdfjs")
 
 $startBat = @"
 @echo off
