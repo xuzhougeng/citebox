@@ -191,7 +191,7 @@ func (s *LibraryService) ListFigures(filter model.FigureFilter) (*model.FigureLi
 		filter.Page = 1
 	}
 	if filter.PageSize < 1 {
-		filter.PageSize = 24
+		filter.PageSize = 8
 	}
 
 	figures, total, err := s.repo.ListFigures(filter)

@@ -548,7 +548,7 @@ func (r *LibraryRepository) ListFigures(filter model.FigureFilter) ([]model.Figu
 		filter.Page = 1
 	}
 	if filter.PageSize < 1 || filter.PageSize > 200 {
-		filter.PageSize = 24
+		filter.PageSize = 8
 	}
 
 	whereClause, args := buildFigureWhere(filter)
