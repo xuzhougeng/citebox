@@ -76,6 +76,86 @@ const Utils = {
         });
     },
 
+    confirmTypedAction(options = {}) {
+        const {
+            title = '危险操作确认',
+            message = '',
+            keyword = 'CLEAR',
+            confirmLabel = '确认继续',
+            hint = `请输入 ${keyword} 继续`,
+            badge = 'Danger Zone'
+        } = options;
+
+        return new Promise((resolve) => {
+            const normalizedKeyword = String(keyword || '').trim();
+            const overlay = document.createElement('div');
+            overlay.className = 'dialog-overlay';
+            overlay.innerHTML = `
+                <div class="dialog-box dialog-box-danger">
+                    <div class="dialog-danger-head">
+                        <span class="dialog-danger-badge">${Utils.escapeHTML(badge)}</span>
+                        <div class="dialog-header">
+                            <h3>${Utils.escapeHTML(title)}</h3>
+                        </div>
+                    </div>
+                    <div class="dialog-body dialog-danger-body">
+                        <p class="dialog-danger-message">${Utils.escapeHTML(message)}</p>
+                        <div class="dialog-danger-instruction">
+                            <span>确认口令</span>
+                            <strong>${Utils.escapeHTML(normalizedKeyword)}</strong>
+                        </div>
+                        <label class="dialog-danger-field">
+                            <span>${Utils.escapeHTML(hint)}</span>
+                            <input class="form-input dialog-confirm-input" type="text" autocomplete="off" spellcheck="false" placeholder="${Utils.escapeHTML(normalizedKeyword)}">
+                        </label>
+                    </div>
+                    <div class="dialog-footer">
+                        <button class="btn btn-outline dialog-cancel">取消</button>
+                        <button class="btn btn-outline danger dialog-confirm" type="button" disabled>${Utils.escapeHTML(confirmLabel)}</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(overlay);
+            requestAnimationFrame(() => overlay.classList.add('active'));
+
+            const input = overlay.querySelector('.dialog-confirm-input');
+            const confirmButton = overlay.querySelector('.dialog-confirm');
+
+            const close = (result) => {
+                document.removeEventListener('keydown', onKeydown);
+                overlay.classList.remove('active');
+                setTimeout(() => overlay.remove(), 200);
+                resolve(result);
+            };
+
+            const syncState = () => {
+                confirmButton.disabled = input.value.trim() !== normalizedKeyword;
+            };
+
+            const onKeydown = (event) => {
+                if (event.key === 'Escape') {
+                    close(false);
+                }
+            };
+
+            input.addEventListener('input', syncState);
+            input.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter' && !confirmButton.disabled) {
+                    event.preventDefault();
+                    close(true);
+                }
+            });
+
+            overlay.querySelector('.dialog-cancel').onclick = () => close(false);
+            confirmButton.onclick = () => close(true);
+            overlay.onclick = (event) => {
+                if (event.target === overlay) close(false);
+            };
+            document.addEventListener('keydown', onKeydown);
+            setTimeout(() => input.focus(), 0);
+        });
+    },
+
     alert(message, title = '提示') {
         return new Promise((resolve) => {
             const overlay = document.createElement('div');

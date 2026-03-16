@@ -1642,6 +1642,11 @@ button {
     gap: 0.7rem;
 }
 
+.figure-notes-editor {
+    display: grid;
+    gap: 0.7rem;
+}
+
 .figure-tag-editor-list {
     display: flex;
     flex-wrap: wrap;
@@ -1662,6 +1667,18 @@ button {
 .figure-tag-empty {
     color: var(--muted);
     font-size: 0.92rem;
+}
+
+.figure-notes-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.8rem;
+    flex-wrap: wrap;
+}
+
+.figure-notes-actions .muted {
+    font-size: 0.84rem;
 }
 
 .figure-editable-tag {
@@ -1711,6 +1728,13 @@ button {
     align-items: flex-start;
     justify-content: space-between;
     gap: 0.8rem;
+}
+
+.figure-ai-head-actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    justify-content: flex-end;
 }
 
 .figure-lightbox-ai-head h3,
@@ -2200,6 +2224,12 @@ button {
     width: min(420px, 100%);
 }
 
+.dialog-box-danger {
+    width: min(520px, 100%);
+    border: 1px solid rgba(159, 63, 52, 0.18);
+    background: linear-gradient(180deg, rgba(255, 248, 246, 0.98), rgba(255, 252, 248, 0.97));
+}
+
 .dialog-header h3,
 .dialog-body p {
     margin: 0;
@@ -2213,6 +2243,72 @@ button {
     display: flex;
     justify-content: flex-end;
     gap: 0.6rem;
+}
+
+.dialog-danger-head {
+    display: grid;
+    gap: 0.85rem;
+}
+
+.dialog-danger-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: fit-content;
+    padding: 0.36rem 0.7rem;
+    border-radius: 999px;
+    background: rgba(159, 63, 52, 0.12);
+    color: var(--error);
+    font-size: 0.78rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.dialog-danger-body {
+    display: grid;
+    gap: 1rem;
+}
+
+.dialog-danger-message {
+    line-height: 1.7;
+}
+
+.dialog-danger-instruction {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.8rem;
+    padding: 0.9rem 1rem;
+    border-radius: 18px;
+    background: rgba(159, 63, 52, 0.08);
+    border: 1px solid rgba(159, 63, 52, 0.12);
+}
+
+.dialog-danger-instruction span {
+    color: var(--muted);
+    font-size: 0.9rem;
+}
+
+.dialog-danger-instruction strong {
+    font-family: "SFMono-Regular", "Menlo", "Monaco", "Cascadia Mono", "Segoe UI Mono", monospace;
+    font-size: 0.95rem;
+    letter-spacing: 0.08em;
+}
+
+.dialog-danger-field {
+    display: grid;
+    gap: 0.5rem;
+}
+
+.dialog-danger-field span {
+    color: var(--muted);
+    font-size: 0.9rem;
+}
+
+.dialog-confirm-input {
+    font-family: "SFMono-Regular", "Menlo", "Monaco", "Cascadia Mono", "Segoe UI Mono", monospace;
+    letter-spacing: 0.08em;
 }
 
 .toast {
@@ -2400,18 +2496,46 @@ body.modal-open {
     font-size: 0.95rem;
 }
 
-.import-form {
-    display: flex;
-    flex-direction: column;
-    gap: 0.8rem;
+.settings-action-form {
+    display: grid;
+    gap: 0.85rem;
+    padding: 0.95rem;
+    border-radius: 18px;
+    background: rgba(255, 251, 245, 0.78);
+    border: 1px solid rgba(36, 27, 22, 0.08);
 }
 
-.import-form input[type="file"] {
-    padding: 0.6rem;
-    background: var(--bg-soft);
-    border: 1px solid var(--line);
-    border-radius: 12px;
+.settings-action-form .btn {
+    justify-self: flex-start;
+}
+
+.settings-action-form input[type="file"] {
+    width: 100%;
+    padding: 0.8rem;
+    background: linear-gradient(180deg, rgba(255, 252, 248, 0.96), rgba(247, 240, 230, 0.92));
+    border: 1px dashed rgba(164, 92, 64, 0.28);
+    border-radius: 14px;
     font-size: 0.9rem;
+    color: var(--muted);
+    cursor: pointer;
+}
+
+.settings-action-form input[type="file"]::file-selector-button {
+    margin-right: 0.9rem;
+    padding: 0.62rem 0.95rem;
+    border: 1px solid rgba(36, 27, 22, 0.12);
+    border-radius: 999px;
+    background: rgba(255, 251, 245, 0.98);
+    color: var(--ink);
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+}
+
+.settings-action-form input[type="file"]:hover::file-selector-button {
+    background: rgba(255, 244, 234, 0.98);
+    border-color: rgba(164, 92, 64, 0.28);
+    transform: translateY(-1px);
 }
 
 /* Utility classes */
