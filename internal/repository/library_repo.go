@@ -3,15 +3,18 @@ package repository
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 
+	"paper_image_db/internal/apperr"
 	"paper_image_db/internal/model"
 
-	_ "modernc.org/sqlite"
+	sqliteDriver "modernc.org/sqlite"
+	sqlite3 "modernc.org/sqlite/lib"
 )
 
 type LibraryRepository struct {
@@ -52,13 +55,13 @@ type PaperUpsertInput struct {
 func NewLibraryRepository(dbPath string) (*LibraryRepository, error) {
 	dir := filepath.Dir(dbPath)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return nil, fmt.Errorf("create database directory: %w", err)
+		return nil, apperr.Wrap(apperr.CodeInternal, "创建数据库目录失败", err)
 	}
 
 	dsn := dbPath + "?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)"
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
-		return nil, fmt.Errorf("open database: %w", err)
+		return nil, apperr.Wrap(apperr.CodeInternal, "打开数据库失败", err)
 	}
 
 	db.SetMaxOpenConns(1)
@@ -66,7 +69,7 @@ func NewLibraryRepository(dbPath string) (*LibraryRepository, error) {
 	repo := &LibraryRepository{db: db}
 	if err := repo.initSchema(); err != nil {
 		db.Close()
-		return nil, fmt.Errorf("initialize schema: %w", err)
+		return nil, apperr.Wrap(apperr.CodeInternal, "初始化数据库结构失败", err)
 	}
 
 	return repo, nil
@@ -181,7 +184,7 @@ func (r *LibraryRepository) Close() error {
 func (r *LibraryRepository) GroupExists(id int64) (bool, error) {
 	var count int
 	if err := r.db.QueryRow("SELECT COUNT(*) FROM groups WHERE id = ?", id).Scan(&count); err != nil {
-		return false, err
+		return false, wrapDBError(err, "查询分组失败")
 	}
 	return count > 0, nil
 }
@@ -189,7 +192,7 @@ func (r *LibraryRepository) GroupExists(id int64) (bool, error) {
 func (r *LibraryRepository) CreatePaper(input PaperUpsertInput) (*model.Paper, error) {
 	tx, err := r.db.Begin()
 	if err != nil {
-		return nil, err
+		return nil, wrapDBError(err, "创建文献失败")
 	}
 	defer tx.Rollback()
 
@@ -212,16 +215,16 @@ func (r *LibraryRepository) CreatePaper(input PaperUpsertInput) (*model.Paper, e
 		input.GroupID,
 	)
 	if err != nil {
-		return nil, err
+		return nil, wrapDBError(err, "创建文献失败")
 	}
 
 	paperID, err := result.LastInsertId()
 	if err != nil {
-		return nil, err
+		return nil, wrapDBError(err, "读取文献 ID 失败")
 	}
 
 	if err := r.syncPaperTags(tx, paperID, input.Tags); err != nil {
-		return nil, err
+		return nil, wrapDBError(err, "保存文献标签失败")
 	}
 
 	for _, figure := range input.Figures {
@@ -239,12 +242,12 @@ func (r *LibraryRepository) CreatePaper(input PaperUpsertInput) (*model.Paper, e
 			figure.Caption,
 			figure.BBoxJSON,
 		); err != nil {
-			return nil, err
+			return nil, wrapDBError(err, "保存文献图片失败")
 		}
 	}
 
 	if err := tx.Commit(); err != nil {
-		return nil, err
+		return nil, wrapDBError(err, "提交文献事务失败")
 	}
 
 	return r.GetPaperDetail(paperID)
@@ -253,7 +256,7 @@ func (r *LibraryRepository) CreatePaper(input PaperUpsertInput) (*model.Paper, e
 func (r *LibraryRepository) UpdatePaper(id int64, title string, groupID *int64, tags []TagUpsertInput) (*model.Paper, error) {
 	tx, err := r.db.Begin()
 	if err != nil {
-		return nil, err
+		return nil, wrapDBError(err, "更新文献失败")
 	}
 	defer tx.Rollback()
 
@@ -263,34 +266,33 @@ func (r *LibraryRepository) UpdatePaper(id int64, title string, groupID *int64, 
 		WHERE id = ?
 	`, title, groupID, id)
 	if err != nil {
-		return nil, err
+		return nil, wrapDBError(err, "更新文献失败")
 	}
 
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
+	if err := ensureRowsAffected(result, "paper not found"); err != nil {
 		return nil, err
-	}
-	if rowsAffected == 0 {
-		return nil, sql.ErrNoRows
 	}
 
 	if _, err := tx.Exec("DELETE FROM paper_tags WHERE paper_id = ?", id); err != nil {
-		return nil, err
+		return nil, wrapDBError(err, "更新文献标签失败")
 	}
 	if err := r.syncPaperTags(tx, id, tags); err != nil {
-		return nil, err
+		return nil, wrapDBError(err, "更新文献标签失败")
 	}
 
 	if err := tx.Commit(); err != nil {
-		return nil, err
+		return nil, wrapDBError(err, "提交文献事务失败")
 	}
 
 	return r.GetPaperDetail(id)
 }
 
 func (r *LibraryRepository) DeletePaper(id int64) error {
-	_, err := r.db.Exec("DELETE FROM papers WHERE id = ?", id)
-	return err
+	result, err := r.db.Exec("DELETE FROM papers WHERE id = ?", id)
+	if err != nil {
+		return wrapDBError(err, "删除文献失败")
+	}
+	return ensureRowsAffected(result, "paper not found")
 }
 
 func (r *LibraryRepository) UpdatePaperExtractionState(id int64, status, message, jobID string) error {
@@ -300,17 +302,10 @@ func (r *LibraryRepository) UpdatePaperExtractionState(id int64, status, message
 		WHERE id = ?
 	`, status, message, jobID, id)
 	if err != nil {
-		return err
+		return wrapDBError(err, "更新文献解析状态失败")
 	}
 
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if rowsAffected == 0 {
-		return sql.ErrNoRows
-	}
-	return nil
+	return ensureRowsAffected(result, "paper not found")
 }
 
 func (r *LibraryRepository) ApplyPaperExtractionResult(
@@ -324,7 +319,7 @@ func (r *LibraryRepository) ApplyPaperExtractionResult(
 ) error {
 	tx, err := r.db.Begin()
 	if err != nil {
-		return err
+		return wrapDBError(err, "写入文献解析结果失败")
 	}
 	defer tx.Rollback()
 
@@ -334,19 +329,15 @@ func (r *LibraryRepository) ApplyPaperExtractionResult(
 		WHERE id = ?
 	`, pdfText, boxesJSON, status, message, jobID, id)
 	if err != nil {
-		return err
+		return wrapDBError(err, "写入文献解析结果失败")
 	}
 
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
+	if err := ensureRowsAffected(result, "paper not found"); err != nil {
 		return err
-	}
-	if rowsAffected == 0 {
-		return sql.ErrNoRows
 	}
 
 	if _, err := tx.Exec("DELETE FROM paper_figures WHERE paper_id = ?", id); err != nil {
-		return err
+		return wrapDBError(err, "更新文献图片失败")
 	}
 
 	for _, figure := range figures {
@@ -364,11 +355,11 @@ func (r *LibraryRepository) ApplyPaperExtractionResult(
 			figure.Caption,
 			figure.BBoxJSON,
 		); err != nil {
-			return err
+			return wrapDBError(err, "更新文献图片失败")
 		}
 	}
 
-	return tx.Commit()
+	return wrapDBError(tx.Commit(), "提交文献解析结果失败")
 }
 
 func (r *LibraryRepository) GetPaperDetail(id int64) (*model.Paper, error) {
@@ -389,12 +380,12 @@ func (r *LibraryRepository) GetPaperDetail(id int64) (*model.Paper, error) {
 		return nil, nil
 	}
 	if err != nil {
-		return nil, err
+		return nil, wrapDBError(err, "查询文献失败")
 	}
 
 	tagsByPaper, err := r.loadTagsByPaperIDs([]int64{id})
 	if err != nil {
-		return nil, err
+		return nil, wrapDBError(err, "查询文献标签失败")
 	}
 	paper.Tags = tagsByPaper[id]
 	if paper.Tags == nil {
@@ -408,7 +399,7 @@ func (r *LibraryRepository) GetPaperDetail(id int64) (*model.Paper, error) {
 		ORDER BY page_number ASC, figure_index ASC, id ASC
 	`, id)
 	if err != nil {
-		return nil, err
+		return nil, wrapDBError(err, "查询文献图片失败")
 	}
 	defer rows.Close()
 
@@ -427,13 +418,17 @@ func (r *LibraryRepository) GetPaperDetail(id int64) (*model.Paper, error) {
 			&bboxJSON,
 			&figure.CreatedAt,
 		); err != nil {
-			return nil, err
+			return nil, wrapDBError(err, "查询文献图片失败")
 		}
 		figure.BBox = rawJSON(bboxJSON)
 		paper.Figures = append(paper.Figures, figure)
 	}
 
-	return paper, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, wrapDBError(err, "查询文献图片失败")
+	}
+
+	return paper, nil
 }
 
 func (r *LibraryRepository) ListPapers(filter model.PaperFilter) ([]model.Paper, int, error) {
@@ -449,7 +444,7 @@ func (r *LibraryRepository) ListPapers(filter model.PaperFilter) ([]model.Paper,
 	var total int
 	countQuery := "SELECT COUNT(*) FROM papers p" + whereClause
 	if err := r.db.QueryRow(countQuery, args...).Scan(&total); err != nil {
-		return nil, 0, err
+		return nil, 0, wrapDBError(err, "查询文献总数失败")
 	}
 
 	query := `
@@ -470,7 +465,7 @@ func (r *LibraryRepository) ListPapers(filter model.PaperFilter) ([]model.Paper,
 	queryArgs := append(append([]interface{}{}, args...), filter.PageSize, offset)
 	rows, err := r.db.Query(query, queryArgs...)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, wrapDBError(err, "查询文献列表失败")
 	}
 	defer rows.Close()
 
@@ -479,7 +474,7 @@ func (r *LibraryRepository) ListPapers(filter model.PaperFilter) ([]model.Paper,
 	for rows.Next() {
 		paper, err := scanPaper(rows, false)
 		if err != nil {
-			return nil, 0, err
+			return nil, 0, wrapDBError(err, "查询文献列表失败")
 		}
 		paper.Tags = []model.Tag{}
 		paper.Figures = nil
@@ -487,12 +482,12 @@ func (r *LibraryRepository) ListPapers(filter model.PaperFilter) ([]model.Paper,
 		paperIDs = append(paperIDs, paper.ID)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, 0, err
+		return nil, 0, wrapDBError(err, "查询文献列表失败")
 	}
 
 	tagsByPaper, err := r.loadTagsByPaperIDs(paperIDs)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, wrapDBError(err, "查询文献标签失败")
 	}
 	for i := range papers {
 		if tags := tagsByPaper[papers[i].ID]; tags != nil {
@@ -528,7 +523,7 @@ func (r *LibraryRepository) ListPapersByExtractionStatuses(statuses []string) ([
 		ORDER BY p.updated_at DESC, p.id DESC
 	`, args...)
 	if err != nil {
-		return nil, err
+		return nil, wrapDBError(err, "查询待恢复文献失败")
 	}
 	defer rows.Close()
 
@@ -536,12 +531,16 @@ func (r *LibraryRepository) ListPapersByExtractionStatuses(statuses []string) ([
 	for rows.Next() {
 		paper, err := scanPaper(rows, false)
 		if err != nil {
-			return nil, err
+			return nil, wrapDBError(err, "查询待恢复文献失败")
 		}
 		papers = append(papers, *paper)
 	}
 
-	return papers, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, wrapDBError(err, "查询待恢复文献失败")
+	}
+
+	return papers, nil
 }
 
 func (r *LibraryRepository) ListFigures(filter model.FigureFilter) ([]model.FigureListItem, int, error) {
@@ -561,7 +560,7 @@ func (r *LibraryRepository) ListFigures(filter model.FigureFilter) ([]model.Figu
 		JOIN papers p ON p.id = pf.paper_id
 	` + whereClause
 	if err := r.db.QueryRow(countQuery, args...).Scan(&total); err != nil {
-		return nil, 0, err
+		return nil, 0, wrapDBError(err, "查询图片总数失败")
 	}
 
 	query := `
@@ -580,7 +579,7 @@ func (r *LibraryRepository) ListFigures(filter model.FigureFilter) ([]model.Figu
 	queryArgs := append(append([]interface{}{}, args...), filter.PageSize, offset)
 	rows, err := r.db.Query(query, queryArgs...)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, wrapDBError(err, "查询图片列表失败")
 	}
 	defer rows.Close()
 
@@ -603,7 +602,7 @@ func (r *LibraryRepository) ListFigures(filter model.FigureFilter) ([]model.Figu
 			&item.Caption,
 			&item.CreatedAt,
 		); err != nil {
-			return nil, 0, err
+			return nil, 0, wrapDBError(err, "查询图片列表失败")
 		}
 		if groupID.Valid {
 			item.GroupID = &groupID.Int64
@@ -617,12 +616,12 @@ func (r *LibraryRepository) ListFigures(filter model.FigureFilter) ([]model.Figu
 		}
 	}
 	if err := rows.Err(); err != nil {
-		return nil, 0, err
+		return nil, 0, wrapDBError(err, "查询图片列表失败")
 	}
 
 	tagsByPaper, err := r.loadTagsByPaperIDs(paperIDs)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, wrapDBError(err, "查询文献标签失败")
 	}
 	for i := range figures {
 		if tags := tagsByPaper[figures[i].PaperID]; tags != nil {
@@ -644,7 +643,7 @@ func (r *LibraryRepository) ListGroups() ([]model.Group, error) {
 		ORDER BY g.name COLLATE NOCASE ASC
 	`)
 	if err != nil {
-		return nil, err
+		return nil, wrapDBError(err, "查询分组列表失败")
 	}
 	defer rows.Close()
 
@@ -659,12 +658,16 @@ func (r *LibraryRepository) ListGroups() ([]model.Group, error) {
 			&group.UpdatedAt,
 			&group.PaperCount,
 		); err != nil {
-			return nil, err
+			return nil, wrapDBError(err, "查询分组列表失败")
 		}
 		groups = append(groups, group)
 	}
 
-	return groups, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, wrapDBError(err, "查询分组列表失败")
+	}
+
+	return groups, nil
 }
 
 func (r *LibraryRepository) CreateGroup(name, description string) (*model.Group, error) {
@@ -673,12 +676,12 @@ func (r *LibraryRepository) CreateGroup(name, description string) (*model.Group,
 		VALUES (?, ?)
 	`, name, description)
 	if err != nil {
-		return nil, err
+		return nil, wrapConflictDBError(err, "分组名称已存在", "创建分组失败")
 	}
 
 	id, err := result.LastInsertId()
 	if err != nil {
-		return nil, err
+		return nil, wrapDBError(err, "读取分组 ID 失败")
 	}
 
 	return r.getGroupByID(id)
@@ -691,23 +694,22 @@ func (r *LibraryRepository) UpdateGroup(id int64, name, description string) (*mo
 		WHERE id = ?
 	`, name, description, id)
 	if err != nil {
-		return nil, err
+		return nil, wrapConflictDBError(err, "分组名称已存在", "更新分组失败")
 	}
 
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
+	if err := ensureRowsAffected(result, "group not found"); err != nil {
 		return nil, err
-	}
-	if rowsAffected == 0 {
-		return nil, sql.ErrNoRows
 	}
 
 	return r.getGroupByID(id)
 }
 
 func (r *LibraryRepository) DeleteGroup(id int64) error {
-	_, err := r.db.Exec("DELETE FROM groups WHERE id = ?", id)
-	return err
+	result, err := r.db.Exec("DELETE FROM groups WHERE id = ?", id)
+	if err != nil {
+		return wrapDBError(err, "删除分组失败")
+	}
+	return ensureRowsAffected(result, "group not found")
 }
 
 func (r *LibraryRepository) ListTags() ([]model.Tag, error) {
@@ -721,7 +723,7 @@ func (r *LibraryRepository) ListTags() ([]model.Tag, error) {
 		ORDER BY t.name COLLATE NOCASE ASC
 	`)
 	if err != nil {
-		return nil, err
+		return nil, wrapDBError(err, "查询标签列表失败")
 	}
 	defer rows.Close()
 
@@ -736,12 +738,16 @@ func (r *LibraryRepository) ListTags() ([]model.Tag, error) {
 			&tag.UpdatedAt,
 			&tag.PaperCount,
 		); err != nil {
-			return nil, err
+			return nil, wrapDBError(err, "查询标签列表失败")
 		}
 		tags = append(tags, tag)
 	}
 
-	return tags, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, wrapDBError(err, "查询标签列表失败")
+	}
+
+	return tags, nil
 }
 
 func (r *LibraryRepository) CreateTag(name, color string) (*model.Tag, error) {
@@ -750,12 +756,12 @@ func (r *LibraryRepository) CreateTag(name, color string) (*model.Tag, error) {
 		VALUES (?, ?)
 	`, name, color)
 	if err != nil {
-		return nil, err
+		return nil, wrapConflictDBError(err, "标签名称已存在", "创建标签失败")
 	}
 
 	id, err := result.LastInsertId()
 	if err != nil {
-		return nil, err
+		return nil, wrapDBError(err, "读取标签 ID 失败")
 	}
 
 	return r.getTagByID(id)
@@ -768,23 +774,22 @@ func (r *LibraryRepository) UpdateTag(id int64, name, color string) (*model.Tag,
 		WHERE id = ?
 	`, name, color, id)
 	if err != nil {
-		return nil, err
+		return nil, wrapConflictDBError(err, "标签名称已存在", "更新标签失败")
 	}
 
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
+	if err := ensureRowsAffected(result, "tag not found"); err != nil {
 		return nil, err
-	}
-	if rowsAffected == 0 {
-		return nil, sql.ErrNoRows
 	}
 
 	return r.getTagByID(id)
 }
 
 func (r *LibraryRepository) DeleteTag(id int64) error {
-	_, err := r.db.Exec("DELETE FROM tags WHERE id = ?", id)
-	return err
+	result, err := r.db.Exec("DELETE FROM tags WHERE id = ?", id)
+	if err != nil {
+		return wrapDBError(err, "删除标签失败")
+	}
+	return ensureRowsAffected(result, "tag not found")
 }
 
 func (r *LibraryRepository) syncPaperTags(tx *sql.Tx, paperID int64, tags []TagUpsertInput) error {
@@ -856,7 +861,10 @@ func (r *LibraryRepository) getGroupByID(id int64) (*model.Group, error) {
 		&group.UpdatedAt,
 		&group.PaperCount,
 	); err != nil {
-		return nil, err
+		if err == sql.ErrNoRows {
+			return nil, notFoundError("group not found")
+		}
+		return nil, wrapDBError(err, "查询分组失败")
 	}
 
 	return &group, nil
@@ -882,7 +890,10 @@ func (r *LibraryRepository) getTagByID(id int64) (*model.Tag, error) {
 		&tag.UpdatedAt,
 		&tag.PaperCount,
 	); err != nil {
-		return nil, err
+		if err == sql.ErrNoRows {
+			return nil, notFoundError("tag not found")
+		}
+		return nil, wrapDBError(err, "查询标签失败")
 	}
 
 	return &tag, nil
@@ -910,7 +921,7 @@ func (r *LibraryRepository) loadTagsByPaperIDs(paperIDs []int64) (map[int64][]mo
 	`
 	rows, err := r.db.Query(query, args...)
 	if err != nil {
-		return nil, err
+		return nil, wrapDBError(err, "查询文献标签失败")
 	}
 	defer rows.Close()
 
@@ -925,12 +936,16 @@ func (r *LibraryRepository) loadTagsByPaperIDs(paperIDs []int64) (map[int64][]mo
 			&tag.CreatedAt,
 			&tag.UpdatedAt,
 		); err != nil {
-			return nil, err
+			return nil, wrapDBError(err, "查询文献标签失败")
 		}
 		result[paperID] = append(result[paperID], tag)
 	}
 
-	return result, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, wrapDBError(err, "查询文献标签失败")
+	}
+
+	return result, nil
 }
 
 func buildPaperWhere(filter model.PaperFilter) (string, []interface{}) {
@@ -1068,4 +1083,54 @@ func rawJSON(value string) json.RawMessage {
 		return nil
 	}
 	return json.RawMessage(value)
+}
+
+func ensureRowsAffected(result sql.Result, notFoundMessage string) error {
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return wrapDBError(err, "读取数据库影响行数失败")
+	}
+	if rowsAffected == 0 {
+		return notFoundError(notFoundMessage)
+	}
+	return nil
+}
+
+func notFoundError(message string) error {
+	return apperr.Wrap(apperr.CodeNotFound, message, sql.ErrNoRows)
+}
+
+func wrapConflictDBError(err error, conflictMessage, defaultMessage string) error {
+	if err == nil {
+		return nil
+	}
+
+	var appErr *apperr.Error
+	if errors.As(err, &appErr) {
+		return err
+	}
+	if sqliteCode(err) == sqlite3.SQLITE_CONSTRAINT_UNIQUE {
+		return apperr.Wrap(apperr.CodeConflict, conflictMessage, err)
+	}
+	return wrapDBError(err, defaultMessage)
+}
+
+func wrapDBError(err error, message string) error {
+	if err == nil {
+		return nil
+	}
+
+	var appErr *apperr.Error
+	if errors.As(err, &appErr) {
+		return err
+	}
+	return apperr.Wrap(apperr.CodeInternal, message, err)
+}
+
+func sqliteCode(err error) int {
+	var sqliteErr *sqliteDriver.Error
+	if errors.As(err, &sqliteErr) {
+		return sqliteErr.Code()
+	}
+	return 0
 }
