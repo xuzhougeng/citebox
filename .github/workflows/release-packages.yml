@@ -1,6 +1,7 @@
 name: Release Packages
 
 on:
+  workflow_dispatch:
   push:
     tags:
       - "v*"
@@ -9,7 +10,7 @@ permissions:
   contents: write
 
 env:
-  VERSION: ${{ github.ref_name }}
+  VERSION: ${{ github.event_name == 'workflow_dispatch' && format('manual-{0}', github.run_number) || github.ref_name }}
 
 jobs:
   build:
@@ -19,17 +20,41 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - label: macOS
+          - label: macOS Server
             runner: macos-latest
             platform: macos
+            package_kind: server
+            base_name: citebox
             archive_ext: .tar.gz
-          - label: Linux
+          - label: Linux Server
             runner: ubuntu-latest
             platform: linux
+            package_kind: server
+            base_name: citebox
             archive_ext: .tar.gz
-          - label: Windows
+          - label: Windows Server
             runner: windows-latest
             platform: windows
+            package_kind: server
+            base_name: citebox
+            archive_ext: .zip
+          - label: macOS Desktop
+            runner: macos-latest
+            platform: macos
+            package_kind: desktop
+            base_name: citebox-desktop
+            archive_ext: .tar.gz
+          - label: Linux Desktop
+            runner: ubuntu-latest
+            platform: linux
+            package_kind: desktop
+            base_name: citebox-desktop
+            archive_ext: .tar.gz
+          - label: Windows Desktop
+            runner: windows-latest
+            platform: windows
+            package_kind: desktop
+            base_name: citebox-desktop
             archive_ext: .zip
 
     steps:
@@ -42,25 +67,59 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Package macOS or Linux release
-        if: matrix.platform != 'windows'
+      - name: Install Linux desktop build dependencies
+        if: matrix.platform == 'linux' && matrix.package_kind == 'desktop'
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev
+
+      - name: Inspect native Windows desktop toolchain
+        if: matrix.platform == 'windows' && matrix.package_kind == 'desktop'
+        shell: pwsh
+        run: |
+          $tools = "gcc", "g++", "clang", "clang++", "cl"
+          foreach ($tool in $tools) {
+            $cmd = Get-Command $tool -ErrorAction SilentlyContinue
+            if ($null -eq $cmd) {
+              Write-Host "$tool => not found"
+            } else {
+              Write-Host "$tool => $($cmd.Source)"
+            }
+          }
+          go env CC CXX CGO_ENABLED
+
+      - name: Package server release for macOS or Linux
+        if: matrix.package_kind == 'server' && matrix.platform != 'windows'
         shell: bash
         run: ./scripts/package-unix.sh "${{ matrix.platform }}" "${VERSION}"
 
-      - name: Package Windows release
-        if: matrix.platform == 'windows'
+      - name: Package desktop release for macOS or Linux
+        if: matrix.package_kind == 'desktop' && matrix.platform != 'windows'
+        shell: bash
+        run: ./scripts/package-desktop-unix.sh "${{ matrix.platform }}" "${VERSION}"
+
+      - name: Package Windows server release
+        if: matrix.package_kind == 'server' && matrix.platform == 'windows'
         shell: pwsh
         run: ./scripts/package-windows.ps1 -Version "${env:VERSION}"
+
+      - name: Package Windows desktop release
+        if: matrix.package_kind == 'desktop' && matrix.platform == 'windows'
+        shell: pwsh
+        run: ./scripts/package-desktop-windows.ps1 -Version "${env:VERSION}"
 
       - name: Upload packaged artifact
         uses: actions/upload-artifact@v4
         with:
-          name: citebox-${{ matrix.platform }}-${{ env.VERSION }}
-          path: dist/citebox-${{ matrix.platform }}-${{ env.VERSION }}${{ matrix.archive_ext }}
+          name: ${{ matrix.base_name }}-${{ matrix.platform }}-${{ env.VERSION }}
+          path: dist/${{ matrix.base_name }}-${{ matrix.platform }}-${{ env.VERSION }}${{ matrix.archive_ext }}
           if-no-files-found: error
 
   publish:
     name: Publish GitHub release
+    if: github.event_name == 'push'
     needs: build
     runs-on: ubuntu-latest
 

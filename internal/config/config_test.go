@@ -1,6 +1,9 @@
 package config
 
-import "testing"
+import (
+	"path/filepath"
+	"testing"
+)
 
 func TestEffectiveExtractorURLFromBaseURL(t *testing.T) {
 	cfg := &Config{ExtractorURL: "http://127.0.0.1:8000"}
@@ -32,5 +35,49 @@ func TestEffectiveExtractorURLKeepsExplicitEndpoint(t *testing.T) {
 	}
 	if got := cfg.EffectiveExtractorJobsURL(); got != "" {
 		t.Fatalf("unexpected jobs url for legacy endpoint: %s", got)
+	}
+}
+
+func TestApplyDesktopDefaultsUsesUserConfigDir(t *testing.T) {
+	configHome := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", configHome)
+
+	cfg := Load()
+	if err := cfg.ApplyDesktopDefaults("CiteBox"); err != nil {
+		t.Fatalf("ApplyDesktopDefaults() error = %v", err)
+	}
+
+	baseDir := filepath.Join(configHome, "CiteBox")
+	if cfg.UploadDir != filepath.Join(baseDir, "uploads") {
+		t.Fatalf("unexpected upload dir: %s", cfg.UploadDir)
+	}
+	if cfg.StorageDir != filepath.Join(baseDir, "library") {
+		t.Fatalf("unexpected storage dir: %s", cfg.StorageDir)
+	}
+	if cfg.DatabasePath != filepath.Join(baseDir, "library.db") {
+		t.Fatalf("unexpected database path: %s", cfg.DatabasePath)
+	}
+}
+
+func TestApplyDesktopDefaultsKeepsExplicitEnv(t *testing.T) {
+	configHome := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", configHome)
+	t.Setenv("UPLOAD_DIR", "/tmp/citebox-upload")
+	t.Setenv("STORAGE_DIR", "/tmp/citebox-storage")
+	t.Setenv("DATABASE_PATH", "/tmp/citebox.db")
+
+	cfg := Load()
+	if err := cfg.ApplyDesktopDefaults("CiteBox"); err != nil {
+		t.Fatalf("ApplyDesktopDefaults() error = %v", err)
+	}
+
+	if cfg.UploadDir != "/tmp/citebox-upload" {
+		t.Fatalf("unexpected upload dir: %s", cfg.UploadDir)
+	}
+	if cfg.StorageDir != "/tmp/citebox-storage" {
+		t.Fatalf("unexpected storage dir: %s", cfg.StorageDir)
+	}
+	if cfg.DatabasePath != "/tmp/citebox.db" {
+		t.Fatalf("unexpected database path: %s", cfg.DatabasePath)
 	}
 }
