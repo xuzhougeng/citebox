@@ -1777,6 +1777,10 @@ func buildFigureWhere(filter model.FigureFilter) (string, []interface{}) {
 		args = append(args, *filter.TagID)
 	}
 
+	if filter.HasNotes {
+		conditions = append(conditions, "TRIM(COALESCE(pf.notes_text, '')) <> ''")
+	}
+
 	if len(conditions) == 0 {
 		return "", args
 	}

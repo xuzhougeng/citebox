@@ -389,6 +389,8 @@ func buildHandler(
 			http.ServeFile(w, r, filepath.Join(webRoot, "groups.html"))
 		case "/tags", "/tags.html":
 			http.ServeFile(w, r, filepath.Join(webRoot, "tags.html"))
+		case "/notes", "/notes.html":
+			http.ServeFile(w, r, filepath.Join(webRoot, "notes.html"))
 		case "/ai", "/ai.html":
 			http.ServeFile(w, r, filepath.Join(webRoot, "ai.html"))
 		case "/settings", "/settings.html":
