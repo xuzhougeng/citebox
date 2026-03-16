@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>配置</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="navbar-content">
+            <a href="/" class="logo">Paper Image DB</a>
+            <ul class="nav-links">
+                <li><a href="/">文献库</a></li>
+                <li><a href="/figures">图片预览</a></li>
+                <li><a href="/groups">分组</a></li>
+                <li><a href="/tags">标签</a></li>
+                <li><a href="/ai">AI 阅读</a></li>
+                <li><a href="/settings" class="active">配置</a></li>
+                <li><a href="/upload">上传 PDF</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <main class="page-shell narrow">
+        <section class="hero compact">
+            <div>
+                <p class="eyebrow">Settings</p>
+                <h1>统一管理 AI 与 PDF 提取服务参数</h1>
+                <p class="hero-text">
+                    AI 阅读页面只负责提问和看结果。这里集中配置模型参数、Prompt 模板以及 PDF 提取服务地址，避免工作台过于拥挤。
+                </p>
+            </div>
+        </section>
+
+        <section class="section-stack">
+            <section class="manager-card">
+                <div class="manager-head">
+                    <h2>AI 配置</h2>
+                    <p>支持 OpenAI、Anthropic、Gemini；OpenAI 额外支持传统兼容模式。</p>
+                </div>
+                <form id="aiSettingsForm" class="manager-form">
+                    <div class="form-grid">
+                        <label class="field">
+                            <span>提供商</span>
+                            <select id="aiProviderInput" class="form-input">
+                                <option value="openai">OpenAI</option>
+                                <option value="anthropic">Anthropic</option>
+                                <option value="gemini">Gemini</option>
+                            </select>
+                        </label>
+                        <label class="field">
+                            <span>模型</span>
+                            <input id="aiModelInput" class="form-input" type="text" placeholder="例如：gpt-4.1-mini">
+                        </label>
+                        <label class="field field-span-2">
+                            <span>Base URL</span>
+                            <input id="aiBaseURLInput" class="form-input" type="text" placeholder="默认使用官方地址；兼容 OpenAI 模式可改成自定义网关">
+                        </label>
+                        <label class="field field-span-2">
+                            <span>API Key</span>
+                            <input id="aiAPIKeyInput" class="form-input" type="password" autocomplete="off" placeholder="sk-...">
+                        </label>
+                        <label class="field">
+                            <span>Temperature</span>
+                            <input id="aiTemperatureInput" class="form-input" type="number" min="0" max="2" step="0.1">
+                        </label>
+                        <label class="field">
+                            <span>Max Output Tokens</span>
+                            <input id="aiMaxTokensInput" class="form-input" type="number" min="1" step="1">
+                        </label>
+                        <label class="field">
+                            <span>图像数量上限</span>
+                            <input id="aiMaxFiguresInput" class="form-input" type="number" min="0" step="1" placeholder="0 表示全部">
+                        </label>
+                        <label class="field checkbox-field field-span-2">
+                            <input id="aiOpenAILegacyInput" type="checkbox">
+                            <span>使用传统 OpenAI 接口模式（Chat Completions），以兼容其他 OpenAI 风格网关</span>
+                        </label>
+                    </div>
+
+                    <div class="ai-provider-note" id="aiProviderNote"></div>
+
+                    <label class="field">
+                        <span>System Prompt</span>
+                        <textarea id="aiSystemPromptInput" class="form-textarea" rows="4" placeholder="系统提示词"></textarea>
+                    </label>
+                    <label class="field">
+                        <span>通用问答 Prompt</span>
+                        <textarea id="aiQAPromptInput" class="form-textarea" rows="4" placeholder="自由提问模式的提示词"></textarea>
+                    </label>
+                    <label class="field">
+                        <span>图片解读 Prompt</span>
+                        <textarea id="aiFigurePromptInput" class="form-textarea" rows="4" placeholder="图片解读模式的提示词"></textarea>
+                    </label>
+                    <label class="field">
+                        <span>Tag 建议 Prompt</span>
+                        <textarea id="aiTagPromptInput" class="form-textarea" rows="4" placeholder="标签建议模式的提示词"></textarea>
+                    </label>
+                    <label class="field">
+                        <span>Group 建议 Prompt</span>
+                        <textarea id="aiGroupPromptInput" class="form-textarea" rows="4" placeholder="分组建议模式的提示词"></textarea>
+                    </label>
+
+                    <div class="submit-row">
+                        <button class="btn btn-primary" type="submit">保存 AI 配置</button>
+                    </div>
+                </form>
+            </section>
+
+            <section class="manager-card">
+                <div class="manager-head">
+                    <h2>PDF 提取服务配置</h2>
+                    <p>如果启动进程没有通过环境变量配置提取服务，可以在这里补充并立即用于上传与重解析。</p>
+                </div>
+                <form id="extractorSettingsForm" class="manager-form">
+                    <div class="form-grid">
+                        <label class="field field-span-2">
+                            <span>提取接口 URL</span>
+                            <input id="extractorURLInput" class="form-input" type="text" placeholder="例如：http://127.0.0.1:8000/api/v1/extract">
+                        </label>
+                        <label class="field field-span-2">
+                            <span>任务接口 URL</span>
+                            <input id="extractorJobsURLInput" class="form-input" type="text" placeholder="例如：http://127.0.0.1:8000/api/v1/jobs">
+                        </label>
+                        <label class="field field-span-2">
+                            <span>鉴权 Token</span>
+                            <input id="extractorTokenInput" class="form-input" type="password" autocomplete="off" placeholder="可选">
+                        </label>
+                        <label class="field">
+                            <span>上传字段名</span>
+                            <input id="extractorFileFieldInput" class="form-input" type="text" placeholder="默认 file">
+                        </label>
+                        <label class="field">
+                            <span>请求超时（秒）</span>
+                            <input id="extractorTimeoutInput" class="form-input" type="number" min="1" step="1">
+                        </label>
+                        <label class="field">
+                            <span>轮询间隔（秒）</span>
+                            <input id="extractorPollIntervalInput" class="form-input" type="number" min="1" step="1">
+                        </label>
+                    </div>
+
+                    <div id="extractorSummary" class="settings-summary-box"></div>
+
+                    <div class="submit-row">
+                        <button class="btn btn-primary" type="submit">保存提取服务配置</button>
+                    </div>
+                </form>
+            </section>
+
+            <section class="manager-card danger-zone-card">
+                <div class="manager-head">
+                    <h2>数据库管理</h2>
+                    <p>导出、导入或清空数据库。导入会覆盖现有数据，请谨慎操作。</p>
+                </div>
+                <div class="db-actions-grid">
+                    <div class="db-action-item">
+                        <h3>导出数据库</h3>
+                        <p>下载当前数据库的完整备份</p>
+                        <button id="exportDbButton" class="btn btn-secondary" type="button">导出数据库</button>
+                    </div>
+                    <div class="db-action-item">
+                        <h3>导入数据库</h3>
+                        <p>从备份文件恢复数据库，将覆盖现有数据</p>
+                        <form id="importDbForm" class="import-form">
+                            <input id="importDbFile" class="form-input" type="file" accept=".db,.sqlite,.sqlite3">
+                            <button id="importDbButton" class="btn btn-secondary" type="submit">导入数据库</button>
+                        </form>
+                    </div>
+                    <div class="db-action-item danger">
+                        <h3>清空数据库</h3>
+                        <p>清空所有文献、图片、分组和标签。此操作不可恢复。</p>
+                        <button id="purgeDbButton" class="btn btn-outline danger" type="button">清空数据库</button>
+                    </div>
+                </div>
+            </section>
+        </section>
+    </main>
+
+    <script src="/static/js/utils.js"></script>
+    <script src="/static/js/api.js"></script>
+    <script src="/static/js/settings.js"></script>
+    <script src="/static/js/main.js"></script>
+</body>
+</html>

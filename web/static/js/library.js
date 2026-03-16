@@ -40,7 +40,7 @@ const LibraryPage = {
         this.tagNameInput = document.getElementById('tagNameInput');
         this.tagColorInput = document.getElementById('tagColorInput');
         this.tagList = document.getElementById('tagList');
-        this.purgeLibraryButton = document.getElementById('purgeLibraryButton');
+
     },
 
     bindEvents() {
@@ -128,9 +128,6 @@ const LibraryPage = {
             if (button.dataset.action === 'delete-tag') {
                 await this.deleteTag(id);
             }
-        });
-        this.purgeLibraryButton.addEventListener('click', async () => {
-            await this.purgeLibrary();
         });
 
         window.addEventListener('beforeunload', () => this.stopAutoRefresh());
@@ -478,29 +475,5 @@ const LibraryPage = {
         }
     },
 
-    async purgeLibrary() {
-        const confirmed = await Utils.confirm('这会清空所有文献、提取图片、分组和标签，且不可恢复。');
-        if (!confirmed) return;
 
-        const token = window.prompt('为避免误操作，请输入 CLEAR 继续');
-        if (token !== 'CLEAR') {
-            Utils.showToast('未完成清库确认', 'info');
-            return;
-        }
-
-        try {
-            await API.purgeLibrary();
-            this.stopAutoRefresh();
-            this.keywordInput.value = '';
-            this.groupFilter.value = '';
-            this.tagFilter.value = '';
-            this.statusFilter.value = '';
-            this.state.currentPage = 1;
-            this.state.filters = { keyword: '', group_id: '', tag_id: '', status: '' };
-            Utils.showToast('数据库已清空');
-            await Promise.all([this.loadGroups(), this.loadTags(), this.loadPapers()]);
-        } catch (error) {
-            Utils.showToast(error.message, 'error');
-        }
-    }
 };

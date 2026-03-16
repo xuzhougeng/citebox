@@ -1,7 +1,6 @@
 const API_BASE = '/api';
 
-async function requestJSON(path, options = {}) {
-    const response = await fetch(path, options);
+async function parseJSONResponse(response) {
     let payload = {};
 
     try {
@@ -9,6 +8,13 @@ async function requestJSON(path, options = {}) {
     } catch (error) {
         payload = {};
     }
+
+    return payload;
+}
+
+async function requestJSON(path, options = {}) {
+    const response = await fetch(path, options);
+    const payload = await parseJSONResponse(response);
 
     if (!response.ok) {
         throw new Error(payload.error || `请求失败 (${response.status})`);
@@ -136,6 +142,96 @@ const API = {
     deleteTag(id) {
         return requestJSON(`${API_BASE}/tags/${id}`, {
             method: 'DELETE'
+        });
+    },
+
+    getAISettings() {
+        return requestJSON(`${API_BASE}/ai/settings`);
+    },
+
+    updateAISettings(data) {
+        return requestJSON(`${API_BASE}/ai/settings`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        });
+    },
+
+    readPaperWithAI(data) {
+        return requestJSON(`${API_BASE}/ai/read`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        });
+    },
+
+    async readPaperWithAIStream(data, options = {}) {
+        const response = await fetch(`${API_BASE}/ai/read/stream`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data),
+            signal: options.signal
+        });
+
+        if (!response.ok) {
+            const payload = await parseJSONResponse(response);
+            throw new Error(payload.error || `请求失败 (${response.status})`);
+        }
+
+        if (!response.body) {
+            throw new Error('当前浏览器不支持流式响应');
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            let newlineIndex = buffer.indexOf('\n');
+            while (newlineIndex >= 0) {
+                const line = buffer.slice(0, newlineIndex).trim();
+                buffer = buffer.slice(newlineIndex + 1);
+                if (line) {
+                    options.onEvent?.(JSON.parse(line));
+                }
+                newlineIndex = buffer.indexOf('\n');
+            }
+        }
+
+        const tail = (buffer + decoder.decode()).trim();
+        if (tail) {
+            options.onEvent?.(JSON.parse(tail));
+        }
+    },
+
+    getExtractorSettings() {
+        return requestJSON(`${API_BASE}/settings/extractor`);
+    },
+
+    updateExtractorSettings(data) {
+        return requestJSON(`${API_BASE}/settings/extractor`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        });
+    },
+
+    importDatabase(formData) {
+        return requestJSON(`${API_BASE}/database/import`, {
+            method: 'POST',
+            body: formData
         });
     }
 };
