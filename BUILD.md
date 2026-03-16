@@ -1,135 +1,176 @@
-# 构建指南 - Windows 分发打包
+# 构建指南 - 跨平台分发打包
 
 ## 快速开始
 
-### 方法 1: 使用 Makefile (推荐)
-
 ```bash
-# 创建标准 Windows 包（EXE + web 目录）
+# 创建所有平台的包
+make package-all
+
+# 或单独构建某个平台
+make package-windows    # Windows
+make package-darwin     # macOS
+make package-linux      # Linux
+```
+
+---
+
+## 支持的平台
+
+| 平台 | 架构 | 命令 |
+|------|------|------|
+| Windows | x86_64 | `make package-windows` |
+| macOS | Intel (AMD64) | `make package-darwin` |
+| macOS | Apple Silicon (ARM64) | `make build-darwin` |
+| Linux | x86_64 | `make package-linux` |
+| Linux | ARM64 | `make build-linux` |
+
+---
+
+## Windows
+
+### 构建
+```bash
 make package-windows
-
-# 创建独立 Windows 包（单个 EXE，嵌入前端资源）
-make package-windows-standalone
-
-# 创建所有包
-make all
 ```
 
-### 方法 2: 使用脚本
-
-```bash
-# 运行打包脚本
-./scripts/build-windows.sh
+### 输出文件
+```
+dist/paper_image_db-windows-{version}.zip
+├── paper_image_db.exe          # 可执行文件
+├── web/                         # 前端资源
+├── data/                        # 数据目录
+├── start.bat                    # 启动脚本
+├── start-with-config.bat        # 自定义配置示例
+└── README.txt                   # 使用说明
 ```
 
-### 方法 3: 手动构建
-
-```bash
-# 1. 安装依赖
-go mod tidy
-
-# 2. 构建 Windows 可执行文件
-GOOS=windows GOARCH=amd64 go build -o paper_image_db.exe ./cmd/server
-
-# 3. 创建分发目录
-mkdir -p dist/paper_image_db
-
-# 4. 复制文件
-cp paper_image_db.exe dist/paper_image_db/
-cp -r web dist/paper_image_db/
-
-# 5. 创建启动脚本 (start.bat)
-# 6. 打包为 zip
-cd dist && zip -r paper_image_db.zip paper_image_db/
-```
-
----
-
-## 构建模式对比
-
-| 模式 | 命令 | 特点 | 适用场景 |
-|------|------|------|---------|
-| **标准版** | `make package-windows` | EXE + web 目录 | 需要修改前端文件 |
-| **独立版** | `make package-windows-standalone` | 单个 EXE 文件 | 简单分发，不可修改前端 |
-
----
-
-## 标准版构建详情
-
-### 文件结构
-```
-paper_image_db/
-├── paper_image_db.exe    # 可执行文件
-├── web/                   # 前端资源（必需）
-│   ├── index.html
-│   ├── static/
-│   └── ...
-├── data/                  # 数据目录（自动生成）
-│   ├── library.db
-│   └── library/
-└── start.bat             # 启动脚本
-```
-
-### 构建命令
-```bash
-# 交叉编译
-GOOS=windows GOARCH=amd64 go build -o paper_image_db.exe ./cmd/server
-```
-
----
-
-## 独立版构建详情
-
-### 特点
-- 使用 `go:embed` 将前端资源嵌入到二进制中
-- 用户只需一个 EXE 文件即可运行
-- 无法运行时修改前端资源
-
-### 构建命令
-```bash
-# 使用 standalone build tag
-go build -tags standalone -o paper_image_db.exe ./cmd/server
-```
-
-### 技术实现
-- `main.go` - 标准版（外部 web 目录）
-- `main_standalone.go` - 独立版（嵌入资源）
-- Build tag `standalone` 控制编译哪个版本
-
----
-
-## Windows 启动脚本示例
-
-### start.bat
+### 运行方式
+**方式1：默认配置**
 ```batch
-@echo off
-chcp 65001 >nul
-title Paper Image Database
-echo ========================================
-echo  Paper Image Database
-echo ========================================
-echo.
-echo URL: http://localhost:8080
-echo Account: wanglab / wanglab789
-echo.
-paper_image_db.exe
-pause
+双击 start.bat
 ```
 
-### start-with-config.bat（自定义配置）
+**方式2：自定义配置**
 ```batch
-@echo off
-chcp 65001 >nul
-set SERVER_PORT=8080
-set ADMIN_USERNAME=admin
-set ADMIN_PASSWORD=secret
-paper_image_db.exe
-pause
+编辑 start-with-config.bat
+双击运行
+```
+
+---
+
+## macOS
+
+### 构建
+```bash
+make package-darwin
+```
+
+### 输出文件
+```
+dist/paper_image_db-darwin-{version}.zip
+├── paper_image_db              # 可执行文件 (Intel 版本)
+├── web/                         # 前端资源
+├── data/                        # 数据目录
+├── start.sh                     # 启动脚本
+├── start-with-config.sh         # 自定义配置示例
+└── README.txt                   # 使用说明
+```
+
+### 运行方式
+**方式1：默认配置**
+```bash
+cd paper_image_db-darwin-{version}
+chmod +x paper_image_db start.sh
+./start.sh
+```
+
+**方式2：自定义配置**
+```bash
+编辑 start-with-config.sh
+./start-with-config.sh
+```
+
+### Apple Silicon (M1/M2/M3) 用户
+默认包包含 Intel 版本，但可在 Apple Silicon Mac 上通过 Rosetta 运行。
+
+如需原生 ARM64 版本：
+```bash
+make build-darwin
+# 使用 bin/darwin/paper_image_db-arm64
+```
+
+---
+
+## Linux
+
+### 构建
+```bash
+make package-linux
+```
+
+### 输出文件
+```
+dist/paper_image_db-linux-{version}.zip
+├── paper_image_db              # 可执行文件 (x86_64)
+├── web/                         # 前端资源
+├── data/                        # 数据目录
+├── start.sh                     # 启动脚本
+├── start-with-config.sh         # 自定义配置示例
+└── README.txt                   # 使用说明
+```
+
+### 运行方式
+**方式1：前台运行**
+```bash
+cd paper_image_db-linux-{version}
+chmod +x paper_image_db start.sh
+./start.sh
+```
+
+**方式2：后台运行**
+```bash
+nohup ./paper_image_db &
+```
+
+**方式3：Systemd 服务**
+```bash
+# 创建服务文件
+sudo tee /etc/systemd/system/paper_image_db.service > /dev/null <<EOF
+[Unit]
+Description=Paper Image Database
+After=network.target
+
+[Service]
+Type=simple
+User=$USER
+WorkingDirectory=/opt/paper_image_db
+ExecStart=/opt/paper_image_db/paper_image_db
+Restart=on-failure
+Environment=SERVER_PORT=8080
+Environment=ADMIN_USERNAME=wanglab
+Environment=ADMIN_PASSWORD=wanglab789
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# 启用并启动服务
+sudo systemctl enable paper_image_db
+sudo systemctl start paper_image_db
+```
+
+### ARM64 服务器
+默认包包含 x86_64 版本，如需 ARM64：
+```bash
+make build-linux
+# 使用 bin/linux/paper_image_db-arm64
 ```
 
 ---
 
 ## 环境变量
+
+所有平台支持相同的环境变量：
 
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
@@ -139,50 +180,116 @@ pause
 | `STORAGE_DIR` | ./data/library | 文件存储目录 |
 | `DATABASE_PATH` | ./data/library.db | 数据库文件路径 |
 | `PDF_EXTRACTOR_URL` | - | PDF 解析服务 URL |
+| `MAX_UPLOAD_SIZE` | 262144000 | 最大上传大小 (字节) |
 
 ---
 
 ## 故障排除
 
-### 1. 交叉编译错误
+### 1. 跨平台编译错误
+
+**问题：** `build constraints exclude all Go files`
+
+**解决：**
 ```bash
-# 确保安装了 mingw-w64（如需要 CGO）
-# 或使用禁用 CGO 的方式：
-CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build ./cmd/server
+# 确保没有使用平台特定的代码
+# 检查 SQLite 驱动是否支持目标平台
+
+# 禁用 CGO（纯 Go 模式）
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build ./cmd/server
 ```
 
-### 2. 前端资源 404
-- 标准版：确保 `web/` 目录与 EXE 在同一目录
-- 独立版：重新构建，确保 embed 指令正确
+### 2. macOS 运行权限
 
-### 3. 数据库权限错误
-- 确保程序有写入 `data/` 目录的权限
-- 首次运行会自动创建数据库和目录
+**问题：** `cannot be opened because the developer cannot be verified`
+
+**解决：**
+```bash
+# 方法1：在系统设置中允许
+# 系统设置 → 隐私与安全性 → 安全性 → 仍要打开
+
+# 方法2：移除隔离属性
+xattr -d com.apple.quarantine paper_image_db
+
+# 方法3：签名（开发者）
+codesign -s "Developer ID" paper_image_db
+```
+
+### 3. Linux 端口权限
+
+**问题：** `bind: permission denied` (端口 < 1024)
+
+**解决：**
+```bash
+# 使用非特权端口
+export SERVER_PORT=8080
+
+# 或使用 authbind
+sudo apt install authbind
+authbind --deep ./paper_image_db
+```
+
+### 4. 数据库锁定
+
+**问题：** `database is locked`
+
+**解决：**
+```bash
+# 检查是否有多个实例在运行
+lsof data/library.db
+
+# 删除锁定文件（确保没有运行中的实例）
+rm -f data/library.db-shm data/library.db-wal
+```
 
 ---
 
-## 分发建议
+## 开发构建
 
-### 给普通用户
-1. 使用 **独立版** (`package-windows-standalone`)
-2. 提供简单的 `双击运行` 说明
-3. 打包为 ZIP 格式（Windows 自带解压支持）
+### 当前平台
+```bash
+make build
+```
 
-### 给高级用户
-1. 使用 **标准版** (`package-windows`)
-2. 允许用户修改前端样式或界面
-3. 提供更灵活的配置方式
+### 特定平台/架构
+```bash
+# Windows AMD64
+GOOS=windows GOARCH=amd64 go build -o paper_image_db.exe ./cmd/server
+
+# macOS Intel
+GOOS=darwin GOARCH=amd64 go build -o paper_image_db ./cmd/server
+
+# macOS Apple Silicon
+GOOS=darwin GOARCH=arm64 go build -o paper_image_db ./cmd/server
+
+# Linux x86_64
+GOOS=linux GOARCH=amd64 go build -o paper_image_db ./cmd/server
+
+# Linux ARM64
+GOOS=linux GOARCH=arm64 go build -o paper_image_db ./cmd/server
+```
 
 ---
 
-## 构建输出
+## 减小二进制体积
 
-构建完成后，`dist/` 目录下会生成：
+```bash
+# 使用 -ldflags 去除调试信息
+go build -ldflags "-s -w" -o paper_image_db ./cmd/server
 
+# 使用 UPX 压缩（可选）
+upx --best paper_image_db
 ```
-dist/
-├── paper_image_db-windows-amd64-v1.0.0.zip          # 标准版
-└── paper_image_db-windows-amd64-standalone-v1.0.0.zip  # 独立版
-```
 
-建议同时提供两个版本，让用户根据需求选择。
+---
+
+## 发布检查清单
+
+- [ ] 版本号正确 (`make version`)
+- [ ] 所有平台构建成功 (`make package-all`)
+- [ ] Windows 包能正常启动
+- [ ] macOS 包能正常启动
+- [ ] Linux 包能正常启动
+- [ ] 默认账号能登录
+- [ ] 能上传 PDF
+- [ ] 数据持久化正常
