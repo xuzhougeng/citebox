@@ -15,6 +15,7 @@ type FigureListItem struct {
 	FigureIndex int       `json:"figure_index"`
 	Source      string    `json:"source,omitempty"`
 	Caption     string    `json:"caption"`
+	NotesText   string    `json:"notes_text,omitempty"`
 	CreatedAt   time.Time `json:"created_at"`
 }
 

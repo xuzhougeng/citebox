@@ -14,6 +14,7 @@ type Figure struct {
 	FigureIndex  int             `json:"figure_index"`
 	Source       string          `json:"source,omitempty"`
 	Caption      string          `json:"caption"`
+	NotesText    string          `json:"notes_text,omitempty"`
 	Tags         []Tag           `json:"tags"`
 	BBox         json.RawMessage `json:"bbox,omitempty"`
 	ImageURL     string          `json:"image_url,omitempty"`

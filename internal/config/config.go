@@ -113,10 +113,6 @@ func (c *Config) EffectiveExtractorURL() string {
 }
 
 func (c *Config) EffectiveExtractorJobsURL() string {
-	if value := strings.TrimSpace(c.ExtractorJobsURL); value != "" {
-		return normalizeExtractorEndpoint(value, "/api/v1/jobs")
-	}
-
 	extractURL := strings.TrimSpace(c.EffectiveExtractorURL())
 	if extractURL == "" {
 		return ""

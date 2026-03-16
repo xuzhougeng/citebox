@@ -103,6 +103,9 @@ func TestCreatePaperAndListEntities(t *testing.T) {
 	if figures[0].Source != "auto" {
 		t.Fatalf("ListFigures() source = %q, want %q", figures[0].Source, "auto")
 	}
+	if figures[0].NotesText != "" {
+		t.Fatalf("ListFigures() notes_text = %q, want empty", figures[0].NotesText)
+	}
 }
 
 func TestUpdateFigureTagsOnlyAffectsTargetFigure(t *testing.T) {
@@ -168,6 +171,174 @@ func TestUpdateFigureTagsOnlyAffectsTargetFigure(t *testing.T) {
 	}
 	if got := len(figures[0].Tags); got != 1 {
 		t.Fatalf("ListFigures(tag filter) tags = %d, want 1", got)
+	}
+}
+
+func TestUpdateFigureTagsPreservesExistingTagsAcrossMultipleUpdates(t *testing.T) {
+	repo := newTestRepository(t)
+
+	paper, err := repo.CreatePaper(PaperUpsertInput{
+		Title:            "Repeated Figure Tags",
+		OriginalFilename: "repeated-figure-tags.pdf",
+		StoredPDFName:    "repeated-figure-tags.pdf",
+		FileSize:         256,
+		ContentType:      "application/pdf",
+		ExtractionStatus: "completed",
+		Figures: []FigureUpsertInput{
+			{Filename: "figure_1.png", PageNumber: 1, FigureIndex: 1, Caption: "First"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreatePaper() error = %v", err)
+	}
+
+	figureID := paper.Figures[0].ID
+	steps := [][]TagUpsertInput{
+		{{Name: "Tag One", Color: "#111111"}},
+		{
+			{Name: "Tag One", Color: "#111111"},
+			{Name: "Tag Two", Color: "#222222"},
+		},
+		{
+			{Name: "Tag One", Color: "#111111"},
+			{Name: "Tag Two", Color: "#222222"},
+			{Name: "Tag Three", Color: "#333333"},
+		},
+	}
+
+	var updated *model.Paper
+	for _, tags := range steps {
+		updated, err = repo.UpdateFigureTags(figureID, tags)
+		if err != nil {
+			t.Fatalf("UpdateFigureTags() error = %v", err)
+		}
+	}
+
+	if updated == nil || len(updated.Figures) != 1 {
+		t.Fatalf("updated paper figures = %+v, want 1 figure", updated)
+	}
+	if got := len(updated.Figures[0].Tags); got != 3 {
+		t.Fatalf("updated figure tags = %d, want 3", got)
+	}
+
+	gotNames := make([]string, 0, len(updated.Figures[0].Tags))
+	for _, tag := range updated.Figures[0].Tags {
+		gotNames = append(gotNames, tag.Name)
+	}
+	expectedNames := []string{"Tag One", "Tag Three", "Tag Two"}
+	if strings.Join(gotNames, ",") != strings.Join(expectedNames, ",") {
+		t.Fatalf("updated figure tag names = %v, want %v", gotNames, expectedNames)
+	}
+}
+
+func TestUpdatePaperTagsPreservesExistingTagsAcrossMultipleUpdates(t *testing.T) {
+	repo := newTestRepository(t)
+
+	paper, err := repo.CreatePaper(PaperUpsertInput{
+		Title:            "Repeated Paper Tags",
+		OriginalFilename: "repeated-paper-tags.pdf",
+		StoredPDFName:    "repeated-paper-tags.pdf",
+		FileSize:         256,
+		ContentType:      "application/pdf",
+		ExtractionStatus: "completed",
+		Figures: []FigureUpsertInput{
+			{Filename: "figure_1.png", PageNumber: 1, FigureIndex: 1, Caption: "First"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreatePaper() error = %v", err)
+	}
+
+	steps := [][]TagUpsertInput{
+		{{Name: "Paper One", Color: "#111111"}},
+		{
+			{Name: "Paper One", Color: "#111111"},
+			{Name: "Paper Two", Color: "#222222"},
+		},
+		{
+			{Name: "Paper One", Color: "#111111"},
+			{Name: "Paper Two", Color: "#222222"},
+			{Name: "Paper Three", Color: "#333333"},
+		},
+	}
+
+	var updated *model.Paper
+	for _, tags := range steps {
+		updated, err = repo.UpdatePaper(paper.ID, PaperUpdateInput{
+			Title:        paper.Title,
+			AbstractText: paper.AbstractText,
+			NotesText:    paper.NotesText,
+			GroupID:      paper.GroupID,
+			Tags:         tags,
+		})
+		if err != nil {
+			t.Fatalf("UpdatePaper() error = %v", err)
+		}
+	}
+
+	if updated == nil {
+		t.Fatalf("updated paper is nil")
+	}
+	if got := len(updated.Tags); got != 3 {
+		t.Fatalf("updated paper tags = %d, want 3", got)
+	}
+
+	gotNames := make([]string, 0, len(updated.Tags))
+	for _, tag := range updated.Tags {
+		gotNames = append(gotNames, tag.Name)
+	}
+	expectedNames := []string{"Paper One", "Paper Three", "Paper Two"}
+	if strings.Join(gotNames, ",") != strings.Join(expectedNames, ",") {
+		t.Fatalf("updated paper tag names = %v, want %v", gotNames, expectedNames)
+	}
+}
+
+func TestUpdateFigureNotesOnlyAffectsTargetFigureAndSearch(t *testing.T) {
+	repo := newTestRepository(t)
+
+	paper, err := repo.CreatePaper(PaperUpsertInput{
+		Title:            "Figure Notes",
+		OriginalFilename: "figure-notes.pdf",
+		StoredPDFName:    "figure-notes.pdf",
+		FileSize:         256,
+		ContentType:      "application/pdf",
+		ExtractionStatus: "completed",
+		Figures: []FigureUpsertInput{
+			{Filename: "figure_1.png", PageNumber: 1, FigureIndex: 1, Caption: "First"},
+			{Filename: "figure_2.png", PageNumber: 2, FigureIndex: 2, Caption: "Second"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreatePaper() error = %v", err)
+	}
+
+	updatedPaper, err := repo.UpdateFigure(paper.Figures[0].ID, FigureUpdateInput{
+		NotesText: "AI 解读：这张图展示了信号通路重编程。",
+		Tags:      []TagUpsertInput{},
+	})
+	if err != nil {
+		t.Fatalf("UpdateFigure() error = %v", err)
+	}
+
+	if updatedPaper.Figures[0].NotesText == "" {
+		t.Fatalf("updated first figure notes_text is empty")
+	}
+	if updatedPaper.Figures[1].NotesText != "" {
+		t.Fatalf("updated second figure notes_text = %q, want empty", updatedPaper.Figures[1].NotesText)
+	}
+
+	figures, total, err := repo.ListFigures(model.FigureFilter{Keyword: "重编程"})
+	if err != nil {
+		t.Fatalf("ListFigures(keyword notes) error = %v", err)
+	}
+	if total != 1 || len(figures) != 1 {
+		t.Fatalf("ListFigures(keyword notes) total=%d len=%d, want 1/1", total, len(figures))
+	}
+	if figures[0].ID != paper.Figures[0].ID {
+		t.Fatalf("ListFigures(keyword notes) figure id = %d, want %d", figures[0].ID, paper.Figures[0].ID)
+	}
+	if figures[0].NotesText == "" {
+		t.Fatalf("ListFigures(keyword notes) notes_text is empty")
 	}
 }
 
@@ -356,8 +527,10 @@ func TestRepositoryMigratesPaperMetadataColumns(t *testing.T) {
 		}
 		figureColumns[strings.ToLower(name)] = true
 	}
-	if !figureColumns["source"] {
-		t.Fatalf("missing migrated column %q", "source")
+	for _, column := range []string{"source", "notes_text"} {
+		if !figureColumns[column] {
+			t.Fatalf("missing migrated column %q", column)
+		}
 	}
 }
 

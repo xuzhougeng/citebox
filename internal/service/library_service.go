@@ -54,6 +54,11 @@ type UpdatePaperParams struct {
 	Tags         []string
 }
 
+type UpdateFigureParams struct {
+	Tags      []string
+	NotesText *string
+}
+
 type ManualExtractParams struct {
 	Regions []model.ManualExtractionRegion
 }
@@ -395,7 +400,35 @@ func (s *LibraryService) DeleteFigure(id int64) (*model.Paper, error) {
 }
 
 func (s *LibraryService) UpdateFigureTags(id int64, tags []string) (*model.Paper, error) {
-	paper, err := s.repo.UpdateFigureTags(id, s.normalizeTagInputs(tags, model.TagScopeFigure))
+	return s.UpdateFigure(id, UpdateFigureParams{Tags: tags})
+}
+
+func (s *LibraryService) UpdateFigure(id int64, params UpdateFigureParams) (*model.Paper, error) {
+	figure, err := s.repo.GetFigure(id)
+	if err != nil {
+		return nil, err
+	}
+	if figure == nil {
+		return nil, apperr.New(apperr.CodeNotFound, "figure not found")
+	}
+
+	tagNames := params.Tags
+	if tagNames == nil {
+		tagNames = make([]string, 0, len(figure.Tags))
+		for _, tag := range figure.Tags {
+			tagNames = append(tagNames, tag.Name)
+		}
+	}
+
+	notesText := figure.NotesText
+	if params.NotesText != nil {
+		notesText = *params.NotesText
+	}
+
+	paper, err := s.repo.UpdateFigure(id, repository.FigureUpdateInput{
+		NotesText: notesText,
+		Tags:      s.normalizeTagInputs(tagNames, model.TagScopeFigure),
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -708,7 +741,7 @@ func (s *LibraryService) UpdateExtractorSettings(input model.ExtractorSettings) 
 func (s *LibraryService) defaultExtractorSettings() model.ExtractorSettings {
 	settings := model.ExtractorSettings{
 		ExtractorURL:        strings.TrimSpace(s.config.ExtractorURL),
-		ExtractorJobsURL:    strings.TrimSpace(s.config.ExtractorJobsURL),
+		ExtractorJobsURL:    "",
 		ExtractorToken:      strings.TrimSpace(s.config.ExtractorToken),
 		ExtractorFileField:  strings.TrimSpace(s.config.ExtractorFileField),
 		TimeoutSeconds:      s.config.ExtractorTimeoutSeconds,
@@ -753,7 +786,7 @@ func (s *LibraryService) normalizeExtractorSettings(input model.ExtractorSetting
 	}
 
 	settings.ExtractorURL = strings.TrimSpace(settings.ExtractorURL)
-	settings.ExtractorJobsURL = strings.TrimSpace(settings.ExtractorJobsURL)
+	settings.ExtractorJobsURL = ""
 	settings.ExtractorToken = strings.TrimSpace(settings.ExtractorToken)
 	settings.ExtractorFileField = strings.TrimSpace(settings.ExtractorFileField)
 
