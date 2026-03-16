@@ -48,3 +48,22 @@ func (h *FigureHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	sendJSON(w, http.StatusOK, result)
 }
+
+func (h *FigureHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	id, err := parseIDFromPath(r.URL.Path, "/api/figures/")
+	if err != nil {
+		sendError(w, apperr.New(apperr.CodeInvalidArgument, "figure id 无效"))
+		return
+	}
+
+	paper, err := h.service.DeleteFigure(id)
+	if err != nil {
+		sendError(w, err)
+		return
+	}
+
+	sendJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"paper":   paper,
+	})
+}

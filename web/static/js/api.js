@@ -125,6 +125,12 @@ const API = {
         return requestJSON(`${API_BASE}/figures${suffix}`);
     },
 
+    deleteFigure(id) {
+        return requestJSON(`${API_BASE}/figures/${id}`, {
+            method: 'DELETE'
+        });
+    },
+
     listGroups() {
         return requestJSON(`${API_BASE}/groups`);
     },

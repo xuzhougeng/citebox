@@ -43,6 +43,7 @@ const (
 	runtimePasswordKey   = "runtime_admin_password"
 	manualPreviewDPI     = 144
 	manualExtractDPI     = 288
+	manualPendingStatus  = "manual_pending"
 )
 
 type LibraryServiceOption func(*LibraryService)
@@ -273,6 +274,19 @@ func (s *LibraryService) UploadPaper(file multipart.File, header *multipart.File
 	}
 
 	tagInputs := s.normalizeTagInputs(params.Tags)
+	autoExtractionConfigured, err := s.autoExtractionConfigured()
+	if err != nil {
+		os.Remove(pdfPath)
+		return nil, err
+	}
+
+	extractionStatus := manualPendingStatus
+	extractorMessage := "未配置自动解析服务，请直接进入人工处理"
+	if autoExtractionConfigured {
+		extractionStatus = "queued"
+		extractorMessage = "文献已入库，等待后台解析"
+	}
+
 	paper, err := s.repo.CreatePaper(repository.PaperUpsertInput{
 		Title:            title,
 		OriginalFilename: header.Filename,
@@ -283,8 +297,8 @@ func (s *LibraryService) UploadPaper(file multipart.File, header *multipart.File
 		AbstractText:     "",
 		NotesText:        "",
 		BoxesJSON:        "",
-		ExtractionStatus: "queued",
-		ExtractorMessage: "文献已入库，等待后台解析",
+		ExtractionStatus: extractionStatus,
+		ExtractorMessage: extractorMessage,
 		ExtractorJobID:   "",
 		GroupID:          params.GroupID,
 		Tags:             tagInputs,
@@ -295,7 +309,9 @@ func (s *LibraryService) UploadPaper(file multipart.File, header *multipart.File
 		return nil, err
 	}
 
-	go s.runPaperExtraction(paper.ID, pdfPath, header.Filename)
+	if autoExtractionConfigured {
+		go s.runPaperExtraction(paper.ID, pdfPath, header.Filename)
+	}
 
 	s.decoratePaper(paper)
 	return paper, nil
@@ -359,6 +375,33 @@ func (s *LibraryService) DeletePaper(id int64) error {
 	return nil
 }
 
+func (s *LibraryService) DeleteFigure(id int64) (*model.Paper, error) {
+	figure, err := s.repo.GetFigure(id)
+	if err != nil {
+		return nil, err
+	}
+	if figure == nil {
+		return nil, apperr.New(apperr.CodeNotFound, "figure not found")
+	}
+
+	if err := s.repo.ApplyManualFigureChanges(figure.PaperID, nil, []int64{id}); err != nil {
+		return nil, err
+	}
+
+	removeFiles([]string{filepath.Join(s.config.FiguresDir(), figure.Filename)})
+
+	paper, err := s.repo.GetPaperDetail(figure.PaperID)
+	if err != nil {
+		return nil, err
+	}
+	if paper == nil {
+		return nil, apperr.New(apperr.CodeNotFound, "paper not found")
+	}
+
+	s.decoratePaper(paper)
+	return paper, nil
+}
+
 func (s *LibraryService) ReextractPaper(id int64) (*model.Paper, error) {
 	paper, err := s.repo.GetPaperDetail(id)
 	if err != nil {
@@ -368,12 +411,20 @@ func (s *LibraryService) ReextractPaper(id int64) (*model.Paper, error) {
 		return nil, apperr.New(apperr.CodeNotFound, "paper not found")
 	}
 
+	autoExtractionConfigured, err := s.autoExtractionConfigured()
+	if err != nil {
+		return nil, err
+	}
+	if !autoExtractionConfigured {
+		return nil, apperr.New(apperr.CodeFailedPrecondition, "未配置自动解析服务，请直接使用人工处理")
+	}
+
 	switch paper.ExtractionStatus {
 	case "queued", "running":
 		return nil, apperr.New(apperr.CodeConflict, "文献正在解析中，无需重复提交")
-	case "failed", "cancelled":
+	case "failed", "cancelled", manualPendingStatus:
 	default:
-		return nil, apperr.New(apperr.CodeFailedPrecondition, "当前只有解析失败的文献支持重新解析")
+		return nil, apperr.New(apperr.CodeFailedPrecondition, "当前只有解析失败或待人工处理的文献支持重新解析")
 	}
 
 	pdfPath := filepath.Join(s.config.PapersDir(), paper.StoredPDFName)
@@ -479,26 +530,50 @@ func (s *LibraryService) ManualExtractFigures(id int64, params ManualExtractPara
 	pageImages := map[int]image.Image{}
 	pageBounds := map[int]image.Rectangle{}
 	items := make([]repository.FigureUpsertInput, 0, len(params.Regions))
-	paths := make([]string, 0, len(params.Regions))
+	newPaths := make([]string, 0, len(params.Regions))
+	replacedPaths := make([]string, 0, len(params.Regions))
 	nextFigureIndex := maxFigureIndex(paper.Figures)
+	existingFiguresByID := make(map[int64]model.Figure, len(paper.Figures))
+	usedReplaceIDs := make(map[int64]struct{}, len(params.Regions))
+	deleteFigureIDs := make([]int64, 0, len(params.Regions))
+	for _, figure := range paper.Figures {
+		existingFiguresByID[figure.ID] = figure
+	}
 
 	for idx, rawRegion := range params.Regions {
 		region, err := normalizeManualRegion(rawRegion, pageCount)
 		if err != nil {
-			removeFiles(paths)
+			removeFiles(newPaths)
 			return nil, 0, err
+		}
+
+		var replaceTarget *model.Figure
+		if region.ReplaceFigureID != nil {
+			figure, ok := existingFiguresByID[*region.ReplaceFigureID]
+			if !ok {
+				removeFiles(newPaths)
+				return nil, 0, apperr.New(apperr.CodeNotFound, "待替换的图片不存在")
+			}
+			if _, exists := usedReplaceIDs[figure.ID]; exists {
+				removeFiles(newPaths)
+				return nil, 0, apperr.New(apperr.CodeInvalidArgument, "同一张原图不能被重复替换")
+			}
+			usedReplaceIDs[figure.ID] = struct{}{}
+			replaceTarget = &figure
+			deleteFigureIDs = append(deleteFigureIDs, figure.ID)
+			replacedPaths = append(replacedPaths, filepath.Join(s.config.FiguresDir(), figure.Filename))
 		}
 
 		if _, ok := pageImages[region.PageNumber]; !ok {
 			rendered, err := s.renderPDFPagePNG(pdfPath, region.PageNumber, manualExtractDPI)
 			if err != nil {
-				removeFiles(paths)
+				removeFiles(newPaths)
 				return nil, 0, err
 			}
 
 			img, _, err := image.Decode(bytes.NewReader(rendered))
 			if err != nil {
-				removeFiles(paths)
+				removeFiles(newPaths)
 				return nil, 0, apperr.Wrap(apperr.CodeInternal, "读取渲染后的 PDF 页面失败", err)
 			}
 			pageImages[region.PageNumber] = img
@@ -507,17 +582,17 @@ func (s *LibraryService) ManualExtractFigures(id int64, params ManualExtractPara
 
 		rect, err := normalizedRect(pageBounds[region.PageNumber], region)
 		if err != nil {
-			removeFiles(paths)
+			removeFiles(newPaths)
 			return nil, 0, err
 		}
 
 		storedName := fmt.Sprintf("figure_%d_manual_%d.png", time.Now().UnixNano(), idx+1)
 		targetPath := filepath.Join(s.config.FiguresDir(), storedName)
 		if err := writeCroppedPNG(targetPath, pageImages[region.PageNumber], rect); err != nil {
-			removeFiles(paths)
+			removeFiles(newPaths)
 			return nil, 0, apperr.Wrap(apperr.CodeInternal, "保存人工提取图片失败", err)
 		}
-		paths = append(paths, targetPath)
+		newPaths = append(newPaths, targetPath)
 
 		bboxJSON, err := json.Marshal(map[string]interface{}{
 			"x":           region.X,
@@ -529,30 +604,44 @@ func (s *LibraryService) ManualExtractFigures(id int64, params ManualExtractPara
 			"source":      "manual",
 		})
 		if err != nil {
-			removeFiles(paths)
+			removeFiles(newPaths)
 			return nil, 0, apperr.Wrap(apperr.CodeInternal, "序列化人工框选坐标失败", err)
 		}
 
-		nextFigureIndex++
+		caption := strings.TrimSpace(region.Caption)
+		figureIndex := nextFigureIndex + 1
+		if replaceTarget != nil {
+			figureIndex = replaceTarget.FigureIndex
+			if caption == "" {
+				caption = strings.TrimSpace(replaceTarget.Caption)
+			}
+		} else {
+			nextFigureIndex++
+		}
+
 		items = append(items, repository.FigureUpsertInput{
 			Filename:     storedName,
 			OriginalName: fmt.Sprintf("%s_p%d_manual_%d.png", strings.TrimSuffix(paper.OriginalFilename, filepath.Ext(paper.OriginalFilename)), region.PageNumber, idx+1),
 			ContentType:  "image/png",
 			PageNumber:   region.PageNumber,
-			FigureIndex:  nextFigureIndex,
+			FigureIndex:  figureIndex,
 			Source:       "manual",
-			Caption:      strings.TrimSpace(region.Caption),
+			Caption:      caption,
 			BBoxJSON:     string(bboxJSON),
 		})
 	}
 
-	if err := s.repo.AddPaperFigures(id, items); err != nil {
-		removeFiles(paths)
+	if err := s.repo.ApplyManualFigureChanges(id, items, deleteFigureIDs); err != nil {
+		removeFiles(newPaths)
 		return nil, 0, err
 	}
+	removeFiles(replacedPaths)
 
-	if paper.ExtractionStatus == "failed" || paper.ExtractionStatus == "cancelled" {
-		message := fmt.Sprintf("自动解析未完成，已人工补录 %d 张图片", len(items))
+	if paper.ExtractionStatus == "failed" || paper.ExtractionStatus == "cancelled" || paper.ExtractionStatus == manualPendingStatus {
+		message := fmt.Sprintf("已人工录入 %d 张图片，可继续补充或替换其他图片", len(items))
+		if paper.ExtractionStatus != manualPendingStatus {
+			message = fmt.Sprintf("自动解析未完成，已人工录入 %d 张图片", len(items))
+		}
 		if err := s.repo.UpdatePaperExtractionState(id, paper.ExtractionStatus, message, paper.ExtractorJobID); err != nil && !apperr.IsCode(err, apperr.CodeNotFound) {
 			s.logger.Warn("update paper message after manual extraction failed",
 				"paper_id", id,
@@ -1280,6 +1369,14 @@ func (s *LibraryService) readPDFPageCount(pdfPath string) (int, error) {
 	}
 
 	return 0, apperr.New(apperr.CodeFailedPrecondition, "无法识别 PDF 页数")
+}
+
+func (s *LibraryService) autoExtractionConfigured() (bool, error) {
+	settings, err := s.GetExtractorSettings()
+	if err != nil {
+		return false, err
+	}
+	return strings.TrimSpace(settings.EffectiveExtractorURL) != "", nil
 }
 
 func (s *LibraryService) renderPDFPagePNG(pdfPath string, page, dpi int) ([]byte, error) {

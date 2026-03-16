@@ -81,11 +81,22 @@ const ManualPage = {
         });
 
         this.selectionList.addEventListener('input', (event) => {
-            const input = event.target.closest('[data-selection-field="caption"]');
+            const input = event.target.closest('[data-selection-field]');
             if (!input) return;
             const selection = this.findSelection(Number(input.dataset.selectionId));
             if (!selection) return;
-            selection.caption = input.value;
+            if (input.dataset.selectionField === 'caption') {
+                selection.caption = input.value;
+            }
+        });
+
+        this.selectionList.addEventListener('change', (event) => {
+            const input = event.target.closest('[data-selection-field="replace_figure_id"]');
+            if (!input) return;
+            const selection = this.findSelection(Number(input.dataset.selectionId));
+            if (!selection) return;
+            selection.replace_figure_id = input.value ? Number(input.value) : null;
+            this.renderSelections();
         });
 
         this.selectionList.addEventListener('click', async (event) => {
@@ -273,7 +284,8 @@ const ManualPage = {
             y: y1 / rect.height,
             width,
             height,
-            caption: ''
+            caption: '',
+            replace_figure_id: null
         };
     },
 
@@ -344,6 +356,16 @@ const ManualPage = {
                         data-selection-id="${selection.id}"
                     >${Utils.escapeHTML(selection.caption || '')}</textarea>
                 </label>
+                <label class="field">
+                    <span>替换已有图片</span>
+                    <select
+                        class="form-input"
+                        data-selection-field="replace_figure_id"
+                        data-selection-id="${selection.id}"
+                    >
+                        ${this.renderReplaceOptions(selection)}
+                    </select>
+                </label>
             </article>
         `).join('');
     },
@@ -366,6 +388,34 @@ const ManualPage = {
 
     findSelection(id) {
         return this.state.selections.find((selection) => selection.id === id);
+    },
+
+    renderReplaceOptions(selection) {
+        const figures = this.state.paper?.figures || [];
+        const selectedElsewhere = new Set(
+            this.state.selections
+                .filter((item) => item.id !== selection.id && item.replace_figure_id)
+                .map((item) => Number(item.replace_figure_id))
+        );
+
+        const options = ['<option value="">作为新图片追加</option>'];
+        figures.forEach((figure) => {
+            const label = [
+                `#${figure.figure_index || '-'}`,
+                `第 ${figure.page_number || '-'} 页`,
+                figure.source === 'manual' ? '人工' : '自动',
+                figure.caption || figure.original_name || '未命名图片'
+            ].join(' · ');
+
+            const disabled = selectedElsewhere.has(Number(figure.id));
+            const selected = Number(selection.replace_figure_id) === Number(figure.id);
+            options.push(`
+                <option value="${figure.id}" ${selected ? 'selected' : ''} ${disabled ? 'disabled' : ''}>
+                    ${Utils.escapeHTML(label)}
+                </option>
+            `);
+        });
+        return options.join('');
     },
 
     scrollPreviewIntoView() {
@@ -391,7 +441,8 @@ const ManualPage = {
                     y: selection.y,
                     width: selection.width,
                     height: selection.height,
-                    caption: selection.caption.trim()
+                    caption: selection.caption.trim(),
+                    replace_figure_id: selection.replace_figure_id || null
                 }))
             });
 

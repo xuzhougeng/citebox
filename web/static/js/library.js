@@ -186,6 +186,7 @@ const LibraryPage = {
 
     renderSummary() {
         const processing = this.state.papers.filter((paper) => Utils.isProcessingStatus(paper.extraction_status)).length;
+        const manualPending = this.state.papers.filter((paper) => paper.extraction_status === 'manual_pending').length;
         const completed = this.state.papers.filter((paper) => paper.extraction_status === 'completed').length;
         const failed = this.state.papers.filter((paper) => paper.extraction_status === 'failed' || paper.extraction_status === 'cancelled').length;
         const figureTotal = this.state.papers.reduce((sum, paper) => sum + (paper.figure_count || 0), 0);
@@ -202,6 +203,10 @@ const LibraryPage = {
             <div class="stat-card">
                 <span>等待 / 解析中</span>
                 <strong>${processing}</strong>
+            </div>
+            <div class="stat-card">
+                <span>待人工处理</span>
+                <strong>${manualPending}</strong>
             </div>
             <div class="stat-card">
                 <span>解析完成</span>

@@ -369,3 +369,39 @@ func TestApplyPaperExtractionResultPreservesManualFigures(t *testing.T) {
 		t.Fatalf("auto figure not refreshed: %+v", got.Figures[1])
 	}
 }
+
+func TestApplyManualFigureChangesReplacesTarget(t *testing.T) {
+	repo := newTestRepository(t)
+
+	paper, err := repo.CreatePaper(PaperUpsertInput{
+		Title:            "Cell Atlas",
+		OriginalFilename: "cell-atlas.pdf",
+		StoredPDFName:    "paper_1.pdf",
+		FileSize:         128,
+		ContentType:      "application/pdf",
+		ExtractionStatus: "manual_pending",
+		Figures: []FigureUpsertInput{
+			{Filename: "auto_old.png", PageNumber: 1, FigureIndex: 1, Source: "auto", Caption: "Old"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreatePaper() error = %v", err)
+	}
+
+	if err := repo.ApplyManualFigureChanges(paper.ID, []FigureUpsertInput{
+		{Filename: "manual_new.png", PageNumber: 1, FigureIndex: 1, Source: "manual", Caption: "New"},
+	}, []int64{paper.Figures[0].ID}); err != nil {
+		t.Fatalf("ApplyManualFigureChanges() error = %v", err)
+	}
+
+	got, err := repo.GetPaperDetail(paper.ID)
+	if err != nil {
+		t.Fatalf("GetPaperDetail() error = %v", err)
+	}
+	if len(got.Figures) != 1 {
+		t.Fatalf("GetPaperDetail() figures = %d, want 1", len(got.Figures))
+	}
+	if got.Figures[0].Filename != "manual_new.png" || got.Figures[0].Source != "manual" {
+		t.Fatalf("replacement result = %+v", got.Figures[0])
+	}
+}

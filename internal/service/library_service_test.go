@@ -5,6 +5,8 @@ import (
 	"image"
 	"io"
 	"log/slog"
+	"mime/multipart"
+	"net/textproto"
 	"os"
 	"path/filepath"
 	"testing"
@@ -78,6 +80,14 @@ func createTestPaper(t *testing.T, repo *repository.LibraryRepository) *model.Pa
 	}
 
 	return paper
+}
+
+type testMultipartFile struct {
+	*bytes.Reader
+}
+
+func (f *testMultipartFile) Close() error {
+	return nil
 }
 
 func TestListPapersAppliesDefaultsAndDecoratesURLs(t *testing.T) {
@@ -257,6 +267,53 @@ func TestBuildExtractorUploadBodyUsesRuntimeFileField(t *testing.T) {
 
 	if !bytes.Contains(body.Bytes(), []byte(`name="upload"`)) {
 		t.Fatalf("buildExtractorUploadBody() body missing configured file field: %s", body.String())
+	}
+}
+
+func TestUploadPaperWithoutExtractorConfiguredUsesManualPending(t *testing.T) {
+	svc, _, _ := newTestService(t)
+
+	content := []byte("%PDF-1.4 test")
+	file := &testMultipartFile{Reader: bytes.NewReader(content)}
+	header := &multipart.FileHeader{
+		Filename: "manual-only.pdf",
+		Size:     int64(len(content)),
+		Header: textproto.MIMEHeader{
+			"Content-Type": []string{"application/pdf"},
+		},
+	}
+
+	paper, err := svc.UploadPaper(file, header, UploadPaperParams{Title: "Manual Only"})
+	if err != nil {
+		t.Fatalf("UploadPaper() error = %v", err)
+	}
+
+	if paper.ExtractionStatus != manualPendingStatus {
+		t.Fatalf("UploadPaper() status = %q, want %q", paper.ExtractionStatus, manualPendingStatus)
+	}
+	if paper.ExtractorMessage == "" {
+		t.Fatalf("UploadPaper() extractor_message should not be empty")
+	}
+}
+
+func TestDeleteFigureRemovesFileAndReturnsUpdatedPaper(t *testing.T) {
+	svc, repo, cfg := newTestService(t)
+	paper := createTestPaper(t, repo)
+
+	figurePath := filepath.Join(cfg.FiguresDir(), paper.Figures[0].Filename)
+	if err := os.WriteFile(figurePath, []byte("img"), 0o644); err != nil {
+		t.Fatalf("WriteFile(figure) error = %v", err)
+	}
+
+	updated, err := svc.DeleteFigure(paper.Figures[0].ID)
+	if err != nil {
+		t.Fatalf("DeleteFigure() error = %v", err)
+	}
+	if len(updated.Figures) != 0 {
+		t.Fatalf("DeleteFigure() figures = %d, want 0", len(updated.Figures))
+	}
+	if _, err := os.Stat(figurePath); !os.IsNotExist(err) {
+		t.Fatalf("figure file still exists, stat err = %v", err)
 	}
 }
 
