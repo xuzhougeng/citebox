@@ -1,6 +1,6 @@
-# CiteBox (paper_image_db)
+# CiteBox
 
-> **cite** (引用/文献) + **box** (盒子) = 你的文献引用盒子
+> Collect. Cite. Create.
 
 一个基于 Go + SQLite + 原生前端的文献数据库。核心目标只有一条主线:
 

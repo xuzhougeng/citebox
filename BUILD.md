@@ -158,7 +158,7 @@ nohup ./citebox &
 # 创建服务文件
 sudo tee /etc/systemd/system/citebox.service > /dev/null <<EOF
 [Unit]
-Description=Paper Image Database
+Description=CiteBox
 After=network.target
 
 [Service]
