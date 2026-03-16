@@ -73,6 +73,31 @@ package-windows: build-windows
 		echo 'pause'; \
 	) > dist/$(BINARY_NAME)-windows-$(VERSION)/start.bat
 	
+	@echo "Creating start-with-config.bat (example)..."
+	@( \
+		echo '@echo off'; \
+		echo 'chcp 65001 >nul'; \
+		echo 'title Paper Image Database (Custom Config)'; \
+		echo 'cls'; \
+		echo 'echo ========================================'; \
+		echo 'echo  Paper Image Database - Custom Config'; \
+		echo 'echo ========================================'; \
+		echo 'echo.'; \
+		echo 'rem Customize settings below:'; \
+		echo 'set SERVER_PORT=8080'; \
+		echo 'set ADMIN_USERNAME=wanglab'; \
+		echo 'set ADMIN_PASSWORD=wanglab789'; \
+		echo 'rem set PDF_EXTRACTOR_URL=http://localhost:8000'; \
+		echo 'rem set STORAGE_DIR=./data/library'; \
+		echo 'rem set DATABASE_PATH=./data/library.db'; \
+		echo 'echo.'; \
+		echo 'echo Starting with custom configuration...'; \
+		echo 'echo Port: %SERVER_PORT%'; \
+		echo 'echo.'; \
+		echo '$(BINARY_NAME).exe'; \
+		echo 'pause'; \
+	) > dist/$(BINARY_NAME)-windows-$(VERSION)/start-with-config.bat
+	
 	@echo "Creating README.txt..."
 	@( \
 		echo 'Paper Image Database - Windows 版'; \
@@ -83,10 +108,19 @@ package-windows: build-windows
 		echo '  2. 浏览器访问 http://localhost:8080'; \
 		echo '  3. 默认账号: wanglab / wanglab789'; \
 		echo ''; \
+		echo '自定义配置:'; \
+		echo '  如需修改端口、用户名或密码:'; \
+		echo '  1. 编辑 start-with-config.bat'; \
+		echo '  2. 修改 set SERVER_PORT=xxx 等变量'; \
+		echo '  3. 保存后双击运行 start-with-config.bat'; \
+		echo ''; \
 		echo '环境变量:'; \
-		echo '  SERVER_PORT      - 服务端口 (默认 8080)'; \
-		echo '  ADMIN_USERNAME   - 管理员用户名'; \
-		echo '  ADMIN_PASSWORD   - 管理员密码'; \
+		echo '  SERVER_PORT       - 服务端口 (默认 8080)'; \
+		echo '  ADMIN_USERNAME    - 管理员用户名'; \
+		echo '  ADMIN_PASSWORD    - 管理员密码'; \
+		echo '  PDF_EXTRACTOR_URL - PDF 解析服务地址'; \
+		echo '  STORAGE_DIR       - 文件存储目录'; \
+		echo '  DATABASE_PATH     - 数据库文件路径'; \
 		echo ''; \
 		echo '数据目录:'; \
 		echo '  data/library.db       - 数据库'; \
@@ -107,11 +141,12 @@ package-windows: build-windows
 	@echo "Size:     $$(du -h dist/$(BINARY_NAME)-windows-$(VERSION).zip | cut -f1)"
 	@echo ""
 	@echo "Contents:"
-	@echo "  - $(BINARY_NAME).exe  (可执行文件)"
-	@echo "  - web/                (前端资源)"
-	@echo "  - data/               (数据目录)"
-	@echo "  - start.bat           (启动脚本)"
-	@echo "  - README.txt          (使用说明)"
+	@echo "  - $(BINARY_NAME).exe       (可执行文件)"
+	@echo "  - web/                      (前端资源)"
+	@echo "  - data/                     (数据目录)"
+	@echo "  - start.bat                 (启动脚本)"
+	@echo "  - start-with-config.bat     (自定义配置示例)"
+	@echo "  - README.txt                (使用说明)"
 	@echo "========================================"
 
 # =============================================================================
