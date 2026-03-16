@@ -1,0 +1,92 @@
+name: Release Packages
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+env:
+  VERSION: ${{ github.ref_name }}
+
+jobs:
+  build:
+    name: Build ${{ matrix.label }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: macOS
+            runner: macos-latest
+            platform: macos
+            archive_ext: .tar.gz
+          - label: Linux
+            runner: ubuntu-latest
+            platform: linux
+            archive_ext: .tar.gz
+          - label: Windows
+            runner: windows-latest
+            platform: windows
+            archive_ext: .zip
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Package macOS or Linux release
+        if: matrix.platform != 'windows'
+        shell: bash
+        run: ./scripts/package-unix.sh "${{ matrix.platform }}" "${VERSION}"
+
+      - name: Package Windows release
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: ./scripts/package-windows.ps1 -Version "${env:VERSION}"
+
+      - name: Upload packaged artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: citebox-${{ matrix.platform }}-${{ env.VERSION }}
+          path: dist/citebox-${{ matrix.platform }}-${{ env.VERSION }}${{ matrix.archive_ext }}
+          if-no-files-found: error
+
+  publish:
+    name: Publish GitHub release
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download packaged artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: Create or update release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+
+          files=(release-assets/*)
+          if [ ${#files[@]} -eq 0 ]; then
+              echo "No release assets found" >&2
+              exit 1
+          fi
+
+          if gh release view "${VERSION}" >/dev/null 2>&1; then
+              gh release upload "${VERSION}" "${files[@]}" --clobber
+          else
+              gh release create "${VERSION}" "${files[@]}" --generate-notes --title "${VERSION}"
+          fi
