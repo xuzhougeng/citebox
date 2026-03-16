@@ -1,0 +1,30 @@
+dist
+data
+uploads
+
+# Go build/test artifacts
+*.exe
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Binary/coverage/cache
+bin/
+build/
+.cache/
+*.coverprofile
+coverage.out
+
+# Logs & temp files
+*.log
+*.tmp
+tmp/
+
+# Local environment/config
+.env
+*.local
+
+# Distribution archives
+*.zip
