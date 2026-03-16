@@ -175,7 +175,7 @@ const LibraryPage = {
 
     async loadTags() {
         try {
-            const payload = await API.listTags();
+            const payload = await API.listTags({ scope: 'paper' });
             this.state.tags = payload.tags || [];
             this.renderTags();
             this.renderTagFilter();
@@ -244,16 +244,28 @@ const LibraryPage = {
                             <h3>${Utils.escapeHTML(paper.title)}</h3>
                         </div>
                         <div class="paper-list-meta">
-                            <span>文件：${Utils.escapeHTML(paper.original_filename)}</span>
-                            <span>分组：${Utils.escapeHTML(paper.group_name || '未分组')}</span>
-                            <span>图片：${paper.figure_count || 0}</span>
-                            <span>更新：${Utils.formatDate(paper.updated_at || paper.created_at)}</span>
+                            <span class="paper-list-meta-item paper-list-meta-file">
+                                <span class="paper-list-meta-label">文件</span>
+                                <span class="paper-list-meta-value">${Utils.escapeHTML(paper.original_filename)}</span>
+                            </span>
+                            <span class="paper-list-meta-item">
+                                <span class="paper-list-meta-label">分组</span>
+                                <span class="paper-list-meta-value">${Utils.escapeHTML(paper.group_name || '未分组')}</span>
+                            </span>
+                            <span class="paper-list-meta-item">
+                                <span class="paper-list-meta-label">图片</span>
+                                <span class="paper-list-meta-value">${paper.figure_count || 0}</span>
+                            </span>
+                            <span class="paper-list-meta-item">
+                                <span class="paper-list-meta-label">更新</span>
+                                <span class="paper-list-meta-value">${Utils.formatDate(paper.updated_at || paper.created_at)}</span>
+                            </span>
                         </div>
                         ${summary ? `<p class="paper-list-summary">${Utils.escapeHTML(summary)}</p>` : ''}
                         ${paper.extractor_message ? `<p class="notice ${statusClass} paper-list-notice">${Utils.escapeHTML(paper.extractor_message)}</p>` : ''}
                     </div>
-                    <div class="paper-list-side">
-                        <div class="paper-list-tags">${tags || '<span class="muted">无 Tag</span>'}</div>
+                    <div class="paper-list-footer">
+                        <div class="paper-list-tags">${tags || '<span class="muted">无标签</span>'}</div>
                         <div class="card-actions paper-list-actions">
                             <button class="btn btn-primary" type="button" data-action="open">编辑详情</button>
                             <a class="btn btn-outline" href="/manual?paper_id=${paper.id}">人工处理</a>
@@ -316,7 +328,7 @@ const LibraryPage = {
 
     renderTagFilter() {
         const current = this.state.filters.tag_id;
-        this.tagFilter.innerHTML = '<option value="">全部标签</option>';
+        this.tagFilter.innerHTML = '<option value="">全部文献标签</option>';
         this.state.tags.forEach((tag) => {
             this.tagFilter.insertAdjacentHTML(
                 'beforeend',
@@ -407,6 +419,7 @@ const LibraryPage = {
     async createTag() {
         try {
             await API.createTag({
+                scope: 'paper',
                 name: this.tagNameInput.value.trim(),
                 color: this.tagColorInput.value
             });

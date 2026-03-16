@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>图片预览 - CiteBox</title>
+    <title>图片库 - CiteBox</title>
     <link rel="icon" type="image/svg+xml" href="/static/img/citebox-icon.svg">
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
@@ -13,22 +13,24 @@
             <a href="/" class="logo">CiteBox</a>
             <ul class="nav-links">
                 <li><a href="/">文献库</a></li>
-                <li><a href="/figures" class="active">图片预览</a></li>
+                <li><a href="/figures" class="active">图片库</a></li>
                 <li><a href="/groups">分组</a></li>
                 <li><a href="/tags">标签</a></li>
                 <li><a href="/ai">AI 阅读</a></li>
                 <li><a href="/settings">配置</a></li>
-                <li><a href="/upload">上传 PDF</a></li>
             </ul>
+            <div class="nav-actions">
+                <a href="/upload" class="nav-cta">上传 PDF</a>
+            </div>
         </div>
     </nav>
 
     <main class="page-shell">
         <section class="hero">
             <div>
-                <p class="eyebrow">Figure Browser</p>
+                <p class="eyebrow">Image Library</p>
                 <h1>跨文献浏览所有提取图片</h1>
-                <p class="hero-text">先看图，再回到对应文献继续查看原文、框选结果和标签。</p>
+                <p class="hero-text">集中整理图片级标签，再按需回到来源文献查看全文、分组和框选结果。</p>
             </div>
         </section>
 
@@ -37,7 +39,7 @@
                 <div>
                     <p class="eyebrow">Filter Dock</p>
                     <h2>按条件筛选图片</h2>
-                    <p>上方固定筛选条件，下方单独展示结果区，浏览时更容易把注意力放在图片本身。</p>
+                    <p>图片只维护自己的标签；如需限制范围，可按来源文献分组或图片标签检索。</p>
                 </div>
             </div>
             <div class="filters-grid three-cols">
@@ -46,15 +48,15 @@
                     <input id="figureKeywordInput" class="form-input" type="text" placeholder="文献标题、图片说明、标签">
                 </label>
                 <label class="field">
-                    <span>分组</span>
+                    <span>来源分组</span>
                     <select id="figureGroupFilter" class="form-input">
                         <option value="">全部分组</option>
                     </select>
                 </label>
                 <label class="field">
-                    <span>标签</span>
+                    <span>图片标签</span>
                     <select id="figureTagFilter" class="form-input">
-                        <option value="">全部标签</option>
+                        <option value="">全部图片标签</option>
                     </select>
                 </label>
             </div>
@@ -64,8 +66,8 @@
             <section id="figureSummaryStrip" class="summary-strip"></section>
             <div class="figure-results-head">
                 <div>
-                    <p class="eyebrow">Result Gallery</p>
-                    <h2>图片结果</h2>
+                    <p class="eyebrow">Library Shelf</p>
+                    <h2>图片库</h2>
                 </div>
                 <div id="figurePageControls" class="figure-page-controls"></div>
             </div>

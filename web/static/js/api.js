@@ -131,6 +131,16 @@ const API = {
         });
     },
 
+    updateFigure(id, data) {
+        return requestJSON(`${API_BASE}/figures/${id}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        });
+    },
+
     listGroups() {
         return requestJSON(`${API_BASE}/groups`);
     },
@@ -161,8 +171,15 @@ const API = {
         });
     },
 
-    listTags() {
-        return requestJSON(`${API_BASE}/tags`);
+    listTags(params = {}) {
+        const query = new URLSearchParams();
+        Object.entries(params).forEach(([key, value]) => {
+            if (value !== undefined && value !== null && value !== '') {
+                query.set(key, value);
+            }
+        });
+        const suffix = query.toString() ? `?${query.toString()}` : '';
+        return requestJSON(`${API_BASE}/tags${suffix}`);
     },
 
     createTag(data) {

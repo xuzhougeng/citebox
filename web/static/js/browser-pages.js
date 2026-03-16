@@ -18,15 +18,27 @@ const BrowserUI = {
                         <h3>${Utils.escapeHTML(paper.title)}</h3>
                     </div>
                     <div class="paper-list-meta">
-                        <span>文件：${Utils.escapeHTML(paper.original_filename)}</span>
-                        <span>分组：${Utils.escapeHTML(paper.group_name || '未分组')}</span>
-                        <span>图片：${paper.figure_count || 0}</span>
-                        <span>更新：${Utils.formatDate(paper.updated_at || paper.created_at)}</span>
+                        <span class="paper-list-meta-item paper-list-meta-file">
+                            <span class="paper-list-meta-label">文件</span>
+                            <span class="paper-list-meta-value">${Utils.escapeHTML(paper.original_filename)}</span>
+                        </span>
+                        <span class="paper-list-meta-item">
+                            <span class="paper-list-meta-label">分组</span>
+                            <span class="paper-list-meta-value">${Utils.escapeHTML(paper.group_name || '未分组')}</span>
+                        </span>
+                        <span class="paper-list-meta-item">
+                            <span class="paper-list-meta-label">图片</span>
+                            <span class="paper-list-meta-value">${paper.figure_count || 0}</span>
+                        </span>
+                        <span class="paper-list-meta-item">
+                            <span class="paper-list-meta-label">更新</span>
+                            <span class="paper-list-meta-value">${Utils.formatDate(paper.updated_at || paper.created_at)}</span>
+                        </span>
                     </div>
                     ${summary ? `<p class="paper-list-summary">${Utils.escapeHTML(summary)}</p>` : ''}
                     ${paper.extractor_message ? `<p class="notice ${statusClass} paper-list-notice">${Utils.escapeHTML(paper.extractor_message)}</p>` : ''}
                 </div>
-                <div class="paper-list-side">
+                <div class="paper-list-footer">
                     <div class="paper-list-tags">${tags}</div>
                     <div class="card-actions paper-list-actions">
                         <button class="btn btn-primary" type="button" data-action="open">查看详情</button>
@@ -81,7 +93,6 @@ const FigureViewer = {
         this.aiCache = new Map();
         this.activeAIByPaper = new Map();
         this.aiRequestState = null;
-        this.groups = [];
         this.paperDetails = new Map();
 
         this.handleKeydown = (event) => {
@@ -144,11 +155,6 @@ const FigureViewer = {
                 await this.handleMetaAction(metaButton);
             }
         });
-        this.body.addEventListener('change', async (event) => {
-            const groupSelect = event.target.closest('#figurePaperGroup');
-            if (!groupSelect || !this.currentFigure) return;
-            await this.updateCurrentPaperMetadata(this.currentDraftMetadata(), '文献分组已更新');
-        });
         this.body.addEventListener('keydown', async (event) => {
             const tagInput = event.target.closest('#figurePaperTagInput');
             if (!tagInput || event.key !== 'Enter') return;
@@ -169,7 +175,6 @@ const FigureViewer = {
         this.onMetaChanged = options.onMetaChanged;
         this.loadingPage = false;
         try {
-            await this.ensureGroupsLoaded();
             this.render();
             this.modal.classList.remove('hidden');
             document.body.classList.add('modal-open');
@@ -430,31 +435,12 @@ const FigureViewer = {
         return action === 'figure_interpretation';
     },
 
-    async ensureGroupsLoaded(force = false) {
-        if (!force && this.groups.length > 0) return this.groups;
-        const payload = await API.listGroups();
-        this.groups = payload.groups || [];
-        return this.groups;
+    tagNames(tags = []) {
+        return Utils.splitTags(Utils.joinTags(tags));
     },
 
-    async ensureCurrentPaperDetail() {
-        const paperID = Number(this.currentFigure?.paper_id);
-        if (!paperID) return null;
-        if (this.paperDetails.has(paperID)) {
-            return this.paperDetails.get(paperID);
-        }
-
-        const paper = await API.getPaper(paperID);
-        this.paperDetails.set(paperID, paper);
-        return paper;
-    },
-
-    currentDraftMetadata() {
-        const groupSelect = this.body.querySelector('#figurePaperGroup');
-        return {
-            groupID: groupSelect?.value ? Number(groupSelect.value) : null,
-            tags: Utils.splitTags(Utils.joinTags(this.currentFigure?.tags || []))
-        };
+    currentFigureTagNames() {
+        return this.tagNames(this.currentFigure?.tags || []);
     },
 
     async handleMetaAction(button) {
@@ -462,10 +448,6 @@ const FigureViewer = {
 
         if (button.dataset.figureMetaAction === 'apply-tag') {
             await this.applySuggestedTag(button.dataset.tagName || '');
-            return;
-        }
-        if (button.dataset.figureMetaAction === 'apply-group') {
-            await this.applySuggestedGroup(button.dataset.groupName || '');
             return;
         }
         if (button.dataset.figureMetaAction === 'add-tag') {
@@ -481,15 +463,15 @@ const FigureViewer = {
         const normalized = tagName.trim();
         if (!normalized) return;
 
-        const draft = this.currentDraftMetadata();
-        const existing = new Set(draft.tags.map((tag) => tag.toLowerCase()));
+        const draftTags = this.currentFigureTagNames();
+        const existing = new Set(draftTags.map((tag) => tag.toLowerCase()));
         if (existing.has(normalized.toLowerCase())) {
             Utils.showToast('这个标签已经存在', 'info');
             return;
         }
 
-        draft.tags.push(normalized);
-        await this.updateCurrentPaperMetadata(draft, `已添加标签：${normalized}`);
+        draftTags.push(normalized);
+        await this.updateCurrentFigureTags(draftTags, `已添加标签：${normalized}`);
     },
 
     async addTagFromInput() {
@@ -503,39 +485,16 @@ const FigureViewer = {
         const normalized = tagName.trim();
         if (!normalized) return;
 
-        const draft = this.currentDraftMetadata();
-        draft.tags = draft.tags.filter((tag) => tag.toLowerCase() !== normalized.toLowerCase());
-        await this.updateCurrentPaperMetadata(draft, `已移除标签：${normalized}`);
+        const draftTags = this.currentFigureTagNames().filter((tag) => tag.toLowerCase() !== normalized.toLowerCase());
+        await this.updateCurrentFigureTags(draftTags, `已移除标签：${normalized}`);
     },
 
-    async applySuggestedGroup(groupName) {
-        const normalized = groupName.trim();
-        if (!normalized) return;
-
-        await this.ensureGroupsLoaded();
-        let group = this.groups.find((item) => item.name.trim().toLowerCase() === normalized.toLowerCase());
-        if (!group) {
-            const payload = await API.createGroup({ name: normalized, description: '' });
-            group = payload.group;
-            await this.ensureGroupsLoaded(true);
-        }
-
-        const draft = this.currentDraftMetadata();
-        draft.groupID = group?.id || null;
-        await this.updateCurrentPaperMetadata(draft, `已加入分组：${normalized}`);
-    },
-
-    async updateCurrentPaperMetadata(draft, successMessage) {
+    async updateCurrentFigureTags(tags, successMessage) {
         if (!this.currentFigure) return;
 
         try {
-            const paper = await this.ensureCurrentPaperDetail();
-            const payload = await API.updatePaper(this.currentFigure.paper_id, {
-                title: paper.title,
-                abstract_text: paper.abstract_text || '',
-                notes_text: paper.notes_text || '',
-                group_id: draft.groupID,
-                tags: draft.tags
+            const payload = await API.updateFigure(this.currentFigure.id, {
+                tags
             });
             this.syncPaperMetadata(payload.paper);
             Utils.showToast(successMessage);
@@ -550,14 +509,18 @@ const FigureViewer = {
 
     syncPaperMetadata(paper) {
         this.paperDetails.set(paper.id, paper);
+        const figuresByID = new Map((paper.figures || []).map((figure) => [Number(figure.id), figure]));
         this.figures = (this.figures || []).map((figure) => {
             if (Number(figure.paper_id) !== Number(paper.id)) return figure;
+            const updatedFigure = figuresByID.get(Number(figure.id));
             return {
                 ...figure,
                 paper_title: paper.title,
                 group_id: paper.group_id,
                 group_name: paper.group_name || '',
-                tags: paper.tags || []
+                tags: updatedFigure?.tags || [],
+                caption: updatedFigure?.caption ?? figure.caption,
+                source: updatedFigure?.source || figure.source
             };
         });
     },
@@ -594,9 +557,6 @@ const FigureViewer = {
         const result = this.currentAIResult();
         if (!result) return '';
 
-        if (kind === 'group' && result.suggested_group) {
-            return result.suggested_group;
-        }
         if (kind === 'tags' && (result.suggested_tags || []).length) {
             return result.suggested_tags.join(', ');
         }
@@ -612,8 +572,6 @@ const FigureViewer = {
                 return `请优先围绕当前查看的图片进行解读：${location}${caption}。说明这张图展示了什么、支持了什么结论，以及它和全文主线的关系。`;
             case 'tag_suggestion':
                 return `我正在查看这篇文献中的 ${location}${caption}。请结合全文和图片给出适合归档检索的标签建议，优先复用现有标签。`;
-            case 'group_suggestion':
-                return `我正在查看这篇文献中的 ${location}${caption}。请结合全文和图片判断这篇文献最适合放入哪个分组，并说明理由。`;
             default:
                 return '';
         }
@@ -631,7 +589,6 @@ const FigureViewer = {
             const name = typeof tag === 'string' ? tag : tag.name || '';
             return name.trim().toLowerCase();
         }));
-        const currentGroupName = (this.currentFigure.group_name || '').trim().toLowerCase();
 
         if (isLoading) {
             return `
@@ -677,7 +634,7 @@ const FigureViewer = {
             return `
                 <div class="figure-ai-result empty">
                     <p class="figure-ai-status">选择一个快捷动作</p>
-                    <div class="figure-ai-answer">这里会显示图片解读、Tag 建议或 Group 建议的返回结果。</div>
+                    <div class="figure-ai-answer">这里会显示图片解读或 Tag 建议的返回结果。</div>
                 </div>
             `;
         }
@@ -687,7 +644,6 @@ const FigureViewer = {
                 ${Utils.escapeHTML(tag)}
             </button>
         `).join('');
-        const groupApplied = (result.suggested_group || '').trim().toLowerCase() === currentGroupName;
 
         return `
             <div class="figure-ai-result">
@@ -702,17 +658,6 @@ const FigureViewer = {
                         <div class="figure-ai-tag-list">${tags}</div>
                     </div>
                 ` : ''}
-                ${result.suggested_group ? `
-                    <div class="figure-ai-supplement">
-                        <span>Group 建议</span>
-                        <div class="figure-ai-suggestion-row">
-                            <strong>${Utils.escapeHTML(result.suggested_group)}</strong>
-                            <button class="btn btn-outline btn-small" type="button" data-figure-meta-action="apply-group" data-group-name="${Utils.escapeHTML(result.suggested_group)}" ${groupApplied ? 'disabled' : ''}>
-                                ${groupApplied ? '已添加' : '直接添加'}
-                            </button>
-                        </div>
-                    </div>
-                ` : ''}
             </div>
         `;
     },
@@ -720,8 +665,7 @@ const FigureViewer = {
     aiActionLabel(action) {
         const labels = {
             figure_interpretation: '图片解读',
-            tag_suggestion: 'Tag 建议',
-            group_suggestion: 'Group 建议'
+            tag_suggestion: 'Tag 建议'
         };
         return labels[action] || 'AI 结果';
     },
@@ -731,7 +675,6 @@ const FigureViewer = {
         return `
             <button class="btn btn-outline ${this.activeAIAction() === 'figure_interpretation' ? 'active' : ''}" type="button" data-figure-ai-action="figure_interpretation" ${aiLoading ? 'disabled' : ''}>图片解读</button>
             <button class="btn btn-outline ${this.activeAIAction() === 'tag_suggestion' ? 'active' : ''}" type="button" data-figure-ai-action="tag_suggestion" ${aiLoading ? 'disabled' : ''}>Tag 建议</button>
-            <button class="btn btn-outline ${this.activeAIAction() === 'group_suggestion' ? 'active' : ''}" type="button" data-figure-ai-action="group_suggestion" ${aiLoading ? 'disabled' : ''}>Group 建议</button>
         `;
     },
 
@@ -753,14 +696,6 @@ const FigureViewer = {
                 <span aria-hidden="true">+</span>
             </button>
         `).join('');
-        const groupOptions = ['<option value="">未分组</option>']
-            .concat((this.groups || []).map((group) => `
-                <option value="${group.id}" ${String(group.id) === String(figure.group_id || '') ? 'selected' : ''}>
-                    ${Utils.escapeHTML(group.name)}
-                </option>
-            `))
-            .join('');
-
         this.body.innerHTML = `
             <div class="figure-lightbox">
                 <section class="figure-lightbox-media-panel">
@@ -783,7 +718,7 @@ const FigureViewer = {
 
                 <aside class="figure-lightbox-side">
                     <div class="figure-lightbox-head">
-                        <p class="eyebrow">Figure Preview</p>
+                        <p class="eyebrow">Image Library</p>
                         <h2>${Utils.escapeHTML(figure.paper_title)}</h2>
                     </div>
 
@@ -796,10 +731,6 @@ const FigureViewer = {
                             <span>定位</span>
                             <strong>第 ${figure.page_number || '-'} 页 · #${figure.figure_index || '-'}${figure.source === 'manual' ? ' · 人工提取' : ''}</strong>
                         </div>
-                        <label class="figure-lightbox-meta-item figure-lightbox-meta-item-editable">
-                            <span>分组</span>
-                            <select id="figurePaperGroup" class="form-input figure-meta-select">${groupOptions}</select>
-                        </label>
                         <div class="figure-lightbox-meta-item figure-lightbox-meta-item-editable">
                             <span>标签</span>
                             <div class="figure-tag-editor">
@@ -933,9 +864,9 @@ const FiguresPage = {
     },
 
     async loadTags() {
-        const payload = await API.listTags();
+        const payload = await API.listTags({ scope: 'figure' });
         const selected = String(this.state.filters.tag_id || '');
-        this.tagFilter.innerHTML = '<option value="">全部标签</option>' + (payload.tags || []).map((tag) => `
+        this.tagFilter.innerHTML = '<option value="">全部图片标签</option>' + (payload.tags || []).map((tag) => `
             <option value="${tag.id}" ${String(tag.id) === selected ? 'selected' : ''}>${Utils.escapeHTML(tag.name)}</option>
         `).join('');
     },
@@ -962,8 +893,8 @@ const FiguresPage = {
         this.summaryStrip.innerHTML = `
             <div class="stat-card"><span>筛选结果</span><strong>${payload.total || 0}</strong></div>
             <div class="stat-card"><span>当前页图片</span><strong>${figures.length}</strong></div>
-            <div class="stat-card"><span>分组筛选</span><strong>${Utils.escapeHTML(this.groupFilter.selectedOptions[0]?.textContent || '全部分组')}</strong></div>
-            <div class="stat-card"><span>标签筛选</span><strong>${Utils.escapeHTML(this.tagFilter.selectedOptions[0]?.textContent || '全部标签')}</strong></div>
+            <div class="stat-card"><span>来源分组筛选</span><strong>${Utils.escapeHTML(this.groupFilter.selectedOptions[0]?.textContent || '全部分组')}</strong></div>
+            <div class="stat-card"><span>图片标签筛选</span><strong>${Utils.escapeHTML(this.tagFilter.selectedOptions[0]?.textContent || '全部图片标签')}</strong></div>
         `;
         this.pageControls.innerHTML = this.state.totalPages > 1 ? `
             <button class="btn btn-outline" type="button" data-page-step="-1" ${this.state.page <= 1 ? 'disabled' : ''}>Prev</button>
@@ -980,7 +911,6 @@ const FiguresPage = {
                         <span class="figure-badge figure-badge-strong">第 ${figure.page_number || '-'} 页</span>
                         <span class="figure-badge">#${figure.figure_index || '-'}</span>
                         ${figure.source === 'manual' ? '<span class="figure-badge">人工提取</span>' : ''}
-                        ${figure.group_name ? `<span class="figure-badge">${Utils.escapeHTML(figure.group_name)}</span>` : ''}
                     </div>
                 </div>
                 <div class="figure-preview-body">
@@ -1172,10 +1102,11 @@ const GroupsPage = {
 };
 
 const TagsPage = {
-    state: { selectedTagId: '', page: 1, pageSize: 20, totalPaperCount: 0 },
+    state: { scope: 'paper', selectedTagId: '', page: 1, totalPaperCount: 0, totalFigureCount: 0 },
 
     async init() {
         PaperViewer.init();
+        FigureViewer.init();
         this.cache();
         this.bind();
         await this.reload();
@@ -1185,9 +1116,14 @@ const TagsPage = {
         this.form = document.getElementById('tagPageForm');
         this.nameInput = document.getElementById('tagPageNameInput');
         this.colorInput = document.getElementById('tagPageColorInput');
+        this.creatorTitle = document.getElementById('tagCreatorTitle');
+        this.creatorHint = document.getElementById('tagCreatorHint');
+        this.submitButton = document.getElementById('tagPageSubmit');
+        this.scopeSwitch = document.getElementById('tagScopeSwitch');
         this.grid = document.getElementById('tagCardGrid');
         this.headline = document.getElementById('tagHeadline');
-        this.paperList = document.getElementById('tagPaperList');
+        this.scopeHint = document.getElementById('tagScopeHint');
+        this.resultList = document.getElementById('tagResultList');
         this.pagination = document.getElementById('tagPagination');
     },
 
@@ -1196,6 +1132,7 @@ const TagsPage = {
             event.preventDefault();
             try {
                 await API.createTag({
+                    scope: this.state.scope,
                     name: this.nameInput.value.trim(),
                     color: this.colorInput.value
                 });
@@ -1217,7 +1154,7 @@ const TagsPage = {
                 this.state.selectedTagId = id;
                 this.state.page = 1;
                 this.renderTagCards();
-                await this.loadPapers();
+                await this.loadResults();
                 return;
             }
             if (action.dataset.action === 'edit-tag') {
@@ -1228,55 +1165,125 @@ const TagsPage = {
             }
         });
 
-        this.paperList.addEventListener('click', async (event) => {
+        this.scopeSwitch.addEventListener('click', async (event) => {
+            const button = event.target.closest('[data-tag-scope]');
+            if (!button || button.dataset.tagScope === this.state.scope) return;
+            this.state.scope = button.dataset.tagScope;
+            this.state.selectedTagId = '';
+            this.state.page = 1;
+            await this.loadTags();
+            this.renderTagCreator();
+            this.renderScopeSwitch();
+            this.renderTagCards();
+            await this.loadResults();
+        });
+
+        this.resultList.addEventListener('click', async (event) => {
+            if (this.state.scope === 'paper') {
+                const action = event.target.closest('[data-action]');
+                const card = event.target.closest('[data-paper-id]');
+                if (!action || !card) return;
+                await PaperViewer.open(Number(card.dataset.paperId), async () => await this.reload());
+                return;
+            }
+
             const action = event.target.closest('[data-action]');
-            const card = event.target.closest('[data-paper-id]');
+            const card = event.target.closest('[data-figure-index]');
             if (!action || !card) return;
-            await PaperViewer.open(Number(card.dataset.paperId), async () => await this.reload());
+
+            const index = Number(card.dataset.figureIndex);
+            if (action.dataset.action === 'preview') {
+                await FigureViewer.open({
+                    figures: this.figures || [],
+                    index,
+                    page: this.state.page,
+                    totalPages: this.totalPages || 1,
+                    loadPage: async (page) => {
+                        const payload = await this.fetchFigureResults(page);
+                        this.renderFigureResults(payload, page);
+                        return payload;
+                    },
+                    onOpenPaper: async (paperID) => {
+                        await PaperViewer.open(Number(paperID), async () => await this.reload());
+                    },
+                    onMetaChanged: async () => {
+                        await this.reload();
+                    }
+                });
+                return;
+            }
+            if (action.dataset.action === 'paper') {
+                await PaperViewer.open(Number(card.dataset.paperId), async () => await this.reload());
+            }
         });
 
         this.pagination.addEventListener('click', async (event) => {
             const button = event.target.closest('button[data-page]');
             if (!button) return;
             this.state.page = Number(button.dataset.page);
-            await this.loadPapers();
+            await this.loadResults();
         });
     },
 
     async reload() {
-        await Promise.all([this.loadTags(), this.loadGlobalPaperCount()]);
+        await Promise.all([this.loadTags(), this.loadGlobalCounts()]);
+        this.renderTagCreator();
+        this.renderScopeSwitch();
         this.renderTagCards();
-        await this.loadPapers();
+        await this.loadResults();
     },
 
     async loadTags() {
-        const payload = await API.listTags();
+        const payload = await API.listTags({ scope: this.state.scope });
         this.tags = payload.tags || [];
         if (this.state.selectedTagId && !this.tags.some((tag) => String(tag.id) === String(this.state.selectedTagId))) {
             this.state.selectedTagId = '';
         }
     },
 
-    async loadGlobalPaperCount() {
-        const payload = await API.listPapers({ page: 1, page_size: 1 });
-        this.state.totalPaperCount = payload.total || 0;
+    renderTagCreator() {
+        const isPaperScope = this.state.scope === 'paper';
+        this.creatorTitle.textContent = isPaperScope ? '新建文献标签' : '新建图片标签';
+        this.creatorHint.textContent = isPaperScope
+            ? '给文献补充主题、方法或阅读状态等检索维度。'
+            : '给图片补充内容、实验类型或局部特征等检索维度。';
+        this.nameInput.placeholder = isPaperScope ? '例如：review' : '例如：细胞分裂';
+        this.submitButton.textContent = isPaperScope ? '创建文献标签' : '创建图片标签';
+    },
+
+    async loadGlobalCounts() {
+        const [papersPayload, figuresPayload] = await Promise.all([
+            API.listPapers({ page: 1, page_size: 1 }),
+            API.listFigures({ page: 1, page_size: 1 })
+        ]);
+        this.state.totalPaperCount = papersPayload.total || 0;
+        this.state.totalFigureCount = figuresPayload.total || 0;
+    },
+
+    renderScopeSwitch() {
+        this.scopeSwitch.innerHTML = `
+            <button class="btn ${this.state.scope === 'paper' ? 'btn-primary' : 'btn-outline'}" type="button" data-tag-scope="paper">文献标签</button>
+            <button class="btn ${this.state.scope === 'figure' ? 'btn-primary' : 'btn-outline'}" type="button" data-tag-scope="figure">图片标签</button>
+        `;
     },
 
     renderTagCards() {
+        const isPaperScope = this.state.scope === 'paper';
+        const totalCount = isPaperScope ? this.state.totalPaperCount : this.state.totalFigureCount;
         const allCard = `
             <article class="entity-card ${this.state.selectedTagId ? '' : 'active'}" data-tag-id="">
-                <div><h3>全部标签</h3><p>查看所有标签下的文献</p></div>
-                <strong>${this.state.totalPaperCount}</strong>
+                <div><h3>${isPaperScope ? '全部文献标签' : '全部图片标签'}</h3><p>${isPaperScope ? '查看所有标签下的文献' : '查看所有标签下的图片'}</p></div>
+                <strong>${totalCount}</strong>
             </article>
         `;
         this.grid.innerHTML = allCard + this.tags.map((tag) => `
             <article class="entity-card ${String(tag.id) === String(this.state.selectedTagId) ? 'active' : ''}" data-tag-id="${tag.id}">
                 <div>
                     <h3 class="tag-line"><span class="tag-dot" style="background:${tag.color}"></span>${Utils.escapeHTML(tag.name)}</h3>
-                    <p>按这个标签浏览文献</p>
+                    <p>${isPaperScope ? `关联文献 ${tag.paper_count || 0} 篇` : `关联图片 ${tag.figure_count || 0} 张`}</p>
                 </div>
                 <div class="entity-card-actions">
-                    <strong>${tag.paper_count}</strong>
+                    <strong>${isPaperScope ? (tag.paper_count || 0) : (tag.figure_count || 0)}</strong>
                     <button class="ghost-btn" type="button" data-action="edit-tag">改名</button>
                     <button class="ghost-btn danger" type="button" data-action="delete-tag">删除</button>
                 </div>
@@ -1284,19 +1291,93 @@ const TagsPage = {
         `).join('');
 
         const current = this.tags.find((tag) => String(tag.id) === String(this.state.selectedTagId));
-        this.headline.textContent = current ? `标签「${current.name}」下的文献` : '全部标签下的文献';
+        this.headline.textContent = current
+            ? `标签「${current.name}」下的${isPaperScope ? '文献' : '图片'}`
+            : `全部${isPaperScope ? '文献标签' : '图片标签'}下的${isPaperScope ? '文献' : '图片'}`;
+        this.scopeHint.textContent = isPaperScope
+            ? '这里展示带有当前标签的文献列表。'
+            : '这里展示带有当前标签的图片列表。';
+    },
+
+    pageSize() {
+        return this.state.scope === 'paper' ? 20 : 12;
+    },
+
+    async loadResults() {
+        if (this.state.scope === 'paper') {
+            await this.loadPapers();
+            return;
+        }
+        await this.loadFigures();
     },
 
     async loadPapers() {
         try {
             const payload = await API.listPapers({
                 page: this.state.page,
-                page_size: this.state.pageSize,
+                page_size: this.pageSize(),
                 tag_id: this.state.selectedTagId
             });
             const papers = payload.papers || [];
-            this.paperList.innerHTML = papers.length ? papers.map(BrowserUI.renderPaperCard).join('') : '<div class="empty-state"><h3>这个标签下还没有文献</h3></div>';
+            this.resultList.className = 'paper-grid paper-list-mode';
+            this.resultList.innerHTML = papers.length ? papers.map(BrowserUI.renderPaperCard).join('') : '<div class="empty-state"><h3>这个标签下还没有文献</h3></div>';
             BrowserUI.renderPagination(this.pagination, this.state.page, payload.total_pages || 0);
+            this.figures = [];
+            this.totalPages = payload.total_pages || 0;
+        } catch (error) {
+            Utils.showToast(error.message, 'error');
+        }
+    },
+
+    async fetchFigureResults(page = this.state.page) {
+        return API.listFigures({
+            page,
+            page_size: this.pageSize(),
+            tag_id: this.state.selectedTagId
+        });
+    },
+
+    renderFigureResults(payload, page = this.state.page) {
+        const figures = payload.figures || [];
+        this.state.page = page;
+        this.figures = figures;
+        this.totalPages = payload.total_pages || 0;
+        this.resultList.className = 'figure-preview-grid';
+        this.resultList.innerHTML = figures.length ? figures.map((figure, index) => `
+            <article class="figure-preview-card" data-paper-id="${figure.paper_id}" data-figure-index="${index}">
+                <div class="figure-preview-stage">
+                    <button class="figure-preview-media" type="button" data-action="preview" aria-label="查看大图">
+                        <img src="${figure.image_url}" alt="${Utils.escapeHTML(figure.paper_title || '提取图片')}">
+                    </button>
+                    <div class="figure-preview-badges">
+                        <span class="figure-badge figure-badge-strong">第 ${figure.page_number || '-'} 页</span>
+                        <span class="figure-badge">#${figure.figure_index || '-'}</span>
+                        ${figure.source === 'manual' ? '<span class="figure-badge">人工提取</span>' : ''}
+                    </div>
+                </div>
+                <div class="figure-preview-body">
+                    <div class="figure-preview-head">
+                        <span class="figure-preview-label">来源文献</span>
+                        <strong class="figure-preview-title">${Utils.escapeHTML(figure.paper_title)}</strong>
+                    </div>
+                    <div class="figure-preview-tags ${figure.tags?.length ? '' : 'is-empty'}">
+                        ${figure.tags?.length ? BrowserUI.renderTagChips(figure.tags || []) : '<span class="figure-preview-empty">无标签</span>'}
+                    </div>
+                    <div class="card-actions">
+                        <button class="btn btn-primary" type="button" data-action="preview">查看大图</button>
+                        <button class="btn btn-outline" type="button" data-action="paper">查看文献</button>
+                        <a class="btn btn-outline" href="${figure.image_url}" target="_blank" rel="noreferrer">原图</a>
+                    </div>
+                </div>
+            </article>
+        `).join('') : '<div class="empty-state"><h3>这个标签下还没有图片</h3></div>';
+        BrowserUI.renderPagination(this.pagination, this.state.page, this.totalPages);
+    },
+
+    async loadFigures() {
+        try {
+            const payload = await this.fetchFigureResults(this.state.page);
+            this.renderFigureResults(payload, this.state.page);
         } catch (error) {
             Utils.showToast(error.message, 'error');
         }

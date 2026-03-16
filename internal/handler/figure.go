@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"encoding/json"
 	"net/http"
 	"strconv"
 	"strings"
@@ -57,6 +58,33 @@ func (h *FigureHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	paper, err := h.service.DeleteFigure(id)
+	if err != nil {
+		sendError(w, err)
+		return
+	}
+
+	sendJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"paper":   paper,
+	})
+}
+
+func (h *FigureHandler) Update(w http.ResponseWriter, r *http.Request) {
+	id, err := parseIDFromPath(r.URL.Path, "/api/figures/")
+	if err != nil {
+		sendError(w, apperr.New(apperr.CodeInvalidArgument, "figure id 无效"))
+		return
+	}
+
+	var req struct {
+		Tags []string `json:"tags"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		sendError(w, apperr.New(apperr.CodeInvalidArgument, "请求体格式错误"))
+		return
+	}
+
+	paper, err := h.service.UpdateFigureTags(id, req.Tags)
 	if err != nil {
 		sendError(w, err)
 		return

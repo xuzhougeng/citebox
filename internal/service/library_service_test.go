@@ -211,6 +211,53 @@ func TestUpdatePaperPersistsMetadata(t *testing.T) {
 	}
 }
 
+func TestUpdateFigureTagsOnlyTouchesSelectedFigure(t *testing.T) {
+	svc, repo, _ := newTestService(t)
+
+	paper, err := repo.CreatePaper(repository.PaperUpsertInput{
+		Title:            "Figure Tags",
+		OriginalFilename: "figure-tags.pdf",
+		StoredPDFName:    "figure-tags.pdf",
+		FileSize:         256,
+		ContentType:      "application/pdf",
+		ExtractionStatus: "completed",
+		Figures: []repository.FigureUpsertInput{
+			{Filename: "figure_a.png", ContentType: "image/png", PageNumber: 1, FigureIndex: 1, Caption: "A"},
+			{Filename: "figure_b.png", ContentType: "image/png", PageNumber: 1, FigureIndex: 2, Caption: "B"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreatePaper() error = %v", err)
+	}
+
+	updated, err := svc.UpdateFigureTags(paper.Figures[0].ID, []string{"signal"})
+	if err != nil {
+		t.Fatalf("UpdateFigureTags() error = %v", err)
+	}
+
+	if got := len(updated.Figures[0].Tags); got != 1 {
+		t.Fatalf("updated first figure tags = %d, want 1", got)
+	}
+	if got := len(updated.Figures[1].Tags); got != 0 {
+		t.Fatalf("updated second figure tags = %d, want 0", got)
+	}
+	if got := updated.Figures[0].ImageURL; got != "/files/figures/figure_a.png" {
+		t.Fatalf("updated first figure image_url = %q, want %q", got, "/files/figures/figure_a.png")
+	}
+
+	tagID := updated.Figures[0].Tags[0].ID
+	result, err := svc.ListFigures(model.FigureFilter{TagID: &tagID})
+	if err != nil {
+		t.Fatalf("ListFigures() error = %v", err)
+	}
+	if result.Total != 1 || len(result.Figures) != 1 {
+		t.Fatalf("ListFigures() total=%d len=%d, want 1/1", result.Total, len(result.Figures))
+	}
+	if result.Figures[0].ID != paper.Figures[0].ID {
+		t.Fatalf("ListFigures() figure id = %d, want %d", result.Figures[0].ID, paper.Figures[0].ID)
+	}
+}
+
 func TestPurgeLibraryRemovesStoredAssets(t *testing.T) {
 	svc, repo, cfg := newTestService(t)
 	paper := createTestPaper(t, repo)
