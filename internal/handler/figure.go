@@ -77,14 +77,18 @@ func (h *FigureHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Tags []string `json:"tags"`
+		Tags      []string `json:"tags"`
+		NotesText *string  `json:"notes_text"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		sendError(w, apperr.New(apperr.CodeInvalidArgument, "请求体格式错误"))
 		return
 	}
 
-	paper, err := h.service.UpdateFigureTags(id, req.Tags)
+	paper, err := h.service.UpdateFigure(id, service.UpdateFigureParams{
+		Tags:      req.Tags,
+		NotesText: req.NotesText,
+	})
 	if err != nil {
 		sendError(w, err)
 		return

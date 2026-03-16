@@ -258,6 +258,53 @@ func TestUpdateFigureTagsOnlyTouchesSelectedFigure(t *testing.T) {
 	}
 }
 
+func TestUpdateFigureNotesAreSearchable(t *testing.T) {
+	svc, repo, _ := newTestService(t)
+
+	paper, err := repo.CreatePaper(repository.PaperUpsertInput{
+		Title:            "Figure Notes",
+		OriginalFilename: "figure-notes.pdf",
+		StoredPDFName:    "figure-notes.pdf",
+		FileSize:         256,
+		ContentType:      "application/pdf",
+		ExtractionStatus: "completed",
+		Figures: []repository.FigureUpsertInput{
+			{Filename: "figure_a.png", ContentType: "image/png", PageNumber: 1, FigureIndex: 1, Caption: "A"},
+			{Filename: "figure_b.png", ContentType: "image/png", PageNumber: 1, FigureIndex: 2, Caption: "B"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreatePaper() error = %v", err)
+	}
+
+	notes := "AI 总结：该图片强调了微环境重塑。"
+	updated, err := svc.UpdateFigure(paper.Figures[0].ID, UpdateFigureParams{NotesText: &notes})
+	if err != nil {
+		t.Fatalf("UpdateFigure() error = %v", err)
+	}
+
+	if updated.Figures[0].NotesText != notes {
+		t.Fatalf("updated first figure notes_text = %q, want %q", updated.Figures[0].NotesText, notes)
+	}
+	if updated.Figures[1].NotesText != "" {
+		t.Fatalf("updated second figure notes_text = %q, want empty", updated.Figures[1].NotesText)
+	}
+
+	result, err := svc.ListFigures(model.FigureFilter{Keyword: "微环境重塑"})
+	if err != nil {
+		t.Fatalf("ListFigures() error = %v", err)
+	}
+	if result.Total != 1 || len(result.Figures) != 1 {
+		t.Fatalf("ListFigures() total=%d len=%d, want 1/1", result.Total, len(result.Figures))
+	}
+	if result.Figures[0].ID != paper.Figures[0].ID {
+		t.Fatalf("ListFigures() figure id = %d, want %d", result.Figures[0].ID, paper.Figures[0].ID)
+	}
+	if result.Figures[0].NotesText != notes {
+		t.Fatalf("ListFigures() notes_text = %q, want %q", result.Figures[0].NotesText, notes)
+	}
+}
+
 func TestPurgeLibraryRemovesStoredAssets(t *testing.T) {
 	svc, repo, cfg := newTestService(t)
 	paper := createTestPaper(t, repo)
@@ -302,7 +349,6 @@ func TestExtractorSettingsDefaultsAndPersistence(t *testing.T) {
 
 	updated, err := svc.UpdateExtractorSettings(model.ExtractorSettings{
 		ExtractorURL:        "http://127.0.0.1:9000/api/v1/extract",
-		ExtractorJobsURL:    "http://127.0.0.1:9000/api/v1/jobs",
 		ExtractorToken:      "secret",
 		ExtractorFileField:  "upload",
 		TimeoutSeconds:      120,
@@ -313,6 +359,9 @@ func TestExtractorSettingsDefaultsAndPersistence(t *testing.T) {
 	}
 	if updated.EffectiveExtractorURL == "" || updated.EffectiveJobsURL == "" || updated.ExtractorFileField != "upload" {
 		t.Fatalf("UpdateExtractorSettings() = %+v, want normalized effective values", updated)
+	}
+	if updated.ExtractorJobsURL != "" {
+		t.Fatalf("UpdateExtractorSettings() extractor_jobs_url = %q, want empty", updated.ExtractorJobsURL)
 	}
 }
 

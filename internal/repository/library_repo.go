@@ -64,6 +64,11 @@ type PaperUpdateInput struct {
 	Tags         []TagUpsertInput
 }
 
+type FigureUpdateInput struct {
+	NotesText string
+	Tags      []TagUpsertInput
+}
+
 func NewLibraryRepository(dbPath string) (*LibraryRepository, error) {
 	dir := filepath.Dir(dbPath)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -149,6 +154,7 @@ func (r *LibraryRepository) initSchema() error {
 		figure_index INTEGER DEFAULT 0,
 		source TEXT DEFAULT 'auto',
 		caption TEXT DEFAULT '',
+		notes_text TEXT DEFAULT '',
 		bbox_json TEXT DEFAULT '',
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
@@ -183,6 +189,7 @@ func (r *LibraryRepository) ensureSchemaColumns() error {
 		{tableName: "papers", name: "abstract_text", definition: "TEXT DEFAULT ''"},
 		{tableName: "papers", name: "notes_text", definition: "TEXT DEFAULT ''"},
 		{tableName: "paper_figures", name: "source", definition: "TEXT DEFAULT 'auto'"},
+		{tableName: "paper_figures", name: "notes_text", definition: "TEXT DEFAULT ''"},
 	} {
 		if err := r.ensureColumn(column.tableName, column.name, column.definition); err != nil {
 			return err
@@ -669,10 +676,10 @@ func (r *LibraryRepository) UpdatePaper(id int64, input PaperUpdateInput) (*mode
 	return r.GetPaperDetail(id)
 }
 
-func (r *LibraryRepository) UpdateFigureTags(id int64, tags []TagUpsertInput) (*model.Paper, error) {
+func (r *LibraryRepository) UpdateFigure(id int64, input FigureUpdateInput) (*model.Paper, error) {
 	tx, err := r.db.Begin()
 	if err != nil {
-		return nil, wrapDBError(err, "更新图片标签失败")
+		return nil, wrapDBError(err, "更新图片信息失败")
 	}
 	defer tx.Rollback()
 
@@ -681,10 +688,22 @@ func (r *LibraryRepository) UpdateFigureTags(id int64, tags []TagUpsertInput) (*
 		if err == sql.ErrNoRows {
 			return nil, notFoundError("figure not found")
 		}
-		return nil, wrapDBError(err, "更新图片标签失败")
+		return nil, wrapDBError(err, "更新图片信息失败")
 	}
 
-	if err := r.syncFigureTags(tx, id, tags); err != nil {
+	result, err := tx.Exec(`
+		UPDATE paper_figures
+		SET notes_text = ?
+		WHERE id = ?
+	`, input.NotesText, id)
+	if err != nil {
+		return nil, wrapDBError(err, "更新图片信息失败")
+	}
+	if err := ensureRowsAffected(result, "figure not found"); err != nil {
+		return nil, err
+	}
+
+	if err := r.syncFigureTags(tx, id, input.Tags); err != nil {
 		return nil, wrapDBError(err, "更新图片标签失败")
 	}
 
@@ -693,14 +712,29 @@ func (r *LibraryRepository) UpdateFigureTags(id int64, tags []TagUpsertInput) (*
 		SET updated_at = CURRENT_TIMESTAMP
 		WHERE id = ?
 	`, paperID); err != nil {
-		return nil, wrapDBError(err, "更新图片标签失败")
+		return nil, wrapDBError(err, "更新图片信息失败")
 	}
 
 	if err := tx.Commit(); err != nil {
-		return nil, wrapDBError(err, "提交图片标签事务失败")
+		return nil, wrapDBError(err, "提交图片事务失败")
 	}
 
 	return r.GetPaperDetail(paperID)
+}
+
+func (r *LibraryRepository) UpdateFigureTags(id int64, tags []TagUpsertInput) (*model.Paper, error) {
+	figure, err := r.GetFigure(id)
+	if err != nil {
+		return nil, err
+	}
+	if figure == nil {
+		return nil, notFoundError("figure not found")
+	}
+
+	return r.UpdateFigure(id, FigureUpdateInput{
+		NotesText: figure.NotesText,
+		Tags:      tags,
+	})
 }
 
 func (r *LibraryRepository) DeletePaper(id int64) error {
@@ -905,7 +939,7 @@ func (r *LibraryRepository) GetFigure(id int64) (*model.FigureListItem, error) {
 	row := r.db.QueryRow(`
 		SELECT
 			pf.id, pf.paper_id, p.title, p.group_id, COALESCE(g.name, ''),
-			pf.filename, pf.page_number, pf.figure_index, pf.source, pf.caption, pf.created_at
+			pf.filename, pf.page_number, pf.figure_index, pf.source, pf.caption, pf.notes_text, pf.created_at
 		FROM paper_figures pf
 		JOIN papers p ON p.id = pf.paper_id
 		LEFT JOIN groups g ON g.id = p.group_id
@@ -926,6 +960,7 @@ func (r *LibraryRepository) GetFigure(id int64) (*model.FigureListItem, error) {
 		&item.FigureIndex,
 		&item.Source,
 		&item.Caption,
+		&item.NotesText,
 		&item.CreatedAt,
 	); err != nil {
 		if err == sql.ErrNoRows {
@@ -1008,7 +1043,7 @@ func (r *LibraryRepository) GetPaperDetail(id int64) (*model.Paper, error) {
 	}
 
 	rows, err := r.db.Query(`
-		SELECT id, filename, original_name, content_type, page_number, figure_index, source, caption, bbox_json, created_at
+		SELECT id, filename, original_name, content_type, page_number, figure_index, source, caption, notes_text, bbox_json, created_at
 		FROM paper_figures
 		WHERE paper_id = ?
 		ORDER BY page_number ASC, figure_index ASC, id ASC
@@ -1032,6 +1067,7 @@ func (r *LibraryRepository) GetPaperDetail(id int64) (*model.Paper, error) {
 			&figure.FigureIndex,
 			&figure.Source,
 			&figure.Caption,
+			&figure.NotesText,
 			&bboxJSON,
 			&figure.CreatedAt,
 		); err != nil {
@@ -1195,7 +1231,7 @@ func (r *LibraryRepository) ListFigures(filter model.FigureFilter) ([]model.Figu
 	query := `
 		SELECT
 			pf.id, pf.paper_id, p.title, p.group_id, COALESCE(g.name, ''),
-			pf.filename, pf.page_number, pf.figure_index, pf.source, pf.caption, pf.created_at
+			pf.filename, pf.page_number, pf.figure_index, pf.source, pf.caption, pf.notes_text, pf.created_at
 		FROM paper_figures pf
 		JOIN papers p ON p.id = pf.paper_id
 		LEFT JOIN groups g ON g.id = p.group_id
@@ -1229,6 +1265,7 @@ func (r *LibraryRepository) ListFigures(filter model.FigureFilter) ([]model.Figu
 			&item.FigureIndex,
 			&item.Source,
 			&item.Caption,
+			&item.NotesText,
 			&item.CreatedAt,
 		); err != nil {
 			return nil, 0, wrapDBError(err, "查询图片列表失败")
@@ -1474,7 +1511,7 @@ func (r *LibraryRepository) upsertTagIDs(tx *sql.Tx, tags []TagUpsertInput) ([]i
 	tagIDs := make([]int64, 0, len(tags))
 	for _, tag := range tags {
 		scope := model.NormalizeTagScope(string(tag.Scope))
-		result, err := tx.Exec(`
+		if _, err := tx.Exec(`
 			INSERT INTO tags (scope, name, color)
 			VALUES (?, ?, ?)
 			ON CONFLICT(scope, name) DO UPDATE SET
@@ -1483,19 +1520,13 @@ func (r *LibraryRepository) upsertTagIDs(tx *sql.Tx, tags []TagUpsertInput) ([]i
 					ELSE tags.color
 				END,
 				updated_at = CURRENT_TIMESTAMP
-		`, scope, tag.Name, tag.Color)
-		if err != nil {
+		`, scope, tag.Name, tag.Color); err != nil {
 			return nil, err
 		}
 
-		id, err := result.LastInsertId()
-		if err != nil {
+		var id int64
+		if err := tx.QueryRow("SELECT id FROM tags WHERE scope = ? AND name = ?", scope, tag.Name).Scan(&id); err != nil {
 			return nil, err
-		}
-		if id == 0 {
-			if err := tx.QueryRow("SELECT id FROM tags WHERE scope = ? AND name = ?", scope, tag.Name).Scan(&id); err != nil {
-				return nil, err
-			}
 		}
 		tagIDs = append(tagIDs, id)
 	}
@@ -1724,6 +1755,7 @@ func buildFigureWhere(filter model.FigureFilter) (string, []interface{}) {
 		conditions = append(conditions, `(
 			p.title LIKE ? OR
 			pf.caption LIKE ? OR
+			pf.notes_text LIKE ? OR
 			pf.original_name LIKE ? OR
 			EXISTS (
 				SELECT 1
@@ -1732,7 +1764,7 @@ func buildFigureWhere(filter model.FigureFilter) (string, []interface{}) {
 				WHERE ft.figure_id = pf.id AND t.name LIKE ?
 			)
 		)`)
-		args = append(args, like, like, like, like)
+		args = append(args, like, like, like, like, like)
 	}
 
 	if filter.GroupID != nil {
