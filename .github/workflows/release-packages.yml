@@ -130,7 +130,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.base_name }}-${{ matrix.platform }}-${{ env.VERSION }}
-          path: dist/${{ matrix.base_name }}-${{ matrix.platform }}-${{ env.VERSION }}${{ matrix.archive_ext }}
+          path: dist/${{ matrix.base_name }}-${{ matrix.platform }}-${{ env.VERSION }}
           if-no-files-found: error
 
   publish:
@@ -147,7 +147,6 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: release-assets
-          merge-multiple: true
 
       - name: Create or update release
         env:
@@ -158,9 +157,35 @@ jobs:
           set -euo pipefail
           shopt -s nullglob
 
-          files=(release-assets/*)
+          dirs=(release-assets/*)
+          if [ ${#dirs[@]} -eq 0 ]; then
+              echo "No release artifact directories found" >&2
+              exit 1
+          fi
+
+          mkdir -p release-bundles
+          files=()
+
+          for dir in "${dirs[@]}"; do
+              [ -d "${dir}" ] || continue
+              name="$(basename "${dir}")"
+
+              if [[ "${name}" == *-windows-* ]]; then
+                  archive="release-bundles/${name}.zip"
+                  (
+                      cd release-assets
+                      zip -rq "../${archive}" "${name}"
+                  )
+              else
+                  archive="release-bundles/${name}.tar.gz"
+                  tar -C release-assets -czf "${archive}" "${name}"
+              fi
+
+              files+=("${archive}")
+          done
+
           if [ ${#files[@]} -eq 0 ]; then
-              echo "No release assets found" >&2
+              echo "No release bundles created" >&2
               exit 1
           fi
 
