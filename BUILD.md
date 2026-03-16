@@ -12,6 +12,21 @@ make package-darwin     # macOS
 make package-linux      # Linux
 ```
 
+## GitHub Action 发版
+
+推送版本 tag 后会自动触发 GitHub Action，并把三个平台的包挂到对应的 GitHub Release：
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+产物格式：
+
+- macOS: `citebox-macos-v0.1.0.tar.gz`
+- Linux: `citebox-linux-v0.1.0.tar.gz`
+- Windows: `citebox-windows-v0.1.0.zip`
+
 ---
 
 ## 支持的平台
