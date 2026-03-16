@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"paper_image_db/internal/apperr"
 	"paper_image_db/internal/model"
 	"paper_image_db/internal/service"
 )
@@ -21,13 +22,13 @@ func NewPaperHandler(svc *service.LibraryService) *PaperHandler {
 func (h *PaperHandler) List(w http.ResponseWriter, r *http.Request) {
 	groupID, err := optionalInt64(r.URL.Query().Get("group_id"))
 	if err != nil {
-		sendError(w, http.StatusBadRequest, "group_id 无效")
+		sendError(w, apperr.New(apperr.CodeInvalidArgument, "group_id 无效"))
 		return
 	}
 
 	tagID, err := optionalInt64(r.URL.Query().Get("tag_id"))
 	if err != nil {
-		sendError(w, http.StatusBadRequest, "tag_id 无效")
+		sendError(w, apperr.New(apperr.CodeInvalidArgument, "tag_id 无效"))
 		return
 	}
 
@@ -43,7 +44,7 @@ func (h *PaperHandler) List(w http.ResponseWriter, r *http.Request) {
 		PageSize: pageSize,
 	})
 	if err != nil {
-		sendError(w, http.StatusInternalServerError, err.Error())
+		sendError(w, err)
 		return
 	}
 
@@ -52,20 +53,20 @@ func (h *PaperHandler) List(w http.ResponseWriter, r *http.Request) {
 
 func (h *PaperHandler) Upload(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseMultipartForm(512 << 20); err != nil {
-		sendError(w, http.StatusBadRequest, "解析上传表单失败: "+err.Error())
+		sendError(w, apperr.Wrap(apperr.CodeInvalidArgument, "解析上传表单失败", err))
 		return
 	}
 
 	file, header, err := r.FormFile("pdf")
 	if err != nil {
-		sendError(w, http.StatusBadRequest, "缺少 PDF 文件")
+		sendError(w, apperr.New(apperr.CodeInvalidArgument, "缺少 PDF 文件"))
 		return
 	}
 	defer file.Close()
 
 	groupID, err := optionalInt64(r.FormValue("group_id"))
 	if err != nil {
-		sendError(w, http.StatusBadRequest, "group_id 无效")
+		sendError(w, apperr.New(apperr.CodeInvalidArgument, "group_id 无效"))
 		return
 	}
 
@@ -75,7 +76,7 @@ func (h *PaperHandler) Upload(w http.ResponseWriter, r *http.Request) {
 		Tags:    splitCSV(r.FormValue("tags")),
 	})
 	if err != nil {
-		sendError(w, http.StatusBadRequest, err.Error())
+		sendError(w, err)
 		return
 	}
 
@@ -88,17 +89,13 @@ func (h *PaperHandler) Upload(w http.ResponseWriter, r *http.Request) {
 func (h *PaperHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	id, err := parseIDFromPath(r.URL.Path, "/api/papers/")
 	if err != nil {
-		sendError(w, http.StatusBadRequest, "paper id 无效")
+		sendError(w, apperr.New(apperr.CodeInvalidArgument, "paper id 无效"))
 		return
 	}
 
 	paper, err := h.service.GetPaper(id)
 	if err != nil {
-		sendError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	if paper == nil {
-		sendError(w, http.StatusNotFound, "paper not found")
+		sendError(w, err)
 		return
 	}
 
@@ -108,17 +105,13 @@ func (h *PaperHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 func (h *PaperHandler) Reextract(w http.ResponseWriter, r *http.Request) {
 	id, err := parseIDWithSuffix(r.URL.Path, "/api/papers/", "/reextract")
 	if err != nil {
-		sendError(w, http.StatusBadRequest, "paper id 无效")
+		sendError(w, apperr.New(apperr.CodeInvalidArgument, "paper id 无效"))
 		return
 	}
 
 	paper, err := h.service.ReextractPaper(id)
 	if err != nil {
-		sendError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	if paper == nil {
-		sendError(w, http.StatusNotFound, "paper not found")
+		sendError(w, err)
 		return
 	}
 
@@ -131,7 +124,7 @@ func (h *PaperHandler) Reextract(w http.ResponseWriter, r *http.Request) {
 func (h *PaperHandler) Update(w http.ResponseWriter, r *http.Request) {
 	id, err := parseIDFromPath(r.URL.Path, "/api/papers/")
 	if err != nil {
-		sendError(w, http.StatusBadRequest, "paper id 无效")
+		sendError(w, apperr.New(apperr.CodeInvalidArgument, "paper id 无效"))
 		return
 	}
 
@@ -141,7 +134,7 @@ func (h *PaperHandler) Update(w http.ResponseWriter, r *http.Request) {
 		Tags    []string `json:"tags"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		sendError(w, http.StatusBadRequest, "请求体格式错误")
+		sendError(w, apperr.New(apperr.CodeInvalidArgument, "请求体格式错误"))
 		return
 	}
 
@@ -151,11 +144,7 @@ func (h *PaperHandler) Update(w http.ResponseWriter, r *http.Request) {
 		Tags:    req.Tags,
 	})
 	if err != nil {
-		sendError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	if paper == nil {
-		sendError(w, http.StatusNotFound, "paper not found")
+		sendError(w, err)
 		return
 	}
 
@@ -168,16 +157,12 @@ func (h *PaperHandler) Update(w http.ResponseWriter, r *http.Request) {
 func (h *PaperHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	id, err := parseIDFromPath(r.URL.Path, "/api/papers/")
 	if err != nil {
-		sendError(w, http.StatusBadRequest, "paper id 无效")
+		sendError(w, apperr.New(apperr.CodeInvalidArgument, "paper id 无效"))
 		return
 	}
 
 	if err := h.service.DeletePaper(id); err != nil {
-		if strings.Contains(err.Error(), "not found") {
-			sendError(w, http.StatusNotFound, "paper not found")
-			return
-		}
-		sendError(w, http.StatusInternalServerError, err.Error())
+		sendError(w, err)
 		return
 	}
 

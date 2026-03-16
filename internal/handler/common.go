@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"paper_image_db/internal/apperr"
 	"paper_image_db/internal/model"
 )
 
@@ -15,10 +16,12 @@ func sendJSON(w http.ResponseWriter, status int, data interface{}) {
 	_ = json.NewEncoder(w).Encode(data)
 }
 
-func sendError(w http.ResponseWriter, status int, message string) {
+func sendError(w http.ResponseWriter, err error) {
+	status := apperr.HTTPStatus(err)
 	sendJSON(w, status, model.ErrorResponse{
 		Success: false,
-		Error:   message,
+		Code:    string(apperr.CodeOf(err)),
+		Error:   apperr.Message(err),
 	})
 }
 

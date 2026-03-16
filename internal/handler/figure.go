@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 
+	"paper_image_db/internal/apperr"
 	"paper_image_db/internal/model"
 	"paper_image_db/internal/service"
 )
@@ -20,13 +21,13 @@ func NewFigureHandler(svc *service.LibraryService) *FigureHandler {
 func (h *FigureHandler) List(w http.ResponseWriter, r *http.Request) {
 	groupID, err := optionalInt64(r.URL.Query().Get("group_id"))
 	if err != nil {
-		sendError(w, http.StatusBadRequest, "group_id 无效")
+		sendError(w, apperr.New(apperr.CodeInvalidArgument, "group_id 无效"))
 		return
 	}
 
 	tagID, err := optionalInt64(r.URL.Query().Get("tag_id"))
 	if err != nil {
-		sendError(w, http.StatusBadRequest, "tag_id 无效")
+		sendError(w, apperr.New(apperr.CodeInvalidArgument, "tag_id 无效"))
 		return
 	}
 
@@ -41,7 +42,7 @@ func (h *FigureHandler) List(w http.ResponseWriter, r *http.Request) {
 		PageSize: pageSize,
 	})
 	if err != nil {
-		sendError(w, http.StatusInternalServerError, err.Error())
+		sendError(w, err)
 		return
 	}
 

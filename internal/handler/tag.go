@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"paper_image_db/internal/apperr"
 	"paper_image_db/internal/model"
 	"paper_image_db/internal/service"
 )
@@ -19,7 +20,7 @@ func NewTagHandler(svc *service.LibraryService) *TagHandler {
 func (h *TagHandler) List(w http.ResponseWriter, r *http.Request) {
 	tags, err := h.service.ListTags()
 	if err != nil {
-		sendError(w, http.StatusInternalServerError, err.Error())
+		sendError(w, err)
 		return
 	}
 	sendJSON(w, http.StatusOK, map[string]interface{}{
@@ -33,13 +34,13 @@ func (h *TagHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Color string `json:"color"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		sendError(w, http.StatusBadRequest, "请求体格式错误")
+		sendError(w, apperr.New(apperr.CodeInvalidArgument, "请求体格式错误"))
 		return
 	}
 
 	tag, err := h.service.CreateTag(req.Name, req.Color)
 	if err != nil {
-		sendError(w, http.StatusBadRequest, err.Error())
+		sendError(w, err)
 		return
 	}
 
@@ -52,7 +53,7 @@ func (h *TagHandler) Create(w http.ResponseWriter, r *http.Request) {
 func (h *TagHandler) Update(w http.ResponseWriter, r *http.Request) {
 	id, err := parseIDFromPath(r.URL.Path, "/api/tags/")
 	if err != nil {
-		sendError(w, http.StatusBadRequest, "tag id 无效")
+		sendError(w, apperr.New(apperr.CodeInvalidArgument, "tag id 无效"))
 		return
 	}
 
@@ -61,17 +62,13 @@ func (h *TagHandler) Update(w http.ResponseWriter, r *http.Request) {
 		Color string `json:"color"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		sendError(w, http.StatusBadRequest, "请求体格式错误")
+		sendError(w, apperr.New(apperr.CodeInvalidArgument, "请求体格式错误"))
 		return
 	}
 
 	tag, err := h.service.UpdateTag(id, req.Name, req.Color)
 	if err != nil {
-		sendError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	if tag == nil {
-		sendError(w, http.StatusNotFound, "tag not found")
+		sendError(w, err)
 		return
 	}
 
@@ -84,12 +81,12 @@ func (h *TagHandler) Update(w http.ResponseWriter, r *http.Request) {
 func (h *TagHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	id, err := parseIDFromPath(r.URL.Path, "/api/tags/")
 	if err != nil {
-		sendError(w, http.StatusBadRequest, "tag id 无效")
+		sendError(w, apperr.New(apperr.CodeInvalidArgument, "tag id 无效"))
 		return
 	}
 
 	if err := h.service.DeleteTag(id); err != nil {
-		sendError(w, http.StatusInternalServerError, err.Error())
+		sendError(w, err)
 		return
 	}
 
