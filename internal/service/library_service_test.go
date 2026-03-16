@@ -1,6 +1,7 @@
 package service
 
 import (
+	"bytes"
 	"io"
 	"log/slog"
 	"os"
@@ -200,5 +201,55 @@ func TestPurgeLibraryRemovesStoredAssets(t *testing.T) {
 	}
 	if result.Total != 0 || len(result.Papers) != 0 {
 		t.Fatalf("ListPapers() after purge = total:%d len:%d", result.Total, len(result.Papers))
+	}
+}
+
+func TestExtractorSettingsDefaultsAndPersistence(t *testing.T) {
+	svc, _, cfg := newTestService(t)
+
+	defaults, err := svc.GetExtractorSettings()
+	if err != nil {
+		t.Fatalf("GetExtractorSettings() default error = %v", err)
+	}
+	if defaults.ExtractorFileField != "file" || defaults.TimeoutSeconds != cfg.ExtractorTimeoutSeconds {
+		t.Fatalf("GetExtractorSettings() defaults = %+v, want config defaults", defaults)
+	}
+
+	updated, err := svc.UpdateExtractorSettings(model.ExtractorSettings{
+		ExtractorURL:        "http://127.0.0.1:9000/api/v1/extract",
+		ExtractorJobsURL:    "http://127.0.0.1:9000/api/v1/jobs",
+		ExtractorToken:      "secret",
+		ExtractorFileField:  "upload",
+		TimeoutSeconds:      120,
+		PollIntervalSeconds: 5,
+	})
+	if err != nil {
+		t.Fatalf("UpdateExtractorSettings() error = %v", err)
+	}
+	if updated.EffectiveExtractorURL == "" || updated.EffectiveJobsURL == "" || updated.ExtractorFileField != "upload" {
+		t.Fatalf("UpdateExtractorSettings() = %+v, want normalized effective values", updated)
+	}
+}
+
+func TestBuildExtractorUploadBodyUsesRuntimeFileField(t *testing.T) {
+	svc, _, cfg := newTestService(t)
+
+	pdfPath := filepath.Join(cfg.PapersDir(), "sample.pdf")
+	if err := os.MkdirAll(filepath.Dir(pdfPath), 0o755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	if err := os.WriteFile(pdfPath, []byte("%PDF-1.4 test"), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	body, _, err := svc.buildExtractorUploadBody(model.ExtractorSettings{
+		ExtractorFileField: "upload",
+	}, pdfPath, "sample.pdf")
+	if err != nil {
+		t.Fatalf("buildExtractorUploadBody() error = %v", err)
+	}
+
+	if !bytes.Contains(body.Bytes(), []byte(`name="upload"`)) {
+		t.Fatalf("buildExtractorUploadBody() body missing configured file field: %s", body.String())
 	}
 }

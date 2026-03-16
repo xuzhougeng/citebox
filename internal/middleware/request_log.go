@@ -12,6 +12,10 @@ type statusRecorder struct {
 	size   int
 }
 
+func (r *statusRecorder) Unwrap() http.ResponseWriter {
+	return r.ResponseWriter
+}
+
 func (r *statusRecorder) WriteHeader(status int) {
 	r.status = status
 	r.ResponseWriter.WriteHeader(status)
@@ -25,6 +29,12 @@ func (r *statusRecorder) Write(data []byte) (int, error) {
 	size, err := r.ResponseWriter.Write(data)
 	r.size += size
 	return size, err
+}
+
+func (r *statusRecorder) Flush() {
+	if flusher, ok := r.ResponseWriter.(http.Flusher); ok {
+		flusher.Flush()
+	}
 }
 
 func RequestLogger(next http.Handler, logger *slog.Logger) http.Handler {
