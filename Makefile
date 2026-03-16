@@ -8,6 +8,11 @@ VERSION=$(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 
 # Build flags for smaller binary
 LDFLAGS=-ldflags "-s -w"
+DESKTOP_LDFLAGS=$(LDFLAGS)
+
+ifeq ($(OS),Windows_NT)
+DESKTOP_LDFLAGS=-ldflags "-s -w -H windowsgui"
+endif
 
 # =============================================================================
 # Local Development
@@ -21,7 +26,7 @@ run:
 
 build-desktop:
 	@mkdir -p bin
-	go build $(LDFLAGS) -o bin/$(DESKTOP_BINARY_NAME) ./cmd/desktop
+	go build $(DESKTOP_LDFLAGS) -o bin/$(DESKTOP_BINARY_NAME) ./cmd/desktop
 
 run-desktop:
 	go run ./cmd/desktop

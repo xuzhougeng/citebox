@@ -18,7 +18,7 @@ New-Item -ItemType Directory -Path $packageDir -Force | Out-Null
 
 $env:CGO_ENABLED = "1"
 $env:GOOS = "windows"
-go build -trimpath -ldflags "-s -w" -o (Join-Path $packageDir "$binaryName.exe") ./cmd/desktop
+go build -trimpath -ldflags "-s -w -H windowsgui" -o (Join-Path $packageDir "$binaryName.exe") ./cmd/desktop
 Remove-Item Env:GOOS
 Remove-Item Env:CGO_ENABLED
 
@@ -55,6 +55,7 @@ Desktop mode stores data in:
 
 Notes:
 - This package expects the native GitHub Windows runner toolchain to compile cgo.
+- The desktop app starts without a visible console window by default.
 - WebView2 is required at runtime on Windows.
 "@
 
