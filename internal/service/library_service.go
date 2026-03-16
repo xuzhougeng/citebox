@@ -2,13 +2,12 @@ package service
 
 import (
 	"bytes"
-	"database/sql"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"mime"
 	"mime/multipart"
 	"net/http"
@@ -18,16 +17,21 @@ import (
 	"strings"
 	"time"
 
+	"paper_image_db/internal/apperr"
 	"paper_image_db/internal/config"
 	"paper_image_db/internal/model"
 	"paper_image_db/internal/repository"
 )
 
 type LibraryService struct {
-	repo       *repository.LibraryRepository
-	config     *config.Config
-	httpClient *http.Client
+	repo            *repository.LibraryRepository
+	config          *config.Config
+	httpClient      *http.Client
+	logger          *slog.Logger
+	startBackground bool
 }
+
+type LibraryServiceOption func(*LibraryService)
 
 type UploadPaperParams struct {
 	Title   string
@@ -97,20 +101,46 @@ type extractorJobStatusResponse struct {
 	Error     string `json:"error"`
 }
 
-func NewLibraryService(repo *repository.LibraryRepository, cfg *config.Config) *LibraryService {
-	os.MkdirAll(cfg.StorageDir, 0o755)
-	os.MkdirAll(cfg.PapersDir(), 0o755)
-	os.MkdirAll(cfg.FiguresDir(), 0o755)
+func WithLogger(logger *slog.Logger) LibraryServiceOption {
+	return func(service *LibraryService) {
+		if logger != nil {
+			service.logger = logger
+		}
+	}
+}
+
+func WithoutBackgroundJobs() LibraryServiceOption {
+	return func(service *LibraryService) {
+		service.startBackground = false
+	}
+}
+
+func NewLibraryService(repo *repository.LibraryRepository, cfg *config.Config, opts ...LibraryServiceOption) (*LibraryService, error) {
+	for _, dir := range []string{cfg.StorageDir, cfg.PapersDir(), cfg.FiguresDir()} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return nil, apperr.Wrap(apperr.CodeInternal, fmt.Sprintf("创建存储目录失败: %s", dir), err)
+		}
+	}
 
 	service := &LibraryService{
-		repo:   repo,
-		config: cfg,
+		repo:            repo,
+		config:          cfg,
+		logger:          slog.Default().With("component", "library_service"),
+		startBackground: true,
 		httpClient: &http.Client{
 			Timeout: time.Duration(cfg.ExtractorTimeoutSeconds) * time.Second,
 		},
 	}
-	go service.resumePendingExtractions()
-	return service
+
+	for _, opt := range opts {
+		opt(service)
+	}
+
+	if service.startBackground {
+		go service.resumePendingExtractions()
+	}
+
+	return service, nil
 }
 
 func (s *LibraryService) ListPapers(filter model.PaperFilter) (*model.PaperListResponse, error) {
@@ -150,7 +180,7 @@ func (s *LibraryService) GetPaper(id int64) (*model.Paper, error) {
 		return nil, err
 	}
 	if paper == nil {
-		return nil, nil
+		return nil, apperr.New(apperr.CodeNotFound, "paper not found")
 	}
 	s.decoratePaper(paper)
 	return paper, nil
@@ -192,10 +222,10 @@ func (s *LibraryService) ListFigures(filter model.FigureFilter) (*model.FigureLi
 
 func (s *LibraryService) UploadPaper(file multipart.File, header *multipart.FileHeader, params UploadPaperParams) (*model.Paper, error) {
 	if header.Size > s.config.MaxUploadSize {
-		return nil, fmt.Errorf("PDF 大小超过限制 %s", humanFileSize(s.config.MaxUploadSize))
+		return nil, apperr.New(apperr.CodeResourceExhausted, fmt.Sprintf("PDF 大小超过限制 %s", humanFileSize(s.config.MaxUploadSize)))
 	}
 	if !isPDF(header.Filename, header.Header.Get("Content-Type")) {
-		return nil, errors.New("只支持上传 PDF 文献")
+		return nil, apperr.New(apperr.CodeUnsupportedMedia, "只支持上传 PDF 文献")
 	}
 
 	if err := s.validateGroup(params.GroupID); err != nil {
@@ -212,16 +242,16 @@ func (s *LibraryService) UploadPaper(file multipart.File, header *multipart.File
 
 	dst, err := os.Create(pdfPath)
 	if err != nil {
-		return nil, fmt.Errorf("创建 PDF 文件失败: %w", err)
+		return nil, apperr.Wrap(apperr.CodeInternal, "创建 PDF 文件失败", err)
 	}
 	if _, err := io.Copy(dst, file); err != nil {
 		dst.Close()
 		os.Remove(pdfPath)
-		return nil, fmt.Errorf("保存 PDF 失败: %w", err)
+		return nil, apperr.Wrap(apperr.CodeInternal, "保存 PDF 失败", err)
 	}
 	if err := dst.Close(); err != nil {
 		os.Remove(pdfPath)
-		return nil, fmt.Errorf("关闭 PDF 文件失败: %w", err)
+		return nil, apperr.Wrap(apperr.CodeInternal, "关闭 PDF 文件失败", err)
 	}
 
 	tagInputs := s.normalizeTagInputs(params.Tags)
@@ -254,7 +284,7 @@ func (s *LibraryService) UploadPaper(file multipart.File, header *multipart.File
 func (s *LibraryService) UpdatePaper(id int64, params UpdatePaperParams) (*model.Paper, error) {
 	title := strings.TrimSpace(params.Title)
 	if title == "" {
-		return nil, errors.New("标题不能为空")
+		return nil, apperr.New(apperr.CodeInvalidArgument, "标题不能为空")
 	}
 	if err := s.validateGroup(params.GroupID); err != nil {
 		return nil, err
@@ -262,9 +292,6 @@ func (s *LibraryService) UpdatePaper(id int64, params UpdatePaperParams) (*model
 
 	paper, err := s.repo.UpdatePaper(id, title, params.GroupID, s.normalizeTagInputs(params.Tags))
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, nil
-		}
 		return nil, err
 	}
 
@@ -278,7 +305,7 @@ func (s *LibraryService) DeletePaper(id int64) error {
 		return err
 	}
 	if paper == nil {
-		return errors.New("paper not found")
+		return apperr.New(apperr.CodeNotFound, "paper not found")
 	}
 
 	if err := s.repo.DeletePaper(id); err != nil {
@@ -299,20 +326,20 @@ func (s *LibraryService) ReextractPaper(id int64) (*model.Paper, error) {
 		return nil, err
 	}
 	if paper == nil {
-		return nil, nil
+		return nil, apperr.New(apperr.CodeNotFound, "paper not found")
 	}
 
 	switch paper.ExtractionStatus {
 	case "queued", "running":
-		return nil, errors.New("文献正在解析中，无需重复提交")
+		return nil, apperr.New(apperr.CodeConflict, "文献正在解析中，无需重复提交")
 	case "failed", "cancelled":
 	default:
-		return nil, errors.New("当前只有解析失败的文献支持重新解析")
+		return nil, apperr.New(apperr.CodeFailedPrecondition, "当前只有解析失败的文献支持重新解析")
 	}
 
 	pdfPath := filepath.Join(s.config.PapersDir(), paper.StoredPDFName)
 	if _, err := os.Stat(pdfPath); err != nil {
-		return nil, fmt.Errorf("原始 PDF 不存在，无法重新解析: %w", err)
+		return nil, apperr.Wrap(apperr.CodeFailedPrecondition, "原始 PDF 不存在，无法重新解析", err)
 	}
 
 	if err := s.repo.UpdatePaperExtractionState(id, "queued", "已重新提交解析任务", ""); err != nil {
@@ -324,6 +351,9 @@ func (s *LibraryService) ReextractPaper(id int64) (*model.Paper, error) {
 	updatedPaper, err := s.repo.GetPaperDetail(id)
 	if err != nil {
 		return nil, err
+	}
+	if updatedPaper == nil {
+		return nil, apperr.New(apperr.CodeNotFound, "paper not found")
 	}
 	s.decoratePaper(updatedPaper)
 	return updatedPaper, nil
@@ -337,7 +367,7 @@ func (s *LibraryService) CreateGroup(name, description string) (*model.Group, er
 	name = strings.TrimSpace(name)
 	description = strings.TrimSpace(description)
 	if name == "" {
-		return nil, errors.New("分组名称不能为空")
+		return nil, apperr.New(apperr.CodeInvalidArgument, "分组名称不能为空")
 	}
 	return s.repo.CreateGroup(name, description)
 }
@@ -346,13 +376,9 @@ func (s *LibraryService) UpdateGroup(id int64, name, description string) (*model
 	name = strings.TrimSpace(name)
 	description = strings.TrimSpace(description)
 	if name == "" {
-		return nil, errors.New("分组名称不能为空")
+		return nil, apperr.New(apperr.CodeInvalidArgument, "分组名称不能为空")
 	}
-	group, err := s.repo.UpdateGroup(id, name, description)
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, nil
-	}
-	return group, err
+	return s.repo.UpdateGroup(id, name, description)
 }
 
 func (s *LibraryService) DeleteGroup(id int64) error {
@@ -366,7 +392,7 @@ func (s *LibraryService) ListTags() ([]model.Tag, error) {
 func (s *LibraryService) CreateTag(name, color string) (*model.Tag, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
-		return nil, errors.New("标签名称不能为空")
+		return nil, apperr.New(apperr.CodeInvalidArgument, "标签名称不能为空")
 	}
 	color = normalizeColor(color)
 	return s.repo.CreateTag(name, color)
@@ -375,13 +401,9 @@ func (s *LibraryService) CreateTag(name, color string) (*model.Tag, error) {
 func (s *LibraryService) UpdateTag(id int64, name, color string) (*model.Tag, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
-		return nil, errors.New("标签名称不能为空")
+		return nil, apperr.New(apperr.CodeInvalidArgument, "标签名称不能为空")
 	}
-	tag, err := s.repo.UpdateTag(id, name, normalizeColor(color))
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, nil
-	}
-	return tag, err
+	return s.repo.UpdateTag(id, name, normalizeColor(color))
 }
 
 func (s *LibraryService) DeleteTag(id int64) error {
@@ -398,7 +420,7 @@ func (s *LibraryService) validateGroup(groupID *int64) error {
 		return err
 	}
 	if !exists {
-		return errors.New("选择的分组不存在")
+		return apperr.New(apperr.CodeNotFound, "选择的分组不存在")
 	}
 	return nil
 }
@@ -412,18 +434,22 @@ func (s *LibraryService) runPaperExtraction(paperID int64, pdfPath, originalFile
 		err = s.processPaperExtractionSync(paperID, pdfPath, originalFilename)
 	}
 
-	if err == nil || errors.Is(err, sql.ErrNoRows) {
+	if err == nil || apperr.IsCode(err, apperr.CodeNotFound) {
 		return
 	}
 
-	log.Printf("paper %d extraction failed: %v", paperID, err)
+	s.logger.Error("paper extraction failed",
+		"paper_id", paperID,
+		"code", apperr.CodeOf(err),
+		"error", err,
+	)
 	s.markPaperExtractionFailed(paperID, "", err)
 }
 
 func (s *LibraryService) resumePendingExtractions() {
 	papers, err := s.repo.ListPapersByExtractionStatuses([]string{"queued", "running"})
 	if err != nil {
-		log.Printf("resume pending extractions failed: %v", err)
+		s.logger.Error("resume pending extractions failed", "error", err, "code", apperr.CodeOf(err))
 		return
 	}
 
@@ -433,16 +459,26 @@ func (s *LibraryService) resumePendingExtractions() {
 		jobID := strings.TrimSpace(paper.ExtractorJobID)
 		if jobsURL != "" && jobID != "" {
 			go func() {
-				if err := s.resumeRemoteExtraction(paperID, jobID); err != nil && !errors.Is(err, sql.ErrNoRows) {
-					log.Printf("resume paper %d extraction failed: %v", paperID, err)
+				if err := s.resumeRemoteExtraction(paperID, jobID); err != nil && !apperr.IsCode(err, apperr.CodeNotFound) {
+					s.logger.Error("resume paper extraction failed",
+						"paper_id", paperID,
+						"job_id", jobID,
+						"code", apperr.CodeOf(err),
+						"error", err,
+					)
 					s.markPaperExtractionFailed(paperID, jobID, err)
 				}
 			}()
 			continue
 		}
 
-		if err := s.repo.UpdatePaperExtractionState(paperID, "failed", "后台解析在服务重启后中断", jobID); err != nil && !errors.Is(err, sql.ErrNoRows) {
-			log.Printf("mark stale paper %d failed: %v", paperID, err)
+		if err := s.repo.UpdatePaperExtractionState(paperID, "failed", "后台解析在服务重启后中断", jobID); err != nil && !apperr.IsCode(err, apperr.CodeNotFound) {
+			s.logger.Warn("mark stale paper failed",
+				"paper_id", paperID,
+				"job_id", jobID,
+				"code", apperr.CodeOf(err),
+				"error", err,
+			)
 		}
 	}
 }
@@ -486,7 +522,7 @@ func (s *LibraryService) processPaperExtractionJob(paperID int64, jobsURL, pdfPa
 	case "cancelled":
 		return nil
 	default:
-		return fmt.Errorf("解析任务状态异常: %s", finalStatus.Status)
+		return apperr.New(apperr.CodeUnavailable, fmt.Sprintf("解析任务状态异常: %s", finalStatus.Status))
 	}
 }
 
@@ -521,12 +557,12 @@ func (s *LibraryService) processPaperExtractionJobWithExistingJob(paperID int64,
 func (s *LibraryService) pollExtractJob(paperID int64, initial *extractorJobStatusResponse) (*extractorJobStatusResponse, error) {
 	current := initial
 	if current == nil {
-		return nil, errors.New("缺少解析任务信息")
+		return nil, apperr.New(apperr.CodeFailedPrecondition, "缺少解析任务信息")
 	}
 
 	for {
 		if current.JobID == "" {
-			return nil, errors.New("解析任务未返回 job_id")
+			return nil, apperr.New(apperr.CodeUnavailable, "解析任务未返回 job_id")
 		}
 
 		status, err := s.getExtractJobStatus(current.JobID)
@@ -558,7 +594,7 @@ func (s *LibraryService) pollExtractJob(paperID int64, initial *extractorJobStat
 			}
 			return status, nil
 		default:
-			return nil, fmt.Errorf("未知的解析任务状态: %s", status.Status)
+			return nil, apperr.New(apperr.CodeUnavailable, fmt.Sprintf("未知的解析任务状态: %s", status.Status))
 		}
 
 		time.Sleep(time.Duration(maxInt(s.config.ExtractorPollInterval, 1)) * time.Second)
@@ -567,12 +603,12 @@ func (s *LibraryService) pollExtractJob(paperID int64, initial *extractorJobStat
 
 func (s *LibraryService) persistExtractionResult(paperID int64, jobID string, result *extractionResult) error {
 	if result == nil {
-		return errors.New("解析结果为空")
+		return apperr.New(apperr.CodeUnavailable, "解析结果为空")
 	}
 
 	figures, figurePaths, err := s.materializeFigures(result.Figures)
 	if err != nil {
-		return fmt.Errorf("解析图片失败: %w", err)
+		return apperr.Wrap(apperr.CodeInternal, "解析图片失败", err)
 	}
 
 	err = s.repo.ApplyPaperExtractionResult(
@@ -600,15 +636,20 @@ func (s *LibraryService) markPaperExtractionFailed(paperID int64, jobID string, 
 		}
 	}
 	message := firstNonEmpty(errorMessage(err), "解析失败")
-	if updateErr := s.repo.UpdatePaperExtractionState(paperID, "failed", message, jobID); updateErr != nil && !errors.Is(updateErr, sql.ErrNoRows) {
-		log.Printf("mark paper %d extraction failed: %v", paperID, updateErr)
+	if updateErr := s.repo.UpdatePaperExtractionState(paperID, "failed", message, jobID); updateErr != nil && !apperr.IsCode(updateErr, apperr.CodeNotFound) {
+		s.logger.Warn("mark paper extraction failed state failed",
+			"paper_id", paperID,
+			"job_id", jobID,
+			"code", apperr.CodeOf(updateErr),
+			"error", updateErr,
+		)
 	}
 }
 
 func (s *LibraryService) extractPDFSync(pdfPath, originalFilename string) (*extractionResult, error) {
 	extractURL := strings.TrimSpace(s.config.EffectiveExtractorURL())
 	if extractURL == "" {
-		return nil, errors.New("PDF_EXTRACTOR_URL 未配置，无法调用解析后端")
+		return nil, apperr.New(apperr.CodeUnavailable, "PDF_EXTRACTOR_URL 未配置，无法调用解析后端")
 	}
 
 	req, err := s.newExtractorUploadRequest(http.MethodPost, extractURL, pdfPath, originalFilename)
@@ -637,7 +678,7 @@ func (s *LibraryService) createExtractJob(jobsURL, pdfPath, originalFilename str
 
 	var payload extractorJobStatusResponse
 	if err := json.Unmarshal(respBody, &payload); err != nil {
-		return nil, fmt.Errorf("解析任务响应不是有效 JSON: %w", err)
+		return nil, apperr.Wrap(apperr.CodeUnavailable, "解析任务响应不是有效 JSON", err)
 	}
 	payload.Status = normalizeExtractionStatus(payload.Status)
 	return &payload, nil
@@ -646,12 +687,12 @@ func (s *LibraryService) createExtractJob(jobsURL, pdfPath, originalFilename str
 func (s *LibraryService) getExtractJobStatus(jobID string) (*extractorJobStatusResponse, error) {
 	jobsURL := strings.TrimSpace(s.config.EffectiveExtractorJobsURL())
 	if jobsURL == "" {
-		return nil, errors.New("PDF_EXTRACTOR_JOBS_URL 未配置，无法轮询解析任务")
+		return nil, apperr.New(apperr.CodeUnavailable, "PDF_EXTRACTOR_JOBS_URL 未配置，无法轮询解析任务")
 	}
 
 	req, err := http.NewRequest(http.MethodGet, strings.TrimRight(jobsURL, "/")+"/"+url.PathEscape(jobID), nil)
 	if err != nil {
-		return nil, fmt.Errorf("创建解析任务轮询请求失败: %w", err)
+		return nil, apperr.Wrap(apperr.CodeInternal, "创建解析任务轮询请求失败", err)
 	}
 	s.authorizeExtractorRequest(req)
 
@@ -662,7 +703,7 @@ func (s *LibraryService) getExtractJobStatus(jobID string) (*extractorJobStatusR
 
 	var payload extractorJobStatusResponse
 	if err := json.Unmarshal(respBody, &payload); err != nil {
-		return nil, fmt.Errorf("解析任务状态响应不是有效 JSON: %w", err)
+		return nil, apperr.Wrap(apperr.CodeUnavailable, "解析任务状态响应不是有效 JSON", err)
 	}
 	payload.Status = normalizeExtractionStatus(payload.Status)
 	return &payload, nil
@@ -671,12 +712,12 @@ func (s *LibraryService) getExtractJobStatus(jobID string) (*extractorJobStatusR
 func (s *LibraryService) getExtractJobResult(jobID string) (*extractionResult, error) {
 	jobsURL := strings.TrimSpace(s.config.EffectiveExtractorJobsURL())
 	if jobsURL == "" {
-		return nil, errors.New("PDF_EXTRACTOR_JOBS_URL 未配置，无法读取解析结果")
+		return nil, apperr.New(apperr.CodeUnavailable, "PDF_EXTRACTOR_JOBS_URL 未配置，无法读取解析结果")
 	}
 
 	req, err := http.NewRequest(http.MethodGet, strings.TrimRight(jobsURL, "/")+"/"+url.PathEscape(jobID)+"/result", nil)
 	if err != nil {
-		return nil, fmt.Errorf("创建解析结果请求失败: %w", err)
+		return nil, apperr.Wrap(apperr.CodeInternal, "创建解析结果请求失败", err)
 	}
 	s.authorizeExtractorRequest(req)
 
@@ -696,7 +737,7 @@ func (s *LibraryService) newExtractorUploadRequest(method, targetURL, pdfPath, o
 
 	req, err := http.NewRequest(method, targetURL, body)
 	if err != nil {
-		return nil, fmt.Errorf("创建解析请求失败: %w", err)
+		return nil, apperr.Wrap(apperr.CodeInternal, "创建解析请求失败", err)
 	}
 	req.Header.Set("Content-Type", contentType)
 	s.authorizeExtractorRequest(req)
@@ -706,7 +747,7 @@ func (s *LibraryService) newExtractorUploadRequest(method, targetURL, pdfPath, o
 func (s *LibraryService) buildExtractorUploadBody(pdfPath, originalFilename string) (*bytes.Buffer, string, error) {
 	file, err := os.Open(pdfPath)
 	if err != nil {
-		return nil, "", fmt.Errorf("打开 PDF 失败: %w", err)
+		return nil, "", apperr.Wrap(apperr.CodeInternal, "打开 PDF 失败", err)
 	}
 	defer file.Close()
 
@@ -714,10 +755,10 @@ func (s *LibraryService) buildExtractorUploadBody(pdfPath, originalFilename stri
 	writer := multipart.NewWriter(body)
 	part, err := writer.CreateFormFile(s.config.ExtractorFileField, originalFilename)
 	if err != nil {
-		return nil, "", fmt.Errorf("创建上传表单失败: %w", err)
+		return nil, "", apperr.Wrap(apperr.CodeInternal, "创建上传表单失败", err)
 	}
 	if _, err := io.Copy(part, file); err != nil {
-		return nil, "", fmt.Errorf("写入 PDF 数据失败: %w", err)
+		return nil, "", apperr.Wrap(apperr.CodeInternal, "写入 PDF 数据失败", err)
 	}
 
 	for _, field := range []struct {
@@ -730,12 +771,12 @@ func (s *LibraryService) buildExtractorUploadBody(pdfPath, originalFilename stri
 		{name: "persist_artifacts", value: "false"},
 	} {
 		if err := writer.WriteField(field.name, field.value); err != nil {
-			return nil, "", fmt.Errorf("写入解析参数 %s 失败: %w", field.name, err)
+			return nil, "", apperr.Wrap(apperr.CodeInternal, fmt.Sprintf("写入解析参数 %s 失败", field.name), err)
 		}
 	}
 
 	if err := writer.Close(); err != nil {
-		return nil, "", fmt.Errorf("关闭表单失败: %w", err)
+		return nil, "", apperr.Wrap(apperr.CodeInternal, "关闭表单失败", err)
 	}
 
 	return body, writer.FormDataContentType(), nil
@@ -750,16 +791,16 @@ func (s *LibraryService) authorizeExtractorRequest(req *http.Request) {
 func (s *LibraryService) doExtractorRequest(req *http.Request) ([]byte, error) {
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("调用解析后端失败: %w", err)
+		return nil, apperr.Wrap(apperr.CodeUnavailable, "调用解析后端失败", err)
 	}
 	defer resp.Body.Close()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("读取解析结果失败: %w", err)
+		return nil, apperr.Wrap(apperr.CodeUnavailable, "读取解析结果失败", err)
 	}
 	if resp.StatusCode >= http.StatusBadRequest {
-		return nil, fmt.Errorf("解析后端返回 %d: %s", resp.StatusCode, extractorErrorMessage(respBody))
+		return nil, apperr.New(apperr.CodeUnavailable, fmt.Sprintf("解析后端返回 %d: %s", resp.StatusCode, extractorErrorMessage(respBody)))
 	}
 	return respBody, nil
 }
@@ -767,19 +808,19 @@ func (s *LibraryService) doExtractorRequest(req *http.Request) ([]byte, error) {
 func parseExtractionResult(respBody []byte) (*extractionResult, error) {
 	var payload extractorResponse
 	if err := json.Unmarshal(respBody, &payload); err != nil {
-		return nil, fmt.Errorf("解析后端响应不是有效 JSON: %w", err)
+		return nil, apperr.Wrap(apperr.CodeUnavailable, "解析后端响应不是有效 JSON", err)
 	}
 	if payload.Success != nil && !*payload.Success {
 		if payload.Message != "" {
-			return nil, errors.New(payload.Message)
+			return nil, apperr.New(apperr.CodeUnavailable, payload.Message)
 		}
-		return nil, errors.New("解析后端返回失败状态")
+		return nil, apperr.New(apperr.CodeUnavailable, "解析后端返回失败状态")
 	}
 	if status := normalizeExtractionStatus(payload.Status); status != "" && status != "completed" {
 		if payload.Message != "" {
-			return nil, errors.New(payload.Message)
+			return nil, apperr.New(apperr.CodeUnavailable, payload.Message)
 		}
-		return nil, fmt.Errorf("解析后端状态异常: %s", payload.Status)
+		return nil, apperr.New(apperr.CodeUnavailable, fmt.Sprintf("解析后端状态异常: %s", payload.Status))
 	}
 
 	pdfText := firstNonEmpty(payload.PDFText, payload.Text, payload.FullText)
@@ -837,7 +878,7 @@ func (s *LibraryService) materializeFigures(figures []extractedFigure) ([]reposi
 
 		binary, err := decodeBase64(figure.Data)
 		if err != nil {
-			return nil, paths, err
+			return nil, paths, apperr.Wrap(apperr.CodeInternal, "无法解码提取图片", err)
 		}
 
 		contentType := contentTypeOrDefault(figure.ContentType, http.DetectContentType(binary))
@@ -846,7 +887,7 @@ func (s *LibraryService) materializeFigures(figures []extractedFigure) ([]reposi
 		path := filepath.Join(s.config.FiguresDir(), storedName)
 
 		if err := os.WriteFile(path, binary, 0o644); err != nil {
-			return nil, paths, err
+			return nil, paths, apperr.Wrap(apperr.CodeInternal, "保存提取图片失败", err)
 		}
 		paths = append(paths, path)
 
@@ -999,7 +1040,7 @@ func errorMessage(err error) string {
 	if err == nil {
 		return ""
 	}
-	return strings.TrimSpace(err.Error())
+	return strings.TrimSpace(apperr.Message(err))
 }
 
 func maxInt(values ...int) int {
