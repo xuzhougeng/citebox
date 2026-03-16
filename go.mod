@@ -1,6 +1,6 @@
 module paper_image_db
 
-go 1.20
+go 1.21
 
 require modernc.org/sqlite v1.27.0
 

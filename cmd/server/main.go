@@ -1,27 +1,46 @@
 package main
 
 import (
-	"log"
+	"log/slog"
 	"net/http"
+	"os"
 	"strings"
 
+	"paper_image_db/internal/apperr"
 	"paper_image_db/internal/config"
 	"paper_image_db/internal/handler"
+	"paper_image_db/internal/logging"
 	"paper_image_db/internal/middleware"
 	"paper_image_db/internal/repository"
 	"paper_image_db/internal/service"
 )
 
 func main() {
+	logger := logging.New()
+	slog.SetDefault(logger)
+
 	cfg := config.Load()
 
 	repo, err := repository.NewLibraryRepository(cfg.DatabasePath)
 	if err != nil {
-		log.Fatalf("Failed to initialize database: %v", err)
+		logger.Error("failed to initialize database", "code", apperr.CodeOf(err), "error", err)
+		os.Exit(1)
 	}
-	defer repo.Close()
+	defer func() {
+		if err := repo.Close(); err != nil {
+			logger.Warn("failed to close database", "error", err)
+		}
+	}()
 
-	librarySvc := service.NewLibraryService(repo, cfg)
+	librarySvc, err := service.NewLibraryService(
+		repo,
+		cfg,
+		service.WithLogger(logger.With("component", "library_service")),
+	)
+	if err != nil {
+		logger.Error("failed to initialize library service", "code", apperr.CodeOf(err), "error", err)
+		os.Exit(1)
+	}
 	paperHandler := handler.NewPaperHandler(librarySvc)
 	figureHandler := handler.NewFigureHandler(librarySvc)
 	groupHandler := handler.NewGroupHandler(librarySvc)
@@ -141,22 +160,26 @@ func main() {
 	})
 
 	authenticated := middleware.BasicAuth(mux, cfg)
-	handler := corsMiddleware(authenticated)
+	logged := middleware.RequestLogger(authenticated, logger.With("component", "http"))
+	handler := corsMiddleware(logged)
 
-	log.Printf("Server starting on port %s...", cfg.ServerPort)
-	log.Printf("Storage directory: %s", cfg.StorageDir)
-	log.Printf("Database path: %s", cfg.DatabasePath)
+	logger.Info("server starting",
+		"port", cfg.ServerPort,
+		"storage_dir", cfg.StorageDir,
+		"database_path", cfg.DatabasePath,
+	)
 	if strings.TrimSpace(cfg.ExtractorURL) == "" {
-		log.Printf("PDF extractor: disabled (set PDF_EXTRACTOR_URL to enable parsing)")
+		logger.Info("pdf extractor disabled")
 	} else {
-		log.Printf("PDF extractor: %s", cfg.EffectiveExtractorURL())
+		logger.Info("pdf extractor enabled", "extract_url", cfg.EffectiveExtractorURL())
 		if jobsURL := strings.TrimSpace(cfg.EffectiveExtractorJobsURL()); jobsURL != "" {
-			log.Printf("PDF extractor jobs: %s", jobsURL)
+			logger.Info("pdf extractor jobs enabled", "jobs_url", jobsURL)
 		}
 	}
 
 	if err := http.ListenAndServe(":"+cfg.ServerPort, handler); err != nil {
-		log.Fatalf("Server failed: %v", err)
+		logger.Error("server failed", "error", err)
+		os.Exit(1)
 	}
 }
 
