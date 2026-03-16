@@ -206,6 +206,11 @@ button {
     transform: translateY(-1px);
 }
 
+.btn-small {
+    padding: 0.58rem 0.9rem;
+    font-size: 0.84rem;
+}
+
 .btn:disabled {
     opacity: 0.45;
     cursor: not-allowed;
@@ -1529,14 +1534,83 @@ button {
     background: rgba(239, 230, 215, 0.5);
 }
 
-.figure-lightbox-meta div {
+.figure-lightbox-meta-item {
     display: grid;
     gap: 0.35rem;
 }
 
-.figure-lightbox-meta span {
+.figure-lightbox-meta-item > span {
     color: var(--muted);
     font-size: 0.86rem;
+}
+
+.figure-lightbox-meta strong {
+    line-height: 1.5;
+}
+
+.figure-lightbox-meta-item-editable {
+    align-items: stretch;
+}
+
+.figure-meta-select {
+    min-height: 3rem;
+    background: rgba(255, 252, 248, 0.94);
+}
+
+.figure-tag-editor {
+    display: grid;
+    gap: 0.7rem;
+}
+
+.figure-tag-editor-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.55rem;
+}
+
+.figure-tag-editor-list.is-empty {
+    min-height: 2.5rem;
+    align-items: center;
+}
+
+.figure-tag-add {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.65rem;
+}
+
+.figure-tag-empty {
+    color: var(--muted);
+    font-size: 0.92rem;
+}
+
+.figure-editable-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.42rem 0.7rem;
+    border: 1px solid rgba(36, 27, 22, 0.12);
+    border-radius: 999px;
+    background: rgba(255, 252, 248, 0.92);
+    color: var(--ink);
+    font-size: 0.82rem;
+    font-weight: 700;
+    transition: border-color 0.18s ease, background 0.18s ease, transform 0.18s ease;
+}
+
+.figure-editable-tag:hover {
+    border-color: rgba(164, 92, 64, 0.32);
+    background: rgba(255, 247, 239, 0.98);
+}
+
+.figure-editable-tag span:last-child {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1rem;
+    height: 1rem;
+    color: var(--muted);
+    transform: rotate(45deg);
 }
 
 .figure-lightbox-actions {
@@ -1644,6 +1718,29 @@ button {
     display: flex;
     flex-wrap: wrap;
     gap: 0.5rem;
+}
+
+.figure-ai-suggestion-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+.figure-ai-tag-button {
+    border: 1px solid rgba(36, 27, 22, 0.1);
+    cursor: pointer;
+    transition: background 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+}
+
+.figure-ai-tag-button:hover:not(:disabled) {
+    border-color: rgba(164, 92, 64, 0.28);
+    background: rgba(255, 244, 234, 0.96);
+}
+
+.figure-ai-tag-button.is-applied {
+    opacity: 0.55;
 }
 
 .code-block,
@@ -1792,6 +1889,15 @@ body.modal-open {
 
     .ai-session-bar,
     .figure-lightbox-ai-head {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .figure-tag-add {
+        grid-template-columns: 1fr;
+    }
+
+    .figure-ai-suggestion-row {
         flex-direction: column;
         align-items: flex-start;
     }
