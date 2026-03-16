@@ -84,12 +84,12 @@
             </div>
         </section>
 
-        <section class="content-layout">
-            <section class="library-panel">
-                <div id="summaryStrip" class="summary-strip"></div>
-                <div id="paperList" class="paper-grid"></div>
-                <div id="pagination" class="pagination"></div>
-            </section>
+	        <section class="content-layout">
+	            <section class="library-panel">
+	                <div id="summaryStrip" class="summary-strip"></div>
+	                <div id="paperList" class="paper-grid paper-list-mode"></div>
+	                <div id="pagination" class="pagination"></div>
+	            </section>
 
             <aside class="sidebar">
                 <section class="manager-card">
@@ -105,20 +105,28 @@
                     <div id="groupList" class="manager-list"></div>
                 </section>
 
-                <section class="manager-card">
-                    <div class="manager-head">
-                        <h2>标签</h2>
+	                <section class="manager-card">
+	                    <div class="manager-head">
+	                        <h2>标签</h2>
                         <p>文献标签管理</p>
                     </div>
                     <form id="tagForm" class="manager-form inline-form">
                         <input id="tagNameInput" class="form-input" type="text" placeholder="新标签名称">
                         <input id="tagColorInput" class="color-input" type="color" value="#A45C40">
                         <button class="btn btn-secondary" type="submit">创建标签</button>
-                    </form>
-                    <div id="tagList" class="manager-list"></div>
-                </section>
-            </aside>
-        </section>
+	                    </form>
+	                    <div id="tagList" class="manager-list"></div>
+	                </section>
+
+	                <section class="manager-card danger-zone-card">
+	                    <div class="manager-head">
+	                        <h2>数据库维护</h2>
+	                        <p>清空文献、图片、分组和标签。此操作不可恢复。</p>
+	                    </div>
+	                    <button id="purgeLibraryButton" class="btn btn-outline danger" type="button">清空数据库</button>
+	                </section>
+	            </aside>
+	        </section>
     </main>
 
     <div id="paperModal" class="modal-shell hidden">
@@ -128,10 +136,11 @@
         </div>
     </div>
 
-    <script src="/static/js/utils.js"></script>
-    <script src="/static/js/api.js"></script>
-    <script src="/static/js/library.js"></script>
-    <script src="/static/js/browser-pages.js"></script>
-    <script src="/static/js/main.js"></script>
+	    <script src="/static/js/utils.js"></script>
+	    <script src="/static/js/api.js"></script>
+	    <script src="/static/js/paper-viewer.js"></script>
+	    <script src="/static/js/library.js"></script>
+	    <script src="/static/js/browser-pages.js"></script>
+	    <script src="/static/js/main.js"></script>
 </body>
 </html>
