@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/xuzhougeng/citebox/internal/apperr"
 	"github.com/xuzhougeng/citebox/internal/config"
@@ -49,7 +50,8 @@ func main() {
 	aiHandler := handler.NewAIHandler(aiSvc)
 	settingsHandler := handler.NewSettingsHandler(librarySvc)
 	databaseHandler := handler.NewDatabaseHandler(librarySvc)
-	authHandler := handler.NewAuthHandler(librarySvc)
+	sessionManager := service.NewSessionManager(24 * time.Hour)
+	authHandler := handler.NewAuthHandler(librarySvc, sessionManager)
 
 	mux := http.NewServeMux()
 
@@ -217,6 +219,15 @@ func main() {
 		}
 	})
 
+	mux.HandleFunc("/api/auth/login", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPost:
+			authHandler.Login(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
 	mux.HandleFunc("/api/auth/logout", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodPost:
@@ -290,11 +301,11 @@ func main() {
 	})
 
 	// Configure authentication middleware with public paths
-	authMiddleware := middleware.AuthMiddleware(librarySvc, []middleware.PublicPath{
+	authMiddleware := middleware.AuthMiddleware(sessionManager, []middleware.PublicPath{
 		{Path: "/login", Prefix: false},
 		{Path: "/login.html", Prefix: false},
+		{Path: "/api/auth/login", Prefix: false},
 		{Path: "/static/", Prefix: true},
-		{Path: "/files/", Prefix: true}, // File downloads should also be protected but via API
 	})
 	authenticated := authMiddleware(mux)
 	logged := middleware.RequestLogger(authenticated, logger.With("component", "http"))

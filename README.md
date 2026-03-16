@@ -78,8 +78,8 @@ go run cmd/server/main.go
 | `PDF_EXTRACTOR_FILE_FIELD` | `file` | 上传到解析后端时的文件字段名 |
 | `PDF_EXTRACTOR_TIMEOUT_SECONDS` | `300` | 调用解析后端超时秒数 |
 | `PDF_EXTRACTOR_POLL_INTERVAL_SECONDS` | `2` | 轮询异步任务状态的间隔秒数 |
-| `ADMIN_USERNAME` | `wanglab` | Basic Auth 用户名 |
-| `ADMIN_PASSWORD` | `wanglab789` | Basic Auth 密码 |
+| `ADMIN_USERNAME` | `wanglab` | 登录用户名 |
+| `ADMIN_PASSWORD` | `wanglab789` | 初始登录密码 |
 
 ## 解析后端约定
 

@@ -274,17 +274,18 @@ const SettingsPage = {
         if (!confirmed) return;
 
         try {
-            // 尝试调用登出 API
             await API.logout();
         } catch (error) {
-            // 忽略错误，因为 logout API 会返回 401
+            Utils.showToast(error.message, 'error');
+            return;
         }
 
-        // 清除前端存储的凭据信息
         sessionStorage.removeItem('citebox_auth');
+        localStorage.removeItem('citebox_auth');
         localStorage.removeItem('citebox_logged_in');
+        localStorage.removeItem('citebox_username');
+        localStorage.removeItem('citebox_password');
 
-        // 显示提示并重定向到登录页
         Utils.showToast('已登出');
         setTimeout(() => {
             window.location.href = '/login';
