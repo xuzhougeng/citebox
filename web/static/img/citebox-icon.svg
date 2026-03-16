@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title">
+  <title>CiteBox</title>
+  <rect width="256" height="256" rx="44" fill="#c17f59"/>
+  <rect x="42" y="36" width="30" height="184" rx="10" fill="#7a4d38"/>
+  <rect x="68" y="36" width="146" height="184" rx="18" fill="#f5f0e8" stroke="#7a4d38" stroke-width="8"/>
+  <path d="M42 202c0-10.493 8.507-19 19-19h153" fill="none" stroke="#7a4d38" stroke-width="10" stroke-linecap="round"/>
+  <line x1="100" y1="92" x2="176" y2="92" stroke="#c17f59" stroke-width="12" stroke-linecap="round"/>
+  <line x1="100" y1="130" x2="158" y2="130" stroke="#c17f59" stroke-width="12" stroke-linecap="round"/>
+</svg>

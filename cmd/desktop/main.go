@@ -14,6 +14,7 @@ import (
 
 	"github.com/xuzhougeng/citebox/internal/app"
 	"github.com/xuzhougeng/citebox/internal/config"
+	"github.com/xuzhougeng/citebox/internal/desktopicon"
 	"github.com/xuzhougeng/citebox/internal/logging"
 )
 
@@ -71,6 +72,13 @@ func main() {
 
 	w := webview.New(false)
 	defer w.Destroy()
+
+	iconAssets, err := desktopicon.EnsureAssets(desktopAppName)
+	if err != nil {
+		logger.Warn("failed to prepare desktop icon assets", "error", err)
+	} else if err := desktopicon.ApplyWindowIcon(w.Window(), iconAssets); err != nil {
+		logger.Warn("failed to apply desktop icon", "error", err)
+	}
 
 	go func() {
 		if err := <-serverErrCh; err != nil {
