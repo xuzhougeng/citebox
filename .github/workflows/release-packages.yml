@@ -73,7 +73,23 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev
+          sudo apt-get install -y libgtk-3-dev pkg-config
+
+          if apt-cache show libwebkit2gtk-4.0-dev >/dev/null 2>&1; then
+            sudo apt-get install -y libwebkit2gtk-4.0-dev
+          else
+            sudo apt-get install -y libwebkit2gtk-4.1-dev
+
+            if ! pkg-config --exists webkit2gtk-4.0 && pkg-config --exists webkit2gtk-4.1; then
+              mkdir -p "${RUNNER_TEMP}/pkgconfig"
+              cp "$(pkg-config --variable=pcfiledir webkit2gtk-4.1)/webkit2gtk-4.1.pc" \
+                "${RUNNER_TEMP}/pkgconfig/webkit2gtk-4.0.pc"
+              echo "PKG_CONFIG_PATH=${RUNNER_TEMP}/pkgconfig${PKG_CONFIG_PATH:+:${PKG_CONFIG_PATH}}" >> "${GITHUB_ENV}"
+            fi
+          fi
+
+          pkg-config --modversion gtk+-3.0
+          pkg-config --modversion webkit2gtk-4.0
 
       - name: Inspect native Windows desktop toolchain
         if: matrix.platform == 'windows' && matrix.package_kind == 'desktop'
@@ -98,7 +114,7 @@ jobs:
       - name: Package desktop release for macOS or Linux
         if: matrix.package_kind == 'desktop' && matrix.platform != 'windows'
         shell: bash
-        run: ./scripts/package-desktop-unix.sh "${{ matrix.platform }}" "${VERSION}"
+        run: bash ./scripts/package-desktop-unix.sh "${{ matrix.platform }}" "${VERSION}"
 
       - name: Package Windows server release
         if: matrix.package_kind == 'server' && matrix.platform == 'windows'
