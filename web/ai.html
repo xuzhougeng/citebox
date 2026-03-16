@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 阅读</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="navbar-content">
+            <a href="/" class="logo">Paper Image DB</a>
+            <ul class="nav-links">
+                <li><a href="/">文献库</a></li>
+                <li><a href="/figures">图片预览</a></li>
+                <li><a href="/groups">分组</a></li>
+                <li><a href="/tags">标签</a></li>
+                <li><a href="/ai" class="active">AI 阅读</a></li>
+                <li><a href="/settings">配置</a></li>
+                <li><a href="/upload">上传 PDF</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <main class="page-shell">
+        <div class="ai-page-tools">
+            <details class="ai-shortcut-help">
+                <summary class="ai-help-button" aria-label="快捷键帮助">?</summary>
+                <div class="ai-help-panel">
+                    <p class="eyebrow">Hotkeys</p>
+                    <h3>快捷键</h3>
+                    <div class="ai-help-list">
+                        <div class="ai-help-row">
+                            <span class="ai-help-key">5 Turns Max</span>
+                            <p>单篇文献支持最多 5 轮连续提问，超出后请清空对话重新开始。</p>
+                        </div>
+                        <div class="ai-help-row">
+                            <span class="ai-help-key">Ctrl/Cmd + Enter</span>
+                            <p>直接发送当前问题。</p>
+                        </div>
+                    </div>
+                </div>
+            </details>
+        </div>
+
+        <section class="hero compact">
+            <div>
+                <p class="eyebrow">AI Reader</p>
+                <h1>让模型带着全文和图片一起读文献</h1>
+                <p class="hero-text">
+                    这里只保留阅读动作本身。模型参数、Prompt 模板和 PDF 提取服务配置都放到独立的配置页面，避免阅读工作台过载。
+                </p>
+            </div>
+            <div class="hero-actions">
+                <a class="btn btn-outline" href="/settings">前往配置页</a>
+            </div>
+        </section>
+
+        <section class="section-stack">
+            <details class="filters-card ai-config-details">
+                <summary class="manager-head ai-collapsible-head">
+                    <div>
+                        <h2>当前配置摘要</h2>
+                        <p>如果这里显示未配置，请先到配置页补全 AI 参数或 PDF 提取器参数。</p>
+                    </div>
+                    <span class="ai-collapsible-toggle" aria-hidden="true"></span>
+                </summary>
+                <div id="aiConfigSummary" class="ai-config-summary-grid"></div>
+            </details>
+
+            <section class="filters-card ai-workspace-card">
+                <div class="manager-head">
+                    <h2>选择文献</h2>
+                </div>
+                <div class="form-grid compact-grid-form">
+                    <label class="field field-span-2">
+                        <span>检索文献</span>
+                        <input id="aiPaperSearchInput" class="form-input" type="text" placeholder="按标题、文件名、摘要、备注或标签过滤">
+                    </label>
+                </div>
+                <div id="aiPaperList" class="ai-paper-list"></div>
+                <div id="aiPaperSummary" class="ai-paper-summary"></div>
+            </section>
+
+            <section class="result-card ai-query-card">
+                <div class="ai-action-head">
+                    <span class="ai-section-kicker">自由提问</span>
+                    <span class="ai-section-rule" aria-hidden="true"></span>
+                    <span id="aiRoundBadge" class="ai-round-badge">0 / 5 轮</span>
+                </div>
+                <div class="ai-session-bar">
+                    <p id="aiSessionHint" class="ai-session-hint">当前还没有对话记录，选中文献后就可以开始提问。</p>
+                    <button id="clearAIConversationButton" class="btn btn-outline" type="button">清空对话</button>
+                </div>
+                <div id="aiConversation" class="ai-conversation"></div>
+                <label class="field ai-question-field">
+                    <span class="ai-question-label">想让 AI 帮你什么？</span>
+                    <textarea id="aiQuestionInput" class="form-textarea ai-question-input" rows="5" placeholder="例如：请解释这篇文章的核心结论，以及哪些图片最关键。"></textarea>
+                </label>
+                <div class="submit-row">
+                    <button id="runAIReaderButton" class="btn btn-primary" type="button">发送问题</button>
+                    <div id="aiModelSummary" class="ai-model-summary"></div>
+                </div>
+            </section>
+        </section>
+    </main>
+
+    <script src="/static/js/utils.js"></script>
+    <script src="/static/js/api.js"></script>
+    <script src="/static/js/ai-reader.js"></script>
+    <script src="/static/js/main.js"></script>
+</body>
+</html>
