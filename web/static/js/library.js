@@ -251,6 +251,7 @@ const LibraryPage = {
                         <div class="paper-list-tags">${tags || '<span class="muted">无 Tag</span>'}</div>
                         <div class="card-actions paper-list-actions">
                             <button class="btn btn-primary" type="button" data-action="open">编辑详情</button>
+                            <a class="btn btn-outline" href="/manual?paper_id=${paper.id}">人工处理</a>
                             ${(paper.extraction_status === 'failed' || paper.extraction_status === 'cancelled') ? '<button class="btn btn-outline" type="button" data-action="reextract">重新解析</button>' : ''}
                             <button class="btn btn-outline danger" type="button" data-action="delete">删除</button>
                         </div>

@@ -9,6 +9,10 @@ document.addEventListener('DOMContentLoaded', () => {
         UploadPage.init();
     }
 
+    if (path === '/manual' || path === '/manual.html') {
+        ManualPage.init();
+    }
+
     if (path === '/figures' || path === '/figures.html') {
         FiguresPage.init();
     }

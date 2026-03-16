@@ -30,6 +30,7 @@ const BrowserUI = {
                     <div class="paper-list-tags">${tags}</div>
                     <div class="card-actions paper-list-actions">
                         <button class="btn btn-primary" type="button" data-action="open">查看详情</button>
+                        <a class="btn btn-outline" href="/manual?paper_id=${paper.id}">人工处理</a>
                     </div>
                 </div>
             </article>
@@ -603,7 +604,7 @@ const FigureViewer = {
     },
 
     buildAIQuestion(action, figure) {
-        const location = `第 ${figure.page_number || '-'} 页图 ${figure.figure_index || '-'}`;
+        const location = `第 ${figure.page_number || '-'} 页图 ${figure.figure_index || '-'}${figure.source === 'manual' ? '（人工提取）' : ''}`;
         const caption = figure.caption ? `；caption：${figure.caption}` : '';
 
         switch (action) {
@@ -793,7 +794,7 @@ const FigureViewer = {
                         </div>
                         <div class="figure-lightbox-meta-item">
                             <span>定位</span>
-                            <strong>第 ${figure.page_number || '-'} 页 · #${figure.figure_index || '-'}</strong>
+                            <strong>第 ${figure.page_number || '-'} 页 · #${figure.figure_index || '-'}${figure.source === 'manual' ? ' · 人工提取' : ''}</strong>
                         </div>
                         <label class="figure-lightbox-meta-item figure-lightbox-meta-item-editable">
                             <span>分组</span>
@@ -978,6 +979,7 @@ const FiguresPage = {
                     <div class="figure-preview-badges">
                         <span class="figure-badge figure-badge-strong">第 ${figure.page_number || '-'} 页</span>
                         <span class="figure-badge">#${figure.figure_index || '-'}</span>
+                        ${figure.source === 'manual' ? '<span class="figure-badge">人工提取</span>' : ''}
                         ${figure.group_name ? `<span class="figure-badge">${Utils.escapeHTML(figure.group_name)}</span>` : ''}
                     </div>
                 </div>

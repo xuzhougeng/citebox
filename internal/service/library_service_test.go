@@ -2,6 +2,7 @@ package service
 
 import (
 	"bytes"
+	"image"
 	"io"
 	"log/slog"
 	"os"
@@ -22,6 +23,8 @@ func newTestService(t *testing.T) (*LibraryService, *repository.LibraryRepositor
 		StorageDir:              filepath.Join(root, "storage"),
 		DatabasePath:            filepath.Join(root, "library.db"),
 		MaxUploadSize:           10 << 20,
+		AdminUsername:           "wanglab",
+		AdminPassword:           "wanglab789",
 		ExtractorTimeoutSeconds: 1,
 		ExtractorPollInterval:   1,
 		ExtractorFileField:      "file",
@@ -108,6 +111,9 @@ func TestGetPaperDecoratesFigureURLs(t *testing.T) {
 	}
 	if len(got.Figures) != 1 || got.Figures[0].ImageURL != "/files/figures/figure_test.png" {
 		t.Fatalf("GetPaper() figures = %+v", got.Figures)
+	}
+	if got.Figures[0].Source != "auto" {
+		t.Fatalf("GetPaper() figure source = %q, want %q", got.Figures[0].Source, "auto")
 	}
 }
 
@@ -251,5 +257,33 @@ func TestBuildExtractorUploadBodyUsesRuntimeFileField(t *testing.T) {
 
 	if !bytes.Contains(body.Bytes(), []byte(`name="upload"`)) {
 		t.Fatalf("buildExtractorUploadBody() body missing configured file field: %s", body.String())
+	}
+}
+
+func TestNormalizeManualRegionRejectsOutOfRange(t *testing.T) {
+	if _, err := normalizeManualRegion(model.ManualExtractionRegion{
+		PageNumber: 3,
+		X:          0.1,
+		Y:          0.1,
+		Width:      0.4,
+		Height:     0.4,
+	}, 2); !apperr.IsCode(err, apperr.CodeInvalidArgument) {
+		t.Fatalf("normalizeManualRegion() code = %q, want %q", apperr.CodeOf(err), apperr.CodeInvalidArgument)
+	}
+}
+
+func TestNormalizedRectBuildsPixelBounds(t *testing.T) {
+	rect, err := normalizedRect(image.Rect(0, 0, 1000, 800), model.ManualExtractionRegion{
+		PageNumber: 1,
+		X:          0.1,
+		Y:          0.2,
+		Width:      0.3,
+		Height:     0.4,
+	})
+	if err != nil {
+		t.Fatalf("normalizedRect() error = %v", err)
+	}
+	if rect.Min.X != 100 || rect.Min.Y != 160 || rect.Max.X != 400 || rect.Max.Y != 480 {
+		t.Fatalf("normalizedRect() = %+v, want (100,160)-(400,480)", rect)
 	}
 }
