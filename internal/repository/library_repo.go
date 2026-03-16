@@ -10,8 +10,8 @@ import (
 	"sort"
 	"strings"
 
-	"paper_image_db/internal/apperr"
-	"paper_image_db/internal/model"
+	"github.com/xuzhougeng/citebox/internal/apperr"
+	"github.com/xuzhougeng/citebox/internal/model"
 
 	sqliteDriver "modernc.org/sqlite"
 	sqlite3 "modernc.org/sqlite/lib"

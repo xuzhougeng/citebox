@@ -35,8 +35,8 @@ make package-windows
 
 ### 输出文件
 ```
-dist/paper_image_db-windows-{version}.zip
-├── paper_image_db.exe          # 可执行文件
+dist/citebox-windows-{version}.zip
+├── citebox.exe          # 可执行文件
 ├── web/                         # 前端资源
 ├── data/                        # 数据目录
 ├── start.bat                    # 启动脚本
@@ -67,8 +67,8 @@ make package-darwin
 
 ### 输出文件
 ```
-dist/paper_image_db-darwin-{version}.zip
-├── paper_image_db              # 可执行文件 (Intel 版本)
+dist/citebox-darwin-{version}.zip
+├── citebox              # 可执行文件 (Intel 版本)
 ├── web/                         # 前端资源
 ├── data/                        # 数据目录
 ├── start.sh                     # 启动脚本
@@ -79,8 +79,8 @@ dist/paper_image_db-darwin-{version}.zip
 ### 运行方式
 **方式1：默认配置**
 ```bash
-cd paper_image_db-darwin-{version}
-chmod +x paper_image_db start.sh
+cd citebox-darwin-{version}
+chmod +x citebox start.sh
 ./start.sh
 ```
 
@@ -96,7 +96,7 @@ chmod +x paper_image_db start.sh
 如需原生 ARM64 版本：
 ```bash
 make build-darwin
-# 使用 bin/darwin/paper_image_db-arm64
+# 使用 bin/darwin/citebox-arm64
 ```
 
 ---
@@ -110,8 +110,8 @@ make package-linux
 
 ### 输出文件
 ```
-dist/paper_image_db-linux-{version}.zip
-├── paper_image_db              # 可执行文件 (x86_64)
+dist/citebox-linux-{version}.zip
+├── citebox              # 可执行文件 (x86_64)
 ├── web/                         # 前端资源
 ├── data/                        # 数据目录
 ├── start.sh                     # 启动脚本
@@ -122,20 +122,20 @@ dist/paper_image_db-linux-{version}.zip
 ### 运行方式
 **方式1：前台运行**
 ```bash
-cd paper_image_db-linux-{version}
-chmod +x paper_image_db start.sh
+cd citebox-linux-{version}
+chmod +x citebox start.sh
 ./start.sh
 ```
 
 **方式2：后台运行**
 ```bash
-nohup ./paper_image_db &
+nohup ./citebox &
 ```
 
 **方式3：Systemd 服务**
 ```bash
 # 创建服务文件
-sudo tee /etc/systemd/system/paper_image_db.service > /dev/null <<EOF
+sudo tee /etc/systemd/system/citebox.service > /dev/null <<EOF
 [Unit]
 Description=Paper Image Database
 After=network.target
@@ -143,8 +143,8 @@ After=network.target
 [Service]
 Type=simple
 User=$USER
-WorkingDirectory=/opt/paper_image_db
-ExecStart=/opt/paper_image_db/paper_image_db
+WorkingDirectory=/opt/citebox
+ExecStart=/opt/citebox/citebox
 Restart=on-failure
 Environment=SERVER_PORT=8080
 Environment=ADMIN_USERNAME=wanglab
@@ -155,15 +155,15 @@ WantedBy=multi-user.target
 EOF
 
 # 启用并启动服务
-sudo systemctl enable paper_image_db
-sudo systemctl start paper_image_db
+sudo systemctl enable citebox
+sudo systemctl start citebox
 ```
 
 ### ARM64 服务器
 默认包包含 x86_64 版本，如需 ARM64：
 ```bash
 make build-linux
-# 使用 bin/linux/paper_image_db-arm64
+# 使用 bin/linux/citebox-arm64
 ```
 
 ---
@@ -209,10 +209,10 @@ CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build ./cmd/server
 # 系统设置 → 隐私与安全性 → 安全性 → 仍要打开
 
 # 方法2：移除隔离属性
-xattr -d com.apple.quarantine paper_image_db
+xattr -d com.apple.quarantine citebox
 
 # 方法3：签名（开发者）
-codesign -s "Developer ID" paper_image_db
+codesign -s "Developer ID" citebox
 ```
 
 ### 3. Linux 端口权限
@@ -226,7 +226,7 @@ export SERVER_PORT=8080
 
 # 或使用 authbind
 sudo apt install authbind
-authbind --deep ./paper_image_db
+authbind --deep ./citebox
 ```
 
 ### 4. 数据库锁定
@@ -254,19 +254,19 @@ make build
 ### 特定平台/架构
 ```bash
 # Windows AMD64
-GOOS=windows GOARCH=amd64 go build -o paper_image_db.exe ./cmd/server
+GOOS=windows GOARCH=amd64 go build -o citebox.exe ./cmd/server
 
 # macOS Intel
-GOOS=darwin GOARCH=amd64 go build -o paper_image_db ./cmd/server
+GOOS=darwin GOARCH=amd64 go build -o citebox ./cmd/server
 
 # macOS Apple Silicon
-GOOS=darwin GOARCH=arm64 go build -o paper_image_db ./cmd/server
+GOOS=darwin GOARCH=arm64 go build -o citebox ./cmd/server
 
 # Linux x86_64
-GOOS=linux GOARCH=amd64 go build -o paper_image_db ./cmd/server
+GOOS=linux GOARCH=amd64 go build -o citebox ./cmd/server
 
 # Linux ARM64
-GOOS=linux GOARCH=arm64 go build -o paper_image_db ./cmd/server
+GOOS=linux GOARCH=arm64 go build -o citebox ./cmd/server
 ```
 
 ---
@@ -275,10 +275,10 @@ GOOS=linux GOARCH=arm64 go build -o paper_image_db ./cmd/server
 
 ```bash
 # 使用 -ldflags 去除调试信息
-go build -ldflags "-s -w" -o paper_image_db ./cmd/server
+go build -ldflags "-s -w" -o citebox ./cmd/server
 
 # 使用 UPX 压缩（可选）
-upx --best paper_image_db
+upx --best citebox
 ```
 
 ---

@@ -6,9 +6,9 @@ import (
 	"strconv"
 	"strings"
 
-	"paper_image_db/internal/apperr"
-	"paper_image_db/internal/model"
-	"paper_image_db/internal/service"
+	"github.com/xuzhougeng/citebox/internal/apperr"
+	"github.com/xuzhougeng/citebox/internal/model"
+	"github.com/xuzhougeng/citebox/internal/service"
 )
 
 type PaperHandler struct {

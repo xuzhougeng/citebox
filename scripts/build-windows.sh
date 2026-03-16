@@ -3,7 +3,7 @@
 
 set -e
 
-BINARY_NAME="paper_image_db"
+BINARY_NAME="citebox"
 VERSION=${VERSION:-$(git describe --tags --always --dirty 2>/dev/null || echo "dev")}
 BUILD_TIME=$(date -u '+%Y-%m-%d %H:%M:%S')
 
@@ -59,7 +59,7 @@ echo Default Account: wanglab / wanglab789
 echo.
 echo Press Ctrl+C to stop the server
 echo.
-paper_image_db.exe
+citebox.exe
 echo.
 echo Server stopped.
 pause
@@ -102,7 +102,7 @@ echo set ADMIN_PASSWORD=%PASSWORD%
 if not "!EXTRACTOR!"=="" echo set PDF_EXTRACTOR_URL=!EXTRACTOR!
 echo echo Configuration loaded.
 echo echo.
-echo paper_image_db.exe
+echo citebox.exe
 echo pause
 ) > start-with-config.bat
 

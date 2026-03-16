@@ -28,7 +28,7 @@
 ## 目录结构
 
 ```text
-paper_image_db/
+citebox/
 ├── cmd/server/main.go
 ├── internal/
 │   ├── config/
@@ -104,7 +104,7 @@ go run cmd/server/main.go
 export PDF_EXTRACTOR_URL=http://127.0.0.1:8000
 ```
 
-这时 `paper_image_db` 会自动解析为：
+这时 CiteBox 会自动解析为：
 
 ```bash
 POST http://127.0.0.1:8000/api/v1/extract
@@ -119,7 +119,7 @@ export PDF_EXTRACTOR_URL=http://127.0.0.1:8000/api/v1/extract
 
 如果出现 `405 Method Not Allowed`，通常说明你当前运行的版本还在把请求发到错误路径，或者环境变量仍然保留着旧值。
 
-无论同步还是异步，`paper_image_db` 都会优先按 `pdffigx v1` 契约请求：
+无论同步还是异步，CiteBox 都会优先按 `pdffigx v1` 契约请求：
 
 - `image_mode=base64`
 - `include_pdf_text=true`

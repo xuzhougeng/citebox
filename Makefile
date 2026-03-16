@@ -2,7 +2,7 @@
 
 .PHONY: build build-windows build-darwin build-linux package-windows package-darwin package-linux clean test version help
 
-BINARY_NAME=paper_image_db
+BINARY_NAME=citebox
 VERSION=$(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 
 # Build flags for smaller binary

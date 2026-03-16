@@ -6,13 +6,13 @@ import (
 	"os"
 	"strings"
 
-	"paper_image_db/internal/apperr"
-	"paper_image_db/internal/config"
-	"paper_image_db/internal/handler"
-	"paper_image_db/internal/logging"
-	"paper_image_db/internal/middleware"
-	"paper_image_db/internal/repository"
-	"paper_image_db/internal/service"
+	"github.com/xuzhougeng/citebox/internal/apperr"
+	"github.com/xuzhougeng/citebox/internal/config"
+	"github.com/xuzhougeng/citebox/internal/handler"
+	"github.com/xuzhougeng/citebox/internal/logging"
+	"github.com/xuzhougeng/citebox/internal/middleware"
+	"github.com/xuzhougeng/citebox/internal/repository"
+	"github.com/xuzhougeng/citebox/internal/service"
 )
 
 func main() {

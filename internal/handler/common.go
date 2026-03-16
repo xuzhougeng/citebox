@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"strings"
 
-	"paper_image_db/internal/apperr"
-	"paper_image_db/internal/model"
+	"github.com/xuzhougeng/citebox/internal/apperr"
+	"github.com/xuzhougeng/citebox/internal/model"
 )
 
 func sendJSON(w http.ResponseWriter, status int, data interface{}) {

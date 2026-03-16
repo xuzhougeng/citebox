@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"paper_image_db/internal/apperr"
-	"paper_image_db/internal/service"
+	"github.com/xuzhougeng/citebox/internal/apperr"
+	"github.com/xuzhougeng/citebox/internal/service"
 )
 
 type DatabaseHandler struct {

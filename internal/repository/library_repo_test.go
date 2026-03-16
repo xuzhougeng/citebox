@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"paper_image_db/internal/apperr"
-	"paper_image_db/internal/model"
+	"github.com/xuzhougeng/citebox/internal/apperr"
+	"github.com/xuzhougeng/citebox/internal/model"
 )
 
 func newTestRepository(t *testing.T) *LibraryRepository {

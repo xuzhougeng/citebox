@@ -3,7 +3,7 @@ package middleware
 import (
 	"net/http"
 
-	"paper_image_db/internal/config"
+	"github.com/xuzhougeng/citebox/internal/config"
 )
 
 // BasicAuth wraps an http.Handler and enforces HTTP Basic authentication using

@@ -1,4 +1,4 @@
-module paper_image_db
+module github.com/xuzhougeng/citebox
 
 go 1.21
 

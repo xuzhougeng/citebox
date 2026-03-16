@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"paper_image_db/internal/model"
+	"github.com/xuzhougeng/citebox/internal/model"
 )
 
 func TestAISettingsDefaultsAndPersistence(t *testing.T) {

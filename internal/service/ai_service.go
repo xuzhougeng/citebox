@@ -18,10 +18,10 @@ import (
 	"strings"
 	"time"
 
-	"paper_image_db/internal/apperr"
-	"paper_image_db/internal/config"
-	"paper_image_db/internal/model"
-	"paper_image_db/internal/repository"
+	"github.com/xuzhougeng/citebox/internal/apperr"
+	"github.com/xuzhougeng/citebox/internal/config"
+	"github.com/xuzhougeng/citebox/internal/model"
+	"github.com/xuzhougeng/citebox/internal/repository"
 )
 
 const aiSettingsKey = "ai_settings"
