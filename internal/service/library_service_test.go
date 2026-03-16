@@ -2,13 +2,17 @@ package service
 
 import (
 	"bytes"
+	"encoding/base64"
 	"image"
+	"image/color"
+	"image/png"
 	"io"
 	"log/slog"
 	"mime/multipart"
 	"net/textproto"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/xuzhougeng/citebox/internal/apperr"
@@ -88,6 +92,24 @@ type testMultipartFile struct {
 
 func (f *testMultipartFile) Close() error {
 	return nil
+}
+
+func testPNGDataURL(t *testing.T, width, height int) string {
+	t.Helper()
+
+	img := image.NewRGBA(image.Rect(0, 0, width, height))
+	for y := 0; y < height; y++ {
+		for x := 0; x < width; x++ {
+			img.Set(x, y, color.RGBA{R: uint8(10 + x), G: uint8(20 + y), B: 180, A: 255})
+		}
+	}
+
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, img); err != nil {
+		t.Fatalf("png.Encode() error = %v", err)
+	}
+
+	return "data:image/png;base64," + base64.StdEncoding.EncodeToString(buf.Bytes())
 }
 
 func TestListPapersAppliesDefaultsAndDecoratesURLs(t *testing.T) {
@@ -317,30 +339,67 @@ func TestDeleteFigureRemovesFileAndReturnsUpdatedPaper(t *testing.T) {
 	}
 }
 
-func TestNormalizeManualRegionRejectsOutOfRange(t *testing.T) {
+func TestNormalizeManualRegionRejectsMissingImageData(t *testing.T) {
 	if _, err := normalizeManualRegion(model.ManualExtractionRegion{
-		PageNumber: 3,
+		PageNumber: 1,
 		X:          0.1,
 		Y:          0.1,
 		Width:      0.4,
 		Height:     0.4,
-	}, 2); !apperr.IsCode(err, apperr.CodeInvalidArgument) {
+	}); !apperr.IsCode(err, apperr.CodeInvalidArgument) {
 		t.Fatalf("normalizeManualRegion() code = %q, want %q", apperr.CodeOf(err), apperr.CodeInvalidArgument)
 	}
 }
 
-func TestNormalizedRectBuildsPixelBounds(t *testing.T) {
-	rect, err := normalizedRect(image.Rect(0, 0, 1000, 800), model.ManualExtractionRegion{
-		PageNumber: 1,
-		X:          0.1,
-		Y:          0.2,
-		Width:      0.3,
-		Height:     0.4,
+func TestManualExtractFiguresStoresClientRenderedImage(t *testing.T) {
+	svc, repo, cfg := newTestService(t)
+	paper := createTestPaper(t, repo)
+
+	if err := os.WriteFile(filepath.Join(cfg.PapersDir(), paper.StoredPDFName), []byte("%PDF-1.4 test"), 0o644); err != nil {
+		t.Fatalf("WriteFile(pdf) error = %v", err)
+	}
+
+	updated, addedCount, err := svc.ManualExtractFigures(paper.ID, ManualExtractParams{
+		Regions: []model.ManualExtractionRegion{
+			{
+				PageNumber: 1,
+				X:          0.1,
+				Y:          0.2,
+				Width:      0.3,
+				Height:     0.4,
+				ImageData:  testPNGDataURL(t, 24, 18),
+				Caption:    "Manual figure",
+			},
+		},
 	})
 	if err != nil {
-		t.Fatalf("normalizedRect() error = %v", err)
+		t.Fatalf("ManualExtractFigures() error = %v", err)
 	}
-	if rect.Min.X != 100 || rect.Min.Y != 160 || rect.Max.X != 400 || rect.Max.Y != 480 {
-		t.Fatalf("normalizedRect() = %+v, want (100,160)-(400,480)", rect)
+
+	if addedCount != 1 {
+		t.Fatalf("ManualExtractFigures() addedCount = %d, want 1", addedCount)
+	}
+	if len(updated.Figures) != 2 {
+		t.Fatalf("ManualExtractFigures() figures = %d, want 2", len(updated.Figures))
+	}
+
+	var manualFigure *model.Figure
+	for i := range updated.Figures {
+		if updated.Figures[i].Source == "manual" {
+			manualFigure = &updated.Figures[i]
+			break
+		}
+	}
+	if manualFigure == nil {
+		t.Fatalf("ManualExtractFigures() missing manual figure: %+v", updated.Figures)
+	}
+	if manualFigure.Caption != "Manual figure" {
+		t.Fatalf("ManualExtractFigures() caption = %q, want %q", manualFigure.Caption, "Manual figure")
+	}
+	if !strings.HasSuffix(manualFigure.Filename, ".png") {
+		t.Fatalf("ManualExtractFigures() filename = %q, want .png suffix", manualFigure.Filename)
+	}
+	if _, err := os.Stat(filepath.Join(cfg.FiguresDir(), manualFigure.Filename)); err != nil {
+		t.Fatalf("stored manual figure missing, stat err = %v", err)
 	}
 }

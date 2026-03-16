@@ -57,12 +57,12 @@ echo.
 echo Default URL: http://localhost:8080
 echo Default Account: wanglab / wanglab789
 echo.
-echo Press Ctrl+C to stop the server
+echo A browser window will open automatically.
+echo Close the "Paper Image Database" window to stop the server.
 echo.
-citebox.exe
-echo.
-echo Server stopped.
-pause
+start "Paper Image Database" citebox.exe
+timeout /t 2 /nobreak >nul
+start "" http://localhost:8080
 EOF
 
 # Replace version in start.bat
@@ -102,8 +102,9 @@ echo set ADMIN_PASSWORD=%PASSWORD%
 if not "!EXTRACTOR!"=="" echo set PDF_EXTRACTOR_URL=!EXTRACTOR!
 echo echo Configuration loaded.
 echo echo.
-echo citebox.exe
-echo pause
+echo start "Paper Image Database" citebox.exe
+echo timeout /t 2 /nobreak ^>nul
+echo start "" http://localhost:%%PORT%%
 ) > start-with-config.bat
 
 echo.

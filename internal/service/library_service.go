@@ -7,20 +7,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"image"
-	"image/draw"
-	"image/png"
 	"io"
 	"log/slog"
-	"math"
 	"mime"
 	"mime/multipart"
 	"net/http"
 	"net/url"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
@@ -41,8 +35,6 @@ type LibraryService struct {
 const (
 	extractorSettingsKey = "extractor_settings"
 	runtimePasswordKey   = "runtime_admin_password"
-	manualPreviewDPI     = 144
-	manualExtractDPI     = 288
 	manualPendingStatus  = "manual_pending"
 )
 
@@ -463,45 +455,15 @@ func (s *LibraryService) GetManualExtractionWorkspace(id int64) (*model.ManualEx
 		return nil, apperr.Wrap(apperr.CodeFailedPrecondition, "原始 PDF 不存在，无法进入人工处理", err)
 	}
 
-	pageCount, err := s.readPDFPageCount(pdfPath)
-	if err != nil {
-		return nil, err
-	}
-
 	s.decoratePaper(paper)
 	return &model.ManualExtractionWorkspace{
 		Paper:     paper,
-		PageCount: pageCount,
+		PageCount: 0,
 	}, nil
 }
 
 func (s *LibraryService) GetManualPreview(id int64, page int) ([]byte, error) {
-	if page < 1 {
-		return nil, apperr.New(apperr.CodeInvalidArgument, "页码必须从 1 开始")
-	}
-
-	paper, err := s.repo.GetPaperDetail(id)
-	if err != nil {
-		return nil, err
-	}
-	if paper == nil {
-		return nil, apperr.New(apperr.CodeNotFound, "paper not found")
-	}
-
-	pdfPath := filepath.Join(s.config.PapersDir(), paper.StoredPDFName)
-	if _, err := os.Stat(pdfPath); err != nil {
-		return nil, apperr.Wrap(apperr.CodeFailedPrecondition, "原始 PDF 不存在，无法渲染人工处理预览", err)
-	}
-
-	pageCount, err := s.readPDFPageCount(pdfPath)
-	if err != nil {
-		return nil, err
-	}
-	if page > pageCount {
-		return nil, apperr.New(apperr.CodeInvalidArgument, fmt.Sprintf("页码超出范围，当前 PDF 共 %d 页", pageCount))
-	}
-
-	return s.renderPDFPagePNG(pdfPath, page, manualPreviewDPI)
+	return nil, apperr.New(apperr.CodeFailedPrecondition, "当前版本已改为浏览器端 PDF 预览，请刷新页面后重试")
 }
 
 func (s *LibraryService) ManualExtractFigures(id int64, params ManualExtractParams) (*model.Paper, int, error) {
@@ -516,19 +478,6 @@ func (s *LibraryService) ManualExtractFigures(id int64, params ManualExtractPara
 	if paper == nil {
 		return nil, 0, apperr.New(apperr.CodeNotFound, "paper not found")
 	}
-
-	pdfPath := filepath.Join(s.config.PapersDir(), paper.StoredPDFName)
-	if _, err := os.Stat(pdfPath); err != nil {
-		return nil, 0, apperr.Wrap(apperr.CodeFailedPrecondition, "原始 PDF 不存在，无法按框选区域提取图片", err)
-	}
-
-	pageCount, err := s.readPDFPageCount(pdfPath)
-	if err != nil {
-		return nil, 0, err
-	}
-
-	pageImages := map[int]image.Image{}
-	pageBounds := map[int]image.Rectangle{}
 	items := make([]repository.FigureUpsertInput, 0, len(params.Regions))
 	newPaths := make([]string, 0, len(params.Regions))
 	replacedPaths := make([]string, 0, len(params.Regions))
@@ -541,7 +490,7 @@ func (s *LibraryService) ManualExtractFigures(id int64, params ManualExtractPara
 	}
 
 	for idx, rawRegion := range params.Regions {
-		region, err := normalizeManualRegion(rawRegion, pageCount)
+		region, err := normalizeManualRegion(rawRegion)
 		if err != nil {
 			removeFiles(newPaths)
 			return nil, 0, err
@@ -564,31 +513,22 @@ func (s *LibraryService) ManualExtractFigures(id int64, params ManualExtractPara
 			replacedPaths = append(replacedPaths, filepath.Join(s.config.FiguresDir(), figure.Filename))
 		}
 
-		if _, ok := pageImages[region.PageNumber]; !ok {
-			rendered, err := s.renderPDFPagePNG(pdfPath, region.PageNumber, manualExtractDPI)
-			if err != nil {
-				removeFiles(newPaths)
-				return nil, 0, err
-			}
-
-			img, _, err := image.Decode(bytes.NewReader(rendered))
-			if err != nil {
-				removeFiles(newPaths)
-				return nil, 0, apperr.Wrap(apperr.CodeInternal, "读取渲染后的 PDF 页面失败", err)
-			}
-			pageImages[region.PageNumber] = img
-			pageBounds[region.PageNumber] = img.Bounds()
-		}
-
-		rect, err := normalizedRect(pageBounds[region.PageNumber], region)
+		binary, err := decodeBase64(region.ImageData)
 		if err != nil {
 			removeFiles(newPaths)
-			return nil, 0, err
+			return nil, 0, apperr.Wrap(apperr.CodeInvalidArgument, "解码人工提取图片失败", err)
 		}
 
-		storedName := fmt.Sprintf("figure_%d_manual_%d.png", time.Now().UnixNano(), idx+1)
+		contentType := http.DetectContentType(binary)
+		if !strings.HasPrefix(contentType, "image/") {
+			removeFiles(newPaths)
+			return nil, 0, apperr.New(apperr.CodeInvalidArgument, "人工提取结果不是有效图片")
+		}
+
+		ext := extensionForFigure(contentType, "manual.png")
+		storedName := fmt.Sprintf("figure_%d_manual_%d%s", time.Now().UnixNano(), idx+1, ext)
 		targetPath := filepath.Join(s.config.FiguresDir(), storedName)
-		if err := writeCroppedPNG(targetPath, pageImages[region.PageNumber], rect); err != nil {
+		if err := os.WriteFile(targetPath, binary, 0o644); err != nil {
 			removeFiles(newPaths)
 			return nil, 0, apperr.Wrap(apperr.CodeInternal, "保存人工提取图片失败", err)
 		}
@@ -621,8 +561,8 @@ func (s *LibraryService) ManualExtractFigures(id int64, params ManualExtractPara
 
 		items = append(items, repository.FigureUpsertInput{
 			Filename:     storedName,
-			OriginalName: fmt.Sprintf("%s_p%d_manual_%d.png", strings.TrimSuffix(paper.OriginalFilename, filepath.Ext(paper.OriginalFilename)), region.PageNumber, idx+1),
-			ContentType:  "image/png",
+			OriginalName: fmt.Sprintf("%s_p%d_manual_%d%s", strings.TrimSuffix(paper.OriginalFilename, filepath.Ext(paper.OriginalFilename)), region.PageNumber, idx+1, ext),
+			ContentType:  contentType,
 			PageNumber:   region.PageNumber,
 			FigureIndex:  figureIndex,
 			Source:       "manual",
@@ -1341,80 +1281,12 @@ func (s *LibraryService) decoratePaper(paper *model.Paper) {
 	}
 }
 
-func (s *LibraryService) readPDFPageCount(pdfPath string) (int, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
-
-	output, err := exec.CommandContext(ctx, "pdfinfo", pdfPath).Output()
-	if err != nil {
-		return 0, apperr.Wrap(apperr.CodeFailedPrecondition, "读取 PDF 页数失败", err)
-	}
-
-	for _, line := range strings.Split(string(output), "\n") {
-		line = strings.TrimSpace(line)
-		if !strings.HasPrefix(line, "Pages:") {
-			continue
-		}
-
-		fields := strings.Fields(line)
-		if len(fields) < 2 {
-			break
-		}
-
-		pageCount, err := strconv.Atoi(fields[len(fields)-1])
-		if err != nil || pageCount <= 0 {
-			break
-		}
-		return pageCount, nil
-	}
-
-	return 0, apperr.New(apperr.CodeFailedPrecondition, "无法识别 PDF 页数")
-}
-
 func (s *LibraryService) autoExtractionConfigured() (bool, error) {
 	settings, err := s.GetExtractorSettings()
 	if err != nil {
 		return false, err
 	}
 	return strings.TrimSpace(settings.EffectiveExtractorURL) != "", nil
-}
-
-func (s *LibraryService) renderPDFPagePNG(pdfPath string, page, dpi int) ([]byte, error) {
-	if page < 1 {
-		return nil, apperr.New(apperr.CodeInvalidArgument, "页码必须从 1 开始")
-	}
-
-	tempDir, err := os.MkdirTemp("", "citebox-manual-preview-*")
-	if err != nil {
-		return nil, apperr.Wrap(apperr.CodeInternal, "创建 PDF 预览缓存目录失败", err)
-	}
-	defer os.RemoveAll(tempDir)
-
-	outputPrefix := filepath.Join(tempDir, "page")
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	cmd := exec.CommandContext(
-		ctx,
-		"pdftoppm",
-		"-f", strconv.Itoa(page),
-		"-l", strconv.Itoa(page),
-		"-r", strconv.Itoa(maxInt(dpi, 72)),
-		"-png",
-		"-singlefile",
-		pdfPath,
-		outputPrefix,
-	)
-	if output, err := cmd.CombinedOutput(); err != nil {
-		return nil, apperr.Wrap(apperr.CodeFailedPrecondition, firstNonEmpty(strings.TrimSpace(string(output)), "渲染 PDF 页面失败"), err)
-	}
-
-	imagePath := outputPrefix + ".png"
-	data, err := os.ReadFile(imagePath)
-	if err != nil {
-		return nil, apperr.Wrap(apperr.CodeInternal, "读取 PDF 页面预览失败", err)
-	}
-	return data, nil
 }
 
 func maxFigureIndex(figures []model.Figure) int {
@@ -1427,10 +1299,11 @@ func maxFigureIndex(figures []model.Figure) int {
 	return result
 }
 
-func normalizeManualRegion(region model.ManualExtractionRegion, pageCount int) (model.ManualExtractionRegion, error) {
+func normalizeManualRegion(region model.ManualExtractionRegion) (model.ManualExtractionRegion, error) {
 	region.Caption = strings.TrimSpace(region.Caption)
-	if region.PageNumber < 1 || region.PageNumber > pageCount {
-		return model.ManualExtractionRegion{}, apperr.New(apperr.CodeInvalidArgument, fmt.Sprintf("页码超出范围，当前 PDF 共 %d 页", pageCount))
+	region.ImageData = strings.TrimSpace(region.ImageData)
+	if region.PageNumber < 1 {
+		return model.ManualExtractionRegion{}, apperr.New(apperr.CodeInvalidArgument, "页码必须从 1 开始")
 	}
 	if region.Width <= 0 || region.Height <= 0 {
 		return model.ManualExtractionRegion{}, apperr.New(apperr.CodeInvalidArgument, "框选区域的宽高必须大于 0")
@@ -1441,54 +1314,10 @@ func normalizeManualRegion(region model.ManualExtractionRegion, pageCount int) (
 	if region.X+region.Width > 1 || region.Y+region.Height > 1 {
 		return model.ManualExtractionRegion{}, apperr.New(apperr.CodeInvalidArgument, "框选区域不能超出页面边界")
 	}
+	if region.ImageData == "" {
+		return model.ManualExtractionRegion{}, apperr.New(apperr.CodeInvalidArgument, "缺少人工提取图片数据")
+	}
 	return region, nil
-}
-
-func normalizedRect(bounds image.Rectangle, region model.ManualExtractionRegion) (image.Rectangle, error) {
-	width := bounds.Dx()
-	height := bounds.Dy()
-	if width <= 0 || height <= 0 {
-		return image.Rectangle{}, apperr.New(apperr.CodeInternal, "PDF 页面预览尺寸无效")
-	}
-
-	left := bounds.Min.X + int(math.Round(region.X*float64(width)))
-	top := bounds.Min.Y + int(math.Round(region.Y*float64(height)))
-	right := bounds.Min.X + int(math.Round((region.X+region.Width)*float64(width)))
-	bottom := bounds.Min.Y + int(math.Round((region.Y+region.Height)*float64(height)))
-
-	left = clampInt(left, bounds.Min.X, bounds.Max.X-1)
-	top = clampInt(top, bounds.Min.Y, bounds.Max.Y-1)
-	right = clampInt(right, left+1, bounds.Max.X)
-	bottom = clampInt(bottom, top+1, bounds.Max.Y)
-
-	if right-left < 2 || bottom-top < 2 {
-		return image.Rectangle{}, apperr.New(apperr.CodeInvalidArgument, "框选区域过小，请重新选择")
-	}
-
-	return image.Rect(left, top, right, bottom), nil
-}
-
-func writeCroppedPNG(path string, src image.Image, rect image.Rectangle) error {
-	target := image.NewRGBA(image.Rect(0, 0, rect.Dx(), rect.Dy()))
-	draw.Draw(target, target.Bounds(), src, rect.Min, draw.Src)
-
-	file, err := os.Create(path)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	return png.Encode(file, target)
-}
-
-func clampInt(value, minValue, maxValue int) int {
-	if value < minValue {
-		return minValue
-	}
-	if value > maxValue {
-		return maxValue
-	}
-	return value
 }
 
 func (s *LibraryService) normalizeTagInputs(names []string) []repository.TagUpsertInput {
