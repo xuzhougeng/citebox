@@ -84,7 +84,8 @@ jobs:
               mkdir -p "${RUNNER_TEMP}/pkgconfig"
               cp "$(pkg-config --variable=pcfiledir webkit2gtk-4.1)/webkit2gtk-4.1.pc" \
                 "${RUNNER_TEMP}/pkgconfig/webkit2gtk-4.0.pc"
-              echo "PKG_CONFIG_PATH=${RUNNER_TEMP}/pkgconfig${PKG_CONFIG_PATH:+:${PKG_CONFIG_PATH}}" >> "${GITHUB_ENV}"
+              export PKG_CONFIG_PATH="${RUNNER_TEMP}/pkgconfig${PKG_CONFIG_PATH:+:${PKG_CONFIG_PATH}}"
+              echo "PKG_CONFIG_PATH=${PKG_CONFIG_PATH}" >> "${GITHUB_ENV}"
             fi
           fi
 
