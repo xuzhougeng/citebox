@@ -100,6 +100,9 @@ func TestCreatePaperAndListEntities(t *testing.T) {
 	if got := len(figures[0].Tags); got != 2 {
 		t.Fatalf("ListFigures() tags = %d, want 2", got)
 	}
+	if figures[0].Source != "auto" {
+		t.Fatalf("ListFigures() source = %q, want %q", figures[0].Source, "auto")
+	}
 }
 
 func TestRepositoryMigratesPaperMetadataColumns(t *testing.T) {
@@ -167,6 +170,31 @@ func TestRepositoryMigratesPaperMetadataColumns(t *testing.T) {
 		if !columns[column] {
 			t.Fatalf("missing migrated column %q", column)
 		}
+	}
+
+	rows, err = repo.db.Query("PRAGMA table_info(paper_figures)")
+	if err != nil {
+		t.Fatalf("PRAGMA table_info(paper_figures) error = %v", err)
+	}
+	defer rows.Close()
+
+	figureColumns := map[string]bool{}
+	for rows.Next() {
+		var (
+			cid        int
+			name       string
+			columnType string
+			notNull    int
+			defaultVal sql.NullString
+			primaryKey int
+		)
+		if err := rows.Scan(&cid, &name, &columnType, &notNull, &defaultVal, &primaryKey); err != nil {
+			t.Fatalf("rows.Scan(paper_figures) error = %v", err)
+		}
+		figureColumns[strings.ToLower(name)] = true
+	}
+	if !figureColumns["source"] {
+		t.Fatalf("missing migrated column %q", "source")
 	}
 }
 
@@ -255,5 +283,89 @@ func TestAppSettingRoundTrip(t *testing.T) {
 	}
 	if got != `{"provider":"openai"}` {
 		t.Fatalf("GetAppSetting() = %q, want %q", got, `{"provider":"openai"}`)
+	}
+}
+
+func TestAddPaperFiguresAppendsManualSource(t *testing.T) {
+	repo := newTestRepository(t)
+
+	paper, err := repo.CreatePaper(PaperUpsertInput{
+		Title:            "Cell Atlas",
+		OriginalFilename: "cell-atlas.pdf",
+		StoredPDFName:    "paper_1.pdf",
+		FileSize:         128,
+		ContentType:      "application/pdf",
+		ExtractionStatus: "failed",
+		Figures: []FigureUpsertInput{
+			{Filename: "figure_1.png", PageNumber: 1, FigureIndex: 1},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreatePaper() error = %v", err)
+	}
+
+	if err := repo.AddPaperFigures(paper.ID, []FigureUpsertInput{
+		{
+			Filename:     "manual_1.png",
+			OriginalName: "manual_1.png",
+			ContentType:  "image/png",
+			PageNumber:   2,
+			FigureIndex:  2,
+			Source:       "manual",
+			Caption:      "Manual region",
+		},
+	}); err != nil {
+		t.Fatalf("AddPaperFigures() error = %v", err)
+	}
+
+	got, err := repo.GetPaperDetail(paper.ID)
+	if err != nil {
+		t.Fatalf("GetPaperDetail() error = %v", err)
+	}
+	if len(got.Figures) != 2 {
+		t.Fatalf("GetPaperDetail() figures = %d, want 2", len(got.Figures))
+	}
+	if got.Figures[1].Source != "manual" {
+		t.Fatalf("manual figure source = %q, want %q", got.Figures[1].Source, "manual")
+	}
+}
+
+func TestApplyPaperExtractionResultPreservesManualFigures(t *testing.T) {
+	repo := newTestRepository(t)
+
+	paper, err := repo.CreatePaper(PaperUpsertInput{
+		Title:            "Cell Atlas",
+		OriginalFilename: "cell-atlas.pdf",
+		StoredPDFName:    "paper_1.pdf",
+		FileSize:         128,
+		ContentType:      "application/pdf",
+		ExtractionStatus: "queued",
+		Figures: []FigureUpsertInput{
+			{Filename: "auto_old.png", PageNumber: 1, FigureIndex: 1, Source: "auto"},
+			{Filename: "manual_old.png", PageNumber: 1, FigureIndex: 2, Source: "manual"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreatePaper() error = %v", err)
+	}
+
+	if err := repo.ApplyPaperExtractionResult(paper.ID, "pdf text", "{}", "completed", "", "", []FigureUpsertInput{
+		{Filename: "auto_new.png", PageNumber: 2, FigureIndex: 1, Source: "auto"},
+	}); err != nil {
+		t.Fatalf("ApplyPaperExtractionResult() error = %v", err)
+	}
+
+	got, err := repo.GetPaperDetail(paper.ID)
+	if err != nil {
+		t.Fatalf("GetPaperDetail() error = %v", err)
+	}
+	if len(got.Figures) != 2 {
+		t.Fatalf("GetPaperDetail() figures = %d, want 2", len(got.Figures))
+	}
+	if got.Figures[0].Filename != "manual_old.png" || got.Figures[0].Source != "manual" {
+		t.Fatalf("manual figure not preserved: %+v", got.Figures[0])
+	}
+	if got.Figures[1].Filename != "auto_new.png" || got.Figures[1].Source != "auto" {
+		t.Fatalf("auto figure not refreshed: %+v", got.Figures[1])
 	}
 }

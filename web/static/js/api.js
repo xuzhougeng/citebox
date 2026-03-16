@@ -68,6 +68,24 @@ const API = {
         });
     },
 
+    getManualExtractionWorkspace(id) {
+        return requestJSON(`${API_BASE}/papers/${id}/manual-extraction`);
+    },
+
+    manualPreviewURL(id, page) {
+        return `${API_BASE}/papers/${id}/manual-preview?page=${encodeURIComponent(page)}`;
+    },
+
+    manualExtractFigures(id, data) {
+        return requestJSON(`${API_BASE}/papers/${id}/manual-extraction`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        });
+    },
+
     purgeLibrary() {
         return requestJSON(`${API_BASE}/papers/purge`, {
             method: 'POST'

@@ -231,7 +231,7 @@ const UploadPage = {
                         <figure class="figure-card">
                             <img src="${figure.image_url}" alt="${Utils.escapeHTML(figure.original_name || paper.title)}">
                             <figcaption>
-                                <strong>第 ${figure.page_number || '-'} 页</strong>
+                                <strong>第 ${figure.page_number || '-'} 页${figure.source === 'manual' ? ' · 人工提取' : ''}</strong>
                                 <span>${Utils.escapeHTML(figure.caption || figure.original_name || '未命名图片')}</span>
                             </figcaption>
                         </figure>
@@ -283,6 +283,7 @@ const UploadPage = {
             <div class="result-actions">
                 <a class="btn btn-primary" href="/">查看文献库</a>
                 <a class="btn btn-outline" href="${paper.pdf_url}" target="_blank" rel="noreferrer">打开 PDF</a>
+                <a class="btn btn-outline" href="/manual?paper_id=${paper.id}">人工框选提取</a>
                 ${(paper.extraction_status === 'failed' || paper.extraction_status === 'cancelled') ? '<button class="btn btn-outline" type="button" data-action="reextract">重新解析</button>' : ''}
             </div>
 

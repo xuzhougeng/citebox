@@ -121,6 +121,80 @@ func (h *PaperHandler) Reextract(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (h *PaperHandler) GetManualExtractionWorkspace(w http.ResponseWriter, r *http.Request) {
+	id, err := parseIDWithSuffix(r.URL.Path, "/api/papers/", "/manual-extraction")
+	if err != nil {
+		sendError(w, apperr.New(apperr.CodeInvalidArgument, "paper id 无效"))
+		return
+	}
+
+	workspace, err := h.service.GetManualExtractionWorkspace(id)
+	if err != nil {
+		sendError(w, err)
+		return
+	}
+
+	sendJSON(w, http.StatusOK, map[string]interface{}{
+		"success":   true,
+		"workspace": workspace,
+	})
+}
+
+func (h *PaperHandler) ManualPreview(w http.ResponseWriter, r *http.Request) {
+	id, err := parseIDWithSuffix(r.URL.Path, "/api/papers/", "/manual-preview")
+	if err != nil {
+		sendError(w, apperr.New(apperr.CodeInvalidArgument, "paper id 无效"))
+		return
+	}
+
+	page, err := strconv.Atoi(strings.TrimSpace(r.URL.Query().Get("page")))
+	if err != nil || page < 1 {
+		sendError(w, apperr.New(apperr.CodeInvalidArgument, "page 参数无效"))
+		return
+	}
+
+	imageData, err := h.service.GetManualPreview(id, page)
+	if err != nil {
+		sendError(w, err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "image/png")
+	w.Header().Set("Cache-Control", "no-store")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(imageData)
+}
+
+func (h *PaperHandler) ManualExtract(w http.ResponseWriter, r *http.Request) {
+	id, err := parseIDWithSuffix(r.URL.Path, "/api/papers/", "/manual-extraction")
+	if err != nil {
+		sendError(w, apperr.New(apperr.CodeInvalidArgument, "paper id 无效"))
+		return
+	}
+
+	var req struct {
+		Regions []model.ManualExtractionRegion `json:"regions"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		sendError(w, apperr.New(apperr.CodeInvalidArgument, "请求体格式错误"))
+		return
+	}
+
+	paper, addedCount, err := h.service.ManualExtractFigures(id, service.ManualExtractParams{
+		Regions: req.Regions,
+	})
+	if err != nil {
+		sendError(w, err)
+		return
+	}
+
+	sendJSON(w, http.StatusOK, map[string]interface{}{
+		"success":     true,
+		"paper":       paper,
+		"added_count": addedCount,
+	})
+}
+
 func (h *PaperHandler) Update(w http.ResponseWriter, r *http.Request) {
 	id, err := parseIDFromPath(r.URL.Path, "/api/papers/")
 	if err != nil {

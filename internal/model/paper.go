@@ -12,6 +12,7 @@ type Figure struct {
 	ContentType  string          `json:"content_type"`
 	PageNumber   int             `json:"page_number"`
 	FigureIndex  int             `json:"figure_index"`
+	Source       string          `json:"source,omitempty"`
 	Caption      string          `json:"caption"`
 	BBox         json.RawMessage `json:"bbox,omitempty"`
 	ImageURL     string          `json:"image_url,omitempty"`

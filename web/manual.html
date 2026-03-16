@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>人工框选提取</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="navbar-content">
+            <a href="/" class="logo">Paper Image DB</a>
+            <ul class="nav-links">
+                <li><a href="/">文献库</a></li>
+                <li><a href="/figures">图片预览</a></li>
+                <li><a href="/groups">分组</a></li>
+                <li><a href="/tags">标签</a></li>
+                <li><a href="/ai">AI 阅读</a></li>
+                <li><a href="/settings">配置</a></li>
+                <li><a href="/upload">上传 PDF</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <main class="page-shell">
+        <section class="hero compact">
+            <div>
+                <p class="eyebrow">Manual Extraction</p>
+                <h1 id="manualPageTitle">上传后人工框选提取图片</h1>
+                <p id="manualPageSubtitle" class="hero-text">
+                    当自动解析不可用、解析失败，或者仍有漏图时，可以直接在 PDF 页图上框选目标区域，并把截图结果录入图库。
+                </p>
+            </div>
+            <div class="hero-actions">
+                <a id="manualOpenPDFLink" class="btn btn-outline" href="/" target="_blank" rel="noreferrer">打开原 PDF</a>
+            </div>
+        </section>
+
+        <section id="manualSummaryStrip" class="summary-strip"></section>
+
+        <section class="manual-layout">
+            <section class="result-card manual-stage-card">
+                <div class="manual-stage-head">
+                    <div>
+                        <p class="eyebrow">Page Canvas</p>
+                        <h2>拖拽框选需要提取的图片区域</h2>
+                    </div>
+                    <div class="manual-stage-actions">
+                        <button id="manualPrevPageBtn" class="btn btn-outline" type="button">上一页</button>
+                        <span id="manualPageIndicator" class="figure-page-indicator">第 1 / 1 页</span>
+                        <button id="manualNextPageBtn" class="btn btn-outline" type="button">下一页</button>
+                    </div>
+                </div>
+
+                <div class="manual-toolbar">
+                    <div id="manualWorkspaceHint" class="manual-hint">
+                        在页图上按下并拖拽即可生成一个框选区域。
+                    </div>
+                    <div class="manual-toolbar-actions">
+                        <button id="manualClearPageBtn" class="btn btn-outline" type="button">清空本页框选</button>
+                        <button id="manualClearAllBtn" class="btn btn-outline" type="button">清空全部框选</button>
+                    </div>
+                </div>
+
+                <div class="manual-preview-shell">
+                    <div class="manual-preview-scroll">
+                        <div id="manualPreviewFrame" class="manual-preview-frame">
+                            <img id="manualPreviewImage" class="manual-preview-image" alt="PDF 页面预览">
+                            <div id="manualOverlay" class="manual-overlay"></div>
+                            <div id="manualDraftBox" class="manual-selection-box draft hidden">
+                                <span>拖拽中</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <aside class="manager-card manual-sidebar">
+                <div class="manager-head">
+                    <h2>待录入区域</h2>
+                    <p>可跨页累积多个框选。提交后会把裁剪结果追加到当前文献，不覆盖已有图片。</p>
+                </div>
+
+                <div id="manualExtractionNotice" class="notice info hidden"></div>
+                <div id="manualSelectionList" class="manual-selection-list"></div>
+
+                <div class="submit-row manual-submit-row">
+                    <button id="manualSubmitBtn" class="btn btn-primary" type="button">提取并录入图片</button>
+                    <a id="manualBackLibraryLink" class="btn btn-outline" href="/">返回文献库</a>
+                </div>
+            </aside>
+        </section>
+    </main>
+
+    <script src="/static/js/utils.js"></script>
+    <script src="/static/js/api.js"></script>
+    <script src="/static/js/manual.js"></script>
+    <script src="/static/js/main.js"></script>
+</body>
+</html>

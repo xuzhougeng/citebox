@@ -78,6 +78,21 @@ func main() {
 			paperHandler.Reextract(w, r)
 			return
 		}
+		if strings.HasSuffix(r.URL.Path, "/manual-extraction") {
+			switch r.Method {
+			case http.MethodGet:
+				paperHandler.GetManualExtractionWorkspace(w, r)
+			case http.MethodPost:
+				paperHandler.ManualExtract(w, r)
+			default:
+				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			}
+			return
+		}
+		if r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/manual-preview") {
+			paperHandler.ManualPreview(w, r)
+			return
+		}
 
 		switch r.Method {
 		case http.MethodGet:
@@ -241,6 +256,10 @@ func main() {
 		}
 		if r.URL.Path == "/upload" || r.URL.Path == "/upload.html" {
 			http.ServeFile(w, r, "web/upload.html")
+			return
+		}
+		if r.URL.Path == "/manual" || r.URL.Path == "/manual.html" {
+			http.ServeFile(w, r, "web/manual.html")
 			return
 		}
 		if r.URL.Path == "/figures" || r.URL.Path == "/figures.html" {

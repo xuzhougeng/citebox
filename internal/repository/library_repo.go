@@ -32,6 +32,7 @@ type FigureUpsertInput struct {
 	ContentType  string
 	PageNumber   int
 	FigureIndex  int
+	Source       string
 	Caption      string
 	BBoxJSON     string
 }
@@ -143,6 +144,7 @@ func (r *LibraryRepository) initSchema() error {
 		content_type TEXT DEFAULT '',
 		page_number INTEGER DEFAULT 0,
 		figure_index INTEGER DEFAULT 0,
+		source TEXT DEFAULT 'auto',
 		caption TEXT DEFAULT '',
 		bbox_json TEXT DEFAULT '',
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -163,14 +165,16 @@ func (r *LibraryRepository) initSchema() error {
 
 func (r *LibraryRepository) ensureSchemaColumns() error {
 	for _, column := range []struct {
+		tableName  string
 		name       string
 		definition string
 	}{
-		{name: "extractor_job_id", definition: "TEXT DEFAULT ''"},
-		{name: "abstract_text", definition: "TEXT DEFAULT ''"},
-		{name: "notes_text", definition: "TEXT DEFAULT ''"},
+		{tableName: "papers", name: "extractor_job_id", definition: "TEXT DEFAULT ''"},
+		{tableName: "papers", name: "abstract_text", definition: "TEXT DEFAULT ''"},
+		{tableName: "papers", name: "notes_text", definition: "TEXT DEFAULT ''"},
+		{tableName: "paper_figures", name: "source", definition: "TEXT DEFAULT 'auto'"},
 	} {
-		if err := r.ensureColumn("papers", column.name, column.definition); err != nil {
+		if err := r.ensureColumn(column.tableName, column.name, column.definition); err != nil {
 			return err
 		}
 	}
@@ -263,8 +267,8 @@ func (r *LibraryRepository) CreatePaper(input PaperUpsertInput) (*model.Paper, e
 	for _, figure := range input.Figures {
 		if _, err := tx.Exec(`
 			INSERT INTO paper_figures (
-				paper_id, filename, original_name, content_type, page_number, figure_index, caption, bbox_json
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+				paper_id, filename, original_name, content_type, page_number, figure_index, source, caption, bbox_json
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 		`,
 			paperID,
 			figure.Filename,
@@ -272,6 +276,7 @@ func (r *LibraryRepository) CreatePaper(input PaperUpsertInput) (*model.Paper, e
 			figure.ContentType,
 			figure.PageNumber,
 			figure.FigureIndex,
+			firstNonEmpty(strings.TrimSpace(figure.Source), "auto"),
 			figure.Caption,
 			figure.BBoxJSON,
 		); err != nil {
@@ -412,15 +417,15 @@ func (r *LibraryRepository) ApplyPaperExtractionResult(
 		return err
 	}
 
-	if _, err := tx.Exec("DELETE FROM paper_figures WHERE paper_id = ?", id); err != nil {
+	if _, err := tx.Exec("DELETE FROM paper_figures WHERE paper_id = ? AND COALESCE(source, 'auto') != 'manual'", id); err != nil {
 		return wrapDBError(err, "更新文献图片失败")
 	}
 
 	for _, figure := range figures {
 		if _, err := tx.Exec(`
 			INSERT INTO paper_figures (
-				paper_id, filename, original_name, content_type, page_number, figure_index, caption, bbox_json
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+				paper_id, filename, original_name, content_type, page_number, figure_index, source, caption, bbox_json
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 		`,
 			id,
 			figure.Filename,
@@ -428,6 +433,7 @@ func (r *LibraryRepository) ApplyPaperExtractionResult(
 			figure.ContentType,
 			figure.PageNumber,
 			figure.FigureIndex,
+			firstNonEmpty(strings.TrimSpace(figure.Source), "auto"),
 			figure.Caption,
 			figure.BBoxJSON,
 		); err != nil {
@@ -436,6 +442,52 @@ func (r *LibraryRepository) ApplyPaperExtractionResult(
 	}
 
 	return wrapDBError(tx.Commit(), "提交文献解析结果失败")
+}
+
+func (r *LibraryRepository) AddPaperFigures(id int64, figures []FigureUpsertInput) error {
+	if len(figures) == 0 {
+		return nil
+	}
+
+	tx, err := r.db.Begin()
+	if err != nil {
+		return wrapDBError(err, "补录文献图片失败")
+	}
+	defer tx.Rollback()
+
+	result, err := tx.Exec(`
+		UPDATE papers
+		SET updated_at = CURRENT_TIMESTAMP
+		WHERE id = ?
+	`, id)
+	if err != nil {
+		return wrapDBError(err, "补录文献图片失败")
+	}
+	if err := ensureRowsAffected(result, "paper not found"); err != nil {
+		return err
+	}
+
+	for _, figure := range figures {
+		if _, err := tx.Exec(`
+			INSERT INTO paper_figures (
+				paper_id, filename, original_name, content_type, page_number, figure_index, source, caption, bbox_json
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`,
+			id,
+			figure.Filename,
+			figure.OriginalName,
+			figure.ContentType,
+			figure.PageNumber,
+			figure.FigureIndex,
+			firstNonEmpty(strings.TrimSpace(figure.Source), "manual"),
+			figure.Caption,
+			figure.BBoxJSON,
+		); err != nil {
+			return wrapDBError(err, "补录文献图片失败")
+		}
+	}
+
+	return wrapDBError(tx.Commit(), "提交补录文献图片失败")
 }
 
 func (r *LibraryRepository) GetPaperDetail(id int64) (*model.Paper, error) {
@@ -469,7 +521,7 @@ func (r *LibraryRepository) GetPaperDetail(id int64) (*model.Paper, error) {
 	}
 
 	rows, err := r.db.Query(`
-		SELECT id, filename, original_name, content_type, page_number, figure_index, caption, bbox_json, created_at
+		SELECT id, filename, original_name, content_type, page_number, figure_index, source, caption, bbox_json, created_at
 		FROM paper_figures
 		WHERE paper_id = ?
 		ORDER BY page_number ASC, figure_index ASC, id ASC
@@ -490,6 +542,7 @@ func (r *LibraryRepository) GetPaperDetail(id int64) (*model.Paper, error) {
 			&figure.ContentType,
 			&figure.PageNumber,
 			&figure.FigureIndex,
+			&figure.Source,
 			&figure.Caption,
 			&bboxJSON,
 			&figure.CreatedAt,
@@ -642,7 +695,7 @@ func (r *LibraryRepository) ListFigures(filter model.FigureFilter) ([]model.Figu
 	query := `
 		SELECT
 			pf.id, pf.paper_id, p.title, p.group_id, COALESCE(g.name, ''),
-			pf.filename, pf.page_number, pf.figure_index, pf.caption, pf.created_at
+			pf.filename, pf.page_number, pf.figure_index, pf.source, pf.caption, pf.created_at
 		FROM paper_figures pf
 		JOIN papers p ON p.id = pf.paper_id
 		LEFT JOIN groups g ON g.id = p.group_id
@@ -675,6 +728,7 @@ func (r *LibraryRepository) ListFigures(filter model.FigureFilter) ([]model.Figu
 			&item.Filename,
 			&item.PageNumber,
 			&item.FigureIndex,
+			&item.Source,
 			&item.Caption,
 			&item.CreatedAt,
 		); err != nil {
@@ -1167,6 +1221,15 @@ func rawJSON(value string) json.RawMessage {
 		return nil
 	}
 	return json.RawMessage(value)
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 func ensureRowsAffected(result sql.Result, notFoundMessage string) error {

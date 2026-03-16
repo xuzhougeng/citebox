@@ -97,6 +97,7 @@ const PaperViewer = {
                     <div class="figure-preview-badges">
                         <span class="figure-badge figure-badge-strong">第 ${figure.page_number || '-'} 页</span>
                         <span class="figure-badge">#${figure.figure_index || '-'}</span>
+                        ${figure.source === 'manual' ? '<span class="figure-badge">人工提取</span>' : ''}
                     </div>
                 </div>
                 <div class="figure-preview-body">
@@ -151,6 +152,7 @@ const PaperViewer = {
                 </div>
                 <div class="detail-actions">
                     <button class="btn btn-primary" type="submit">保存</button>
+                    <a class="btn btn-outline" href="/manual?paper_id=${paper.id}" target="_blank" rel="noreferrer">人工处理</a>
                     ${(paper.extraction_status === 'failed' || paper.extraction_status === 'cancelled') ? '<button class="btn btn-outline" type="button" data-modal-action="reextract-paper">重新解析</button>' : ''}
                     <button class="btn btn-outline danger" type="button" data-modal-action="delete-paper">删除文献</button>
                     <a class="btn btn-outline" href="/ai?paper_id=${paper.id}" target="_blank" rel="noreferrer">AI 阅读</a>
