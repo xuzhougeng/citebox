@@ -270,7 +270,14 @@ func main() {
 		http.NotFound(w, r)
 	})
 
-	authenticated := middleware.BasicAuthWithService(mux, librarySvc)
+	// Configure authentication middleware with public paths
+	authMiddleware := middleware.AuthMiddleware(librarySvc, []middleware.PublicPath{
+		{Path: "/login", Prefix: false},
+		{Path: "/login.html", Prefix: false},
+		{Path: "/static/", Prefix: true},
+		{Path: "/files/", Prefix: true}, // File downloads should also be protected but via API
+	})
+	authenticated := authMiddleware(mux)
 	logged := middleware.RequestLogger(authenticated, logger.With("component", "http"))
 	handler := corsMiddleware(logged)
 
