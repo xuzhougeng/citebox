@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>文献库</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="navbar-content">
+            <a href="/" class="logo">Paper Image DB</a>
+            <ul class="nav-links">
+                <li><a href="/" class="active">文献库</a></li>
+                <li><a href="/figures">图片预览</a></li>
+                <li><a href="/groups">分组</a></li>
+                <li><a href="/tags">标签</a></li>
+                <li><a href="/upload">上传 PDF</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <main class="page-shell">
+        <section class="hero">
+            <div>
+                <p class="eyebrow">Paper Library</p>
+                <h1>围绕文献构建可浏览的图片数据库</h1>
+                <p class="hero-text">
+                    上传 PDF 后，系统会为每篇文献保存原始文件、正文内容、框选结果和提取图片，并支持按分组与标签持续整理。
+                </p>
+            </div>
+            <div class="hero-actions">
+                <a class="btn btn-primary" href="/upload">上传新文献</a>
+            </div>
+        </section>
+
+        <section class="shortcut-grid">
+            <a class="shortcut-card" href="/figures">
+                <span class="eyebrow">Browse</span>
+                <h2>图片预览</h2>
+                <p>集中浏览所有提取图片，再回到对应文献继续查看细节。</p>
+            </a>
+            <a class="shortcut-card" href="/groups">
+                <span class="eyebrow">Organize</span>
+                <h2>分组</h2>
+                <p>按项目、主题或任务组织文献集合。</p>
+            </a>
+            <a class="shortcut-card" href="/tags">
+                <span class="eyebrow">Annotate</span>
+                <h2>标签</h2>
+                <p>用更灵活的多维标记方式补充检索入口。</p>
+            </a>
+        </section>
+
+        <section class="filters-card">
+            <div class="filters-grid">
+                <label class="field">
+                    <span>关键词</span>
+                    <input id="keywordInput" class="form-input" type="text" placeholder="标题、文件名、标签、正文内容">
+                </label>
+                <label class="field">
+                    <span>分组</span>
+                    <select id="groupFilter" class="form-input">
+                        <option value="">全部分组</option>
+                    </select>
+                </label>
+                <label class="field">
+                    <span>标签</span>
+                    <select id="tagFilter" class="form-input">
+                        <option value="">全部标签</option>
+                    </select>
+                </label>
+                <label class="field">
+                    <span>解析状态</span>
+                    <select id="statusFilter" class="form-input">
+                        <option value="">全部状态</option>
+                        <option value="queued">等待解析</option>
+                        <option value="running">解析中</option>
+                        <option value="completed">已完成</option>
+                        <option value="failed">解析失败</option>
+                        <option value="cancelled">已取消</option>
+                    </select>
+                </label>
+            </div>
+        </section>
+
+        <section class="content-layout">
+            <section class="library-panel">
+                <div id="summaryStrip" class="summary-strip"></div>
+                <div id="paperList" class="paper-grid"></div>
+                <div id="pagination" class="pagination"></div>
+            </section>
+
+            <aside class="sidebar">
+                <section class="manager-card">
+                    <div class="manager-head">
+                        <h2>分组</h2>
+                        <p>文献归档维度</p>
+                    </div>
+                    <form id="groupForm" class="manager-form">
+                        <input id="groupNameInput" class="form-input" type="text" placeholder="新分组名称">
+                        <textarea id="groupDescriptionInput" class="form-textarea" rows="3" placeholder="分组说明（可选）"></textarea>
+                        <button class="btn btn-secondary" type="submit">创建分组</button>
+                    </form>
+                    <div id="groupList" class="manager-list"></div>
+                </section>
+
+                <section class="manager-card">
+                    <div class="manager-head">
+                        <h2>标签</h2>
+                        <p>文献标签管理</p>
+                    </div>
+                    <form id="tagForm" class="manager-form inline-form">
+                        <input id="tagNameInput" class="form-input" type="text" placeholder="新标签名称">
+                        <input id="tagColorInput" class="color-input" type="color" value="#A45C40">
+                        <button class="btn btn-secondary" type="submit">创建标签</button>
+                    </form>
+                    <div id="tagList" class="manager-list"></div>
+                </section>
+            </aside>
+        </section>
+    </main>
+
+    <div id="paperModal" class="modal-shell hidden">
+        <div class="modal-dialog">
+            <button id="closePaperModal" class="modal-close" type="button" aria-label="关闭">×</button>
+            <div id="paperModalBody"></div>
+        </div>
+    </div>
+
+    <script src="/static/js/utils.js"></script>
+    <script src="/static/js/api.js"></script>
+    <script src="/static/js/library.js"></script>
+    <script src="/static/js/browser-pages.js"></script>
+    <script src="/static/js/main.js"></script>
+</body>
+</html>

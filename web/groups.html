@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>分组</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="navbar-content">
+            <a href="/" class="logo">Paper Image DB</a>
+            <ul class="nav-links">
+                <li><a href="/">文献库</a></li>
+                <li><a href="/figures">图片预览</a></li>
+                <li><a href="/groups" class="active">分组</a></li>
+                <li><a href="/tags">标签</a></li>
+                <li><a href="/upload">上传 PDF</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <main class="page-shell">
+        <section class="hero compact">
+            <div>
+                <p class="eyebrow">Groups</p>
+                <h1>用分组管理文献集合</h1>
+                <p class="hero-text">适合按项目、课题或阶段组织文献，再进入分组内部集中浏览。</p>
+            </div>
+        </section>
+
+        <section class="manager-card">
+            <div class="manager-head">
+                <h2>新建分组</h2>
+                <p>分组适合相对稳定的组织结构。</p>
+            </div>
+            <form id="groupPageForm" class="manager-form">
+                <div class="form-grid compact-grid-form">
+                    <label class="field">
+                        <span>分组名称</span>
+                        <input id="groupPageNameInput" class="form-input" type="text" placeholder="例如：单细胞图谱">
+                    </label>
+                    <label class="field">
+                        <span>说明</span>
+                        <input id="groupPageDescriptionInput" class="form-input" type="text" placeholder="一句话说明这个分组的用途">
+                    </label>
+                </div>
+                <div class="submit-row">
+                    <button class="btn btn-primary" type="submit">创建分组</button>
+                </div>
+            </form>
+        </section>
+
+        <section class="section-stack">
+            <div id="groupCardGrid" class="entity-grid"></div>
+            <section class="filters-card">
+                <div class="manager-head">
+                    <h2 id="groupHeadline">全部文献</h2>
+                    <p>点击上方分组卡片切换筛选结果。</p>
+                </div>
+                <div id="groupPaperList" class="paper-grid"></div>
+                <div id="groupPagination" class="pagination"></div>
+            </section>
+        </section>
+    </main>
+
+    <div id="paperModal" class="modal-shell hidden">
+        <div class="modal-dialog">
+            <button id="closePaperModal" class="modal-close" type="button" aria-label="关闭">×</button>
+            <div id="paperModalBody"></div>
+        </div>
+    </div>
+
+    <script src="/static/js/utils.js"></script>
+    <script src="/static/js/api.js"></script>
+    <script src="/static/js/browser-pages.js"></script>
+    <script src="/static/js/main.js"></script>
+</body>
+</html>

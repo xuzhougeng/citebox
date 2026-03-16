@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>标签</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="navbar-content">
+            <a href="/" class="logo">Paper Image DB</a>
+            <ul class="nav-links">
+                <li><a href="/">文献库</a></li>
+                <li><a href="/figures">图片预览</a></li>
+                <li><a href="/groups">分组</a></li>
+                <li><a href="/tags" class="active">标签</a></li>
+                <li><a href="/upload">上传 PDF</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <main class="page-shell">
+        <section class="hero compact">
+            <div>
+                <p class="eyebrow">Tags</p>
+                <h1>用标签补充更灵活的检索入口</h1>
+                <p class="hero-text">标签适合方法、主题、阅读状态等多维标记，同一篇文献可以挂多个标签。</p>
+            </div>
+        </section>
+
+        <section class="manager-card">
+            <div class="manager-head">
+                <h2>新建标签</h2>
+                <p>标签适合轻量、多维、可叠加的整理方式。</p>
+            </div>
+            <form id="tagPageForm" class="manager-form inline-form">
+                <input id="tagPageNameInput" class="form-input" type="text" placeholder="例如：review">
+                <input id="tagPageColorInput" class="color-input" type="color" value="#A45C40">
+                <button class="btn btn-primary" type="submit">创建标签</button>
+            </form>
+        </section>
+
+        <section class="section-stack">
+            <div id="tagCardGrid" class="entity-grid"></div>
+            <section class="filters-card">
+                <div class="manager-head">
+                    <h2 id="tagHeadline">全部标签下的文献</h2>
+                    <p>点击上方标签卡片切换筛选结果。</p>
+                </div>
+                <div id="tagPaperList" class="paper-grid"></div>
+                <div id="tagPagination" class="pagination"></div>
+            </section>
+        </section>
+    </main>
+
+    <div id="paperModal" class="modal-shell hidden">
+        <div class="modal-dialog">
+            <button id="closePaperModal" class="modal-close" type="button" aria-label="关闭">×</button>
+            <div id="paperModalBody"></div>
+        </div>
+    </div>
+
+    <script src="/static/js/utils.js"></script>
+    <script src="/static/js/api.js"></script>
+    <script src="/static/js/browser-pages.js"></script>
+    <script src="/static/js/main.js"></script>
+</body>
+</html>

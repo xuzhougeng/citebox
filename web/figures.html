@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>图片预览</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="navbar-content">
+            <a href="/" class="logo">Paper Image DB</a>
+            <ul class="nav-links">
+                <li><a href="/">文献库</a></li>
+                <li><a href="/figures" class="active">图片预览</a></li>
+                <li><a href="/groups">分组</a></li>
+                <li><a href="/tags">标签</a></li>
+                <li><a href="/upload">上传 PDF</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <main class="page-shell">
+        <section class="hero">
+            <div>
+                <p class="eyebrow">Figure Browser</p>
+                <h1>跨文献浏览所有提取图片</h1>
+                <p class="hero-text">先看图，再回到对应文献继续查看原文、框选结果和标签。</p>
+            </div>
+        </section>
+
+        <section class="filters-card">
+            <div class="filters-grid three-cols">
+                <label class="field">
+                    <span>关键词</span>
+                    <input id="figureKeywordInput" class="form-input" type="text" placeholder="文献标题、图片说明、标签">
+                </label>
+                <label class="field">
+                    <span>分组</span>
+                    <select id="figureGroupFilter" class="form-input">
+                        <option value="">全部分组</option>
+                    </select>
+                </label>
+                <label class="field">
+                    <span>标签</span>
+                    <select id="figureTagFilter" class="form-input">
+                        <option value="">全部标签</option>
+                    </select>
+                </label>
+            </div>
+        </section>
+
+        <section id="figureSummaryStrip" class="summary-strip"></section>
+        <section id="figureGrid" class="figure-preview-grid"></section>
+        <div id="figurePagination" class="pagination"></div>
+    </main>
+
+    <div id="paperModal" class="modal-shell hidden">
+        <div class="modal-dialog">
+            <button id="closePaperModal" class="modal-close" type="button" aria-label="关闭">×</button>
+            <div id="paperModalBody"></div>
+        </div>
+    </div>
+
+    <div id="figureModal" class="modal-shell hidden">
+        <div class="modal-dialog figure-modal-dialog">
+            <button id="closeFigureModal" class="modal-close" type="button" aria-label="关闭">×</button>
+            <div id="figureModalBody"></div>
+        </div>
+    </div>
+
+    <script src="/static/js/utils.js"></script>
+    <script src="/static/js/api.js"></script>
+    <script src="/static/js/browser-pages.js"></script>
+    <script src="/static/js/main.js"></script>
+</body>
+</html>

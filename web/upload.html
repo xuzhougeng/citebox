@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>上传 PDF</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="navbar-content">
+            <a href="/" class="logo">Paper Image DB</a>
+            <ul class="nav-links">
+                <li><a href="/">文献库</a></li>
+                <li><a href="/figures">图片预览</a></li>
+                <li><a href="/groups">分组</a></li>
+                <li><a href="/tags">标签</a></li>
+                <li><a href="/upload" class="active">上传 PDF</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <main class="page-shell narrow">
+        <section class="hero compact">
+            <div>
+                <p class="eyebrow">文献上传</p>
+                <h1>上传 PDF，生成新的文献条目</h1>
+                <p class="hero-text">
+                    文献会先立即入库，再由后台异步解析 PDF。页面会持续轮询解析进度，自动展示正文、框选结果和提取图片。
+                </p>
+            </div>
+        </section>
+
+        <section class="upload-card">
+            <form id="paperUploadForm" class="upload-form">
+                <input id="pdfInput" type="file" accept="application/pdf,.pdf" hidden>
+
+                <div id="dropArea" class="drop-zone" tabindex="0">
+                    <p class="drop-title">拖拽 PDF 到这里</p>
+                    <p class="drop-subtitle">或点击选择一篇文献</p>
+                </div>
+
+                <div id="selectedFile" class="selected-file empty">
+                    <span>尚未选择 PDF</span>
+                </div>
+
+                <div class="form-grid">
+                    <label class="field">
+                        <span>标题</span>
+                        <input id="titleInput" class="form-input" type="text" placeholder="默认使用文件名生成标题">
+                    </label>
+                    <label class="field">
+                        <span>分组</span>
+                        <select id="groupSelect" class="form-input">
+                            <option value="">暂不分组</option>
+                        </select>
+                    </label>
+                </div>
+
+                <label class="field">
+                    <span>标签</span>
+                    <input id="tagsInput" class="form-input" type="text" placeholder="多个标签用逗号分隔，例如：review, stem-cell, atlasing">
+                </label>
+
+                <div class="submit-row">
+                    <button id="submitUploadBtn" class="btn btn-primary" type="submit">上传并开始后台解析</button>
+                    <a class="btn btn-outline" href="/">返回文献库</a>
+                </div>
+            </form>
+        </section>
+
+        <section id="uploadResult" class="result-card hidden"></section>
+    </main>
+
+    <script src="/static/js/utils.js"></script>
+    <script src="/static/js/api.js"></script>
+    <script src="/static/js/browser-pages.js"></script>
+    <script src="/static/js/upload.js"></script>
+    <script src="/static/js/main.js"></script>
+</body>
+</html>
