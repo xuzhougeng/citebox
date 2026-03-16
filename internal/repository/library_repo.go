@@ -103,6 +103,13 @@ func (r *LibraryRepository) initSchema() error {
 		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
 
+	CREATE TABLE IF NOT EXISTS app_settings (
+		key TEXT PRIMARY KEY,
+		value TEXT NOT NULL DEFAULT '',
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
+
 	CREATE TABLE IF NOT EXISTS papers (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		title TEXT NOT NULL,
@@ -340,6 +347,28 @@ func (r *LibraryRepository) PurgeLibrary() error {
 	}
 
 	return wrapDBError(tx.Commit(), "提交清空数据库事务失败")
+}
+
+func (r *LibraryRepository) GetAppSetting(key string) (string, error) {
+	var value string
+	if err := r.db.QueryRow("SELECT value FROM app_settings WHERE key = ?", key).Scan(&value); err != nil {
+		if err == sql.ErrNoRows {
+			return "", nil
+		}
+		return "", wrapDBError(err, "读取应用设置失败")
+	}
+	return value, nil
+}
+
+func (r *LibraryRepository) UpsertAppSetting(key, value string) error {
+	_, err := r.db.Exec(`
+		INSERT INTO app_settings (key, value)
+		VALUES (?, ?)
+		ON CONFLICT(key) DO UPDATE SET
+			value = excluded.value,
+			updated_at = CURRENT_TIMESTAMP
+	`, key, value)
+	return wrapDBError(err, "保存应用设置失败")
 }
 
 func (r *LibraryRepository) UpdatePaperExtractionState(id int64, status, message, jobID string) error {

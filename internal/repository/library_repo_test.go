@@ -237,3 +237,23 @@ func TestGroupAndTagErrorsUseErrorCodes(t *testing.T) {
 		t.Fatalf("DeleteTag() missing code = %q, want %q", apperr.CodeOf(err), apperr.CodeNotFound)
 	}
 }
+
+func TestAppSettingRoundTrip(t *testing.T) {
+	repo := newTestRepository(t)
+
+	if got, err := repo.GetAppSetting("ai_settings"); err != nil || got != "" {
+		t.Fatalf("GetAppSetting() before save = %q, err = %v, want empty nil", got, err)
+	}
+
+	if err := repo.UpsertAppSetting("ai_settings", `{"provider":"openai"}`); err != nil {
+		t.Fatalf("UpsertAppSetting() error = %v", err)
+	}
+
+	got, err := repo.GetAppSetting("ai_settings")
+	if err != nil {
+		t.Fatalf("GetAppSetting() error = %v", err)
+	}
+	if got != `{"provider":"openai"}` {
+		t.Fatalf("GetAppSetting() = %q, want %q", got, `{"provider":"openai"}`)
+	}
+}
