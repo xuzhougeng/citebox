@@ -20,4 +20,12 @@ document.addEventListener('DOMContentLoaded', () => {
     if (path === '/tags' || path === '/tags.html') {
         TagsPage.init();
     }
+
+    if (path === '/ai' || path === '/ai.html') {
+        AIReaderPage.init();
+    }
+
+    if (path === '/settings' || path === '/settings.html') {
+        SettingsPage.init();
+    }
 });

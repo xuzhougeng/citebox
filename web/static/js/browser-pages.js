@@ -62,6 +62,9 @@ const FigureViewer = {
         this.closeButton = document.getElementById('closeFigureModal');
         if (!this.modal || this.initialized) return;
         this.initialized = true;
+        this.aiCache = new Map();
+        this.activeAIByPaper = new Map();
+        this.aiRequestState = null;
 
         this.handleKeydown = (event) => {
             if (!this.modal || this.modal.classList.contains('hidden')) return;
@@ -84,19 +87,37 @@ const FigureViewer = {
         });
         this.body.addEventListener('click', async (event) => {
             const button = event.target.closest('[data-figure-action]');
-            if (!button) return;
-
-            if (button.dataset.figureAction === 'prev') {
-                await this.previous();
-            }
-            if (button.dataset.figureAction === 'next') {
-                await this.next();
-            }
-            if (button.dataset.figureAction === 'open-paper' && this.currentFigure) {
-                this.close();
-                if (typeof this.onOpenPaper === 'function') {
-                    await this.onOpenPaper(this.currentFigure.paper_id);
+            if (button) {
+                if (button.dataset.figureAction === 'prev') {
+                    await this.previous();
                 }
+                if (button.dataset.figureAction === 'next') {
+                    await this.next();
+                }
+                if (button.dataset.figureAction === 'open-paper' && this.currentFigure) {
+                    this.close();
+                    if (typeof this.onOpenPaper === 'function') {
+                        await this.onOpenPaper(this.currentFigure.paper_id);
+                    }
+                }
+                return;
+            }
+
+            const aiButton = event.target.closest('[data-figure-ai-action]');
+            if (aiButton) {
+                await this.runAIAction(aiButton.dataset.figureAiAction);
+                return;
+            }
+
+            const stopButton = event.target.closest('[data-figure-ai-stop]');
+            if (stopButton) {
+                this.stopAIAction();
+                return;
+            }
+
+            const copyButton = event.target.closest('[data-figure-ai-copy]');
+            if (copyButton) {
+                await this.copyAIResult(copyButton.dataset.figureAiCopy);
             }
         });
         document.addEventListener('keydown', this.handleKeydown);
@@ -117,6 +138,7 @@ const FigureViewer = {
     },
 
     close() {
+        this.stopAIAction({ preservePartial: false, silent: true });
         if (!this.modal) return;
         this.modal.classList.add('hidden');
         document.body.classList.remove('modal-open');
@@ -131,7 +153,7 @@ const FigureViewer = {
     },
 
     async previous() {
-        if (!this.canMovePrevious() || this.loadingPage) return;
+        if (!this.canMovePrevious() || this.loadingPage || this.aiRequestState?.loading) return;
         if (this.index > 0) {
             this.index -= 1;
             this.render();
@@ -141,7 +163,7 @@ const FigureViewer = {
     },
 
     async next() {
-        if (!this.canMoveNext() || this.loadingPage) return;
+        if (!this.canMoveNext() || this.loadingPage || this.aiRequestState?.loading) return;
         if (this.index < this.figures.length - 1) {
             this.index += 1;
             this.render();
@@ -173,6 +195,326 @@ const FigureViewer = {
         }
     },
 
+    aiCacheKey(paperID, action) {
+        return `${paperID}:${action}`;
+    },
+
+    activeAIAction() {
+        if (!this.currentFigure?.paper_id) return '';
+        return this.activeAIByPaper.get(this.currentFigure.paper_id) || '';
+    },
+
+    currentAIResult() {
+        if (!this.currentFigure?.paper_id) return null;
+        const action = this.activeAIAction();
+        if (!action) return null;
+        return this.aiCache.get(this.aiCacheKey(this.currentFigure.paper_id, action)) || null;
+    },
+
+    refreshAIResultPanel() {
+        if (!this.modal || this.modal.classList.contains('hidden')) return;
+        const panel = this.body.querySelector('[data-figure-ai-panel]');
+        if (!panel) return;
+        panel.innerHTML = this.renderAIResultPanel();
+    },
+
+    async runAIAction(action) {
+        if (!this.currentFigure || this.aiRequestState?.loading) return;
+
+        const paperID = Number(this.currentFigure.paper_id);
+        const cacheKey = this.aiCacheKey(paperID, action);
+        this.activeAIByPaper.set(paperID, action);
+
+        if (this.aiCache.has(cacheKey)) {
+            this.aiRequestState = null;
+            this.render();
+            return;
+        }
+
+        this.aiRequestState = {
+            loading: true,
+            paperID,
+            action
+        };
+        this.render();
+
+        if (this.isStreamingAction(action)) {
+            await this.runStreamingAIAction(action, paperID, cacheKey);
+            return;
+        }
+
+        await this.runBufferedAIAction(action, paperID, cacheKey);
+    },
+
+    async runBufferedAIAction(action, paperID, cacheKey) {
+        try {
+            const result = await API.readPaperWithAI({
+                paper_id: paperID,
+                action,
+                question: this.buildAIQuestion(action, this.currentFigure)
+            });
+            this.aiCache.set(cacheKey, result);
+            this.aiRequestState = null;
+            this.render();
+        } catch (error) {
+            this.aiRequestState = {
+                loading: false,
+                paperID,
+                action,
+                error: error.message
+            };
+            this.render();
+            Utils.showToast(error.message, 'error');
+        }
+    },
+
+    async runStreamingAIAction(action, paperID, cacheKey) {
+        const requestState = {
+            loading: true,
+            paperID,
+            action,
+            answer: '',
+            provider: '',
+            model: '',
+            mode: '',
+            includedFigures: 0,
+            abortController: new AbortController(),
+            stopped: false,
+            silentAbort: false,
+            discardOnAbort: false
+        };
+        this.aiRequestState = requestState;
+        this.render();
+
+        try {
+            await API.readPaperWithAIStream({
+                paper_id: paperID,
+                action,
+                question: this.buildAIQuestion(action, this.currentFigure)
+            }, {
+                signal: requestState.abortController.signal,
+                onEvent: (event) => {
+                    if (this.aiRequestState !== requestState) return;
+
+                    if (event.type === 'error') {
+                        throw new Error(event.error || '流式解读失败');
+                    }
+                    if (event.type === 'meta' && event.result) {
+                        requestState.provider = event.result.provider || '';
+                        requestState.model = event.result.model || '';
+                        requestState.mode = event.result.mode || '';
+                        requestState.includedFigures = event.result.included_figures || 0;
+                        this.refreshAIResultPanel();
+                        return;
+                    }
+                    if (event.type === 'delta') {
+                        requestState.answer += event.delta || '';
+                        this.refreshAIResultPanel();
+                        return;
+                    }
+                    if (event.type === 'final' && event.result) {
+                        this.aiCache.set(cacheKey, event.result);
+                        this.aiRequestState = null;
+                        this.render();
+                    }
+                }
+            });
+        } catch (error) {
+            if (error.name === 'AbortError') {
+                if (this.aiRequestState !== requestState) return;
+                if (requestState.discardOnAbort) {
+                    this.aiRequestState = null;
+                    return;
+                }
+                requestState.loading = false;
+                requestState.stopped = true;
+                delete requestState.abortController;
+                this.aiRequestState = requestState;
+                if (!requestState.silentAbort) {
+                    this.render();
+                }
+                return;
+            }
+
+            if (this.aiRequestState !== requestState) return;
+            this.aiRequestState = {
+                loading: false,
+                paperID,
+                action,
+                answer: requestState.answer || '',
+                provider: requestState.provider || '',
+                model: requestState.model || '',
+                mode: requestState.mode || '',
+                includedFigures: requestState.includedFigures || 0,
+                error: error.message
+            };
+            this.render();
+            Utils.showToast(error.message, 'error');
+        }
+    },
+
+    stopAIAction(options = {}) {
+        if (!this.aiRequestState?.loading || !this.aiRequestState.abortController) return;
+        this.aiRequestState.discardOnAbort = options.preservePartial === false;
+        this.aiRequestState.silentAbort = Boolean(options.silent);
+        this.aiRequestState.abortController.abort();
+    },
+
+    isStreamingAction(action) {
+        return action === 'figure_interpretation';
+    },
+
+    async copyAIResult(kind) {
+        const text = this.copyTextForCurrentResult(kind);
+        if (!text) {
+            Utils.showToast('当前没有可复制的内容', 'error');
+            return;
+        }
+
+        try {
+            await navigator.clipboard.writeText(text);
+            Utils.showToast('已复制');
+        } catch (error) {
+            Utils.showToast('复制失败', 'error');
+        }
+    },
+
+    copyTextForCurrentResult(kind) {
+        const paperID = Number(this.currentFigure?.paper_id);
+        const action = this.activeAIAction();
+        const requestState = this.aiRequestState;
+        if (requestState?.loading && requestState.paperID === paperID && requestState.action === action) {
+            return requestState.answer || '';
+        }
+        if (requestState?.stopped && requestState.paperID === paperID && requestState.action === action) {
+            return requestState.answer || '';
+        }
+        if (requestState?.error && requestState.paperID === paperID && requestState.action === action) {
+            return requestState.error || '';
+        }
+
+        const result = this.currentAIResult();
+        if (!result) return '';
+
+        if (kind === 'group' && result.suggested_group) {
+            return result.suggested_group;
+        }
+        if (kind === 'tags' && (result.suggested_tags || []).length) {
+            return result.suggested_tags.join(', ');
+        }
+        return result.answer || '';
+    },
+
+    buildAIQuestion(action, figure) {
+        const location = `第 ${figure.page_number || '-'} 页图 ${figure.figure_index || '-'}`;
+        const caption = figure.caption ? `；caption：${figure.caption}` : '';
+
+        switch (action) {
+            case 'figure_interpretation':
+                return `请优先围绕当前查看的图片进行解读：${location}${caption}。说明这张图展示了什么、支持了什么结论，以及它和全文主线的关系。`;
+            case 'tag_suggestion':
+                return `我正在查看这篇文献中的 ${location}${caption}。请结合全文和图片给出适合归档检索的标签建议，优先复用现有标签。`;
+            case 'group_suggestion':
+                return `我正在查看这篇文献中的 ${location}${caption}。请结合全文和图片判断这篇文献最适合放入哪个分组，并说明理由。`;
+            default:
+                return '';
+        }
+    },
+
+    renderAIResultPanel() {
+        if (!this.currentFigure) return '';
+
+        const paperID = Number(this.currentFigure.paper_id);
+        const action = this.activeAIAction();
+        const requestState = this.aiRequestState;
+        const isLoading = Boolean(requestState?.loading && requestState.paperID === paperID);
+        const activeLabel = this.aiActionLabel(action);
+
+        if (isLoading) {
+            return `
+                <div class="figure-ai-result loading">
+                    <div class="figure-ai-head">
+                        <p class="figure-ai-status">${Utils.escapeHTML(activeLabel)}进行中</p>
+                        ${requestState.answer ? '<button class="btn btn-outline btn-small" type="button" data-figure-ai-copy="answer">Copy</button>' : ''}
+                    </div>
+                    <div class="figure-ai-answer">${Utils.escapeHTML(requestState.answer || '正在结合全文、摘要、标签和图片生成结果。')}</div>
+                    <div class="figure-ai-stream-actions">
+                        <button class="btn btn-outline" type="button" data-figure-ai-stop>Stop</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        if (requestState?.error && requestState.paperID === paperID && requestState.action === action) {
+            return `
+                <div class="figure-ai-result error">
+                    <div class="figure-ai-head">
+                        <p class="figure-ai-status">${Utils.escapeHTML(activeLabel)}失败</p>
+                        ${requestState.error ? '<button class="btn btn-outline btn-small" type="button" data-figure-ai-copy="answer">Copy</button>' : ''}
+                    </div>
+                    <div class="figure-ai-answer">${Utils.escapeHTML(requestState.error)}</div>
+                </div>
+            `;
+        }
+
+        if (requestState?.stopped && requestState.paperID === paperID && requestState.action === action) {
+            return `
+                <div class="figure-ai-result">
+                    <div class="figure-ai-head">
+                        <p class="figure-ai-status">${Utils.escapeHTML(activeLabel)}已停止</p>
+                        ${requestState.answer ? '<button class="btn btn-outline btn-small" type="button" data-figure-ai-copy="answer">Copy</button>' : ''}
+                    </div>
+                    <div class="figure-ai-answer">${Utils.escapeHTML(requestState.answer || '这次解读已被手动停止。')}</div>
+                </div>
+            `;
+        }
+
+        const result = this.currentAIResult();
+        if (!result) {
+            return `
+                <div class="figure-ai-result empty">
+                    <p class="figure-ai-status">选择一个快捷动作</p>
+                    <div class="figure-ai-answer">这里会显示图片解读、Tag 建议或 Group 建议的返回结果。</div>
+                </div>
+            `;
+        }
+
+        const tags = (result.suggested_tags || []).map((tag) => `
+            <span class="tag-pill neutral">${Utils.escapeHTML(tag)}</span>
+        `).join('');
+
+        return `
+            <div class="figure-ai-result">
+                <div class="figure-ai-head">
+                    <p class="figure-ai-status">${Utils.escapeHTML(this.aiActionLabel(result.action))} · ${Utils.escapeHTML(result.provider)} · ${Utils.escapeHTML(result.model)} · ${Utils.escapeHTML(result.mode)}</p>
+                    ${result.answer ? '<button class="btn btn-outline btn-small" type="button" data-figure-ai-copy="answer">Copy</button>' : ''}
+                </div>
+                <div class="figure-ai-answer">${Utils.escapeHTML(result.answer || '模型没有返回文本结果。')}</div>
+                ${(result.suggested_tags || []).length ? `
+                    <div class="figure-ai-supplement">
+                        <span>Tag 建议</span>
+                        <div class="figure-ai-tag-list">${tags}</div>
+                    </div>
+                ` : ''}
+                ${result.suggested_group ? `
+                    <div class="figure-ai-supplement">
+                        <span>Group 建议</span>
+                        <strong>${Utils.escapeHTML(result.suggested_group)}</strong>
+                    </div>
+                ` : ''}
+            </div>
+        `;
+    },
+
+    aiActionLabel(action) {
+        const labels = {
+            figure_interpretation: '图片解读',
+            tag_suggestion: 'Tag 建议',
+            group_suggestion: 'Group 建议'
+        };
+        return labels[action] || 'AI 结果';
+    },
+
     render() {
         this.currentFigure = this.figures?.[this.index];
         if (!this.currentFigure) {
@@ -185,6 +527,7 @@ const FigureViewer = {
         const tags = BrowserUI.renderTagChips(figure.tags || []);
         const canPrev = this.canMovePrevious();
         const canNext = this.canMoveNext();
+        const aiLoading = Boolean(this.aiRequestState?.loading);
 
         this.body.innerHTML = `
             <div class="figure-lightbox">
@@ -192,20 +535,24 @@ const FigureViewer = {
                     <div class="figure-lightbox-toolbar">
                         <div class="figure-lightbox-counter">第 ${this.index + 1} / ${total} 张 · 第 ${this.page} / ${this.totalPages} 页</div>
                         <div class="figure-lightbox-nav">
-                            <button class="btn btn-outline" type="button" data-figure-action="prev" ${!canPrev || this.loadingPage ? 'disabled' : ''}>上一张</button>
-                            <button class="btn btn-outline" type="button" data-figure-action="next" ${!canNext || this.loadingPage ? 'disabled' : ''}>下一张</button>
+                            <button class="btn btn-outline" type="button" data-figure-action="prev" ${!canPrev || this.loadingPage || aiLoading ? 'disabled' : ''}>上一张</button>
+                            <button class="btn btn-outline" type="button" data-figure-action="next" ${!canNext || this.loadingPage || aiLoading ? 'disabled' : ''}>下一张</button>
                         </div>
                     </div>
                     <div class="figure-lightbox-media">
                         <img src="${figure.image_url}" alt="${Utils.escapeHTML(figure.caption || figure.paper_title)}">
                     </div>
+                    ${figure.caption ? `
+                        <div class="figure-lightbox-caption">
+                            ${Utils.escapeHTML(figure.caption)}
+                        </div>
+                    ` : ''}
                 </section>
 
                 <aside class="figure-lightbox-side">
                     <div class="figure-lightbox-head">
                         <p class="eyebrow">Figure Preview</p>
                         <h2>${Utils.escapeHTML(figure.paper_title)}</h2>
-                        <p class="figure-lightbox-caption">${Utils.escapeHTML(figure.caption || '未提供图片说明')}</p>
                     </div>
 
                     <div class="figure-lightbox-meta">
@@ -220,6 +567,22 @@ const FigureViewer = {
                         <a class="btn btn-outline" href="${figure.image_url}" target="_blank" rel="noreferrer">打开原图</a>
                         <a class="btn btn-outline" href="${figure.image_url}" download="${Utils.escapeHTML(figure.filename || 'figure.png')}">下载图片</a>
                     </div>
+
+                    <section class="figure-lightbox-ai">
+                        <div class="figure-lightbox-ai-head">
+                            <div>
+                                <p class="eyebrow">AI Shortcut</p>
+                                <h3>快速辅助阅读</h3>
+                            </div>
+                            <a class="btn btn-outline" href="/ai?paper_id=${figure.paper_id}" target="_blank" rel="noreferrer">自由提问</a>
+                        </div>
+                        <div class="figure-lightbox-ai-actions">
+                            <button class="btn btn-outline ${this.activeAIAction() === 'figure_interpretation' ? 'active' : ''}" type="button" data-figure-ai-action="figure_interpretation" ${aiLoading ? 'disabled' : ''}>图片解读</button>
+                            <button class="btn btn-outline ${this.activeAIAction() === 'tag_suggestion' ? 'active' : ''}" type="button" data-figure-ai-action="tag_suggestion" ${aiLoading ? 'disabled' : ''}>Tag 建议</button>
+                            <button class="btn btn-outline ${this.activeAIAction() === 'group_suggestion' ? 'active' : ''}" type="button" data-figure-ai-action="group_suggestion" ${aiLoading ? 'disabled' : ''}>Group 建议</button>
+                        </div>
+                        <div data-figure-ai-panel>${this.renderAIResultPanel()}</div>
+                    </section>
                 </aside>
             </div>
         `;

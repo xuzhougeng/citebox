@@ -144,6 +144,7 @@ const PaperViewer = {
                     <button class="btn btn-primary" type="submit">保存</button>
                     ${(paper.extraction_status === 'failed' || paper.extraction_status === 'cancelled') ? '<button class="btn btn-outline" type="button" data-modal-action="reextract-paper">重新解析</button>' : ''}
                     <button class="btn btn-outline danger" type="button" data-modal-action="delete-paper">删除文献</button>
+                    <a class="btn btn-outline" href="/ai?paper_id=${paper.id}" target="_blank" rel="noreferrer">AI 阅读</a>
                     <a class="btn btn-outline" href="${paper.pdf_url}" target="_blank" rel="noreferrer">打开 PDF</a>
                 </div>
             </form>
