@@ -43,6 +43,9 @@ const PaperViewer = {
             if (button.dataset.modalAction === 'preview-figure') {
                 await this.openFigurePreview(Number(button.dataset.figureIndex));
             }
+            if (button.dataset.modalAction === 'delete-figure') {
+                await this.deleteFigure(Number(button.dataset.figureId));
+            }
         });
     },
 
@@ -110,6 +113,7 @@ const PaperViewer = {
                     </div>
                     <div class="card-actions">
                         <button class="btn btn-primary" type="button" data-modal-action="preview-figure" data-figure-index="${index}">查看大图</button>
+                        <button class="btn btn-outline danger" type="button" data-modal-action="delete-figure" data-figure-id="${figure.id}">删除图片</button>
                         <a class="btn btn-outline" href="${figure.image_url}" target="_blank" rel="noreferrer">原图</a>
                     </div>
                 </div>
@@ -283,6 +287,23 @@ const PaperViewer = {
             const payload = await API.reextractPaper(this.paper.id);
             this.paper = payload.paper;
             Utils.showToast('文献已重新提交解析', 'info');
+            this.render();
+            if (typeof this.onChanged === 'function') {
+                await this.onChanged();
+            }
+        } catch (error) {
+            Utils.showToast(error.message, 'error');
+        }
+    },
+
+    async deleteFigure(figureID) {
+        const confirmed = await Utils.confirm('删除后会移除这张图片文件，但不会删除整篇文献。');
+        if (!confirmed) return;
+
+        try {
+            const payload = await API.deleteFigure(figureID);
+            this.paper = payload.paper;
+            Utils.showToast('图片已删除');
             this.render();
             if (typeof this.onChanged === 'function') {
                 await this.onChanged();

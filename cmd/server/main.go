@@ -117,6 +117,15 @@ func main() {
 		}
 	})
 
+	mux.HandleFunc("/api/figures/", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodDelete:
+			figureHandler.Delete(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
 	mux.HandleFunc("/api/groups", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:

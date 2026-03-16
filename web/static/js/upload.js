@@ -136,7 +136,9 @@ const UploadPage = {
             this.startPolling(paper);
 
             Utils.showToast(
-                Utils.isProcessingStatus(paper.extraction_status) ? '文献已入库，后台开始解析' : '文献已入库',
+                Utils.isProcessingStatus(paper.extraction_status)
+                    ? '文献已入库，后台开始解析'
+                    : (paper.extraction_status === 'manual_pending' ? '文献已入库，请继续人工处理' : '文献已入库'),
                 Utils.statusTone(paper.extraction_status)
             );
 
@@ -149,7 +151,7 @@ const UploadPage = {
             Utils.showToast(error.message, 'error');
         } finally {
             this.submitButton.disabled = false;
-            this.submitButton.textContent = '上传并开始后台解析';
+            this.submitButton.textContent = '上传文献';
         }
     },
 
@@ -250,6 +252,13 @@ const UploadPage = {
                 <div class="empty-state">
                     <h3>没有生成可展示的图片</h3>
                     <p>这篇文献的后台解析没有成功完成，可以先回到文献库查看错误信息。</p>
+                </div>
+            `;
+        } else if (paper.extraction_status === 'manual_pending') {
+            figureContent = `
+                <div class="empty-state">
+                    <h3>当前走人工处理流程</h3>
+                    <p>系统没有启动自动解析，你可以直接打开人工框选提取页，把需要的图片录入到文献里。</p>
                 </div>
             `;
         } else {

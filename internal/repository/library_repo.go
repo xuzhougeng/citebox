@@ -445,13 +445,18 @@ func (r *LibraryRepository) ApplyPaperExtractionResult(
 }
 
 func (r *LibraryRepository) AddPaperFigures(id int64, figures []FigureUpsertInput) error {
-	if len(figures) == 0 {
+	return r.ApplyManualFigureChanges(id, figures, nil)
+}
+
+func (r *LibraryRepository) ApplyManualFigureChanges(id int64, addFigures []FigureUpsertInput, deleteFigureIDs []int64) error {
+	if len(addFigures) == 0 && len(deleteFigureIDs) == 0 {
 		return nil
 	}
 
+	uniqueDeleteIDs := uniqueInt64s(deleteFigureIDs)
 	tx, err := r.db.Begin()
 	if err != nil {
-		return wrapDBError(err, "补录文献图片失败")
+		return wrapDBError(err, "更新人工图片失败")
 	}
 	defer tx.Rollback()
 
@@ -461,13 +466,41 @@ func (r *LibraryRepository) AddPaperFigures(id int64, figures []FigureUpsertInpu
 		WHERE id = ?
 	`, id)
 	if err != nil {
-		return wrapDBError(err, "补录文献图片失败")
+		return wrapDBError(err, "更新人工图片失败")
 	}
 	if err := ensureRowsAffected(result, "paper not found"); err != nil {
 		return err
 	}
 
-	for _, figure := range figures {
+	if len(uniqueDeleteIDs) > 0 {
+		placeholders := make([]string, len(uniqueDeleteIDs))
+		args := make([]interface{}, 0, len(uniqueDeleteIDs)+1)
+		args = append(args, id)
+		for i, figureID := range uniqueDeleteIDs {
+			placeholders[i] = "?"
+			args = append(args, figureID)
+		}
+
+		var count int
+		if err := tx.QueryRow(
+			`SELECT COUNT(*) FROM paper_figures WHERE paper_id = ? AND id IN (`+strings.Join(placeholders, ",")+`)`,
+			args...,
+		).Scan(&count); err != nil {
+			return wrapDBError(err, "校验待删除图片失败")
+		}
+		if count != len(uniqueDeleteIDs) {
+			return apperr.New(apperr.CodeNotFound, "待替换或删除的图片不存在")
+		}
+
+		if _, err := tx.Exec(
+			`DELETE FROM paper_figures WHERE paper_id = ? AND id IN (`+strings.Join(placeholders, ",")+`)`,
+			args...,
+		); err != nil {
+			return wrapDBError(err, "删除旧图片失败")
+		}
+	}
+
+	for _, figure := range addFigures {
 		if _, err := tx.Exec(`
 			INSERT INTO paper_figures (
 				paper_id, filename, original_name, content_type, page_number, figure_index, source, caption, bbox_json
@@ -483,11 +516,80 @@ func (r *LibraryRepository) AddPaperFigures(id int64, figures []FigureUpsertInpu
 			figure.Caption,
 			figure.BBoxJSON,
 		); err != nil {
-			return wrapDBError(err, "补录文献图片失败")
+			return wrapDBError(err, "保存人工图片失败")
 		}
 	}
 
-	return wrapDBError(tx.Commit(), "提交补录文献图片失败")
+	return wrapDBError(tx.Commit(), "提交人工图片事务失败")
+}
+
+func (r *LibraryRepository) GetFigure(id int64) (*model.FigureListItem, error) {
+	row := r.db.QueryRow(`
+		SELECT
+			pf.id, pf.paper_id, p.title, p.group_id, COALESCE(g.name, ''),
+			pf.filename, pf.page_number, pf.figure_index, pf.source, pf.caption, pf.created_at
+		FROM paper_figures pf
+		JOIN papers p ON p.id = pf.paper_id
+		LEFT JOIN groups g ON g.id = p.group_id
+		WHERE pf.id = ?
+	`, id)
+
+	var item model.FigureListItem
+	var groupID sql.NullInt64
+	var groupName string
+	if err := row.Scan(
+		&item.ID,
+		&item.PaperID,
+		&item.PaperTitle,
+		&groupID,
+		&groupName,
+		&item.Filename,
+		&item.PageNumber,
+		&item.FigureIndex,
+		&item.Source,
+		&item.Caption,
+		&item.CreatedAt,
+	); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, wrapDBError(err, "查询图片失败")
+	}
+
+	if groupID.Valid {
+		item.GroupID = &groupID.Int64
+		item.GroupName = groupName
+	}
+	item.Tags = []model.Tag{}
+	return &item, nil
+}
+
+func uniqueInt64s(values []int64) []int64 {
+	if len(values) == 0 {
+		return nil
+	}
+
+	seen := make(map[int64]struct{}, len(values))
+	result := make([]int64, 0, len(values))
+	for _, value := range values {
+		if value <= 0 {
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		result = append(result, value)
+	}
+	return result
+}
+
+func (r *LibraryRepository) DeletePaperFigure(id int64) error {
+	result, err := r.db.Exec(`DELETE FROM paper_figures WHERE id = ?`, id)
+	if err != nil {
+		return wrapDBError(err, "删除图片失败")
+	}
+	return ensureRowsAffected(result, "figure not found")
 }
 
 func (r *LibraryRepository) GetPaperDetail(id int64) (*model.Paper, error) {
