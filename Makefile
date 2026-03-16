@@ -1,4 +1,4 @@
-# Paper Image Database - Cross-Platform Build Makefile
+# CiteBox - Cross-Platform Build Makefile
 
 .PHONY: build build-windows build-darwin build-linux package-windows package-darwin package-linux prepare-web-assets clean test version help
 
@@ -53,10 +53,10 @@ package-windows: build-windows
 	@( \
 		echo '@echo off'; \
 		echo 'chcp 65001 >nul'; \
-		echo 'title Paper Image Database'; \
+		echo 'title CiteBox'; \
 		echo 'cls'; \
 		echo 'echo ========================================'; \
-		echo 'echo  Paper Image Database'; \
+		echo 'echo  CiteBox'; \
 		echo 'echo  Version: $(VERSION)'; \
 		echo 'echo ========================================'; \
 		echo 'echo.'; \
@@ -67,9 +67,9 @@ package-windows: build-windows
 		echo 'echo Password: wanglab789'; \
 		echo 'echo.'; \
 		echo 'echo A browser window will open automatically.'; \
-		echo 'echo Close the "Paper Image Database" window to stop the app.'; \
+		echo 'echo Close the "CiteBox" window to stop the app.'; \
 		echo 'echo.'; \
-		echo 'start "Paper Image Database" $(BINARY_NAME).exe'; \
+		echo 'start "CiteBox" $(BINARY_NAME).exe'; \
 		echo 'timeout /t 2 /nobreak >nul'; \
 		echo 'start "" http://localhost:8080'; \
 	) > dist/$(BINARY_NAME)-windows-$(VERSION)/start.bat
@@ -78,10 +78,10 @@ package-windows: build-windows
 	@( \
 		echo '@echo off'; \
 		echo 'chcp 65001 >nul'; \
-		echo 'title Paper Image Database (Custom Config)'; \
+		echo 'title CiteBox (Custom Config)'; \
 		echo 'cls'; \
 		echo 'echo ========================================'; \
-		echo 'echo  Paper Image Database - Custom Config'; \
+		echo 'echo  CiteBox - Custom Config'; \
 		echo 'echo ========================================'; \
 		echo 'echo.'; \
 		echo 'rem Customize settings below:'; \
@@ -95,14 +95,14 @@ package-windows: build-windows
 		echo 'echo Starting with custom configuration...'; \
 		echo 'echo Port: %SERVER_PORT%'; \
 		echo 'echo.'; \
-		echo 'start "Paper Image Database" $(BINARY_NAME).exe'; \
+		echo 'start "CiteBox" $(BINARY_NAME).exe'; \
 		echo 'timeout /t 2 /nobreak >nul'; \
 		echo 'start "" http://localhost:%SERVER_PORT%'; \
 	) > dist/$(BINARY_NAME)-windows-$(VERSION)/start-with-config.bat
 	
 	@echo "Creating README.txt..."
 	@( \
-		echo 'Paper Image Database - Windows 版'; \
+		echo 'CiteBox - Windows 版'; \
 		echo '===================================='; \
 		echo ''; \
 		echo '快速开始:'; \
@@ -157,7 +157,7 @@ package-darwin: build-darwin
 		echo 'cd "$$(dirname "$$0")"'; \
 		echo 'clear'; \
 		echo 'echo "========================================"'; \
-		echo 'echo "  Paper Image Database"'; \
+		echo 'echo "  CiteBox"'; \
 		echo 'echo "  Version: $(VERSION)"'; \
 		echo 'echo "========================================"'; \
 		echo 'echo ""'; \
@@ -179,7 +179,7 @@ package-darwin: build-darwin
 		echo 'cd "$$(dirname "$$0")"'; \
 		echo 'clear'; \
 		echo 'echo "========================================"'; \
-		echo 'echo "  Paper Image Database - Custom Config"'; \
+		echo 'echo "  CiteBox - Custom Config"'; \
 		echo 'echo "========================================"'; \
 		echo 'echo ""'; \
 		echo '# Customize settings below:'; \
@@ -199,7 +199,7 @@ package-darwin: build-darwin
 	
 	@echo "Creating README.txt..."
 	@( \
-		echo 'Paper Image Database - macOS 版'; \
+		echo 'CiteBox - macOS 版'; \
 		echo '==================================='; \
 		echo ''; \
 		echo '快速开始:'; \
@@ -257,7 +257,7 @@ package-linux: build-linux
 		echo 'cd "$$(dirname "$$0")"'; \
 		echo 'clear'; \
 		echo 'echo "========================================"'; \
-		echo 'echo "  Paper Image Database"'; \
+		echo 'echo "  CiteBox"'; \
 		echo 'echo "  Version: $(VERSION)"'; \
 		echo 'echo "========================================"'; \
 		echo 'echo ""'; \
@@ -279,7 +279,7 @@ package-linux: build-linux
 		echo 'cd "$$(dirname "$$0")"'; \
 		echo 'clear'; \
 		echo 'echo "========================================"'; \
-		echo 'echo "  Paper Image Database - Custom Config"'; \
+		echo 'echo "  CiteBox - Custom Config"'; \
 		echo 'echo "========================================"'; \
 		echo 'echo ""'; \
 		echo '# Customize settings below:'; \
@@ -299,7 +299,7 @@ package-linux: build-linux
 	
 	@echo "Creating README.txt..."
 	@( \
-		echo 'Paper Image Database - Linux 版'; \
+		echo 'CiteBox - Linux 版'; \
 		echo '==================================='; \
 		echo ''; \
 		echo '快速开始:'; \
@@ -348,7 +348,7 @@ version:
 	@echo "Version: $(VERSION)"
 
 help:
-	@echo "Paper Image Database - Build System"
+	@echo "CiteBox - Build System"
 	@echo ""
 	@echo "Usage: make [target]"
 	@echo ""

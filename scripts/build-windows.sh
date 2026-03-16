@@ -8,7 +8,7 @@ VERSION=${VERSION:-$(git describe --tags --always --dirty 2>/dev/null || echo "d
 BUILD_TIME=$(date -u '+%Y-%m-%d %H:%M:%S')
 
 echo "========================================"
-echo "Building Paper Image Database for Windows"
+echo "Building CiteBox for Windows"
 echo "Version: $VERSION"
 echo "Build Time: $BUILD_TIME"
 echo "========================================"
@@ -46,9 +46,9 @@ cp README.md "$DIST_DIR/"
 cat > "$DIST_DIR/start.bat" << 'EOF'
 @echo off
 chcp 65001 >nul
-title Paper Image Database
+title CiteBox
 echo ========================================
-echo  Paper Image Database
+echo  CiteBox
 echo  Version: VERSION_PLACEHOLDER
 echo ========================================
 echo.
@@ -58,9 +58,9 @@ echo Default URL: http://localhost:8080
 echo Default Account: wanglab / wanglab789
 echo.
 echo A browser window will open automatically.
-echo Close the "Paper Image Database" window to stop the server.
+echo Close the "CiteBox" window to stop the server.
 echo.
-start "Paper Image Database" citebox.exe
+start "CiteBox" citebox.exe
 timeout /t 2 /nobreak >nul
 start "" http://localhost:8080
 EOF
@@ -73,7 +73,7 @@ cat > "$DIST_DIR/config.bat" << 'EOF'
 @echo off
 chcp 65001 >nul
 echo ========================================
-echo Paper Image Database - Configuration
+echo CiteBox - Configuration
 echo ========================================
 echo.
 echo Current settings (press Enter to keep default):
@@ -102,7 +102,7 @@ echo set ADMIN_PASSWORD=%PASSWORD%
 if not "!EXTRACTOR!"=="" echo set PDF_EXTRACTOR_URL=!EXTRACTOR!
 echo echo Configuration loaded.
 echo echo.
-echo start "Paper Image Database" citebox.exe
+echo start "CiteBox" citebox.exe
 echo timeout /t 2 /nobreak ^>nul
 echo start "" http://localhost:%%PORT%%
 ) > start-with-config.bat
@@ -117,7 +117,7 @@ EOF
 # Create Windows README
 cat > "$DIST_DIR/README-Windows.txt" << 'EOF'
 ================================================================================
-                        Paper Image Database - Windows 版
+                        CiteBox - Windows 版
 ================================================================================
 
 快速开始
