@@ -44,6 +44,27 @@ func Load() *Config {
 	}
 }
 
+func (c *Config) ApplyDesktopDefaults(appName string) error {
+	configDir, err := os.UserConfigDir()
+	if err != nil {
+		return err
+	}
+
+	baseDir := filepath.Join(configDir, appName)
+
+	if !hasEnv("UPLOAD_DIR") {
+		c.UploadDir = filepath.Join(baseDir, "uploads")
+	}
+	if !hasEnv("STORAGE_DIR") {
+		c.StorageDir = filepath.Join(baseDir, "library")
+	}
+	if !hasEnv("DATABASE_PATH") {
+		c.DatabasePath = filepath.Join(baseDir, "library.db")
+	}
+
+	return nil
+}
+
 func getEnv(key, defaultValue string) string {
 	if value := os.Getenv(key); value != "" {
 		return value
@@ -144,4 +165,9 @@ func normalizeExtractorEndpoint(rawURL, defaultPath string) string {
 	}
 
 	return parsed.String()
+}
+
+func hasEnv(key string) bool {
+	_, ok := os.LookupEnv(key)
+	return ok
 }

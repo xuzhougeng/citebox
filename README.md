@@ -29,6 +29,7 @@
 
 ```text
 citebox/
+├── cmd/desktop/main.go
 ├── cmd/server/main.go
 ├── internal/
 │   ├── config/
@@ -58,11 +59,23 @@ citebox/
 go run cmd/server/main.go
 ```
 
+如果你想直接以桌面客户端打开，而不是手动起服务再开浏览器：
+
+```bash
+go run ./cmd/desktop
+```
+
 默认地址:
 
 - Web: `http://localhost:8080`
 - 账号: `wanglab`
 - 密码: `wanglab789`
+
+桌面模式说明:
+
+- 会在本机随机端口启动内置服务，并嵌进原生窗口，不再额外打开浏览器
+- 默认数据目录会切到用户配置目录，例如 Linux 下是 `~/.config/CiteBox/`
+- 如果仍想自定义路径，继续使用 `STORAGE_DIR`、`DATABASE_PATH`、`UPLOAD_DIR` 即可
 
 ## 关键环境变量
 

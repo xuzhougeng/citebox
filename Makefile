@@ -1,8 +1,9 @@
 # CiteBox - Cross-Platform Build Makefile
 
-.PHONY: build build-windows build-darwin build-linux package-windows package-darwin package-linux prepare-web-assets clean test version help
+.PHONY: build run build-desktop run-desktop build-windows build-darwin build-linux package-windows package-darwin package-linux package-desktop-windows package-desktop-darwin package-desktop-linux prepare-web-assets clean test version help
 
 BINARY_NAME=citebox
+DESKTOP_BINARY_NAME=$(BINARY_NAME)-desktop
 VERSION=$(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 
 # Build flags for smaller binary
@@ -17,6 +18,13 @@ build:
 
 run:
 	go run ./cmd/server
+
+build-desktop:
+	@mkdir -p bin
+	go build $(LDFLAGS) -o bin/$(DESKTOP_BINARY_NAME) ./cmd/desktop
+
+run-desktop:
+	go run ./cmd/desktop
 
 prepare-web-assets:
 	go run ./scripts/fetch_pdfjs.go web/static/vendor/pdfjs
@@ -319,9 +327,36 @@ package-linux: build-linux
 	
 	@echo ""
 	@echo "✓ Created: dist/$(BINARY_NAME)-linux-$(VERSION).zip"
+
+package-desktop-linux:
 	@echo ""
-	@echo "Note: This package contains x86_64 binary."
-	@echo "For ARM64, run: make build-linux"
+	@echo "========================================"
+	@echo "Creating Linux Desktop Package"
+	@echo "Version: $(VERSION)"
+	@echo "========================================"
+	@bash scripts/package-desktop-unix.sh linux $(VERSION)
+	@echo ""
+	@echo "Note: This package contains the host-architecture binary."
+
+package-desktop-darwin:
+	@echo ""
+	@echo "========================================"
+	@echo "Creating macOS Desktop Package"
+	@echo "Version: $(VERSION)"
+	@echo "========================================"
+	@bash scripts/package-desktop-unix.sh macos $(VERSION)
+	@echo ""
+	@echo "Note: This package contains the host-architecture binary."
+
+package-desktop-windows:
+	@echo ""
+	@echo "========================================"
+	@echo "Creating Windows Desktop Package"
+	@echo "Version: $(VERSION)"
+	@echo "========================================"
+	@pwsh -File scripts/package-desktop-windows.ps1 -Version $(VERSION)
+	@echo ""
+	@echo "Note: This package contains the host-architecture binary."
 
 # =============================================================================
 # Build All Packages
@@ -361,14 +396,17 @@ help:
 	@echo "Windows:"
 	@echo "  make build-windows  - Build Windows executable"
 	@echo "  make package-windows - Create Windows ZIP package"
+	@echo "  make package-desktop-windows - Create Windows desktop ZIP package"
 	@echo ""
 	@echo "macOS:"
 	@echo "  make build-darwin   - Build macOS executables (Intel + Apple Silicon)"
 	@echo "  make package-darwin - Create macOS ZIP package"
+	@echo "  make package-desktop-darwin - Create macOS desktop tar.gz package"
 	@echo ""
 	@echo "Linux:"
 	@echo "  make build-linux    - Build Linux executables (x86_64 + ARM64)"
 	@echo "  make package-linux  - Create Linux ZIP package"
+	@echo "  make package-desktop-linux - Create Linux desktop tar.gz package"
 	@echo ""
 	@echo "All Platforms:"
 	@echo "  make package-all    - Create packages for all platforms"

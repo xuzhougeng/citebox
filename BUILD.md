@@ -10,6 +10,12 @@ make package-all
 make package-windows    # Windows
 make package-darwin     # macOS
 make package-linux      # Linux
+
+# 当前平台桌面客户端
+make build-desktop
+make package-desktop-linux   # Linux
+make package-desktop-darwin  # macOS
+make package-desktop-windows # Windows
 ```
 
 ## GitHub Action 发版
@@ -44,6 +50,87 @@ git push origin v0.1.0
 | macOS | Apple Silicon (ARM64) | `make build-darwin` |
 | Linux | x86_64 | `make package-linux` |
 | Linux | ARM64 | `make build-linux` |
+
+---
+
+## 桌面客户端
+
+桌面客户端入口位于 `cmd/desktop`，当前实现方式是：
+
+- 启动本地内置 HTTP 服务
+- 用原生 WebView 打开 CiteBox，而不是外部浏览器
+- 默认把数据写入用户配置目录，例如 Linux 下为 `~/.config/CiteBox/`
+
+### 本地构建
+
+```bash
+make build-desktop
+```
+
+生成文件：
+
+```text
+bin/citebox-desktop
+```
+
+### 本地运行
+
+```bash
+make run-desktop
+```
+
+### 打包
+
+```bash
+make package-desktop-linux
+make package-desktop-darwin
+make package-desktop-windows
+```
+
+输出文件：
+
+```text
+dist/citebox-desktop-linux-{version}.tar.gz
+├── citebox-desktop
+├── web/
+├── start.sh
+└── README.txt
+
+dist/citebox-desktop-macos-{version}.tar.gz
+├── citebox-desktop
+├── web/
+├── start.sh
+└── README.txt
+
+dist/citebox-desktop-windows-{version}.zip
+├── citebox-desktop.exe
+├── web/
+├── start.bat
+└── README.txt
+```
+
+### Linux 依赖
+
+Linux 桌面版依赖系统 WebView 运行时，构建机和运行机都需要以下库：
+
+```bash
+pkg-config --exists gtk+-3.0
+pkg-config --exists webkit2gtk-4.0
+```
+
+如果缺失，可安装：
+
+```bash
+sudo apt install libgtk-3-dev libwebkit2gtk-4.0-dev
+```
+
+### Windows 说明
+
+Windows 桌面包当前按“原生 runner 直接编译”接入 GitHub Actions：
+
+- 不额外安装 MSYS2
+- 直接依赖 `windows-latest` runner 现成的本机编译环境
+- 如果首轮 CI 发现该 runner 缺少可用的 cgo C/C++ 编译器，再回头补专用工具链
 
 ---
 
@@ -263,6 +350,15 @@ lsof data/library.db
 rm -f data/library.db-shm data/library.db-wal
 ```
 
+### 5. Linux 桌面版无法启动
+
+**问题：** 启动 `citebox-desktop` 后提示缺少 GTK 或 WebKit 相关库。
+
+**解决：**
+```bash
+sudo apt install libgtk-3-dev libwebkit2gtk-4.0-dev
+```
+
 ---
 
 ## 开发构建
@@ -270,6 +366,7 @@ rm -f data/library.db-shm data/library.db-wal
 ### 当前平台
 ```bash
 make build
+make build-desktop
 ```
 
 ### 特定平台/架构

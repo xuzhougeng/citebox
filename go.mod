@@ -2,7 +2,10 @@ module github.com/xuzhougeng/citebox
 
 go 1.21
 
-require modernc.org/sqlite v1.27.0
+require (
+	github.com/webview/webview_go v0.0.0-20240220051247-56f456ca3a43
+	modernc.org/sqlite v1.27.0
+)
 
 require (
 	github.com/dustin/go-humanize v1.0.1 // indirect
