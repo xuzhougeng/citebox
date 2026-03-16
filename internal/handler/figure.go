@@ -34,11 +34,13 @@ func (h *FigureHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
 	pageSize, _ := strconv.Atoi(r.URL.Query().Get("page_size"))
+	hasNotesValue := strings.TrimSpace(r.URL.Query().Get("has_notes"))
 
 	result, err := h.service.ListFigures(model.FigureFilter{
 		Keyword:  strings.TrimSpace(r.URL.Query().Get("keyword")),
 		GroupID:  groupID,
 		TagID:    tagID,
+		HasNotes: hasNotesValue == "1" || strings.EqualFold(hasNotesValue, "true"),
 		Page:     page,
 		PageSize: pageSize,
 	})

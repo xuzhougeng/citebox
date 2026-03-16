@@ -342,6 +342,47 @@ func TestUpdateFigureNotesOnlyAffectsTargetFigureAndSearch(t *testing.T) {
 	}
 }
 
+func TestListFiguresFiltersHasNotes(t *testing.T) {
+	repo := newTestRepository(t)
+
+	paper, err := repo.CreatePaper(PaperUpsertInput{
+		Title:            "Notes Filter",
+		OriginalFilename: "notes-filter.pdf",
+		StoredPDFName:    "notes-filter.pdf",
+		FileSize:         256,
+		ContentType:      "application/pdf",
+		ExtractionStatus: "completed",
+		Figures: []FigureUpsertInput{
+			{Filename: "figure_1.png", PageNumber: 1, FigureIndex: 1, Caption: "First"},
+			{Filename: "figure_2.png", PageNumber: 2, FigureIndex: 2, Caption: "Second"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreatePaper() error = %v", err)
+	}
+
+	if _, err := repo.UpdateFigure(paper.Figures[1].ID, FigureUpdateInput{
+		NotesText: "这张图已经补充了检索笔记",
+		Tags:      []TagUpsertInput{},
+	}); err != nil {
+		t.Fatalf("UpdateFigure() error = %v", err)
+	}
+
+	figures, total, err := repo.ListFigures(model.FigureFilter{HasNotes: true})
+	if err != nil {
+		t.Fatalf("ListFigures(has notes) error = %v", err)
+	}
+	if total != 1 || len(figures) != 1 {
+		t.Fatalf("ListFigures(has notes) total=%d len=%d, want 1/1", total, len(figures))
+	}
+	if figures[0].ID != paper.Figures[1].ID {
+		t.Fatalf("ListFigures(has notes) figure id = %d, want %d", figures[0].ID, paper.Figures[1].ID)
+	}
+	if strings.TrimSpace(figures[0].NotesText) == "" {
+		t.Fatalf("ListFigures(has notes) notes_text = %q, want non-empty", figures[0].NotesText)
+	}
+}
+
 func TestListTagsIncludesPaperAndFigureCounts(t *testing.T) {
 	repo := newTestRepository(t)
 

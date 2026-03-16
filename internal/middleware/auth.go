@@ -62,7 +62,7 @@ func isHTMLPage(r *http.Request) bool {
 		return true
 	}
 
-	htmlPaths := []string{"/", "/index.html", "/upload", "/figures", "/groups", "/tags", "/ai", "/settings"}
+	htmlPaths := []string{"/", "/index.html", "/upload", "/figures", "/groups", "/tags", "/notes", "/ai", "/settings"}
 	for _, p := range htmlPaths {
 		if path == p || path == p+".html" {
 			return true

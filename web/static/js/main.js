@@ -25,6 +25,10 @@ document.addEventListener('DOMContentLoaded', () => {
         TagsPage.init();
     }
 
+    if (path === '/notes' || path === '/notes.html') {
+        NotesPage.init();
+    }
+
     if (path === '/ai' || path === '/ai.html') {
         AIReaderPage.init();
     }

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>图片库 - CiteBox</title>
+    <title>笔记 - CiteBox</title>
     <link rel="icon" type="image/svg+xml" href="/static/img/citebox-icon.svg">
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
@@ -13,10 +13,10 @@
             <a href="/" class="logo">CiteBox</a>
             <ul class="nav-links">
                 <li><a href="/">文献库</a></li>
-                <li><a href="/figures" class="active">图片库</a></li>
+                <li><a href="/figures">图片库</a></li>
                 <li><a href="/groups">分组</a></li>
                 <li><a href="/tags">标签</a></li>
-                <li><a href="/notes">笔记</a></li>
+                <li><a href="/notes" class="active">笔记</a></li>
                 <li><a href="/ai">AI 阅读</a></li>
                 <li><a href="/settings">配置</a></li>
             </ul>
@@ -29,34 +29,34 @@
     <main class="page-shell">
         <section class="hero">
             <div>
-                <p class="eyebrow">Image Library</p>
-                <h1>跨文献浏览所有提取图片</h1>
-                <p class="hero-text">集中整理图片级标签，再按需回到来源文献查看全文、分组和框选结果。</p>
+                <p class="eyebrow">Notes Desk</p>
+                <h1>管理图片笔记</h1>
+                <p class="hero-text">把 AI 解读、人工观察和后续检索关键词沉淀到图片笔记里，再统一回看和检索。</p>
             </div>
         </section>
 
         <section class="filters-card figure-filters-card">
             <div class="filters-card-head">
                 <div>
-                    <p class="eyebrow">Filter Dock</p>
-                    <h2>按条件筛选图片</h2>
-                    <p>图片只维护自己的标签；如需限制范围，可按来源文献分组或图片标签检索。</p>
+                    <p class="eyebrow">Notes Filter</p>
+                    <h2>筛选带笔记的图片</h2>
+                    <p>这里只显示已经写过图片笔记的条目，你可以继续编辑、回看大图或跳转到来源文献。</p>
                 </div>
             </div>
             <div class="filters-grid three-cols">
                 <label class="field">
                     <span>关键词</span>
-                    <input id="figureKeywordInput" class="form-input" type="text" placeholder="文献标题、图片说明、标签、笔记">
+                    <input id="notesKeywordInput" class="form-input" type="text" placeholder="文献标题、图片说明、标签、笔记">
                 </label>
                 <label class="field">
                     <span>来源分组</span>
-                    <select id="figureGroupFilter" class="form-input">
+                    <select id="notesGroupFilter" class="form-input">
                         <option value="">全部分组</option>
                     </select>
                 </label>
                 <label class="field">
                     <span>图片标签</span>
-                    <select id="figureTagFilter" class="form-input">
+                    <select id="notesTagFilter" class="form-input">
                         <option value="">全部图片标签</option>
                     </select>
                 </label>
@@ -64,16 +64,17 @@
         </section>
 
         <section class="figure-results-shell">
-            <section id="figureSummaryStrip" class="summary-strip"></section>
+            <section id="notesSummaryStrip" class="summary-strip"></section>
             <div class="figure-results-head">
                 <div>
-                    <p class="eyebrow">Library Shelf</p>
-                    <h2>图片库</h2>
+                    <p class="eyebrow">Notes Shelf</p>
+                    <h2>管理笔记</h2>
+                    <p>优先打开图片笔记，必要时再切回大图预览或来源文献。</p>
                 </div>
-                <div id="figurePageControls" class="figure-page-controls"></div>
+                <div id="notesPageControls" class="figure-page-controls"></div>
             </div>
-            <section id="figureGrid" class="figure-preview-grid"></section>
-            <div id="figurePagination" class="pagination"></div>
+            <section id="notesGrid" class="figure-preview-grid"></section>
+            <div id="notesPagination" class="pagination"></div>
         </section>
     </main>
 
@@ -81,13 +82,6 @@
         <div class="modal-dialog">
             <button id="closePaperModal" class="modal-close" type="button" aria-label="关闭">×</button>
             <div id="paperModalBody"></div>
-        </div>
-    </div>
-
-    <div id="figureModal" class="modal-shell hidden">
-        <div class="modal-dialog figure-modal-dialog">
-            <button id="closeFigureModal" class="modal-close" type="button" aria-label="关闭">×</button>
-            <div id="figureModalBody"></div>
         </div>
     </div>
 
