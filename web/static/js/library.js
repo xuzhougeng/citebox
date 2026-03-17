@@ -122,10 +122,8 @@ const LibraryPage = {
             }
         });
 
-        this.pagination.addEventListener('click', async (event) => {
-            const button = event.target.closest('button[data-page]');
-            if (!button) return;
-            this.state.currentPage = Number(button.dataset.page);
+        Utils.bindPagination(this.pagination, async (page) => {
+            this.state.currentPage = page;
             await this.loadPapers();
         });
 
@@ -190,6 +188,7 @@ const LibraryPage = {
             this.state.papers = payload.papers || [];
             this.state.total = payload.total || 0;
             this.state.totalPages = payload.total_pages || 0;
+            this.state.currentPage = this.state.totalPages ? Math.min(this.state.currentPage, this.state.totalPages) : 1;
             this.renderResultMeta();
             this.renderPaperList();
             this.renderPagination();
@@ -306,20 +305,7 @@ const LibraryPage = {
     },
 
     renderPagination() {
-        if (!this.state.totalPages || this.state.totalPages <= 1) {
-            this.pagination.innerHTML = '';
-            return;
-        }
-
-        const buttons = [];
-        for (let page = 1; page <= this.state.totalPages; page += 1) {
-            buttons.push(`
-                <button class="${page === this.state.currentPage ? 'active' : ''}" type="button" data-page="${page}">
-                    ${page}
-                </button>
-            `);
-        }
-        this.pagination.innerHTML = buttons.join('');
+        Utils.renderPagination(this.pagination, this.state.currentPage, this.state.totalPages);
     },
 
     syncAutoRefresh() {

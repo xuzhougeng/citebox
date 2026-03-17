@@ -116,21 +116,7 @@ const BrowserUI = {
     },
 
     renderPagination(container, currentPage, totalPages) {
-        if (!container) return;
-        if (!totalPages || totalPages <= 1) {
-            container.innerHTML = '';
-            return;
-        }
-
-        const buttons = [];
-        for (let page = 1; page <= totalPages; page += 1) {
-            buttons.push(`
-                <button class="${page === currentPage ? 'active' : ''}" type="button" data-page="${page}">
-                    ${page}
-                </button>
-            `);
-        }
-        container.innerHTML = buttons.join('');
+        Utils.renderPagination(container, currentPage, totalPages);
     }
 };
 
@@ -1523,11 +1509,7 @@ const FiguresPage = {
                 });
             }
         });
-        this.pagination.addEventListener('click', async (event) => {
-            const button = event.target.closest('button[data-page]');
-            if (!button) return;
-            await this.load(Number(button.dataset.page));
-        });
+        Utils.bindPagination(this.pagination, async (page) => await this.load(page));
         this.pageControls.addEventListener('click', async (event) => {
             const button = event.target.closest('button[data-page-step]');
             if (!button || button.disabled) return;
@@ -1572,9 +1554,10 @@ const FiguresPage = {
 
     renderFigureResults(payload, page = this.state.page) {
         const figures = payload.figures || [];
-        this.state.page = page;
+        const totalPages = payload.total_pages || 0;
+        this.state.page = totalPages ? Math.min(page, totalPages) : 1;
         this.figures = figures;
-        this.state.totalPages = payload.total_pages || 0;
+        this.state.totalPages = totalPages;
         this.summaryStrip.innerHTML = `
             <div class="stat-card"><span>筛选结果</span><strong>${payload.total || 0}</strong></div>
             <div class="stat-card"><span>当前页图片</span><strong>${figures.length}</strong></div>
@@ -1582,9 +1565,9 @@ const FiguresPage = {
             <div class="stat-card"><span>图片标签筛选</span><strong>${Utils.escapeHTML(this.tagFilter.selectedOptions[0]?.textContent || '全部图片标签')}</strong></div>
         `;
         this.pageControls.innerHTML = this.state.totalPages > 1 ? `
-            <button class="btn btn-outline" type="button" data-page-step="-1" ${this.state.page <= 1 ? 'disabled' : ''}>Prev</button>
+            <button class="btn btn-outline" type="button" data-page-step="-1" ${this.state.page <= 1 ? 'disabled' : ''}>上一页</button>
             <span class="figure-page-indicator">第 ${this.state.page} / ${this.state.totalPages} 页</span>
-            <button class="btn btn-outline" type="button" data-page-step="1" ${this.state.page >= this.state.totalPages ? 'disabled' : ''}>Next</button>
+            <button class="btn btn-outline" type="button" data-page-step="1" ${this.state.page >= this.state.totalPages ? 'disabled' : ''}>下一页</button>
         ` : '';
         this.grid.innerHTML = figures.length
             ? figures.map((figure, index) => BrowserUI.renderFigureCard(figure, index, {
@@ -1669,10 +1652,8 @@ const GroupsPage = {
             await PaperViewer.open(Number(card.dataset.paperId), async () => await this.reload());
         });
 
-        this.pagination.addEventListener('click', async (event) => {
-            const button = event.target.closest('button[data-page]');
-            if (!button) return;
-            this.state.page = Number(button.dataset.page);
+        Utils.bindPagination(this.pagination, async (page) => {
+            this.state.page = page;
             await this.loadPapers();
         });
     },
@@ -1728,9 +1709,11 @@ const GroupsPage = {
                 page_size: this.state.pageSize,
                 group_id: this.state.selectedGroupId
             });
+            const totalPages = payload.total_pages || 0;
+            this.state.page = totalPages ? Math.min(this.state.page, totalPages) : 1;
             const papers = payload.papers || [];
             this.paperList.innerHTML = papers.length ? papers.map(BrowserUI.renderPaperCard).join('') : '<div class="empty-state"><h3>这个分组下还没有文献</h3></div>';
-            BrowserUI.renderPagination(this.pagination, this.state.page, payload.total_pages || 0);
+            BrowserUI.renderPagination(this.pagination, this.state.page, totalPages);
         } catch (error) {
             Utils.showToast(error.message, 'error');
         }
@@ -1902,10 +1885,8 @@ const TagsPage = {
             }
         });
 
-        this.pagination.addEventListener('click', async (event) => {
-            const button = event.target.closest('button[data-page]');
-            if (!button) return;
-            this.state.page = Number(button.dataset.page);
+        Utils.bindPagination(this.pagination, async (page) => {
+            this.state.page = page;
             await this.loadResults();
         });
     },
@@ -2003,12 +1984,14 @@ const TagsPage = {
                 page_size: this.pageSize(),
                 tag_id: this.state.selectedTagId
             });
+            const totalPages = payload.total_pages || 0;
+            this.state.page = totalPages ? Math.min(this.state.page, totalPages) : 1;
             const papers = payload.papers || [];
             this.resultList.className = 'paper-grid paper-list-mode';
             this.resultList.innerHTML = papers.length ? papers.map(BrowserUI.renderPaperCard).join('') : '<div class="empty-state"><h3>这个标签下还没有文献</h3></div>';
-            BrowserUI.renderPagination(this.pagination, this.state.page, payload.total_pages || 0);
+            BrowserUI.renderPagination(this.pagination, this.state.page, totalPages);
             this.figures = [];
-            this.totalPages = payload.total_pages || 0;
+            this.totalPages = totalPages;
         } catch (error) {
             Utils.showToast(error.message, 'error');
         }
@@ -2024,9 +2007,10 @@ const TagsPage = {
 
     renderFigureResults(payload, page = this.state.page) {
         const figures = payload.figures || [];
-        this.state.page = page;
+        const totalPages = payload.total_pages || 0;
+        this.state.page = totalPages ? Math.min(page, totalPages) : 1;
         this.figures = figures;
-        this.totalPages = payload.total_pages || 0;
+        this.totalPages = totalPages;
         this.resultList.className = 'figure-preview-grid';
         this.resultList.innerHTML = figures.length
             ? figures.map((figure, index) => BrowserUI.renderFigureCard(figure, index, {
@@ -2169,11 +2153,7 @@ const NotesPage = {
                 });
             }
         });
-        this.pagination.addEventListener('click', async (event) => {
-            const button = event.target.closest('button[data-page]');
-            if (!button) return;
-            await this.load(Number(button.dataset.page));
-        });
+        Utils.bindPagination(this.pagination, async (page) => await this.load(page));
         this.pageControls.addEventListener('click', async (event) => {
             const button = event.target.closest('button[data-page-step]');
             if (!button || button.disabled) return;
@@ -2219,9 +2199,10 @@ const NotesPage = {
 
     renderFigureResults(payload, page = this.state.page) {
         const figures = payload.figures || [];
-        this.state.page = page;
+        const totalPages = payload.total_pages || 0;
+        this.state.page = totalPages ? Math.min(page, totalPages) : 1;
         this.figures = figures;
-        this.state.totalPages = payload.total_pages || 0;
+        this.state.totalPages = totalPages;
         this.summaryStrip.innerHTML = `
             <div class="stat-card"><span>带笔记图片</span><strong>${payload.total || 0}</strong></div>
             <div class="stat-card"><span>当前页</span><strong>${figures.length}</strong></div>
@@ -2229,9 +2210,9 @@ const NotesPage = {
             <div class="stat-card"><span>图片标签</span><strong>${Utils.escapeHTML(this.tagFilter.selectedOptions[0]?.textContent || '全部图片标签')}</strong></div>
         `;
         this.pageControls.innerHTML = this.state.totalPages > 1 ? `
-            <button class="btn btn-outline" type="button" data-page-step="-1" ${this.state.page <= 1 ? 'disabled' : ''}>Prev</button>
+            <button class="btn btn-outline" type="button" data-page-step="-1" ${this.state.page <= 1 ? 'disabled' : ''}>上一页</button>
             <span class="figure-page-indicator">第 ${this.state.page} / ${this.state.totalPages} 页</span>
-            <button class="btn btn-outline" type="button" data-page-step="1" ${this.state.page >= this.state.totalPages ? 'disabled' : ''}>Next</button>
+            <button class="btn btn-outline" type="button" data-page-step="1" ${this.state.page >= this.state.totalPages ? 'disabled' : ''}>下一页</button>
         ` : '';
         this.grid.innerHTML = figures.length
             ? figures.map((figure, index) => this.renderNoteRow(figure, index)).join('')
