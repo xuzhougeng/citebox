@@ -24,6 +24,7 @@ type AIModelConfig struct {
 	APIKey           string     `json:"api_key"`
 	BaseURL          string     `json:"base_url"`
 	Model            string     `json:"model"`
+	MaxOutputTokens  int        `json:"max_output_tokens"`
 	OpenAILegacyMode bool       `json:"openai_legacy_mode"`
 }
 
@@ -102,6 +103,7 @@ func DefaultAISettings() AISettings {
 		Provider:         AIProviderOpenAI,
 		BaseURL:          "https://api.openai.com",
 		Model:            "gpt-4.1-mini",
+		MaxOutputTokens:  1200,
 		OpenAILegacyMode: false,
 	}
 

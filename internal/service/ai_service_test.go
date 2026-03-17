@@ -48,6 +48,9 @@ func TestAISettingsDefaultsAndPersistence(t *testing.T) {
 	if len(updated.Models) != 1 || updated.Models[0].Provider != model.AIProviderAnthropic {
 		t.Fatalf("UpdateSettings() models = %+v, want migrated legacy model", updated.Models)
 	}
+	if updated.Models[0].MaxOutputTokens != 900 {
+		t.Fatalf("UpdateSettings() model max_output_tokens = %d, want 900", updated.Models[0].MaxOutputTokens)
+	}
 
 	reloaded, err := aiSvc.GetSettings()
 	if err != nil {
@@ -58,6 +61,9 @@ func TestAISettingsDefaultsAndPersistence(t *testing.T) {
 	}
 	if reloaded.SceneModels.QAModelID == "" || len(reloaded.Models) != 1 {
 		t.Fatalf("GetSettings() reload scene/models = %+v %+v, want populated values", reloaded.SceneModels, reloaded.Models)
+	}
+	if reloaded.Models[0].MaxOutputTokens != 900 {
+		t.Fatalf("GetSettings() reload model max_output_tokens = %d, want 900", reloaded.Models[0].MaxOutputTokens)
 	}
 }
 
@@ -110,6 +116,60 @@ func TestCheckModelCallsProviderSuccessfully(t *testing.T) {
 	}
 	if !result.Success || result.Model != "gpt-test" || result.Mode != "responses" {
 		t.Fatalf("CheckModel() = %+v, want success for responses mode", result)
+	}
+}
+
+func TestPrepareReadUsesSceneModelMaxOutputTokens(t *testing.T) {
+	svc, repo, _ := newTestService(t)
+	aiSvc := NewAIService(repo, svc.config, nil)
+	paper := createTestPaper(t, repo)
+
+	_, err := aiSvc.UpdateSettings(model.AISettings{
+		Models: []model.AIModelConfig{
+			{
+				ID:              "default",
+				Name:            "Default",
+				Provider:        model.AIProviderOpenAI,
+				APIKey:          "key-default",
+				BaseURL:         "https://api.openai.com",
+				Model:           "gpt-default",
+				MaxOutputTokens: 1200,
+			},
+			{
+				ID:              "qa",
+				Name:            "QA",
+				Provider:        model.AIProviderAnthropic,
+				APIKey:          "key-qa",
+				BaseURL:         "https://api.anthropic.com",
+				Model:           "claude-qa",
+				MaxOutputTokens: 2048,
+			},
+		},
+		SceneModels: model.AISceneModelSelection{
+			DefaultModelID: "default",
+			QAModelID:      "qa",
+		},
+		SystemPrompt: "system",
+		QAPrompt:     "qa",
+	})
+	if err != nil {
+		t.Fatalf("UpdateSettings() error = %v", err)
+	}
+
+	prepared, err := aiSvc.prepareRead(model.AIReadRequest{
+		PaperID:  paper.ID,
+		Action:   model.AIActionPaperQA,
+		Question: "总结一下",
+	}, true)
+	if err != nil {
+		t.Fatalf("prepareRead() error = %v", err)
+	}
+
+	if prepared.settings.Provider != model.AIProviderAnthropic || prepared.settings.Model != "claude-qa" {
+		t.Fatalf("prepareRead() model = %s/%s, want anthropic/claude-qa", prepared.settings.Provider, prepared.settings.Model)
+	}
+	if prepared.settings.MaxOutputTokens != 2048 {
+		t.Fatalf("prepareRead() max_output_tokens = %d, want 2048", prepared.settings.MaxOutputTokens)
 	}
 }
 

@@ -1,6 +1,6 @@
 # CiteBox - Cross-Platform Build Makefile
 
-.PHONY: build run build-desktop run-desktop build-windows build-darwin build-linux package-windows package-darwin package-linux package-desktop-windows package-desktop-darwin package-desktop-linux prepare-web-assets clean test version help
+.PHONY: build run dev build-desktop run-desktop build-windows build-darwin build-linux package-windows package-darwin package-linux package-desktop-windows package-desktop-darwin package-desktop-linux prepare-web-assets clean test version help
 
 BINARY_NAME=citebox
 DESKTOP_BINARY_NAME=$(BINARY_NAME)-desktop
@@ -22,6 +22,9 @@ build:
 	go build $(LDFLAGS) -o bin/$(BINARY_NAME) ./cmd/server
 
 run:
+	go run ./cmd/server
+
+dev: prepare-web-assets
 	go run ./cmd/server
 
 build-desktop:
@@ -395,6 +398,7 @@ help:
 	@echo "Development:"
 	@echo "  make build          - Build for current platform"
 	@echo "  make run            - Run development server"
+	@echo "  make dev            - Prepare PDF.js assets, then run development server"
 	@echo "  make prepare-web-assets - Download PDF.js runtime assets for source runs"
 	@echo "  make test           - Run tests"
 	@echo ""
