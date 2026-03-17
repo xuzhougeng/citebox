@@ -131,7 +131,6 @@ func (s *AIService) ReadPaperStream(ctx context.Context, input model.AIReadReque
 	if prepared.action != model.AIActionFigureInterpretation {
 		return apperr.New(apperr.CodeInvalidArgument, "当前只有图片解读支持流式输出")
 	}
-
 	mode := aiProviderMode(prepared.settings)
 	if err := onEvent(model.AIReadStreamEvent{
 		Type: "meta",
@@ -457,6 +456,12 @@ func buildAIPrompts(
 
 func aiOutputRequirements(action model.AIAction, structuredOutput bool) string {
 	if structuredOutput {
+		if action == model.AIActionTagSuggestion {
+			return `1. 只返回 JSON 对象，不要使用 Markdown 代码块。
+2. JSON 必须包含 suggested_tags 字段（字符串数组）。
+3. answer 字段只填一句话概括，不需要展开分析。
+4. 不要长篇解释，只给出标签列表。`
+		}
 		return `1. 只返回 JSON 对象，不要使用 Markdown 代码块。
 2. JSON 必须包含 answer、suggested_tags、suggested_group 三个字段。
 3. 如果当前任务不需要标签建议或分组建议，请分别返回空数组 [] 和空字符串 ""。
