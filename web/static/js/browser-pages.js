@@ -192,8 +192,13 @@ const FigureViewer = {
 
         this.handleKeydown = (event) => {
             if (!this.modal || this.modal.classList.contains('hidden')) return;
+            const target = event.target;
+            const isEditableTarget = target instanceof HTMLElement && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName));
             if (event.key === 'Escape') {
                 this.close();
+            }
+            if (isEditableTarget) {
+                return;
             }
             if (event.key === 'ArrowLeft') {
                 void this.previous();
@@ -208,6 +213,11 @@ const FigureViewer = {
             if (event.target === this.modal) {
                 this.close();
             }
+        });
+        this.body.addEventListener('input', (event) => {
+            const captionInput = event.target.closest('#figureCaptionInput');
+            if (!captionInput) return;
+            this.captionDraft = captionInput.value;
         });
         this.body.addEventListener('click', async (event) => {
             const button = event.target.closest('[data-figure-action]');
@@ -268,6 +278,12 @@ const FigureViewer = {
             event.preventDefault();
             await this.saveNotesFromInput();
         });
+        this.body.addEventListener('keydown', async (event) => {
+            const captionInput = event.target.closest('#figureCaptionInput');
+            if (!captionInput || event.key !== 'Enter' || (!event.metaKey && !event.ctrlKey)) return;
+            event.preventDefault();
+            await this.saveCaptionFromInput();
+        });
         document.addEventListener('keydown', this.handleKeydown);
     },
 
@@ -281,6 +297,8 @@ const FigureViewer = {
         this.onOpenPaper = options.onOpenPaper;
         this.onMetaChanged = options.onMetaChanged;
         this.loadingPage = false;
+        this.captionDraft = '';
+        this.syncCurrentFigureState({ forceDraftFromFigure: true });
         try {
             this.render();
             this.modal.classList.remove('hidden');
@@ -309,6 +327,7 @@ const FigureViewer = {
         if (!this.canMovePrevious() || this.loadingPage || this.aiRequestState?.loading) return;
         if (this.index > 0) {
             this.index -= 1;
+            this.syncCurrentFigureState({ forceDraftFromFigure: true });
             this.render();
             return;
         }
@@ -319,6 +338,7 @@ const FigureViewer = {
         if (!this.canMoveNext() || this.loadingPage || this.aiRequestState?.loading) return;
         if (this.index < this.figures.length - 1) {
             this.index += 1;
+            this.syncCurrentFigureState({ forceDraftFromFigure: true });
             this.render();
             return;
         }
@@ -340,11 +360,20 @@ const FigureViewer = {
             this.page = targetPage;
             this.totalPages = Math.max(1, Number(payload.total_pages) || this.totalPages);
             this.index = targetIndex === 'last' ? figures.length - 1 : 0;
+            this.syncCurrentFigureState({ forceDraftFromFigure: true });
         } catch (error) {
             Utils.showToast(error.message, 'error');
         } finally {
             this.loadingPage = false;
             this.render();
+        }
+    },
+
+    syncCurrentFigureState(options = {}) {
+        const { forceDraftFromFigure = false } = options;
+        this.currentFigure = this.figures?.[this.index];
+        if (forceDraftFromFigure || typeof this.captionDraft !== 'string') {
+            this.captionDraft = this.currentFigure?.caption || '';
         }
     },
 
@@ -573,6 +602,10 @@ const FigureViewer = {
         return this.tagNames(this.currentFigure?.tags || []);
     },
 
+    currentFigureCaptionDraft() {
+        return this.body.querySelector('#figureCaptionInput')?.value ?? this.captionDraft ?? (this.currentFigure?.caption || '');
+    },
+
     currentFigureNotesDraft() {
         return this.body.querySelector('#figureNotesInput')?.value ?? (this.currentFigure?.notes_text || '');
     },
@@ -590,6 +623,10 @@ const FigureViewer = {
         }
         if (button.dataset.figureMetaAction === 'remove-tag') {
             await this.removeTag(button.dataset.tagName || '');
+            return;
+        }
+        if (button.dataset.figureMetaAction === 'save-caption') {
+            await this.saveCaptionFromInput();
             return;
         }
         if (button.dataset.figureMetaAction === 'save-notes') {
@@ -633,6 +670,30 @@ const FigureViewer = {
         try {
             const payload = await API.updateFigure(this.currentFigure.id, {
                 tags,
+                caption: this.currentFigureCaptionDraft(),
+                notes_text: this.currentFigureNotesDraft()
+            });
+            this.syncPaperMetadata(payload.paper);
+            Utils.showToast(successMessage);
+            this.render();
+            if (typeof this.onMetaChanged === 'function') {
+                await this.onMetaChanged(payload.paper);
+            }
+        } catch (error) {
+            Utils.showToast(error.message, 'error');
+        }
+    },
+
+    async saveCaptionFromInput() {
+        await this.updateCurrentFigureCaption(this.currentFigureCaptionDraft(), '图片说明已保存');
+    },
+
+    async updateCurrentFigureCaption(caption, successMessage) {
+        if (!this.currentFigure) return;
+
+        try {
+            const payload = await API.updateFigure(this.currentFigure.id, {
+                caption,
                 notes_text: this.currentFigureNotesDraft()
             });
             this.syncPaperMetadata(payload.paper);
@@ -655,6 +716,7 @@ const FigureViewer = {
 
         try {
             const payload = await API.updateFigure(this.currentFigure.id, {
+                caption: this.currentFigureCaptionDraft(),
                 notes_text: notesText
             });
             this.syncPaperMetadata(payload.paper);
@@ -671,7 +733,7 @@ const FigureViewer = {
     syncPaperMetadata(paper) {
         this.paperDetails.set(paper.id, paper);
         this.figures = mergeFigureCollectionWithPaper(this.figures, paper);
-        this.currentFigure = this.figures?.[this.index];
+        this.syncCurrentFigureState({ forceDraftFromFigure: true });
     },
 
     async copyAIResult(kind) {
@@ -891,6 +953,7 @@ const FigureViewer = {
         const canPrev = this.canMovePrevious();
         const canNext = this.canMoveNext();
         const aiLoading = Boolean(this.aiRequestState?.loading);
+        const captionDraft = this.captionDraft ?? (figure.caption || '');
         const editableTags = (figure.tags || []).map((tag) => `
             <button class="figure-editable-tag" type="button" data-figure-meta-action="remove-tag" data-tag-name="${Utils.escapeHTML(typeof tag === 'string' ? tag : tag.name || '')}" aria-label="移除标签 ${Utils.escapeHTML(typeof tag === 'string' ? tag : tag.name || '')}">
                 <span>${Utils.escapeHTML(typeof tag === 'string' ? tag : tag.name || '')}</span>
@@ -910,11 +973,16 @@ const FigureViewer = {
                     <div class="figure-lightbox-media">
                         <img src="${figure.image_url}" alt="${Utils.escapeHTML(figure.caption || figure.paper_title)}">
                     </div>
-                    ${figure.caption ? `
-                        <div class="figure-lightbox-caption">
-                            ${Utils.escapeHTML(figure.caption)}
+                    <div class="figure-lightbox-caption figure-lightbox-caption-editor">
+                        <label class="field">
+                            <span>图片说明（Caption）</span>
+                            <textarea id="figureCaptionInput" class="form-textarea figure-caption-input" rows="4" placeholder="解析 caption 有误时，可在这里直接修正。">${Utils.escapeHTML(captionDraft)}</textarea>
+                        </label>
+                        <div class="figure-notes-actions figure-caption-actions">
+                            <span class="muted">caption 会参与检索；按 Ctrl/Cmd + Enter 可快速保存。</span>
+                            <button class="btn btn-outline btn-small" type="button" data-figure-meta-action="save-caption">保存说明</button>
                         </div>
-                    ` : ''}
+                    </div>
                 </section>
 
                 <aside class="figure-lightbox-side">
@@ -1004,8 +1072,13 @@ const NoteViewer = {
 
         this.handleKeydown = (event) => {
             if (!this.modal || this.modal.classList.contains('hidden')) return;
+            const target = event.target;
+            const isEditableTarget = target instanceof HTMLElement && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName));
             if (event.key === 'Escape') {
                 this.close();
+            }
+            if (isEditableTarget) {
+                return;
             }
             if (event.key === 'ArrowLeft') {
                 void this.previous();
