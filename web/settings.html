@@ -92,48 +92,242 @@
                         </label>
                     </div>
 
-                    <div class="settings-summary-box">
-                        <div>
-                            <span>Prompt 使用说明</span>
-                            <p><code>System Prompt</code> 是全局角色设定，作用于所有 AI 场景。</p>
-                            <p><code>通用问答 Prompt</code> 面向 AI伴读页的单篇文献问答。</p>
-                            <p><code>当前图片解读 Prompt</code> 和 <code>图片标签建议 Prompt</code> 都只作用于当前正在查看的单张图片，不是整篇文献的所有图片。</p>
-                            <p><code>分组建议 Prompt</code> 作用于整篇文献的分组判断。</p>
-                            <p>论文标题、摘要、备注、全文、现有标签/分组、当前图片信息，以及 JSON / 流式输出要求都会由后端自动补充，这里只需要写额外的行为指令。</p>
-                        </div>
+                    <div class="manager-head prompt-section-head">
+                        <h3>Prompt 设置</h3>
+                        <p>这里配置各个 AI 场景的主要任务指令；场景范围、论文内容、当前图片信息和输出格式会由系统自动拼接。</p>
                     </div>
+
+                    <label class="field prompt-field">
+                        <span class="field-label-row">
+                            <span class="field-label-text">System Prompt</span>
+                            <span class="field-help" tabindex="0" role="note" title="全局角色设定，作用于所有 AI 场景。不要在这里重复写具体任务、场景范围、论文内容或输出格式。" data-help="全局角色设定，作用于所有 AI 场景。不要在这里重复写具体任务、场景范围、论文内容或输出格式。">?</span>
+                        </span>
+                        <textarea id="aiSystemPromptInput" class="form-textarea" rows="4" placeholder="全局角色设定，例如：优先引用原文证据；证据不足时明确说明不确定"></textarea>
+                        <details class="prompt-template-details">
+                            <summary>查看实际模板</summary>
+                            <p class="prompt-template-note">这部分会单独作为 <code>systemPrompt</code> 发送，不会被包进下面的 <code>userPrompt</code> 模板。</p>
+                            <pre class="prompt-template-pre">System Prompt:
+{这里填写的 System Prompt}</pre>
+                        </details>
+                    </label>
+                    <label class="field prompt-field">
+                        <span class="field-label-row">
+                            <span class="field-label-text">通用问答 Prompt</span>
+                            <span class="field-help" tabindex="0" role="note" title="面向 AI伴读页的单篇文献问答。系统会自动附带全文、摘要、笔记、图片摘要和历史对话。" data-help="面向 AI伴读页的单篇文献问答。系统会自动附带全文、摘要、笔记、图片摘要和历史对话。">?</span>
+                        </span>
+                        <textarea id="aiQAPromptInput" class="form-textarea" rows="4" placeholder="用于单篇文献问答的补充要求，例如：优先回答结论、证据链和局限"></textarea>
+                        <details class="prompt-template-details">
+                            <summary>查看实际模板</summary>
+                            <pre class="prompt-template-pre">System Prompt:
+{System Prompt}
+
+User Prompt:
+任务类型: paper_qa
+
+场景范围:
+针对当前整篇文献回答用户问题。
+
+论文信息:
+- 标题: {标题}
+- 原始文件名: {文件名}
+- 当前分组: {当前分组}
+- 当前标签: {当前文献标签}
+- 摘要: {摘要}
+- 备注: {备注}
+- 本次附带图片数: {图片数}
+
+图片列表:
+{当前文献选中的图片摘要}
+
+现有标签库:
+{文献标签库}
+
+现有分组库:
+{分组库}
+
+用户问题:
+{用户输入的问题}
+
+历史对话:
+{最多 4 轮历史对话}
+
+场景指令:
+{这里填写的通用问答 Prompt}
+
+全文:
+{论文全文}
+
+输出要求:
+1. 只返回 JSON 对象，不要使用 Markdown 代码块。
+2. JSON 必须包含 answer、suggested_tags、suggested_group 三个字段。
+3. 如果当前任务不需要标签建议或分组建议，请分别返回空数组 [] 和空字符串 ""。
+4. answer 中请直接给出结论、依据和必要的限制说明。</pre>
+                        </details>
+                    </label>
+                    <label class="field prompt-field">
+                        <span class="field-label-row">
+                            <span class="field-label-text">当前图片解读 Prompt</span>
+                            <span class="field-help" tabindex="0" role="note" title="只作用于当前正在查看的单张图片。这里主要写解读重点和判断标准；当前图片信息、全文和输出格式会自动附带。" data-help="只作用于当前正在查看的单张图片。这里主要写解读重点和判断标准；当前图片信息、全文和输出格式会自动附带。">?</span>
+                        </span>
+                        <textarea id="aiFigurePromptInput" class="form-textarea" rows="4" placeholder="用于当前单张图片的主要任务要求，例如：优先说明图中设计、对照关系、结论和局限"></textarea>
+                        <details class="prompt-template-details">
+                            <summary>查看实际模板</summary>
+                            <pre class="prompt-template-pre">System Prompt:
+{System Prompt}
+
+User Prompt:
+任务类型: figure_interpretation
+
+场景范围:
+只针对当前选中的这张图片进行解读；论文全文仅作为补充上下文。
+
+论文信息:
+- 标题: {标题}
+- 原始文件名: {文件名}
+- 当前分组: {当前分组}
+- 当前标签: {当前文献标签}
+- 摘要: {摘要}
+- 备注: {备注}
+- 本次附带图片数: 1
+
+图片列表:
+- 第 {页码} 页图 {图序号}：caption={caption}
+
+现有标签库:
+{图片标签库}
+
+现有分组库:
+{分组库}
+
+用户问题:
+当前查看图片：第 {页码} 页图 {图序号}；caption：{caption}。请只围绕这张图片回答。
+
+历史对话:
+{空}
+
+场景指令:
+{这里填写的当前图片解读 Prompt}
+
+全文:
+{论文全文}
+
+输出要求:
+1. 直接输出自然语言正文，不要返回 JSON、代码块或额外元数据。
+2. 优先围绕当前图片说明图像内容、支撑结论、与全文主线的关系以及局限。
+3. 尽量分成短段落，保证可以逐段流式阅读。</pre>
+                        </details>
+                    </label>
+                    <label class="field prompt-field">
+                        <span class="field-label-row">
+                            <span class="field-label-text">图片标签建议 Prompt</span>
+                            <span class="field-help" tabindex="0" role="note" title="只作用于当前正在查看的单张图片，生成的是图片标签。这里主要写标签选择标准和偏好；当前图片信息、现有图片标签库和 JSON 输出要求会自动附带。" data-help="只作用于当前正在查看的单张图片，生成的是图片标签。这里主要写标签选择标准和偏好；当前图片信息、现有图片标签库和 JSON 输出要求会自动附带。">?</span>
+                        </span>
+                        <textarea id="aiTagPromptInput" class="form-textarea" rows="4" placeholder="用于当前单张图片的主要任务要求，例如：优先输出可检索的图片内容标签，避免过泛词"></textarea>
+                        <details class="prompt-template-details">
+                            <summary>查看实际模板</summary>
+                            <pre class="prompt-template-pre">System Prompt:
+{System Prompt}
+
+User Prompt:
+任务类型: tag_suggestion
+
+场景范围:
+只针对当前选中的这张图片生成图片标签；不是整篇文献的文献标签。
+
+论文信息:
+- 标题: {标题}
+- 原始文件名: {文件名}
+- 当前分组: {当前分组}
+- 当前标签: {当前文献标签}
+- 摘要: {摘要}
+- 备注: {备注}
+- 本次附带图片数: 1
+
+图片列表:
+- 第 {页码} 页图 {图序号}：caption={caption}
+
+现有标签库:
+{图片标签库}
+
+现有分组库:
+{分组库}
+
+用户问题:
+当前查看图片：第 {页码} 页图 {图序号}；caption：{caption}。请只针对这张图片给出结果。
+
+历史对话:
+{空}
+
+场景指令:
+{这里填写的图片标签建议 Prompt}
+
+全文:
+{论文全文}
+
+输出要求:
+1. 只返回 JSON 对象，不要使用 Markdown 代码块。
+2. JSON 必须包含 suggested_tags 字段（字符串数组）。
+3. answer 字段只填一句话概括，不需要展开分析。
+4. 不要长篇解释，只给出标签列表。</pre>
+                        </details>
+                    </label>
+                    <label class="field prompt-field">
+                        <span class="field-label-row">
+                            <span class="field-label-text">分组建议 Prompt</span>
+                            <span class="field-help" tabindex="0" role="note" title="作用于整篇文献的分组判断。系统会自动附带当前分组、现有分组库、摘要、备注和全文。" data-help="作用于整篇文献的分组判断。系统会自动附带当前分组、现有分组库、摘要、备注和全文。">?</span>
+                        </span>
+                        <textarea id="aiGroupPromptInput" class="form-textarea" rows="4" placeholder="用于整篇文献分组判断的补充要求，例如：优先复用已有分组，必要时再提新分组"></textarea>
+                        <details class="prompt-template-details">
+                            <summary>查看实际模板</summary>
+                            <pre class="prompt-template-pre">System Prompt:
+{System Prompt}
+
+User Prompt:
+任务类型: group_suggestion
+
+场景范围:
+针对当前整篇文献进行分组判断。
+
+论文信息:
+- 标题: {标题}
+- 原始文件名: {文件名}
+- 当前分组: {当前分组}
+- 当前标签: {当前文献标签}
+- 摘要: {摘要}
+- 备注: {备注}
+- 本次附带图片数: {图片数}
+
+图片列表:
+{当前文献选中的图片摘要}
+
+现有标签库:
+{文献标签库}
+
+现有分组库:
+{分组库}
+
+用户问题:
+请判断这篇文献最适合放到哪个分组。
+
+历史对话:
+{空}
+
+场景指令:
+{这里填写的分组建议 Prompt}
+
+全文:
+{论文全文}
+
+输出要求:
+1. 只返回 JSON 对象，不要使用 Markdown 代码块。
+2. JSON 必须包含 answer、suggested_tags、suggested_group 三个字段。
+3. 如果当前任务不需要标签建议或分组建议，请分别返回空数组 [] 和空字符串 ""。
+4. answer 中请直接给出结论、依据和必要的限制说明。</pre>
+                        </details>
+                    </label>
 
                     <div class="submit-row">
                         <button id="restoreAIPromptsButton" class="btn btn-outline" type="button">恢复推荐 Prompt</button>
-                    </div>
-
-                    <label class="field">
-                        <span>System Prompt</span>
-                        <textarea id="aiSystemPromptInput" class="form-textarea" rows="4" placeholder="全局角色设定，例如：优先引用原文证据；证据不足时明确说明不确定"></textarea>
-                        <p class="muted">适用于所有 AI 动作。不要在这里重复写具体任务、论文内容或输出格式。</p>
-                    </label>
-                    <label class="field">
-                        <span>通用问答 Prompt</span>
-                        <textarea id="aiQAPromptInput" class="form-textarea" rows="4" placeholder="用于单篇文献问答的补充要求，例如：优先回答结论、证据链和局限"></textarea>
-                        <p class="muted">对应 AI伴读页的单篇文献问答。系统会自动附带全文、摘要、笔记、图片摘要和历史对话。</p>
-                    </label>
-                    <label class="field">
-                        <span>当前图片解读 Prompt</span>
-                        <textarea id="aiFigurePromptInput" class="form-textarea" rows="4" placeholder="用于当前单张图片的补充要求，例如：优先说明图中设计、对照关系、结论和局限"></textarea>
-                        <p class="muted">只作用于当前正在查看的那一张图。系统会自动附带该图信息、所属文献全文和输出格式要求。</p>
-                    </label>
-                    <label class="field">
-                        <span>图片标签建议 Prompt</span>
-                        <textarea id="aiTagPromptInput" class="form-textarea" rows="4" placeholder="用于当前单张图片的标签建议，例如：优先输出可检索的图片内容标签，避免过泛词"></textarea>
-                        <p class="muted">只作用于当前图片，生成的是图片标签，不是整篇文献标签。系统会自动附带现有图片标签库，并处理结构化输出。</p>
-                    </label>
-                    <label class="field">
-                        <span>分组建议 Prompt</span>
-                        <textarea id="aiGroupPromptInput" class="form-textarea" rows="4" placeholder="用于整篇文献分组判断的补充要求，例如：优先复用已有分组，必要时再提新分组"></textarea>
-                        <p class="muted">作用对象是整篇文献。系统会自动附带当前分组、现有分组库、摘要、备注和全文。</p>
-                    </label>
-
-                    <div class="submit-row">
                         <button class="btn btn-primary" type="submit">保存 AI 配置</button>
                     </div>
                 </form>

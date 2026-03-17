@@ -389,6 +389,189 @@ button {
     font-size: 0.95rem;
 }
 
+.field-label-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    width: 100%;
+    align-self: stretch;
+}
+
+.field-label-text {
+    color: var(--ink);
+    font-weight: 600;
+}
+
+.prompt-field {
+    gap: 0.9rem;
+    padding: 1rem 1.05rem 1.05rem;
+    border-radius: 22px;
+    border: 1px solid rgba(36, 27, 22, 0.08);
+    background:
+        radial-gradient(circle at top right, rgba(65, 103, 136, 0.06), transparent 12rem),
+        linear-gradient(180deg, rgba(255, 253, 249, 0.96), rgba(248, 241, 232, 0.92));
+    box-shadow: 0 14px 28px rgba(78, 51, 33, 0.06);
+}
+
+.prompt-field .field-label-text {
+    display: inline-flex;
+    align-items: center;
+    position: relative;
+    min-height: 1.3rem;
+    padding-left: 0.9rem;
+    background: none;
+    border: 0;
+    box-shadow: none;
+    border-radius: 0;
+    font-size: 1rem;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+}
+
+.prompt-field .field-label-text::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 0.24rem;
+    height: 1.1rem;
+    border-radius: 999px;
+    background: linear-gradient(180deg, #a45c40, #416788);
+}
+
+.prompt-field .form-textarea {
+    background: rgba(255, 252, 248, 0.88);
+}
+
+.prompt-template-details {
+    border-top: 1px solid rgba(36, 27, 22, 0.08);
+    padding-top: 0.75rem;
+}
+
+.prompt-template-details summary {
+    cursor: pointer;
+    list-style: none;
+    color: var(--accent-deep);
+    font-size: 0.92rem;
+    font-weight: 700;
+}
+
+.prompt-template-details summary::-webkit-details-marker {
+    display: none;
+}
+
+.prompt-template-details summary::before {
+    content: "展开实际模板";
+}
+
+.prompt-template-details[open] summary::before {
+    content: "收起实际模板";
+}
+
+.prompt-template-note {
+    margin: 0.7rem 0 0;
+    color: var(--muted);
+    line-height: 1.6;
+}
+
+.prompt-template-note code {
+    font-family: "SFMono-Regular", "Menlo", "Monaco", "Cascadia Mono", "Segoe UI Mono", monospace;
+    font-size: 0.88em;
+}
+
+.prompt-template-pre {
+    margin: 0.8rem 0 0;
+    padding: 1rem 1.05rem;
+    border-radius: 18px;
+    border: 1px solid rgba(36, 27, 22, 0.08);
+    background: rgba(255, 252, 248, 0.92);
+    color: var(--ink);
+    font-family: "SFMono-Regular", "Menlo", "Monaco", "Cascadia Mono", "Segoe UI Mono", monospace;
+    font-size: 0.84rem;
+    line-height: 1.62;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.field-help {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 1.45rem;
+    height: 1.45rem;
+    border-radius: 999px;
+    border: 1px solid rgba(36, 27, 22, 0.12);
+    background: rgba(36, 27, 22, 0.04);
+    color: rgba(36, 27, 22, 0.78);
+    font-size: 0.82rem;
+    font-weight: 700;
+    cursor: help;
+    outline: none;
+}
+
+.field-help:hover,
+.field-help:focus-visible {
+    border-color: rgba(164, 92, 64, 0.26);
+    background: rgba(164, 92, 64, 0.1);
+    color: var(--accent-deep);
+}
+
+.field-help::after {
+    content: attr(data-help);
+    position: absolute;
+    left: 50%;
+    top: calc(100% + 0.65rem);
+    transform: translateX(-50%);
+    width: min(28rem, calc(100vw - 3rem));
+    padding: 0.85rem 1rem;
+    border-radius: 16px;
+    background: rgba(36, 27, 22, 0.96);
+    color: #fff;
+    font-size: 0.9rem;
+    font-weight: 500;
+    line-height: 1.6;
+    text-align: left;
+    box-shadow: 0 18px 42px rgba(20, 14, 11, 0.28);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 0.18s ease, visibility 0.18s ease, transform 0.18s ease;
+    z-index: 20;
+}
+
+.field-help::before {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: calc(100% + 0.25rem);
+    transform: translateX(-50%) rotate(45deg);
+    width: 0.7rem;
+    height: 0.7rem;
+    background: rgba(36, 27, 22, 0.96);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 0.18s ease, visibility 0.18s ease;
+    z-index: 19;
+}
+
+.field-help:hover::after,
+.field-help:hover::before,
+.field-help:focus-visible::after,
+.field-help:focus-visible::before {
+    opacity: 1;
+    visibility: visible;
+}
+
+.field-help:hover::after,
+.field-help:focus-visible::after {
+    transform: translateX(-50%) translateY(0.1rem);
+}
+
 .form-input,
 .form-textarea,
 .color-input {
@@ -412,6 +595,24 @@ button {
     display: grid;
     grid-template-columns: minmax(0, 1.8fr) minmax(320px, 0.9fr);
     gap: 1.5rem;
+}
+
+@media (max-width: 720px) {
+    .field-help::after {
+        left: 0;
+        transform: translateX(0);
+        width: min(22rem, calc(100vw - 2.5rem));
+    }
+
+    .field-help::before {
+        left: 0.8rem;
+        transform: rotate(45deg);
+    }
+
+    .field-help:hover::after,
+    .field-help:focus-visible::after {
+        transform: translateY(0.1rem);
+    }
 }
 
 .overview-grid {
@@ -1699,6 +1900,20 @@ button {
 .detail-section h3 {
     margin: 0;
     font-family: var(--font-display);
+}
+
+.manager-head h3 {
+    margin: 0;
+    color: var(--ink);
+    font-family: var(--font-display);
+}
+
+.prompt-section-head {
+    margin-top: 0.4rem;
+}
+
+.prompt-section-head p {
+    color: rgba(36, 27, 22, 0.78);
 }
 
 .manager-form {
