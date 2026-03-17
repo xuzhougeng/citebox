@@ -329,7 +329,7 @@ const Utils = {
     statusLabel(status = '') {
         if (status === 'queued') return '等待解析';
         if (status === 'running') return '解析中';
-        if (status === 'manual_pending') return '待人工处理';
+        if (status === 'manual_pending') return '待手动标注';
         if (status === 'completed') return '解析完成';
         if (status === 'failed') return '解析失败';
         if (status === 'cancelled') return '已取消';

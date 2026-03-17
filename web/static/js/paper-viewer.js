@@ -156,7 +156,7 @@ const PaperViewer = {
                 </div>
                 <div class="detail-actions">
                     <button class="btn btn-primary" type="submit">保存</button>
-                    <a class="btn btn-outline" href="/manual?paper_id=${paper.id}" target="_blank" rel="noreferrer">人工处理</a>
+                    <a class="btn btn-outline" href="/manual?paper_id=${paper.id}" target="_blank" rel="noreferrer">手动标注</a>
                     ${(paper.extraction_status === 'failed' || paper.extraction_status === 'cancelled') ? '<button class="btn btn-outline" type="button" data-modal-action="reextract-paper">重新解析</button>' : ''}
                     <button class="btn btn-outline danger" type="button" data-modal-action="delete-paper">删除文献</button>
                     <a class="btn btn-outline" href="/ai?paper_id=${paper.id}" target="_blank" rel="noreferrer">AI伴读</a>
@@ -184,15 +184,15 @@ const PaperViewer = {
                 </div>
             </section>
 
-            <section class="detail-section">
-                <div class="section-head section-head-boxes">
+            <details class="detail-section detail-section-collapsible">
+                <summary class="section-head section-head-boxes">
                     <h3>框选结果</h3>
                     <span class="boxes-count">${boxesHtml.count} 个框选区域</span>
-                </div>
+                </summary>
                 <div class="boxes-content">
                     ${boxesHtml.html}
                 </div>
-            </section>
+            </details>
 
             <section class="detail-section">
                 <div class="section-head section-head-pdf-text">
@@ -201,7 +201,7 @@ const PaperViewer = {
                 </div>
                 <div class="pdf-text-preview">
                     ${paper.pdf_text ? `
-                        <p class="pdf-text-snippet">${Utils.escapeHTML(paper.pdf_text.substring(0, 200))}${paper.pdf_text.length > 200 ? '...' : ''}</p>
+                        <pre class="pdf-text-snippet">${Utils.escapeHTML(paper.pdf_text.substring(0, 1000))}${paper.pdf_text.length > 1000 ? '\n...' : ''}</pre>
                         <p class="pdf-text-meta">共 ${paper.pdf_text.length.toLocaleString()} 字符</p>
                     ` : '<p class="muted">暂无 PDF 原文</p>'}
                 </div>
