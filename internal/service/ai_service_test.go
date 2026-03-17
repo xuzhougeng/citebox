@@ -1,14 +1,55 @@
 package service
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
+	"image"
+	"image/color"
+	_ "image/jpeg"
+	"image/png"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/xuzhougeng/citebox/internal/model"
+	"github.com/xuzhougeng/citebox/internal/repository"
 )
+
+func testFigurePNGBytes(t *testing.T, width, height int) []byte {
+	t.Helper()
+
+	img := image.NewRGBA(image.Rect(0, 0, width, height))
+	for y := 0; y < height; y++ {
+		for x := 0; x < width; x++ {
+			img.Set(x, y, color.RGBA{
+				R: uint8((x*37 + y*11) % 256),
+				G: uint8((x*19 + y*29) % 256),
+				B: uint8((x*13 + y*7) % 256),
+				A: 255,
+			})
+		}
+	}
+
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, img); err != nil {
+		t.Fatalf("png.Encode() error = %v", err)
+	}
+	return buf.Bytes()
+}
+
+func writeFigureFixture(t *testing.T, path string, width, height int) []byte {
+	t.Helper()
+
+	data := testFigurePNGBytes(t, width, height)
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatalf("WriteFile(%s) error = %v", path, err)
+	}
+	return data
+}
 
 func TestAISettingsDefaultsAndPersistence(t *testing.T) {
 	_, repo, cfg := newTestService(t)
@@ -170,6 +211,124 @@ func TestPrepareReadUsesSceneModelMaxOutputTokens(t *testing.T) {
 	}
 	if prepared.settings.MaxOutputTokens != 2048 {
 		t.Fatalf("prepareRead() max_output_tokens = %d, want 2048", prepared.settings.MaxOutputTokens)
+	}
+}
+
+func TestPrepareReadFigureInterpretationUsesRequestedFigureOnly(t *testing.T) {
+	_, repo, cfg := newTestService(t)
+	aiSvc := NewAIService(repo, cfg, nil)
+
+	paper, err := repo.CreatePaper(repository.PaperUpsertInput{
+		Title:            "Figure Scoped AI",
+		OriginalFilename: "figure-scoped-ai.pdf",
+		StoredPDFName:    "figure-scoped-ai.pdf",
+		FileSize:         256,
+		ContentType:      "application/pdf",
+		PDFText:          "Full text for figure scoped AI.",
+		ExtractionStatus: "completed",
+		Figures: []repository.FigureUpsertInput{
+			{Filename: "figure_a.png", ContentType: "image/png", PageNumber: 1, FigureIndex: 1, Caption: "First"},
+			{Filename: "figure_b.png", ContentType: "image/png", PageNumber: 2, FigureIndex: 2, Caption: "Second"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreatePaper() error = %v", err)
+	}
+
+	writeFigureFixture(t, filepath.Join(cfg.FiguresDir(), paper.Figures[0].Filename), 320, 220)
+	writeFigureFixture(t, filepath.Join(cfg.FiguresDir(), paper.Figures[1].Filename), 360, 240)
+
+	if _, err := aiSvc.UpdateSettings(model.AISettings{
+		Models: []model.AIModelConfig{
+			{
+				ID:              "figure",
+				Name:            "Figure",
+				Provider:        model.AIProviderOpenAI,
+				APIKey:          "test-key",
+				BaseURL:         "https://api.openai.com",
+				Model:           "gpt-test",
+				MaxOutputTokens: 1200,
+			},
+		},
+		SceneModels: model.AISceneModelSelection{
+			DefaultModelID: "figure",
+			FigureModelID:  "figure",
+			TagModelID:     "figure",
+		},
+		SystemPrompt: "system",
+		FigurePrompt: "figure",
+		TagPrompt:    "tag",
+	}); err != nil {
+		t.Fatalf("UpdateSettings() error = %v", err)
+	}
+
+	prepared, err := aiSvc.prepareRead(model.AIReadRequest{
+		PaperID:  paper.ID,
+		FigureID: paper.Figures[1].ID,
+		Action:   model.AIActionFigureInterpretation,
+		Question: "请解读当前图片。",
+	}, true)
+	if err != nil {
+		t.Fatalf("prepareRead() error = %v", err)
+	}
+
+	if prepared.includedFigures != 1 || len(prepared.images) != 1 {
+		t.Fatalf("prepareRead() included=%d images=%d, want 1/1", prepared.includedFigures, len(prepared.images))
+	}
+	if !strings.Contains(prepared.userPrompt, "caption=Second") {
+		t.Fatalf("prepareRead() prompt missing selected figure summary\n%s", prepared.userPrompt)
+	}
+	if strings.Contains(prepared.userPrompt, "caption=First") {
+		t.Fatalf("prepareRead() prompt leaked unselected figure summary\n%s", prepared.userPrompt)
+	}
+}
+
+func TestLoadFigureInputsCompressesOversizedFigure(t *testing.T) {
+	_, repo, cfg := newTestService(t)
+	aiSvc := NewAIService(repo, cfg, nil)
+
+	paper, err := repo.CreatePaper(repository.PaperUpsertInput{
+		Title:            "Large Figure AI",
+		OriginalFilename: "large-figure-ai.pdf",
+		StoredPDFName:    "large-figure-ai.pdf",
+		FileSize:         256,
+		ContentType:      "application/pdf",
+		PDFText:          "Full text for image compression.",
+		ExtractionStatus: "completed",
+		Figures: []repository.FigureUpsertInput{
+			{Filename: "large_figure.png", ContentType: "image/png", PageNumber: 3, FigureIndex: 1, Caption: "Large"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreatePaper() error = %v", err)
+	}
+
+	writeFigureFixture(t, filepath.Join(cfg.FiguresDir(), paper.Figures[0].Filename), 2600, 1600)
+
+	images, summaries, err := aiSvc.loadFigureInputs(paper, paper.Figures)
+	if err != nil {
+		t.Fatalf("loadFigureInputs() error = %v", err)
+	}
+	if len(summaries) != 1 {
+		t.Fatalf("loadFigureInputs() summaries = %d, want 1", len(summaries))
+	}
+	if len(images) != 1 {
+		t.Fatalf("loadFigureInputs() images = %d, want 1", len(images))
+	}
+	if images[0].MIMEType != "image/jpeg" {
+		t.Fatalf("loadFigureInputs() mime = %q, want image/jpeg", images[0].MIMEType)
+	}
+
+	decoded, err := base64.StdEncoding.DecodeString(images[0].Data)
+	if err != nil {
+		t.Fatalf("DecodeString() error = %v", err)
+	}
+	img, _, err := image.Decode(bytes.NewReader(decoded))
+	if err != nil {
+		t.Fatalf("Decode(compressed) error = %v", err)
+	}
+	if maxInt(img.Bounds().Dx(), img.Bounds().Dy()) > aiFigureImageMaxDimension {
+		t.Fatalf("compressed image bounds = %dx%d, want max <= %d", img.Bounds().Dx(), img.Bounds().Dy(), aiFigureImageMaxDimension)
 	}
 }
 

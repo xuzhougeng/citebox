@@ -131,10 +131,11 @@ const SettingsPage = {
         this.renderSceneModelSelectors(settings.scene_models || {});
     },
 
-    async saveAISettings() {
-        const payload = {
-            models: this.getAIPayloadModels(),
-            scene_models: this.readSceneModelSelections(),
+    buildAISettingsPayload(options = {}) {
+        const { models = this.aiModelDraft, sceneModels = this.readSceneModelSelections() } = options;
+        return {
+            models: this.getAIPayloadModels(models),
+            scene_models: sceneModels,
             temperature: this.temperatureInput.value === '' ? 0.2 : Number(this.temperatureInput.value),
             max_figures: Number(this.maxFiguresInput.value || 0),
             system_prompt: this.systemPromptInput.value.trim(),
@@ -143,10 +144,20 @@ const SettingsPage = {
             tag_prompt: this.tagPromptInput.value.trim(),
             group_prompt: this.groupPromptInput.value.trim()
         };
+    },
 
+    async persistAISettings(payload, successMessage) {
         await API.updateAISettings(payload);
         await this.loadAISettings();
-        Utils.showToast('AI 配置已保存');
+        if (successMessage) {
+            Utils.showToast(successMessage);
+        }
+    },
+
+    async saveAISettings() {
+        const payload = this.buildAISettingsPayload();
+
+        await this.persistAISettings(payload, 'AI 配置已保存');
     },
 
     async loadExtractorSettings() {
@@ -295,40 +306,48 @@ const SettingsPage = {
     },
 
     async saveEditedAIModel() {
-        const selection = this.readSceneModelSelections();
         const model = this.readAIModelFromModal();
+        const nextModels = this.editingAIModelIsNew
+            ? [...this.aiModelDraft, model]
+            : this.aiModelDraft.map((item) => item.id === model.id ? model : item);
+        const selection = this.readSceneModelSelections();
+        const payload = this.buildAISettingsPayload({
+            models: nextModels,
+            sceneModels: selection
+        });
 
-        if (this.editingAIModelIsNew) {
-            this.aiModelDraft.push(model);
-        } else {
-            this.aiModelDraft = this.aiModelDraft.map((item) => item.id === model.id ? model : item);
+        await this.persistAISettings(payload, '模型已保存');
+        if (!this.aiModelModal.classList.contains('hidden')) {
+            this.closeAIModelModal();
         }
-
-        this.renderAIModels();
-        this.renderSceneModelSelectors(selection);
-        this.closeAIModelModal();
     },
 
-    deleteAIModel(modelID) {
+    async deleteAIModel(modelID) {
         if (this.aiModelDraft.length <= 1) {
             Utils.showToast('至少需要保留一个 AI 模型', 'error');
             return;
         }
         const selection = this.readSceneModelSelections();
-        this.aiModelDraft = this.aiModelDraft.filter((item) => item.id !== modelID);
-        this.renderAIModels();
-        this.renderSceneModelSelectors(selection);
+        const nextModels = this.aiModelDraft.filter((item) => item.id !== modelID);
+        const payload = this.buildAISettingsPayload({
+            models: nextModels,
+            sceneModels: selection
+        });
+
+        await this.persistAISettings(payload, '模型已删除');
     },
 
-    deleteCurrentAIModel() {
+    async deleteCurrentAIModel() {
         if (!this.editingAIModel?.id) return;
         if (this.aiModelDraft.length <= 1) {
             Utils.showToast('至少需要保留一个 AI 模型', 'error');
             return;
         }
 
-        this.deleteAIModel(this.editingAIModel.id);
-        this.closeAIModelModal();
+        await this.deleteAIModel(this.editingAIModel.id);
+        if (!this.aiModelModal.classList.contains('hidden')) {
+            this.closeAIModelModal();
+        }
     },
 
     renderSceneModelSelectors(selection = {}) {
@@ -372,8 +391,8 @@ const SettingsPage = {
         };
     },
 
-    getAIPayloadModels() {
-        return this.aiModelDraft.map((item) => ({
+    getAIPayloadModels(models = this.aiModelDraft) {
+        return models.map((item) => ({
             id: item.id,
             name: item.name || '',
             provider: item.provider,
