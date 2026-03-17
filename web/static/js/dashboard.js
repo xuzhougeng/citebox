@@ -151,7 +151,7 @@ const DashboardPage = {
             return `
                 <article class="recent-paper-row" data-paper-id="${paper.id}">
                     <div class="recent-paper-main">
-                        <div class="recent-paper-head">
+                        <div class="recent-paper-head" data-action="open" role="button" title="点击查看详情">
                             <span class="status-pill ${statusClass}">${Utils.escapeHTML(Utils.statusLabel(paper.extraction_status))}</span>
                             <h3>${Utils.escapeHTML(paper.title)}</h3>
                         </div>
