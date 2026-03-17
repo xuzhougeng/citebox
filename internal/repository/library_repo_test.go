@@ -108,6 +108,140 @@ func TestCreatePaperAndListEntities(t *testing.T) {
 	}
 }
 
+func TestListPapersSearchesPDFTextWithFTS(t *testing.T) {
+	repo := newTestRepository(t)
+
+	if _, err := repo.CreatePaper(PaperUpsertInput{
+		Title:            "Cell Atlas",
+		OriginalFilename: "cell-atlas.pdf",
+		StoredPDFName:    "paper_fts.pdf",
+		FileSize:         128,
+		ContentType:      "application/pdf",
+		PDFText:          "This manuscript summarizes transcriptome remodeling across stress gradients.",
+		ExtractionStatus: "completed",
+		Figures: []FigureUpsertInput{
+			{Filename: "figure_fts.png", PageNumber: 1, FigureIndex: 1},
+		},
+	}); err != nil {
+		t.Fatalf("CreatePaper() error = %v", err)
+	}
+
+	papers, total, err := repo.ListPapers(model.PaperFilter{Keyword: "transcriptome remodeling"})
+	if err != nil {
+		t.Fatalf("ListPapers(keyword) error = %v", err)
+	}
+	if total != 1 || len(papers) != 1 {
+		t.Fatalf("ListPapers(keyword) total=%d len=%d, want 1/1", total, len(papers))
+	}
+	if papers[0].Title != "Cell Atlas" {
+		t.Fatalf("ListPapers(keyword) title = %q, want %q", papers[0].Title, "Cell Atlas")
+	}
+}
+
+func TestCreatePaperRejectsDuplicateStoredPDFName(t *testing.T) {
+	repo := newTestRepository(t)
+
+	if _, err := repo.CreatePaper(PaperUpsertInput{
+		Title:            "First",
+		OriginalFilename: "first.pdf",
+		StoredPDFName:    "duplicate-paper.pdf",
+		FileSize:         128,
+		ContentType:      "application/pdf",
+		ExtractionStatus: "completed",
+		Figures: []FigureUpsertInput{
+			{Filename: "first-figure.png", PageNumber: 1, FigureIndex: 1},
+		},
+	}); err != nil {
+		t.Fatalf("CreatePaper() setup error = %v", err)
+	}
+
+	if _, err := repo.CreatePaper(PaperUpsertInput{
+		Title:            "Second",
+		OriginalFilename: "second.pdf",
+		StoredPDFName:    "duplicate-paper.pdf",
+		FileSize:         128,
+		ContentType:      "application/pdf",
+		ExtractionStatus: "completed",
+		Figures: []FigureUpsertInput{
+			{Filename: "second-figure.png", PageNumber: 1, FigureIndex: 1},
+		},
+	}); !apperr.IsCode(err, apperr.CodeConflict) {
+		t.Fatalf("CreatePaper() duplicate stored pdf code = %q, want %q", apperr.CodeOf(err), apperr.CodeConflict)
+	}
+}
+
+func TestCreatePaperRejectsDuplicateFigureFilename(t *testing.T) {
+	repo := newTestRepository(t)
+
+	if _, err := repo.CreatePaper(PaperUpsertInput{
+		Title:            "First",
+		OriginalFilename: "first.pdf",
+		StoredPDFName:    "first-paper.pdf",
+		FileSize:         128,
+		ContentType:      "application/pdf",
+		ExtractionStatus: "completed",
+		Figures: []FigureUpsertInput{
+			{Filename: "duplicate-figure.png", PageNumber: 1, FigureIndex: 1},
+		},
+	}); err != nil {
+		t.Fatalf("CreatePaper() setup error = %v", err)
+	}
+
+	if _, err := repo.CreatePaper(PaperUpsertInput{
+		Title:            "Second",
+		OriginalFilename: "second.pdf",
+		StoredPDFName:    "second-paper.pdf",
+		FileSize:         128,
+		ContentType:      "application/pdf",
+		ExtractionStatus: "completed",
+		Figures: []FigureUpsertInput{
+			{Filename: "duplicate-figure.png", PageNumber: 1, FigureIndex: 1},
+		},
+	}); !apperr.IsCode(err, apperr.CodeConflict) {
+		t.Fatalf("CreatePaper() duplicate figure filename code = %q, want %q", apperr.CodeOf(err), apperr.CodeConflict)
+	}
+
+	papers, total, err := repo.ListPapers(model.PaperFilter{})
+	if err != nil {
+		t.Fatalf("ListPapers() error = %v", err)
+	}
+	if total != 1 || len(papers) != 1 {
+		t.Fatalf("ListPapers() after duplicate figure total=%d len=%d, want 1/1", total, len(papers))
+	}
+}
+
+func TestCreatePaperRejectsInvalidStatusAndFigureSource(t *testing.T) {
+	repo := newTestRepository(t)
+
+	if _, err := repo.CreatePaper(PaperUpsertInput{
+		Title:            "Invalid Status",
+		OriginalFilename: "invalid-status.pdf",
+		StoredPDFName:    "invalid-status.pdf",
+		FileSize:         128,
+		ContentType:      "application/pdf",
+		ExtractionStatus: "unexpected",
+		Figures: []FigureUpsertInput{
+			{Filename: "invalid-status-figure.png", PageNumber: 1, FigureIndex: 1},
+		},
+	}); !apperr.IsCode(err, apperr.CodeInvalidArgument) {
+		t.Fatalf("CreatePaper() invalid status code = %q, want %q", apperr.CodeOf(err), apperr.CodeInvalidArgument)
+	}
+
+	if _, err := repo.CreatePaper(PaperUpsertInput{
+		Title:            "Invalid Source",
+		OriginalFilename: "invalid-source.pdf",
+		StoredPDFName:    "invalid-source.pdf",
+		FileSize:         128,
+		ContentType:      "application/pdf",
+		ExtractionStatus: "completed",
+		Figures: []FigureUpsertInput{
+			{Filename: "invalid-source-figure.png", PageNumber: 1, FigureIndex: 1, Source: "crawler"},
+		},
+	}); !apperr.IsCode(err, apperr.CodeInvalidArgument) {
+		t.Fatalf("CreatePaper() invalid source code = %q, want %q", apperr.CodeOf(err), apperr.CodeInvalidArgument)
+	}
+}
+
 func TestUpdateFigureTagsOnlyAffectsTargetFigure(t *testing.T) {
 	repo := newTestRepository(t)
 
@@ -383,6 +517,72 @@ func TestListFiguresFiltersHasNotes(t *testing.T) {
 	}
 }
 
+func TestUpdateFigureTracksUpdatedAtAndNotesSort(t *testing.T) {
+	repo := newTestRepository(t)
+
+	paper, err := repo.CreatePaper(PaperUpsertInput{
+		Title:            "Figure Updates",
+		OriginalFilename: "figure-updates.pdf",
+		StoredPDFName:    "figure-updates.pdf",
+		FileSize:         256,
+		ContentType:      "application/pdf",
+		ExtractionStatus: "completed",
+		Figures: []FigureUpsertInput{
+			{Filename: "figure_1.png", PageNumber: 1, FigureIndex: 1, Caption: "First"},
+			{Filename: "figure_2.png", PageNumber: 2, FigureIndex: 2, Caption: "Second"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreatePaper() error = %v", err)
+	}
+
+	if _, err := repo.db.Exec(
+		"UPDATE paper_figures SET notes_text = ?, updated_at = '2000-01-01 00:00:00' WHERE id = ?",
+		"old note",
+		paper.Figures[0].ID,
+	); err != nil {
+		t.Fatalf("seed first figure notes error = %v", err)
+	}
+	if _, err := repo.db.Exec(
+		"UPDATE paper_figures SET updated_at = '2000-01-01 00:00:00' WHERE id = ?",
+		paper.Figures[1].ID,
+	); err != nil {
+		t.Fatalf("seed second figure updated_at error = %v", err)
+	}
+
+	if _, err := repo.UpdateFigure(paper.Figures[1].ID, FigureUpdateInput{
+		NotesText: "new note",
+		Tags:      []TagUpsertInput{},
+	}); err != nil {
+		t.Fatalf("UpdateFigure() error = %v", err)
+	}
+
+	secondFigure, err := repo.GetFigure(paper.Figures[1].ID)
+	if err != nil {
+		t.Fatalf("GetFigure() error = %v", err)
+	}
+	if secondFigure == nil {
+		t.Fatalf("GetFigure() returned nil figure")
+	}
+	if secondFigure.UpdatedAt.Year() == 2000 {
+		t.Fatalf("GetFigure() updated_at = %v, want refreshed timestamp", secondFigure.UpdatedAt)
+	}
+
+	figures, total, err := repo.ListFigures(model.FigureFilter{HasNotes: true})
+	if err != nil {
+		t.Fatalf("ListFigures(has notes) error = %v", err)
+	}
+	if total != 2 || len(figures) != 2 {
+		t.Fatalf("ListFigures(has notes) total=%d len=%d, want 2/2", total, len(figures))
+	}
+	if figures[0].ID != paper.Figures[1].ID {
+		t.Fatalf("ListFigures(has notes) first id = %d, want %d", figures[0].ID, paper.Figures[1].ID)
+	}
+	if figures[1].ID != paper.Figures[0].ID {
+		t.Fatalf("ListFigures(has notes) second id = %d, want %d", figures[1].ID, paper.Figures[0].ID)
+	}
+}
+
 func TestListTagsIncludesPaperAndFigureCounts(t *testing.T) {
 	repo := newTestRepository(t)
 
@@ -568,7 +768,7 @@ func TestRepositoryMigratesPaperMetadataColumns(t *testing.T) {
 		}
 		figureColumns[strings.ToLower(name)] = true
 	}
-	for _, column := range []string{"source", "notes_text"} {
+	for _, column := range []string{"source", "notes_text", "updated_at"} {
 		if !figureColumns[column] {
 			t.Fatalf("missing migrated column %q", column)
 		}
