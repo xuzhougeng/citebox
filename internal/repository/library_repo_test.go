@@ -170,6 +170,40 @@ func TestCreatePaperRejectsDuplicateStoredPDFName(t *testing.T) {
 	}
 }
 
+func TestCreatePaperRejectsDuplicatePDFSHA256(t *testing.T) {
+	repo := newTestRepository(t)
+
+	if _, err := repo.CreatePaper(PaperUpsertInput{
+		Title:            "First",
+		OriginalFilename: "first.pdf",
+		StoredPDFName:    "first-paper.pdf",
+		PDFSHA256:        "same-checksum",
+		FileSize:         128,
+		ContentType:      "application/pdf",
+		ExtractionStatus: "completed",
+		Figures: []FigureUpsertInput{
+			{Filename: "first-figure.png", PageNumber: 1, FigureIndex: 1},
+		},
+	}); err != nil {
+		t.Fatalf("CreatePaper() setup error = %v", err)
+	}
+
+	if _, err := repo.CreatePaper(PaperUpsertInput{
+		Title:            "Second",
+		OriginalFilename: "second.pdf",
+		StoredPDFName:    "second-paper.pdf",
+		PDFSHA256:        "same-checksum",
+		FileSize:         128,
+		ContentType:      "application/pdf",
+		ExtractionStatus: "completed",
+		Figures: []FigureUpsertInput{
+			{Filename: "second-figure.png", PageNumber: 1, FigureIndex: 1},
+		},
+	}); !apperr.IsCode(err, apperr.CodeConflict) {
+		t.Fatalf("CreatePaper() duplicate checksum code = %q, want %q", apperr.CodeOf(err), apperr.CodeConflict)
+	}
+}
+
 func TestCreatePaperRejectsDuplicateFigureFilename(t *testing.T) {
 	repo := newTestRepository(t)
 

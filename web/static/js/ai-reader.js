@@ -83,19 +83,20 @@ const AIReaderPage = {
     renderConfigSummary() {
         const aiSettings = this.state.aiSettings || {};
         const extractorSettings = this.state.extractorSettings || {};
-        const aiReady = Boolean(aiSettings.api_key);
+        const qaModel = this.resolveModelForAction('paper_qa');
+        const aiReady = Boolean(qaModel.api_key);
         const extractorReady = Boolean(extractorSettings.effective_extractor_url);
 
         this.configSummary.innerHTML = `
             <article class="settings-summary-card">
-                <span>AI Provider</span>
-                <strong>${Utils.escapeHTML(aiSettings.provider || 'openai')}</strong>
-                <p>${Utils.escapeHTML(aiSettings.model || this.defaultModel(aiSettings.provider || 'openai'))}</p>
+                <span>问答模型</span>
+                <strong>${Utils.escapeHTML(qaModel.provider || 'openai')}</strong>
+                <p>${Utils.escapeHTML(qaModel.model || this.defaultModel(qaModel.provider || 'openai'))}</p>
             </article>
             <article class="settings-summary-card">
                 <span>AI 状态</span>
                 <strong>${aiReady ? '已配置' : '未配置'}</strong>
-                <p>${aiReady ? 'API Key 已提供，可直接发起阅读请求。' : '请先到配置页保存 AI Key 与模型参数。'}</p>
+                <p>${aiReady ? '当前问答模型已提供 API Key，可直接发起阅读请求。' : '请先到配置页为问答场景配置可用模型和 API Key。'}</p>
             </article>
             <article class="settings-summary-card">
                 <span>PDF 提取器</span>
@@ -222,8 +223,8 @@ const AIReaderPage = {
             Utils.showToast('请先选择一篇文献', 'error');
             return;
         }
-        if (!this.state.aiSettings?.api_key) {
-            Utils.showToast('请先到配置页保存 AI 配置', 'error');
+        if (!this.resolveModelForAction('paper_qa').api_key) {
+            Utils.showToast('请先到配置页为问答场景配置可用模型', 'error');
             return;
         }
         if (this.currentConversation().length >= 5) {
@@ -346,13 +347,33 @@ const AIReaderPage = {
     },
 
     renderModelSummary() {
-        const settings = this.state.aiSettings || {};
-        const provider = settings.provider || 'openai';
-        const model = settings.model || this.defaultModel(provider);
+        const selectedModel = this.resolveModelForAction('paper_qa');
+        const provider = selectedModel.provider || 'openai';
+        const model = selectedModel.model || this.defaultModel(provider);
         const mode = provider === 'openai'
-            ? (settings.openai_legacy_mode ? 'Chat Completions' : 'Responses')
+            ? (selectedModel.openai_legacy_mode ? 'Chat Completions' : 'Responses')
             : (provider === 'anthropic' ? 'Messages' : 'generateContent');
         this.modelSummary.textContent = `${provider} / ${model} / ${mode}`;
+    },
+
+    resolveModelForAction(action) {
+        const settings = this.state.aiSettings || {};
+        const models = Array.isArray(settings.models) ? settings.models : [];
+        const sceneModels = settings.scene_models || {};
+        const fallbackProvider = settings.provider || 'openai';
+        const fallbackModel = models[0] || {
+            provider: fallbackProvider,
+            model: settings.model || this.defaultModel(fallbackProvider),
+            api_key: settings.api_key || '',
+            openai_legacy_mode: Boolean(settings.openai_legacy_mode)
+        };
+
+        let modelID = sceneModels.default_model_id || fallbackModel.id || '';
+        if (action === 'paper_qa') {
+            modelID = sceneModels.qa_model_id || modelID;
+        }
+
+        return models.find((item) => item.id === modelID) || fallbackModel;
     },
 
     currentPaper() {

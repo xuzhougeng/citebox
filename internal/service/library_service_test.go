@@ -3,6 +3,7 @@ package service
 import (
 	"bytes"
 	"encoding/base64"
+	"errors"
 	"image"
 	"image/color"
 	"image/png"
@@ -411,6 +412,50 @@ func TestUploadPaperWithoutExtractorConfiguredUsesManualPending(t *testing.T) {
 	}
 	if paper.ExtractorMessage == "" {
 		t.Fatalf("UploadPaper() extractor_message should not be empty")
+	}
+}
+
+func TestUploadPaperRejectsDuplicatePDFAndReturnsExistingPaper(t *testing.T) {
+	svc, repo, cfg := newTestService(t)
+
+	content := []byte("%PDF-1.4 duplicate test")
+	existing, err := repo.CreatePaper(repository.PaperUpsertInput{
+		Title:            "Existing",
+		OriginalFilename: "existing.pdf",
+		StoredPDFName:    "existing.pdf",
+		FileSize:         int64(len(content)),
+		ContentType:      "application/pdf",
+		ExtractionStatus: "completed",
+	})
+	if err != nil {
+		t.Fatalf("CreatePaper() error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(cfg.PapersDir(), existing.StoredPDFName), content, 0o644); err != nil {
+		t.Fatalf("WriteFile(existing pdf) error = %v", err)
+	}
+	if err := svc.backfillPaperChecksums(); err != nil {
+		t.Fatalf("backfillPaperChecksums() error = %v", err)
+	}
+
+	file := &testMultipartFile{Reader: bytes.NewReader(content)}
+	header := &multipart.FileHeader{
+		Filename: "duplicate.pdf",
+		Size:     int64(len(content)),
+		Header: textproto.MIMEHeader{
+			"Content-Type": []string{"application/pdf"},
+		},
+	}
+
+	_, err = svc.UploadPaper(file, header, UploadPaperParams{Title: "Duplicate"})
+	var duplicateErr *DuplicatePaperError
+	if !errors.As(err, &duplicateErr) {
+		t.Fatalf("UploadPaper() error = %T %v, want DuplicatePaperError", err, err)
+	}
+	if duplicateErr.Paper == nil || duplicateErr.Paper.ID != existing.ID {
+		t.Fatalf("DuplicatePaperError paper = %+v, want existing paper id %d", duplicateErr.Paper, existing.ID)
+	}
+	if !apperr.IsCode(err, apperr.CodeConflict) {
+		t.Fatalf("UploadPaper() code = %q, want %q", apperr.CodeOf(err), apperr.CodeConflict)
 	}
 }
 

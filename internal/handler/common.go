@@ -2,12 +2,14 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
 
 	"github.com/xuzhougeng/citebox/internal/apperr"
 	"github.com/xuzhougeng/citebox/internal/model"
+	"github.com/xuzhougeng/citebox/internal/service"
 )
 
 func sendJSON(w http.ResponseWriter, status int, data interface{}) {
@@ -18,11 +20,18 @@ func sendJSON(w http.ResponseWriter, status int, data interface{}) {
 
 func sendError(w http.ResponseWriter, err error) {
 	status := apperr.HTTPStatus(err)
-	sendJSON(w, status, model.ErrorResponse{
+	resp := model.ErrorResponse{
 		Success: false,
 		Code:    string(apperr.CodeOf(err)),
 		Error:   apperr.Message(err),
-	})
+	}
+
+	var duplicateErr *service.DuplicatePaperError
+	if errors.As(err, &duplicateErr) {
+		resp.Paper = duplicateErr.Paper
+	}
+
+	sendJSON(w, status, resp)
 }
 
 func parseIDFromPath(path, prefix string) (int64, error) {

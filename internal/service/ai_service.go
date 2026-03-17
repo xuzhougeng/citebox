@@ -109,6 +109,44 @@ func (s *AIService) UpdateSettings(input model.AISettings) (*model.AISettings, e
 	return &settings, nil
 }
 
+func (s *AIService) CheckModel(ctx context.Context, input model.AIModelConfig) (*model.AIModelCheckResponse, error) {
+	normalized, err := normalizeAIModelConfig(input, model.DefaultAISettings().Models[0], 1)
+	if err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(normalized.APIKey) == "" {
+		return nil, apperr.New(apperr.CodeFailedPrecondition, "请先填写 API Key 再检查模型")
+	}
+
+	runtimeSettings := model.DefaultAISettings()
+	runtimeSettings.Provider = normalized.Provider
+	runtimeSettings.APIKey = normalized.APIKey
+	runtimeSettings.BaseURL = normalized.BaseURL
+	runtimeSettings.Model = normalized.Model
+	runtimeSettings.OpenAILegacyMode = normalized.OpenAILegacyMode
+	mode := aiProviderMode(runtimeSettings)
+
+	rawText, providerMode, err := s.callProvider(ctx, &aiReadPrepared{
+		settings:     runtimeSettings,
+		systemPrompt: "你是模型联通性检查助手。请只回复 OK。",
+		userPrompt:   "请只回复 OK",
+	})
+	if err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(rawText) == "" {
+		return nil, apperr.New(apperr.CodeUnavailable, "模型检查未返回文本内容")
+	}
+
+	return &model.AIModelCheckResponse{
+		Success:  true,
+		Provider: normalized.Provider,
+		Model:    normalized.Model,
+		Mode:     firstNonEmpty(providerMode, mode),
+		Message:  "模型检查通过",
+	}, nil
+}
+
 func (s *AIService) ReadPaper(ctx context.Context, input model.AIReadRequest) (*model.AIReadResponse, error) {
 	prepared, err := s.prepareRead(input, true)
 	if err != nil {
@@ -185,11 +223,14 @@ func (s *AIService) prepareRead(input model.AIReadRequest, structuredOutput bool
 	if err != nil {
 		return nil, err
 	}
-	if strings.TrimSpace(settings.APIKey) == "" {
-		return nil, apperr.New(apperr.CodeFailedPrecondition, "请先在 AI 页面配置 API Key")
-	}
-
 	action := normalizeAIAction(input.Action)
+	modelConfig, err := resolveModelForAction(*settings, action)
+	if err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(modelConfig.APIKey) == "" {
+		return nil, apperr.New(apperr.CodeFailedPrecondition, "请先在 AI 页面为当前场景配置可用模型和 API Key")
+	}
 	question := strings.TrimSpace(input.Question)
 	if question == "" {
 		question = defaultAIQuestion(action)
@@ -226,16 +267,23 @@ func (s *AIService) prepareRead(input model.AIReadRequest, structuredOutput bool
 
 	systemPrompt, userPrompt := buildAIPrompts(*settings, paper, groups, tags, action, question, history, figureSummaries, len(images), structuredOutput)
 
+	runtimeSettings := *settings
+	runtimeSettings.Provider = modelConfig.Provider
+	runtimeSettings.APIKey = modelConfig.APIKey
+	runtimeSettings.BaseURL = modelConfig.BaseURL
+	runtimeSettings.Model = modelConfig.Model
+	runtimeSettings.OpenAILegacyMode = modelConfig.OpenAILegacyMode
+
 	s.logger.Info("ai paper read started",
-		"provider", settings.Provider,
-		"model", settings.Model,
+		"provider", runtimeSettings.Provider,
+		"model", runtimeSettings.Model,
 		"paper_id", paper.ID,
 		"action", action,
 		"figures", len(images),
 	)
 
 	return &aiReadPrepared{
-		settings:        *settings,
+		settings:        runtimeSettings,
 		action:          action,
 		question:        question,
 		paper:           paper,
@@ -272,19 +320,6 @@ func normalizeAISettings(input model.AISettings) (model.AISettings, error) {
 	defaults := model.DefaultAISettings()
 	settings := input
 
-	if strings.TrimSpace(string(settings.Provider)) == "" {
-		settings.Provider = defaults.Provider
-	}
-	if !isSupportedAIProvider(settings.Provider) {
-		return model.AISettings{}, apperr.New(apperr.CodeInvalidArgument, "暂不支持该 AI 提供商")
-	}
-
-	if strings.TrimSpace(settings.BaseURL) == "" {
-		settings.BaseURL = defaultAIBaseURL(settings.Provider)
-	}
-	if strings.TrimSpace(settings.Model) == "" {
-		settings.Model = defaultAIModel(settings.Provider)
-	}
 	if settings.Temperature < 0 || settings.Temperature > 2 {
 		return model.AISettings{}, apperr.New(apperr.CodeInvalidArgument, "temperature 必须在 0 到 2 之间")
 	}
@@ -313,20 +348,164 @@ func normalizeAISettings(input model.AISettings) (model.AISettings, error) {
 	if strings.TrimSpace(settings.GroupPrompt) == "" {
 		settings.GroupPrompt = defaults.GroupPrompt
 	}
-	if settings.Provider != model.AIProviderOpenAI {
-		settings.OpenAILegacyMode = false
-	}
-
-	settings.BaseURL = strings.TrimRight(strings.TrimSpace(settings.BaseURL), "/")
-	settings.Model = strings.TrimSpace(settings.Model)
-	settings.APIKey = strings.TrimSpace(settings.APIKey)
 	settings.SystemPrompt = strings.TrimSpace(settings.SystemPrompt)
 	settings.QAPrompt = strings.TrimSpace(settings.QAPrompt)
 	settings.FigurePrompt = strings.TrimSpace(settings.FigurePrompt)
 	settings.TagPrompt = strings.TrimSpace(settings.TagPrompt)
 	settings.GroupPrompt = strings.TrimSpace(settings.GroupPrompt)
 
+	models, err := normalizeAIModels(settings, defaults)
+	if err != nil {
+		return model.AISettings{}, err
+	}
+	settings.Models = models
+	settings.SceneModels = normalizeAISceneModelSelection(settings.SceneModels, settings.Models)
+
+	defaultModel, err := resolveModelByID(settings.Models, settings.SceneModels.DefaultModelID)
+	if err != nil {
+		return model.AISettings{}, err
+	}
+	settings.Provider = defaultModel.Provider
+	settings.APIKey = defaultModel.APIKey
+	settings.BaseURL = defaultModel.BaseURL
+	settings.Model = defaultModel.Model
+	settings.OpenAILegacyMode = defaultModel.OpenAILegacyMode
+
 	return settings, nil
+}
+
+func normalizeAIModels(settings model.AISettings, defaults model.AISettings) ([]model.AIModelConfig, error) {
+	inputModels := settings.Models
+	if len(inputModels) == 0 {
+		inputModels = []model.AIModelConfig{{
+			ID:               defaults.Models[0].ID,
+			Name:             defaults.Models[0].Name,
+			Provider:         settings.Provider,
+			APIKey:           settings.APIKey,
+			BaseURL:          settings.BaseURL,
+			Model:            settings.Model,
+			OpenAILegacyMode: settings.OpenAILegacyMode,
+		}}
+	}
+
+	models := make([]model.AIModelConfig, 0, len(inputModels))
+	seenIDs := map[string]struct{}{}
+	for index, item := range inputModels {
+		normalized, err := normalizeAIModelConfig(item, defaults.Models[0], index+1)
+		if err != nil {
+			return nil, err
+		}
+		if _, exists := seenIDs[normalized.ID]; exists {
+			return nil, apperr.New(apperr.CodeInvalidArgument, "AI 模型 ID 不能重复")
+		}
+		seenIDs[normalized.ID] = struct{}{}
+		models = append(models, normalized)
+	}
+	if len(models) == 0 {
+		return nil, apperr.New(apperr.CodeInvalidArgument, "至少需要保留一个 AI 模型")
+	}
+	return models, nil
+}
+
+func normalizeAIModelConfig(input model.AIModelConfig, fallback model.AIModelConfig, index int) (model.AIModelConfig, error) {
+	config := input
+
+	if strings.TrimSpace(config.ID) == "" {
+		config.ID = fmt.Sprintf("model_%d", index)
+	}
+	config.ID = strings.TrimSpace(config.ID)
+
+	if strings.TrimSpace(string(config.Provider)) == "" {
+		config.Provider = fallback.Provider
+	}
+	if !isSupportedAIProvider(config.Provider) {
+		return model.AIModelConfig{}, apperr.New(apperr.CodeInvalidArgument, "暂不支持该 AI 提供商")
+	}
+
+	config.APIKey = strings.TrimSpace(config.APIKey)
+	config.BaseURL = strings.TrimRight(strings.TrimSpace(config.BaseURL), "/")
+	config.Model = strings.TrimSpace(config.Model)
+	config.Name = strings.TrimSpace(config.Name)
+
+	if config.BaseURL == "" {
+		config.BaseURL = defaultAIBaseURL(config.Provider)
+	}
+	if config.Model == "" {
+		config.Model = defaultAIModel(config.Provider)
+	}
+	if config.Name == "" {
+		config.Name = fmt.Sprintf("%s / %s", strings.ToUpper(string(config.Provider)), config.Model)
+	}
+	if config.Provider != model.AIProviderOpenAI {
+		config.OpenAILegacyMode = false
+	}
+
+	return config, nil
+}
+
+func normalizeAISceneModelSelection(input model.AISceneModelSelection, models []model.AIModelConfig) model.AISceneModelSelection {
+	selection := input
+	if len(models) == 0 {
+		return model.AISceneModelSelection{}
+	}
+
+	selection.DefaultModelID = normalizeSceneModelID(selection.DefaultModelID, models, models[0].ID)
+	selection.QAModelID = normalizeSceneModelID(selection.QAModelID, models, selection.DefaultModelID)
+	selection.FigureModelID = normalizeSceneModelID(selection.FigureModelID, models, selection.DefaultModelID)
+	selection.TagModelID = normalizeSceneModelID(selection.TagModelID, models, selection.DefaultModelID)
+	selection.GroupModelID = normalizeSceneModelID(selection.GroupModelID, models, selection.DefaultModelID)
+	return selection
+}
+
+func normalizeSceneModelID(modelID string, models []model.AIModelConfig, fallback string) string {
+	modelID = strings.TrimSpace(modelID)
+	if modelID != "" {
+		for _, item := range models {
+			if item.ID == modelID {
+				return modelID
+			}
+		}
+	}
+	for _, item := range models {
+		if item.ID == fallback {
+			return fallback
+		}
+	}
+	if len(models) == 0 {
+		return ""
+	}
+	return models[0].ID
+}
+
+func resolveModelForAction(settings model.AISettings, action model.AIAction) (model.AIModelConfig, error) {
+	modelID := settings.SceneModels.DefaultModelID
+	switch action {
+	case model.AIActionFigureInterpretation:
+		modelID = firstNonEmpty(settings.SceneModels.FigureModelID, settings.SceneModels.DefaultModelID)
+	case model.AIActionTagSuggestion:
+		modelID = firstNonEmpty(settings.SceneModels.TagModelID, settings.SceneModels.DefaultModelID)
+	case model.AIActionGroupSuggestion:
+		modelID = firstNonEmpty(settings.SceneModels.GroupModelID, settings.SceneModels.DefaultModelID)
+	default:
+		modelID = firstNonEmpty(settings.SceneModels.QAModelID, settings.SceneModels.DefaultModelID)
+	}
+	return resolveModelByID(settings.Models, modelID)
+}
+
+func resolveModelByID(models []model.AIModelConfig, modelID string) (model.AIModelConfig, error) {
+	modelID = strings.TrimSpace(modelID)
+	for _, item := range models {
+		if item.ID == modelID {
+			return item, nil
+		}
+	}
+	if len(models) == 0 {
+		return model.AIModelConfig{}, apperr.New(apperr.CodeFailedPrecondition, "请先在 AI 页面配置至少一个模型")
+	}
+	if modelID == "" {
+		return models[0], nil
+	}
+	return model.AIModelConfig{}, apperr.New(apperr.CodeFailedPrecondition, "当前场景绑定的 AI 模型不存在，请到配置页重新选择")
 }
 
 func buildAIPrompts(

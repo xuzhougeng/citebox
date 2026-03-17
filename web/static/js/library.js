@@ -15,6 +15,7 @@ const LibraryPage = {
     async init() {
         this.autoRefreshTimer = null;
         this.loadingPapers = false;
+        this.readLaunchState();
         this.cacheElements();
         this.bindEvents();
         await Promise.all([
@@ -22,6 +23,36 @@ const LibraryPage = {
             this.loadTags()
         ]);
         await this.loadPapers();
+        await this.handleLaunchState();
+    },
+
+    readLaunchState() {
+        const params = new URLSearchParams(window.location.search);
+        const paperId = Number(params.get('paper_id') || 0);
+        this.launchState = {
+            paperId: paperId > 0 ? paperId : 0,
+            fromDuplicate: params.get('from') === 'duplicate'
+        };
+    },
+
+    async handleLaunchState() {
+        if (!this.launchState?.paperId) return;
+
+        if (this.launchState.fromDuplicate) {
+            Utils.showToast('PDF 已存在，已跳转到已有文献', 'info');
+        }
+
+        const paperId = this.launchState.paperId;
+        this.clearLaunchState();
+        await this.openPaperModal(paperId);
+    },
+
+    clearLaunchState() {
+        const url = new URL(window.location.href);
+        url.searchParams.delete('paper_id');
+        url.searchParams.delete('from');
+        window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
+        this.launchState = { paperId: 0, fromDuplicate: false };
     },
 
     cacheElements() {

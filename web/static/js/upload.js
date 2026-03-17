@@ -148,6 +148,12 @@ const UploadPage = {
             this.selectedFile.innerHTML = '<span>尚未选择 PDF</span>';
             await this.loadGroups();
         } catch (error) {
+            const duplicatePaperId = Number(error?.payload?.paper?.id || 0);
+            if (error?.code === 'CONFLICT' && duplicatePaperId > 0) {
+                Utils.showToast(error.message, 'info');
+                window.location.href = `/library?paper_id=${encodeURIComponent(duplicatePaperId)}&from=duplicate`;
+                return;
+            }
             Utils.showToast(error.message, 'error');
         } finally {
             this.submitButton.disabled = false;
