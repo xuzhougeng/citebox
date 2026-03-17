@@ -216,6 +216,10 @@ const API = {
         return requestJSON(`${API_BASE}/ai/settings`);
     },
 
+    getDefaultAISettings() {
+        return requestJSON(`${API_BASE}/ai/settings/defaults`);
+    },
+
     updateAISettings(data) {
         return requestJSON(`${API_BASE}/ai/settings`, {
             method: 'PUT',

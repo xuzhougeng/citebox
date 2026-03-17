@@ -29,6 +29,10 @@ func (h *AIHandler) GetSettings(w http.ResponseWriter, r *http.Request) {
 	sendJSON(w, http.StatusOK, settings)
 }
 
+func (h *AIHandler) GetDefaultSettings(w http.ResponseWriter, r *http.Request) {
+	sendJSON(w, http.StatusOK, model.DefaultAISettings())
+}
+
 func (h *AIHandler) UpdateSettings(w http.ResponseWriter, r *http.Request) {
 	var req model.AISettings
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {

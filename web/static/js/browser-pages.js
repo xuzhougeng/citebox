@@ -603,12 +603,20 @@ const FigureViewer = {
         return this.body.querySelector('#figureNotesInput')?.value ?? (this.currentFigure?.notes_text || '');
     },
 
-    clearFigureAIState(figureID) {
+    clearFigureAIState(figureID, options = {}) {
+        const preserveActions = new Set((options.preserveActions || []).map((action) => String(action || '')));
         if (!figureID) return;
-        this.activeAIByFigure.delete(figureID);
-        this.aiCache.delete(this.aiCacheKey(figureID, 'figure_interpretation'));
-        this.aiCache.delete(this.aiCacheKey(figureID, 'tag_suggestion'));
-        if (this.aiRequestState?.figureID === figureID && !this.aiRequestState.loading) {
+        const activeAction = this.activeAIByFigure.get(figureID) || '';
+        if (!activeAction || !preserveActions.has(activeAction)) {
+            this.activeAIByFigure.delete(figureID);
+        }
+        if (!preserveActions.has('figure_interpretation')) {
+            this.aiCache.delete(this.aiCacheKey(figureID, 'figure_interpretation'));
+        }
+        if (!preserveActions.has('tag_suggestion')) {
+            this.aiCache.delete(this.aiCacheKey(figureID, 'tag_suggestion'));
+        }
+        if (this.aiRequestState?.figureID === figureID && !this.aiRequestState.loading && !preserveActions.has(this.aiRequestState.action || '')) {
             this.aiRequestState = null;
         }
     },
@@ -676,12 +684,13 @@ const FigureViewer = {
 
         try {
             const figureID = Number(this.currentFigure.id);
+            const preserveActions = this.activeAIAction() === 'tag_suggestion' ? ['tag_suggestion'] : [];
             const payload = await API.updateFigure(this.currentFigure.id, {
                 tags,
                 caption: this.currentFigureCaptionDraft(),
                 notes_text: this.currentFigureNotesDraft()
             });
-            this.clearFigureAIState(figureID);
+            this.clearFigureAIState(figureID, { preserveActions });
             this.syncPaperMetadata(payload.paper);
             Utils.showToast(successMessage);
             this.render();
