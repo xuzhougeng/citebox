@@ -3,7 +3,9 @@ package service
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -39,6 +41,28 @@ const (
 )
 
 type LibraryServiceOption func(*LibraryService)
+
+type DuplicatePaperError struct {
+	Paper *model.Paper
+	Err   error
+}
+
+func (e *DuplicatePaperError) Error() string {
+	if e == nil {
+		return ""
+	}
+	if e.Err != nil {
+		return e.Err.Error()
+	}
+	return "PDF 已存在"
+}
+
+func (e *DuplicatePaperError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return e.Err
+}
 
 type UploadPaperParams struct {
 	Title   string
@@ -152,6 +176,10 @@ func NewLibraryService(repo *repository.LibraryRepository, cfg *config.Config, o
 		opt(service)
 	}
 
+	if err := service.backfillPaperChecksums(); err != nil {
+		return nil, err
+	}
+
 	if service.startBackground {
 		go service.resumePendingExtractions()
 	}
@@ -260,7 +288,8 @@ func (s *LibraryService) UploadPaper(file multipart.File, header *multipart.File
 	if err != nil {
 		return nil, apperr.Wrap(apperr.CodeInternal, "创建 PDF 文件失败", err)
 	}
-	if _, err := io.Copy(dst, file); err != nil {
+	hasher := sha256.New()
+	if _, err := io.Copy(io.MultiWriter(dst, hasher), file); err != nil {
 		dst.Close()
 		os.Remove(pdfPath)
 		return nil, apperr.Wrap(apperr.CodeInternal, "保存 PDF 失败", err)
@@ -268,6 +297,19 @@ func (s *LibraryService) UploadPaper(file multipart.File, header *multipart.File
 	if err := dst.Close(); err != nil {
 		os.Remove(pdfPath)
 		return nil, apperr.Wrap(apperr.CodeInternal, "关闭 PDF 文件失败", err)
+	}
+	pdfSHA256 := hex.EncodeToString(hasher.Sum(nil))
+
+	if duplicate, err := s.repo.FindPaperByPDFSHA256(pdfSHA256); err != nil {
+		os.Remove(pdfPath)
+		return nil, err
+	} else if duplicate != nil {
+		os.Remove(pdfPath)
+		s.decoratePaper(duplicate)
+		return nil, &DuplicatePaperError{
+			Paper: duplicate,
+			Err:   apperr.New(apperr.CodeConflict, "PDF 已存在，正在跳转到已有文献"),
+		}
 	}
 
 	tagInputs := s.normalizeTagInputs(params.Tags, model.TagScopePaper)
@@ -288,6 +330,7 @@ func (s *LibraryService) UploadPaper(file multipart.File, header *multipart.File
 		Title:            title,
 		OriginalFilename: header.Filename,
 		StoredPDFName:    storedPDFName,
+		PDFSHA256:        pdfSHA256,
 		FileSize:         header.Size,
 		ContentType:      contentTypeOrDefault(header.Header.Get("Content-Type"), "application/pdf"),
 		PDFText:          "",
@@ -303,6 +346,19 @@ func (s *LibraryService) UploadPaper(file multipart.File, header *multipart.File
 	})
 	if err != nil {
 		os.Remove(pdfPath)
+		if apperr.IsCode(err, apperr.CodeConflict) {
+			duplicate, findErr := s.repo.FindPaperByPDFSHA256(pdfSHA256)
+			if findErr != nil {
+				return nil, findErr
+			}
+			if duplicate != nil {
+				s.decoratePaper(duplicate)
+				return nil, &DuplicatePaperError{
+					Paper: duplicate,
+					Err:   apperr.New(apperr.CodeConflict, "PDF 已存在，正在跳转到已有文献"),
+				}
+			}
+		}
 		return nil, err
 	}
 
@@ -312,6 +368,49 @@ func (s *LibraryService) UploadPaper(file multipart.File, header *multipart.File
 
 	s.decoratePaper(paper)
 	return paper, nil
+}
+
+func (s *LibraryService) backfillPaperChecksums() error {
+	items, err := s.repo.ListPapersMissingPDFSHA256()
+	if err != nil {
+		return err
+	}
+
+	for _, item := range items {
+		pdfPath := filepath.Join(s.config.PapersDir(), item.StoredPDFName)
+		checksum, err := fileSHA256(pdfPath)
+		if err != nil {
+			if os.IsNotExist(err) {
+				s.logger.Warn("skip pdf checksum backfill because file is missing", "paper_id", item.ID, "stored_pdf_name", item.StoredPDFName)
+				continue
+			}
+			return apperr.Wrap(apperr.CodeInternal, "计算历史 PDF 指纹失败", err)
+		}
+
+		if err := s.repo.UpdatePaperPDFSHA256(item.ID, checksum); err != nil {
+			if apperr.IsCode(err, apperr.CodeConflict) {
+				s.logger.Warn("skip duplicate historical pdf checksum", "paper_id", item.ID, "stored_pdf_name", item.StoredPDFName, "pdf_sha256", checksum)
+				continue
+			}
+			return err
+		}
+	}
+
+	return nil
+}
+
+func fileSHA256(path string) (string, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+
+	hasher := sha256.New()
+	if _, err := io.Copy(hasher, file); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(hasher.Sum(nil)), nil
 }
 
 func (s *LibraryService) UpdatePaper(id int64, params UpdatePaperParams) (*model.Paper, error) {

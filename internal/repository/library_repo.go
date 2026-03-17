@@ -43,6 +43,7 @@ type PaperUpsertInput struct {
 	Title            string
 	OriginalFilename string
 	StoredPDFName    string
+	PDFSHA256        string
 	FileSize         int64
 	ContentType      string
 	PDFText          string
@@ -129,6 +130,7 @@ func (r *LibraryRepository) initSchema() error {
 		title TEXT NOT NULL,
 		original_filename TEXT NOT NULL,
 		stored_pdf_name TEXT NOT NULL,
+		pdf_sha256 TEXT DEFAULT '',
 		file_size INTEGER DEFAULT 0,
 		content_type TEXT DEFAULT 'application/pdf',
 		pdf_text TEXT DEFAULT '',
@@ -194,6 +196,7 @@ func (r *LibraryRepository) ensureSchemaColumns() error {
 		{tableName: "papers", name: "extractor_job_id", definition: "TEXT DEFAULT ''"},
 		{tableName: "papers", name: "abstract_text", definition: "TEXT DEFAULT ''"},
 		{tableName: "papers", name: "notes_text", definition: "TEXT DEFAULT ''"},
+		{tableName: "papers", name: "pdf_sha256", definition: "TEXT DEFAULT ''"},
 		{tableName: "paper_figures", name: "source", definition: "TEXT DEFAULT 'auto'"},
 		{tableName: "paper_figures", name: "notes_text", definition: "TEXT DEFAULT ''"},
 		{tableName: "paper_figures", name: "updated_at", definition: "DATETIME"},
@@ -350,6 +353,14 @@ func (r *LibraryRepository) ensureIndexes() error {
 	); err != nil {
 		return err
 	}
+	if err := r.ensureUniqueNonEmptyIndex(
+		"idx_papers_pdf_sha256_unique",
+		"papers",
+		"pdf_sha256",
+		"数据库中存在重复的 PDF 指纹，无法完成升级，请先清理重复数据",
+	); err != nil {
+		return err
+	}
 	if err := r.ensureUniqueIndex(
 		"idx_paper_figures_filename_unique",
 		"paper_figures",
@@ -397,6 +408,42 @@ func (r *LibraryRepository) ensureUniqueIndex(indexName, tableName, columnName, 
 	}
 
 	_, err = r.db.Exec(fmt.Sprintf("CREATE UNIQUE INDEX %s ON %s(%s)", indexName, tableName, columnName))
+	return err
+}
+
+func (r *LibraryRepository) ensureUniqueNonEmptyIndex(indexName, tableName, columnName, duplicateMessage string) error {
+	hasIndex, err := r.hasIndex(indexName)
+	if err != nil {
+		return err
+	}
+	if hasIndex {
+		return nil
+	}
+
+	var duplicateValue string
+	query := fmt.Sprintf(`
+		SELECT %s
+		FROM %s
+		WHERE COALESCE(TRIM(%s), '') <> ''
+		GROUP BY %s
+		HAVING COUNT(*) > 1
+		LIMIT 1
+	`, columnName, tableName, columnName, columnName)
+	err = r.db.QueryRow(query).Scan(&duplicateValue)
+	if err != nil && err != sql.ErrNoRows {
+		return err
+	}
+	if err == nil {
+		return apperr.New(apperr.CodeFailedPrecondition, duplicateMessage)
+	}
+
+	_, err = r.db.Exec(fmt.Sprintf(
+		"CREATE UNIQUE INDEX %s ON %s(%s) WHERE COALESCE(TRIM(%s), '') <> ''",
+		indexName,
+		tableName,
+		columnName,
+		columnName,
+	))
 	return err
 }
 
@@ -895,13 +942,14 @@ func (r *LibraryRepository) CreatePaper(input PaperUpsertInput) (*model.Paper, e
 
 	result, err := tx.Exec(`
 		INSERT INTO papers (
-			title, original_filename, stored_pdf_name, file_size, content_type,
+			title, original_filename, stored_pdf_name, pdf_sha256, file_size, content_type,
 			pdf_text, abstract_text, notes_text, boxes_json, extraction_status, extractor_message, extractor_job_id, group_id
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`,
 		input.Title,
 		input.OriginalFilename,
 		input.StoredPDFName,
+		input.PDFSHA256,
 		input.FileSize,
 		input.ContentType,
 		input.PDFText,
@@ -951,6 +999,72 @@ func (r *LibraryRepository) CreatePaper(input PaperUpsertInput) (*model.Paper, e
 	}
 
 	return r.GetPaperDetail(paperID)
+}
+
+func (r *LibraryRepository) FindPaperByPDFSHA256(pdfSHA256 string) (*model.Paper, error) {
+	pdfSHA256 = strings.TrimSpace(pdfSHA256)
+	if pdfSHA256 == "" {
+		return nil, nil
+	}
+
+	var paperID int64
+	err := r.db.QueryRow(`
+		SELECT id
+		FROM papers
+		WHERE pdf_sha256 = ?
+		LIMIT 1
+	`, pdfSHA256).Scan(&paperID)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, wrapDBError(err, "查询重复文献失败")
+	}
+
+	return r.GetPaperDetail(paperID)
+}
+
+type PaperChecksumBackfillItem struct {
+	ID            int64
+	StoredPDFName string
+}
+
+func (r *LibraryRepository) ListPapersMissingPDFSHA256() ([]PaperChecksumBackfillItem, error) {
+	rows, err := r.db.Query(`
+		SELECT id, stored_pdf_name
+		FROM papers
+		WHERE COALESCE(TRIM(pdf_sha256), '') = ''
+		ORDER BY id ASC
+	`)
+	if err != nil {
+		return nil, wrapDBError(err, "查询待补全文献指纹失败")
+	}
+	defer rows.Close()
+
+	items := []PaperChecksumBackfillItem{}
+	for rows.Next() {
+		var item PaperChecksumBackfillItem
+		if err := rows.Scan(&item.ID, &item.StoredPDFName); err != nil {
+			return nil, wrapDBError(err, "查询待补全文献指纹失败")
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, wrapDBError(err, "查询待补全文献指纹失败")
+	}
+	return items, nil
+}
+
+func (r *LibraryRepository) UpdatePaperPDFSHA256(id int64, pdfSHA256 string) error {
+	result, err := r.db.Exec(`
+		UPDATE papers
+		SET pdf_sha256 = ?, updated_at = CURRENT_TIMESTAMP
+		WHERE id = ?
+	`, strings.TrimSpace(pdfSHA256), id)
+	if err != nil {
+		return wrapConflictDBError(err, "文献 PDF 指纹已存在", "更新文献 PDF 指纹失败")
+	}
+	return ensureRowsAffected(result, "paper not found")
 }
 
 func (r *LibraryRepository) UpdatePaper(id int64, input PaperUpdateInput) (*model.Paper, error) {

@@ -1,6 +1,9 @@
 package service
 
 import (
+	"context"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -17,6 +20,9 @@ func TestAISettingsDefaultsAndPersistence(t *testing.T) {
 	}
 	if defaults.Provider != model.AIProviderOpenAI || defaults.Model == "" || defaults.SystemPrompt == "" {
 		t.Fatalf("GetSettings() defaults = %+v, want populated defaults", defaults)
+	}
+	if len(defaults.Models) != 1 || defaults.SceneModels.DefaultModelID == "" {
+		t.Fatalf("GetSettings() defaults = %+v, want default model pool and scene bindings", defaults)
 	}
 
 	updated, err := aiSvc.UpdateSettings(model.AISettings{
@@ -39,6 +45,9 @@ func TestAISettingsDefaultsAndPersistence(t *testing.T) {
 	if updated.Provider != model.AIProviderAnthropic || updated.MaxFigures != 4 || updated.OpenAILegacyMode {
 		t.Fatalf("UpdateSettings() = %+v, want anthropic settings persisted", updated)
 	}
+	if len(updated.Models) != 1 || updated.Models[0].Provider != model.AIProviderAnthropic {
+		t.Fatalf("UpdateSettings() models = %+v, want migrated legacy model", updated.Models)
+	}
 
 	reloaded, err := aiSvc.GetSettings()
 	if err != nil {
@@ -46,6 +55,61 @@ func TestAISettingsDefaultsAndPersistence(t *testing.T) {
 	}
 	if reloaded.Provider != model.AIProviderAnthropic || reloaded.APIKey != "test-key" || reloaded.QAPrompt != "custom qa" {
 		t.Fatalf("GetSettings() reload = %+v, want updated settings", reloaded)
+	}
+	if reloaded.SceneModels.QAModelID == "" || len(reloaded.Models) != 1 {
+		t.Fatalf("GetSettings() reload scene/models = %+v %+v, want populated values", reloaded.SceneModels, reloaded.Models)
+	}
+}
+
+func TestResolveModelForActionUsesSceneSpecificModel(t *testing.T) {
+	settings := model.DefaultAISettings()
+	settings.Models = []model.AIModelConfig{
+		{ID: "default", Name: "Default", Provider: model.AIProviderOpenAI, APIKey: "key-1", BaseURL: "https://api.openai.com", Model: "gpt-4.1-mini"},
+		{ID: "figure", Name: "Figure", Provider: model.AIProviderAnthropic, APIKey: "key-2", BaseURL: "https://api.anthropic.com", Model: "claude-test"},
+	}
+	settings.SceneModels = model.AISceneModelSelection{
+		DefaultModelID: "default",
+		QAModelID:      "default",
+		FigureModelID:  "figure",
+		TagModelID:     "default",
+		GroupModelID:   "default",
+	}
+
+	resolved, err := resolveModelForAction(settings, model.AIActionFigureInterpretation)
+	if err != nil {
+		t.Fatalf("resolveModelForAction() error = %v", err)
+	}
+	if resolved.ID != "figure" || resolved.Provider != model.AIProviderAnthropic {
+		t.Fatalf("resolveModelForAction() = %+v, want figure-scoped model", resolved)
+	}
+}
+
+func TestCheckModelCallsProviderSuccessfully(t *testing.T) {
+	_, repo, cfg := newTestService(t)
+	aiSvc := NewAIService(repo, cfg, nil)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/responses" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"output_text":"OK"}`))
+	}))
+	defer server.Close()
+
+	result, err := aiSvc.CheckModel(context.Background(), model.AIModelConfig{
+		ID:       "check-openai",
+		Name:     "Check OpenAI",
+		Provider: model.AIProviderOpenAI,
+		APIKey:   "test-key",
+		BaseURL:  server.URL,
+		Model:    "gpt-test",
+	})
+	if err != nil {
+		t.Fatalf("CheckModel() error = %v", err)
+	}
+	if !result.Success || result.Model != "gpt-test" || result.Mode != "responses" {
+		t.Fatalf("CheckModel() = %+v, want success for responses mode", result)
 	}
 }
 

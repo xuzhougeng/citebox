@@ -34,6 +34,7 @@ erDiagram
         TEXT title
         TEXT original_filename
         TEXT stored_pdf_name UK
+        TEXT pdf_sha256 UK
         INTEGER file_size
         TEXT content_type
         TEXT pdf_text
@@ -131,6 +132,7 @@ CREATE TABLE papers (
     title TEXT NOT NULL,
     original_filename TEXT NOT NULL,
     stored_pdf_name TEXT NOT NULL,
+    pdf_sha256 TEXT DEFAULT '',
     file_size INTEGER DEFAULT 0,
     content_type TEXT DEFAULT 'application/pdf',
     pdf_text TEXT DEFAULT '',
@@ -198,6 +200,7 @@ CREATE INDEX idx_papers_group_id ON papers(group_id);
 CREATE INDEX idx_papers_created_at ON papers(created_at);
 CREATE INDEX idx_papers_status ON papers(extraction_status);
 CREATE UNIQUE INDEX idx_papers_stored_pdf_name_unique ON papers(stored_pdf_name);
+CREATE UNIQUE INDEX idx_papers_pdf_sha256_unique ON papers(pdf_sha256) WHERE COALESCE(TRIM(pdf_sha256), '') <> '';
 
 CREATE INDEX idx_paper_figures_paper_id ON paper_figures(paper_id);
 CREATE INDEX idx_paper_figures_updated_at ON paper_figures(updated_at);
@@ -240,6 +243,7 @@ CREATE UNIQUE INDEX idx_tags_scope_name ON tags(scope, name);
 | `title` | 文献标题 |
 | `original_filename` | 上传时的原始 PDF 文件名 |
 | `stored_pdf_name` | 存储目录里的实际 PDF 文件名，当前要求唯一 |
+| `pdf_sha256` | PDF 内容指纹，用于上传去重；仅对非空值要求唯一 |
 | `file_size` | 文件大小 |
 | `content_type` | MIME 类型，默认 `application/pdf` |
 | `pdf_text` | PDF 提取出的全文文本，主要用于检索和 AI伴读 |

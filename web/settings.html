@@ -42,29 +42,45 @@
             <section class="manager-card">
                 <div class="manager-head">
                     <h2>AI 配置</h2>
-                    <p>支持 OpenAI、Anthropic、Gemini；OpenAI 额外支持传统兼容模式。</p>
+                    <p>先维护模型池，再把不同模型绑定到问答、图片解读、标签建议、分组建议等场景。</p>
                 </div>
                 <form id="aiSettingsForm" class="manager-form">
+                    <div class="manager-head">
+                        <h3>模型池</h3>
+                        <p>每个模型都可以独立配置提供商、Base URL、API Key，并支持单独检查可用性。</p>
+                    </div>
+
+                    <div id="aiModelList" class="manager-list"></div>
+
+                    <div class="submit-row">
+                        <button id="addAIModelButton" class="btn btn-outline" type="button">添加模型</button>
+                    </div>
+
+                    <div class="manager-head">
+                        <h3>场景绑定</h3>
+                        <p>为不同 AI 场景选择默认模型；如果没有特别指定，系统会回退到默认模型。</p>
+                    </div>
+
                     <div class="form-grid">
                         <label class="field">
-                            <span>提供商</span>
-                            <select id="aiProviderInput" class="form-input">
-                                <option value="openai">OpenAI</option>
-                                <option value="anthropic">Anthropic</option>
-                                <option value="gemini">Gemini</option>
-                            </select>
+                            <span>默认模型</span>
+                            <select id="aiDefaultModelSelect" class="form-input"></select>
                         </label>
                         <label class="field">
-                            <span>模型</span>
-                            <input id="aiModelInput" class="form-input" type="text" placeholder="例如：gpt-4.1-mini">
+                            <span>通用问答模型</span>
+                            <select id="aiQAModelSelect" class="form-input"></select>
                         </label>
-                        <label class="field field-span-2">
-                            <span>Base URL</span>
-                            <input id="aiBaseURLInput" class="form-input" type="text" placeholder="默认使用官方地址；兼容 OpenAI 模式可改成自定义网关">
+                        <label class="field">
+                            <span>图片解读模型</span>
+                            <select id="aiFigureModelSelect" class="form-input"></select>
                         </label>
-                        <label class="field field-span-2">
-                            <span>API Key</span>
-                            <input id="aiAPIKeyInput" class="form-input" type="password" autocomplete="off" placeholder="sk-...">
+                        <label class="field">
+                            <span>Tag 建议模型</span>
+                            <select id="aiTagModelSelect" class="form-input"></select>
+                        </label>
+                        <label class="field">
+                            <span>分组建议模型</span>
+                            <select id="aiGroupModelSelect" class="form-input"></select>
                         </label>
                         <label class="field">
                             <span>Temperature</span>
@@ -78,13 +94,7 @@
                             <span>图像数量上限</span>
                             <input id="aiMaxFiguresInput" class="form-input" type="number" min="0" step="1" placeholder="0 表示全部">
                         </label>
-                        <label class="field checkbox-field field-span-2">
-                            <input id="aiOpenAILegacyInput" type="checkbox">
-                            <span>使用传统 OpenAI 接口模式（Chat Completions），以兼容其他 OpenAI 风格网关</span>
-                        </label>
                     </div>
-
-                    <div class="ai-provider-note" id="aiProviderNote"></div>
 
                     <label class="field">
                         <span>System Prompt</span>
@@ -101,6 +111,10 @@
                     <label class="field">
                         <span>Tag 建议 Prompt</span>
                         <textarea id="aiTagPromptInput" class="form-textarea" rows="4" placeholder="标签建议模式的提示词"></textarea>
+                    </label>
+                    <label class="field">
+                        <span>分组建议 Prompt</span>
+                        <textarea id="aiGroupPromptInput" class="form-textarea" rows="4" placeholder="分组建议模式的提示词"></textarea>
                     </label>
 
                     <div class="submit-row">

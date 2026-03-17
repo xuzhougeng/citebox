@@ -39,7 +39,11 @@ async function requestJSON(path, options = {}) {
     }
 
     if (!response.ok) {
-        throw new Error(payload.error || `请求失败 (${response.status})`);
+        const error = new Error(payload.error || `请求失败 (${response.status})`);
+        error.code = payload.code || '';
+        error.status = response.status;
+        error.payload = payload;
+        throw error;
     }
 
     return payload;
@@ -215,6 +219,16 @@ const API = {
     updateAISettings(data) {
         return requestJSON(`${API_BASE}/ai/settings`, {
             method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        });
+    },
+
+    checkAIModel(data) {
+        return requestJSON(`${API_BASE}/ai/settings/check-model`, {
+            method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
