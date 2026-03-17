@@ -2,6 +2,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const path = window.location.pathname;
 
     if (path === '/' || path === '/index.html') {
+        DashboardPage.init();
+    }
+
+    if (path === '/library' || path === '/library.html') {
         LibraryPage.init();
     }
 

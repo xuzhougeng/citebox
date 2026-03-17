@@ -8,7 +8,7 @@ const LibraryPage = {
             keyword: '',
             group_id: '',
             tag_id: '',
-            status: ''
+            status: 'completed'
         }
     },
 
@@ -30,7 +30,7 @@ const LibraryPage = {
         this.tagFilter = document.getElementById('tagFilter');
         this.statusFilter = document.getElementById('statusFilter');
         this.paperList = document.getElementById('paperList');
-        this.summaryStrip = document.getElementById('summaryStrip');
+        this.resultMeta = document.getElementById('libraryResultMeta');
         this.pagination = document.getElementById('pagination');
         this.groupForm = document.getElementById('groupForm');
         this.groupNameInput = document.getElementById('groupNameInput');
@@ -40,7 +40,9 @@ const LibraryPage = {
         this.tagNameInput = document.getElementById('tagNameInput');
         this.tagColorInput = document.getElementById('tagColorInput');
         this.tagList = document.getElementById('tagList');
-
+        if (this.statusFilter) {
+            this.statusFilter.value = this.state.filters.status;
+        }
     },
 
     bindEvents() {
@@ -96,39 +98,47 @@ const LibraryPage = {
             await this.loadPapers();
         });
 
-        this.groupForm.addEventListener('submit', async (event) => {
-            event.preventDefault();
-            await this.createGroup();
-        });
+        if (this.groupForm) {
+            this.groupForm.addEventListener('submit', async (event) => {
+                event.preventDefault();
+                await this.createGroup();
+            });
+        }
 
-        this.groupList.addEventListener('click', async (event) => {
-            const button = event.target.closest('button[data-action]');
-            if (!button) return;
-            const id = Number(button.dataset.id);
-            if (button.dataset.action === 'edit-group') {
-                await this.editGroup(id);
-            }
-            if (button.dataset.action === 'delete-group') {
-                await this.deleteGroup(id);
-            }
-        });
+        if (this.groupList) {
+            this.groupList.addEventListener('click', async (event) => {
+                const button = event.target.closest('button[data-action]');
+                if (!button) return;
+                const id = Number(button.dataset.id);
+                if (button.dataset.action === 'edit-group') {
+                    await this.editGroup(id);
+                }
+                if (button.dataset.action === 'delete-group') {
+                    await this.deleteGroup(id);
+                }
+            });
+        }
 
-        this.tagForm.addEventListener('submit', async (event) => {
-            event.preventDefault();
-            await this.createTag();
-        });
+        if (this.tagForm) {
+            this.tagForm.addEventListener('submit', async (event) => {
+                event.preventDefault();
+                await this.createTag();
+            });
+        }
 
-        this.tagList.addEventListener('click', async (event) => {
-            const button = event.target.closest('button[data-action]');
-            if (!button) return;
-            const id = Number(button.dataset.id);
-            if (button.dataset.action === 'edit-tag') {
-                await this.editTag(id);
-            }
-            if (button.dataset.action === 'delete-tag') {
-                await this.deleteTag(id);
-            }
-        });
+        if (this.tagList) {
+            this.tagList.addEventListener('click', async (event) => {
+                const button = event.target.closest('button[data-action]');
+                if (!button) return;
+                const id = Number(button.dataset.id);
+                if (button.dataset.action === 'edit-tag') {
+                    await this.editTag(id);
+                }
+                if (button.dataset.action === 'delete-tag') {
+                    await this.deleteTag(id);
+                }
+            });
+        }
 
         window.addEventListener('beforeunload', () => this.stopAutoRefresh());
     },
@@ -149,7 +159,7 @@ const LibraryPage = {
             this.state.papers = payload.papers || [];
             this.state.total = payload.total || 0;
             this.state.totalPages = payload.total_pages || 0;
-            this.renderSummary();
+            this.renderResultMeta();
             this.renderPaperList();
             this.renderPagination();
             this.syncAutoRefresh();
@@ -184,37 +194,24 @@ const LibraryPage = {
         }
     },
 
-    renderSummary() {
-        const processing = this.state.papers.filter((paper) => Utils.isProcessingStatus(paper.extraction_status)).length;
-        const manualPending = this.state.papers.filter((paper) => paper.extraction_status === 'manual_pending').length;
-        const completed = this.state.papers.filter((paper) => paper.extraction_status === 'completed').length;
-        const failed = this.state.papers.filter((paper) => paper.extraction_status === 'failed' || paper.extraction_status === 'cancelled').length;
-        const figureTotal = this.state.papers.reduce((sum, paper) => sum + (paper.figure_count || 0), 0);
+    renderResultMeta() {
+        if (!this.resultMeta) return;
 
-        this.summaryStrip.innerHTML = `
-            <div class="stat-card">
-                <span>当前页文献</span>
-                <strong>${this.state.papers.length}</strong>
+        const statusLabel = this.state.filters.status
+            ? Utils.statusLabel(this.state.filters.status)
+            : '全部状态';
+
+        this.resultMeta.innerHTML = `
+            <div>
+                <p class="eyebrow">Result Set</p>
+                <h2>找到 ${this.state.total || 0} 篇文献</h2>
+                <p>当前聚焦：${Utils.escapeHTML(statusLabel)}。默认优先展示已完成解析的文献，方便直接进入阅读和整理。</p>
             </div>
-            <div class="stat-card">
-                <span>当前页图片</span>
-                <strong>${figureTotal}</strong>
-            </div>
-            <div class="stat-card">
-                <span>等待 / 解析中</span>
-                <strong>${processing}</strong>
-            </div>
-            <div class="stat-card">
-                <span>待人工处理</span>
-                <strong>${manualPending}</strong>
-            </div>
-            <div class="stat-card">
-                <span>解析完成</span>
-                <strong>${completed}</strong>
-            </div>
-            <div class="stat-card">
-                <span>解析异常</span>
-                <strong>${failed}</strong>
+            <div class="library-result-meta-tags">
+                <span class="tag-pill neutral">当前页 ${this.state.papers.length} 篇</span>
+                ${this.state.filters.keyword ? `<span class="tag-pill neutral">关键词：${Utils.escapeHTML(this.state.filters.keyword)}</span>` : ''}
+                ${this.state.filters.group_id ? '<span class="tag-pill neutral">已限定分组</span>' : ''}
+                ${this.state.filters.tag_id ? '<span class="tag-pill neutral">已限定标签</span>' : ''}
             </div>
         `;
     },
@@ -224,7 +221,7 @@ const LibraryPage = {
             this.paperList.innerHTML = `
                 <div class="empty-state">
                     <h3>还没有符合条件的文献</h3>
-                    <p>先上传 PDF，或者调整当前的筛选条件。</p>
+                    <p>${this.state.filters.status === 'completed' ? '当前还没有完成解析的文献，先上传 PDF 或把状态切回全部。' : '先上传 PDF，或者调整当前的筛选条件。'}</p>
                     <a class="btn btn-primary" href="/upload">上传文献</a>
                 </div>
             `;
@@ -338,6 +335,7 @@ const LibraryPage = {
     },
 
     renderGroups() {
+        if (!this.groupList) return;
         this.groupList.innerHTML = this.state.groups.map((group) => `
             <div class="manager-item">
                 <div>
@@ -354,6 +352,7 @@ const LibraryPage = {
     },
 
     renderTags() {
+        if (!this.tagList) return;
         this.tagList.innerHTML = this.state.tags.map((tag) => `
             <div class="manager-item">
                 <div class="tag-line">

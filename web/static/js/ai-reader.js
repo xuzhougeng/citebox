@@ -150,7 +150,7 @@ const AIReaderPage = {
         if (this.state.papers.length === 0) {
             this.paperList.innerHTML = `
                 <div class="empty-state">
-                    <p>没有找到可用于 AI 阅读的已解析文献。</p>
+                    <p>没有找到可用于 AI伴读的已解析文献。</p>
                 </div>
             `;
             return;

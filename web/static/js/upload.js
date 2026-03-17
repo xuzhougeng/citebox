@@ -290,7 +290,7 @@ const UploadPage = {
             ${paper.extractor_message ? `<p class="notice ${statusTone}">${Utils.escapeHTML(paper.extractor_message)}</p>` : ''}
 
             <div class="result-actions">
-                <a class="btn btn-primary" href="/">查看文献库</a>
+                <a class="btn btn-primary" href="/library">查看文献库</a>
                 <a class="btn btn-outline" href="${paper.pdf_url}" target="_blank" rel="noreferrer">打开 PDF</a>
                 <a class="btn btn-outline" href="/manual?paper_id=${paper.id}">人工框选提取</a>
                 ${(paper.extraction_status === 'failed' || paper.extraction_status === 'cancelled') ? '<button class="btn btn-outline" type="button" data-action="reextract">重新解析</button>' : ''}

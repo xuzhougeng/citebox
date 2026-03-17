@@ -379,6 +379,10 @@ func buildHandler(
 		switch r.URL.Path {
 		case "/", "/index.html":
 			http.ServeFile(w, r, filepath.Join(webRoot, "index.html"))
+		case "/library", "/library.html":
+			http.ServeFile(w, r, filepath.Join(webRoot, "library.html"))
+		case "/guide", "/guide.html":
+			http.ServeFile(w, r, filepath.Join(webRoot, "guide.html"))
 		case "/upload", "/upload.html":
 			http.ServeFile(w, r, filepath.Join(webRoot, "upload.html"))
 		case "/manual", "/manual.html":

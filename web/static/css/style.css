@@ -156,8 +156,17 @@ button {
     border: 1px solid rgba(36, 27, 22, 0.08);
 }
 
+.hero > :first-child {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
 .hero.compact {
     align-items: flex-start;
+}
+
+.hero.compact .hero-text {
+    max-width: 68rem;
 }
 
 .eyebrow {
@@ -189,6 +198,25 @@ button {
     align-items: center;
 }
 
+.hero-inline-links {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.55rem;
+    margin: 1rem 0 0;
+    color: var(--muted);
+    font-size: 0.96rem;
+}
+
+.hero-inline-links a {
+    color: var(--accent-deep);
+    font-weight: 700;
+}
+
+.hero-inline-links a:hover {
+    color: var(--accent);
+}
+
 .shortcut-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -213,6 +241,15 @@ button {
     margin: 0;
     color: var(--muted);
     line-height: 1.6;
+}
+
+.shortcut-card.compact {
+    padding: 1.15rem 1.2rem;
+    border-radius: 20px;
+}
+
+.shortcut-card.compact h2 {
+    font-size: 1.15rem;
 }
 
 .btn {
@@ -377,6 +414,57 @@ button {
     gap: 1.5rem;
 }
 
+.overview-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.45fr) minmax(320px, 0.9fr);
+    gap: 1.5rem;
+    align-items: start;
+}
+
+.overview-main,
+.overview-side {
+    display: grid;
+    gap: 1rem;
+}
+
+.library-shell {
+    display: grid;
+    gap: 1rem;
+}
+
+.library-result-meta {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1.2rem 1.3rem;
+    border-radius: 22px;
+    background:
+        radial-gradient(circle at top right, rgba(65, 103, 136, 0.08), transparent 14rem),
+        linear-gradient(180deg, rgba(255, 253, 249, 0.96), rgba(247, 239, 229, 0.92));
+    border: 1px solid rgba(36, 27, 22, 0.08);
+    box-shadow: 0 14px 28px rgba(78, 51, 33, 0.08);
+}
+
+.library-result-meta h2 {
+    margin: 0.25rem 0 0;
+    font-family: var(--font-display);
+    font-size: clamp(1.5rem, 2vw, 1.9rem);
+}
+
+.library-result-meta p {
+    margin: 0.5rem 0 0;
+    color: var(--muted);
+    line-height: 1.65;
+}
+
+.library-result-meta-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.55rem;
+    justify-content: flex-end;
+}
+
 .library-panel {
     display: flex;
     flex-direction: column;
@@ -455,6 +543,88 @@ button {
     margin-top: 0.45rem;
     font-size: 1.8rem;
     font-family: var(--font-display);
+}
+
+.recent-paper-list,
+.quick-link-stack,
+.workflow-grid {
+    display: grid;
+    gap: 0.9rem;
+}
+
+.recent-paper-row {
+    display: grid;
+    gap: 0.85rem;
+    padding: 1.05rem 1.1rem;
+    border-radius: 22px;
+    background: rgba(255, 252, 248, 0.82);
+    border: 1px solid rgba(36, 27, 22, 0.08);
+}
+
+.recent-paper-main {
+    display: grid;
+    gap: 0.55rem;
+}
+
+.recent-paper-head {
+    display: grid;
+    gap: 0.45rem;
+}
+
+.recent-paper-head h3,
+.workflow-card h3 {
+    margin: 0;
+    font-size: 1.06rem;
+    line-height: 1.45;
+}
+
+.recent-paper-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.65rem;
+    color: var(--muted);
+    font-size: 0.92rem;
+}
+
+.recent-paper-notice,
+.guide-teaser-text {
+    margin: 0;
+}
+
+.guide-teaser-text {
+    color: var(--muted);
+    line-height: 1.7;
+}
+
+.workflow-grid {
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.workflow-card {
+    padding: 1.15rem;
+    border-radius: 20px;
+    background: rgba(255, 252, 248, 0.84);
+    border: 1px solid rgba(36, 27, 22, 0.08);
+}
+
+.workflow-card p {
+    margin: 0.55rem 0 0;
+    color: var(--muted);
+    line-height: 1.65;
+}
+
+.workflow-step {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2.4rem;
+    padding: 0.35rem 0.65rem;
+    border-radius: 999px;
+    background: rgba(164, 92, 64, 0.12);
+    color: var(--accent-deep);
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
 }
 
 .paper-grid,
@@ -2671,6 +2841,7 @@ body.modal-open {
 
 @media (max-width: 1080px) {
     .shortcut-grid,
+    .overview-grid,
     .content-layout,
     .figure-lightbox,
     .note-lightbox,
@@ -2700,6 +2871,7 @@ body.modal-open {
     .navbar-content,
     .hero,
     .filters-card-head,
+    .library-result-meta,
     .paper-card-head,
     .paper-list-head,
     .paper-list-footer,
@@ -2724,6 +2896,7 @@ body.modal-open {
 
     .summary-strip,
     .shortcut-grid,
+    .workflow-grid,
     .filters-grid,
     .form-grid,
     .compact-grid-form,
@@ -2750,6 +2923,7 @@ body.modal-open {
 
     .paper-list-actions,
     .paper-list-tags,
+    .library-result-meta-tags,
     .ai-paper-item-head,
     .ai-help-row {
         justify-content: flex-start;
