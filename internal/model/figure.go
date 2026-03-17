@@ -17,6 +17,7 @@ type FigureListItem struct {
 	Caption     string    `json:"caption"`
 	NotesText   string    `json:"notes_text,omitempty"`
 	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 type FigureFilter struct {

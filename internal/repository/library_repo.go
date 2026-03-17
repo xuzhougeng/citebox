@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/xuzhougeng/citebox/internal/apperr"
 	"github.com/xuzhougeng/citebox/internal/model"
@@ -86,6 +87,10 @@ func NewLibraryRepository(dbPath string) (*LibraryRepository, error) {
 	repo := &LibraryRepository{db: db}
 	if err := repo.initSchema(); err != nil {
 		db.Close()
+		var appErr *apperr.Error
+		if errors.As(err, &appErr) {
+			return nil, err
+		}
 		return nil, apperr.Wrap(apperr.CodeInternal, "初始化数据库结构失败", err)
 	}
 
@@ -104,7 +109,7 @@ func (r *LibraryRepository) initSchema() error {
 
 	CREATE TABLE IF NOT EXISTS tags (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		scope TEXT NOT NULL DEFAULT 'paper',
+		scope TEXT NOT NULL DEFAULT 'paper' CHECK (scope IN ('paper', 'figure')),
 		name TEXT NOT NULL COLLATE NOCASE,
 		color TEXT DEFAULT '#A45C40',
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -130,7 +135,7 @@ func (r *LibraryRepository) initSchema() error {
 		abstract_text TEXT DEFAULT '',
 		notes_text TEXT DEFAULT '',
 		boxes_json TEXT DEFAULT '',
-		extraction_status TEXT DEFAULT 'completed',
+		extraction_status TEXT DEFAULT 'completed' CHECK (extraction_status IN ('queued', 'running', 'manual_pending', 'completed', 'failed', 'cancelled')),
 		extractor_message TEXT DEFAULT '',
 		extractor_job_id TEXT DEFAULT '',
 		group_id INTEGER REFERENCES groups(id) ON DELETE SET NULL,
@@ -152,11 +157,12 @@ func (r *LibraryRepository) initSchema() error {
 		content_type TEXT DEFAULT '',
 		page_number INTEGER DEFAULT 0,
 		figure_index INTEGER DEFAULT 0,
-		source TEXT DEFAULT 'auto',
+		source TEXT DEFAULT 'auto' CHECK (source IN ('auto', 'manual')),
 		caption TEXT DEFAULT '',
 		notes_text TEXT DEFAULT '',
 		bbox_json TEXT DEFAULT '',
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
 
 	CREATE TABLE IF NOT EXISTS figure_tags (
@@ -190,12 +196,25 @@ func (r *LibraryRepository) ensureSchemaColumns() error {
 		{tableName: "papers", name: "notes_text", definition: "TEXT DEFAULT ''"},
 		{tableName: "paper_figures", name: "source", definition: "TEXT DEFAULT 'auto'"},
 		{tableName: "paper_figures", name: "notes_text", definition: "TEXT DEFAULT ''"},
+		{tableName: "paper_figures", name: "updated_at", definition: "DATETIME"},
 	} {
 		if err := r.ensureColumn(column.tableName, column.name, column.definition); err != nil {
 			return err
 		}
 	}
-	return r.ensureTagScopeSchema()
+	if err := r.ensureTagScopeSchema(); err != nil {
+		return err
+	}
+	if err := r.ensureFigureUpdatedAtValues(); err != nil {
+		return err
+	}
+	if err := r.ensureValidationTriggers(); err != nil {
+		return err
+	}
+	if err := r.ensureIndexes(); err != nil {
+		return err
+	}
+	return r.ensureFTSSchema()
 }
 
 func (r *LibraryRepository) ensureColumn(tableName, columnName, definition string) error {
@@ -239,6 +258,295 @@ func (r *LibraryRepository) hasColumn(tableName, columnName string) (bool, error
 	}
 
 	return false, nil
+}
+
+func (r *LibraryRepository) hasSchemaObject(objectType, name string) (bool, error) {
+	var count int
+	if err := r.db.QueryRow(
+		"SELECT COUNT(*) FROM sqlite_master WHERE type = ? AND name = ?",
+		objectType,
+		name,
+	).Scan(&count); err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
+func (r *LibraryRepository) hasTable(tableName string) (bool, error) {
+	return r.hasSchemaObject("table", tableName)
+}
+
+func (r *LibraryRepository) hasIndex(indexName string) (bool, error) {
+	return r.hasSchemaObject("index", indexName)
+}
+
+func (r *LibraryRepository) ensureFigureUpdatedAtValues() error {
+	_, err := r.db.Exec(`
+		UPDATE paper_figures
+		SET updated_at = COALESCE(updated_at, created_at, CURRENT_TIMESTAMP)
+		WHERE updated_at IS NULL
+	`)
+	return err
+}
+
+func (r *LibraryRepository) ensureValidationTriggers() error {
+	for _, statement := range []string{
+		`CREATE TRIGGER IF NOT EXISTS validate_tags_scope_insert
+		BEFORE INSERT ON tags
+		FOR EACH ROW
+		WHEN NEW.scope NOT IN ('paper', 'figure')
+		BEGIN
+			SELECT RAISE(ABORT, 'invalid tag scope');
+		END;`,
+		`CREATE TRIGGER IF NOT EXISTS validate_tags_scope_update
+		BEFORE UPDATE OF scope ON tags
+		FOR EACH ROW
+		WHEN NEW.scope NOT IN ('paper', 'figure')
+		BEGIN
+			SELECT RAISE(ABORT, 'invalid tag scope');
+		END;`,
+		`CREATE TRIGGER IF NOT EXISTS validate_papers_status_insert
+		BEFORE INSERT ON papers
+		FOR EACH ROW
+		WHEN NEW.extraction_status NOT IN ('queued', 'running', 'manual_pending', 'completed', 'failed', 'cancelled')
+		BEGIN
+			SELECT RAISE(ABORT, 'invalid paper extraction status');
+		END;`,
+		`CREATE TRIGGER IF NOT EXISTS validate_papers_status_update
+		BEFORE UPDATE OF extraction_status ON papers
+		FOR EACH ROW
+		WHEN NEW.extraction_status NOT IN ('queued', 'running', 'manual_pending', 'completed', 'failed', 'cancelled')
+		BEGIN
+			SELECT RAISE(ABORT, 'invalid paper extraction status');
+		END;`,
+		`CREATE TRIGGER IF NOT EXISTS validate_paper_figures_source_insert
+		BEFORE INSERT ON paper_figures
+		FOR EACH ROW
+		WHEN COALESCE(NEW.source, 'auto') NOT IN ('auto', 'manual')
+		BEGIN
+			SELECT RAISE(ABORT, 'invalid figure source');
+		END;`,
+		`CREATE TRIGGER IF NOT EXISTS validate_paper_figures_source_update
+		BEFORE UPDATE OF source ON paper_figures
+		FOR EACH ROW
+		WHEN COALESCE(NEW.source, 'auto') NOT IN ('auto', 'manual')
+		BEGIN
+			SELECT RAISE(ABORT, 'invalid figure source');
+		END;`,
+	} {
+		if _, err := r.db.Exec(statement); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (r *LibraryRepository) ensureIndexes() error {
+	if err := r.ensureUniqueIndex(
+		"idx_papers_stored_pdf_name_unique",
+		"papers",
+		"stored_pdf_name",
+		"数据库中存在重复的文献文件名，无法完成升级，请先清理重复数据",
+	); err != nil {
+		return err
+	}
+	if err := r.ensureUniqueIndex(
+		"idx_paper_figures_filename_unique",
+		"paper_figures",
+		"filename",
+		"数据库中存在重复的图片文件名，无法完成升级，请先清理重复数据",
+	); err != nil {
+		return err
+	}
+
+	for _, statement := range []string{
+		"CREATE INDEX IF NOT EXISTS idx_paper_figures_updated_at ON paper_figures(updated_at)",
+		"CREATE INDEX IF NOT EXISTS idx_tags_scope ON tags(scope)",
+		"CREATE UNIQUE INDEX IF NOT EXISTS idx_tags_scope_name ON tags(scope, name)",
+	} {
+		if _, err := r.db.Exec(statement); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (r *LibraryRepository) ensureUniqueIndex(indexName, tableName, columnName, duplicateMessage string) error {
+	hasIndex, err := r.hasIndex(indexName)
+	if err != nil {
+		return err
+	}
+	if hasIndex {
+		return nil
+	}
+
+	var duplicateValue string
+	query := fmt.Sprintf(`
+		SELECT %s
+		FROM %s
+		GROUP BY %s
+		HAVING COUNT(*) > 1
+		LIMIT 1
+	`, columnName, tableName, columnName)
+	err = r.db.QueryRow(query).Scan(&duplicateValue)
+	if err != nil && err != sql.ErrNoRows {
+		return err
+	}
+	if err == nil {
+		return apperr.New(apperr.CodeFailedPrecondition, duplicateMessage)
+	}
+
+	_, err = r.db.Exec(fmt.Sprintf("CREATE UNIQUE INDEX %s ON %s(%s)", indexName, tableName, columnName))
+	return err
+}
+
+func (r *LibraryRepository) ensureFTSSchema() error {
+	papersFTSCreated, err := r.ensureFTSTable("papers_fts", `
+		CREATE VIRTUAL TABLE papers_fts USING fts5(
+			title,
+			original_filename,
+			abstract_text,
+			notes_text,
+			pdf_text,
+			tokenize='trigram'
+		)
+	`)
+	if err != nil {
+		return err
+	}
+	figuresFTSCreated, err := r.ensureFTSTable("figures_fts", `
+		CREATE VIRTUAL TABLE figures_fts USING fts5(
+			original_name,
+			caption,
+			notes_text,
+			tokenize='trigram'
+		)
+	`)
+	if err != nil {
+		return err
+	}
+
+	for _, statement := range []string{
+		`CREATE TRIGGER IF NOT EXISTS papers_fts_insert AFTER INSERT ON papers BEGIN
+			INSERT INTO papers_fts(rowid, title, original_filename, abstract_text, notes_text, pdf_text)
+			VALUES (NEW.id, NEW.title, NEW.original_filename, NEW.abstract_text, NEW.notes_text, NEW.pdf_text);
+		END;`,
+		`CREATE TRIGGER IF NOT EXISTS papers_fts_update AFTER UPDATE ON papers BEGIN
+			DELETE FROM papers_fts WHERE rowid = OLD.id;
+			INSERT INTO papers_fts(rowid, title, original_filename, abstract_text, notes_text, pdf_text)
+			VALUES (NEW.id, NEW.title, NEW.original_filename, NEW.abstract_text, NEW.notes_text, NEW.pdf_text);
+		END;`,
+		`CREATE TRIGGER IF NOT EXISTS papers_fts_delete AFTER DELETE ON papers BEGIN
+			DELETE FROM papers_fts WHERE rowid = OLD.id;
+		END;`,
+		`CREATE TRIGGER IF NOT EXISTS figures_fts_insert AFTER INSERT ON paper_figures BEGIN
+			INSERT INTO figures_fts(rowid, original_name, caption, notes_text)
+			VALUES (NEW.id, NEW.original_name, NEW.caption, NEW.notes_text);
+		END;`,
+		`CREATE TRIGGER IF NOT EXISTS figures_fts_update AFTER UPDATE ON paper_figures BEGIN
+			DELETE FROM figures_fts WHERE rowid = OLD.id;
+			INSERT INTO figures_fts(rowid, original_name, caption, notes_text)
+			VALUES (NEW.id, NEW.original_name, NEW.caption, NEW.notes_text);
+		END;`,
+		`CREATE TRIGGER IF NOT EXISTS figures_fts_delete AFTER DELETE ON paper_figures BEGIN
+			DELETE FROM figures_fts WHERE rowid = OLD.id;
+		END;`,
+	} {
+		if _, err := r.db.Exec(statement); err != nil {
+			return err
+		}
+	}
+
+	paperCount, err := r.countRows("papers")
+	if err != nil {
+		return err
+	}
+	papersFTSCount, err := r.countRows("papers_fts")
+	if err != nil {
+		return err
+	}
+	if papersFTSCreated || paperCount != papersFTSCount {
+		if err := r.rebuildPapersFTS(); err != nil {
+			return err
+		}
+	}
+
+	figureCount, err := r.countRows("paper_figures")
+	if err != nil {
+		return err
+	}
+	figuresFTSCount, err := r.countRows("figures_fts")
+	if err != nil {
+		return err
+	}
+	if figuresFTSCreated || figureCount != figuresFTSCount {
+		if err := r.rebuildFiguresFTS(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (r *LibraryRepository) ensureFTSTable(tableName, createSQL string) (bool, error) {
+	hasTable, err := r.hasTable(tableName)
+	if err != nil {
+		return false, err
+	}
+	if hasTable {
+		return false, nil
+	}
+	if _, err := r.db.Exec(createSQL); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func (r *LibraryRepository) countRows(tableName string) (int, error) {
+	var count int
+	if err := r.db.QueryRow(fmt.Sprintf("SELECT COUNT(*) FROM %s", tableName)).Scan(&count); err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
+func (r *LibraryRepository) rebuildPapersFTS() error {
+	tx, err := r.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.Exec("DELETE FROM papers_fts"); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`
+		INSERT INTO papers_fts(rowid, title, original_filename, abstract_text, notes_text, pdf_text)
+		SELECT id, title, original_filename, abstract_text, notes_text, pdf_text
+		FROM papers
+	`); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func (r *LibraryRepository) rebuildFiguresFTS() error {
+	tx, err := r.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.Exec("DELETE FROM figures_fts"); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`
+		INSERT INTO figures_fts(rowid, original_name, caption, notes_text)
+		SELECT id, original_name, caption, notes_text
+		FROM paper_figures
+	`); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func (r *LibraryRepository) Close() error {
@@ -606,7 +914,7 @@ func (r *LibraryRepository) CreatePaper(input PaperUpsertInput) (*model.Paper, e
 		input.GroupID,
 	)
 	if err != nil {
-		return nil, wrapDBError(err, "创建文献失败")
+		return nil, wrapConflictDBError(err, "文献文件已存在", "创建文献失败")
 	}
 
 	paperID, err := result.LastInsertId()
@@ -620,10 +928,10 @@ func (r *LibraryRepository) CreatePaper(input PaperUpsertInput) (*model.Paper, e
 
 	for _, figure := range input.Figures {
 		if _, err := tx.Exec(`
-			INSERT INTO paper_figures (
-				paper_id, filename, original_name, content_type, page_number, figure_index, source, caption, bbox_json
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-		`,
+				INSERT INTO paper_figures (
+					paper_id, filename, original_name, content_type, page_number, figure_index, source, caption, bbox_json, created_at, updated_at
+				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+			`,
 			paperID,
 			figure.Filename,
 			figure.OriginalName,
@@ -634,7 +942,7 @@ func (r *LibraryRepository) CreatePaper(input PaperUpsertInput) (*model.Paper, e
 			figure.Caption,
 			figure.BBoxJSON,
 		); err != nil {
-			return nil, wrapDBError(err, "保存文献图片失败")
+			return nil, wrapConflictDBError(err, "图片文件已存在", "保存文献图片失败")
 		}
 	}
 
@@ -693,7 +1001,7 @@ func (r *LibraryRepository) UpdateFigure(id int64, input FigureUpdateInput) (*mo
 
 	result, err := tx.Exec(`
 		UPDATE paper_figures
-		SET notes_text = ?
+		SET notes_text = ?, updated_at = CURRENT_TIMESTAMP
 		WHERE id = ?
 	`, input.NotesText, id)
 	if err != nil {
@@ -836,8 +1144,8 @@ func (r *LibraryRepository) ApplyPaperExtractionResult(
 	for _, figure := range figures {
 		if _, err := tx.Exec(`
 			INSERT INTO paper_figures (
-				paper_id, filename, original_name, content_type, page_number, figure_index, source, caption, bbox_json
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+				paper_id, filename, original_name, content_type, page_number, figure_index, source, caption, bbox_json, created_at, updated_at
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 		`,
 			id,
 			figure.Filename,
@@ -849,7 +1157,7 @@ func (r *LibraryRepository) ApplyPaperExtractionResult(
 			figure.Caption,
 			figure.BBoxJSON,
 		); err != nil {
-			return wrapDBError(err, "更新文献图片失败")
+			return wrapConflictDBError(err, "图片文件已存在", "更新文献图片失败")
 		}
 	}
 
@@ -915,8 +1223,8 @@ func (r *LibraryRepository) ApplyManualFigureChanges(id int64, addFigures []Figu
 	for _, figure := range addFigures {
 		if _, err := tx.Exec(`
 			INSERT INTO paper_figures (
-				paper_id, filename, original_name, content_type, page_number, figure_index, source, caption, bbox_json
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+				paper_id, filename, original_name, content_type, page_number, figure_index, source, caption, bbox_json, created_at, updated_at
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 		`,
 			id,
 			figure.Filename,
@@ -928,7 +1236,7 @@ func (r *LibraryRepository) ApplyManualFigureChanges(id int64, addFigures []Figu
 			figure.Caption,
 			figure.BBoxJSON,
 		); err != nil {
-			return wrapDBError(err, "保存人工图片失败")
+			return wrapConflictDBError(err, "图片文件已存在", "保存人工图片失败")
 		}
 	}
 
@@ -939,7 +1247,7 @@ func (r *LibraryRepository) GetFigure(id int64) (*model.FigureListItem, error) {
 	row := r.db.QueryRow(`
 		SELECT
 			pf.id, pf.paper_id, p.title, p.group_id, COALESCE(g.name, ''),
-			pf.filename, pf.page_number, pf.figure_index, pf.source, pf.caption, pf.notes_text, pf.created_at
+			pf.filename, pf.page_number, pf.figure_index, pf.source, pf.caption, pf.notes_text, pf.created_at, pf.updated_at
 		FROM paper_figures pf
 		JOIN papers p ON p.id = pf.paper_id
 		LEFT JOIN groups g ON g.id = p.group_id
@@ -962,6 +1270,7 @@ func (r *LibraryRepository) GetFigure(id int64) (*model.FigureListItem, error) {
 		&item.Caption,
 		&item.NotesText,
 		&item.CreatedAt,
+		&item.UpdatedAt,
 	); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
@@ -1043,7 +1352,7 @@ func (r *LibraryRepository) GetPaperDetail(id int64) (*model.Paper, error) {
 	}
 
 	rows, err := r.db.Query(`
-		SELECT id, filename, original_name, content_type, page_number, figure_index, source, caption, notes_text, bbox_json, created_at
+		SELECT id, filename, original_name, content_type, page_number, figure_index, source, caption, notes_text, bbox_json, created_at, updated_at
 		FROM paper_figures
 		WHERE paper_id = ?
 		ORDER BY page_number ASC, figure_index ASC, id ASC
@@ -1070,6 +1379,7 @@ func (r *LibraryRepository) GetPaperDetail(id int64) (*model.Paper, error) {
 			&figure.NotesText,
 			&bboxJSON,
 			&figure.CreatedAt,
+			&figure.UpdatedAt,
 		); err != nil {
 			return nil, wrapDBError(err, "查询文献图片失败")
 		}
@@ -1231,12 +1541,12 @@ func (r *LibraryRepository) ListFigures(filter model.FigureFilter) ([]model.Figu
 	query := `
 		SELECT
 			pf.id, pf.paper_id, p.title, p.group_id, COALESCE(g.name, ''),
-			pf.filename, pf.page_number, pf.figure_index, pf.source, pf.caption, pf.notes_text, pf.created_at
+			pf.filename, pf.page_number, pf.figure_index, pf.source, pf.caption, pf.notes_text, pf.created_at, pf.updated_at
 		FROM paper_figures pf
 		JOIN papers p ON p.id = pf.paper_id
 		LEFT JOIN groups g ON g.id = p.group_id
-	` + whereClause + `
-		ORDER BY p.created_at DESC, pf.page_number ASC, pf.figure_index ASC, pf.id ASC
+		` + whereClause + `
+		` + buildFigureOrderBy(filter) + `
 		LIMIT ? OFFSET ?
 	`
 
@@ -1267,6 +1577,7 @@ func (r *LibraryRepository) ListFigures(filter model.FigureFilter) ([]model.Figu
 			&item.Caption,
 			&item.NotesText,
 			&item.CreatedAt,
+			&item.UpdatedAt,
 		); err != nil {
 			return nil, 0, wrapDBError(err, "查询图片列表失败")
 		}
@@ -1702,26 +2013,9 @@ func buildPaperWhere(filter model.PaperFilter) (string, []interface{}) {
 	args := []interface{}{}
 
 	if keyword := strings.TrimSpace(filter.Keyword); keyword != "" {
-		like := "%" + keyword + "%"
-		conditions = append(conditions, `(
-			p.title LIKE ? OR
-			p.original_filename LIKE ? OR
-			p.pdf_text LIKE ? OR
-			p.abstract_text LIKE ? OR
-			p.notes_text LIKE ? OR
-			EXISTS (
-				SELECT 1
-				FROM paper_tags pt
-				JOIN tags t ON t.id = pt.tag_id
-				WHERE pt.paper_id = p.id AND t.name LIKE ?
-			) OR
-			EXISTS (
-				SELECT 1
-				FROM groups g2
-				WHERE g2.id = p.group_id AND g2.name LIKE ?
-			)
-		)`)
-		args = append(args, like, like, like, like, like, like, like)
+		keywordCondition, keywordArgs := buildPaperKeywordCondition(keyword)
+		conditions = append(conditions, keywordCondition)
+		args = append(args, keywordArgs...)
 	}
 
 	if filter.GroupID != nil {
@@ -1751,20 +2045,9 @@ func buildFigureWhere(filter model.FigureFilter) (string, []interface{}) {
 	args := []interface{}{}
 
 	if keyword := strings.TrimSpace(filter.Keyword); keyword != "" {
-		like := "%" + keyword + "%"
-		conditions = append(conditions, `(
-			p.title LIKE ? OR
-			pf.caption LIKE ? OR
-			pf.notes_text LIKE ? OR
-			pf.original_name LIKE ? OR
-			EXISTS (
-				SELECT 1
-				FROM figure_tags ft
-				JOIN tags t ON t.id = ft.tag_id
-				WHERE ft.figure_id = pf.id AND t.name LIKE ?
-			)
-		)`)
-		args = append(args, like, like, like, like, like)
+		keywordCondition, keywordArgs := buildFigureKeywordCondition(keyword)
+		conditions = append(conditions, keywordCondition)
+		args = append(args, keywordArgs...)
 	}
 
 	if filter.GroupID != nil {
@@ -1786,6 +2069,93 @@ func buildFigureWhere(filter model.FigureFilter) (string, []interface{}) {
 	}
 
 	return " WHERE " + strings.Join(conditions, " AND "), args
+}
+
+func buildPaperKeywordCondition(keyword string) (string, []interface{}) {
+	like := "%" + keyword + "%"
+	if ftsQuery, ok := buildFTSMatchQuery(keyword); ok {
+		return `(
+			p.id IN (SELECT rowid FROM papers_fts WHERE papers_fts MATCH ?) OR
+			EXISTS (
+				SELECT 1
+				FROM paper_tags pt
+				JOIN tags t ON t.id = pt.tag_id
+				WHERE pt.paper_id = p.id AND t.name LIKE ?
+			) OR
+			EXISTS (
+				SELECT 1
+				FROM groups g2
+				WHERE g2.id = p.group_id AND g2.name LIKE ?
+			)
+		)`, []interface{}{ftsQuery, like, like}
+	}
+
+	return `(
+		p.title LIKE ? OR
+		p.original_filename LIKE ? OR
+		p.pdf_text LIKE ? OR
+		p.abstract_text LIKE ? OR
+		p.notes_text LIKE ? OR
+		EXISTS (
+			SELECT 1
+			FROM paper_tags pt
+			JOIN tags t ON t.id = pt.tag_id
+			WHERE pt.paper_id = p.id AND t.name LIKE ?
+		) OR
+		EXISTS (
+			SELECT 1
+			FROM groups g2
+			WHERE g2.id = p.group_id AND g2.name LIKE ?
+		)
+	)`, []interface{}{like, like, like, like, like, like, like}
+}
+
+func buildFigureKeywordCondition(keyword string) (string, []interface{}) {
+	like := "%" + keyword + "%"
+	if ftsQuery, ok := buildFTSMatchQuery(keyword); ok {
+		return `(
+			pf.id IN (SELECT rowid FROM figures_fts WHERE figures_fts MATCH ?) OR
+			p.title LIKE ? OR
+			EXISTS (
+				SELECT 1
+				FROM figure_tags ft
+				JOIN tags t ON t.id = ft.tag_id
+				WHERE ft.figure_id = pf.id AND t.name LIKE ?
+			)
+		)`, []interface{}{ftsQuery, like, like}
+	}
+
+	return `(
+		p.title LIKE ? OR
+		pf.caption LIKE ? OR
+		pf.notes_text LIKE ? OR
+		pf.original_name LIKE ? OR
+		EXISTS (
+			SELECT 1
+			FROM figure_tags ft
+			JOIN tags t ON t.id = ft.tag_id
+			WHERE ft.figure_id = pf.id AND t.name LIKE ?
+		)
+	)`, []interface{}{like, like, like, like, like}
+}
+
+func buildFTSMatchQuery(keyword string) (string, bool) {
+	normalized := strings.Join(strings.Fields(strings.TrimSpace(keyword)), " ")
+	if normalized == "" {
+		return "", false
+	}
+	compact := strings.ReplaceAll(normalized, " ", "")
+	if utf8.RuneCountInString(compact) < 3 {
+		return "", false
+	}
+	return fmt.Sprintf(`"%s"`, strings.ReplaceAll(normalized, `"`, `""`)), true
+}
+
+func buildFigureOrderBy(filter model.FigureFilter) string {
+	if filter.HasNotes {
+		return "ORDER BY COALESCE(pf.updated_at, pf.created_at) DESC, pf.id DESC"
+	}
+	return "ORDER BY p.created_at DESC, pf.page_number ASC, pf.figure_index ASC, pf.id ASC"
 }
 
 type scanner interface {
@@ -1880,7 +2250,7 @@ func wrapConflictDBError(err error, conflictMessage, defaultMessage string) erro
 	if errors.As(err, &appErr) {
 		return err
 	}
-	if sqliteCode(err) == sqlite3.SQLITE_CONSTRAINT_UNIQUE {
+	if code := sqliteCode(err); code == sqlite3.SQLITE_CONSTRAINT_UNIQUE || code == sqlite3.SQLITE_CONSTRAINT_PRIMARYKEY {
 		return apperr.Wrap(apperr.CodeConflict, conflictMessage, err)
 	}
 	return wrapDBError(err, defaultMessage)
@@ -1894,6 +2264,12 @@ func wrapDBError(err error, message string) error {
 	var appErr *apperr.Error
 	if errors.As(err, &appErr) {
 		return err
+	}
+	switch sqliteCode(err) {
+	case sqlite3.SQLITE_CONSTRAINT_UNIQUE, sqlite3.SQLITE_CONSTRAINT_PRIMARYKEY:
+		return apperr.Wrap(apperr.CodeConflict, message, err)
+	case sqlite3.SQLITE_CONSTRAINT_CHECK, sqlite3.SQLITE_CONSTRAINT_TRIGGER:
+		return apperr.Wrap(apperr.CodeInvalidArgument, message, err)
 	}
 	return apperr.Wrap(apperr.CodeInternal, message, err)
 }
