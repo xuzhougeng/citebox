@@ -187,6 +187,8 @@ const FigureViewer = {
         this.activeAIByPaper = new Map();
         this.aiRequestState = null;
         this.paperDetails = new Map();
+        this.lastAIDisplayAction = '';
+        this.lastAIDisplayCacheKey = '';
 
         this.handleKeydown = (event) => {
             if (!this.modal || this.modal.classList.contains('hidden')) return;
@@ -351,19 +353,34 @@ const FigureViewer = {
     },
 
     activeAIAction() {
-        if (!this.currentFigure?.paper_id) return '';
-        return this.activeAIByPaper.get(this.currentFigure.paper_id) || '';
+        if (!this.currentFigure?.paper_id) return this.lastAIDisplayAction || '';
+        const action = this.activeAIByPaper.get(this.currentFigure.paper_id) || '';
+        return action || this.lastAIDisplayAction || '';
     },
 
     currentAIResult() {
-        if (!this.currentFigure?.paper_id) return null;
+        if (!this.currentFigure?.paper_id) {
+            if (this.lastAIDisplayCacheKey) {
+                return this.aiCache.get(this.lastAIDisplayCacheKey) || null;
+            }
+            return null;
+        }
         const action = this.activeAIAction();
         if (!action) return null;
-        return this.aiCache.get(this.aiCacheKey(this.currentFigure.paper_id, action)) || null;
+        const cacheKey = this.aiCacheKey(this.currentFigure.paper_id, action);
+        const result = this.aiCache.get(cacheKey) || null;
+        if (result) {
+            this.lastAIDisplayAction = action;
+            this.lastAIDisplayCacheKey = cacheKey;
+        } else if (this.lastAIDisplayCacheKey) {
+            return this.aiCache.get(this.lastAIDisplayCacheKey) || null;
+        }
+        return result;
     },
 
     refreshAIResultPanel() {
         if (!this.modal || this.modal.classList.contains('hidden')) return;
+        if (this.aiRequestState?.waitingForContent) return;
         const panel = this.body.querySelector('[data-figure-ai-panel]');
         if (!panel) return;
         panel.innerHTML = this.renderAIResultPanel();
@@ -402,6 +419,8 @@ const FigureViewer = {
         this.activeAIByPaper.set(paperID, action);
 
         if (this.aiCache.has(cacheKey)) {
+            this.lastAIDisplayAction = action;
+            this.lastAIDisplayCacheKey = cacheKey;
             this.aiRequestState = null;
             this.refreshAIState();
             return;
@@ -410,7 +429,8 @@ const FigureViewer = {
         this.aiRequestState = {
             loading: true,
             paperID,
-            action
+            action,
+            waitingForContent: true
         };
         this.refreshAIState();
 
@@ -430,6 +450,8 @@ const FigureViewer = {
                 question: this.buildAIQuestion(action, this.currentFigure)
             });
             this.aiCache.set(cacheKey, result);
+            this.lastAIDisplayAction = action;
+            this.lastAIDisplayCacheKey = cacheKey;
             this.aiRequestState = null;
             this.refreshAIState();
         } catch (error) {
@@ -485,11 +507,14 @@ const FigureViewer = {
                     }
                     if (event.type === 'delta') {
                         requestState.answer += event.delta || '';
+                        requestState.waitingForContent = false;
                         this.refreshAIResultPanel();
                         return;
                     }
                     if (event.type === 'final' && event.result) {
                         this.aiCache.set(cacheKey, event.result);
+                        this.lastAIDisplayAction = action;
+                        this.lastAIDisplayCacheKey = cacheKey;
                         this.aiRequestState = null;
                         this.refreshAIState();
                     }
@@ -732,6 +757,21 @@ const FigureViewer = {
             return name.trim().toLowerCase();
         }));
 
+        if (isLoading && requestState.waitingForContent) {
+            const fallback = this.currentAIResult();
+            if (fallback) {
+                return this.renderAICachedResult(fallback, currentTagNames, true);
+            }
+            return `
+                <div class="figure-ai-result loading">
+                    <div class="figure-ai-head">
+                        <p class="figure-ai-status">${Utils.escapeHTML(activeLabel)}准备中</p>
+                    </div>
+                    <div class="figure-ai-answer">正在结合全文、摘要、标签和图片生成结果。</div>
+                </div>
+            `;
+        }
+
         if (isLoading) {
             return `
                 <div class="figure-ai-result loading">
@@ -791,6 +831,10 @@ const FigureViewer = {
             `;
         }
 
+        return this.renderAICachedResult(result, currentTagNames, false);
+    },
+
+    renderAICachedResult(result, currentTagNames, isWaiting) {
         const tags = (result.suggested_tags || []).map((tag) => `
             <button class="tag-pill neutral figure-ai-tag-button ${currentTagNames.has(tag.trim().toLowerCase()) ? 'is-applied' : ''}" type="button" data-figure-meta-action="apply-tag" data-tag-name="${Utils.escapeHTML(tag)}" ${currentTagNames.has(tag.trim().toLowerCase()) ? 'disabled' : ''}>
                 ${Utils.escapeHTML(tag)}
@@ -798,9 +842,9 @@ const FigureViewer = {
         `).join('');
 
         return `
-            <div class="figure-ai-result">
+            <div class="figure-ai-result ${isWaiting ? 'loading' : ''}">
                 <div class="figure-ai-head">
-                    <p class="figure-ai-status">${Utils.escapeHTML(this.aiActionLabel(result.action))} · ${Utils.escapeHTML(result.provider)} · ${Utils.escapeHTML(result.model)} · ${Utils.escapeHTML(result.mode)}</p>
+                    <p class="figure-ai-status">${Utils.escapeHTML(this.aiActionLabel(result.action))} · ${Utils.escapeHTML(result.provider)} · ${Utils.escapeHTML(result.model)} · ${Utils.escapeHTML(result.mode)}${isWaiting ? ' · 加载中' : ''}</p>
                     ${result.answer ? `
                         <div class="figure-ai-head-actions">
                             <button class="btn btn-outline btn-small" type="button" data-figure-ai-copy="answer">复制</button>
