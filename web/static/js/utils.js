@@ -304,6 +304,151 @@ const Utils = {
         return '';
     },
 
+    buildPaginationItems(currentPage = 1, totalPages = 0) {
+        const total = Math.max(0, Number(totalPages) || 0);
+        const current = Math.min(Math.max(1, Number(currentPage) || 1), Math.max(total, 1));
+
+        if (!total) {
+            return [];
+        }
+
+        if (total <= 7) {
+            return Array.from({ length: total }, (_, index) => index + 1);
+        }
+
+        const items = [1];
+        let start = current <= 4 ? 2 : current - 1;
+        let end = current >= total - 3 ? total - 1 : current + 1;
+
+        if (current <= 4) {
+            end = 5;
+        }
+
+        if (current >= total - 3) {
+            start = total - 4;
+        }
+
+        start = Math.max(2, start);
+        end = Math.min(total - 1, end);
+
+        if (start > 2) {
+            items.push('ellipsis');
+        }
+
+        for (let page = start; page <= end; page += 1) {
+            items.push(page);
+        }
+
+        if (end < total - 1) {
+            items.push('ellipsis');
+        }
+
+        items.push(total);
+        return items;
+    },
+
+    normalizePaginationPage(value, totalPages = 0) {
+        const total = Math.max(0, Number(totalPages) || 0);
+        const page = Number(String(value ?? '').trim());
+
+        if (!total || !Number.isInteger(page) || page < 1 || page > total) {
+            return null;
+        }
+
+        return page;
+    },
+
+    renderPagination(container, currentPage = 1, totalPages = 0) {
+        if (!container) return;
+
+        const total = Math.max(0, Number(totalPages) || 0);
+        const current = Math.min(Math.max(1, Number(currentPage) || 1), Math.max(total, 1));
+        container.dataset.currentPage = String(current);
+        container.dataset.totalPages = String(total);
+
+        if (total <= 1) {
+            container.innerHTML = '';
+            return;
+        }
+
+        const jumpInputId = `${container.id || 'pagination'}JumpInput`;
+        const pageButtons = Utils.buildPaginationItems(current, total).map((item) => {
+            if (item === 'ellipsis') {
+                return '<span class="pagination-ellipsis" aria-hidden="true">...</span>';
+            }
+
+            return `
+                <button class="${item === current ? 'active' : ''}" type="button" data-page="${item}" ${item === current ? 'aria-current="page"' : ''}>
+                    ${item}
+                </button>
+            `;
+        }).join('');
+
+        container.innerHTML = `
+            <button class="pagination-nav" type="button" data-page="${current - 1}" ${current <= 1 ? 'disabled' : ''}>上一页</button>
+            ${pageButtons}
+            <button class="pagination-nav" type="button" data-page="${current + 1}" ${current >= total ? 'disabled' : ''}>下一页</button>
+            <span class="pagination-meta">第 ${current} / ${total} 页</span>
+            <form class="pagination-jump" data-pagination-jump-form>
+                <label class="pagination-jump-label" for="${jumpInputId}">跳至</label>
+                <input id="${jumpInputId}" class="form-input pagination-jump-input" type="number" min="1" max="${total}" step="1" value="${current}" inputmode="numeric" data-pagination-input>
+                <button class="pagination-jump-button" type="submit" data-pagination-jump>跳转</button>
+            </form>
+        `;
+    },
+
+    bindPagination(container, onPageChange) {
+        if (!container || typeof onPageChange !== 'function' || container.dataset.paginationBound === 'true') {
+            return;
+        }
+
+        const navigate = async (value, input) => {
+            const totalPages = Number(container.dataset.totalPages || 0);
+            const targetPage = Utils.normalizePaginationPage(value, totalPages);
+
+            if (targetPage === null) {
+                if (totalPages > 0) {
+                    Utils.showToast(`请输入 1 - ${totalPages} 的页码`, 'error');
+                }
+                if (input) {
+                    input.focus();
+                    if (typeof input.select === 'function') {
+                        input.select();
+                    }
+                }
+                return;
+            }
+
+            const currentPage = Number(container.dataset.currentPage || 0);
+            if (targetPage === currentPage) {
+                return;
+            }
+
+            await onPageChange(targetPage);
+        };
+
+        container.addEventListener('click', async (event) => {
+            const pageButton = event.target.closest('button[data-page]');
+            if (pageButton) {
+                if (pageButton.disabled) return;
+                await navigate(pageButton.dataset.page);
+            }
+        });
+
+        container.addEventListener('submit', async (event) => {
+            const form = event.target.closest('form[data-pagination-jump-form]');
+            if (!form) return;
+            event.preventDefault();
+
+            const input = form.querySelector('input[data-pagination-input]');
+            if (!input) return;
+
+            await navigate(input.value, input);
+        }, true);
+
+        container.dataset.paginationBound = 'true';
+    },
+
     splitTags(value = '') {
         return value
             .split(',')
