@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>文献库 - CiteBox</title>
+    <title>总览 - CiteBox</title>
     <link rel="icon" type="image/svg+xml" href="/static/img/citebox-icon.svg">
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
@@ -12,12 +12,13 @@
         <div class="navbar-content">
             <a href="/" class="logo">CiteBox</a>
             <ul class="nav-links">
-                <li><a href="/" class="active">文献库</a></li>
+                <li><a href="/" class="active">总览</a></li>
+                <li><a href="/library">文献库</a></li>
                 <li><a href="/figures">图片库</a></li>
                 <li><a href="/groups">分组</a></li>
                 <li><a href="/tags">标签</a></li>
                 <li><a href="/notes">笔记</a></li>
-                <li><a href="/ai">AI 阅读</a></li>
+                <li><a href="/ai">AI伴读</a></li>
                 <li><a href="/settings">配置</a></li>
             </ul>
             <div class="nav-actions">
@@ -29,123 +30,90 @@
     <main class="page-shell">
         <section class="hero">
             <div>
-                <p class="eyebrow">Collect. Cite. Create.</p>
-                <h1>围绕文献构建可浏览的图片数据库</h1>
+                <p class="eyebrow">Research Dashboard</p>
+                <h1>先看全局进度，再进入文献与图片工作流</h1>
                 <p class="hero-text">
-                    上传 PDF 后，系统会为每篇文献保存原始文件、正文内容、框选结果和提取图片，并支持按分组与标签持续整理。
+                    这里集中展示文献处理状态、图片沉淀情况和最近更新内容；真正的文献浏览与筛选，单独放到文献库页面完成。
+                </p>
+                <p class="hero-inline-links">
+                    <span>下一步：</span>
+                    <a href="/library">进入文献库</a>
+                    <span aria-hidden="true">/</span>
+                    <a href="/guide">查看功能说明</a>
                 </p>
             </div>
         </section>
 
-        <section class="shortcut-grid">
-            <a class="shortcut-card" href="/figures">
-                <span class="eyebrow">Browse</span>
-                <h2>图片库</h2>
-                <p>集中浏览所有提取图片，再回到对应文献继续查看细节。</p>
-            </a>
-            <a class="shortcut-card" href="/groups">
-                <span class="eyebrow">Organize</span>
-                <h2>分组</h2>
-                <p>按项目、主题或任务组织文献集合。</p>
-            </a>
-            <a class="shortcut-card" href="/tags">
-                <span class="eyebrow">Annotate</span>
-                <h2>标签</h2>
-                <p>用更灵活的多维标记方式补充检索入口。</p>
-            </a>
-            <a class="shortcut-card" href="/notes">
-                <span class="eyebrow">Notes</span>
-                <h2>笔记</h2>
-                <p>集中管理图片笔记，把 AI 解读和人工观察沉淀成可检索内容。</p>
-            </a>
-            <a class="shortcut-card" href="/ai">
-                <span class="eyebrow">Assist</span>
-                <h2>AI 阅读</h2>
-                <p>把全文、图片和你的问题一起发给模型，辅助做图像解读和归档建议。</p>
-            </a>
-            <a class="shortcut-card" href="/settings">
-                <span class="eyebrow">Setup</span>
-                <h2>配置</h2>
-                <p>统一维护 AI 参数与 PDF 提取服务地址，避免在阅读工作台里堆叠设置项。</p>
-            </a>
-        </section>
-
-        <section class="filters-card">
+        <section class="filters-card dashboard-summary-card">
             <div class="filters-card-head">
                 <div>
-                    <h2>筛选文献</h2>
-                    <p>按关键词、分组、文献标签和解析状态快速定位目标文献；需要新增内容时，再从这里继续上传。</p>
+                    <p class="eyebrow">Status</p>
+                    <h2>当前处理概况</h2>
+                    <p>把总量、完成度和待处理项放在一页里，减少你在文献库里来回切状态筛选的成本。</p>
                 </div>
-                <a class="btn btn-secondary" href="/upload">上传新文献</a>
             </div>
-            <div class="filters-grid">
-                <label class="field">
-                    <span>关键词</span>
-                    <input id="keywordInput" class="form-input" type="text" placeholder="标题、文件名、标签、正文内容">
-                </label>
-                <label class="field">
-                    <span>分组</span>
-                    <select id="groupFilter" class="form-input">
-                        <option value="">全部分组</option>
-                    </select>
-                </label>
-                <label class="field">
-                    <span>文献标签</span>
-                    <select id="tagFilter" class="form-input">
-                        <option value="">全部文献标签</option>
-                    </select>
-                </label>
-                <label class="field">
-                    <span>解析状态</span>
-                    <select id="statusFilter" class="form-input">
-                        <option value="">全部状态</option>
-                        <option value="queued">等待解析</option>
-                        <option value="running">解析中</option>
-                        <option value="manual_pending">待人工处理</option>
-                        <option value="completed">已完成</option>
-                        <option value="failed">解析失败</option>
-                        <option value="cancelled">已取消</option>
-                    </select>
-                </label>
-            </div>
+            <div id="dashboardSummaryStrip" class="summary-strip"></div>
         </section>
 
-	        <section class="content-layout">
-	            <section class="library-panel">
-	                <div id="summaryStrip" class="summary-strip"></div>
-	                <div id="paperList" class="paper-grid paper-list-mode"></div>
-	                <div id="pagination" class="pagination"></div>
-	            </section>
-
-            <aside class="sidebar">
-                <section class="manager-card">
-                    <div class="manager-head">
-                        <h2>分组</h2>
-                        <p>文献归档维度</p>
+        <section class="overview-grid">
+            <section class="overview-main">
+                <section class="filters-card recent-papers-card">
+                    <div class="filters-card-head">
+                        <div>
+                            <p class="eyebrow">Recent</p>
+                            <h2>最近更新的文献</h2>
+                            <p>优先回到最近有变化的条目，继续查看详情、人工处理或补充标注。</p>
+                        </div>
+                        <a class="btn btn-secondary" href="/library">查看全部文献</a>
                     </div>
-                    <form id="groupForm" class="manager-form">
-                        <input id="groupNameInput" class="form-input" type="text" placeholder="新分组名称">
-                        <textarea id="groupDescriptionInput" class="form-textarea" rows="3" placeholder="分组说明（可选）"></textarea>
-                        <button class="btn btn-secondary" type="submit">创建分组</button>
-                    </form>
-                    <div id="groupList" class="manager-list"></div>
+                    <div id="dashboardRecentPaperList" class="recent-paper-list"></div>
+                </section>
+            </section>
+
+            <aside class="overview-side">
+                <section class="manager-card quick-actions-card">
+                    <div class="manager-head">
+                        <h2>快捷入口</h2>
+                        <p>按你的当前任务，直接进入对应工作区。</p>
+                    </div>
+                    <div class="quick-link-stack">
+                        <a class="shortcut-card compact" href="/upload">
+                            <span class="eyebrow">Ingest</span>
+                            <h2>上传 PDF</h2>
+                            <p>新建文献条目并触发后台解析。</p>
+                        </a>
+                        <a class="shortcut-card compact" href="/figures">
+                            <span class="eyebrow">Browse</span>
+                            <h2>图片库</h2>
+                            <p>跨文献浏览图片、标签和图片笔记。</p>
+                        </a>
+                        <a class="shortcut-card compact" href="/notes">
+                            <span class="eyebrow">Notes</span>
+                            <h2>笔记</h2>
+                            <p>集中回看图片笔记和 AI 解读结果。</p>
+                        </a>
+                        <a class="shortcut-card compact" href="/ai">
+                            <span class="eyebrow">Assist</span>
+                            <h2>AI伴读</h2>
+                            <p>围绕正文和图片继续提问与整理。</p>
+                        </a>
+                    </div>
                 </section>
 
-	                <section class="manager-card">
-	                    <div class="manager-head">
-	                        <h2>文献标签</h2>
-                        <p>文献标签管理</p>
+                <section class="manager-card guide-teaser-card">
+                    <div class="manager-head">
+                        <h2>功能说明</h2>
+                        <p>把“文献、分图、标注、笔记、AI”各自负责什么，拆到单独页面统一说明。</p>
                     </div>
-                    <form id="tagForm" class="manager-form inline-form">
-                        <input id="tagNameInput" class="form-input" type="text" placeholder="新标签名称">
-                        <input id="tagColorInput" class="color-input" type="color" value="#A45C40">
-                        <button class="btn btn-secondary" type="submit">创建标签</button>
-	                    </form>
-	                    <div id="tagList" class="manager-list"></div>
-	                </section>
-
-	            </aside>
-	        </section>
+                    <p class="guide-teaser-text">
+                        如果是第一次接触这个工作流，先看功能说明会比直接钻进文献库更容易理解整个系统。
+                    </p>
+                    <div class="card-actions">
+                        <a class="btn btn-primary" href="/guide">打开功能说明</a>
+                    </div>
+                </section>
+            </aside>
+        </section>
     </main>
 
     <div id="paperModal" class="modal-shell hidden">
@@ -155,11 +123,10 @@
         </div>
     </div>
 
-	    <script src="/static/js/utils.js"></script>
-	    <script src="/static/js/api.js"></script>
-	    <script src="/static/js/paper-viewer.js"></script>
-	    <script src="/static/js/library.js"></script>
-	    <script src="/static/js/browser-pages.js"></script>
-	    <script src="/static/js/main.js"></script>
+    <script src="/static/js/utils.js"></script>
+    <script src="/static/js/api.js"></script>
+    <script src="/static/js/paper-viewer.js"></script>
+    <script src="/static/js/dashboard.js"></script>
+    <script src="/static/js/main.js"></script>
 </body>
 </html>

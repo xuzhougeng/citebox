@@ -242,7 +242,7 @@ CREATE UNIQUE INDEX idx_tags_scope_name ON tags(scope, name);
 | `stored_pdf_name` | 存储目录里的实际 PDF 文件名，当前要求唯一 |
 | `file_size` | 文件大小 |
 | `content_type` | MIME 类型，默认 `application/pdf` |
-| `pdf_text` | PDF 提取出的全文文本，主要用于检索和 AI 阅读 |
+| `pdf_text` | PDF 提取出的全文文本，主要用于检索和 AI伴读 |
 | `abstract_text` | 文献摘要 |
 | `notes_text` | 文献级笔记或补充说明 |
 | `boxes_json` | 提取框、版面分析等结构化 JSON |

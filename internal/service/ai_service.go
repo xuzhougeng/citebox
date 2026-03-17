@@ -208,7 +208,7 @@ func (s *AIService) prepareRead(input model.AIReadRequest, structuredOutput bool
 		return nil, apperr.New(apperr.CodeNotFound, "文献不存在")
 	}
 	if strings.TrimSpace(paper.PDFText) == "" && len(paper.Figures) == 0 {
-		return nil, apperr.New(apperr.CodeFailedPrecondition, "当前文献缺少可供 AI 阅读的正文或图片，请先完成解析")
+		return nil, apperr.New(apperr.CodeFailedPrecondition, "当前文献缺少可供 AI伴读的正文或图片，请先完成解析")
 	}
 
 	groups, err := s.repo.ListGroups()

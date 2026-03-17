@@ -228,7 +228,7 @@ const ManualPage = {
                 <div class="empty-state">
                     <h3>无法进入人工处理工作台</h3>
                     <p>${Utils.escapeHTML(message)}</p>
-                    <a class="btn btn-primary" href="/">返回文献库</a>
+                    <a class="btn btn-primary" href="/library">返回文献库</a>
                 </div>
             `;
         }

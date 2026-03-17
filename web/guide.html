@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>功能说明 - CiteBox</title>
+    <link rel="icon" type="image/svg+xml" href="/static/img/citebox-icon.svg">
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="navbar-content">
+            <a href="/" class="logo">CiteBox</a>
+            <ul class="nav-links">
+                <li><a href="/">总览</a></li>
+                <li><a href="/library">文献库</a></li>
+                <li><a href="/figures">图片库</a></li>
+                <li><a href="/groups">分组</a></li>
+                <li><a href="/tags">标签</a></li>
+                <li><a href="/notes">笔记</a></li>
+                <li><a href="/ai">AI伴读</a></li>
+                <li><a href="/settings">配置</a></li>
+            </ul>
+            <div class="nav-actions">
+                <a href="/upload" class="nav-cta">上传 PDF</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="page-shell">
+        <section class="hero">
+            <div>
+                <p class="eyebrow">Guide</p>
+                <h1>把文献、图片、笔记和 AI 工作流拆开看</h1>
+                <p class="hero-text">
+                    这页只负责说明系统各模块分别做什么，帮助你理解为什么文献库不再承担状态汇总和功能介绍。
+                </p>
+                <p class="hero-inline-links">
+                    <span>继续浏览：</span>
+                    <a href="/library">进入文献库</a>
+                    <span aria-hidden="true">/</span>
+                    <a href="/">返回总览</a>
+                </p>
+            </div>
+        </section>
+
+        <section class="filters-card">
+            <div class="filters-card-head">
+                <div>
+                    <p class="eyebrow">Workflow</p>
+                    <h2>建议使用顺序</h2>
+                </div>
+            </div>
+            <div class="workflow-grid">
+                <article class="workflow-card">
+                    <span class="workflow-step">01</span>
+                    <h3>上传 PDF</h3>
+                    <p>创建文献条目，并将 PDF 送入后台解析流程。</p>
+                </article>
+                <article class="workflow-card">
+                    <span class="workflow-step">02</span>
+                    <h3>查看文献库</h3>
+                    <p>按分组、标签和状态筛选已经处理好的文献，进入详情继续编辑。</p>
+                </article>
+                <article class="workflow-card">
+                    <span class="workflow-step">03</span>
+                    <h3>进入图片库</h3>
+                    <p>跨文献浏览提取图片，为单张图片打标签、写笔记和做回看。</p>
+                </article>
+                <article class="workflow-card">
+                    <span class="workflow-step">04</span>
+                    <h3>沉淀到笔记</h3>
+                    <p>把 AI 解读或人工观察写回图片笔记，作为后续检索入口。</p>
+                </article>
+                <article class="workflow-card">
+                    <span class="workflow-step">05</span>
+                    <h3>用 AI伴读补充</h3>
+                    <p>结合全文、图片和问题继续对文献做结构化理解。</p>
+                </article>
+            </div>
+        </section>
+
+        <section class="shortcut-grid">
+            <article class="shortcut-card">
+                <span class="eyebrow">Overview</span>
+                <h2>总览</h2>
+                <p>展示文献总量、解析完成度、图片与笔记沉淀情况，以及最近更新的文献。</p>
+            </article>
+            <article class="shortcut-card">
+                <span class="eyebrow">Library</span>
+                <h2>文献库</h2>
+                <p>只负责定位和打开文献，不再混合承担状态概览和功能导航。</p>
+            </article>
+            <article class="shortcut-card">
+                <span class="eyebrow">Figures</span>
+                <h2>图片库</h2>
+                <p>围绕单张图片管理标签与笔记，按图像内容而不是全文来组织知识。</p>
+            </article>
+            <article class="shortcut-card">
+                <span class="eyebrow">Notes</span>
+                <h2>笔记</h2>
+                <p>统一回看图片笔记，沉淀可搜索的说明文本和 AI 解读结果。</p>
+            </article>
+            <article class="shortcut-card">
+                <span class="eyebrow">Tags & Groups</span>
+                <h2>分组与标签</h2>
+                <p>分组适合稳定归类，标签适合多维检索；文献标签和图片标签彼此独立。</p>
+            </article>
+            <article class="shortcut-card">
+                <span class="eyebrow">AI</span>
+                <h2>AI伴读</h2>
+                <p>把正文与图片一起交给模型处理，服务于归纳、解释和后续记录。</p>
+            </article>
+        </section>
+    </main>
+</body>
+</html>

@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>文献库 - CiteBox</title>
+    <link rel="icon" type="image/svg+xml" href="/static/img/citebox-icon.svg">
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="navbar-content">
+            <a href="/" class="logo">CiteBox</a>
+            <ul class="nav-links">
+                <li><a href="/">总览</a></li>
+                <li><a href="/library" class="active">文献库</a></li>
+                <li><a href="/figures">图片库</a></li>
+                <li><a href="/groups">分组</a></li>
+                <li><a href="/tags">标签</a></li>
+                <li><a href="/notes">笔记</a></li>
+                <li><a href="/ai">AI伴读</a></li>
+                <li><a href="/settings">配置</a></li>
+            </ul>
+            <div class="nav-actions">
+                <a href="/upload" class="nav-cta">上传 PDF</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="page-shell">
+        <section class="hero compact">
+            <div>
+                <p class="eyebrow">Library</p>
+                <h1>专注查看已经进入工作流的文献</h1>
+                <p class="hero-text">
+                    文献库只负责筛选、定位和打开文献详情。默认展示已完成解析的条目；处理状态汇总和功能说明，已经移到总览与功能说明页面。
+                </p>
+                <p class="hero-inline-links">
+                    <span>辅助入口：</span>
+                    <a href="/guide">查看功能说明</a>
+                    <span aria-hidden="true">/</span>
+                    <a href="/">返回总览</a>
+                </p>
+            </div>
+        </section>
+
+        <section class="filters-card">
+            <div class="filters-card-head">
+                <div>
+                    <h2>筛选文献</h2>
+                    <p>按关键词、分组、文献标签和解析状态快速定位目标文献。需要看整体进度时，回总览页即可。</p>
+                </div>
+                <a class="btn btn-primary" href="/upload">上传新文献</a>
+            </div>
+            <div class="filters-grid">
+                <label class="field">
+                    <span>关键词</span>
+                    <input id="keywordInput" class="form-input" type="text" placeholder="标题、文件名、标签、正文内容">
+                </label>
+                <label class="field">
+                    <span>分组</span>
+                    <select id="groupFilter" class="form-input">
+                        <option value="">全部分组</option>
+                    </select>
+                </label>
+                <label class="field">
+                    <span>文献标签</span>
+                    <select id="tagFilter" class="form-input">
+                        <option value="">全部文献标签</option>
+                    </select>
+                </label>
+                <label class="field">
+                    <span>解析状态</span>
+                    <select id="statusFilter" class="form-input">
+                        <option value="">全部状态</option>
+                        <option value="queued">等待解析</option>
+                        <option value="running">解析中</option>
+                        <option value="manual_pending">待人工处理</option>
+                        <option value="completed">已完成</option>
+                        <option value="failed">解析失败</option>
+                        <option value="cancelled">已取消</option>
+                    </select>
+                </label>
+            </div>
+        </section>
+
+        <section class="library-shell">
+            <div id="libraryResultMeta" class="library-result-meta"></div>
+            <div id="paperList" class="paper-grid paper-list-mode"></div>
+            <div id="pagination" class="pagination"></div>
+        </section>
+    </main>
+
+    <div id="paperModal" class="modal-shell hidden">
+        <div class="modal-dialog">
+            <button id="closePaperModal" class="modal-close" type="button" aria-label="关闭">×</button>
+            <div id="paperModalBody"></div>
+        </div>
+    </div>
+
+    <script src="/static/js/utils.js"></script>
+    <script src="/static/js/api.js"></script>
+    <script src="/static/js/paper-viewer.js"></script>
+    <script src="/static/js/library.js"></script>
+    <script src="/static/js/main.js"></script>
+</body>
+</html>
