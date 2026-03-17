@@ -835,9 +835,9 @@ const FigureViewer = {
 
         switch (action) {
             case 'figure_interpretation':
-                return `请优先围绕当前查看的图片进行解读：${location}${caption}。说明这张图展示了什么、支持了什么结论，以及它和全文主线的关系。`;
+                return `当前查看图片：${location}${caption}。请只围绕这张图片回答。`;
             case 'tag_suggestion':
-                return `我正在查看这篇文献中的 ${location}${caption}。请结合全文和图片给出适合归档检索的标签建议，优先复用现有标签。`;
+                return `当前查看图片：${location}${caption}。请只针对这张图片给出结果。`;
             default:
                 return '';
         }

@@ -613,8 +613,12 @@ func buildAIPrompts(
 	}
 
 	outputRequirements := strings.TrimSpace(aiOutputRequirements(action, structuredOutput))
+	scopeDescription := actionScopeDescription(action)
 
 	userPrompt := fmt.Sprintf(`任务类型: %s
+
+场景范围:
+%s
 
 论文信息:
 - 标题: %s
@@ -640,7 +644,7 @@ func buildAIPrompts(
 历史对话:
 %s
 
-动作提示:
+场景指令:
 %s
 
 全文:
@@ -649,6 +653,7 @@ func buildAIPrompts(
 输出要求:
 %s`,
 		action,
+		scopeDescription,
 		paper.Title,
 		paper.OriginalFilename,
 		groupName,
@@ -705,6 +710,19 @@ func actionPromptFor(settings model.AISettings, action model.AIAction) string {
 	}
 }
 
+func actionScopeDescription(action model.AIAction) string {
+	switch action {
+	case model.AIActionFigureInterpretation:
+		return "只针对当前选中的这张图片进行解读；论文全文仅作为补充上下文。"
+	case model.AIActionTagSuggestion:
+		return "只针对当前选中的这张图片生成图片标签；不是整篇文献的文献标签。"
+	case model.AIActionGroupSuggestion:
+		return "针对当前整篇文献进行分组判断。"
+	default:
+		return "针对当前整篇文献回答用户问题。"
+	}
+}
+
 func normalizeAIAction(action model.AIAction) model.AIAction {
 	switch action {
 	case model.AIActionFigureInterpretation, model.AIActionTagSuggestion, model.AIActionGroupSuggestion, model.AIActionPaperQA:
@@ -726,9 +744,9 @@ func tagScopeForAIAction(action model.AIAction) model.TagScope {
 func defaultAIQuestion(action model.AIAction) string {
 	switch action {
 	case model.AIActionFigureInterpretation:
-		return "请围绕这篇文章的关键图片做一次重点解读。"
+		return "当前任务只针对当前选中的这张图片。"
 	case model.AIActionTagSuggestion:
-		return "请为这篇文献生成一组适合检索和归档的标签。"
+		return "当前任务只针对当前选中的这张图片。"
 	case model.AIActionGroupSuggestion:
 		return "请判断这篇文献最适合放到哪个分组。"
 	default:
