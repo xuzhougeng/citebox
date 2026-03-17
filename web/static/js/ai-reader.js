@@ -166,10 +166,13 @@ const AIReaderPage = {
             `).join('');
 
             return `
-                <button class="ai-paper-item ${active ? 'active' : ''}" type="button" data-paper-id="${paper.id}">
+                <button class="ai-paper-item ${active ? 'active' : ''}" type="button" data-paper-id="${paper.id}" aria-pressed="${active ? 'true' : 'false'}">
                     <div class="ai-paper-item-head">
                         <strong>${Utils.escapeHTML(paper.title)}</strong>
-                        <span class="status-badge tone-${Utils.statusTone(paper.extraction_status)}">${Utils.escapeHTML(Utils.statusLabel(paper.extraction_status))}</span>
+                        <div class="ai-paper-item-state">
+                            ${active ? '<span class="ai-paper-active-badge">当前文献</span>' : ''}
+                            <span class="status-badge tone-${Utils.statusTone(paper.extraction_status)}">${Utils.escapeHTML(Utils.statusLabel(paper.extraction_status))}</span>
+                        </div>
                     </div>
                     <div class="ai-paper-item-meta">
                         <span>${Utils.escapeHTML(paper.original_filename)}</span>

@@ -18,7 +18,7 @@ const BrowserUI = {
                         <h3>${Utils.escapeHTML(paper.title)}</h3>
                     </div>
                     <div class="paper-list-meta">
-                        <span class="paper-list-meta-item paper-list-meta-file">
+                        <span class="paper-list-meta-item paper-list-meta-file" data-action="open" role="button" title="点击查看详情">
                             <span class="paper-list-meta-label">文件</span>
                             <span class="paper-list-meta-value">${Utils.escapeHTML(paper.original_filename)}</span>
                         </span>
