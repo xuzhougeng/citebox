@@ -113,7 +113,7 @@ const DashboardPage = {
                 <strong>${stats.processingPapers}</strong>
             </div>
             <div class="stat-card">
-                <span>待人工处理</span>
+                <span>待手动标注</span>
                 <strong>${stats.manualPendingPapers}</strong>
             </div>
             <div class="stat-card">
@@ -164,7 +164,7 @@ const DashboardPage = {
                     </div>
                     <div class="card-actions recent-paper-actions">
                         <button class="btn btn-primary" type="button" data-action="open">查看详情</button>
-                        <a class="btn btn-outline" href="/manual?paper_id=${paper.id}">人工处理</a>
+                        <a class="btn btn-outline" href="/manual?paper_id=${paper.id}">手动标注</a>
                         ${(paper.extraction_status === 'failed' || paper.extraction_status === 'cancelled') ? '<button class="btn btn-outline" type="button" data-action="reextract">重新解析</button>' : ''}
                     </div>
                 </article>

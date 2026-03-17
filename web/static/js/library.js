@@ -241,7 +241,7 @@ const LibraryPage = {
                             <h3>${Utils.escapeHTML(paper.title)}</h3>
                         </div>
                         <div class="paper-list-meta">
-                            <span class="paper-list-meta-item paper-list-meta-file">
+                            <span class="paper-list-meta-item paper-list-meta-file" data-action="open" role="button">
                                 <span class="paper-list-meta-label">文件</span>
                                 <span class="paper-list-meta-value">${Utils.escapeHTML(paper.original_filename)}</span>
                             </span>
@@ -264,8 +264,7 @@ const LibraryPage = {
                     <div class="paper-list-footer">
                         <div class="paper-list-tags">${tags || '<span class="muted">无标签</span>'}</div>
                         <div class="card-actions paper-list-actions">
-                            <button class="btn btn-primary" type="button" data-action="open">编辑详情</button>
-                            <a class="btn btn-outline" href="/manual?paper_id=${paper.id}">人工处理</a>
+                            <a class="btn btn-outline" href="/manual?paper_id=${paper.id}">手动标注</a>
                             ${(paper.extraction_status === 'failed' || paper.extraction_status === 'cancelled') ? '<button class="btn btn-outline" type="button" data-action="reextract">重新解析</button>' : ''}
                             <button class="btn btn-outline danger" type="button" data-action="delete">删除</button>
                         </div>

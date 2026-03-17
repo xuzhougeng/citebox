@@ -226,7 +226,7 @@ const ManualPage = {
         if (this.summaryStrip) {
             this.summaryStrip.innerHTML = `
                 <div class="empty-state">
-                    <h3>无法进入人工处理工作台</h3>
+                    <h3>无法进入手动标注工作台</h3>
                     <p>${Utils.escapeHTML(message)}</p>
                     <a class="btn btn-primary" href="/library">返回文献库</a>
                 </div>

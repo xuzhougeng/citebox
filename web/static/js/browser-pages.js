@@ -42,7 +42,7 @@ const BrowserUI = {
                     <div class="paper-list-tags">${tags}</div>
                     <div class="card-actions paper-list-actions">
                         <button class="btn btn-primary" type="button" data-action="open">查看详情</button>
-                        <a class="btn btn-outline" href="/manual?paper_id=${paper.id}">人工处理</a>
+                        <a class="btn btn-outline" href="/manual?paper_id=${paper.id}">手动标注</a>
                     </div>
                 </div>
             </article>
@@ -2074,13 +2074,40 @@ const NotesPage = {
             <button class="btn btn-outline" type="button" data-page-step="1" ${this.state.page >= this.state.totalPages ? 'disabled' : ''}>Next</button>
         ` : '';
         this.grid.innerHTML = figures.length
-            ? figures.map((figure, index) => BrowserUI.renderFigureCard(figure, index, {
-                mediaAction: 'note',
-                primaryAction: 'note',
-                showNotesPreview: true
-            })).join('')
+            ? figures.map((figure, index) => this.renderNoteRow(figure, index)).join('')
             : '<div class="empty-state"><h3>还没有可管理的图片笔记</h3><p>先在图片库里为图片补充笔记，再回到这里统一整理。</p></div>';
         BrowserUI.renderPagination(this.pagination, this.state.page, this.state.totalPages);
+    },
+
+    renderNoteRow(figure, index) {
+        const noteText = String(figure.notes_text || '').trim().replace(/\s+/g, ' ');
+        const preview = noteText.length > 280 ? noteText.slice(0, 280) + '...' : noteText;
+        const tags = BrowserUI.renderTagChips(figure.tags || []);
+
+        return `
+            <article class="note-row" data-paper-id="${figure.paper_id}" data-figure-index="${index}">
+                <div class="note-row-thumb">
+                    <button class="note-row-img" type="button" data-action="preview" aria-label="查看大图">
+                        <img src="${figure.image_url}" alt="${Utils.escapeHTML(figure.paper_title || '')}">
+                    </button>
+                </div>
+                <div class="note-row-body">
+                    <div class="note-row-head">
+                        <span class="note-row-source" data-action="paper" role="button">${Utils.escapeHTML(figure.paper_title)}</span>
+                        <span class="note-row-page">第 ${figure.page_number || '-'} 页 · #${figure.figure_index || '-'}</span>
+                    </div>
+                    <div class="note-row-text" data-action="note" role="button">${Utils.escapeHTML(preview) || '<span class="muted">空笔记</span>'}</div>
+                    <div class="note-row-foot">
+                        <div class="note-row-tags">${tags}</div>
+                        <div class="note-row-actions">
+                            <button class="btn btn-small btn-primary" type="button" data-action="note">编辑笔记</button>
+                            <button class="btn btn-small btn-outline" type="button" data-action="preview">大图</button>
+                            <button class="btn btn-small btn-outline" type="button" data-action="paper">文献</button>
+                        </div>
+                    </div>
+                </div>
+            </article>
+        `;
     },
 
     async load(page = this.state.page) {

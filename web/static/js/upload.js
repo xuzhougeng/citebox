@@ -138,7 +138,7 @@ const UploadPage = {
             Utils.showToast(
                 Utils.isProcessingStatus(paper.extraction_status)
                     ? '文献已入库，后台开始解析'
-                    : (paper.extraction_status === 'manual_pending' ? '文献已入库，请继续人工处理' : '文献已入库'),
+                    : (paper.extraction_status === 'manual_pending' ? '文献已入库，请继续手动标注' : '文献已入库'),
                 Utils.statusTone(paper.extraction_status)
             );
 
@@ -257,7 +257,7 @@ const UploadPage = {
         } else if (paper.extraction_status === 'manual_pending') {
             figureContent = `
                 <div class="empty-state">
-                    <h3>当前走人工处理流程</h3>
+                    <h3>当前走手动标注流程</h3>
                     <p>系统没有启动自动解析，你可以直接打开人工框选提取页，把需要的图片录入到文献里。</p>
                 </div>
             `;
