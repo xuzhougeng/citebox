@@ -2058,6 +2058,22 @@ button {
     line-height: 1.75;
 }
 
+.figure-lightbox-caption-editor {
+    display: grid;
+    gap: 0.75rem;
+    color: var(--ink);
+}
+
+.figure-caption-input {
+    min-height: 7.5rem;
+    resize: vertical;
+    background: rgba(255, 252, 248, 0.98);
+}
+
+.figure-caption-actions {
+    margin-top: -0.1rem;
+}
+
 .figure-lightbox-side {
     display: grid;
     gap: 1rem;

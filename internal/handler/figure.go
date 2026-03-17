@@ -80,6 +80,7 @@ func (h *FigureHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	var req struct {
 		Tags      []string `json:"tags"`
+		Caption   *string  `json:"caption"`
 		NotesText *string  `json:"notes_text"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -89,6 +90,7 @@ func (h *FigureHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	paper, err := h.service.UpdateFigure(id, service.UpdateFigureParams{
 		Tags:      req.Tags,
+		Caption:   req.Caption,
 		NotesText: req.NotesText,
 	})
 	if err != nil {

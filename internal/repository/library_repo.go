@@ -67,6 +67,7 @@ type PaperUpdateInput struct {
 }
 
 type FigureUpdateInput struct {
+	Caption   string
 	NotesText string
 	Tags      []TagUpsertInput
 }
@@ -1115,9 +1116,9 @@ func (r *LibraryRepository) UpdateFigure(id int64, input FigureUpdateInput) (*mo
 
 	result, err := tx.Exec(`
 		UPDATE paper_figures
-		SET notes_text = ?, updated_at = CURRENT_TIMESTAMP
+		SET caption = ?, notes_text = ?, updated_at = CURRENT_TIMESTAMP
 		WHERE id = ?
-	`, input.NotesText, id)
+	`, input.Caption, input.NotesText, id)
 	if err != nil {
 		return nil, wrapDBError(err, "更新图片信息失败")
 	}
@@ -1154,6 +1155,7 @@ func (r *LibraryRepository) UpdateFigureTags(id int64, tags []TagUpsertInput) (*
 	}
 
 	return r.UpdateFigure(id, FigureUpdateInput{
+		Caption:   figure.Caption,
 		NotesText: figure.NotesText,
 		Tags:      tags,
 	})

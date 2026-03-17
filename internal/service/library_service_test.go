@@ -287,8 +287,14 @@ func TestUpdateFigureNotesAreSearchable(t *testing.T) {
 	if updated.Figures[0].NotesText != notes {
 		t.Fatalf("updated first figure notes_text = %q, want %q", updated.Figures[0].NotesText, notes)
 	}
+	if updated.Figures[0].Caption != "A" {
+		t.Fatalf("updated first figure caption = %q, want %q", updated.Figures[0].Caption, "A")
+	}
 	if updated.Figures[1].NotesText != "" {
 		t.Fatalf("updated second figure notes_text = %q, want empty", updated.Figures[1].NotesText)
+	}
+	if updated.Figures[1].Caption != "B" {
+		t.Fatalf("updated second figure caption = %q, want %q", updated.Figures[1].Caption, "B")
 	}
 
 	result, err := svc.ListFigures(model.FigureFilter{Keyword: "微环境重塑"})

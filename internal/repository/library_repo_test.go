@@ -551,6 +551,57 @@ func TestListFiguresFiltersHasNotes(t *testing.T) {
 	}
 }
 
+func TestUpdateFigureCaptionBecomesSearchable(t *testing.T) {
+	repo := newTestRepository(t)
+
+	paper, err := repo.CreatePaper(PaperUpsertInput{
+		Title:            "Caption Fixes",
+		OriginalFilename: "caption-fixes.pdf",
+		StoredPDFName:    "caption-fixes.pdf",
+		FileSize:         256,
+		ContentType:      "application/pdf",
+		ExtractionStatus: "completed",
+		Figures: []FigureUpsertInput{
+			{Filename: "figure_1.png", PageNumber: 1, FigureIndex: 1, Caption: "Old caption"},
+			{Filename: "figure_2.png", PageNumber: 2, FigureIndex: 2, Caption: "Second"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreatePaper() error = %v", err)
+	}
+
+	revisedCaption := "Corrected signaling overview"
+	updatedPaper, err := repo.UpdateFigure(paper.Figures[0].ID, FigureUpdateInput{
+		Caption:   revisedCaption,
+		NotesText: paper.Figures[0].NotesText,
+		Tags:      []TagUpsertInput{},
+	})
+	if err != nil {
+		t.Fatalf("UpdateFigure() error = %v", err)
+	}
+
+	if updatedPaper.Figures[0].Caption != revisedCaption {
+		t.Fatalf("updated first figure caption = %q, want %q", updatedPaper.Figures[0].Caption, revisedCaption)
+	}
+	if updatedPaper.Figures[1].Caption != "Second" {
+		t.Fatalf("updated second figure caption = %q, want %q", updatedPaper.Figures[1].Caption, "Second")
+	}
+
+	figures, total, err := repo.ListFigures(model.FigureFilter{Keyword: "signaling overview"})
+	if err != nil {
+		t.Fatalf("ListFigures(keyword caption) error = %v", err)
+	}
+	if total != 1 || len(figures) != 1 {
+		t.Fatalf("ListFigures(keyword caption) total=%d len=%d, want 1/1", total, len(figures))
+	}
+	if figures[0].ID != paper.Figures[0].ID {
+		t.Fatalf("ListFigures(keyword caption) figure id = %d, want %d", figures[0].ID, paper.Figures[0].ID)
+	}
+	if figures[0].Caption != revisedCaption {
+		t.Fatalf("ListFigures(keyword caption) caption = %q, want %q", figures[0].Caption, revisedCaption)
+	}
+}
+
 func TestUpdateFigureTracksUpdatedAtAndNotesSort(t *testing.T) {
 	repo := newTestRepository(t)
 

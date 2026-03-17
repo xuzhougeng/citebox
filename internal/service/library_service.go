@@ -80,6 +80,7 @@ type UpdatePaperParams struct {
 
 type UpdateFigureParams struct {
 	Tags      []string
+	Caption   *string
 	NotesText *string
 }
 
@@ -524,7 +525,13 @@ func (s *LibraryService) UpdateFigure(id int64, params UpdateFigureParams) (*mod
 		notesText = *params.NotesText
 	}
 
+	caption := figure.Caption
+	if params.Caption != nil {
+		caption = strings.TrimSpace(*params.Caption)
+	}
+
 	paper, err := s.repo.UpdateFigure(id, repository.FigureUpdateInput{
+		Caption:   caption,
 		NotesText: notesText,
 		Tags:      s.normalizeTagInputs(tagNames, model.TagScopeFigure),
 	})
