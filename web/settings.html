@@ -92,25 +92,45 @@
                         </label>
                     </div>
 
+                    <div class="settings-summary-box">
+                        <div>
+                            <span>Prompt 使用说明</span>
+                            <p><code>System Prompt</code> 是全局角色设定，作用于所有 AI 场景。</p>
+                            <p><code>通用问答 Prompt</code> 面向 AI伴读页的单篇文献问答。</p>
+                            <p><code>当前图片解读 Prompt</code> 和 <code>图片标签建议 Prompt</code> 都只作用于当前正在查看的单张图片，不是整篇文献的所有图片。</p>
+                            <p><code>分组建议 Prompt</code> 作用于整篇文献的分组判断。</p>
+                            <p>论文标题、摘要、备注、全文、现有标签/分组、当前图片信息，以及 JSON / 流式输出要求都会由后端自动补充，这里只需要写额外的行为指令。</p>
+                        </div>
+                    </div>
+
+                    <div class="submit-row">
+                        <button id="restoreAIPromptsButton" class="btn btn-outline" type="button">恢复推荐 Prompt</button>
+                    </div>
+
                     <label class="field">
                         <span>System Prompt</span>
-                        <textarea id="aiSystemPromptInput" class="form-textarea" rows="4" placeholder="系统提示词"></textarea>
+                        <textarea id="aiSystemPromptInput" class="form-textarea" rows="4" placeholder="全局角色设定，例如：优先引用原文证据；证据不足时明确说明不确定"></textarea>
+                        <p class="muted">适用于所有 AI 动作。不要在这里重复写具体任务、论文内容或输出格式。</p>
                     </label>
                     <label class="field">
                         <span>通用问答 Prompt</span>
-                        <textarea id="aiQAPromptInput" class="form-textarea" rows="4" placeholder="自由提问模式的提示词"></textarea>
+                        <textarea id="aiQAPromptInput" class="form-textarea" rows="4" placeholder="用于单篇文献问答的补充要求，例如：优先回答结论、证据链和局限"></textarea>
+                        <p class="muted">对应 AI伴读页的单篇文献问答。系统会自动附带全文、摘要、笔记、图片摘要和历史对话。</p>
                     </label>
                     <label class="field">
-                        <span>图片解读 Prompt</span>
-                        <textarea id="aiFigurePromptInput" class="form-textarea" rows="4" placeholder="图片解读模式的提示词"></textarea>
+                        <span>当前图片解读 Prompt</span>
+                        <textarea id="aiFigurePromptInput" class="form-textarea" rows="4" placeholder="用于当前单张图片的补充要求，例如：优先说明图中设计、对照关系、结论和局限"></textarea>
+                        <p class="muted">只作用于当前正在查看的那一张图。系统会自动附带该图信息、所属文献全文和输出格式要求。</p>
                     </label>
                     <label class="field">
-                        <span>Tag 建议 Prompt</span>
-                        <textarea id="aiTagPromptInput" class="form-textarea" rows="4" placeholder="标签建议模式的提示词"></textarea>
+                        <span>图片标签建议 Prompt</span>
+                        <textarea id="aiTagPromptInput" class="form-textarea" rows="4" placeholder="用于当前单张图片的标签建议，例如：优先输出可检索的图片内容标签，避免过泛词"></textarea>
+                        <p class="muted">只作用于当前图片，生成的是图片标签，不是整篇文献标签。系统会自动附带现有图片标签库，并处理结构化输出。</p>
                     </label>
                     <label class="field">
                         <span>分组建议 Prompt</span>
-                        <textarea id="aiGroupPromptInput" class="form-textarea" rows="4" placeholder="分组建议模式的提示词"></textarea>
+                        <textarea id="aiGroupPromptInput" class="form-textarea" rows="4" placeholder="用于整篇文献分组判断的补充要求，例如：优先复用已有分组，必要时再提新分组"></textarea>
+                        <p class="muted">作用对象是整篇文献。系统会自动附带当前分组、现有分组库、摘要、备注和全文。</p>
                     </label>
 
                     <div class="submit-row">

@@ -288,6 +288,15 @@ func buildHandler(
 		}
 	})
 
+	mux.HandleFunc("/api/ai/settings/defaults", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			aiHandler.GetDefaultSettings(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
 	mux.HandleFunc("/api/ai/settings/check-model", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodPost:

@@ -18,6 +18,7 @@ const SettingsPage = {
         this.figurePromptInput = document.getElementById('aiFigurePromptInput');
         this.tagPromptInput = document.getElementById('aiTagPromptInput');
         this.groupPromptInput = document.getElementById('aiGroupPromptInput');
+        this.restoreAIPromptsButton = document.getElementById('restoreAIPromptsButton');
         this.aiModelModal = document.getElementById('aiModelModal');
         this.closeAIModelModalButton = document.getElementById('closeAIModelModal');
         this.aiModelModalTitle = document.getElementById('aiModelModalTitle');
@@ -62,6 +63,9 @@ const SettingsPage = {
             await this.saveAISettings();
         });
         this.addAIModelButton.addEventListener('click', () => this.addAIModel());
+        this.restoreAIPromptsButton.addEventListener('click', async () => {
+            await this.restoreRecommendedPrompts();
+        });
         this.aiModelList.addEventListener('click', (event) => {
             const button = event.target.closest('[data-model-id]');
             if (!button) return;
@@ -158,6 +162,32 @@ const SettingsPage = {
         const payload = this.buildAISettingsPayload();
 
         await this.persistAISettings(payload, 'AI 配置已保存');
+    },
+
+    async restoreRecommendedPrompts() {
+        const button = this.restoreAIPromptsButton;
+        const originalLabel = button?.textContent || '';
+        if (button) {
+            button.disabled = true;
+            button.textContent = '载入中...';
+        }
+
+        try {
+            const defaults = await API.getDefaultAISettings();
+            this.systemPromptInput.value = defaults.system_prompt || '';
+            this.qaPromptInput.value = defaults.qa_prompt || '';
+            this.figurePromptInput.value = defaults.figure_prompt || '';
+            this.tagPromptInput.value = defaults.tag_prompt || '';
+            this.groupPromptInput.value = defaults.group_prompt || '';
+            Utils.showToast('已恢复推荐 Prompt，记得点击“保存 AI 配置”');
+        } catch (error) {
+            Utils.showToast(error.message, 'error');
+        } finally {
+            if (button) {
+                button.disabled = false;
+                button.textContent = originalLabel || '恢复推荐 Prompt';
+            }
+        }
     },
 
     async loadExtractorSettings() {
