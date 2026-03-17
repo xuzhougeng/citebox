@@ -184,11 +184,9 @@ const FigureViewer = {
         if (!this.modal || this.initialized) return;
         this.initialized = true;
         this.aiCache = new Map();
-        this.activeAIByPaper = new Map();
+        this.activeAIByFigure = new Map();
         this.aiRequestState = null;
         this.paperDetails = new Map();
-        this.lastAIDisplayAction = '';
-        this.lastAIDisplayCacheKey = '';
 
         this.handleKeydown = (event) => {
             if (!this.modal || this.modal.classList.contains('hidden')) return;
@@ -196,6 +194,7 @@ const FigureViewer = {
             const isEditableTarget = target instanceof HTMLElement && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName));
             if (event.key === 'Escape') {
                 this.close();
+                return;
             }
             if (isEditableTarget) {
                 return;
@@ -377,34 +376,20 @@ const FigureViewer = {
         }
     },
 
-    aiCacheKey(paperID, action) {
-        return `${paperID}:${action}`;
+    aiCacheKey(figureID, action) {
+        return `${figureID}:${action}`;
     },
 
     activeAIAction() {
-        if (!this.currentFigure?.paper_id) return this.lastAIDisplayAction || '';
-        const action = this.activeAIByPaper.get(this.currentFigure.paper_id) || '';
-        return action || this.lastAIDisplayAction || '';
+        if (!this.currentFigure?.id) return '';
+        return this.activeAIByFigure.get(this.currentFigure.id) || '';
     },
 
     currentAIResult() {
-        if (!this.currentFigure?.paper_id) {
-            if (this.lastAIDisplayCacheKey) {
-                return this.aiCache.get(this.lastAIDisplayCacheKey) || null;
-            }
-            return null;
-        }
+        if (!this.currentFigure?.id) return null;
         const action = this.activeAIAction();
         if (!action) return null;
-        const cacheKey = this.aiCacheKey(this.currentFigure.paper_id, action);
-        const result = this.aiCache.get(cacheKey) || null;
-        if (result) {
-            this.lastAIDisplayAction = action;
-            this.lastAIDisplayCacheKey = cacheKey;
-        } else if (this.lastAIDisplayCacheKey) {
-            return this.aiCache.get(this.lastAIDisplayCacheKey) || null;
-        }
-        return result;
+        return this.aiCache.get(this.aiCacheKey(this.currentFigure.id, action)) || null;
     },
 
     refreshAIResultPanel() {
@@ -444,12 +429,11 @@ const FigureViewer = {
         if (!this.currentFigure || this.aiRequestState?.loading) return;
 
         const paperID = Number(this.currentFigure.paper_id);
-        const cacheKey = this.aiCacheKey(paperID, action);
-        this.activeAIByPaper.set(paperID, action);
+        const figureID = Number(this.currentFigure.id);
+        const cacheKey = this.aiCacheKey(figureID, action);
+        this.activeAIByFigure.set(figureID, action);
 
         if (this.aiCache.has(cacheKey)) {
-            this.lastAIDisplayAction = action;
-            this.lastAIDisplayCacheKey = cacheKey;
             this.aiRequestState = null;
             this.refreshAIState();
             return;
@@ -458,6 +442,7 @@ const FigureViewer = {
         this.aiRequestState = {
             loading: true,
             paperID,
+            figureID,
             action,
             waitingForContent: true
         };
@@ -475,18 +460,18 @@ const FigureViewer = {
         try {
             const result = await API.readPaperWithAI({
                 paper_id: paperID,
+                figure_id: this.currentFigure.id,
                 action,
                 question: this.buildAIQuestion(action, this.currentFigure)
             });
             this.aiCache.set(cacheKey, result);
-            this.lastAIDisplayAction = action;
-            this.lastAIDisplayCacheKey = cacheKey;
             this.aiRequestState = null;
             this.refreshAIState();
         } catch (error) {
             this.aiRequestState = {
                 loading: false,
                 paperID,
+                figureID: Number(this.currentFigure?.id) || 0,
                 action,
                 error: error.message
             };
@@ -499,6 +484,7 @@ const FigureViewer = {
         const requestState = {
             loading: true,
             paperID,
+            figureID: Number(this.currentFigure.id),
             action,
             answer: '',
             provider: '',
@@ -516,6 +502,7 @@ const FigureViewer = {
         try {
             await API.readPaperWithAIStream({
                 paper_id: paperID,
+                figure_id: this.currentFigure.id,
                 action,
                 question: this.buildAIQuestion(action, this.currentFigure)
             }, {
@@ -542,8 +529,6 @@ const FigureViewer = {
                     }
                     if (event.type === 'final' && event.result) {
                         this.aiCache.set(cacheKey, event.result);
-                        this.lastAIDisplayAction = action;
-                        this.lastAIDisplayCacheKey = cacheKey;
                         this.aiRequestState = null;
                         this.refreshAIState();
                     }
@@ -567,9 +552,22 @@ const FigureViewer = {
             }
 
             if (this.aiRequestState !== requestState) return;
+            if (!requestState.answer && this.shouldFallbackToBufferedAI(error)) {
+                this.aiRequestState = {
+                    loading: true,
+                    paperID,
+                    figureID: requestState.figureID,
+                    action,
+                    waitingForContent: true
+                };
+                this.refreshAIState();
+                await this.runBufferedAIAction(action, paperID, cacheKey);
+                return;
+            }
             this.aiRequestState = {
                 loading: false,
                 paperID,
+                figureID: requestState.figureID,
                 action,
                 answer: requestState.answer || '',
                 provider: requestState.provider || '',
@@ -594,6 +592,15 @@ const FigureViewer = {
         return action === 'figure_interpretation';
     },
 
+    shouldFallbackToBufferedAI(error) {
+        const message = String(error?.message || '').toLowerCase();
+        return message.includes('401')
+            || message.includes('unauthorized')
+            || message.includes('invalid jwt token')
+            || message.includes('token is malformed')
+            || (message.includes('stream') && message.includes('unsupported'));
+    },
+
     tagNames(tags = []) {
         return Utils.splitTags(Utils.joinTags(tags));
     },
@@ -608,6 +615,16 @@ const FigureViewer = {
 
     currentFigureNotesDraft() {
         return this.body.querySelector('#figureNotesInput')?.value ?? (this.currentFigure?.notes_text || '');
+    },
+
+    clearFigureAIState(figureID) {
+        if (!figureID) return;
+        this.activeAIByFigure.delete(figureID);
+        this.aiCache.delete(this.aiCacheKey(figureID, 'figure_interpretation'));
+        this.aiCache.delete(this.aiCacheKey(figureID, 'tag_suggestion'));
+        if (this.aiRequestState?.figureID === figureID && !this.aiRequestState.loading) {
+            this.aiRequestState = null;
+        }
     },
 
     async handleMetaAction(button) {
@@ -627,6 +644,10 @@ const FigureViewer = {
         }
         if (button.dataset.figureMetaAction === 'save-caption') {
             await this.saveCaptionFromInput();
+            return;
+        }
+        if (button.dataset.figureMetaAction === 'open-notes') {
+            await this.openNotes();
             return;
         }
         if (button.dataset.figureMetaAction === 'save-notes') {
@@ -668,11 +689,13 @@ const FigureViewer = {
         if (!this.currentFigure) return;
 
         try {
+            const figureID = Number(this.currentFigure.id);
             const payload = await API.updateFigure(this.currentFigure.id, {
                 tags,
                 caption: this.currentFigureCaptionDraft(),
                 notes_text: this.currentFigureNotesDraft()
             });
+            this.clearFigureAIState(figureID);
             this.syncPaperMetadata(payload.paper);
             Utils.showToast(successMessage);
             this.render();
@@ -692,10 +715,12 @@ const FigureViewer = {
         if (!this.currentFigure) return;
 
         try {
+            const figureID = Number(this.currentFigure.id);
             const payload = await API.updateFigure(this.currentFigure.id, {
                 caption,
                 notes_text: this.currentFigureNotesDraft()
             });
+            this.clearFigureAIState(figureID);
             this.syncPaperMetadata(payload.paper);
             Utils.showToast(successMessage);
             this.render();
@@ -715,10 +740,12 @@ const FigureViewer = {
         if (!this.currentFigure) return;
 
         try {
+            const figureID = Number(this.currentFigure.id);
             const payload = await API.updateFigure(this.currentFigure.id, {
                 caption: this.currentFigureCaptionDraft(),
                 notes_text: notesText
             });
+            this.clearFigureAIState(figureID);
             this.syncPaperMetadata(payload.paper);
             Utils.showToast(successMessage);
             this.render();
@@ -734,6 +761,21 @@ const FigureViewer = {
         this.paperDetails.set(paper.id, paper);
         this.figures = mergeFigureCollectionWithPaper(this.figures, paper);
         this.syncCurrentFigureState({ forceDraftFromFigure: true });
+    },
+
+    async openNotes() {
+        if (!this.currentFigure) return;
+
+        this.close();
+        await NoteViewer.open({
+            figures: this.figures || [],
+            index: this.index,
+            page: this.page,
+            totalPages: this.totalPages,
+            loadPage: this.loadPage,
+            onOpenPaper: this.onOpenPaper,
+            onMetaChanged: this.onMetaChanged
+        });
     },
 
     async copyAIResult(kind) {
@@ -770,16 +812,16 @@ const FigureViewer = {
     },
 
     copyTextForCurrentResult(kind) {
-        const paperID = Number(this.currentFigure?.paper_id);
+        const figureID = Number(this.currentFigure?.id);
         const action = this.activeAIAction();
         const requestState = this.aiRequestState;
-        if (requestState?.loading && requestState.paperID === paperID && requestState.action === action) {
+        if (requestState?.loading && requestState.figureID === figureID && requestState.action === action) {
             return requestState.answer || '';
         }
-        if (requestState?.stopped && requestState.paperID === paperID && requestState.action === action) {
+        if (requestState?.stopped && requestState.figureID === figureID && requestState.action === action) {
             return requestState.answer || '';
         }
-        if (requestState?.error && requestState.paperID === paperID && requestState.action === action) {
+        if (requestState?.error && requestState.figureID === figureID && requestState.action === action) {
             return requestState.error || '';
         }
 
@@ -809,10 +851,10 @@ const FigureViewer = {
     renderAIResultPanel() {
         if (!this.currentFigure) return '';
 
-        const paperID = Number(this.currentFigure.paper_id);
+        const figureID = Number(this.currentFigure.id);
         const action = this.activeAIAction();
         const requestState = this.aiRequestState;
-        const isLoading = Boolean(requestState?.loading && requestState.paperID === paperID);
+        const isLoading = Boolean(requestState?.loading && requestState.figureID === figureID);
         const activeLabel = this.aiActionLabel(action);
         const currentTagNames = new Set((this.currentFigure.tags || []).map((tag) => {
             const name = typeof tag === 'string' ? tag : tag.name || '';
@@ -854,7 +896,7 @@ const FigureViewer = {
             `;
         }
 
-        if (requestState?.error && requestState.paperID === paperID && requestState.action === action) {
+        if (requestState?.error && requestState.figureID === figureID && requestState.action === action) {
             return `
                 <div class="figure-ai-result error">
                     <div class="figure-ai-head">
@@ -866,7 +908,7 @@ const FigureViewer = {
             `;
         }
 
-        if (requestState?.stopped && requestState.paperID === paperID && requestState.action === action) {
+        if (requestState?.stopped && requestState.figureID === figureID && requestState.action === action) {
             return `
                 <div class="figure-ai-result">
                     <div class="figure-ai-head">
@@ -954,6 +996,7 @@ const FigureViewer = {
         const canNext = this.canMoveNext();
         const aiLoading = Boolean(this.aiRequestState?.loading);
         const captionDraft = this.captionDraft ?? (figure.caption || '');
+        const notePreview = String(figure.notes_text || '').replace(/\s+/g, ' ').trim();
         const editableTags = (figure.tags || []).map((tag) => `
             <button class="figure-editable-tag" type="button" data-figure-meta-action="remove-tag" data-tag-name="${Utils.escapeHTML(typeof tag === 'string' ? tag : tag.name || '')}" aria-label="移除标签 ${Utils.escapeHTML(typeof tag === 'string' ? tag : tag.name || '')}">
                 <span>${Utils.escapeHTML(typeof tag === 'string' ? tag : tag.name || '')}</span>
@@ -1014,13 +1057,10 @@ const FigureViewer = {
                         </div>
                         <div class="figure-lightbox-meta-item figure-lightbox-meta-item-editable">
                             <span>图片笔记</span>
-                            <div class="figure-notes-editor">
-                                <textarea id="figureNotesInput" class="form-textarea" rows="7" placeholder="记录这张图的观察、AI 解读摘要或后续检索关键词">${Utils.escapeHTML(figure.notes_text || '')}</textarea>
-                                <div class="figure-notes-actions">
-                                    <span class="muted">支持多行内容，按 Ctrl/Cmd + Enter 可快速保存。</span>
-                                    <button class="btn btn-outline btn-small" type="button" data-figure-meta-action="save-notes">保存笔记</button>
-                                </div>
-                            </div>
+                            <button class="figure-note-inline-trigger ${notePreview ? '' : 'is-empty'}" type="button" data-figure-meta-action="open-notes" aria-label="打开图片笔记编辑器">
+                                <span class="figure-note-inline-text">${Utils.escapeHTML(notePreview || '还没有图片笔记，点击后在独立笔记面板中编辑。')}</span>
+                                <span class="figure-note-inline-action">打开笔记</span>
+                            </button>
                         </div>
                     </div>
 
@@ -1075,7 +1115,10 @@ const NoteViewer = {
             const target = event.target;
             const isEditableTarget = target instanceof HTMLElement && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName));
             if (event.key === 'Escape') {
-                this.close();
+                event.preventDefault();
+                event.stopPropagation();
+                void this.openPreview();
+                return;
             }
             if (isEditableTarget) {
                 return;

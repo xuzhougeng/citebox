@@ -56,6 +56,7 @@ type AISettings struct {
 
 type AIReadRequest struct {
 	PaperID  int64                `json:"paper_id"`
+	FigureID int64                `json:"figure_id,omitempty"`
 	Action   AIAction             `json:"action"`
 	Question string               `json:"question"`
 	History  []AIConversationTurn `json:"history,omitempty"`

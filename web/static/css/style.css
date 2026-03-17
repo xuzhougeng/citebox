@@ -2127,6 +2127,45 @@ button {
     gap: 0.7rem;
 }
 
+.figure-note-inline-trigger {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0.8rem;
+    width: 100%;
+    padding: 0.9rem 1rem;
+    border: 1px solid rgba(36, 27, 22, 0.1);
+    border-radius: 16px;
+    background: rgba(255, 252, 248, 0.94);
+    color: var(--ink);
+    text-align: left;
+    transition: border-color 0.18s ease, background 0.18s ease, transform 0.18s ease;
+}
+
+.figure-note-inline-trigger:hover {
+    border-color: rgba(164, 92, 64, 0.28);
+    background: rgba(255, 247, 239, 0.98);
+}
+
+.figure-note-inline-trigger.is-empty {
+    color: var(--muted);
+}
+
+.figure-note-inline-text {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    line-height: 1.5;
+}
+
+.figure-note-inline-action {
+    color: var(--accent-deep);
+    font-size: 0.84rem;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
 .figure-tag-editor-list {
     display: flex;
     flex-wrap: wrap;
