@@ -1368,24 +1368,51 @@ button {
     font-size: 0.93rem;
 }
 
-.ai-model-card {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: start;
-}
-
-.ai-model-card-body {
-    min-width: 0;
-}
-
-.ai-model-card-actions {
-    display: grid;
-    gap: 0.5rem;
-    align-items: start;
-}
-
 .ai-model-check-status {
     margin: 0;
+}
+
+.ai-model-button {
+    display: grid;
+    gap: 0.25rem;
+    align-items: start;
+    justify-items: start;
+    padding: 0.95rem 1rem;
+    border-radius: 16px;
+    border: 1px solid rgba(36, 27, 22, 0.08);
+    background: rgba(255, 252, 248, 0.86);
+    text-align: left;
+    transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease;
+}
+
+.ai-model-button:hover {
+    transform: translateY(-1px);
+    border-color: rgba(164, 92, 64, 0.28);
+    background: rgba(255, 248, 240, 0.92);
+}
+
+.ai-model-button.active {
+    border-color: rgba(164, 92, 64, 0.42);
+    background: rgba(164, 92, 64, 0.08);
+}
+
+.ai-model-button strong {
+    font-size: 0.98rem;
+}
+
+.ai-model-button span {
+    color: var(--muted);
+    font-size: 0.88rem;
+    line-height: 1.5;
+}
+
+.ai-model-modal-dialog {
+    width: min(860px, 100%);
+}
+
+.ai-model-editor-actions {
+    justify-content: flex-start;
+    flex-wrap: wrap;
 }
 
 .ai-config-summary-grid,
@@ -3114,15 +3141,6 @@ body.modal-open {
 
     .field-span-2 {
         grid-column: auto;
-    }
-
-    .ai-model-card {
-        grid-template-columns: 1fr;
-    }
-
-    .ai-model-card-actions {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        width: 100%;
     }
 
     .paper-grid,

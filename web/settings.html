@@ -47,7 +47,7 @@
                 <form id="aiSettingsForm" class="manager-form">
                     <div class="manager-head">
                         <h3>模型池</h3>
-                        <p>每个模型都可以独立配置提供商、Base URL、API Key，并支持单独检查可用性。</p>
+                        <p>点击模型名按钮即可修改；新增模型会先弹出配置窗口，保存后再加入模型池。</p>
                     </div>
 
                     <div id="aiModelList" class="manager-list"></div>
@@ -85,10 +85,6 @@
                         <label class="field">
                             <span>Temperature</span>
                             <input id="aiTemperatureInput" class="form-input" type="number" min="0" max="2" step="0.1">
-                        </label>
-                        <label class="field">
-                            <span>Max Output Tokens</span>
-                            <input id="aiMaxTokensInput" class="form-input" type="number" min="1" step="1">
                         </label>
                         <label class="field">
                             <span>图像数量上限</span>
@@ -214,6 +210,64 @@
             </section>
         </section>
     </main>
+
+    <div id="aiModelModal" class="modal-shell hidden">
+        <div class="modal-dialog ai-model-modal-dialog">
+            <button id="closeAIModelModal" class="modal-close" type="button" aria-label="关闭">×</button>
+            <div class="detail-head">
+                <div>
+                    <p class="eyebrow">AI Model</p>
+                    <h2 id="aiModelModalTitle">新增模型</h2>
+                </div>
+            </div>
+
+            <form id="aiModelEditorForm" class="detail-form">
+                <div class="form-grid">
+                    <label class="field">
+                        <span>模型名称</span>
+                        <input id="aiModelNameInput" class="form-input" type="text" placeholder="例如：OpenAI 快速问答">
+                    </label>
+                    <label class="field">
+                        <span>提供商</span>
+                        <select id="aiModelProviderInput" class="form-input">
+                            <option value="openai">OpenAI</option>
+                            <option value="anthropic">Anthropic</option>
+                            <option value="gemini">Gemini</option>
+                        </select>
+                    </label>
+                    <label class="field">
+                        <span>模型名</span>
+                        <input id="aiModelIdentifierInput" class="form-input" type="text" placeholder="例如：gpt-4.1-mini">
+                    </label>
+                    <label class="field">
+                        <span>Max Output Tokens</span>
+                        <input id="aiModelMaxTokensInput" class="form-input" type="number" min="1" step="1" placeholder="例如：1200">
+                    </label>
+                    <label class="field field-span-2">
+                        <span>Base URL</span>
+                        <input id="aiModelBaseURLInput" class="form-input" type="text" placeholder="默认使用官方地址；兼容网关时填自定义地址">
+                    </label>
+                    <label class="field field-span-2">
+                        <span>API Key</span>
+                        <input id="aiModelAPIKeyInput" class="form-input" type="password" autocomplete="off" placeholder="sk-...">
+                    </label>
+                    <label class="field checkbox-field field-span-2">
+                        <input id="aiModelLegacyModeInput" type="checkbox">
+                        <span>使用传统 OpenAI 接口模式（Chat Completions），以兼容其他 OpenAI 风格网关</span>
+                    </label>
+                </div>
+
+                <div id="aiModelProviderNote" class="ai-provider-note"></div>
+                <p id="aiModelCheckStatus" class="muted ai-model-check-status">尚未检查</p>
+
+                <div class="detail-actions ai-model-editor-actions">
+                    <button id="saveAIModelButton" class="btn btn-primary" type="submit">保存模型</button>
+                    <button id="checkAIModelButton" class="btn btn-outline" type="button">检查模型</button>
+                    <button id="deleteAIModelButton" class="btn btn-outline danger" type="button">删除模型</button>
+                </div>
+            </form>
+        </div>
+    </div>
 
     <script src="/static/js/utils.js"></script>
     <script src="/static/js/api.js"></script>

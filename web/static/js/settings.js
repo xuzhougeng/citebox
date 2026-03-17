@@ -12,13 +12,27 @@ const SettingsPage = {
         this.tagModelSelect = document.getElementById('aiTagModelSelect');
         this.groupModelSelect = document.getElementById('aiGroupModelSelect');
         this.temperatureInput = document.getElementById('aiTemperatureInput');
-        this.maxTokensInput = document.getElementById('aiMaxTokensInput');
         this.maxFiguresInput = document.getElementById('aiMaxFiguresInput');
         this.systemPromptInput = document.getElementById('aiSystemPromptInput');
         this.qaPromptInput = document.getElementById('aiQAPromptInput');
         this.figurePromptInput = document.getElementById('aiFigurePromptInput');
         this.tagPromptInput = document.getElementById('aiTagPromptInput');
         this.groupPromptInput = document.getElementById('aiGroupPromptInput');
+        this.aiModelModal = document.getElementById('aiModelModal');
+        this.closeAIModelModalButton = document.getElementById('closeAIModelModal');
+        this.aiModelModalTitle = document.getElementById('aiModelModalTitle');
+        this.aiModelEditorForm = document.getElementById('aiModelEditorForm');
+        this.aiModelNameInput = document.getElementById('aiModelNameInput');
+        this.aiModelProviderInput = document.getElementById('aiModelProviderInput');
+        this.aiModelIdentifierInput = document.getElementById('aiModelIdentifierInput');
+        this.aiModelMaxTokensInput = document.getElementById('aiModelMaxTokensInput');
+        this.aiModelBaseURLInput = document.getElementById('aiModelBaseURLInput');
+        this.aiModelAPIKeyInput = document.getElementById('aiModelAPIKeyInput');
+        this.aiModelLegacyModeInput = document.getElementById('aiModelLegacyModeInput');
+        this.aiModelProviderNote = document.getElementById('aiModelProviderNote');
+        this.aiModelCheckStatus = document.getElementById('aiModelCheckStatus');
+        this.checkAIModelButton = document.getElementById('checkAIModelButton');
+        this.deleteAIModelButton = document.getElementById('deleteAIModelButton');
 
         this.extractorSettingsForm = document.getElementById('extractorSettingsForm');
         this.extractorURLInput = document.getElementById('extractorURLInput');
@@ -48,32 +62,25 @@ const SettingsPage = {
             await this.saveAISettings();
         });
         this.addAIModelButton.addEventListener('click', () => this.addAIModel());
-        this.aiModelList.addEventListener('click', async (event) => {
-            const button = event.target.closest('[data-action]');
+        this.aiModelList.addEventListener('click', (event) => {
+            const button = event.target.closest('[data-model-id]');
             if (!button) return;
-
-            const card = button.closest('[data-model-id]');
-            if (!card) return;
-
-            if (button.dataset.action === 'delete-model') {
-                this.deleteAIModel(card.dataset.modelId);
-            }
-            if (button.dataset.action === 'check-model') {
-                await this.checkAIModel(card.dataset.modelId, button);
-            }
+            this.openAIModelEditor(button.dataset.modelId);
         });
-        this.aiModelList.addEventListener('input', (event) => {
-            const card = event.target.closest('[data-model-id]');
-            if (!card) return;
-            this.syncAIModelDraftFromCard(card);
-            this.renderSceneModelSelectors(this.readSceneModelSelections());
+        this.aiModelEditorForm.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            await this.saveEditedAIModel();
         });
-        this.aiModelList.addEventListener('change', (event) => {
-            const card = event.target.closest('[data-model-id]');
-            if (!card) return;
-            this.syncAIModelDraftFromCard(card);
-            this.updateModelCardUI(card);
-            this.renderSceneModelSelectors(this.readSceneModelSelections());
+        this.checkAIModelButton.addEventListener('click', async () => {
+            await this.checkActiveAIModel();
+        });
+        this.deleteAIModelButton.addEventListener('click', () => this.deleteCurrentAIModel());
+        this.aiModelProviderInput.addEventListener('change', () => this.updateAIModelModalUI());
+        this.closeAIModelModalButton.addEventListener('click', () => this.closeAIModelModal());
+        this.aiModelModal.addEventListener('click', (event) => {
+            if (event.target === this.aiModelModal) {
+                this.closeAIModelModal();
+            }
         });
         this.extractorSettingsForm.addEventListener('submit', async (event) => {
             event.preventDefault();
@@ -91,6 +98,11 @@ const SettingsPage = {
             await this.changePassword();
         });
         this.logoutButton.addEventListener('click', () => this.logout());
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape' && this.aiModelModal && !this.aiModelModal.classList.contains('hidden')) {
+                this.closeAIModelModal();
+            }
+        });
     },
 
     async bootstrap() {
@@ -108,7 +120,6 @@ const SettingsPage = {
             ? settings.models.map((item) => ({ ...item }))
             : [this.createAIModelDraft()];
         this.temperatureInput.value = settings.temperature ?? 0.2;
-        this.maxTokensInput.value = settings.max_output_tokens ?? 1200;
         this.maxFiguresInput.value = settings.max_figures ?? 0;
         this.systemPromptInput.value = settings.system_prompt || '';
         this.qaPromptInput.value = settings.qa_prompt || '';
@@ -125,7 +136,6 @@ const SettingsPage = {
             models: this.getAIPayloadModels(),
             scene_models: this.readSceneModelSelections(),
             temperature: this.temperatureInput.value === '' ? 0.2 : Number(this.temperatureInput.value),
-            max_output_tokens: this.maxTokensInput.value === '' ? 1200 : Number(this.maxTokensInput.value),
             max_figures: Number(this.maxFiguresInput.value || 0),
             system_prompt: this.systemPromptInput.value.trim(),
             qa_prompt: this.qaPromptInput.value.trim(),
@@ -185,99 +195,140 @@ const SettingsPage = {
             model: '',
             base_url: '',
             api_key: '',
+            max_output_tokens: 1200,
             openai_legacy_mode: false,
             check_status: ''
         };
     },
 
     renderAIModels() {
-        const canDelete = this.aiModelDraft.length > 1;
-        this.aiModelList.innerHTML = this.aiModelDraft.map((item) => `
-            <article class="manager-item ai-model-card" data-model-id="${Utils.escapeHTML(item.id)}">
-                <div class="ai-model-card-body">
-                    <div class="form-grid">
-                        <label class="field">
-                            <span>模型名称</span>
-                            <input class="form-input" type="text" data-field="name" value="${Utils.escapeHTML(item.name || '')}" placeholder="例如：OpenAI 快速问答">
-                        </label>
-                        <label class="field">
-                            <span>提供商</span>
-                            <select class="form-input" data-field="provider">
-                                <option value="openai" ${item.provider === 'openai' ? 'selected' : ''}>OpenAI</option>
-                                <option value="anthropic" ${item.provider === 'anthropic' ? 'selected' : ''}>Anthropic</option>
-                                <option value="gemini" ${item.provider === 'gemini' ? 'selected' : ''}>Gemini</option>
-                            </select>
-                        </label>
-                        <label class="field">
-                            <span>模型名</span>
-                            <input class="form-input" type="text" data-field="model" value="${Utils.escapeHTML(item.model || '')}" placeholder="例如：gpt-4.1-mini">
-                        </label>
-                        <label class="field field-span-2">
-                            <span>Base URL</span>
-                            <input class="form-input" type="text" data-field="base_url" value="${Utils.escapeHTML(item.base_url || '')}" placeholder="默认使用官方地址；兼容网关时填自定义地址">
-                        </label>
-                        <label class="field field-span-2">
-                            <span>API Key</span>
-                            <input class="form-input" type="password" data-field="api_key" autocomplete="off" value="${Utils.escapeHTML(item.api_key || '')}" placeholder="sk-...">
-                        </label>
-                        <label class="field checkbox-field field-span-2">
-                            <input type="checkbox" data-field="openai_legacy_mode" ${item.openai_legacy_mode ? 'checked' : ''}>
-                            <span>使用传统 OpenAI 接口模式（Chat Completions），以兼容其他 OpenAI 风格网关</span>
-                        </label>
-                    </div>
-                    <div class="ai-provider-note" data-provider-note></div>
-                    <p class="muted ai-model-check-status" data-model-check-status>${Utils.escapeHTML(item.check_status || '尚未检查')}</p>
-                </div>
-                <div class="manager-item-actions ai-model-card-actions">
-                    <button class="btn btn-secondary" type="button" data-action="check-model">检查模型</button>
-                    <button class="btn btn-outline danger" type="button" data-action="delete-model" ${canDelete ? '' : 'disabled'}>删除</button>
-                </div>
-            </article>
-        `).join('');
+        if (!this.aiModelDraft.length) {
+            this.aiModelList.innerHTML = '<p class="muted">还没有模型，先新增一个。</p>';
+            return;
+        }
 
-        this.aiModelList.querySelectorAll('[data-model-id]').forEach((card) => this.updateModelCardUI(card));
+        this.aiModelList.innerHTML = this.aiModelDraft.map((item) => `
+            <button class="ai-model-button ${item.id === this.activeAIModelID ? 'active' : ''}" type="button" data-model-id="${Utils.escapeHTML(item.id)}">
+                <strong>${Utils.escapeHTML(this.aiModelButtonTitle(item))}</strong>
+                <span>${Utils.escapeHTML(this.aiModelButtonMeta(item))}</span>
+            </button>
+        `).join('');
     },
 
-    updateModelCardUI(card) {
-        const model = this.syncAIModelDraftFromCard(card);
+    aiModelButtonTitle(model) {
+        return model.name || model.model || '未命名模型';
+    },
+
+    aiModelButtonMeta(model) {
+        const provider = model.provider || 'openai';
+        const modelName = model.model || '未填写模型名';
+        return `${provider} / ${modelName}`;
+    },
+
+    addAIModel() {
+        this.openAIModelEditor(this.createAIModelDraft(), { isNew: true });
+    },
+
+    openAIModelEditor(target, options = {}) {
+        const isNew = Boolean(options.isNew);
+        const model = typeof target === 'string'
+            ? this.aiModelDraft.find((item) => item.id === target)
+            : target;
         if (!model) return;
 
-        const provider = model.provider || 'openai';
-        const note = card.querySelector('[data-provider-note]');
-        const legacyInput = card.querySelector('[data-field="openai_legacy_mode"]');
-        if (note) {
-            note.textContent = this.providerNoteText(provider);
-        }
-        if (legacyInput) {
-            const enabled = provider === 'openai';
-            legacyInput.disabled = !enabled;
-            if (!enabled) {
-                legacyInput.checked = false;
-                model.openai_legacy_mode = false;
-            }
+        this.activeAIModelID = model.id;
+        this.renderAIModels();
+
+        this.editingAIModel = { ...model };
+        this.editingAIModelIsNew = isNew;
+        this.aiModelModalTitle.textContent = isNew ? '新增模型' : `编辑模型 · ${this.aiModelButtonTitle(model)}`;
+        this.aiModelNameInput.value = model.name || '';
+        this.aiModelProviderInput.value = model.provider || 'openai';
+        this.aiModelIdentifierInput.value = model.model || '';
+        this.aiModelMaxTokensInput.value = Number(model.max_output_tokens || 1200);
+        this.aiModelBaseURLInput.value = model.base_url || '';
+        this.aiModelAPIKeyInput.value = model.api_key || '';
+        this.aiModelLegacyModeInput.checked = Boolean(model.openai_legacy_mode);
+        this.aiModelCheckStatus.textContent = model.check_status || '尚未检查';
+        this.deleteAIModelButton.disabled = isNew || this.aiModelDraft.length <= 1;
+        this.updateAIModelModalUI();
+        this.aiModelModal.classList.remove('hidden');
+        document.body.classList.add('modal-open');
+    },
+
+    closeAIModelModal() {
+        if (!this.aiModelModal) return;
+        this.aiModelModal.classList.add('hidden');
+        document.body.classList.remove('modal-open');
+        this.editingAIModel = null;
+        this.editingAIModelIsNew = false;
+        this.activeAIModelID = '';
+        this.renderAIModels();
+    },
+
+    updateAIModelModalUI() {
+        const provider = this.aiModelProviderInput.value || 'openai';
+        this.aiModelProviderNote.textContent = this.providerNoteText(provider);
+        const legacyEnabled = provider === 'openai';
+        this.aiModelLegacyModeInput.disabled = !legacyEnabled;
+        if (!legacyEnabled) {
+            this.aiModelLegacyModeInput.checked = false;
         }
     },
 
-    syncAIModelDraftFromCard(card) {
-        const modelID = card.dataset.modelId;
-        const index = this.aiModelDraft.findIndex((item) => item.id === modelID);
-        if (index < 0) return null;
-
+    readAIModelFromModal() {
         const model = {
-            ...this.aiModelDraft[index],
-            name: card.querySelector('[data-field="name"]').value.trim(),
-            provider: card.querySelector('[data-field="provider"]').value,
-            model: card.querySelector('[data-field="model"]').value.trim(),
-            base_url: card.querySelector('[data-field="base_url"]').value.trim(),
-            api_key: card.querySelector('[data-field="api_key"]').value.trim(),
-            openai_legacy_mode: card.querySelector('[data-field="openai_legacy_mode"]').checked
+            ...(this.editingAIModel || this.createAIModelDraft()),
+            name: this.aiModelNameInput.value.trim(),
+            provider: this.aiModelProviderInput.value,
+            model: this.aiModelIdentifierInput.value.trim(),
+            max_output_tokens: Number(this.aiModelMaxTokensInput.value || 1200),
+            base_url: this.aiModelBaseURLInput.value.trim(),
+            api_key: this.aiModelAPIKeyInput.value.trim(),
+            openai_legacy_mode: this.aiModelLegacyModeInput.checked,
+            check_status: this.aiModelCheckStatus.textContent.trim()
         };
         if (model.provider !== 'openai') {
             model.openai_legacy_mode = false;
         }
-
-        this.aiModelDraft[index] = model;
         return model;
+    },
+
+    async saveEditedAIModel() {
+        const selection = this.readSceneModelSelections();
+        const model = this.readAIModelFromModal();
+
+        if (this.editingAIModelIsNew) {
+            this.aiModelDraft.push(model);
+        } else {
+            this.aiModelDraft = this.aiModelDraft.map((item) => item.id === model.id ? model : item);
+        }
+
+        this.renderAIModels();
+        this.renderSceneModelSelectors(selection);
+        this.closeAIModelModal();
+    },
+
+    deleteAIModel(modelID) {
+        if (this.aiModelDraft.length <= 1) {
+            Utils.showToast('至少需要保留一个 AI 模型', 'error');
+            return;
+        }
+        const selection = this.readSceneModelSelections();
+        this.aiModelDraft = this.aiModelDraft.filter((item) => item.id !== modelID);
+        this.renderAIModels();
+        this.renderSceneModelSelectors(selection);
+    },
+
+    deleteCurrentAIModel() {
+        if (!this.editingAIModel?.id) return;
+        if (this.aiModelDraft.length <= 1) {
+            Utils.showToast('至少需要保留一个 AI 模型', 'error');
+            return;
+        }
+
+        this.deleteAIModel(this.editingAIModel.id);
+        this.closeAIModelModal();
     },
 
     renderSceneModelSelectors(selection = {}) {
@@ -327,65 +378,39 @@ const SettingsPage = {
             name: item.name || '',
             provider: item.provider,
             model: item.model || '',
+            max_output_tokens: Number(item.max_output_tokens || 1200),
             base_url: item.base_url || '',
             api_key: item.api_key || '',
             openai_legacy_mode: Boolean(item.openai_legacy_mode)
         }));
     },
 
-    addAIModel() {
-        const selection = this.readSceneModelSelections();
-        this.aiModelDraft.push(this.createAIModelDraft());
-        this.renderAIModels();
-        this.renderSceneModelSelectors(selection);
-    },
-
-    deleteAIModel(modelID) {
-        if (this.aiModelDraft.length <= 1) {
-            Utils.showToast('至少需要保留一个 AI 模型', 'error');
-            return;
-        }
-        const selection = this.readSceneModelSelections();
-        this.aiModelDraft = this.aiModelDraft.filter((item) => item.id !== modelID);
-        this.renderAIModels();
-        this.renderSceneModelSelectors(selection);
-    },
-
-    async checkAIModel(modelID, button) {
-        const card = Array.from(this.aiModelList.querySelectorAll('[data-model-id]'))
-            .find((item) => item.dataset.modelId === modelID);
-        if (!card) return;
-
-        const model = this.syncAIModelDraftFromCard(card);
-        if (!model) return;
-
-        const statusNode = card.querySelector('[data-model-check-status]');
-        const originalLabel = button.textContent;
-        button.disabled = true;
-        button.textContent = '检查中...';
+    async checkActiveAIModel() {
+        const originalLabel = this.checkAIModelButton.textContent;
+        this.checkAIModelButton.disabled = true;
+        this.checkAIModelButton.textContent = '检查中...';
 
         try {
+            const model = this.readAIModelFromModal();
             const result = await API.checkAIModel({
                 id: model.id,
                 name: model.name,
                 provider: model.provider,
                 model: model.model,
+                max_output_tokens: Number(model.max_output_tokens || 1200),
                 base_url: model.base_url,
                 api_key: model.api_key,
                 openai_legacy_mode: model.openai_legacy_mode
             });
             const statusText = `${result.message} · ${result.provider} / ${result.model} / ${result.mode}`;
-            statusNode.textContent = statusText;
-            model.check_status = statusText;
+            this.aiModelCheckStatus.textContent = statusText;
             Utils.showToast('模型检查通过');
         } catch (error) {
-            const statusText = `检查失败：${error.message}`;
-            statusNode.textContent = statusText;
-            model.check_status = statusText;
+            this.aiModelCheckStatus.textContent = `检查失败：${error.message}`;
             Utils.showToast(error.message, 'error');
         } finally {
-            button.disabled = false;
-            button.textContent = originalLabel;
+            this.checkAIModelButton.disabled = false;
+            this.checkAIModelButton.textContent = originalLabel;
         }
     },
 

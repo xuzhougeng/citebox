@@ -123,6 +123,7 @@ func (s *AIService) CheckModel(ctx context.Context, input model.AIModelConfig) (
 	runtimeSettings.APIKey = normalized.APIKey
 	runtimeSettings.BaseURL = normalized.BaseURL
 	runtimeSettings.Model = normalized.Model
+	runtimeSettings.MaxOutputTokens = normalized.MaxOutputTokens
 	runtimeSettings.OpenAILegacyMode = normalized.OpenAILegacyMode
 	mode := aiProviderMode(runtimeSettings)
 
@@ -272,6 +273,7 @@ func (s *AIService) prepareRead(input model.AIReadRequest, structuredOutput bool
 	runtimeSettings.APIKey = modelConfig.APIKey
 	runtimeSettings.BaseURL = modelConfig.BaseURL
 	runtimeSettings.Model = modelConfig.Model
+	runtimeSettings.MaxOutputTokens = modelConfig.MaxOutputTokens
 	runtimeSettings.OpenAILegacyMode = modelConfig.OpenAILegacyMode
 
 	s.logger.Info("ai paper read started",
@@ -369,21 +371,28 @@ func normalizeAISettings(input model.AISettings) (model.AISettings, error) {
 	settings.APIKey = defaultModel.APIKey
 	settings.BaseURL = defaultModel.BaseURL
 	settings.Model = defaultModel.Model
+	settings.MaxOutputTokens = defaultModel.MaxOutputTokens
 	settings.OpenAILegacyMode = defaultModel.OpenAILegacyMode
 
 	return settings, nil
 }
 
 func normalizeAIModels(settings model.AISettings, defaults model.AISettings) ([]model.AIModelConfig, error) {
+	fallbackModel := defaults.Models[0]
+	if settings.MaxOutputTokens > 0 {
+		fallbackModel.MaxOutputTokens = settings.MaxOutputTokens
+	}
+
 	inputModels := settings.Models
 	if len(inputModels) == 0 {
 		inputModels = []model.AIModelConfig{{
-			ID:               defaults.Models[0].ID,
-			Name:             defaults.Models[0].Name,
+			ID:               fallbackModel.ID,
+			Name:             fallbackModel.Name,
 			Provider:         settings.Provider,
 			APIKey:           settings.APIKey,
 			BaseURL:          settings.BaseURL,
 			Model:            settings.Model,
+			MaxOutputTokens:  settings.MaxOutputTokens,
 			OpenAILegacyMode: settings.OpenAILegacyMode,
 		}}
 	}
@@ -391,7 +400,7 @@ func normalizeAIModels(settings model.AISettings, defaults model.AISettings) ([]
 	models := make([]model.AIModelConfig, 0, len(inputModels))
 	seenIDs := map[string]struct{}{}
 	for index, item := range inputModels {
-		normalized, err := normalizeAIModelConfig(item, defaults.Models[0], index+1)
+		normalized, err := normalizeAIModelConfig(item, fallbackModel, index+1)
 		if err != nil {
 			return nil, err
 		}
@@ -432,6 +441,12 @@ func normalizeAIModelConfig(input model.AIModelConfig, fallback model.AIModelCon
 	}
 	if config.Model == "" {
 		config.Model = defaultAIModel(config.Provider)
+	}
+	if config.MaxOutputTokens <= 0 {
+		config.MaxOutputTokens = fallback.MaxOutputTokens
+	}
+	if config.MaxOutputTokens > 16384 {
+		return model.AIModelConfig{}, apperr.New(apperr.CodeInvalidArgument, "max_output_tokens 过大")
 	}
 	if config.Name == "" {
 		config.Name = fmt.Sprintf("%s / %s", strings.ToUpper(string(config.Provider)), config.Model)
