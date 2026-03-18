@@ -3,6 +3,7 @@ const AIReaderPage = {
         aiSettings: null,
         extractorSettings: null,
         papers: [],
+        paperDetails: {},
         selectedPaperID: null,
         loading: false,
         sessions: {}
@@ -40,6 +41,9 @@ const AIReaderPage = {
             this.renderPaperSummary();
             this.renderConversation();
             this.syncURL();
+            this.ensurePaperDetail(this.state.selectedPaperID).catch((error) => {
+                Utils.showToast(error.message, 'error');
+            });
         });
 
         this.runButton.addEventListener('click', async () => {
@@ -145,6 +149,11 @@ const AIReaderPage = {
         this.renderPaperSummary();
         this.renderConversation();
         this.syncURL();
+        if (this.state.selectedPaperID) {
+            this.ensurePaperDetail(this.state.selectedPaperID).catch((error) => {
+                Utils.showToast(error.message, 'error');
+            });
+        }
     },
 
     renderPaperList() {
@@ -237,6 +246,12 @@ const AIReaderPage = {
 
         const paperID = this.state.selectedPaperID;
         const pendingQuestion = this.questionInput.value.trim();
+        try {
+            await this.ensurePaperDetail(paperID);
+        } catch (error) {
+            Utils.showToast(error.message, 'error');
+            return;
+        }
         this.state.loading = true;
         this.runButton.disabled = true;
         this.runButton.textContent = '发送中...';
@@ -308,6 +323,11 @@ const AIReaderPage = {
         }
 
         turns.forEach((turn, index) => {
+            const assistantBody = turn.answer
+                ? Utils.renderMarkdown(turn.answer, {
+                    resolveFigureSrc: (figureID) => this.resolveFigureImageURL(figureID, paper)
+                })
+                : '<div class="markdown-empty">模型没有返回文本结果。</div>';
             blocks.push(`
                 <article class="ai-turn ai-turn-user">
                     <div class="ai-turn-meta">
@@ -321,7 +341,7 @@ const AIReaderPage = {
                         <span>AI</span>
                         <strong>${Utils.escapeHTML(turn.provider || 'AI')}</strong>
                     </div>
-                    <div class="ai-turn-body">${Utils.escapeHTML(turn.answer || '模型没有返回文本结果。')}</div>
+                    <div class="ai-turn-body markdown-body">${assistantBody}</div>
                     <div class="ai-turn-foot">${Utils.escapeHTML(this.turnMeta(turn))}</div>
                 </article>
             `);
@@ -380,7 +400,46 @@ const AIReaderPage = {
     },
 
     currentPaper() {
-        return this.state.papers.find((paper) => paper.id === this.state.selectedPaperID) || null;
+        if (!this.state.selectedPaperID) return null;
+        return this.state.paperDetails[this.state.selectedPaperID]
+            || this.state.papers.find((paper) => paper.id === this.state.selectedPaperID)
+            || null;
+    },
+
+    async ensurePaperDetail(paperID) {
+        if (!paperID) return null;
+        if (this.state.paperDetails[paperID]?.id === paperID) {
+            return this.state.paperDetails[paperID];
+        }
+
+        this.paperDetailPromises = this.paperDetailPromises || {};
+        if (this.paperDetailPromises[paperID]) {
+            return this.paperDetailPromises[paperID];
+        }
+
+        this.paperDetailPromises[paperID] = API.getPaper(paperID)
+            .then((paper) => {
+                this.state.paperDetails[paperID] = paper;
+                if (paperID === this.state.selectedPaperID) {
+                    this.renderPaperSummary();
+                    this.renderConversation();
+                }
+                return paper;
+            })
+            .finally(() => {
+                delete this.paperDetailPromises[paperID];
+            });
+
+        return this.paperDetailPromises[paperID];
+    },
+
+    resolveFigureImageURL(figureID, paper = this.currentPaper()) {
+        const normalizedID = Number(figureID);
+        if (!Number.isFinite(normalizedID) || normalizedID <= 0 || !paper || !Array.isArray(paper.figures)) {
+            return '';
+        }
+        const figure = paper.figures.find((item) => Number(item.id) === normalizedID);
+        return figure?.image_url || '';
     },
 
     currentConversation(paperID = this.state.selectedPaperID) {

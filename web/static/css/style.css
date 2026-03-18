@@ -1866,6 +1866,12 @@ button {
     line-height: 1.72;
 }
 
+.ai-turn-body.markdown-body {
+    display: grid;
+    gap: 0.85rem;
+    white-space: normal;
+}
+
 .ai-turn-foot {
     margin-top: 0.85rem;
     color: var(--muted);
@@ -2820,6 +2826,37 @@ button {
     text-decoration: underline;
     text-decoration-thickness: 1px;
     text-underline-offset: 0.18rem;
+}
+
+.markdown-figure {
+    display: grid;
+    gap: 0.65rem;
+    margin: 0;
+}
+
+.markdown-paragraph + .markdown-figure,
+.markdown-list li > .markdown-figure {
+    margin-top: 0.7rem;
+}
+
+.markdown-image {
+    display: block;
+    max-width: 100%;
+    width: auto;
+    border-radius: 18px;
+    border: 1px solid rgba(36, 27, 22, 0.08);
+    background: rgba(255, 252, 248, 0.96);
+    box-shadow: 0 12px 28px rgba(36, 27, 22, 0.08);
+}
+
+.markdown-inline-image {
+    margin: 0.25rem 0;
+}
+
+.markdown-figcaption {
+    color: var(--muted);
+    font-size: 0.9rem;
+    line-height: 1.6;
 }
 
 .markdown-inline-code {
