@@ -50,6 +50,12 @@ const AIReaderPage = {
             });
         });
 
+        this.paperSummary.addEventListener('click', async (event) => {
+            const button = event.target.closest('[data-ai-paper-action="open-paper"]');
+            if (!button) return;
+            await this.openPaperDetail();
+        });
+
         this.runButton.addEventListener('click', async () => {
             await this.run();
         });
@@ -247,8 +253,30 @@ const AIReaderPage = {
                 </div>
                 <p class="paper-list-summary">${Utils.escapeHTML(summaryText)}</p>
                 ${tags ? `<div class="paper-list-tags">${tags}</div>` : ''}
+                <div class="card-actions ai-paper-summary-actions">
+                    <button class="btn btn-outline" type="button" data-ai-paper-action="open-paper">文献详情</button>
+                    <a class="btn btn-outline" href="${paper.pdf_url}" target="_blank" rel="noreferrer">打开 PDF</a>
+                </div>
             </div>
         `;
+    },
+
+    async openPaperDetail() {
+        const paper = this.currentPaper();
+        if (!paper?.id) return;
+
+        if (typeof PaperViewer === 'undefined') {
+            window.location.href = `/library?paper_id=${paper.id}`;
+            return;
+        }
+
+        await PaperViewer.open(paper.id, async () => {
+            delete this.state.paperDetails[paper.id];
+            await this.loadPapers();
+            if (this.state.selectedPaperID === paper.id) {
+                await this.ensurePaperDetail(paper.id);
+            }
+        });
     },
 
     async run() {

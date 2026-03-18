@@ -6,6 +6,7 @@ const LibraryPage = {
         tags: [],
         filters: {
             keyword: '',
+            keyword_scope: 'full_text',
             group_id: '',
             tag_id: '',
             status: 'completed'
@@ -57,6 +58,7 @@ const LibraryPage = {
 
     cacheElements() {
         this.keywordInput = document.getElementById('keywordInput');
+        this.keywordScopeFilter = document.getElementById('keywordScopeFilter');
         this.groupFilter = document.getElementById('groupFilter');
         this.tagFilter = document.getElementById('tagFilter');
         this.statusFilter = document.getElementById('statusFilter');
@@ -71,6 +73,10 @@ const LibraryPage = {
         this.tagNameInput = document.getElementById('tagNameInput');
         this.tagColorInput = document.getElementById('tagColorInput');
         this.tagList = document.getElementById('tagList');
+        if (this.keywordScopeFilter) {
+            this.keywordScopeFilter.value = this.state.filters.keyword_scope;
+            this.updateKeywordPlaceholder();
+        }
         if (this.statusFilter) {
             this.statusFilter.value = this.state.filters.status;
         }
@@ -84,6 +90,13 @@ const LibraryPage = {
         }, 300);
 
         this.keywordInput.addEventListener('input', debouncedSearch);
+
+        this.keywordScopeFilter.addEventListener('change', async () => {
+            this.state.filters.keyword_scope = this.keywordScopeFilter.value || 'full_text';
+            this.state.currentPage = 1;
+            this.updateKeywordPlaceholder();
+            await this.loadPapers();
+        });
 
         this.groupFilter.addEventListener('change', async () => {
             this.state.filters.group_id = this.groupFilter.value;
@@ -181,6 +194,7 @@ const LibraryPage = {
                 page: this.state.currentPage,
                 page_size: this.state.pageSize,
                 keyword: this.state.filters.keyword,
+                keyword_scope: this.state.filters.keyword_scope,
                 group_id: this.state.filters.group_id,
                 tag_id: this.state.filters.tag_id,
                 status: this.state.filters.status
@@ -230,20 +244,33 @@ const LibraryPage = {
         const statusLabel = this.state.filters.status
             ? Utils.statusLabel(this.state.filters.status)
             : '全部状态';
+        const scopeLabel = this.keywordScopeLabel();
 
         this.resultMeta.innerHTML = `
             <div>
                 <p class="eyebrow">Result Set</p>
                 <h2>找到 ${this.state.total || 0} 篇文献</h2>
-                <p>当前聚焦：${Utils.escapeHTML(statusLabel)}。默认优先展示已完成解析的文献，方便直接进入阅读和整理。</p>
+                <p>当前聚焦：${Utils.escapeHTML(statusLabel)}。关键词检索范围：${Utils.escapeHTML(scopeLabel)}。</p>
             </div>
             <div class="library-result-meta-tags">
                 <span class="tag-pill neutral">当前页 ${this.state.papers.length} 篇</span>
                 ${this.state.filters.keyword ? `<span class="tag-pill neutral">关键词：${Utils.escapeHTML(this.state.filters.keyword)}</span>` : ''}
+                <span class="tag-pill neutral">范围：${Utils.escapeHTML(scopeLabel)}</span>
                 ${this.state.filters.group_id ? '<span class="tag-pill neutral">已限定分组</span>' : ''}
                 ${this.state.filters.tag_id ? '<span class="tag-pill neutral">已限定标签</span>' : ''}
             </div>
         `;
+    },
+
+    keywordScopeLabel() {
+        return this.state.filters.keyword_scope === 'title_abstract' ? '标题 + 摘要' : '全文';
+    },
+
+    updateKeywordPlaceholder() {
+        if (!this.keywordInput) return;
+        this.keywordInput.placeholder = this.state.filters.keyword_scope === 'title_abstract'
+            ? '仅检索标题和摘要'
+            : '标题、摘要或正文内容';
     },
 
     renderPaperList() {

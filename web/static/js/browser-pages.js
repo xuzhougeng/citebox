@@ -173,6 +173,8 @@ const FigureViewer = {
         this.activeAIByFigure = new Map();
         this.aiRequestState = null;
         this.paperDetails = new Map();
+        this.viewState = this.defaultViewState();
+        this.dragState = null;
 
         this.handleKeydown = (event) => {
             if (!this.modal || this.modal.classList.contains('hidden')) return;
@@ -212,6 +214,10 @@ const FigureViewer = {
                 }
                 if (button.dataset.figureAction === 'next') {
                     await this.next();
+                }
+                if (button.dataset.figureAction === 'reset-view') {
+                    this.resetViewportState();
+                    this.applyViewTransform();
                 }
                 if (button.dataset.figureAction === 'open-paper' && this.currentFigure) {
                     this.close();
@@ -269,6 +275,26 @@ const FigureViewer = {
             event.preventDefault();
             await this.saveCaptionFromInput();
         });
+        this.body.addEventListener('wheel', (event) => {
+            const viewport = event.target.closest('[data-figure-viewport]');
+            if (!viewport || !this.currentFigure) return;
+            event.preventDefault();
+            this.handleViewportWheel(event, viewport);
+        }, { passive: false });
+        this.body.addEventListener('pointerdown', (event) => {
+            const viewport = event.target.closest('[data-figure-viewport]');
+            if (!viewport || !this.currentFigure) return;
+            this.beginViewportDrag(event, viewport);
+        });
+        document.addEventListener('pointermove', (event) => {
+            this.updateViewportDrag(event);
+        });
+        document.addEventListener('pointerup', (event) => {
+            this.endViewportDrag(event);
+        });
+        document.addEventListener('pointercancel', (event) => {
+            this.endViewportDrag(event);
+        });
         document.addEventListener('keydown', this.handleKeydown);
     },
 
@@ -283,6 +309,7 @@ const FigureViewer = {
         this.onMetaChanged = options.onMetaChanged;
         this.loadingPage = false;
         this.captionDraft = '';
+        this.resetViewportState();
         this.syncCurrentFigureState({ forceDraftFromFigure: true });
         try {
             this.render();
@@ -295,6 +322,8 @@ const FigureViewer = {
 
     close() {
         this.stopAIAction({ preservePartial: false, silent: true });
+        this.endViewportDrag();
+        this.resetViewportState();
         if (!this.modal) return;
         this.modal.classList.add('hidden');
         document.body.classList.remove('modal-open');
@@ -312,6 +341,7 @@ const FigureViewer = {
         if (!this.canMovePrevious() || this.loadingPage || this.aiRequestState?.loading) return;
         if (this.index > 0) {
             this.index -= 1;
+            this.resetViewportState();
             this.syncCurrentFigureState({ forceDraftFromFigure: true });
             this.render();
             return;
@@ -323,6 +353,7 @@ const FigureViewer = {
         if (!this.canMoveNext() || this.loadingPage || this.aiRequestState?.loading) return;
         if (this.index < this.figures.length - 1) {
             this.index += 1;
+            this.resetViewportState();
             this.syncCurrentFigureState({ forceDraftFromFigure: true });
             this.render();
             return;
@@ -345,6 +376,7 @@ const FigureViewer = {
             this.page = targetPage;
             this.totalPages = Math.max(1, Number(payload.total_pages) || this.totalPages);
             this.index = targetIndex === 'last' ? figures.length - 1 : 0;
+            this.resetViewportState();
             this.syncCurrentFigureState({ forceDraftFromFigure: true });
         } catch (error) {
             Utils.showToast(error.message, 'error');
@@ -352,6 +384,131 @@ const FigureViewer = {
             this.loadingPage = false;
             this.render();
         }
+    },
+
+    defaultViewState() {
+        return {
+            scale: 1,
+            x: 0,
+            y: 0
+        };
+    },
+
+    resetViewportState() {
+        this.viewState = this.defaultViewState();
+        this.dragState = null;
+    },
+
+    hasViewportTransform() {
+        const state = this.viewState || this.defaultViewState();
+        return Math.abs(state.scale - 1) > 0.001 || Math.abs(state.x) > 0.5 || Math.abs(state.y) > 0.5;
+    },
+
+    clampViewState(state = this.viewState || this.defaultViewState()) {
+        const viewport = this.body?.querySelector('[data-figure-viewport]');
+        const image = this.body?.querySelector('[data-figure-image]');
+        const scale = Math.min(6, Math.max(1, Number(state.scale) || 1));
+        if (!viewport || !image || scale <= 1) {
+            return { scale: 1, x: 0, y: 0 };
+        }
+
+        const baseWidth = image.offsetWidth || image.clientWidth || 0;
+        const baseHeight = image.offsetHeight || image.clientHeight || 0;
+        if (!baseWidth || !baseHeight) {
+            return { scale, x: state.x || 0, y: state.y || 0 };
+        }
+
+        const maxX = Math.max(0, (baseWidth * scale - viewport.clientWidth) / 2);
+        const maxY = Math.max(0, (baseHeight * scale - viewport.clientHeight) / 2);
+        return {
+            scale,
+            x: Math.min(maxX, Math.max(-maxX, Number(state.x) || 0)),
+            y: Math.min(maxY, Math.max(-maxY, Number(state.y) || 0))
+        };
+    },
+
+    applyViewTransform() {
+        const viewport = this.body?.querySelector('[data-figure-viewport]');
+        const image = this.body?.querySelector('[data-figure-image]');
+        if (!viewport || !image) return;
+
+        this.viewState = this.clampViewState(this.viewState);
+        const state = this.viewState;
+        image.style.transform = `translate(${state.x}px, ${state.y}px) scale(${state.scale})`;
+        image.draggable = false;
+        viewport.style.cursor = state.scale > 1 ? (this.dragState ? 'grabbing' : 'grab') : 'zoom-in';
+        viewport.classList.toggle('is-zoomed', state.scale > 1);
+        viewport.classList.toggle('is-dragging', Boolean(this.dragState));
+
+        const resetButton = this.body.querySelector('[data-figure-action="reset-view"]');
+        if (resetButton) {
+            resetButton.disabled = !this.hasViewportTransform();
+        }
+    },
+
+    handleViewportWheel(event, viewport) {
+        const previous = this.viewState || this.defaultViewState();
+        const zoomFactor = event.deltaY < 0 ? 1.18 : 1 / 1.18;
+        const nextScale = Math.min(6, Math.max(1, previous.scale * zoomFactor));
+        if (Math.abs(nextScale - previous.scale) < 0.001) return;
+
+        const rect = viewport.getBoundingClientRect();
+        const pointX = event.clientX - (rect.left + rect.width / 2);
+        const pointY = event.clientY - (rect.top + rect.height / 2);
+        const ratio = nextScale / previous.scale;
+
+        this.viewState = {
+            scale: nextScale,
+            x: pointX - ratio * (pointX - previous.x),
+            y: pointY - ratio * (pointY - previous.y)
+        };
+        this.applyViewTransform();
+    },
+
+    beginViewportDrag(event, viewport) {
+        if ((event.button !== 0 && event.button !== 1) || (this.viewState?.scale || 1) <= 1) return;
+        event.preventDefault();
+        this.dragState = {
+            pointerID: event.pointerId,
+            startX: event.clientX,
+            startY: event.clientY,
+            originX: this.viewState.x,
+            originY: this.viewState.y
+        };
+        if (typeof viewport.setPointerCapture === 'function') {
+            try {
+                viewport.setPointerCapture(event.pointerId);
+            } catch (error) {
+                // Ignore capture failures from synthetic or non-primary pointer events.
+            }
+        }
+        this.applyViewTransform();
+    },
+
+    updateViewportDrag(event) {
+        if (!this.dragState || event.pointerId !== this.dragState.pointerID) return;
+        this.viewState = {
+            ...this.viewState,
+            x: this.dragState.originX + (event.clientX - this.dragState.startX),
+            y: this.dragState.originY + (event.clientY - this.dragState.startY)
+        };
+        this.applyViewTransform();
+    },
+
+    endViewportDrag(event = null) {
+        if (!this.dragState) return;
+        if (event && event.pointerId !== this.dragState.pointerID) return;
+
+        const viewport = this.body?.querySelector('[data-figure-viewport]');
+        if (viewport && typeof viewport.hasPointerCapture === 'function' && viewport.hasPointerCapture(this.dragState.pointerID)) {
+            try {
+                viewport.releasePointerCapture(this.dragState.pointerID);
+            } catch (error) {
+                // Ignore release failures when the pointer has already been cancelled.
+            }
+        }
+        this.dragState = null;
+        this.applyViewTransform();
     },
 
     syncCurrentFigureState(options = {}) {
@@ -1004,12 +1161,14 @@ const FigureViewer = {
                     <div class="figure-lightbox-toolbar">
                         <div class="figure-lightbox-counter">第 ${this.index + 1} / ${total} 张 · 第 ${this.page} / ${this.totalPages} 页</div>
                         <div class="figure-lightbox-nav">
+                            <span class="figure-lightbox-hint">滚轮缩放，按住左键或中键拖动</span>
+                            <button class="btn btn-outline" type="button" data-figure-action="reset-view">复原视图</button>
                             <button class="btn btn-outline" type="button" data-figure-action="prev" ${!canPrev || this.loadingPage || aiLoading ? 'disabled' : ''}>上一张</button>
                             <button class="btn btn-outline" type="button" data-figure-action="next" ${!canNext || this.loadingPage || aiLoading ? 'disabled' : ''}>下一张</button>
                         </div>
                     </div>
-                    <div class="figure-lightbox-media">
-                        <img src="${figure.image_url}" alt="${Utils.escapeHTML(figure.caption || figure.paper_title)}">
+                    <div class="figure-lightbox-media" data-figure-viewport>
+                        <img src="${figure.image_url}" alt="${Utils.escapeHTML(figure.caption || figure.paper_title)}" data-figure-image>
                     </div>
                     <div class="figure-lightbox-caption figure-lightbox-caption-editor">
                         <label class="field">
@@ -1079,6 +1238,15 @@ const FigureViewer = {
                 </aside>
             </div>
         `;
+
+        const image = this.body.querySelector('[data-figure-image]');
+        if (image) {
+            if (image.complete) {
+                this.applyViewTransform();
+            } else {
+                image.addEventListener('load', () => this.applyViewTransform(), { once: true });
+            }
+        }
     }
 };
 

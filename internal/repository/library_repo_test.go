@@ -139,6 +139,79 @@ func TestListPapersSearchesPDFTextWithFTS(t *testing.T) {
 	}
 }
 
+func TestListPapersKeywordScopeTitleAbstract(t *testing.T) {
+	repo := newTestRepository(t)
+
+	if _, err := repo.CreatePaper(PaperUpsertInput{
+		Title:            "Signal Atlas",
+		OriginalFilename: "signal-atlas.pdf",
+		StoredPDFName:    "signal-atlas.pdf",
+		FileSize:         128,
+		ContentType:      "application/pdf",
+		AbstractText:     "This abstract mentions pathway drift.",
+		PDFText:          "The full text mentions hidden-only phrase.",
+		ExtractionStatus: "completed",
+		Figures: []FigureUpsertInput{
+			{Filename: "signal-atlas.png", PageNumber: 1, FigureIndex: 1},
+		},
+	}); err != nil {
+		t.Fatalf("CreatePaper() error = %v", err)
+	}
+
+	papers, total, err := repo.ListPapers(model.PaperFilter{
+		Keyword:      "pathway drift",
+		KeywordScope: "title_abstract",
+	})
+	if err != nil {
+		t.Fatalf("ListPapers(title_abstract) error = %v", err)
+	}
+	if total != 1 || len(papers) != 1 {
+		t.Fatalf("ListPapers(title_abstract) total=%d len=%d, want 1/1", total, len(papers))
+	}
+
+	papers, total, err = repo.ListPapers(model.PaperFilter{
+		Keyword:      "hidden-only phrase",
+		KeywordScope: "title_abstract",
+	})
+	if err != nil {
+		t.Fatalf("ListPapers(title_abstract hidden) error = %v", err)
+	}
+	if total != 0 || len(papers) != 0 {
+		t.Fatalf("ListPapers(title_abstract hidden) total=%d len=%d, want 0/0", total, len(papers))
+	}
+}
+
+func TestListPapersKeywordScopeFullText(t *testing.T) {
+	repo := newTestRepository(t)
+
+	if _, err := repo.CreatePaper(PaperUpsertInput{
+		Title:            "Signal Atlas",
+		OriginalFilename: "signal-atlas.pdf",
+		StoredPDFName:    "signal-atlas.pdf",
+		FileSize:         128,
+		ContentType:      "application/pdf",
+		AbstractText:     "Overview only.",
+		PDFText:          "The full text mentions hidden-only phrase.",
+		ExtractionStatus: "completed",
+		Figures: []FigureUpsertInput{
+			{Filename: "signal-atlas.png", PageNumber: 1, FigureIndex: 1},
+		},
+	}); err != nil {
+		t.Fatalf("CreatePaper() error = %v", err)
+	}
+
+	papers, total, err := repo.ListPapers(model.PaperFilter{
+		Keyword:      "hidden-only phrase",
+		KeywordScope: "full_text",
+	})
+	if err != nil {
+		t.Fatalf("ListPapers(full_text) error = %v", err)
+	}
+	if total != 1 || len(papers) != 1 {
+		t.Fatalf("ListPapers(full_text) total=%d len=%d, want 1/1", total, len(papers))
+	}
+}
+
 func TestCreatePaperRejectsDuplicateStoredPDFName(t *testing.T) {
 	repo := newTestRepository(t)
 
