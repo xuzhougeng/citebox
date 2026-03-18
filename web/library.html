@@ -55,7 +55,14 @@
             <div class="filters-grid">
                 <label class="field">
                     <span>关键词</span>
-                    <input id="keywordInput" class="form-input" type="text" placeholder="标题、文件名、标签、正文内容">
+                    <input id="keywordInput" class="form-input" type="text" placeholder="标题、摘要或正文内容">
+                </label>
+                <label class="field">
+                    <span>检索范围</span>
+                    <select id="keywordScopeFilter" class="form-input">
+                        <option value="full_text">全文</option>
+                        <option value="title_abstract">标题 + 摘要</option>
+                    </select>
                 </label>
                 <label class="field">
                     <span>分组</span>

@@ -57,6 +57,7 @@ type PaperListResponse struct {
 
 type PaperFilter struct {
 	Keyword       string `json:"keyword"`
+	KeywordScope  string `json:"keyword_scope,omitempty"`
 	GroupID       *int64 `json:"group_id,omitempty"`
 	TagID         *int64 `json:"tag_id,omitempty"`
 	Status        string `json:"status"`

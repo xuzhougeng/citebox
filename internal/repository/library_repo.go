@@ -2158,7 +2158,7 @@ func buildPaperWhere(filter model.PaperFilter) (string, []interface{}) {
 	args := []interface{}{}
 
 	if keyword := strings.TrimSpace(filter.Keyword); keyword != "" {
-		keywordCondition, keywordArgs := buildPaperKeywordCondition(keyword)
+		keywordCondition, keywordArgs := buildPaperKeywordCondition(keyword, filter.KeywordScope)
 		conditions = append(conditions, keywordCondition)
 		args = append(args, keywordArgs...)
 	}
@@ -2187,6 +2187,17 @@ func buildPaperWhere(filter model.PaperFilter) (string, []interface{}) {
 	}
 
 	return " WHERE " + strings.Join(conditions, " AND "), args
+}
+
+func normalizePaperKeywordScope(scope string) string {
+	switch strings.ToLower(strings.TrimSpace(scope)) {
+	case "title_abstract":
+		return "title_abstract"
+	case "full_text":
+		return "full_text"
+	default:
+		return "all"
+	}
 }
 
 func buildFigureWhere(filter model.FigureFilter) (string, []interface{}) {
@@ -2220,8 +2231,22 @@ func buildFigureWhere(filter model.FigureFilter) (string, []interface{}) {
 	return " WHERE " + strings.Join(conditions, " AND "), args
 }
 
-func buildPaperKeywordCondition(keyword string) (string, []interface{}) {
+func buildPaperKeywordCondition(keyword, scope string) (string, []interface{}) {
 	like := "%" + keyword + "%"
+	switch normalizePaperKeywordScope(scope) {
+	case "title_abstract":
+		return `(
+			p.title LIKE ? OR
+			p.abstract_text LIKE ?
+		)`, []interface{}{like, like}
+	case "full_text":
+		return `(
+			p.title LIKE ? OR
+			p.abstract_text LIKE ? OR
+			p.pdf_text LIKE ?
+		)`, []interface{}{like, like, like}
+	}
+
 	if ftsQuery, ok := buildFTSMatchQuery(keyword); ok {
 		return `(
 			p.id IN (SELECT rowid FROM papers_fts WHERE papers_fts MATCH ?) OR

@@ -501,12 +501,7 @@ const ManualPage = {
 
         const options = ['<option value="">作为新图片追加</option>'];
         figures.forEach((figure) => {
-            const label = [
-                `#${figure.figure_index || '-'}`,
-                `第 ${figure.page_number || '-'} 页`,
-                figure.source === 'manual' ? '人工' : '自动',
-                figure.caption || figure.original_name || '未命名图片'
-            ].join(' · ');
+            const label = `第 ${figure.page_number || '-'} 页`;
 
             const disabled = selectedElsewhere.has(Number(figure.id));
             const selected = Number(selection.replace_figure_id) === Number(figure.id);

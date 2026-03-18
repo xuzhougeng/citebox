@@ -1805,6 +1805,10 @@ button {
     border: 1px solid rgba(36, 27, 22, 0.08);
 }
 
+.ai-paper-summary-actions {
+    margin-top: 1rem;
+}
+
 .ai-action-head {
     display: flex;
     align-items: center;
@@ -2356,16 +2360,25 @@ button {
     flex-wrap: wrap;
 }
 
+.figure-lightbox-hint {
+    color: var(--muted);
+    font-size: 0.82rem;
+}
+
 .figure-lightbox-media {
+    position: relative;
     display: flex;
     align-items: center;
     justify-content: center;
     margin-top: 1rem;
     min-height: 520px;
+    overflow: hidden;
     border-radius: 20px;
     background:
         radial-gradient(circle at top left, rgba(164, 92, 64, 0.1), transparent 18rem),
         linear-gradient(180deg, rgba(239, 230, 215, 0.75), rgba(255, 252, 248, 0.88));
+    touch-action: none;
+    user-select: none;
 }
 
 .figure-lightbox-media img {
@@ -2375,6 +2388,8 @@ button {
     object-fit: contain;
     border-radius: 18px;
     box-shadow: 0 24px 48px rgba(36, 27, 22, 0.12);
+    transform-origin: center center;
+    will-change: transform;
 }
 
 .figure-lightbox-caption {

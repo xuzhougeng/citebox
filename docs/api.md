@@ -102,6 +102,7 @@ AI 流式阅读通过：
 | 参数 | 类型 | 说明 |
 | --- | --- | --- |
 | `keyword` | string | 标题、摘要、全文、笔记、标签、分组等搜索 |
+| `keyword_scope` | string | 可选：`title_abstract` 仅搜索标题和摘要，`full_text` 搜索标题、摘要和正文；默认保留兼容模式 |
 | `group_id` | int | 按分组过滤 |
 | `tag_id` | int | 按文献标签过滤 |
 | `status` | string | 按解析状态过滤 |
