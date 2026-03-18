@@ -43,6 +43,9 @@ func (h *DatabaseHandler) Export(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Length", fmt.Sprintf("%d", stat.Size()))
 
 	if _, err := io.Copy(w, file); err != nil {
+		if isClientDisconnectError(err) {
+			return
+		}
 		sendError(w, apperr.Wrap(apperr.CodeInternal, "导出数据库失败", err))
 		return
 	}

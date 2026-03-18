@@ -1,11 +1,14 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
+	"syscall"
 
 	"github.com/xuzhougeng/citebox/internal/apperr"
 	"github.com/xuzhougeng/citebox/internal/model"
@@ -32,6 +35,14 @@ func sendError(w http.ResponseWriter, err error) {
 	}
 
 	sendJSON(w, status, resp)
+}
+
+func isClientDisconnectError(err error) bool {
+	return errors.Is(err, context.Canceled) ||
+		errors.Is(err, net.ErrClosed) ||
+		errors.Is(err, syscall.EPIPE) ||
+		errors.Is(err, syscall.ECONNRESET) ||
+		errors.Is(err, syscall.ECONNABORTED)
 }
 
 func parseIDFromPath(path, prefix string) (int64, error) {

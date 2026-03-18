@@ -144,6 +144,9 @@ func (h *AIHandler) ExportReadMarkdown(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
 	w.Header().Set("Content-Length", fmt.Sprintf("%d", len(archive)))
 	if _, err := w.Write(archive); err != nil {
+		if isClientDisconnectError(err) {
+			return
+		}
 		sendError(w, apperr.Wrap(apperr.CodeInternal, "下载 AI Markdown 导出包失败", err))
 		return
 	}
