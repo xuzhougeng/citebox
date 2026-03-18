@@ -1071,7 +1071,7 @@ const FigureViewer = {
                                 <p class="eyebrow">AI Shortcut</p>
                                 <h3>快速辅助阅读</h3>
                             </div>
-                            <a class="btn btn-outline" href="/ai?paper_id=${figure.paper_id}" target="_blank" rel="noreferrer">自由提问</a>
+                            <a class="btn btn-outline" href="/ai?paper_id=${figure.paper_id}">自由提问</a>
                         </div>
                         <div class="figure-lightbox-ai-actions" data-figure-ai-actions>${this.renderAIActionButtons()}</div>
                         <div data-figure-ai-panel>${this.renderAIResultPanel()}</div>
