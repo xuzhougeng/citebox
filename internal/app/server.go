@@ -424,6 +424,8 @@ func buildHandler(
 			http.ServeFile(w, r, filepath.Join(webRoot, "upload.html"))
 		case "/manual", "/manual.html":
 			http.ServeFile(w, r, filepath.Join(webRoot, "manual.html"))
+		case "/viewer", "/viewer.html":
+			http.ServeFile(w, r, filepath.Join(webRoot, "viewer.html"))
 		case "/figures", "/figures.html":
 			http.ServeFile(w, r, filepath.Join(webRoot, "figures.html"))
 		case "/groups", "/groups.html":

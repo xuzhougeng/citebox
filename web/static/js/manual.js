@@ -195,7 +195,7 @@ const ManualPage = {
             ? `自动处理状态：${Utils.statusLabel(paper.extraction_status)}。${paper.extractor_message}`
             : 'PDF 预览和裁图现在直接在浏览器里完成，提交后会把结果追加到当前文献。';
 
-        this.openPDFLink.href = paper.pdf_url || '/';
+        this.openPDFLink.href = paper.pdf_url ? Utils.resourceViewerURL('pdf', paper.pdf_url) : '/';
         this.backLibraryLink.href = '/';
         this.pageIndicator.textContent = this.state.pageCount
             ? `第 ${this.state.currentPage} / ${this.state.pageCount} 页`

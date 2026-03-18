@@ -191,6 +191,8 @@ var desktopInternalRoutes = []string{
 	"/upload.html",
 	"/manual",
 	"/manual.html",
+	"/viewer",
+	"/viewer.html",
 	"/figures",
 	"/figures.html",
 	"/groups",

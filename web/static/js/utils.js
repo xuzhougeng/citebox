@@ -33,6 +33,16 @@ const Utils = {
         return typeof window.citeboxDesktopSaveFile === 'function';
     },
 
+    resourceViewerURL(kind, src, back = window.location.href) {
+        const params = new URLSearchParams();
+        params.set('kind', String(kind || ''));
+        params.set('src', String(src || ''));
+        if (back) {
+            params.set('back', String(back));
+        }
+        return `/viewer?${params.toString()}`;
+    },
+
     blobToBase64(blob) {
         return new Promise((resolve, reject) => {
             const reader = new FileReader();

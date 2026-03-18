@@ -210,7 +210,7 @@ const PaperNoteViewer = {
                     <div class="note-lightbox-actions">
                         <button class="btn btn-outline" type="button" data-paper-note-action="open-paper">查看文献详情</button>
                         <button class="btn btn-outline" type="button" data-paper-note-action="open-ai">去 AI伴读</button>
-                        <a class="btn btn-outline" href="${paper.pdf_url}" target="_blank" rel="noreferrer">打开 PDF</a>
+                        <a class="btn btn-outline" href="${Utils.resourceViewerURL('pdf', paper.pdf_url)}" target="_blank" rel="noreferrer">打开 PDF</a>
                     </div>
                 </aside>
             </div>
@@ -341,7 +341,7 @@ const PaperViewer = {
                     <div class="card-actions">
                         <button class="btn btn-primary" type="button" data-modal-action="preview-figure" data-figure-index="${index}">查看大图</button>
                         <button class="btn btn-outline danger" type="button" data-modal-action="delete-figure" data-figure-id="${figure.id}">删除图片</button>
-                        <a class="btn btn-outline" href="${figure.image_url}" target="_blank" rel="noreferrer">原图</a>
+                        <a class="btn btn-outline" href="${Utils.resourceViewerURL('image', figure.image_url)}" target="_blank" rel="noreferrer">原图</a>
                     </div>
                 </div>
             </article>
@@ -394,7 +394,7 @@ const PaperViewer = {
                     ${(paper.extraction_status === 'failed' || paper.extraction_status === 'cancelled') ? '<button class="btn btn-outline" type="button" data-modal-action="reextract-paper">重新解析</button>' : ''}
                     <button class="btn btn-outline danger" type="button" data-modal-action="delete-paper">删除文献</button>
                     <a class="btn btn-outline" href="/ai?paper_id=${paper.id}" target="_blank" rel="noreferrer">AI伴读</a>
-                    <a class="btn btn-outline" href="${paper.pdf_url}" target="_blank" rel="noreferrer">打开 PDF</a>
+                    <a class="btn btn-outline" href="${Utils.resourceViewerURL('pdf', paper.pdf_url)}" target="_blank" rel="noreferrer">打开 PDF</a>
                 </div>
             </form>
 
@@ -457,7 +457,7 @@ const PaperViewer = {
 
     async openFigurePreview(index) {
         if (typeof FigureViewer === 'undefined') {
-            window.open(this.paper?.figures?.[index]?.image_url, '_blank', 'noreferrer');
+            window.open(Utils.resourceViewerURL('image', this.paper?.figures?.[index]?.image_url), '_blank', 'noreferrer');
             return;
         }
 
