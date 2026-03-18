@@ -255,7 +255,7 @@ const AIReaderPage = {
                 ${tags ? `<div class="paper-list-tags">${tags}</div>` : ''}
                 <div class="card-actions ai-paper-summary-actions">
                     <button class="btn btn-outline" type="button" data-ai-paper-action="open-paper">文献详情</button>
-                    <a class="btn btn-outline" href="${paper.pdf_url}" target="_blank" rel="noreferrer">打开 PDF</a>
+                    <a class="btn btn-outline" href="${Utils.resourceViewerURL('pdf', paper.pdf_url)}" target="_blank" rel="noreferrer">打开 PDF</a>
                 </div>
             </div>
         `;
