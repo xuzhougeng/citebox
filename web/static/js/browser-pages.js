@@ -9,7 +9,7 @@ const BrowserUI = {
     renderPaperCard(paper) {
         const tags = BrowserUI.renderTagChips(paper.tags || []);
         const statusClass = Utils.statusTone(paper.extraction_status);
-        const summary = paper.abstract_text || paper.notes_text;
+        const summary = paper.abstract_text || paper.paper_notes_text || paper.notes_text;
         return `
             <article class="paper-list-row" data-paper-id="${paper.id}">
                 <div class="paper-list-main">
@@ -2070,14 +2070,16 @@ const TagsPage = {
 };
 
 const NotesPage = {
-    state: { page: 1, pageSize: 8, totalPages: 0, filters: { keyword: '', group_id: '', tag_id: '' } },
+    state: { mode: 'paper', page: 1, pageSize: 8, totalPages: 0, filters: { keyword: '', group_id: '', tag_id: '' } },
 
     async init() {
         PaperViewer.init();
         FigureViewer.init();
         NoteViewer.init();
+        PaperNoteViewer.init();
         this.cache();
         this.bind();
+        this.syncModeUI();
         await Promise.all([this.loadGroups(), this.loadTags()]);
         await this.load();
     },
@@ -2086,6 +2088,9 @@ const NotesPage = {
         this.keywordInput = document.getElementById('notesKeywordInput');
         this.groupFilter = document.getElementById('notesGroupFilter');
         this.tagFilter = document.getElementById('notesTagFilter');
+        this.tagFilterLabel = document.getElementById('notesTagFilterLabel');
+        this.typeSwitch = document.getElementById('notesTypeSwitch');
+        this.filterDescription = document.getElementById('notesFilterDescription');
         this.summaryStrip = document.getElementById('notesSummaryStrip');
         this.grid = document.getElementById('notesGrid');
         this.pagination = document.getElementById('notesPagination');
@@ -2106,10 +2111,39 @@ const NotesPage = {
             this.state.filters.tag_id = this.tagFilter.value;
             await this.load(1);
         });
+        this.typeSwitch.addEventListener('click', async (event) => {
+            const button = event.target.closest('[data-notes-mode]');
+            if (!button) return;
+            const nextMode = button.dataset.notesMode === 'figure' ? 'figure' : 'paper';
+            if (nextMode === this.state.mode) return;
+            this.state.mode = nextMode;
+            this.state.page = 1;
+            this.state.totalPages = 0;
+            this.state.filters.tag_id = '';
+            this.syncModeUI();
+            await this.loadTags();
+            await this.load(1);
+        });
         this.grid.addEventListener('click', async (event) => {
             const action = event.target.closest('[data-action]');
-            const card = event.target.closest('[data-figure-index]');
+            const card = event.target.closest('[data-note-kind]');
             if (!card || !action) return;
+
+            if (card.dataset.noteKind === 'paper') {
+                const paperID = Number(card.dataset.paperId);
+                if (action.dataset.action === 'note') {
+                    await this.openPaperNote(paperID);
+                    return;
+                }
+                if (action.dataset.action === 'paper') {
+                    await this.openPaper(paperID);
+                    return;
+                }
+                if (action.dataset.action === 'ai') {
+                    window.location.href = `/ai?paper_id=${paperID}`;
+                }
+                return;
+            }
 
             const index = Number(card.dataset.figureIndex);
             if (action.dataset.action === 'note') {
@@ -2124,9 +2158,7 @@ const NotesPage = {
                         return payload;
                     },
                     onOpenPaper: async (paperID) => {
-                        await PaperViewer.open(Number(paperID), async () => {
-                            await Promise.all([this.loadGroups(), this.loadTags(), this.load(this.state.page)]);
-                        });
+                        await this.openPaper(Number(paperID));
                     },
                     onMetaChanged: async () => {
                         await Promise.all([this.loadGroups(), this.loadTags(), this.load(this.state.page)]);
@@ -2146,9 +2178,7 @@ const NotesPage = {
                         return payload;
                     },
                     onOpenPaper: async (paperID) => {
-                        await PaperViewer.open(Number(paperID), async () => {
-                            await Promise.all([this.loadGroups(), this.loadTags(), this.load(this.state.page)]);
-                        });
+                        await this.openPaper(Number(paperID));
                     },
                     onMetaChanged: async () => {
                         await Promise.all([this.loadGroups(), this.loadTags(), this.load(this.state.page)]);
@@ -2157,9 +2187,7 @@ const NotesPage = {
                 return;
             }
             if (action.dataset.action === 'paper') {
-                await PaperViewer.open(Number(card.dataset.paperId), async () => {
-                    await Promise.all([this.loadGroups(), this.loadTags(), this.load(this.state.page)]);
-                });
+                await this.openPaper(Number(card.dataset.paperId));
             }
         });
         Utils.bindPagination(this.pagination, async (page) => await this.load(page));
@@ -2175,6 +2203,26 @@ const NotesPage = {
         });
     },
 
+    syncModeUI() {
+        const isPaperMode = this.state.mode === 'paper';
+        this.keywordInput.placeholder = isPaperMode ? '文献标题、摘要、文献笔记、标签' : '文献标题、图片说明、图片标签、图片笔记';
+        this.filterDescription.textContent = isPaperMode
+            ? '这里只显示已经写过文献笔记的条目，你可以继续编辑、回看内容或跳转到来源文献。'
+            : '这里只显示已经写过图片笔记的条目，你可以继续编辑、回看大图或跳转到来源文献。';
+        this.tagFilterLabel.textContent = isPaperMode ? '文献标签' : '图片标签';
+
+        Array.from(this.typeSwitch.querySelectorAll('[data-notes-mode]')).forEach((button) => {
+            const active = button.dataset.notesMode === this.state.mode;
+            button.classList.toggle('btn-primary', active);
+            button.classList.toggle('btn-outline', !active);
+            button.setAttribute('aria-pressed', active ? 'true' : 'false');
+        });
+    },
+
+    currentTagScope() {
+        return this.state.mode === 'paper' ? 'paper' : 'figure';
+    },
+
     async loadGroups() {
         const payload = await API.listGroups();
         const selected = String(this.state.filters.group_id || '');
@@ -2184,11 +2232,24 @@ const NotesPage = {
     },
 
     async loadTags() {
-        const payload = await API.listTags({ scope: 'figure' });
+        const scope = this.currentTagScope();
+        const payload = await API.listTags({ scope });
         const selected = String(this.state.filters.tag_id || '');
-        this.tagFilter.innerHTML = '<option value="">全部图片标签</option>' + (payload.tags || []).map((tag) => `
+        const label = scope === 'paper' ? '全部文献标签' : '全部图片标签';
+        this.tagFilter.innerHTML = `<option value="">${label}</option>` + (payload.tags || []).map((tag) => `
             <option value="${tag.id}" ${String(tag.id) === selected ? 'selected' : ''}>${Utils.escapeHTML(tag.name)}</option>
         `).join('');
+    },
+
+    buildPaperParams(page = this.state.page) {
+        return {
+            page,
+            page_size: this.state.pageSize,
+            keyword: this.state.filters.keyword,
+            group_id: this.state.filters.group_id,
+            tag_id: this.state.filters.tag_id,
+            has_paper_notes: true
+        };
     },
 
     buildFigureParams(page = this.state.page) {
@@ -2202,8 +2263,65 @@ const NotesPage = {
         };
     },
 
+    async fetchPaperPage(page = this.state.page) {
+        return API.listPapers(this.buildPaperParams(page));
+    },
+
     async fetchFigurePage(page = this.state.page) {
         return API.listFigures(this.buildFigureParams(page));
+    },
+
+    renderPageControls() {
+        this.pageControls.innerHTML = this.state.totalPages > 1 ? `
+            <button class="btn btn-outline" type="button" data-page-step="-1" ${this.state.page <= 1 ? 'disabled' : ''}>上一页</button>
+            <span class="figure-page-indicator">第 ${this.state.page} / ${this.state.totalPages} 页</span>
+            <button class="btn btn-outline" type="button" data-page-step="1" ${this.state.page >= this.state.totalPages ? 'disabled' : ''}>下一页</button>
+        ` : '';
+    },
+
+    renderPaperResults(payload, page = this.state.page) {
+        const papers = payload.papers || [];
+        const totalPages = payload.total_pages || 0;
+        this.state.page = totalPages ? Math.min(page, totalPages) : 1;
+        this.papers = papers;
+        this.state.totalPages = totalPages;
+        this.summaryStrip.innerHTML = `
+            <div class="stat-card"><span>带笔记文献</span><strong>${payload.total || 0}</strong></div>
+            <div class="stat-card"><span>当前页</span><strong>${papers.length}</strong></div>
+            <div class="stat-card"><span>来源分组</span><strong>${Utils.escapeHTML(this.groupFilter.selectedOptions[0]?.textContent || '全部分组')}</strong></div>
+            <div class="stat-card"><span>文献标签</span><strong>${Utils.escapeHTML(this.tagFilter.selectedOptions[0]?.textContent || '全部文献标签')}</strong></div>
+        `;
+        this.renderPageControls();
+        this.grid.innerHTML = papers.length
+            ? papers.map((paper) => this.renderPaperNoteRow(paper)).join('')
+            : '<div class="empty-state"><h3>还没有可管理的文献笔记</h3><p>先在 AI伴读或文献详情里沉淀文献笔记，再回到这里统一整理。</p></div>';
+        BrowserUI.renderPagination(this.pagination, this.state.page, this.state.totalPages);
+    },
+
+    renderPaperNoteRow(paper) {
+        const noteText = String(paper.paper_notes_text || '').trim().replace(/\s+/g, ' ');
+        const preview = noteText.length > 320 ? noteText.slice(0, 320) + '...' : noteText;
+        const tags = BrowserUI.renderTagChips(paper.tags || []);
+
+        return `
+            <article class="note-row note-row-paper" data-note-kind="paper" data-paper-id="${paper.id}">
+                <div class="note-row-body">
+                    <div class="note-row-head">
+                        <span class="note-row-source" data-action="paper" role="button">${Utils.escapeHTML(paper.title)}</span>
+                        <span class="note-row-page">${Utils.escapeHTML(paper.group_name || '未分组')} · 图片 ${paper.figure_count || 0}</span>
+                    </div>
+                    <div class="note-row-text" data-action="note" role="button">${Utils.escapeHTML(preview) || '<span class="muted">空笔记</span>'}</div>
+                    <div class="note-row-foot">
+                        <div class="note-row-tags">${tags}</div>
+                        <div class="note-row-actions">
+                            <button class="btn btn-small btn-primary" type="button" data-action="note">编辑笔记</button>
+                            <button class="btn btn-small btn-outline" type="button" data-action="paper">文献详情</button>
+                            <button class="btn btn-small btn-outline" type="button" data-action="ai">AI伴读</button>
+                        </div>
+                    </div>
+                </div>
+            </article>
+        `;
     },
 
     renderFigureResults(payload, page = this.state.page) {
@@ -2218,24 +2336,20 @@ const NotesPage = {
             <div class="stat-card"><span>来源分组</span><strong>${Utils.escapeHTML(this.groupFilter.selectedOptions[0]?.textContent || '全部分组')}</strong></div>
             <div class="stat-card"><span>图片标签</span><strong>${Utils.escapeHTML(this.tagFilter.selectedOptions[0]?.textContent || '全部图片标签')}</strong></div>
         `;
-        this.pageControls.innerHTML = this.state.totalPages > 1 ? `
-            <button class="btn btn-outline" type="button" data-page-step="-1" ${this.state.page <= 1 ? 'disabled' : ''}>上一页</button>
-            <span class="figure-page-indicator">第 ${this.state.page} / ${this.state.totalPages} 页</span>
-            <button class="btn btn-outline" type="button" data-page-step="1" ${this.state.page >= this.state.totalPages ? 'disabled' : ''}>下一页</button>
-        ` : '';
+        this.renderPageControls();
         this.grid.innerHTML = figures.length
-            ? figures.map((figure, index) => this.renderNoteRow(figure, index)).join('')
+            ? figures.map((figure, index) => this.renderFigureNoteRow(figure, index)).join('')
             : '<div class="empty-state"><h3>还没有可管理的图片笔记</h3><p>先在图片库里为图片补充笔记，再回到这里统一整理。</p></div>';
         BrowserUI.renderPagination(this.pagination, this.state.page, this.state.totalPages);
     },
 
-    renderNoteRow(figure, index) {
+    renderFigureNoteRow(figure, index) {
         const noteText = String(figure.notes_text || '').trim().replace(/\s+/g, ' ');
         const preview = noteText.length > 280 ? noteText.slice(0, 280) + '...' : noteText;
         const tags = BrowserUI.renderTagChips(figure.tags || []);
 
         return `
-            <article class="note-row" data-paper-id="${figure.paper_id}" data-figure-index="${index}">
+            <article class="note-row" data-note-kind="figure" data-paper-id="${figure.paper_id}" data-figure-index="${index}">
                 <div class="note-row-thumb">
                     <button class="note-row-img" type="button" data-action="preview" aria-label="查看大图">
                         <img src="${figure.image_url}" alt="${Utils.escapeHTML(figure.paper_title || '')}">
@@ -2260,8 +2374,32 @@ const NotesPage = {
         `;
     },
 
+    async openPaper(paperID) {
+        await PaperViewer.open(Number(paperID), async () => {
+            await Promise.all([this.loadGroups(), this.loadTags(), this.load(this.state.page)]);
+        });
+    },
+
+    async openPaperNote(paperID) {
+        const paper = await API.getPaper(Number(paperID));
+        PaperNoteViewer.open({
+            paper,
+            onChanged: async () => {
+                await Promise.all([this.loadGroups(), this.loadTags(), this.load(this.state.page)]);
+            },
+            onOpenPaper: async (targetPaperID) => {
+                await this.openPaper(Number(targetPaperID));
+            }
+        });
+    },
+
     async load(page = this.state.page) {
         try {
+            if (this.state.mode === 'paper') {
+                const payload = await this.fetchPaperPage(page);
+                this.renderPaperResults(payload, page);
+                return;
+            }
             const payload = await this.fetchFigurePage(page);
             this.renderFigureResults(payload, page);
         } catch (error) {

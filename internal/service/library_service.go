@@ -71,11 +71,12 @@ type UploadPaperParams struct {
 }
 
 type UpdatePaperParams struct {
-	Title        string
-	AbstractText string
-	NotesText    string
-	GroupID      *int64
-	Tags         []string
+	Title          string
+	AbstractText   string
+	NotesText      string
+	PaperNotesText string
+	GroupID        *int64
+	Tags           []string
 }
 
 type UpdateFigureParams struct {
@@ -337,6 +338,7 @@ func (s *LibraryService) UploadPaper(file multipart.File, header *multipart.File
 		PDFText:          "",
 		AbstractText:     "",
 		NotesText:        "",
+		PaperNotesText:   "",
 		BoxesJSON:        "",
 		ExtractionStatus: extractionStatus,
 		ExtractorMessage: extractorMessage,
@@ -424,11 +426,12 @@ func (s *LibraryService) UpdatePaper(id int64, params UpdatePaperParams) (*model
 	}
 
 	paper, err := s.repo.UpdatePaper(id, repository.PaperUpdateInput{
-		Title:        title,
-		AbstractText: strings.TrimSpace(params.AbstractText),
-		NotesText:    strings.TrimSpace(params.NotesText),
-		GroupID:      params.GroupID,
-		Tags:         s.normalizeTagInputs(params.Tags, model.TagScopePaper),
+		Title:          title,
+		AbstractText:   strings.TrimSpace(params.AbstractText),
+		NotesText:      strings.TrimSpace(params.NotesText),
+		PaperNotesText: strings.TrimSpace(params.PaperNotesText),
+		GroupID:        params.GroupID,
+		Tags:           s.normalizeTagInputs(params.Tags, model.TagScopePaper),
 	})
 	if err != nil {
 		return nil, err

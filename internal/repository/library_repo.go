@@ -49,6 +49,7 @@ type PaperUpsertInput struct {
 	PDFText          string
 	AbstractText     string
 	NotesText        string
+	PaperNotesText   string
 	BoxesJSON        string
 	ExtractionStatus string
 	ExtractorMessage string
@@ -59,11 +60,12 @@ type PaperUpsertInput struct {
 }
 
 type PaperUpdateInput struct {
-	Title        string
-	AbstractText string
-	NotesText    string
-	GroupID      *int64
-	Tags         []TagUpsertInput
+	Title          string
+	AbstractText   string
+	NotesText      string
+	PaperNotesText string
+	GroupID        *int64
+	Tags           []TagUpsertInput
 }
 
 type FigureUpdateInput struct {
@@ -137,6 +139,7 @@ func (r *LibraryRepository) initSchema() error {
 		pdf_text TEXT DEFAULT '',
 		abstract_text TEXT DEFAULT '',
 		notes_text TEXT DEFAULT '',
+		paper_notes_text TEXT DEFAULT '',
 		boxes_json TEXT DEFAULT '',
 		extraction_status TEXT DEFAULT 'completed' CHECK (extraction_status IN ('queued', 'running', 'manual_pending', 'completed', 'failed', 'cancelled')),
 		extractor_message TEXT DEFAULT '',
@@ -206,6 +209,9 @@ func (r *LibraryRepository) ensureSchemaColumns() error {
 			return err
 		}
 	}
+	if err := r.ensurePaperNotesSchema(); err != nil {
+		return err
+	}
 	if err := r.ensureTagScopeSchema(); err != nil {
 		return err
 	}
@@ -219,6 +225,28 @@ func (r *LibraryRepository) ensureSchemaColumns() error {
 		return err
 	}
 	return r.ensureFTSSchema()
+}
+
+func (r *LibraryRepository) ensurePaperNotesSchema() error {
+	hasColumn, err := r.hasColumn("papers", "paper_notes_text")
+	if err != nil {
+		return err
+	}
+	if hasColumn {
+		return nil
+	}
+
+	if _, err := r.db.Exec("ALTER TABLE papers ADD COLUMN paper_notes_text TEXT DEFAULT ''"); err != nil {
+		return err
+	}
+	_, err = r.db.Exec(`
+		UPDATE papers
+		SET paper_notes_text = COALESCE(notes_text, ''),
+			notes_text = ''
+		WHERE TRIM(COALESCE(notes_text, '')) <> ''
+		  AND TRIM(COALESCE(paper_notes_text, '')) = ''
+	`)
+	return err
 }
 
 func (r *LibraryRepository) ensureColumn(tableName, columnName, definition string) error {
@@ -944,8 +972,8 @@ func (r *LibraryRepository) CreatePaper(input PaperUpsertInput) (*model.Paper, e
 	result, err := tx.Exec(`
 		INSERT INTO papers (
 			title, original_filename, stored_pdf_name, pdf_sha256, file_size, content_type,
-			pdf_text, abstract_text, notes_text, boxes_json, extraction_status, extractor_message, extractor_job_id, group_id
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			pdf_text, abstract_text, notes_text, paper_notes_text, boxes_json, extraction_status, extractor_message, extractor_job_id, group_id
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`,
 		input.Title,
 		input.OriginalFilename,
@@ -956,6 +984,7 @@ func (r *LibraryRepository) CreatePaper(input PaperUpsertInput) (*model.Paper, e
 		input.PDFText,
 		input.AbstractText,
 		input.NotesText,
+		input.PaperNotesText,
 		input.BoxesJSON,
 		input.ExtractionStatus,
 		input.ExtractorMessage,
@@ -1077,9 +1106,9 @@ func (r *LibraryRepository) UpdatePaper(id int64, input PaperUpdateInput) (*mode
 
 	result, err := tx.Exec(`
 		UPDATE papers
-		SET title = ?, abstract_text = ?, notes_text = ?, group_id = ?, updated_at = CURRENT_TIMESTAMP
+		SET title = ?, abstract_text = ?, notes_text = ?, paper_notes_text = ?, group_id = ?, updated_at = CURRENT_TIMESTAMP
 		WHERE id = ?
-	`, input.Title, input.AbstractText, input.NotesText, input.GroupID, id)
+	`, input.Title, input.AbstractText, input.NotesText, input.PaperNotesText, input.GroupID, id)
 	if err != nil {
 		return nil, wrapDBError(err, "更新文献失败")
 	}
@@ -1441,7 +1470,7 @@ func (r *LibraryRepository) GetPaperDetail(id int64) (*model.Paper, error) {
 	row := r.db.QueryRow(`
 			SELECT
 				p.id, p.title, p.original_filename, p.stored_pdf_name, p.file_size, p.content_type,
-				p.pdf_text, p.abstract_text, p.notes_text, p.boxes_json, p.extraction_status, p.extractor_message, p.extractor_job_id,
+				p.pdf_text, p.abstract_text, p.notes_text, p.paper_notes_text, p.boxes_json, p.extraction_status, p.extractor_message, p.extractor_job_id,
 				p.group_id, COALESCE(g.name, ''),
 				p.created_at, p.updated_at,
 				(SELECT COUNT(*) FROM paper_figures pf WHERE pf.paper_id = p.id)
@@ -1541,7 +1570,7 @@ func (r *LibraryRepository) ListPapers(filter model.PaperFilter) ([]model.Paper,
 	query := `
 			SELECT
 				p.id, p.title, p.original_filename, p.stored_pdf_name, p.file_size, p.content_type,
-				'', p.abstract_text, p.notes_text, '', p.extraction_status, p.extractor_message, p.extractor_job_id,
+				'', p.abstract_text, p.notes_text, p.paper_notes_text, '', p.extraction_status, p.extractor_message, p.extractor_job_id,
 				p.group_id, COALESCE(g.name, ''),
 				p.created_at, p.updated_at,
 				(SELECT COUNT(*) FROM paper_figures pf WHERE pf.paper_id = p.id)
@@ -1604,7 +1633,7 @@ func (r *LibraryRepository) ListPapersByExtractionStatuses(statuses []string) ([
 	rows, err := r.db.Query(`
 		SELECT
 			p.id, p.title, p.original_filename, p.stored_pdf_name, p.file_size, p.content_type,
-			'', p.abstract_text, p.notes_text, '', p.extraction_status, p.extractor_message, p.extractor_job_id,
+			'', p.abstract_text, p.notes_text, p.paper_notes_text, '', p.extraction_status, p.extractor_message, p.extractor_job_id,
 			p.group_id, COALESCE(g.name, ''),
 			p.created_at, p.updated_at,
 			(SELECT COUNT(*) FROM paper_figures pf WHERE pf.paper_id = p.id)
@@ -2149,6 +2178,10 @@ func buildPaperWhere(filter model.PaperFilter) (string, []interface{}) {
 		args = append(args, status)
 	}
 
+	if filter.HasPaperNotes {
+		conditions = append(conditions, "TRIM(COALESCE(p.paper_notes_text, '')) <> ''")
+	}
+
 	if len(conditions) == 0 {
 		return "", args
 	}
@@ -2192,6 +2225,7 @@ func buildPaperKeywordCondition(keyword string) (string, []interface{}) {
 	if ftsQuery, ok := buildFTSMatchQuery(keyword); ok {
 		return `(
 			p.id IN (SELECT rowid FROM papers_fts WHERE papers_fts MATCH ?) OR
+			p.paper_notes_text LIKE ? OR
 			EXISTS (
 				SELECT 1
 				FROM paper_tags pt
@@ -2203,7 +2237,7 @@ func buildPaperKeywordCondition(keyword string) (string, []interface{}) {
 				FROM groups g2
 				WHERE g2.id = p.group_id AND g2.name LIKE ?
 			)
-		)`, []interface{}{ftsQuery, like, like}
+		)`, []interface{}{ftsQuery, like, like, like}
 	}
 
 	return `(
@@ -2212,6 +2246,7 @@ func buildPaperKeywordCondition(keyword string) (string, []interface{}) {
 		p.pdf_text LIKE ? OR
 		p.abstract_text LIKE ? OR
 		p.notes_text LIKE ? OR
+		p.paper_notes_text LIKE ? OR
 		EXISTS (
 			SELECT 1
 			FROM paper_tags pt
@@ -2223,7 +2258,7 @@ func buildPaperKeywordCondition(keyword string) (string, []interface{}) {
 			FROM groups g2
 			WHERE g2.id = p.group_id AND g2.name LIKE ?
 		)
-	)`, []interface{}{like, like, like, like, like, like, like}
+	)`, []interface{}{like, like, like, like, like, like, like, like}
 }
 
 func buildFigureKeywordCondition(keyword string) (string, []interface{}) {
@@ -2286,6 +2321,7 @@ func scanPaper(s scanner, includeHeavyFields bool) (*model.Paper, error) {
 	var pdfText string
 	var abstractText string
 	var notesText string
+	var paperNotesText string
 
 	if err := s.Scan(
 		&paper.ID,
@@ -2297,6 +2333,7 @@ func scanPaper(s scanner, includeHeavyFields bool) (*model.Paper, error) {
 		&pdfText,
 		&abstractText,
 		&notesText,
+		&paperNotesText,
 		&boxesJSON,
 		&paper.ExtractionStatus,
 		&paper.ExtractorMessage,
@@ -2321,6 +2358,7 @@ func scanPaper(s scanner, includeHeavyFields bool) (*model.Paper, error) {
 	}
 	paper.AbstractText = abstractText
 	paper.NotesText = notesText
+	paper.PaperNotesText = paperNotesText
 
 	return &paper, nil
 }

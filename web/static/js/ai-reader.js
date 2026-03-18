@@ -227,7 +227,7 @@ const AIReaderPage = {
             return;
         }
 
-        const summaryText = paper.abstract_text || paper.notes_text || '当前文献还没有摘要或备注。';
+        const summaryText = paper.abstract_text || paper.paper_notes_text || paper.notes_text || '当前文献还没有摘要或笔记。';
         const tags = (paper.tags || []).map((tag) => `
             <span class="tag-pill" style="background:${tag.color || '#A45C40'}22;color:${tag.color || '#A45C40'};">
                 ${Utils.escapeHTML(tag.name)}
@@ -380,7 +380,7 @@ const AIReaderPage = {
                                     data-save-turn-note-index="${index}"
                                     ${savingNote ? 'disabled' : ''}
                                 >
-                                    ${savingNote ? '写入中...' : '保存到文献备注'}
+                                    ${savingNote ? '写入中...' : '保存到文献笔记'}
                                 </button>
                                 <button
                                     class="btn btn-outline btn-small"
@@ -602,9 +602,9 @@ const AIReaderPage = {
         try {
             const latestPaper = await API.getPaper(paper.id);
             const noteBlock = this.buildTurnNoteBlock(turn, turnIndex);
-            const currentNotes = String(latestPaper.notes_text || '').trim();
+            const currentNotes = String(latestPaper.paper_notes_text || '').trim();
             if (currentNotes.includes(noteBlock.trim())) {
-                Utils.showToast('这轮 AI 内容已经写入文献备注');
+                Utils.showToast('这轮 AI 内容已经写入文献笔记');
                 return;
             }
 
@@ -612,12 +612,13 @@ const AIReaderPage = {
             const payload = await API.updatePaper(paper.id, {
                 title: latestPaper.title,
                 abstract_text: latestPaper.abstract_text || '',
-                notes_text: nextNotes,
+                notes_text: latestPaper.notes_text || '',
+                paper_notes_text: nextNotes,
                 group_id: latestPaper.group_id ?? null,
                 tags: (latestPaper.tags || []).map((tag) => tag.name || tag)
             });
             this.syncUpdatedPaper(payload.paper);
-            Utils.showToast('AI 内容已写入文献备注');
+            Utils.showToast('AI 内容已写入文献笔记');
         } catch (error) {
             Utils.showToast(error.message, 'error');
         } finally {

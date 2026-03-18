@@ -41,6 +41,7 @@ func TestCreatePaperAndListEntities(t *testing.T) {
 		ContentType:      "application/pdf",
 		AbstractText:     "Cell atlas abstract",
 		NotesText:        "Important notes",
+		PaperNotesText:   "Paper reading note",
 		ExtractionStatus: "completed",
 		GroupID:          &group.ID,
 		Tags: []TagUpsertInput{
@@ -83,8 +84,8 @@ func TestCreatePaperAndListEntities(t *testing.T) {
 	if got := len(papers[0].Tags); got != 2 {
 		t.Fatalf("ListPapers() tags = %d, want 2", got)
 	}
-	if papers[0].AbstractText != "Cell atlas abstract" || papers[0].NotesText != "Important notes" {
-		t.Fatalf("ListPapers() metadata = (%q, %q), want abstract/notes", papers[0].AbstractText, papers[0].NotesText)
+	if papers[0].AbstractText != "Cell atlas abstract" || papers[0].NotesText != "Important notes" || papers[0].PaperNotesText != "Paper reading note" {
+		t.Fatalf("ListPapers() metadata = (%q, %q, %q), want abstract/notes/paper notes", papers[0].AbstractText, papers[0].NotesText, papers[0].PaperNotesText)
 	}
 
 	figures, total, err := repo.ListFigures(model.FigureFilter{})
@@ -826,7 +827,7 @@ func TestRepositoryMigratesPaperMetadataColumns(t *testing.T) {
 		columns[strings.ToLower(name)] = true
 	}
 
-	for _, column := range []string{"extractor_job_id", "abstract_text", "notes_text"} {
+	for _, column := range []string{"extractor_job_id", "abstract_text", "notes_text", "paper_notes_text"} {
 		if !columns[column] {
 			t.Fatalf("missing migrated column %q", column)
 		}

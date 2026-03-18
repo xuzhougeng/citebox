@@ -30,3 +30,5 @@ Go tests are colocated as `*_test.go` files, especially under `internal/reposito
 ## Commit & Pull Request Guidelines
 
 Recent history favors short imperative subjects, e.g. `Add notes workspace and markdown preview` or scoped fixes like `fix: set http.Server.Addr to respect ServerPort config`. Keep commits focused. PRs should describe user-visible impact, call out schema/config changes, list verification commands, and include screenshots for navigation or layout changes. If you touch database structure, update `docs/database.md` in the same PR.
+
+When changing database schema, note models, or note semantics, update the relevant documentation immediately in the same change instead of leaving docs drift for later.

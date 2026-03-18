@@ -33,6 +33,7 @@ type Paper struct {
 	PDFText          string          `json:"pdf_text,omitempty"`
 	AbstractText     string          `json:"abstract_text,omitempty"`
 	NotesText        string          `json:"notes_text,omitempty"`
+	PaperNotesText   string          `json:"paper_notes_text,omitempty"`
 	Boxes            json.RawMessage `json:"boxes,omitempty"`
 	ExtractionStatus string          `json:"extraction_status"`
 	ExtractorMessage string          `json:"extractor_message,omitempty"`
@@ -55,10 +56,11 @@ type PaperListResponse struct {
 }
 
 type PaperFilter struct {
-	Keyword  string `json:"keyword"`
-	GroupID  *int64 `json:"group_id,omitempty"`
-	TagID    *int64 `json:"tag_id,omitempty"`
-	Status   string `json:"status"`
-	Page     int    `json:"page"`
-	PageSize int    `json:"page_size"`
+	Keyword       string `json:"keyword"`
+	GroupID       *int64 `json:"group_id,omitempty"`
+	TagID         *int64 `json:"tag_id,omitempty"`
+	Status        string `json:"status"`
+	HasPaperNotes bool   `json:"has_paper_notes,omitempty"`
+	Page          int    `json:"page"`
+	PageSize      int    `json:"page_size"`
 }
