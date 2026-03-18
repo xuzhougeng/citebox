@@ -64,7 +64,9 @@ type AIReadRequest struct {
 
 type AIReadExportRequest struct {
 	PaperID   int64  `json:"paper_id"`
-	Answer    string `json:"answer"`
+	Answer    string `json:"answer,omitempty"`
+	Content   string `json:"content,omitempty"`
+	Scope     string `json:"scope,omitempty"`
 	TurnIndex int    `json:"turn_index,omitempty"`
 }
 

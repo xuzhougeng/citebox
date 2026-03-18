@@ -187,12 +187,17 @@ func (s *AIService) ExportReadMarkdown(ctx context.Context, input model.AIReadEx
 	if input.PaperID <= 0 {
 		return "", nil, apperr.New(apperr.CodeInvalidArgument, "paper_id 无效")
 	}
-	if strings.TrimSpace(input.Answer) == "" {
+	content := strings.TrimSpace(input.Content)
+	if content == "" {
+		content = strings.TrimSpace(input.Answer)
+	}
+	if content == "" {
 		return "", nil, apperr.New(apperr.CodeInvalidArgument, "缺少可导出的 Markdown 内容")
 	}
 	if err := ctx.Err(); err != nil {
 		return "", nil, err
 	}
+	scope := normalizeAIReadExportScope(input.Scope)
 
 	paper, err := s.repo.GetPaperDetail(input.PaperID)
 	if err != nil {
@@ -215,7 +220,7 @@ func (s *AIService) ExportReadMarkdown(ctx context.Context, input model.AIReadEx
 	assetPaths := map[int64]string{}
 	assets := make([]markdownAsset, 0, 4)
 	var rewriteErr error
-	rewritten := aiMarkdownFigureReferencePattern.ReplaceAllStringFunc(input.Answer, func(match string) string {
+	rewritten := aiMarkdownFigureReferencePattern.ReplaceAllStringFunc(content, func(match string) string {
 		if rewriteErr != nil {
 			return match
 		}
@@ -262,7 +267,7 @@ func (s *AIService) ExportReadMarkdown(ctx context.Context, input model.AIReadEx
 	var archive bytes.Buffer
 	zipWriter := zip.NewWriter(&archive)
 
-	answerWriter, err := zipWriter.Create("answer.md")
+	answerWriter, err := zipWriter.Create(aiReadExportMarkdownFilename(scope))
 	if err != nil {
 		return "", nil, apperr.Wrap(apperr.CodeInternal, "创建 Markdown 导出文件失败", err)
 	}
@@ -284,7 +289,7 @@ func (s *AIService) ExportReadMarkdown(ctx context.Context, input model.AIReadEx
 		return "", nil, apperr.Wrap(apperr.CodeInternal, "生成导出压缩包失败", err)
 	}
 
-	return aiReadExportFilename(paper, input.TurnIndex), archive.Bytes(), nil
+	return aiReadExportFilename(paper, scope, input.TurnIndex), archive.Bytes(), nil
 }
 
 func (s *AIService) ReadPaperStream(ctx context.Context, input model.AIReadRequest, onEvent func(model.AIReadStreamEvent) error) error {
@@ -461,12 +466,29 @@ func (s *AIService) loadMarkdownExportAsset(figure model.Figure) (string, []byte
 	return "assets/" + aiReadExportAssetName(figure), data, nil
 }
 
-func aiReadExportFilename(paper *model.Paper, turnIndex int) string {
+func normalizeAIReadExportScope(value string) string {
+	if strings.EqualFold(strings.TrimSpace(value), "conversation") {
+		return "conversation"
+	}
+	return "turn"
+}
+
+func aiReadExportFilename(paper *model.Paper, scope string, turnIndex int) string {
 	base := fmt.Sprintf("paper_%d_ai_reader", paper.ID)
+	if scope == "conversation" {
+		return base + "_conversation.zip"
+	}
 	if turnIndex > 0 {
 		return fmt.Sprintf("%s_turn_%02d.zip", base, turnIndex)
 	}
 	return base + ".zip"
+}
+
+func aiReadExportMarkdownFilename(scope string) string {
+	if scope == "conversation" {
+		return "conversation.md"
+	}
+	return "answer.md"
 }
 
 func aiReadExportAssetName(figure model.Figure) string {

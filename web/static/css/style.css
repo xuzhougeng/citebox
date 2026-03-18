@@ -1823,6 +1823,13 @@ button {
     line-height: 1.6;
 }
 
+.ai-session-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    flex-wrap: wrap;
+}
+
 .ai-conversation {
     display: grid;
     gap: 0.85rem;
