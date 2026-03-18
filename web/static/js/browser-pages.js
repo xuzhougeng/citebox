@@ -108,7 +108,7 @@ const BrowserUI = {
                         <button class="${noteButtonClass}" type="button" data-action="note">查看笔记</button>
                         <button class="${previewButtonClass}" type="button" data-action="preview">查看大图</button>
                         <button class="btn btn-outline" type="button" data-action="paper">查看文献</button>
-                        <a class="btn btn-outline" href="${Utils.resourceViewerURL('image', figure.image_url)}" target="_blank" rel="noreferrer">原图</a>
+                        <a class="btn btn-outline" href="${Utils.resourceViewerURL('image', figure.image_url)}">原图</a>
                     </div>
                 </div>
             </article>
@@ -1250,7 +1250,7 @@ const FigureViewer = {
 
                     <div class="figure-lightbox-actions">
                         <button class="btn btn-primary" type="button" data-figure-action="open-paper">查看来源文献</button>
-                        <a class="btn btn-outline" href="${Utils.resourceViewerURL('image', figure.image_url)}" target="_blank" rel="noreferrer">打开原图</a>
+                        <a class="btn btn-outline" href="${Utils.resourceViewerURL('image', figure.image_url)}">打开原图</a>
                         ${canUseDesktopSave
                             ? '<button class="btn btn-outline" type="button" data-figure-action="download-image">下载图片</button>'
                             : `<a class="btn btn-outline" href="${figure.image_url}" download="${Utils.escapeHTML(figure.filename || 'figure.png')}">下载图片</a>`}
@@ -1612,7 +1612,7 @@ const NoteViewer = {
                     <div class="note-lightbox-actions">
                         <button class="btn btn-outline" type="button" data-note-action="open-preview">查看大图</button>
                         <button class="btn btn-outline" type="button" data-note-action="open-paper">查看文献</button>
-                        <a class="btn btn-outline" href="${Utils.resourceViewerURL('image', figure.image_url)}" target="_blank" rel="noreferrer">原图</a>
+                        <a class="btn btn-outline" href="${Utils.resourceViewerURL('image', figure.image_url)}">原图</a>
                     </div>
 
                     <div class="note-lightbox-tip">
