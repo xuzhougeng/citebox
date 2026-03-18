@@ -110,6 +110,8 @@ const SettingsPage = {
         this.logoutButton.addEventListener('click', () => this.logout());
         document.addEventListener('keydown', (event) => {
             if (event.key === 'Escape' && this.aiModelModal && !this.aiModelModal.classList.contains('hidden')) {
+                event.preventDefault();
+                event.stopPropagation();
                 this.closeAIModelModal();
             }
         });
@@ -575,14 +577,17 @@ const SettingsPage = {
         return value;
     },
 
-    exportDatabase() {
-        const link = document.createElement('a');
-        link.href = '/api/database/export';
-        link.download = `library_backup_${new Date().toISOString().slice(0, 10)}.db`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        Utils.showToast('数据库导出开始');
+    async exportDatabase() {
+        try {
+            const fallbackName = `library_backup_${new Date().toISOString().slice(0, 10)}.db`;
+            const result = await requestBlob('/api/database/export');
+            const saved = await Utils.saveBlobDownload(result.blob, result.filename || fallbackName);
+            if (saved) {
+                Utils.showToast('数据库导出完成');
+            }
+        } catch (error) {
+            Utils.showToast(error.message || '数据库导出失败', 'error');
+        }
     },
 
     async importDatabase() {

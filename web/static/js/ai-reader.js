@@ -569,8 +569,10 @@ const AIReaderPage = {
                 answer: turn.answer,
                 turn_index: turnIndex + 1
             });
-            this.saveBlobDownload(result.blob, result.filename || this.fallbackExportFilename(paper, turnIndex + 1));
-            Utils.showToast('Markdown 导出完成');
+            const saved = await Utils.saveBlobDownload(result.blob, result.filename || this.fallbackExportFilename(paper, turnIndex + 1));
+            if (saved) {
+                Utils.showToast('Markdown 导出完成');
+            }
         } catch (error) {
             Utils.showToast(error.message, 'error');
         } finally {
@@ -600,8 +602,10 @@ const AIReaderPage = {
                 scope: 'conversation',
                 content: markdown
             });
-            this.saveBlobDownload(result.blob, result.filename || this.fallbackConversationExportFilename(paper));
-            Utils.showToast('对话导出完成');
+            const saved = await Utils.saveBlobDownload(result.blob, result.filename || this.fallbackConversationExportFilename(paper));
+            if (saved) {
+                Utils.showToast('对话导出完成');
+            }
         } catch (error) {
             Utils.showToast(error.message, 'error');
         } finally {
@@ -738,17 +742,6 @@ const AIReaderPage = {
         ].join('\n').trim());
 
         return [...header, ...rounds].join('\n').trim();
-    },
-
-    saveBlobDownload(blob, filename) {
-        const objectURL = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = objectURL;
-        link.download = filename || 'ai_reader_export.zip';
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-        setTimeout(() => URL.revokeObjectURL(objectURL), 1000);
     },
 
     syncUpdatedPaper(updatedPaper) {

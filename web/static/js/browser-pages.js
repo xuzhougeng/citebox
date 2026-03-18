@@ -181,6 +181,8 @@ const FigureViewer = {
             const target = event.target;
             const isEditableTarget = target instanceof HTMLElement && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName));
             if (event.key === 'Escape') {
+                event.preventDefault();
+                event.stopPropagation();
                 this.close();
                 return;
             }
@@ -224,6 +226,9 @@ const FigureViewer = {
                     if (typeof this.onOpenPaper === 'function') {
                         await this.onOpenPaper(this.currentFigure.paper_id);
                     }
+                }
+                if (button.dataset.figureAction === 'download-image') {
+                    await this.downloadCurrentImage();
                 }
                 return;
             }
@@ -930,6 +935,30 @@ const FigureViewer = {
         });
     },
 
+    async downloadCurrentImage() {
+        if (!this.currentFigure?.image_url) {
+            Utils.showToast('当前图片无法下载', 'error');
+            return;
+        }
+
+        const filename = this.currentFigure.filename || 'figure.png';
+        try {
+            const response = await fetch(this.currentFigure.image_url, {
+                credentials: 'same-origin'
+            });
+            if (!response.ok) {
+                throw new Error(`图片下载失败 (${response.status})`);
+            }
+
+            const saved = await Utils.saveBlobDownload(await response.blob(), filename);
+            if (saved) {
+                Utils.showToast('图片已保存');
+            }
+        } catch (error) {
+            Utils.showToast(error.message || '图片下载失败', 'error');
+        }
+    },
+
     async copyAIResult(kind) {
         const text = this.copyTextForCurrentResult(kind);
         if (!text) {
@@ -1147,6 +1176,7 @@ const FigureViewer = {
         const canPrev = this.canMovePrevious();
         const canNext = this.canMoveNext();
         const aiLoading = Boolean(this.aiRequestState?.loading);
+        const canUseDesktopSave = Utils.supportsDesktopSave();
         const captionDraft = this.captionDraft ?? (figure.caption || '');
         const notePreview = String(figure.notes_text || '').replace(/\s+/g, ' ').trim();
         const editableTags = (figure.tags || []).map((tag) => `
@@ -1221,7 +1251,9 @@ const FigureViewer = {
                     <div class="figure-lightbox-actions">
                         <button class="btn btn-primary" type="button" data-figure-action="open-paper">查看来源文献</button>
                         <a class="btn btn-outline" href="${figure.image_url}" target="_blank" rel="noreferrer">打开原图</a>
-                        <a class="btn btn-outline" href="${figure.image_url}" download="${Utils.escapeHTML(figure.filename || 'figure.png')}">下载图片</a>
+                        ${canUseDesktopSave
+                            ? '<button class="btn btn-outline" type="button" data-figure-action="download-image">下载图片</button>'
+                            : `<a class="btn btn-outline" href="${figure.image_url}" download="${Utils.escapeHTML(figure.filename || 'figure.png')}">下载图片</a>`}
                     </div>
 
                     <section class="figure-lightbox-ai">
