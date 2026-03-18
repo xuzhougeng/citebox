@@ -15,6 +15,7 @@ import (
 	"github.com/xuzhougeng/citebox/internal/app"
 	"github.com/xuzhougeng/citebox/internal/config"
 	"github.com/xuzhougeng/citebox/internal/desktopicon"
+	"github.com/xuzhougeng/citebox/internal/desktopruntime"
 	"github.com/xuzhougeng/citebox/internal/logging"
 )
 
@@ -89,6 +90,9 @@ func main() {
 
 	w.SetTitle(desktopAppName)
 	w.SetSize(windowWidth, windowHeight, webview.HintNone)
+	if err := desktopruntime.Configure(w, desktopAppName); err != nil {
+		logger.Warn("failed to configure desktop runtime integrations", "error", err)
+	}
 	w.Navigate(baseURL)
 	w.Run()
 
