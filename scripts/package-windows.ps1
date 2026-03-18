@@ -8,6 +8,7 @@ $ErrorActionPreference = "Stop"
 $binaryName = "citebox"
 $packageDir = Join-Path "dist" "$binaryName-windows-$Version"
 $archivePath = "$packageDir.zip"
+$buildTime = Get-Date -AsUTC -Format "yyyy-MM-ddTHH:mm:ssZ"
 
 if (Test-Path $packageDir) {
     Remove-Item $packageDir -Recurse -Force
@@ -18,7 +19,7 @@ New-Item -ItemType Directory -Path (Join-Path $packageDir "data\library\figures"
 
 $env:GOOS = "windows"
 $env:GOARCH = "amd64"
-go build -trimpath -ldflags "-s -w" -o (Join-Path $packageDir "$binaryName.exe") ./cmd/server
+go build -trimpath -ldflags "-s -w -X github.com/xuzhougeng/citebox/internal/buildinfo.Version=$Version -X github.com/xuzhougeng/citebox/internal/buildinfo.BuildTime=$buildTime" -o (Join-Path $packageDir "$binaryName.exe") ./cmd/server
 Remove-Item Env:GOOS
 Remove-Item Env:GOARCH
 

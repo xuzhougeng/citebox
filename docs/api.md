@@ -22,6 +22,7 @@
   - 分组：`/api/groups`
   - 标签：`/api/tags`
   - AI：`/api/ai/...`
+  - 版本检查：`/api/settings/version`
   - 提取器设置：`/api/settings/extractor`
   - 数据库备份导入导出：`/api/database/...`
   - 鉴权：`/api/auth/...`
@@ -485,6 +486,38 @@ AI 流式阅读通过：
 - 返回 `application/zip`
 
 ### 提取器设置
+
+#### `GET /api/settings/version`
+
+用途：
+
+- 获取当前运行版本，以及与 GitHub 最新正式 Release 的比较结果
+
+查询参数：
+
+| 参数 | 说明 |
+| --- | --- |
+| `refresh=1` | 强制刷新，不走服务端短时缓存 |
+
+返回字段包括：
+
+- `current_version`
+- `build_time`
+- `latest_version`
+- `latest_release_url`
+- `published_at`
+- `checked_at`
+- `status`
+- `is_latest`
+- `has_update`
+- `message`
+
+状态值说明：
+
+- `latest`：当前就是最新正式版本
+- `update_available`：GitHub Release 上有更高版本
+- `ahead`：当前构建高于或晚于最新正式 Release，例如开发构建
+- `unknown`：当前版本号不可比较，或暂时无法获取远端版本信息
 
 #### `GET /api/settings/extractor`
 

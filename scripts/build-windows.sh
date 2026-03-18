@@ -5,7 +5,8 @@ set -e
 
 BINARY_NAME="citebox"
 VERSION=${VERSION:-$(git describe --tags --always --dirty 2>/dev/null || echo "dev")}
-BUILD_TIME=$(date -u '+%Y-%m-%d %H:%M:%S')
+BUILD_TIME=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
+BUILDINFO_PKG="github.com/xuzhougeng/citebox/internal/buildinfo"
 
 echo "========================================"
 echo "Building CiteBox for Windows"
@@ -20,7 +21,7 @@ mkdir -p dist
 # Build Windows AMD64 binary
 echo "[1/3] Building Windows AMD64 executable..."
 GOOS=windows GOARCH=amd64 go build \
-    -ldflags "-s -w -X main.Version=$VERSION -X 'main.BuildTime=$BUILD_TIME'" \
+    -ldflags "-s -w -X ${BUILDINFO_PKG}.Version=${VERSION} -X ${BUILDINFO_PKG}.BuildTime=${BUILD_TIME}" \
     -o bin/windows/${BINARY_NAME}.exe \
     ./cmd/server
 

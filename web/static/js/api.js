@@ -370,6 +370,11 @@ const API = {
         });
     },
 
+    getVersionStatus(forceRefresh = false) {
+        const suffix = forceRefresh ? '?refresh=1' : '';
+        return requestJSON(`${API_BASE}/settings/version${suffix}`);
+    },
+
     importDatabase(formData) {
         return requestJSON(`${API_BASE}/database/import`, {
             method: 'POST',

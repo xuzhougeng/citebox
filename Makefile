@@ -5,13 +5,15 @@
 BINARY_NAME=citebox
 DESKTOP_BINARY_NAME=$(BINARY_NAME)-desktop
 VERSION=$(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
+BUILD_TIME=$(shell date -u '+%Y-%m-%dT%H:%M:%SZ')
+BUILDINFO_PKG=github.com/xuzhougeng/citebox/internal/buildinfo
 
 # Build flags for smaller binary
-LDFLAGS=-ldflags "-s -w"
+LDFLAGS=-ldflags "-s -w -X $(BUILDINFO_PKG).Version=$(VERSION) -X $(BUILDINFO_PKG).BuildTime=$(BUILD_TIME)"
 DESKTOP_LDFLAGS=$(LDFLAGS)
 
 ifeq ($(OS),Windows_NT)
-DESKTOP_LDFLAGS=-ldflags "-s -w -H windowsgui"
+DESKTOP_LDFLAGS=-ldflags "-s -w -H windowsgui -X $(BUILDINFO_PKG).Version=$(VERSION) -X $(BUILDINFO_PKG).BuildTime=$(BUILD_TIME)"
 endif
 
 # =============================================================================

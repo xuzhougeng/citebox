@@ -148,12 +148,13 @@ func buildHandler(
 	webRoot string,
 ) http.Handler {
 	aiSvc := service.NewAIService(repo, cfg, logger.With("component", "ai_service"))
+	versionSvc := service.NewVersionService()
 	paperHandler := handler.NewPaperHandler(librarySvc)
 	figureHandler := handler.NewFigureHandler(librarySvc)
 	groupHandler := handler.NewGroupHandler(librarySvc)
 	tagHandler := handler.NewTagHandler(librarySvc)
 	aiHandler := handler.NewAIHandler(aiSvc)
-	settingsHandler := handler.NewSettingsHandler(librarySvc)
+	settingsHandler := handler.NewSettingsHandler(librarySvc, versionSvc)
 	databaseHandler := handler.NewDatabaseHandler(librarySvc)
 	sessionManager := service.NewSessionManager(24 * time.Hour)
 	authHandler := handler.NewAuthHandler(librarySvc, sessionManager)
@@ -339,6 +340,15 @@ func buildHandler(
 			settingsHandler.GetExtractorSettings(w, r)
 		case http.MethodPut:
 			settingsHandler.UpdateExtractorSettings(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	mux.HandleFunc("/api/settings/version", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			settingsHandler.GetVersionStatus(w, r)
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}

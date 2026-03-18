@@ -42,6 +42,9 @@ const SettingsPage = {
         this.extractorTimeoutInput = document.getElementById('extractorTimeoutInput');
         this.extractorPollIntervalInput = document.getElementById('extractorPollIntervalInput');
         this.extractorSummary = document.getElementById('extractorSummary');
+        this.versionSummary = document.getElementById('versionSummary');
+        this.checkVersionButton = document.getElementById('checkVersionButton');
+        this.versionReleaseLink = document.getElementById('versionReleaseLink');
 
         this.exportDbButton = document.getElementById('exportDbButton');
         this.importDbForm = document.getElementById('importDbForm');
@@ -90,6 +93,9 @@ const SettingsPage = {
             event.preventDefault();
             await this.saveExtractorSettings();
         });
+        this.checkVersionButton.addEventListener('click', async () => {
+            await this.loadVersionStatus(true);
+        });
 
         this.exportDbButton.addEventListener('click', () => this.exportDatabase());
         this.importDbForm.addEventListener('submit', async (event) => {
@@ -111,7 +117,7 @@ const SettingsPage = {
 
     async bootstrap() {
         try {
-            await Promise.all([this.loadAISettings(), this.loadExtractorSettings()]);
+            await Promise.all([this.loadAISettings(), this.loadExtractorSettings(), this.loadVersionStatus()]);
         } catch (error) {
             Utils.showToast(error.message, 'error');
         }
@@ -203,6 +209,31 @@ const SettingsPage = {
         this.renderExtractorSummary(settings);
     },
 
+    async loadVersionStatus(forceRefresh = false) {
+        const button = this.checkVersionButton;
+        const originalLabel = button?.textContent || '';
+        if (button) {
+            button.disabled = true;
+            button.textContent = forceRefresh ? '检查中...' : '载入中...';
+        }
+
+        try {
+            const status = await API.getVersionStatus(forceRefresh);
+            this.renderVersionSummary(status);
+            if (forceRefresh) {
+                const toastMessage = status.has_update
+                    ? `发现新版本 ${status.latest_version || ''}`.trim()
+                    : (status.message || '版本检查已完成');
+                Utils.showToast(toastMessage);
+            }
+        } finally {
+            if (button) {
+                button.disabled = false;
+                button.textContent = originalLabel || '检查更新';
+            }
+        }
+    },
+
     async saveExtractorSettings() {
         const payload = {
             extractor_url: this.extractorURLInput.value.trim(),
@@ -216,6 +247,63 @@ const SettingsPage = {
         const response = await API.updateExtractorSettings(payload);
         this.renderExtractorSummary(response.settings);
         Utils.showToast('PDF 提取服务配置已保存');
+    },
+
+    renderVersionSummary(status = {}) {
+        const badge = this.versionStatusBadge(status.status, status.message);
+        const currentVersion = status.current_version || 'dev';
+        const currentDetail = status.build_time
+            ? `构建时间：${Utils.escapeHTML(Utils.formatDate(status.build_time))}`
+            : '构建时间未注入';
+        const latestVersion = status.latest_version || '暂未获取';
+        const latestDetail = status.published_at
+            ? `发布时间：${Utils.escapeHTML(Utils.formatDate(status.published_at))}`
+            : '尚无发布时间信息';
+        const checkedAt = status.checked_at
+            ? Utils.formatDate(status.checked_at)
+            : '尚未完成检查';
+
+        this.versionSummary.innerHTML = `
+            <div>
+                <span>当前版本</span>
+                <strong>${Utils.escapeHTML(currentVersion)}</strong>
+                <p>${currentDetail}</p>
+            </div>
+            <div>
+                <span>检查结果</span>
+                <strong>${badge}</strong>
+                <p>${Utils.escapeHTML(status.message || '尚未检查最新版本')}</p>
+            </div>
+            <div>
+                <span>最新正式版本</span>
+                <strong>${Utils.escapeHTML(latestVersion)}</strong>
+                <p>${latestDetail}</p>
+            </div>
+            <div>
+                <span>最近检查</span>
+                <strong>${Utils.escapeHTML(checkedAt)}</strong>
+                <p>${status.latest_release_url ? `下载页面：<a href="${Utils.escapeHTML(status.latest_release_url)}" target="_blank" rel="noreferrer">${Utils.escapeHTML(status.latest_release_url)}</a>` : '暂无可用的 Release 链接'}</p>
+            </div>
+        `;
+
+        if (status.latest_release_url) {
+            this.versionReleaseLink.href = status.latest_release_url;
+            this.versionReleaseLink.classList.remove('hidden');
+        } else {
+            this.versionReleaseLink.href = '#';
+            this.versionReleaseLink.classList.add('hidden');
+        }
+    },
+
+    versionStatusBadge(status, message) {
+        const badges = {
+            latest: { label: '已是最新', tone: 'tone-success' },
+            update_available: { label: '发现更新', tone: 'tone-error' },
+            ahead: { label: '当前更高', tone: 'tone-info' },
+            unknown: { label: '无法判断', tone: 'tone-info' }
+        };
+        const badge = badges[status] || badges.unknown;
+        return `<span class="status-badge ${badge.tone}" title="${Utils.escapeHTML(message || badge.label)}">${Utils.escapeHTML(badge.label)}</span>`;
     },
 
     providerNoteText(provider) {

@@ -11,10 +11,14 @@ import (
 
 type SettingsHandler struct {
 	libraryService *service.LibraryService
+	versionService *service.VersionService
 }
 
-func NewSettingsHandler(libraryService *service.LibraryService) *SettingsHandler {
-	return &SettingsHandler{libraryService: libraryService}
+func NewSettingsHandler(libraryService *service.LibraryService, versionService *service.VersionService) *SettingsHandler {
+	return &SettingsHandler{
+		libraryService: libraryService,
+		versionService: versionService,
+	}
 }
 
 func (h *SettingsHandler) GetExtractorSettings(w http.ResponseWriter, r *http.Request) {
@@ -44,4 +48,15 @@ func (h *SettingsHandler) UpdateExtractorSettings(w http.ResponseWriter, r *http
 		"success":  true,
 		"settings": settings,
 	})
+}
+
+func (h *SettingsHandler) GetVersionStatus(w http.ResponseWriter, r *http.Request) {
+	refresh := false
+	switch r.URL.Query().Get("refresh") {
+	case "1", "true", "TRUE", "True", "yes", "YES", "Yes":
+		refresh = true
+	}
+
+	status := h.versionService.GetStatus(r.Context(), refresh)
+	sendJSON(w, http.StatusOK, status)
 }

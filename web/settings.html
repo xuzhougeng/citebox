@@ -41,6 +41,37 @@
         <section class="section-stack">
             <section class="manager-card">
                 <div class="manager-head">
+                    <div>
+                        <h2>版本信息</h2>
+                        <p>检查当前运行中的 CiteBox 是否已经落后于 GitHub 上的最新正式版本。</p>
+                    </div>
+                    <div class="submit-row">
+                        <a id="versionReleaseLink" class="btn btn-outline hidden" href="#" target="_blank" rel="noreferrer">查看 Release</a>
+                        <button id="checkVersionButton" class="btn btn-primary" type="button">检查更新</button>
+                    </div>
+                </div>
+                <div id="versionSummary" class="settings-summary-box">
+                    <div>
+                        <span>当前版本</span>
+                        <strong>载入中...</strong>
+                    </div>
+                    <div>
+                        <span>检查结果</span>
+                        <strong>正在查询最新版本</strong>
+                    </div>
+                    <div>
+                        <span>最新正式版本</span>
+                        <strong>载入中...</strong>
+                    </div>
+                    <div>
+                        <span>最近检查</span>
+                        <strong>载入中...</strong>
+                    </div>
+                </div>
+            </section>
+
+            <section class="manager-card">
+                <div class="manager-head">
                     <h2>AI 配置</h2>
                     <p>先维护模型池，再把不同模型绑定到问答、图片解读、标签建议、分组建议等场景。</p>
                 </div>
