@@ -29,6 +29,45 @@ const Utils = {
         }, 3000);
     },
 
+    supportsDesktopSave() {
+        return typeof window.citeboxDesktopSaveFile === 'function';
+    },
+
+    blobToBase64(blob) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => {
+                const result = String(reader.result || '');
+                const commaIndex = result.indexOf(',');
+                resolve(commaIndex >= 0 ? result.slice(commaIndex + 1) : result);
+            };
+            reader.onerror = () => reject(reader.error || new Error('读取文件失败'));
+            reader.readAsDataURL(blob);
+        });
+    },
+
+    triggerBlobDownload(blob, filename = 'download.bin') {
+        const objectURL = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = objectURL;
+        link.download = filename || 'download.bin';
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(objectURL), 1000);
+    },
+
+    async saveBlobDownload(blob, filename = 'download.bin') {
+        if (Utils.supportsDesktopSave()) {
+            const base64 = await Utils.blobToBase64(blob);
+            const result = await window.citeboxDesktopSaveFile(filename || 'download.bin', base64);
+            return Boolean(result && result.saved);
+        }
+
+        Utils.triggerBlobDownload(blob, filename);
+        return true;
+    },
+
     debounce(func, wait) {
         let timeout;
         return function executedFunction(...args) {
@@ -134,6 +173,8 @@ const Utils = {
 
             const onKeydown = (event) => {
                 if (event.key === 'Escape') {
+                    event.preventDefault();
+                    event.stopPropagation();
                     close(false);
                 }
             };
