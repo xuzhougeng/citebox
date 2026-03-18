@@ -7,6 +7,7 @@ const AIReaderPage = {
         selectedPaperID: null,
         loading: false,
         exportingTurnKey: '',
+        savingNoteTurnKey: '',
         sessions: {}
     },
 
@@ -60,6 +61,13 @@ const AIReaderPage = {
             if (!button) return;
             event.preventDefault();
             await this.downloadTurnMarkdown(Number(button.dataset.downloadTurnIndex));
+        });
+
+        this.conversation.addEventListener('click', async (event) => {
+            const button = event.target.closest('[data-save-turn-note-index]');
+            if (!button) return;
+            event.preventDefault();
+            await this.saveTurnToPaperNotes(Number(button.dataset.saveTurnNoteIndex));
         });
 
         this.keydownHandler = async (event) => {
@@ -333,6 +341,8 @@ const AIReaderPage = {
         turns.forEach((turn, index) => {
             const turnKey = this.turnExportKey(index);
             const exporting = this.state.exportingTurnKey === turnKey;
+            const noteKey = this.turnNoteKey(index);
+            const savingNote = this.state.savingNoteTurnKey === noteKey;
             const assistantBody = turn.answer
                 ? Utils.renderMarkdown(turn.answer, {
                     resolveFigureSrc: (figureID) => this.resolveFigureImageURL(figureID, paper)
@@ -355,14 +365,24 @@ const AIReaderPage = {
                     <div class="ai-turn-foot">
                         <span>${Utils.escapeHTML(this.turnMeta(turn))}</span>
                         ${turn.answer ? `
-                            <button
-                                class="btn btn-outline btn-small"
-                                type="button"
-                                data-download-turn-index="${index}"
-                                ${exporting ? 'disabled' : ''}
-                            >
-                                ${exporting ? '导出中...' : '下载 Markdown'}
-                            </button>
+                            <div class="ai-turn-foot-actions">
+                                <button
+                                    class="btn btn-outline btn-small"
+                                    type="button"
+                                    data-save-turn-note-index="${index}"
+                                    ${savingNote ? 'disabled' : ''}
+                                >
+                                    ${savingNote ? '写入中...' : '保存到文献备注'}
+                                </button>
+                                <button
+                                    class="btn btn-outline btn-small"
+                                    type="button"
+                                    data-download-turn-index="${index}"
+                                    ${exporting ? 'disabled' : ''}
+                                >
+                                    ${exporting ? '导出中...' : '下载 Markdown'}
+                                </button>
+                            </div>
                         ` : ''}
                     </div>
                 </article>
@@ -523,6 +543,50 @@ const AIReaderPage = {
         }
     },
 
+    async saveTurnToPaperNotes(turnIndex) {
+        const paper = this.currentPaper();
+        const turns = this.currentConversation();
+        const turn = turns[turnIndex];
+        if (!paper || !turn || !String(turn.answer || '').trim()) {
+            Utils.showToast('当前回答没有可保存的内容', 'error');
+            return;
+        }
+
+        const noteKey = this.turnNoteKey(turnIndex);
+        if (this.state.savingNoteTurnKey === noteKey) {
+            return;
+        }
+
+        this.state.savingNoteTurnKey = noteKey;
+        this.renderConversation();
+
+        try {
+            const latestPaper = await API.getPaper(paper.id);
+            const noteBlock = this.buildTurnNoteBlock(turn, turnIndex);
+            const currentNotes = String(latestPaper.notes_text || '').trim();
+            if (currentNotes.includes(noteBlock.trim())) {
+                Utils.showToast('这轮 AI 内容已经写入文献备注');
+                return;
+            }
+
+            const nextNotes = currentNotes ? `${currentNotes}\n\n---\n\n${noteBlock}` : noteBlock;
+            const payload = await API.updatePaper(paper.id, {
+                title: latestPaper.title,
+                abstract_text: latestPaper.abstract_text || '',
+                notes_text: nextNotes,
+                group_id: latestPaper.group_id ?? null,
+                tags: (latestPaper.tags || []).map((tag) => tag.name || tag)
+            });
+            this.syncUpdatedPaper(payload.paper);
+            Utils.showToast('AI 内容已写入文献备注');
+        } catch (error) {
+            Utils.showToast(error.message, 'error');
+        } finally {
+            this.state.savingNoteTurnKey = '';
+            this.renderConversation();
+        }
+    },
+
     turnMeta(turn) {
         const items = [];
         if (turn.provider) items.push(turn.provider);
@@ -549,8 +613,34 @@ const AIReaderPage = {
         return `${this.state.selectedPaperID || 0}:${turnIndex}`;
     },
 
+    turnNoteKey(turnIndex) {
+        return `${this.state.selectedPaperID || 0}:${turnIndex}`;
+    },
+
     fallbackExportFilename(paper, turnIndex) {
         return `paper_${paper?.id || 'ai'}_ai_reader_turn_${String(turnIndex).padStart(2, '0')}.zip`;
+    },
+
+    buildTurnNoteBlock(turn, turnIndex) {
+        const lines = [
+            `## AI伴读 · 第 ${turnIndex + 1} 轮`,
+            `问题：${String(turn.question || this.questionPlaceholder()).trim()}`,
+            `记录时间：${this.formatNoteTimestamp()}`,
+            `模型：${this.turnMeta(turn)}`,
+            '',
+            String(turn.answer || '').trim()
+        ];
+        return lines.join('\n').trim();
+    },
+
+    formatNoteTimestamp() {
+        return new Date().toLocaleString('zh-CN', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
     },
 
     saveBlobDownload(blob, filename) {
@@ -562,6 +652,23 @@ const AIReaderPage = {
         link.click();
         link.remove();
         setTimeout(() => URL.revokeObjectURL(objectURL), 1000);
+    },
+
+    syncUpdatedPaper(updatedPaper) {
+        if (!updatedPaper || !updatedPaper.id) return;
+        this.state.paperDetails[updatedPaper.id] = updatedPaper;
+        this.state.papers = (this.state.papers || []).map((paper) => (
+            paper.id === updatedPaper.id
+                ? {
+                    ...paper,
+                    ...updatedPaper,
+                    tags: updatedPaper.tags || paper.tags || [],
+                    figure_count: updatedPaper.figure_count ?? paper.figure_count
+                }
+                : paper
+        ));
+        this.renderPaperList();
+        this.renderPaperSummary();
     },
 
     queryPaperID() {

@@ -1886,6 +1886,14 @@ button {
     min-width: 0;
 }
 
+.ai-turn-foot-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 0.55rem;
+    flex-wrap: wrap;
+}
+
 .ai-question-field {
     margin-top: 1rem;
     padding: 1rem;
