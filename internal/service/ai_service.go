@@ -1,6 +1,7 @@
 package service
 
 import (
+	"archive/zip"
 	"bufio"
 	"bytes"
 	"context"
@@ -19,6 +20,8 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -41,6 +44,8 @@ const (
 	aiFigureImageMinJPEGQuality  = 58
 	aiFigureImageCompressionRuns = 6
 )
+
+var aiMarkdownFigureReferencePattern = regexp.MustCompile(`!\[([^\]]*)\]\(figure://([0-9]+)\)`)
 
 type AIService struct {
 	repo       *repository.LibraryRepository
@@ -176,6 +181,110 @@ func (s *AIService) ReadPaper(ctx context.Context, input model.AIReadRequest) (*
 	}
 
 	return buildAIReadResponse(prepared, mode, rawText), nil
+}
+
+func (s *AIService) ExportReadMarkdown(ctx context.Context, input model.AIReadExportRequest) (string, []byte, error) {
+	if input.PaperID <= 0 {
+		return "", nil, apperr.New(apperr.CodeInvalidArgument, "paper_id 无效")
+	}
+	if strings.TrimSpace(input.Answer) == "" {
+		return "", nil, apperr.New(apperr.CodeInvalidArgument, "缺少可导出的 Markdown 内容")
+	}
+	if err := ctx.Err(); err != nil {
+		return "", nil, err
+	}
+
+	paper, err := s.repo.GetPaperDetail(input.PaperID)
+	if err != nil {
+		return "", nil, err
+	}
+	if paper == nil {
+		return "", nil, apperr.New(apperr.CodeNotFound, "文献不存在")
+	}
+
+	figureByID := make(map[int64]model.Figure, len(paper.Figures))
+	for _, figure := range paper.Figures {
+		figureByID[figure.ID] = figure
+	}
+
+	type markdownAsset struct {
+		Path string
+		Data []byte
+	}
+
+	assetPaths := map[int64]string{}
+	assets := make([]markdownAsset, 0, 4)
+	var rewriteErr error
+	rewritten := aiMarkdownFigureReferencePattern.ReplaceAllStringFunc(input.Answer, func(match string) string {
+		if rewriteErr != nil {
+			return match
+		}
+
+		parts := aiMarkdownFigureReferencePattern.FindStringSubmatch(match)
+		if len(parts) != 3 {
+			return match
+		}
+
+		figureID, err := strconv.ParseInt(parts[2], 10, 64)
+		if err != nil {
+			rewriteErr = apperr.New(apperr.CodeInvalidArgument, "回答里的图片引用格式无效")
+			return match
+		}
+
+		assetPath, ok := assetPaths[figureID]
+		if !ok {
+			figure, exists := figureByID[figureID]
+			if !exists {
+				rewriteErr = apperr.New(apperr.CodeInvalidArgument, fmt.Sprintf("回答里引用了当前文献不存在的图片 #%d", figureID))
+				return match
+			}
+
+			var assetData []byte
+			assetPath, assetData, err = s.loadMarkdownExportAsset(figure)
+			if err != nil {
+				rewriteErr = err
+				return match
+			}
+
+			assetPaths[figureID] = assetPath
+			assets = append(assets, markdownAsset{
+				Path: assetPath,
+				Data: assetData,
+			})
+		}
+
+		return fmt.Sprintf("![%s](%s)", parts[1], assetPath)
+	})
+	if rewriteErr != nil {
+		return "", nil, rewriteErr
+	}
+
+	var archive bytes.Buffer
+	zipWriter := zip.NewWriter(&archive)
+
+	answerWriter, err := zipWriter.Create("answer.md")
+	if err != nil {
+		return "", nil, apperr.Wrap(apperr.CodeInternal, "创建 Markdown 导出文件失败", err)
+	}
+	if _, err := io.WriteString(answerWriter, rewritten); err != nil {
+		return "", nil, apperr.Wrap(apperr.CodeInternal, "写入 Markdown 导出内容失败", err)
+	}
+
+	for _, asset := range assets {
+		fileWriter, err := zipWriter.Create(asset.Path)
+		if err != nil {
+			return "", nil, apperr.Wrap(apperr.CodeInternal, "创建导出图片文件失败", err)
+		}
+		if _, err := fileWriter.Write(asset.Data); err != nil {
+			return "", nil, apperr.Wrap(apperr.CodeInternal, "写入导出图片文件失败", err)
+		}
+	}
+
+	if err := zipWriter.Close(); err != nil {
+		return "", nil, apperr.Wrap(apperr.CodeInternal, "生成导出压缩包失败", err)
+	}
+
+	return aiReadExportFilename(paper, input.TurnIndex), archive.Bytes(), nil
 }
 
 func (s *AIService) ReadPaperStream(ctx context.Context, input model.AIReadRequest, onEvent func(model.AIReadStreamEvent) error) error {
@@ -337,6 +446,32 @@ func buildAIReadResponse(prepared *aiReadPrepared, mode, rawText string) *model.
 		SuggestedGroup:  parsed.SuggestedGroup,
 		IncludedFigures: prepared.includedFigures,
 	}
+}
+
+func (s *AIService) loadMarkdownExportAsset(figure model.Figure) (string, []byte, error) {
+	assetPath := filepath.Join(s.config.FiguresDir(), figure.Filename)
+	data, err := os.ReadFile(assetPath)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return "", nil, apperr.New(apperr.CodeNotFound, fmt.Sprintf("导出失败：图片文件不存在（figure #%d）", figure.ID))
+		}
+		return "", nil, apperr.Wrap(apperr.CodeInternal, "读取导出图片失败", err)
+	}
+
+	return "assets/" + aiReadExportAssetName(figure), data, nil
+}
+
+func aiReadExportFilename(paper *model.Paper, turnIndex int) string {
+	base := fmt.Sprintf("paper_%d_ai_reader", paper.ID)
+	if turnIndex > 0 {
+		return fmt.Sprintf("%s_turn_%02d.zip", base, turnIndex)
+	}
+	return base + ".zip"
+}
+
+func aiReadExportAssetName(figure model.Figure) string {
+	ext := extensionForFigure(figure.ContentType, figure.Filename)
+	return fmt.Sprintf("figure-p%d-n%d-%d%s", figure.PageNumber, figure.FigureIndex, figure.ID, ext)
 }
 
 func normalizeAISettings(input model.AISettings) (model.AISettings, error) {
@@ -1741,6 +1876,16 @@ func extractStructuredAIResult(text string) aiStructuredResult {
 		}
 	}
 
+	for _, candidate := range []string{
+		trimmed,
+		trimCodeFence(trimmed),
+	} {
+		result, ok := parseStructuredAIJSONLoose(candidate)
+		if ok {
+			return result
+		}
+	}
+
 	return aiStructuredResult{Answer: trimmed}
 }
 
@@ -1761,6 +1906,192 @@ func parseStructuredAIJSON(candidate string) (aiStructuredResult, bool) {
 		SuggestedGroup: firstString(raw["suggested_group"], raw["group"]),
 	}
 	return result, true
+}
+
+func parseStructuredAIJSONLoose(candidate string) (aiStructuredResult, bool) {
+	candidate = strings.TrimSpace(candidate)
+	if candidate == "" {
+		return aiStructuredResult{}, false
+	}
+	if !strings.Contains(candidate, "\"answer\"") &&
+		!strings.Contains(candidate, "\"response\"") &&
+		!strings.Contains(candidate, "\"analysis\"") &&
+		!strings.Contains(candidate, "\"suggested_tags\"") &&
+		!strings.Contains(candidate, "\"suggested_group\"") {
+		return aiStructuredResult{}, false
+	}
+
+	result := aiStructuredResult{}
+	found := false
+
+	if answer, ok := extractPartialJSONStringField(candidate, "answer", "response", "analysis"); ok {
+		result.Answer = answer
+		found = true
+	}
+	if tags, ok := extractPartialJSONStringArrayField(candidate, "suggested_tags", "tags"); ok {
+		result.SuggestedTags = tags
+		found = true
+	}
+	if group, ok := extractPartialJSONStringField(candidate, "suggested_group", "group"); ok {
+		result.SuggestedGroup = group
+		found = true
+	}
+
+	return result, found
+}
+
+func extractPartialJSONStringField(text string, keys ...string) (string, bool) {
+	for _, key := range keys {
+		start, ok := findJSONFieldValueStart(text, key, '"')
+		if !ok {
+			continue
+		}
+		value, _, _ := decodePartialJSONString(text, start)
+		return value, true
+	}
+	return "", false
+}
+
+func extractPartialJSONStringArrayField(text string, keys ...string) ([]string, bool) {
+	for _, key := range keys {
+		start, ok := findJSONFieldValueStart(text, key, '[')
+		if !ok {
+			continue
+		}
+		values := make([]string, 0, 4)
+		i := start
+		for i < len(text) {
+			i = skipJSONWhitespace(text, i)
+			if i >= len(text) || text[i] == ']' {
+				break
+			}
+			if text[i] == ',' {
+				i++
+				continue
+			}
+			if text[i] != '"' {
+				break
+			}
+
+			value, next, _ := decodePartialJSONString(text, i+1)
+			if strings.TrimSpace(value) != "" {
+				values = append(values, value)
+			}
+			i = next
+		}
+
+		if len(values) > 0 {
+			return values, true
+		}
+	}
+	return nil, false
+}
+
+func findJSONFieldValueStart(text, key string, opening byte) (int, bool) {
+	pattern := `"` + key + `"`
+	searchFrom := 0
+	for searchFrom < len(text) {
+		relative := strings.Index(text[searchFrom:], pattern)
+		if relative < 0 {
+			return 0, false
+		}
+		index := searchFrom + relative + len(pattern)
+		index = skipJSONWhitespace(text, index)
+		if index >= len(text) || text[index] != ':' {
+			searchFrom += relative + len(pattern)
+			continue
+		}
+		index++
+		index = skipJSONWhitespace(text, index)
+		if index >= len(text) || text[index] != opening {
+			searchFrom += relative + len(pattern)
+			continue
+		}
+		return index + 1, true
+	}
+	return 0, false
+}
+
+func skipJSONWhitespace(text string, index int) int {
+	for index < len(text) {
+		switch text[index] {
+		case ' ', '\n', '\r', '\t':
+			index++
+		default:
+			return index
+		}
+	}
+	return index
+}
+
+func decodePartialJSONString(text string, start int) (string, int, bool) {
+	var builder strings.Builder
+	for i := start; i < len(text); i++ {
+		ch := text[i]
+		if ch == '"' {
+			return builder.String(), i + 1, true
+		}
+		if ch != '\\' {
+			builder.WriteByte(ch)
+			continue
+		}
+
+		i++
+		if i >= len(text) {
+			return builder.String(), len(text), false
+		}
+
+		switch text[i] {
+		case '"', '\\', '/':
+			builder.WriteByte(text[i])
+		case 'b':
+			builder.WriteByte('\b')
+		case 'f':
+			builder.WriteByte('\f')
+		case 'n':
+			builder.WriteByte('\n')
+		case 'r':
+			builder.WriteByte('\r')
+		case 't':
+			builder.WriteByte('\t')
+		case 'u':
+			if i+4 >= len(text) {
+				return builder.String(), len(text), false
+			}
+			if value, ok := parseJSONUnicodeEscape(text[i+1 : i+5]); ok {
+				builder.WriteRune(value)
+				i += 4
+				continue
+			}
+			builder.WriteString(`\u`)
+		default:
+			builder.WriteByte(text[i])
+		}
+	}
+
+	return builder.String(), len(text), false
+}
+
+func parseJSONUnicodeEscape(text string) (rune, bool) {
+	if len(text) != 4 {
+		return 0, false
+	}
+
+	var value rune
+	for _, ch := range text {
+		value <<= 4
+		switch {
+		case ch >= '0' && ch <= '9':
+			value += ch - '0'
+		case ch >= 'a' && ch <= 'f':
+			value += ch - 'a' + 10
+		case ch >= 'A' && ch <= 'F':
+			value += ch - 'A' + 10
+		default:
+			return 0, false
+		}
+	}
+	return value, true
 }
 
 func trimCodeFence(text string) string {

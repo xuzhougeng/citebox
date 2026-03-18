@@ -49,6 +49,53 @@ async function requestJSON(path, options = {}) {
     return payload;
 }
 
+function parseContentDispositionFilename(headerValue = '') {
+    const value = String(headerValue || '');
+    if (!value) return '';
+
+    const encodedMatch = value.match(/filename\*\s*=\s*UTF-8''([^;]+)/i);
+    if (encodedMatch?.[1]) {
+        try {
+            return decodeURIComponent(encodedMatch[1].trim());
+        } catch (error) {
+            return encodedMatch[1].trim();
+        }
+    }
+
+    const quotedMatch = value.match(/filename\s*=\s*"([^"]+)"/i);
+    if (quotedMatch?.[1]) {
+        return quotedMatch[1].trim();
+    }
+
+    const plainMatch = value.match(/filename\s*=\s*([^;]+)/i);
+    return plainMatch?.[1]?.trim() || '';
+}
+
+async function requestBlob(path, options = {}) {
+    const response = await fetch(path, {
+        credentials: 'same-origin',
+        ...options
+    });
+
+    if (response.status === 401) {
+        handleUnauthenticatedResponse();
+    }
+
+    if (!response.ok) {
+        const payload = await parseJSONResponse(response);
+        const error = new Error(payload.error || `请求失败 (${response.status})`);
+        error.code = payload.code || '';
+        error.status = response.status;
+        error.payload = payload;
+        throw error;
+    }
+
+    return {
+        blob: await response.blob(),
+        filename: parseContentDispositionFilename(response.headers.get('Content-Disposition'))
+    };
+}
+
 const API = {
     listPapers(params = {}) {
         const query = new URLSearchParams();
@@ -242,6 +289,16 @@ const API = {
 
     readPaperWithAI(data) {
         return requestJSON(`${API_BASE}/ai/read`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        });
+    },
+
+    exportAIReadMarkdown(data) {
+        return requestBlob(`${API_BASE}/ai/read/export`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'

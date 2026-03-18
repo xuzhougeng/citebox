@@ -1,13 +1,16 @@
 package service
 
 import (
+	"archive/zip"
 	"bytes"
 	"context"
 	"encoding/base64"
+	"fmt"
 	"image"
 	"image/color"
 	_ "image/jpeg"
 	"image/png"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -15,6 +18,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/xuzhougeng/citebox/internal/apperr"
 	"github.com/xuzhougeng/citebox/internal/model"
 	"github.com/xuzhougeng/citebox/internal/repository"
 )
@@ -335,6 +339,117 @@ func TestLoadFigureInputsCompressesOversizedFigure(t *testing.T) {
 	}
 }
 
+func TestExportReadMarkdownBundlesAssetsAndRewritesFigureRefs(t *testing.T) {
+	_, repo, cfg := newTestService(t)
+	aiSvc := NewAIService(repo, cfg, nil)
+
+	paper, err := repo.CreatePaper(repository.PaperUpsertInput{
+		Title:            "Export Markdown Study",
+		OriginalFilename: "export-markdown.pdf",
+		StoredPDFName:    "export-markdown.pdf",
+		FileSize:         512,
+		ContentType:      "application/pdf",
+		PDFText:          "Full text for export markdown.",
+		ExtractionStatus: "completed",
+		Figures: []repository.FigureUpsertInput{
+			{Filename: "figure_one.png", ContentType: "image/png", PageNumber: 3, FigureIndex: 1, Caption: "Figure one"},
+			{Filename: "figure_two.png", ContentType: "image/png", PageNumber: 5, FigureIndex: 2, Caption: "Figure two"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreatePaper() error = %v", err)
+	}
+
+	figureOneBytes := writeFigureFixture(t, filepath.Join(cfg.FiguresDir(), paper.Figures[0].Filename), 280, 180)
+	figureTwoBytes := writeFigureFixture(t, filepath.Join(cfg.FiguresDir(), paper.Figures[1].Filename), 300, 200)
+
+	filename, archive, err := aiSvc.ExportReadMarkdown(context.Background(), model.AIReadExportRequest{
+		PaperID:   paper.ID,
+		TurnIndex: 2,
+		Answer: strings.Join([]string{
+			"这是第一张图：",
+			"",
+			fmt.Sprintf("![第 3 页图 1](figure://%d)", paper.Figures[0].ID),
+			"",
+			"第二次再引用第一张图：",
+			fmt.Sprintf("![第 3 页图 1](figure://%d)", paper.Figures[0].ID),
+			"",
+			fmt.Sprintf("![第 5 页图 2](figure://%d)", paper.Figures[1].ID),
+		}, "\n"),
+	})
+	if err != nil {
+		t.Fatalf("ExportReadMarkdown() error = %v", err)
+	}
+
+	if filename != fmt.Sprintf("paper_%d_ai_reader_turn_02.zip", paper.ID) {
+		t.Fatalf("ExportReadMarkdown() filename = %q, want turn-specific zip name", filename)
+	}
+
+	reader, err := zip.NewReader(bytes.NewReader(archive), int64(len(archive)))
+	if err != nil {
+		t.Fatalf("zip.NewReader() error = %v", err)
+	}
+
+	entries := map[string][]byte{}
+	for _, file := range reader.File {
+		rc, err := file.Open()
+		if err != nil {
+			t.Fatalf("zip entry %s open error = %v", file.Name, err)
+		}
+		content, err := io.ReadAll(rc)
+		_ = rc.Close()
+		if err != nil {
+			t.Fatalf("zip entry %s read error = %v", file.Name, err)
+		}
+		entries[file.Name] = content
+	}
+
+	answer, ok := entries["answer.md"]
+	if !ok {
+		t.Fatalf("zip entries missing answer.md: %#v", entries)
+	}
+
+	firstAsset := fmt.Sprintf("assets/figure-p3-n1-%d.png", paper.Figures[0].ID)
+	secondAsset := fmt.Sprintf("assets/figure-p5-n2-%d.png", paper.Figures[1].ID)
+
+	answerText := string(answer)
+	if strings.Contains(answerText, "figure://") {
+		t.Fatalf("answer.md = %q, want rewritten asset references", answerText)
+	}
+	for _, want := range []string{firstAsset, secondAsset} {
+		if !strings.Contains(answerText, want) {
+			t.Fatalf("answer.md missing %q\n%s", want, answerText)
+		}
+	}
+
+	if got := entries[firstAsset]; !bytes.Equal(got, figureOneBytes) {
+		t.Fatalf("first asset bytes mismatch: got=%d want=%d", len(got), len(figureOneBytes))
+	}
+	if got := entries[secondAsset]; !bytes.Equal(got, figureTwoBytes) {
+		t.Fatalf("second asset bytes mismatch: got=%d want=%d", len(got), len(figureTwoBytes))
+	}
+	if len(entries) != 3 {
+		t.Fatalf("zip entry count = %d, want 3 (answer + 2 assets)", len(entries))
+	}
+}
+
+func TestExportReadMarkdownRejectsUnknownFigureReference(t *testing.T) {
+	_, repo, cfg := newTestService(t)
+	aiSvc := NewAIService(repo, cfg, nil)
+	paper := createTestPaper(t, repo)
+
+	_, _, err := aiSvc.ExportReadMarkdown(context.Background(), model.AIReadExportRequest{
+		PaperID: paper.ID,
+		Answer:  "![不存在的图](figure://999999)",
+	})
+	if err == nil {
+		t.Fatal("ExportReadMarkdown() error = nil, want invalid figure reference error")
+	}
+	if got := apperr.CodeOf(err); got != apperr.CodeInvalidArgument {
+		t.Fatalf("ExportReadMarkdown() code = %q, want %q", got, apperr.CodeInvalidArgument)
+	}
+}
+
 func TestBuildAIPromptsIncludePaperContext(t *testing.T) {
 	settings := model.DefaultAISettings()
 	paper := &model.Paper{
@@ -508,5 +623,30 @@ func TestExtractStructuredAIResultParsesCodeFenceJSON(t *testing.T) {
 	}
 	if result.SuggestedGroup != "GroupA" {
 		t.Fatalf("SuggestedGroup = %q, want %q", result.SuggestedGroup, "GroupA")
+	}
+}
+
+func TestExtractStructuredAIResultParsesPartialJSONAnswer(t *testing.T) {
+	result := extractStructuredAIResult("{\"answer\":\"FT 很重要\\n\\n### 1) 核心结论\\n可直接看原图：第 3 页图 1")
+
+	if !strings.Contains(result.Answer, "FT 很重要") {
+		t.Fatalf("Answer = %q, want salvaged answer text", result.Answer)
+	}
+	if !strings.Contains(result.Answer, "### 1) 核心结论") {
+		t.Fatalf("Answer = %q, want decoded markdown heading", result.Answer)
+	}
+	if strings.Contains(result.Answer, "{\"answer\"") {
+		t.Fatalf("Answer = %q, want parsed content instead of raw JSON", result.Answer)
+	}
+}
+
+func TestExtractStructuredAIResultParsesPartialJSONEscapesAndTags(t *testing.T) {
+	result := extractStructuredAIResult("{\"answer\":\"他说：\\\"FT 是关键\\\"。\\n第二行\",\"suggested_tags\":[\"FT\",\"FAC\"")
+
+	if result.Answer != "他说：\"FT 是关键\"。\n第二行" {
+		t.Fatalf("Answer = %q, want decoded escaped content", result.Answer)
+	}
+	if len(result.SuggestedTags) != 2 || result.SuggestedTags[0] != "FT" || result.SuggestedTags[1] != "FAC" {
+		t.Fatalf("SuggestedTags = %#v, want salvaged partial tags", result.SuggestedTags)
 	}
 }

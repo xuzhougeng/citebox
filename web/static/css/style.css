@@ -1874,8 +1874,16 @@ button {
 
 .ai-turn-foot {
     margin-top: 0.85rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
     color: var(--muted);
     font-size: 0.84rem;
+}
+
+.ai-turn-foot span {
+    min-width: 0;
 }
 
 .ai-question-field {
@@ -3599,6 +3607,7 @@ body.modal-open {
     }
 
     .ai-session-bar,
+    .ai-turn-foot,
     .figure-lightbox-ai-head,
     .note-lightbox-head-row,
     .manual-stage-head,
