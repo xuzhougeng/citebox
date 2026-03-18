@@ -22,8 +22,8 @@ func newAuthHandlerForTest(t *testing.T) (*AuthHandler, *service.LibraryService,
 	cfg := &config.Config{
 		StorageDir:              filepath.Join(root, "storage"),
 		DatabasePath:            filepath.Join(root, "library.db"),
-		AdminUsername:           "wanglab",
-		AdminPassword:           "wanglab789",
+		AdminUsername:           "citebox",
+		AdminPassword:           "citebox123",
 		ExtractorTimeoutSeconds: 1,
 		ExtractorPollInterval:   1,
 		ExtractorFileField:      "file",
@@ -50,7 +50,7 @@ func newAuthHandlerForTest(t *testing.T) (*AuthHandler, *service.LibraryService,
 func TestLoginSetsSessionCookie(t *testing.T) {
 	handler, _, sessionManager := newAuthHandlerForTest(t)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewBufferString(`{"username":"wanglab","password":"wanglab789"}`))
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewBufferString(`{"username":"citebox","password":"citebox123"}`))
 	w := httptest.NewRecorder()
 
 	handler.Login(w, req)
@@ -80,7 +80,7 @@ func TestLoginSetsSessionCookie(t *testing.T) {
 
 func TestLogoutClearsSessionCookie(t *testing.T) {
 	handler, _, sessionManager := newAuthHandlerForTest(t)
-	session, err := sessionManager.Create("wanglab")
+	session, err := sessionManager.Create("citebox")
 	if err != nil {
 		t.Fatalf("Create() error = %v", err)
 	}
@@ -113,16 +113,16 @@ func TestLogoutClearsSessionCookie(t *testing.T) {
 
 func TestChangePasswordInvalidatesAllSessions(t *testing.T) {
 	handler, libraryService, sessionManager := newAuthHandlerForTest(t)
-	currentSession, err := sessionManager.Create("wanglab")
+	currentSession, err := sessionManager.Create("citebox")
 	if err != nil {
 		t.Fatalf("Create(current) error = %v", err)
 	}
-	otherSession, err := sessionManager.Create("wanglab")
+	otherSession, err := sessionManager.Create("citebox")
 	if err != nil {
 		t.Fatalf("Create(other) error = %v", err)
 	}
 
-	req := httptest.NewRequest(http.MethodPost, "/api/auth/change-password", bytes.NewBufferString(`{"current_password":"wanglab789","new_password":"new-secret"}`))
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/change-password", bytes.NewBufferString(`{"current_password":"citebox123","new_password":"new-secret"}`))
 	req.AddCookie(&http.Cookie{Name: service.SessionCookieName, Value: currentSession.ID})
 	w := httptest.NewRecorder()
 
@@ -138,7 +138,7 @@ func TestChangePasswordInvalidatesAllSessions(t *testing.T) {
 	if _, ok := sessionManager.Validate(otherSession.ID); ok {
 		t.Fatal("ChangePassword() other session still valid")
 	}
-	if !libraryService.ValidateCredentials("wanglab", "new-secret") {
+	if !libraryService.ValidateCredentials("citebox", "new-secret") {
 		t.Fatal("ChangePassword() did not update runtime credentials")
 	}
 }

@@ -47,7 +47,7 @@ Quick start:
 2. Open the extracted folder.
 3. Double-click start.bat.
 
-Default account: wanglab / wanglab789
+Default account: citebox / citebox123
 Binary architecture: $hostArch
 
 Desktop mode stores data in:

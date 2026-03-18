@@ -71,7 +71,7 @@ Quick start:
 3. chmod +x citebox-desktop start.sh
 4. ./start.sh
 
-Default account: wanglab / wanglab789
+Default account: citebox / citebox123
 Binary architecture: ${HOST_ARCH}
 
 Desktop mode stores data in:

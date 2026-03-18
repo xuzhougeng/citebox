@@ -261,8 +261,8 @@ WorkingDirectory=/opt/citebox
 ExecStart=/opt/citebox/citebox
 Restart=on-failure
 Environment=SERVER_PORT=8080
-Environment=ADMIN_USERNAME=wanglab
-Environment=ADMIN_PASSWORD=wanglab789
+Environment=ADMIN_USERNAME=citebox
+Environment=ADMIN_PASSWORD=citebox123
 
 [Install]
 WantedBy=multi-user.target
@@ -289,8 +289,8 @@ make build-linux
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
 | `SERVER_PORT` | 8080 | 服务端口 |
-| `ADMIN_USERNAME` | wanglab | 管理员用户名 |
-| `ADMIN_PASSWORD` | wanglab789 | 管理员密码 |
+| `ADMIN_USERNAME` | citebox | 管理员用户名 |
+| `ADMIN_PASSWORD` | citebox123 | 管理员密码 |
 | `STORAGE_DIR` | ./data/library | 文件存储目录 |
 | `DATABASE_PATH` | ./data/library.db | 数据库文件路径 |
 | `PDF_EXTRACTOR_URL` | - | PDF 解析服务 URL |

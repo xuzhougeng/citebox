@@ -79,8 +79,8 @@ package-windows: build-windows
 		echo 'echo Starting server...'; \
 		echo 'echo.'; \
 		echo 'echo Default URL: http://localhost:8080'; \
-		echo 'echo Username: wanglab'; \
-		echo 'echo Password: wanglab789'; \
+		echo 'echo Username: citebox'; \
+		echo 'echo Password: citebox123'; \
 		echo 'echo.'; \
 		echo 'echo A browser window will open automatically.'; \
 		echo 'echo Close the "CiteBox" window to stop the app.'; \
@@ -102,8 +102,8 @@ package-windows: build-windows
 		echo 'echo.'; \
 		echo 'rem Customize settings below:'; \
 		echo 'set SERVER_PORT=8080'; \
-		echo 'set ADMIN_USERNAME=wanglab'; \
-		echo 'set ADMIN_PASSWORD=wanglab789'; \
+		echo 'set ADMIN_USERNAME=citebox'; \
+		echo 'set ADMIN_PASSWORD=citebox123'; \
 		echo 'rem set PDF_EXTRACTOR_URL=http://localhost:8000'; \
 		echo 'rem set STORAGE_DIR=./data/library'; \
 		echo 'rem set DATABASE_PATH=./data/library.db'; \
@@ -124,7 +124,7 @@ package-windows: build-windows
 		echo '快速开始:'; \
 		echo '  1. 解压后双击 start.bat'; \
 		echo '  2. 浏览器访问 http://localhost:8080'; \
-		echo '  3. 默认账号: wanglab / wanglab789'; \
+		echo '  3. 默认账号: citebox / citebox123'; \
 		echo ''; \
 		echo '自定义配置:'; \
 		echo '  编辑 start-with-config.bat 修改配置'; \
@@ -180,8 +180,8 @@ package-darwin: build-darwin
 		echo 'echo "Starting server..."'; \
 		echo 'echo ""'; \
 		echo 'echo "Default URL: http://localhost:8080"'; \
-		echo 'echo "Username: wanglab"'; \
-		echo 'echo "Password: wanglab789"'; \
+		echo 'echo "Username: citebox"'; \
+		echo 'echo "Password: citebox123"'; \
 		echo 'echo ""'; \
 		echo 'echo "Press Ctrl+C to stop"'; \
 		echo 'echo ""'; \
@@ -200,8 +200,8 @@ package-darwin: build-darwin
 		echo 'echo ""'; \
 		echo '# Customize settings below:'; \
 		echo 'export SERVER_PORT=8080'; \
-		echo 'export ADMIN_USERNAME=wanglab'; \
-		echo 'export ADMIN_PASSWORD=wanglab789'; \
+		echo 'export ADMIN_USERNAME=citebox'; \
+		echo 'export ADMIN_PASSWORD=citebox123'; \
 		echo '# export PDF_EXTRACTOR_URL=http://localhost:8000'; \
 		echo '# export STORAGE_DIR=./data/library'; \
 		echo '# export DATABASE_PATH=./data/library.db'; \
@@ -280,8 +280,8 @@ package-linux: build-linux
 		echo 'echo "Starting server..."'; \
 		echo 'echo ""'; \
 		echo 'echo "Default URL: http://localhost:8080"'; \
-		echo 'echo "Username: wanglab"'; \
-		echo 'echo "Password: wanglab789"'; \
+		echo 'echo "Username: citebox"'; \
+		echo 'echo "Password: citebox123"'; \
 		echo 'echo ""'; \
 		echo 'echo "Press Ctrl+C to stop"'; \
 		echo 'echo ""'; \
@@ -300,8 +300,8 @@ package-linux: build-linux
 		echo 'echo ""'; \
 		echo '# Customize settings below:'; \
 		echo 'export SERVER_PORT=8080'; \
-		echo 'export ADMIN_USERNAME=wanglab'; \
-		echo 'export ADMIN_PASSWORD=wanglab789'; \
+		echo 'export ADMIN_USERNAME=citebox'; \
+		echo 'export ADMIN_PASSWORD=citebox123'; \
 		echo '# export PDF_EXTRACTOR_URL=http://localhost:8000'; \
 		echo '# export STORAGE_DIR=./data/library'; \
 		echo '# export DATABASE_PATH=./data/library.db'; \

@@ -55,7 +55,7 @@ printf '%s\n' "========================================"
 printf '\n'
 printf '%s\n' "Starting server..."
 printf '%s\n' "Default URL: http://localhost:8080"
-printf '%s\n' "Default account: wanglab / wanglab789"
+printf '%s\n' "Default account: citebox / citebox123"
 printf '%s\n' "Press Ctrl+C to stop"
 printf '\n'
 
@@ -71,8 +71,8 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 cd "${SCRIPT_DIR}"
 
 export SERVER_PORT=8080
-export ADMIN_USERNAME=wanglab
-export ADMIN_PASSWORD=wanglab789
+export ADMIN_USERNAME=citebox
+export ADMIN_PASSWORD=citebox123
 # export PDF_EXTRACTOR_URL=http://127.0.0.1:8000
 # export STORAGE_DIR=./data/library
 # export DATABASE_PATH=./data/library.db
@@ -102,7 +102,7 @@ Quick start:
 4. ./start.sh
 
 Default URL: http://localhost:8080
-Default account: wanglab / wanglab789
+Default account: citebox / citebox123
 EOF
 
 chmod +x "${PACKAGE_DIR}/${BINARY_NAME}" "${PACKAGE_DIR}/start.sh" "${PACKAGE_DIR}/start-with-config.sh"
