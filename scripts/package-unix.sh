@@ -26,6 +26,8 @@ esac
 BINARY_NAME="citebox"
 PACKAGE_DIR="dist/${BINARY_NAME}-${PLATFORM}-${VERSION}"
 ARCHIVE_PATH="${PACKAGE_DIR}.tar.gz"
+BUILD_TIME="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+BUILDINFO_PKG="github.com/xuzhougeng/citebox/internal/buildinfo"
 
 rm -rf "${PACKAGE_DIR}"
 mkdir -p "${PACKAGE_DIR}/data/library/papers"
@@ -33,7 +35,7 @@ mkdir -p "${PACKAGE_DIR}/data/library/figures"
 
 GOOS="${GOOS_VALUE}" GOARCH=amd64 go build \
     -trimpath \
-    -ldflags "-s -w" \
+    -ldflags "-s -w -X ${BUILDINFO_PKG}.Version=${VERSION} -X ${BUILDINFO_PKG}.BuildTime=${BUILD_TIME}" \
     -o "${PACKAGE_DIR}/${BINARY_NAME}" \
     ./cmd/server
 

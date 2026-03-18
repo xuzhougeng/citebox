@@ -31,13 +31,15 @@ BINARY_NAME="citebox-desktop"
 PACKAGE_DIR="dist/${BINARY_NAME}-${PLATFORM}-${VERSION}"
 ARCHIVE_PATH="${PACKAGE_DIR}.tar.gz"
 HOST_ARCH="$(go env GOARCH)"
+BUILD_TIME="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+BUILDINFO_PKG="github.com/xuzhougeng/citebox/internal/buildinfo"
 
 rm -rf "${PACKAGE_DIR}"
 mkdir -p "${PACKAGE_DIR}"
 
 CGO_ENABLED=1 GOOS="${GOOS_VALUE}" go build \
     -trimpath \
-    -ldflags "-s -w" \
+    -ldflags "-s -w -X ${BUILDINFO_PKG}.Version=${VERSION} -X ${BUILDINFO_PKG}.BuildTime=${BUILD_TIME}" \
     -o "${PACKAGE_DIR}/${BINARY_NAME}" \
     ./cmd/desktop
 

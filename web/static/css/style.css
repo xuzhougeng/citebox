@@ -1694,6 +1694,10 @@ button {
     color: var(--accent-deep);
 }
 
+.settings-summary-box a {
+    color: var(--accent-deep);
+}
+
 .ai-paper-list {
     display: grid;
     gap: 0.8rem;

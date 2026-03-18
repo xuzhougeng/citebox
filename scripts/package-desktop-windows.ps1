@@ -9,6 +9,7 @@ $binaryName = "citebox-desktop"
 $packageDir = Join-Path "dist" "$binaryName-windows-$Version"
 $archivePath = "$packageDir.zip"
 $hostArch = go env GOARCH
+$buildTime = Get-Date -AsUTC -Format "yyyy-MM-ddTHH:mm:ssZ"
 
 if (Test-Path $packageDir) {
     Remove-Item $packageDir -Recurse -Force
@@ -18,7 +19,7 @@ New-Item -ItemType Directory -Path $packageDir -Force | Out-Null
 
 $env:CGO_ENABLED = "1"
 $env:GOOS = "windows"
-go build -trimpath -ldflags "-s -w -H windowsgui" -o (Join-Path $packageDir "$binaryName.exe") ./cmd/desktop
+go build -trimpath -ldflags "-s -w -H windowsgui -X github.com/xuzhougeng/citebox/internal/buildinfo.Version=$Version -X github.com/xuzhougeng/citebox/internal/buildinfo.BuildTime=$buildTime" -o (Join-Path $packageDir "$binaryName.exe") ./cmd/desktop
 Remove-Item Env:GOOS
 Remove-Item Env:CGO_ENABLED
 
