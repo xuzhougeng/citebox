@@ -305,12 +305,15 @@ func TestLoadFigureInputsCompressesOversizedFigure(t *testing.T) {
 
 	writeFigureFixture(t, filepath.Join(cfg.FiguresDir(), paper.Figures[0].Filename), 2600, 1600)
 
-	images, summaries, err := aiSvc.loadFigureInputs(paper, paper.Figures)
+	images, summaries, err := aiSvc.loadFigureInputs(paper, paper.Figures, model.AIActionPaperQA)
 	if err != nil {
 		t.Fatalf("loadFigureInputs() error = %v", err)
 	}
 	if len(summaries) != 1 {
 		t.Fatalf("loadFigureInputs() summaries = %d, want 1", len(summaries))
+	}
+	if !strings.Contains(summaries[0], "figure://") || !strings.Contains(summaries[0], "figure_id=") {
+		t.Fatalf("loadFigureInputs() summary = %q, want figure reference instructions", summaries[0])
 	}
 	if len(images) != 1 {
 		t.Fatalf("loadFigureInputs() images = %d, want 1", len(images))
@@ -409,6 +412,41 @@ func TestBuildAIPromptsIncludeConversationHistoryForPaperQA(t *testing.T) {
 		"第 1 轮用户: 先概括一下这篇文章。",
 		"第 1 轮助手: 它主要研究细胞图谱。",
 		"这篇文章最关键的证据是什么？",
+		"answer 支持使用 Markdown",
+		"figure://<figure_id>",
+	} {
+		if !strings.Contains(userPrompt, want) {
+			t.Fatalf("userPrompt missing %q\n%s", want, userPrompt)
+		}
+	}
+}
+
+func TestBuildAIPromptsIncludeFigureReferenceFormatForPaperQA(t *testing.T) {
+	settings := model.DefaultAISettings()
+	paper := &model.Paper{
+		ID:               13,
+		Title:            "Figure Ref Study",
+		OriginalFilename: "figure-ref-study.pdf",
+		PDFText:          "Full text",
+	}
+
+	_, userPrompt := buildAIPrompts(
+		settings,
+		paper,
+		nil,
+		nil,
+		model.AIActionPaperQA,
+		"请结合图片说明主要发现。",
+		nil,
+		[]string{"- figure_id=182；标签=第 3 页图 1；caption=Signal map；如需插图请使用 ![第 3 页图 1](figure://182)"},
+		1,
+		true,
+	)
+
+	for _, want := range []string{
+		"figure_id=182",
+		"![第 3 页图 1](figure://182)",
+		"不要伪造本地文件路径",
 	} {
 		if !strings.Contains(userPrompt, want) {
 			t.Fatalf("userPrompt missing %q\n%s", want, userPrompt)

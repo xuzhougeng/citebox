@@ -161,7 +161,9 @@ User Prompt:
 1. 只返回 JSON 对象，不要使用 Markdown 代码块。
 2. JSON 必须包含 answer、suggested_tags、suggested_group 三个字段。
 3. 如果当前任务不需要标签建议或分组建议，请分别返回空数组 [] 和空字符串 ""。
-4. answer 中请直接给出结论、依据和必要的限制说明。</pre>
+4. answer 中请直接给出结论、依据和必要的限制说明。
+5. answer 支持使用 Markdown；如果需要插入论文图片，只能使用系统提供的图片引用，格式为 ![图片说明](figure://&lt;figure_id&gt;)。
+6. 不要伪造本地文件路径、文件名或外部图片 URL。</pre>
                         </details>
                     </label>
                     <label class="field prompt-field">

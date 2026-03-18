@@ -282,7 +282,7 @@ func (s *AIService) prepareRead(input model.AIReadRequest, structuredOutput bool
 		return nil, err
 	}
 
-	images, figureSummaries, err := s.loadFigureInputs(paper, selectedFigures)
+	images, figureSummaries, err := s.loadFigureInputs(paper, selectedFigures, action)
 	if err != nil {
 		return nil, err
 	}
@@ -676,6 +676,14 @@ func buildAIPrompts(
 
 func aiOutputRequirements(action model.AIAction, structuredOutput bool) string {
 	if structuredOutput {
+		if action == model.AIActionPaperQA {
+			return `1. 只返回 JSON 对象，不要使用 Markdown 代码块。
+2. JSON 必须包含 answer、suggested_tags、suggested_group 三个字段。
+3. 如果当前任务不需要标签建议或分组建议，请分别返回空数组 [] 和空字符串 ""。
+4. answer 中请直接给出结论、依据和必要的限制说明。
+5. answer 支持使用 Markdown；如果需要插入论文图片，只能使用系统提供的图片引用，格式为 ![图片说明](figure://<figure_id>)。
+6. 不要伪造本地文件路径、文件名或外部图片 URL。`
+		}
 		if action == model.AIActionTagSuggestion {
 			return `1. 只返回 JSON 对象，不要使用 Markdown 代码块。
 2. JSON 必须包含 suggested_tags 字段（字符串数组）。
@@ -807,13 +815,13 @@ func selectFiguresForAI(paper *model.Paper, action model.AIAction, figureID int6
 	return figures, nil
 }
 
-func (s *AIService) loadFigureInputs(paper *model.Paper, figures []model.Figure) ([]aiImageInput, []string, error) {
+func (s *AIService) loadFigureInputs(paper *model.Paper, figures []model.Figure, action model.AIAction) ([]aiImageInput, []string, error) {
 	images := make([]aiImageInput, 0, len(figures))
 	summaries := make([]string, 0, len(figures))
 	totalBytes := 0
 	budgetReached := false
 	for _, figure := range figures {
-		summary := fmt.Sprintf("- 第 %d 页图 %d：caption=%s", figure.PageNumber, figure.FigureIndex, fallbackText(strings.TrimSpace(figure.Caption), "无"))
+		summary := buildAIFigureSummary(figure, action)
 		summaries = append(summaries, summary)
 
 		if budgetReached {
@@ -871,6 +879,15 @@ func (s *AIService) loadFigureInputs(paper *model.Paper, figures []model.Figure)
 	}
 
 	return images, summaries, nil
+}
+
+func buildAIFigureSummary(figure model.Figure, action model.AIAction) string {
+	label := fmt.Sprintf("第 %d 页图 %d", figure.PageNumber, figure.FigureIndex)
+	caption := fallbackText(strings.TrimSpace(figure.Caption), "无")
+	if action == model.AIActionPaperQA {
+		return fmt.Sprintf("- figure_id=%d；标签=%s；caption=%s；如需插图请使用 ![%s](figure://%d)", figure.ID, label, caption, label, figure.ID)
+	}
+	return fmt.Sprintf("- %s：caption=%s", label, caption)
 }
 
 func compressAIImage(data []byte, mimeType string) ([]byte, string, error) {

@@ -197,7 +197,7 @@ const Utils = {
             .replaceAll("'", '&#39;');
     },
 
-    renderMarkdown(value = '') {
+    renderMarkdown(value = '', options = {}) {
         const source = String(value || '').replace(/\r\n?/g, '\n').trim();
         if (!source) {
             return '<div class="markdown-empty">暂无笔记内容</div>';
@@ -228,14 +228,14 @@ const Utils = {
         text = text.replace(/`([^`\n]+)`/g, (_, code) => stash(`<code class="markdown-inline-code">${code}</code>`));
 
         const blocks = text.split(/\n{2,}/).map((block) => block.trim()).filter(Boolean);
-        let html = blocks.map((block) => Utils.renderMarkdownBlock(block)).join('');
+        let html = blocks.map((block) => Utils.renderMarkdownBlock(block, options)).join('');
         placeholders.forEach(({ token, html: fragment }) => {
             html = html.replaceAll(token, fragment);
         });
         return html;
     },
 
-    renderMarkdownBlock(block) {
+    renderMarkdownBlock(block, options = {}) {
         const lines = block.split('\n').map((line) => line.trimEnd());
 
         if (lines.length === 1 && /^(-{3,}|\*{3,}|_{3,})$/.test(lines[0].trim())) {
@@ -243,17 +243,26 @@ const Utils = {
         }
 
         if (lines.length === 1) {
+            const image = Utils.renderMarkdownImageBlock(lines[0], options);
+            if (image) {
+                return image;
+            }
             const heading = lines[0].match(/^(#{1,6})\s+(.+)$/);
             if (heading) {
                 const level = heading[1].length;
-                return `<h${level} class="markdown-heading markdown-heading-${level}">${Utils.renderMarkdownInline(heading[2])}</h${level}>`;
+                return `<h${level} class="markdown-heading markdown-heading-${level}">${Utils.renderMarkdownInline(heading[2], options)}</h${level}>`;
             }
+        }
+
+        const headingWithList = Utils.renderMarkdownHeadingListBlock(lines, options);
+        if (headingWithList) {
+            return headingWithList;
         }
 
         if (lines.every((line) => /^&gt;\s?/.test(line))) {
             const content = lines
                 .map((line) => line.replace(/^&gt;\s?/, ''))
-                .map((line) => Utils.renderMarkdownInline(line))
+                .map((line) => Utils.renderMarkdownInline(line, options))
                 .join('<br>');
             return `<blockquote class="markdown-blockquote">${content}</blockquote>`;
         }
@@ -261,39 +270,285 @@ const Utils = {
         if (lines.every((line) => /^[-*+]\s+/.test(line))) {
             return `
                 <ul class="markdown-list">
-                    ${lines.map((line) => `<li>${Utils.renderMarkdownInline(line.replace(/^[-*+]\s+/, ''))}</li>`).join('')}
+                    ${lines.map((line) => Utils.renderMarkdownListItem(line.replace(/^[-*+]\s+/, ''), options)).join('')}
                 </ul>
             `;
         }
 
         if (lines.every((line) => /^\d+\.\s+/.test(line))) {
-            return `
-                <ol class="markdown-list markdown-list-ordered">
-                    ${lines.map((line) => `<li>${Utils.renderMarkdownInline(line.replace(/^\d+\.\s+/, ''))}</li>`).join('')}
-                </ol>
+            return Utils.renderMarkdownOrderedList(lines, options);
+        }
+
+        const orderedItemWithNestedList = Utils.renderMarkdownSingleOrderedItem(lines, options);
+        if (orderedItemWithNestedList) {
+            return orderedItemWithNestedList;
+        }
+
+        return Utils.renderMarkdownFlowBlock(lines, options);
+    },
+
+    renderMarkdownHeadingListBlock(lines, options = {}) {
+        if (lines.length < 2) {
+            return '';
+        }
+
+        const heading = lines[0].match(/^(#{1,6})\s+(.+)$/);
+        if (!heading) {
+            return '';
+        }
+
+        const rest = lines.slice(1).filter((line) => line.trim());
+        if (!rest.length) {
+            return '';
+        }
+
+        const level = heading[1].length;
+        const headingHTML = `<h${level} class="markdown-heading markdown-heading-${level}">${Utils.renderMarkdownInline(heading[2], options)}</h${level}>`;
+
+        if (rest.every((line) => /^[-*+]\s+/.test(line))) {
+            return `${headingHTML}
+                <ul class="markdown-list">
+                    ${rest.map((line) => Utils.renderMarkdownListItem(line.replace(/^[-*+]\s+/, ''), options)).join('')}
+                </ul>
             `;
         }
 
-        return `<p class="markdown-paragraph">${lines.map((line) => Utils.renderMarkdownInline(line)).join('<br>')}</p>`;
+        if (rest.every((line) => /^\d+\.\s+/.test(line))) {
+            return `${headingHTML}${Utils.renderMarkdownOrderedList(rest, options)}`;
+        }
+
+        return '';
     },
 
-    renderMarkdownInline(value = '') {
-        let text = String(value || '');
+    renderMarkdownOrderedList(lines, options = {}) {
+        const firstMatch = lines[0].match(/^(\d+)\.\s+(.+)$/);
+        const start = firstMatch ? parseInt(firstMatch[1], 10) : 1;
+        const startAttr = start > 1 ? ` start="${start}"` : '';
 
+        return `
+                <ol class="markdown-list markdown-list-ordered"${startAttr}>
+                    ${lines.map((line) => Utils.renderMarkdownListItem(line.replace(/^\d+\.\s+/, ''), options)).join('')}
+                </ol>
+            `;
+    },
+
+    renderMarkdownSingleOrderedItem(lines, options = {}) {
+        if (!lines.length) {
+            return '';
+        }
+
+        const firstMatch = lines[0].match(/^(\d+)\.\s+(.+)$/);
+        if (!firstMatch || lines.length === 1) {
+            return '';
+        }
+
+        const start = parseInt(firstMatch[1], 10);
+        const startAttr = start > 1 ? ` start="${start}"` : '';
+        const bodyLines = [];
+        const nestedItems = [];
+
+        for (const line of lines.slice(1)) {
+            if (/^\s*[-*+]\s+/.test(line)) {
+                nestedItems.push(line.replace(/^\s*[-*+]\s+/, ''));
+                continue;
+            }
+
+            if (/^\s{2,}\S/.test(line) || /^\t+\S/.test(line)) {
+                bodyLines.push(line.trim());
+                continue;
+            }
+
+            return '';
+        }
+
+        if (!bodyLines.length && !nestedItems.length) {
+            return '';
+        }
+
+        const itemParts = [Utils.renderMarkdownFlowBlock([firstMatch[2]], options, 'div')];
+        if (bodyLines.length) {
+            itemParts.push(Utils.renderMarkdownFlowBlock(bodyLines, options, 'div'));
+        }
+        if (nestedItems.length) {
+            itemParts.push(`
+                <ul class="markdown-list markdown-list-nested">
+                    ${nestedItems.map((item) => Utils.renderMarkdownListItem(item, options)).join('')}
+                </ul>
+            `);
+        }
+
+        return `
+                <ol class="markdown-list markdown-list-ordered"${startAttr}>
+                    <li>${itemParts.join('')}</li>
+                </ol>
+            `;
+    },
+
+    renderMarkdownInline(value = '', options = {}) {
+        let text = String(value || '');
+        const placeholders = [];
+        const stash = (html) => {
+            const token = `%%MDINLINETOKEN${placeholders.length}%%`;
+            placeholders.push({ token, html });
+            return token;
+        };
+
+        text = text.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, (_, altText, src) => {
+            return stash(
+                Utils.renderMarkdownImageHTML(altText, src, options, 'markdown-image markdown-inline-image')
+                    || altText
+                    || '[图片不可用]'
+            );
+        });
         text = text.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_, label, href) => {
             const safeHref = Utils.safeMarkdownHref(href);
             if (!safeHref) {
                 return label;
             }
-            return `<a class="markdown-link" href="${safeHref}" target="_blank" rel="noreferrer">${label}</a>`;
+            return stash(`<a class="markdown-link" href="${safeHref}" target="_blank" rel="noreferrer">${label}</a>`);
         });
         text = text.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
         text = text.replace(/__([^_]+)__/g, '<strong>$1</strong>');
         text = text.replace(/(^|[^*])\*([^*]+)\*(?!\*)/g, '$1<em>$2</em>');
         text = text.replace(/(^|[^_])_([^_]+)_(?!_)/g, '$1<em>$2</em>');
         text = text.replace(/~~([^~]+)~~/g, '<del>$1</del>');
+        placeholders.forEach(({ token, html }) => {
+            text = text.replaceAll(token, html);
+        });
 
         return text;
+    },
+
+    renderMarkdownImageBlock(value = '', options = {}) {
+        const match = String(value || '').trim().match(/^!\[([^\]]*)\]\(([^)\s]+)\)$/);
+        if (!match) return '';
+
+        const [, altText = '', src = ''] = match;
+        const figureHTML = Utils.renderMarkdownImageFigure(altText, src, options);
+        if (!figureHTML) {
+            const fallback = altText || '图片不可用';
+            return `<p class="markdown-paragraph">${fallback}</p>`;
+        }
+
+        return figureHTML;
+    },
+
+    renderMarkdownImageHTML(altText = '', src = '', options = {}, className = 'markdown-image') {
+        const safeSrc = Utils.resolveMarkdownImageSrc(src, options);
+        if (!safeSrc) return '';
+
+        return `<img class="${className}" src="${safeSrc}" alt="${altText}" loading="lazy" decoding="async">`;
+    },
+
+    renderMarkdownImageFigure(altText = '', src = '', options = {}) {
+        const imageHTML = Utils.renderMarkdownImageHTML(altText, src, options, 'markdown-image');
+        if (!imageHTML) return '';
+
+        const caption = String(altText || '').trim();
+        return `
+            <figure class="markdown-figure">
+                ${imageHTML}
+                ${caption ? `<figcaption class="markdown-figcaption">${caption}</figcaption>` : ''}
+            </figure>
+        `;
+    },
+
+    renderMarkdownFlowBlock(lines = [], options = {}, wrapperTag = 'p') {
+        const segments = [];
+        let textBuffer = '';
+
+        const flushText = () => {
+            if (!textBuffer) return;
+            segments.push(`<${wrapperTag} class="markdown-paragraph">${textBuffer}</${wrapperTag}>`);
+            textBuffer = '';
+        };
+
+        lines.forEach((line, lineIndex) => {
+            const pieces = Utils.splitMarkdownFigureSegments(line, options);
+            pieces.forEach((piece, pieceIndex) => {
+                if (piece.type === 'text') {
+                    const html = Utils.renderMarkdownInline(piece.value, options);
+                    if (!html) return;
+                    if (textBuffer && pieceIndex === 0 && lineIndex > 0) {
+                        textBuffer += '<br>';
+                    }
+                    textBuffer += html;
+                    return;
+                }
+
+                flushText();
+                segments.push(piece.html);
+            });
+        });
+
+        flushText();
+        return segments.join('');
+    },
+
+    splitMarkdownFigureSegments(value = '', options = {}) {
+        const source = String(value || '');
+        const regex = /!\[([^\]]*)\]\(([^)\s]+)\)/g;
+        const segments = [];
+        let cursor = 0;
+        let match;
+
+        while ((match = regex.exec(source)) !== null) {
+            const [token, altText = '', src = ''] = match;
+            const textBefore = source.slice(cursor, match.index);
+            const [suffix, consumedLength] = Utils.extractMarkdownFigureSuffix(source.slice(match.index + token.length));
+
+            if (textBefore || altText || suffix) {
+                segments.push({
+                    type: 'text',
+                    value: `${textBefore}${altText}${suffix}`
+                });
+            }
+
+            const figureHTML = Utils.renderMarkdownImageFigure(altText, src, options);
+            if (figureHTML) {
+                segments.push({
+                    type: 'figure',
+                    html: figureHTML
+                });
+            }
+
+            cursor = match.index + token.length + consumedLength;
+        }
+
+        const tail = source.slice(cursor);
+        if (tail || !segments.length) {
+            segments.push({
+                type: 'text',
+                value: tail
+            });
+        }
+
+        return segments;
+    },
+
+    extractMarkdownFigureSuffix(value = '') {
+        const text = String(value || '');
+        const match = text.match(/^[\s]*[)）\]】》」』"'’”]*[、，,。：；;.!！？?]*/);
+        return match ? [match[0], match[0].length] : ['', 0];
+    },
+
+    renderMarkdownListItem(value = '', options = {}) {
+        return `<li>${Utils.renderMarkdownFlowBlock([value], options, 'div')}</li>`;
+    },
+
+    resolveMarkdownImageSrc(value = '', options = {}) {
+        const raw = String(value || '').trim();
+        if (!raw) return '';
+
+        const figureMatch = raw.match(/^figure:\/\/(\d+)$/i);
+        if (figureMatch) {
+            if (typeof options.resolveFigureSrc !== 'function') {
+                return '';
+            }
+            return Utils.safeMarkdownImageSrc(options.resolveFigureSrc(Number(figureMatch[1])) || '');
+        }
+
+        return Utils.safeMarkdownImageSrc(raw);
     },
 
     safeMarkdownHref(value = '') {
@@ -301,6 +556,13 @@ const Utils = {
         if (!href) return '';
         if (/^(https?:|mailto:)/i.test(href)) return href;
         if (href.startsWith('/')) return href;
+        return '';
+    },
+
+    safeMarkdownImageSrc(value = '') {
+        const src = String(value || '').trim();
+        if (!src) return '';
+        if (src.startsWith('/files/figures/')) return src;
         return '';
     },
 
