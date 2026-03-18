@@ -36,7 +36,7 @@ echo ========================================
 echo.
 echo Starting server...
 echo Default URL: http://localhost:8080
-echo Default account: wanglab / wanglab789
+echo Default account: citebox / citebox123
 echo A browser window will open automatically.
 echo Close the "CiteBox Server" window to stop the app.
 echo.
@@ -50,8 +50,8 @@ $configBat = @"
 chcp 65001 >nul
 cd /d %~dp0
 set SERVER_PORT=8080
-set ADMIN_USERNAME=wanglab
-set ADMIN_PASSWORD=wanglab789
+set ADMIN_USERNAME=citebox
+set ADMIN_PASSWORD=citebox123
 rem set PDF_EXTRACTOR_URL=http://127.0.0.1:8000
 rem set STORAGE_DIR=.\data\library
 rem set DATABASE_PATH=.\data\library.db
@@ -80,7 +80,7 @@ Quick start:
 3. Double-click start.bat.
 
 Default URL: http://localhost:8080
-Default account: wanglab / wanglab789
+Default account: citebox / citebox123
 "@
 
 Set-Content -Path (Join-Path $packageDir "start.bat") -Value $startBat -Encoding ascii

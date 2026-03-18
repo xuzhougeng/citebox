@@ -55,7 +55,7 @@ echo.
 echo Starting server...
 echo.
 echo Default URL: http://localhost:8080
-echo Default Account: wanglab / wanglab789
+echo Default Account: citebox / citebox123
 echo.
 echo A browser window will open automatically.
 echo Close the "CiteBox" window to stop the server.
@@ -82,11 +82,11 @@ echo.
 set /p PORT="Server port [8080]: "
 if "%%PORT%%"=="" set PORT=8080
 
-set /p USERNAME="Admin username [wanglab]: "
-if "%%USERNAME%%"=="" set USERNAME=wanglab
+set /p USERNAME="Admin username [citebox]: "
+if "%%USERNAME%%"=="" set USERNAME=citebox
 
-set /p PASSWORD="Admin password [wanglab789]: "
-if "%%PASSWORD%%"=="" set PASSWORD=wanglab789
+set /p PASSWORD="Admin password [citebox123]: "
+if "%%PASSWORD%%"=="" set PASSWORD=citebox123
 
 set /p EXTRACTOR="PDF Extractor URL [optional]: "
 
@@ -124,7 +124,7 @@ cat > "$DIST_DIR/README-Windows.txt" << 'EOF'
 --------
 1. 解压后，双击运行 start.bat
 2. 浏览器访问 http://localhost:8080
-3. 默认账号: wanglab / wanglab789
+3. 默认账号: citebox / citebox123
 
 配置文件
 --------
