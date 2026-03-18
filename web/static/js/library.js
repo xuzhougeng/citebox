@@ -261,7 +261,7 @@ const LibraryPage = {
         this.paperList.innerHTML = this.state.papers.map((paper) => {
             const tags = (paper.tags || []).map((tag) => `<span class="chip" style="--chip-color:${tag.color}">${Utils.escapeHTML(tag.name)}</span>`).join('');
             const statusClass = Utils.statusTone(paper.extraction_status);
-            const summary = paper.abstract_text || paper.notes_text;
+            const summary = paper.abstract_text || paper.paper_notes_text || paper.notes_text;
 
             return `
                 <article class="paper-list-row" data-paper-id="${paper.id}">

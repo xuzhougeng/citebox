@@ -65,6 +65,7 @@ func createTestPaper(t *testing.T, repo *repository.LibraryRepository) *model.Pa
 		ContentType:      "application/pdf",
 		AbstractText:     "Atlas abstract",
 		NotesText:        "Atlas notes",
+		PaperNotesText:   "Atlas paper notes",
 		ExtractionStatus: "completed",
 		Tags: []repository.TagUpsertInput{
 			{Name: "Atlas", Color: "#123456"},
@@ -195,17 +196,18 @@ func TestUpdatePaperPersistsMetadata(t *testing.T) {
 	paper := createTestPaper(t, repo)
 
 	updated, err := svc.UpdatePaper(paper.ID, UpdatePaperParams{
-		Title:        "Atlas Study Revised",
-		AbstractText: "Updated abstract",
-		NotesText:    "Updated notes",
-		Tags:         []string{"Atlas", "Revised"},
+		Title:          "Atlas Study Revised",
+		AbstractText:   "Updated abstract",
+		NotesText:      "Updated notes",
+		PaperNotesText: "Updated paper notes",
+		Tags:           []string{"Atlas", "Revised"},
 	})
 	if err != nil {
 		t.Fatalf("UpdatePaper() error = %v", err)
 	}
 
-	if updated.AbstractText != "Updated abstract" || updated.NotesText != "Updated notes" {
-		t.Fatalf("UpdatePaper() metadata = (%q, %q), want updated values", updated.AbstractText, updated.NotesText)
+	if updated.AbstractText != "Updated abstract" || updated.NotesText != "Updated notes" || updated.PaperNotesText != "Updated paper notes" {
+		t.Fatalf("UpdatePaper() metadata = (%q, %q, %q), want updated values", updated.AbstractText, updated.NotesText, updated.PaperNotesText)
 	}
 	if len(updated.Tags) != 2 {
 		t.Fatalf("UpdatePaper() tags = %d, want 2", len(updated.Tags))

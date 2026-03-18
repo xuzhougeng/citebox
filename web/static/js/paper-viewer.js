@@ -1,3 +1,223 @@
+const PaperNoteViewer = {
+    init() {
+        this.modal = document.getElementById('paperNoteModal');
+        this.body = document.getElementById('paperNoteModalBody');
+        this.closeButton = document.getElementById('closePaperNoteModal');
+        if (!this.modal) {
+            const shell = document.createElement('div');
+            shell.id = 'paperNoteModal';
+            shell.className = 'modal-shell hidden';
+            shell.innerHTML = `
+                <div class="modal-dialog figure-modal-dialog note-modal-dialog">
+                    <button id="closePaperNoteModal" class="modal-close" type="button" aria-label="关闭">×</button>
+                    <div id="paperNoteModalBody"></div>
+                </div>
+            `;
+            document.body.appendChild(shell);
+            this.modal = shell;
+            this.body = shell.querySelector('#paperNoteModalBody');
+            this.closeButton = shell.querySelector('#closePaperNoteModal');
+        }
+        if (!this.modal || this.initialized) return;
+        this.initialized = true;
+
+        this.handleKeydown = (event) => {
+            if (!this.modal || this.modal.classList.contains('hidden')) return;
+            const target = event.target;
+            const isEditableTarget = target instanceof HTMLElement && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName));
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                event.stopPropagation();
+                this.close();
+                return;
+            }
+            if (isEditableTarget) return;
+        };
+
+        this.closeButton.addEventListener('click', () => this.close());
+        this.modal.addEventListener('click', (event) => {
+            if (event.target === this.modal) {
+                this.close();
+            }
+        });
+        this.body.addEventListener('input', (event) => {
+            const notesInput = event.target.closest('#paperNoteViewerInput');
+            if (!notesInput) return;
+            this.noteDraft = notesInput.value;
+        });
+        this.body.addEventListener('click', async (event) => {
+            const button = event.target.closest('[data-paper-note-action]');
+            if (!button) return;
+
+            if (button.dataset.paperNoteAction === 'set-mode') {
+                this.noteMode = button.dataset.noteMode === 'preview' ? 'preview' : 'write';
+                this.render();
+                return;
+            }
+            if (button.dataset.paperNoteAction === 'save-notes') {
+                await this.saveNotes();
+                return;
+            }
+            if (button.dataset.paperNoteAction === 'open-ai') {
+                window.location.href = `/ai?paper_id=${this.paper?.id || ''}`;
+                return;
+            }
+            if (button.dataset.paperNoteAction === 'open-paper') {
+                this.close();
+                if (typeof this.onOpenPaper === 'function' && this.paper?.id) {
+                    await this.onOpenPaper(this.paper.id);
+                }
+            }
+        });
+        this.body.addEventListener('keydown', async (event) => {
+            const notesInput = event.target.closest('#paperNoteViewerInput');
+            if (!notesInput || event.key !== 'Enter' || (!event.metaKey && !event.ctrlKey)) return;
+            event.preventDefault();
+            await this.saveNotes();
+        });
+        document.addEventListener('keydown', this.handleKeydown);
+    },
+
+    open(options = {}) {
+        this.init();
+        this.paper = options.paper || null;
+        this.onChanged = options.onChanged;
+        this.onOpenPaper = options.onOpenPaper;
+        this.noteDraft = this.paper?.paper_notes_text || '';
+        this.noteMode = this.noteDraft.trim() ? 'preview' : 'write';
+        this.render();
+        this.modal.classList.remove('hidden');
+        document.body.classList.add('modal-open');
+    },
+
+    close() {
+        if (!this.modal) return;
+        this.modal.classList.add('hidden');
+        if (!document.querySelector('.modal-shell:not(.hidden)')) {
+            document.body.classList.remove('modal-open');
+        }
+    },
+
+    currentNotesDraft() {
+        return this.body.querySelector('#paperNoteViewerInput')?.value ?? this.noteDraft ?? (this.paper?.paper_notes_text || '');
+    },
+
+    async saveNotes() {
+        if (!this.paper) return;
+
+        try {
+            const payload = await API.updatePaper(this.paper.id, {
+                title: this.paper.title,
+                abstract_text: this.paper.abstract_text || '',
+                notes_text: this.paper.notes_text || '',
+                paper_notes_text: this.currentNotesDraft(),
+                group_id: this.paper.group_id ?? null,
+                tags: Utils.splitTags(Utils.joinTags(this.paper.tags || []))
+            });
+            this.paper = payload.paper;
+            this.noteDraft = this.paper.paper_notes_text || '';
+            if (!this.noteMode || !this.noteDraft.trim()) {
+                this.noteMode = 'write';
+            }
+            Utils.showToast('文献笔记已保存');
+            this.render();
+            if (typeof this.onChanged === 'function') {
+                await this.onChanged(payload.paper);
+            }
+        } catch (error) {
+            Utils.showToast(error.message, 'error');
+        }
+    },
+
+    render() {
+        const paper = this.paper;
+        if (!paper) {
+            this.body.innerHTML = '<div class="empty-state"><h3>没有可展示的文献笔记</h3></div>';
+            return;
+        }
+
+        const noteText = this.currentNotesDraft();
+        const isPreviewMode = this.noteMode === 'preview';
+        const tags = PaperViewer.renderTagChips(paper.tags || []);
+        const managementNotePreview = String(paper.notes_text || '').trim();
+
+        this.body.innerHTML = `
+            <div class="note-lightbox">
+                <section class="note-lightbox-main">
+                    <div class="note-lightbox-editor-card">
+                        <div class="note-lightbox-head">
+                            <div class="note-lightbox-head-row">
+                                <div>
+                                    <p class="eyebrow">Paper Notes</p>
+                                    <h2>${Utils.escapeHTML(paper.title)}</h2>
+                                    <p class="note-lightbox-subtitle">${Utils.escapeHTML(paper.original_filename || '')}</p>
+                                </div>
+                                <div class="note-lightbox-mode-switch">
+                                    <button class="btn ${isPreviewMode ? 'btn-outline' : 'btn-primary'}" type="button" data-paper-note-action="set-mode" data-note-mode="write">编辑</button>
+                                    <button class="btn ${isPreviewMode ? 'btn-primary' : 'btn-outline'}" type="button" data-paper-note-action="set-mode" data-note-mode="preview">Markdown 预览</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="note-lightbox-meta-grid">
+                            <div class="note-lightbox-meta-item">
+                                <span>当前分组</span>
+                                <strong>${Utils.escapeHTML(paper.group_name || '未分组')}</strong>
+                            </div>
+                            <div class="note-lightbox-meta-item">
+                                <span>文献标签</span>
+                                <div class="figure-preview-tags ${paper.tags?.length ? '' : 'is-empty'}">
+                                    ${paper.tags?.length ? tags : '<span class="figure-preview-empty">无标签</span>'}
+                                </div>
+                            </div>
+                        </div>
+
+                        ${isPreviewMode ? `
+                            <section class="note-lightbox-render-panel">
+                                <span class="note-lightbox-panel-label">Markdown 预览</span>
+                                <div class="markdown-preview">${Utils.renderMarkdown(noteText)}</div>
+                            </section>
+                        ` : `
+                            <label class="field note-lightbox-field">
+                                <span>文献笔记</span>
+                                <textarea id="paperNoteViewerInput" class="form-textarea note-lightbox-textarea" rows="16" placeholder="记录这篇文献的 AI 解读、阅读结论、方法摘要或后续行动">${Utils.escapeHTML(noteText)}</textarea>
+                            </label>
+                        `}
+
+                        <div class="figure-notes-actions">
+                            <span class="muted">${isPreviewMode ? '预览基于当前草稿渲染；切回编辑可继续修改。' : '支持多行内容，按 Ctrl/Cmd + Enter 可快速保存。'}</span>
+                            <button class="btn btn-primary" type="button" data-paper-note-action="save-notes">保存文献笔记</button>
+                        </div>
+                    </div>
+                </section>
+
+                <aside class="note-lightbox-side">
+                    <div class="note-lightbox-preview-card">
+                        <div class="detail-meta-panel paper-note-meta-panel">
+                            <div><span>最近更新</span><strong>${Utils.escapeHTML(Utils.formatDate(paper.updated_at || paper.created_at))}</strong></div>
+                            <div><span>提取图片</span><strong>${paper.figure_count || 0}</strong></div>
+                            <div><span>摘要</span><strong>${Utils.escapeHTML(paper.abstract_text || '暂无摘要')}</strong></div>
+                        </div>
+                    </div>
+
+                    <div class="note-lightbox-preview-card">
+                        <div class="note-lightbox-tip">
+                            <span>管理笔记</span>
+                            <p>${Utils.escapeHTML(managementNotePreview || '当前没有管理笔记。')}</p>
+                        </div>
+                    </div>
+
+                    <div class="note-lightbox-actions">
+                        <button class="btn btn-outline" type="button" data-paper-note-action="open-paper">查看文献详情</button>
+                        <button class="btn btn-outline" type="button" data-paper-note-action="open-ai">去 AI伴读</button>
+                        <a class="btn btn-outline" href="${paper.pdf_url}" target="_blank" rel="noreferrer">打开 PDF</a>
+                    </div>
+                </aside>
+            </div>
+        `;
+    }
+};
+
 const PaperViewer = {
     init() {
         this.modal = document.getElementById('paperModal');
@@ -5,6 +225,7 @@ const PaperViewer = {
         this.closeButton = document.getElementById('closePaperModal');
         if (!this.modal || this.initialized) return;
         this.initialized = true;
+        PaperNoteViewer.init();
 
         this.handleKeydown = (event) => {
             if (!this.modal || this.modal.classList.contains('hidden')) return;
@@ -46,6 +267,9 @@ const PaperViewer = {
             if (button.dataset.modalAction === 'delete-figure') {
                 await this.deleteFigure(Number(button.dataset.figureId));
             }
+            if (button.dataset.modalAction === 'open-paper-notes') {
+                this.openPaperNotes();
+            }
         });
     },
 
@@ -74,7 +298,9 @@ const PaperViewer = {
     close() {
         if (!this.modal) return;
         this.modal.classList.add('hidden');
-        document.body.classList.remove('modal-open');
+        if (!document.querySelector('.modal-shell:not(.hidden)')) {
+            document.body.classList.remove('modal-open');
+        }
     },
 
     render() {
@@ -88,6 +314,7 @@ const PaperViewer = {
             .join('');
         const figures = paper.figures || [];
         const statusClass = Utils.statusTone(paper.extraction_status);
+        const paperNotePreview = String(paper.paper_notes_text || '').replace(/\s+/g, ' ').trim();
         
         // 解析框选结果为人类可读格式
         const boxesHtml = this.renderBoxes(paper.boxes);
@@ -150,9 +377,16 @@ const PaperViewer = {
                         <textarea id="paperViewerAbstract" class="form-textarea" rows="4" placeholder="为这篇文献补充摘要或核心结论">${Utils.escapeHTML(paper.abstract_text || '')}</textarea>
                     </label>
                     <label class="field field-span-2">
-                        <span>备注</span>
-                        <textarea id="paperViewerNotes" class="form-textarea" rows="5" placeholder="记录你的整理备注、阅读结论或迁移补充信息">${Utils.escapeHTML(paper.notes_text || '')}</textarea>
+                        <span>管理笔记</span>
+                        <textarea id="paperViewerNotes" class="form-textarea" rows="4" placeholder="记录这篇文献的整理备注、迁移说明或管理信息">${Utils.escapeHTML(paper.notes_text || '')}</textarea>
                     </label>
+                    <div class="field field-span-2">
+                        <span>文献笔记</span>
+                        <button class="figure-note-inline-trigger ${paperNotePreview ? '' : 'is-empty'}" type="button" data-modal-action="open-paper-notes" aria-label="打开文献笔记编辑器">
+                            <span class="figure-note-inline-text">${Utils.escapeHTML(paperNotePreview || '还没有文献笔记，点击后在独立笔记面板中查看和编辑。')}</span>
+                            <span class="figure-note-inline-action">打开笔记</span>
+                        </button>
+                    </div>
                 </div>
                 <div class="detail-actions">
                     <button class="btn btn-primary" type="submit">保存</button>
@@ -252,6 +486,7 @@ const PaperViewer = {
                 title: document.getElementById('paperViewerTitle').value.trim(),
                 abstract_text: document.getElementById('paperViewerAbstract').value.trim(),
                 notes_text: document.getElementById('paperViewerNotes').value.trim(),
+                paper_notes_text: this.paper.paper_notes_text || '',
                 group_id: document.getElementById('paperViewerGroup').value ? Number(document.getElementById('paperViewerGroup').value) : null,
                 tags: Utils.splitTags(document.getElementById('paperViewerTags').value)
             });
@@ -311,6 +546,26 @@ const PaperViewer = {
         } catch (error) {
             Utils.showToast(error.message, 'error');
         }
+    },
+
+    openPaperNotes() {
+        PaperNoteViewer.open({
+            paper: this.paper,
+            onChanged: async (paper) => {
+                if (!paper) return;
+                this.paper = paper;
+                this.render();
+                if (typeof this.onChanged === 'function') {
+                    await this.onChanged();
+                }
+            },
+            onOpenPaper: async (paperID) => {
+                if (!paperID) return;
+                const nextPaper = await API.getPaper(paperID);
+                this.paper = nextPaper;
+                this.render();
+            }
+        });
     },
 
     // 解析并渲染框选结果为人类可读格式

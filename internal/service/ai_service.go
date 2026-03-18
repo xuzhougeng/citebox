@@ -732,10 +732,7 @@ func buildAIPrompts(
 	if abstractText == "" {
 		abstractText = "无"
 	}
-	notesText := strings.TrimSpace(paper.NotesText)
-	if notesText == "" {
-		notesText = "无"
-	}
+	notesText := buildPaperNotesContext(paper)
 
 	figureSection := "未提取到图片。"
 	if len(figureSummaries) > 0 {
@@ -829,6 +826,22 @@ func buildAIPrompts(
 	)
 
 	return settings.SystemPrompt, userPrompt
+}
+
+func buildPaperNotesContext(paper *model.Paper) string {
+	managementNotes := strings.TrimSpace(paper.NotesText)
+	paperNotes := strings.TrimSpace(paper.PaperNotesText)
+
+	switch {
+	case managementNotes == "" && paperNotes == "":
+		return "无"
+	case managementNotes == "":
+		return "文献笔记:\n" + paperNotes
+	case paperNotes == "":
+		return "管理笔记:\n" + managementNotes
+	default:
+		return "管理笔记:\n" + managementNotes + "\n\n文献笔记:\n" + paperNotes
+	}
 }
 
 func aiOutputRequirements(action model.AIAction, structuredOutput bool) string {

@@ -34,14 +34,16 @@ func (h *PaperHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
 	pageSize, _ := strconv.Atoi(r.URL.Query().Get("page_size"))
+	hasPaperNotes := parseBoolQuery(r.URL.Query().Get("has_paper_notes"))
 
 	result, err := h.service.ListPapers(model.PaperFilter{
-		Keyword:  strings.TrimSpace(r.URL.Query().Get("keyword")),
-		GroupID:  groupID,
-		TagID:    tagID,
-		Status:   strings.TrimSpace(r.URL.Query().Get("status")),
-		Page:     page,
-		PageSize: pageSize,
+		Keyword:       strings.TrimSpace(r.URL.Query().Get("keyword")),
+		GroupID:       groupID,
+		TagID:         tagID,
+		Status:        strings.TrimSpace(r.URL.Query().Get("status")),
+		HasPaperNotes: hasPaperNotes,
+		Page:          page,
+		PageSize:      pageSize,
 	})
 	if err != nil {
 		sendError(w, err)
@@ -203,11 +205,12 @@ func (h *PaperHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Title        string   `json:"title"`
-		AbstractText string   `json:"abstract_text"`
-		NotesText    string   `json:"notes_text"`
-		GroupID      *int64   `json:"group_id"`
-		Tags         []string `json:"tags"`
+		Title          string   `json:"title"`
+		AbstractText   string   `json:"abstract_text"`
+		NotesText      string   `json:"notes_text"`
+		PaperNotesText string   `json:"paper_notes_text"`
+		GroupID        *int64   `json:"group_id"`
+		Tags           []string `json:"tags"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		sendError(w, apperr.New(apperr.CodeInvalidArgument, "请求体格式错误"))
@@ -215,11 +218,12 @@ func (h *PaperHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	paper, err := h.service.UpdatePaper(id, service.UpdatePaperParams{
-		Title:        req.Title,
-		AbstractText: req.AbstractText,
-		NotesText:    req.NotesText,
-		GroupID:      req.GroupID,
-		Tags:         req.Tags,
+		Title:          req.Title,
+		AbstractText:   req.AbstractText,
+		NotesText:      req.NotesText,
+		PaperNotesText: req.PaperNotesText,
+		GroupID:        req.GroupID,
+		Tags:           req.Tags,
 	})
 	if err != nil {
 		sendError(w, err)
@@ -284,4 +288,13 @@ func splitCSV(value string) []string {
 		}
 	}
 	return result
+}
+
+func parseBoolQuery(value string) bool {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "1", "true", "yes", "on":
+		return true
+	default:
+		return false
+	}
 }

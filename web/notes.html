@@ -31,8 +31,8 @@
         <section class="hero">
             <div>
                 <p class="eyebrow">Notes Desk</p>
-                <h1>管理图片笔记</h1>
-                <p class="hero-text">在这里查看和管理所有图片笔记，包括 AI 解读和你的个人批注。</p>
+                <h1>管理内容笔记</h1>
+                <p class="hero-text">在这里统一查看和管理文献笔记与图片笔记；文献管理信息仍保留在详情页中单独维护。</p>
             </div>
         </section>
 
@@ -40,14 +40,18 @@
             <div class="filters-card-head">
                 <div>
                     <p class="eyebrow">Notes Filter</p>
-                    <h2>筛选带笔记的图片</h2>
-                    <p>这里只显示已经写过图片笔记的条目，你可以继续编辑、回看大图或跳转到来源文献。</p>
+                    <h2>筛选内容笔记</h2>
+                    <p id="notesFilterDescription">这里只显示已经写过文献笔记的条目，你可以继续编辑、回看内容或跳转到来源文献。</p>
+                </div>
+                <div id="notesTypeSwitch" class="notes-type-switch" role="tablist" aria-label="笔记类型切换">
+                    <button class="btn btn-primary" type="button" data-notes-mode="paper" aria-pressed="true">文献笔记</button>
+                    <button class="btn btn-outline" type="button" data-notes-mode="figure" aria-pressed="false">图片笔记</button>
                 </div>
             </div>
             <div class="filters-grid three-cols">
                 <label class="field">
                     <span>关键词</span>
-                    <input id="notesKeywordInput" class="form-input" type="text" placeholder="文献标题、图片说明、标签、笔记">
+                    <input id="notesKeywordInput" class="form-input" type="text" placeholder="文献标题、摘要、文献笔记、标签">
                 </label>
                 <label class="field">
                     <span>来源分组</span>
@@ -56,9 +60,9 @@
                     </select>
                 </label>
                 <label class="field">
-                    <span>图片标签</span>
+                    <span id="notesTagFilterLabel">文献标签</span>
                     <select id="notesTagFilter" class="form-input">
-                        <option value="">全部图片标签</option>
+                        <option value="">全部文献标签</option>
                     </select>
                 </label>
             </div>

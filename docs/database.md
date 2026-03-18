@@ -40,6 +40,7 @@ erDiagram
         TEXT pdf_text
         TEXT abstract_text
         TEXT notes_text
+        TEXT paper_notes_text
         TEXT boxes_json
         TEXT extraction_status
         TEXT extractor_message
@@ -95,8 +96,10 @@ erDiagram
 说明：
 
 - `tags.scope` 用来区分文献标签和图片标签，当前允许值为 `paper` / `figure`
-- `papers.notes_text` 是文献级说明或阅读笔记
+- `papers.notes_text` 是文献级管理笔记，适合保存迁移说明、整理备注和管理信息
+- `papers.paper_notes_text` 是文献级内容笔记，适合保存 AI伴读结果、阅读结论和结构化摘要
 - `paper_figures.notes_text` 是图片级笔记，用于图片库、笔记页和全文检索
+- 历史升级时，旧的 `papers.notes_text` 会迁移到 `papers.paper_notes_text`，避免原有 AI 内容继续混在管理笔记里
 - `papers_fts` / `figures_fts` 是全文索引表，不是业务真表
 
 ## 当前建表 SQL
@@ -138,6 +141,7 @@ CREATE TABLE papers (
     pdf_text TEXT DEFAULT '',
     abstract_text TEXT DEFAULT '',
     notes_text TEXT DEFAULT '',
+    paper_notes_text TEXT DEFAULT '',
     boxes_json TEXT DEFAULT '',
     extraction_status TEXT DEFAULT 'completed'
         CHECK (extraction_status IN ('queued', 'running', 'manual_pending', 'completed', 'failed', 'cancelled')),
@@ -248,7 +252,8 @@ CREATE UNIQUE INDEX idx_tags_scope_name ON tags(scope, name);
 | `content_type` | MIME 类型，默认 `application/pdf` |
 | `pdf_text` | PDF 提取出的全文文本，主要用于检索和 AI伴读 |
 | `abstract_text` | 文献摘要 |
-| `notes_text` | 文献级笔记或补充说明 |
+| `notes_text` | 文献级管理笔记；适合保存整理说明、迁移备注、归档提示 |
+| `paper_notes_text` | 文献级内容笔记；适合保存 AI伴读结果、阅读结论和 Markdown 笔记 |
 | `boxes_json` | 提取框、版面分析等结构化 JSON |
 | `extraction_status` | 解析状态，当前允许 `queued/running/manual_pending/completed/failed/cancelled` |
 | `extractor_message` | 解析流程的状态说明或错误信息 |
@@ -318,9 +323,11 @@ CREATE UNIQUE INDEX idx_tags_scope_name ON tags(scope, name);
    - `tag_id`
    - `extraction_status`
    - `has_notes`
+   - `has_paper_notes`
 
 2. 全文搜索
    - `papers_fts` 覆盖：`title`、`original_filename`、`abstract_text`、`notes_text`、`pdf_text`
+   - `papers.paper_notes_text` 当前通过普通列匹配参与搜索和筛选，还没有独立 FTS 列
    - `figures_fts` 覆盖：`original_name`、`caption`、`notes_text`
    - 标签名和分组名仍然通过普通表查询完成
 
@@ -334,24 +341,23 @@ CREATE UNIQUE INDEX idx_tags_scope_name ON tags(scope, name);
 
 - `papers` 和 `paper_figures` 分离，符合“一篇文献有多张图片”的自然关系
 - 标签通过 `scope + relation table` 拆成文献标签和图片标签，职责清楚
-- `notes_text` 已经拆到文献层和图片层，不会再把图片笔记塞回 paper
+- 管理笔记、文献笔记、图片笔记已经分层，不再把 AI 伴读结果继续塞回管理备注
 - `updated_at` 已补到 `paper_figures`，后续能支持“最近编辑的图片笔记”这类视图
 - 继续保持 SQLite 单文件模式，适合本地客户端 / 桌面应用
 
 ## 未来拓展建议
 
-### 1. 如果只是“单篇文献一段备注”
-
-当前已经有 `papers.notes_text`，直接复用即可，不需要新表。
+### 1. 当前的单篇笔记模型
 
 适用场景：
 
-- 每篇文献只有一份自由文本笔记
+- `papers.notes_text` 保存管理笔记
+- `papers.paper_notes_text` 保存单篇文献的一份内容笔记
+- `paper_figures.notes_text` 保存单张图片的一份内容笔记
 - 不需要版本历史
 - 不需要多人协作
-- 不需要把 AI 摘要、人工摘要、阅读记录拆开保存
 
-### 2. 如果要支持“一个 paper 多条 note”
+### 2. 如果要支持“一个 paper 多条文献笔记”
 
 这时不建议继续往 `papers` 上加 `note_1`、`note_2` 之类列，而应该单独建表：
 
