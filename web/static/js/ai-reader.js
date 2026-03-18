@@ -7,6 +7,7 @@ const AIReaderPage = {
         selectedPaperID: null,
         loading: false,
         exportingTurnKey: '',
+        exportingConversation: false,
         savingNoteTurnKey: '',
         sessions: {}
     },
@@ -24,6 +25,7 @@ const AIReaderPage = {
         this.sessionHint = document.getElementById('aiSessionHint');
         this.questionInput = document.getElementById('aiQuestionInput');
         this.runButton = document.getElementById('runAIReaderButton');
+        this.exportConversationButton = document.getElementById('exportAIConversationButton');
         this.clearConversationButton = document.getElementById('clearAIConversationButton');
         this.modelSummary = document.getElementById('aiModelSummary');
 
@@ -54,6 +56,10 @@ const AIReaderPage = {
 
         this.clearConversationButton.addEventListener('click', () => {
             this.clearConversation();
+        });
+
+        this.exportConversationButton.addEventListener('click', async () => {
+            await this.downloadConversationMarkdown();
         });
 
         this.conversation.addEventListener('click', async (event) => {
@@ -308,6 +314,8 @@ const AIReaderPage = {
 
         this.roundBadge.textContent = `${roundCount} / 5 轮`;
         this.clearConversationButton.disabled = !turns.length && !pending;
+        this.exportConversationButton.disabled = !paper || !turns.length || this.state.exportingConversation;
+        this.exportConversationButton.textContent = this.state.exportingConversation ? '导出中...' : '对话导出';
         this.questionInput.disabled = !paper || hasLimitReached || this.state.loading;
         this.runButton.disabled = !paper || hasLimitReached || this.state.loading;
 
@@ -543,6 +551,37 @@ const AIReaderPage = {
         }
     },
 
+    async downloadConversationMarkdown() {
+        const paper = this.currentPaper();
+        const turns = this.currentConversation();
+        if (!paper || !turns.length) {
+            Utils.showToast('当前还没有可导出的对话内容', 'error');
+            return;
+        }
+        if (this.state.exportingConversation) {
+            return;
+        }
+
+        this.state.exportingConversation = true;
+        this.renderConversation();
+
+        try {
+            const markdown = this.buildConversationMarkdown(paper, turns);
+            const result = await API.exportAIReadMarkdown({
+                paper_id: paper.id,
+                scope: 'conversation',
+                content: markdown
+            });
+            this.saveBlobDownload(result.blob, result.filename || this.fallbackConversationExportFilename(paper));
+            Utils.showToast('对话导出完成');
+        } catch (error) {
+            Utils.showToast(error.message, 'error');
+        } finally {
+            this.state.exportingConversation = false;
+            this.renderConversation();
+        }
+    },
+
     async saveTurnToPaperNotes(turnIndex) {
         const paper = this.currentPaper();
         const turns = this.currentConversation();
@@ -621,6 +660,10 @@ const AIReaderPage = {
         return `paper_${paper?.id || 'ai'}_ai_reader_turn_${String(turnIndex).padStart(2, '0')}.zip`;
     },
 
+    fallbackConversationExportFilename(paper) {
+        return `paper_${paper?.id || 'ai'}_ai_reader_conversation.zip`;
+    },
+
     buildTurnNoteBlock(turn, turnIndex) {
         const lines = [
             `## AI伴读 · 第 ${turnIndex + 1} 轮`,
@@ -641,6 +684,31 @@ const AIReaderPage = {
             hour: '2-digit',
             minute: '2-digit'
         });
+    },
+
+    buildConversationMarkdown(paper, turns = []) {
+        const header = [
+            '# AI伴读对话导出',
+            '',
+            `- 文献：${paper?.title || '未命名文献'}`,
+            `- 原始文件：${paper?.original_filename || '未知文件'}`,
+            `- 导出时间：${this.formatNoteTimestamp()}`,
+            `- 对话轮数：${turns.length}`,
+            ''
+        ];
+
+        const rounds = turns.map((turn, index) => [
+            `# 第 ${index + 1} 轮`,
+            '',
+            '## 用户提问',
+            String(turn.question || this.questionPlaceholder()).trim(),
+            '',
+            '## AI 回答',
+            String(turn.answer || '').trim(),
+            ''
+        ].join('\n').trim());
+
+        return [...header, ...rounds].join('\n').trim();
     },
 
     saveBlobDownload(blob, filename) {

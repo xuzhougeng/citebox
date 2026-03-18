@@ -450,6 +450,82 @@ func TestExportReadMarkdownRejectsUnknownFigureReference(t *testing.T) {
 	}
 }
 
+func TestExportReadMarkdownConversationScopeUsesConversationFilenames(t *testing.T) {
+	_, repo, cfg := newTestService(t)
+	aiSvc := NewAIService(repo, cfg, nil)
+
+	paper, err := repo.CreatePaper(repository.PaperUpsertInput{
+		Title:            "Conversation Export Study",
+		OriginalFilename: "conversation-export.pdf",
+		StoredPDFName:    "conversation-export.pdf",
+		FileSize:         256,
+		ContentType:      "application/pdf",
+		PDFText:          "Full text for conversation export.",
+		ExtractionStatus: "completed",
+		Figures: []repository.FigureUpsertInput{
+			{Filename: "conversation_figure.png", ContentType: "image/png", PageNumber: 4, FigureIndex: 1, Caption: "Conversation figure"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreatePaper() error = %v", err)
+	}
+
+	assetBytes := writeFigureFixture(t, filepath.Join(cfg.FiguresDir(), paper.Figures[0].Filename), 240, 160)
+
+	filename, archive, err := aiSvc.ExportReadMarkdown(context.Background(), model.AIReadExportRequest{
+		PaperID: paper.ID,
+		Scope:   "conversation",
+		Content: strings.Join([]string{
+			"# 第 1 轮",
+			"",
+			"## 用户提问",
+			"请结合图说明结论。",
+			"",
+			"## AI 回答",
+			fmt.Sprintf("见第 4 页图 1：![第 4 页图 1](figure://%d)", paper.Figures[0].ID),
+		}, "\n"),
+	})
+	if err != nil {
+		t.Fatalf("ExportReadMarkdown(conversation) error = %v", err)
+	}
+
+	if filename != fmt.Sprintf("paper_%d_ai_reader_conversation.zip", paper.ID) {
+		t.Fatalf("ExportReadMarkdown(conversation) filename = %q, want conversation zip", filename)
+	}
+
+	reader, err := zip.NewReader(bytes.NewReader(archive), int64(len(archive)))
+	if err != nil {
+		t.Fatalf("zip.NewReader() error = %v", err)
+	}
+
+	entries := map[string][]byte{}
+	for _, file := range reader.File {
+		rc, err := file.Open()
+		if err != nil {
+			t.Fatalf("zip entry %s open error = %v", file.Name, err)
+		}
+		content, err := io.ReadAll(rc)
+		_ = rc.Close()
+		if err != nil {
+			t.Fatalf("zip entry %s read error = %v", file.Name, err)
+		}
+		entries[file.Name] = content
+	}
+
+	conversation, ok := entries["conversation.md"]
+	if !ok {
+		t.Fatalf("zip entries missing conversation.md: %#v", entries)
+	}
+
+	assetPath := fmt.Sprintf("assets/figure-p4-n1-%d.png", paper.Figures[0].ID)
+	if !strings.Contains(string(conversation), assetPath) {
+		t.Fatalf("conversation.md missing %q\n%s", assetPath, string(conversation))
+	}
+	if got := entries[assetPath]; !bytes.Equal(got, assetBytes) {
+		t.Fatalf("conversation asset bytes mismatch: got=%d want=%d", len(got), len(assetBytes))
+	}
+}
+
 func TestBuildAIPromptsIncludePaperContext(t *testing.T) {
 	settings := model.DefaultAISettings()
 	paper := &model.Paper{

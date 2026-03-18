@@ -92,7 +92,10 @@
                 </div>
                 <div class="ai-session-bar">
                     <p id="aiSessionHint" class="ai-session-hint">当前还没有对话记录，选中文献后就可以开始提问。</p>
-                    <button id="clearAIConversationButton" class="btn btn-outline" type="button">清空对话</button>
+                    <div class="ai-session-actions">
+                        <button id="exportAIConversationButton" class="btn btn-outline" type="button">对话导出</button>
+                        <button id="clearAIConversationButton" class="btn btn-outline" type="button">清空对话</button>
+                    </div>
                 </div>
                 <div id="aiConversation" class="ai-conversation"></div>
                 <label class="field ai-question-field">
