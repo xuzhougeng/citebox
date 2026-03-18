@@ -6,6 +6,7 @@ const AIReaderPage = {
         paperDetails: {},
         selectedPaperID: null,
         loading: false,
+        exportingTurnKey: '',
         sessions: {}
     },
 
@@ -52,6 +53,13 @@ const AIReaderPage = {
 
         this.clearConversationButton.addEventListener('click', () => {
             this.clearConversation();
+        });
+
+        this.conversation.addEventListener('click', async (event) => {
+            const button = event.target.closest('[data-download-turn-index]');
+            if (!button) return;
+            event.preventDefault();
+            await this.downloadTurnMarkdown(Number(button.dataset.downloadTurnIndex));
         });
 
         this.keydownHandler = async (event) => {
@@ -323,6 +331,8 @@ const AIReaderPage = {
         }
 
         turns.forEach((turn, index) => {
+            const turnKey = this.turnExportKey(index);
+            const exporting = this.state.exportingTurnKey === turnKey;
             const assistantBody = turn.answer
                 ? Utils.renderMarkdown(turn.answer, {
                     resolveFigureSrc: (figureID) => this.resolveFigureImageURL(figureID, paper)
@@ -342,7 +352,19 @@ const AIReaderPage = {
                         <strong>${Utils.escapeHTML(turn.provider || 'AI')}</strong>
                     </div>
                     <div class="ai-turn-body markdown-body">${assistantBody}</div>
-                    <div class="ai-turn-foot">${Utils.escapeHTML(this.turnMeta(turn))}</div>
+                    <div class="ai-turn-foot">
+                        <span>${Utils.escapeHTML(this.turnMeta(turn))}</span>
+                        ${turn.answer ? `
+                            <button
+                                class="btn btn-outline btn-small"
+                                type="button"
+                                data-download-turn-index="${index}"
+                                ${exporting ? 'disabled' : ''}
+                            >
+                                ${exporting ? '导出中...' : '下载 Markdown'}
+                            </button>
+                        ` : ''}
+                    </div>
                 </article>
             `);
         });
@@ -468,6 +490,39 @@ const AIReaderPage = {
         this.renderConversation();
     },
 
+    async downloadTurnMarkdown(turnIndex) {
+        const paper = this.currentPaper();
+        const turns = this.currentConversation();
+        const turn = turns[turnIndex];
+        if (!paper || !turn || !turn.answer) {
+            Utils.showToast('当前回答没有可导出的 Markdown 内容', 'error');
+            return;
+        }
+
+        const turnKey = this.turnExportKey(turnIndex);
+        if (this.state.exportingTurnKey === turnKey) {
+            return;
+        }
+
+        this.state.exportingTurnKey = turnKey;
+        this.renderConversation();
+
+        try {
+            const result = await API.exportAIReadMarkdown({
+                paper_id: paper.id,
+                answer: turn.answer,
+                turn_index: turnIndex + 1
+            });
+            this.saveBlobDownload(result.blob, result.filename || this.fallbackExportFilename(paper, turnIndex + 1));
+            Utils.showToast('Markdown 导出完成');
+        } catch (error) {
+            Utils.showToast(error.message, 'error');
+        } finally {
+            this.state.exportingTurnKey = '';
+            this.renderConversation();
+        }
+    },
+
     turnMeta(turn) {
         const items = [];
         if (turn.provider) items.push(turn.provider);
@@ -488,6 +543,25 @@ const AIReaderPage = {
             gemini: 'gemini-2.5-flash'
         };
         return models[provider] || models.openai;
+    },
+
+    turnExportKey(turnIndex) {
+        return `${this.state.selectedPaperID || 0}:${turnIndex}`;
+    },
+
+    fallbackExportFilename(paper, turnIndex) {
+        return `paper_${paper?.id || 'ai'}_ai_reader_turn_${String(turnIndex).padStart(2, '0')}.zip`;
+    },
+
+    saveBlobDownload(blob, filename) {
+        const objectURL = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = objectURL;
+        link.download = filename || 'ai_reader_export.zip';
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(objectURL), 1000);
     },
 
     queryPaperID() {

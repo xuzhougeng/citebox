@@ -324,6 +324,15 @@ func buildHandler(
 		}
 	})
 
+	mux.HandleFunc("/api/ai/read/export", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPost:
+			aiHandler.ExportReadMarkdown(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
 	mux.HandleFunc("/api/settings/extractor", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:

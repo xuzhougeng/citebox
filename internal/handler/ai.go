@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/xuzhougeng/citebox/internal/apperr"
@@ -124,4 +125,26 @@ func (h *AIHandler) ReadStream(w http.ResponseWriter, r *http.Request) {
 		Error: apperr.Message(err),
 		Code:  string(apperr.CodeOf(err)),
 	})
+}
+
+func (h *AIHandler) ExportReadMarkdown(w http.ResponseWriter, r *http.Request) {
+	var req model.AIReadExportRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		sendError(w, apperr.New(apperr.CodeInvalidArgument, "请求体格式错误"))
+		return
+	}
+
+	filename, archive, err := h.service.ExportReadMarkdown(r.Context(), req)
+	if err != nil {
+		sendError(w, err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/zip")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
+	w.Header().Set("Content-Length", fmt.Sprintf("%d", len(archive)))
+	if _, err := w.Write(archive); err != nil {
+		sendError(w, apperr.Wrap(apperr.CodeInternal, "下载 AI Markdown 导出包失败", err))
+		return
+	}
 }

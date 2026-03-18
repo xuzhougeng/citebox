@@ -62,6 +62,12 @@ type AIReadRequest struct {
 	History  []AIConversationTurn `json:"history,omitempty"`
 }
 
+type AIReadExportRequest struct {
+	PaperID   int64  `json:"paper_id"`
+	Answer    string `json:"answer"`
+	TurnIndex int    `json:"turn_index,omitempty"`
+}
+
 type AIConversationTurn struct {
 	Question string `json:"question"`
 	Answer   string `json:"answer"`
