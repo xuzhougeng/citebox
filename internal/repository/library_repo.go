@@ -2,78 +2,30 @@ package repository
 
 import (
 	"database/sql"
-	"encoding/json"
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
-	"strings"
-	"unicode/utf8"
 
 	"github.com/xuzhougeng/citebox/internal/apperr"
 	"github.com/xuzhougeng/citebox/internal/model"
+	"github.com/xuzhougeng/citebox/internal/repository/schema"
 
-	sqliteDriver "modernc.org/sqlite"
-	sqlite3 "modernc.org/sqlite/lib"
+	_ "modernc.org/sqlite" // 注册 sqlite 驱动
 )
 
+// LibraryRepository 是图书馆仓库的门面，组合了各领域的子仓库
 type LibraryRepository struct {
 	db *sql.DB
+
+	// 子仓库
+	Paper   *PaperRepository
+	Figure  *FigureRepository
+	Group   *GroupRepository
+	Tag     *TagRepository
+	Setting *SettingRepository
 }
 
-type TagUpsertInput struct {
-	Scope model.TagScope
-	Name  string
-	Color string
-}
-
-type FigureUpsertInput struct {
-	Filename     string
-	OriginalName string
-	ContentType  string
-	PageNumber   int
-	FigureIndex  int
-	Source       string
-	Caption      string
-	BBoxJSON     string
-}
-
-type PaperUpsertInput struct {
-	Title            string
-	OriginalFilename string
-	StoredPDFName    string
-	PDFSHA256        string
-	FileSize         int64
-	ContentType      string
-	PDFText          string
-	AbstractText     string
-	NotesText        string
-	PaperNotesText   string
-	BoxesJSON        string
-	ExtractionStatus string
-	ExtractorMessage string
-	ExtractorJobID   string
-	GroupID          *int64
-	Tags             []TagUpsertInput
-	Figures          []FigureUpsertInput
-}
-
-type PaperUpdateInput struct {
-	Title          string
-	AbstractText   string
-	NotesText      string
-	PaperNotesText string
-	GroupID        *int64
-	Tags           []TagUpsertInput
-}
-
-type FigureUpdateInput struct {
-	Caption   string
-	NotesText string
-	Tags      []TagUpsertInput
-}
-
+// NewLibraryRepository 创建图书馆仓库
 func NewLibraryRepository(dbPath string) (*LibraryRepository, error) {
 	dir := filepath.Dir(dbPath)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -88,8 +40,9 @@ func NewLibraryRepository(dbPath string) (*LibraryRepository, error) {
 
 	db.SetMaxOpenConns(1)
 
-	repo := &LibraryRepository{db: db}
-	if err := repo.initSchema(); err != nil {
+	// 初始化 Schema
+	schemaManager := schema.NewManager(db)
+	if err := schemaManager.Initialize(); err != nil {
 		db.Close()
 		var appErr *apperr.Error
 		if errors.As(err, &appErr) {
@@ -98,1162 +51,84 @@ func NewLibraryRepository(dbPath string) (*LibraryRepository, error) {
 		return nil, apperr.Wrap(apperr.CodeInternal, "初始化数据库结构失败", err)
 	}
 
+	// 创建子仓库（按依赖顺序）
+	tagRepo := NewTagRepository(db)
+	groupRepo := NewGroupRepository(db)
+	paperRepo := NewPaperRepository(db, tagRepo, groupRepo)
+	figureRepo := NewFigureRepository(db, tagRepo)
+	settingRepo := NewSettingRepository(db)
+
+	repo := &LibraryRepository{
+		db:      db,
+		Paper:   paperRepo,
+		Figure:  figureRepo,
+		Group:   groupRepo,
+		Tag:     tagRepo,
+		Setting: settingRepo,
+	}
+
 	return repo, nil
 }
 
-func (r *LibraryRepository) initSchema() error {
-	schema := `
-	CREATE TABLE IF NOT EXISTS groups (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		name TEXT NOT NULL COLLATE NOCASE UNIQUE,
-		description TEXT DEFAULT '',
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-	);
-
-	CREATE TABLE IF NOT EXISTS tags (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		scope TEXT NOT NULL DEFAULT 'paper' CHECK (scope IN ('paper', 'figure')),
-		name TEXT NOT NULL COLLATE NOCASE,
-		color TEXT DEFAULT '#A45C40',
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		UNIQUE(scope, name)
-	);
-
-	CREATE TABLE IF NOT EXISTS app_settings (
-		key TEXT PRIMARY KEY,
-		value TEXT NOT NULL DEFAULT '',
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-	);
-
-	CREATE TABLE IF NOT EXISTS papers (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		title TEXT NOT NULL,
-		original_filename TEXT NOT NULL,
-		stored_pdf_name TEXT NOT NULL,
-		pdf_sha256 TEXT DEFAULT '',
-		file_size INTEGER DEFAULT 0,
-		content_type TEXT DEFAULT 'application/pdf',
-		pdf_text TEXT DEFAULT '',
-		abstract_text TEXT DEFAULT '',
-		notes_text TEXT DEFAULT '',
-		paper_notes_text TEXT DEFAULT '',
-		boxes_json TEXT DEFAULT '',
-		extraction_status TEXT DEFAULT 'completed' CHECK (extraction_status IN ('queued', 'running', 'manual_pending', 'completed', 'failed', 'cancelled')),
-		extractor_message TEXT DEFAULT '',
-		extractor_job_id TEXT DEFAULT '',
-		group_id INTEGER REFERENCES groups(id) ON DELETE SET NULL,
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-	);
-
-	CREATE TABLE IF NOT EXISTS paper_tags (
-		paper_id INTEGER NOT NULL REFERENCES papers(id) ON DELETE CASCADE,
-		tag_id INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
-		PRIMARY KEY (paper_id, tag_id)
-	);
-
-	CREATE TABLE IF NOT EXISTS paper_figures (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		paper_id INTEGER NOT NULL REFERENCES papers(id) ON DELETE CASCADE,
-		filename TEXT NOT NULL,
-		original_name TEXT DEFAULT '',
-		content_type TEXT DEFAULT '',
-		page_number INTEGER DEFAULT 0,
-		figure_index INTEGER DEFAULT 0,
-		source TEXT DEFAULT 'auto' CHECK (source IN ('auto', 'manual')),
-		caption TEXT DEFAULT '',
-		notes_text TEXT DEFAULT '',
-		bbox_json TEXT DEFAULT '',
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-	);
-
-	CREATE TABLE IF NOT EXISTS figure_tags (
-		figure_id INTEGER NOT NULL REFERENCES paper_figures(id) ON DELETE CASCADE,
-		tag_id INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
-		PRIMARY KEY (figure_id, tag_id)
-	);
-
-	CREATE INDEX IF NOT EXISTS idx_papers_group_id ON papers(group_id);
-	CREATE INDEX IF NOT EXISTS idx_papers_created_at ON papers(created_at);
-	CREATE INDEX IF NOT EXISTS idx_papers_status ON papers(extraction_status);
-	CREATE INDEX IF NOT EXISTS idx_paper_figures_paper_id ON paper_figures(paper_id);
-	CREATE INDEX IF NOT EXISTS idx_paper_tags_tag_id ON paper_tags(tag_id);
-	CREATE INDEX IF NOT EXISTS idx_figure_tags_tag_id ON figure_tags(tag_id);
-	`
-
-	if _, err := r.db.Exec(schema); err != nil {
-		return err
-	}
-	return r.ensureSchemaColumns()
-}
-
-func (r *LibraryRepository) ensureSchemaColumns() error {
-	for _, column := range []struct {
-		tableName  string
-		name       string
-		definition string
-	}{
-		{tableName: "papers", name: "extractor_job_id", definition: "TEXT DEFAULT ''"},
-		{tableName: "papers", name: "abstract_text", definition: "TEXT DEFAULT ''"},
-		{tableName: "papers", name: "notes_text", definition: "TEXT DEFAULT ''"},
-		{tableName: "papers", name: "pdf_sha256", definition: "TEXT DEFAULT ''"},
-		{tableName: "paper_figures", name: "source", definition: "TEXT DEFAULT 'auto'"},
-		{tableName: "paper_figures", name: "notes_text", definition: "TEXT DEFAULT ''"},
-		{tableName: "paper_figures", name: "updated_at", definition: "DATETIME"},
-	} {
-		if err := r.ensureColumn(column.tableName, column.name, column.definition); err != nil {
-			return err
-		}
-	}
-	if err := r.ensurePaperNotesSchema(); err != nil {
-		return err
-	}
-	if err := r.ensureTagScopeSchema(); err != nil {
-		return err
-	}
-	if err := r.ensureFigureUpdatedAtValues(); err != nil {
-		return err
-	}
-	if err := r.ensureValidationTriggers(); err != nil {
-		return err
-	}
-	if err := r.ensureIndexes(); err != nil {
-		return err
-	}
-	return r.ensureFTSSchema()
-}
-
-func (r *LibraryRepository) ensurePaperNotesSchema() error {
-	hasColumn, err := r.hasColumn("papers", "paper_notes_text")
-	if err != nil {
-		return err
-	}
-	if hasColumn {
-		return nil
-	}
-
-	if _, err := r.db.Exec("ALTER TABLE papers ADD COLUMN paper_notes_text TEXT DEFAULT ''"); err != nil {
-		return err
-	}
-	_, err = r.db.Exec(`
-		UPDATE papers
-		SET paper_notes_text = COALESCE(notes_text, ''),
-			notes_text = ''
-		WHERE TRIM(COALESCE(notes_text, '')) <> ''
-		  AND TRIM(COALESCE(paper_notes_text, '')) = ''
-	`)
-	return err
-}
-
-func (r *LibraryRepository) ensureColumn(tableName, columnName, definition string) error {
-	hasColumn, err := r.hasColumn(tableName, columnName)
-	if err != nil {
-		return err
-	}
-	if hasColumn {
-		return nil
-	}
-
-	_, err = r.db.Exec(fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", tableName, columnName, definition))
-	return err
-}
-
-func (r *LibraryRepository) hasColumn(tableName, columnName string) (bool, error) {
-	rows, err := r.db.Query(fmt.Sprintf("PRAGMA table_info(%s)", tableName))
-	if err != nil {
-		return false, err
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var (
-			cid        int
-			name       string
-			columnType string
-			notNull    int
-			defaultVal sql.NullString
-			primaryKey int
-		)
-		if err := rows.Scan(&cid, &name, &columnType, &notNull, &defaultVal, &primaryKey); err != nil {
-			return false, err
-		}
-		if strings.EqualFold(name, columnName) {
-			return true, nil
-		}
-	}
-	if err := rows.Err(); err != nil {
-		return false, err
-	}
-
-	return false, nil
-}
-
-func (r *LibraryRepository) hasSchemaObject(objectType, name string) (bool, error) {
-	var count int
-	if err := r.db.QueryRow(
-		"SELECT COUNT(*) FROM sqlite_master WHERE type = ? AND name = ?",
-		objectType,
-		name,
-	).Scan(&count); err != nil {
-		return false, err
-	}
-	return count > 0, nil
-}
-
-func (r *LibraryRepository) hasTable(tableName string) (bool, error) {
-	return r.hasSchemaObject("table", tableName)
-}
-
-func (r *LibraryRepository) hasIndex(indexName string) (bool, error) {
-	return r.hasSchemaObject("index", indexName)
-}
-
-func (r *LibraryRepository) ensureFigureUpdatedAtValues() error {
-	_, err := r.db.Exec(`
-		UPDATE paper_figures
-		SET updated_at = COALESCE(updated_at, created_at, CURRENT_TIMESTAMP)
-		WHERE updated_at IS NULL
-	`)
-	return err
-}
-
-func (r *LibraryRepository) ensureValidationTriggers() error {
-	for _, statement := range []string{
-		`CREATE TRIGGER IF NOT EXISTS validate_tags_scope_insert
-		BEFORE INSERT ON tags
-		FOR EACH ROW
-		WHEN NEW.scope NOT IN ('paper', 'figure')
-		BEGIN
-			SELECT RAISE(ABORT, 'invalid tag scope');
-		END;`,
-		`CREATE TRIGGER IF NOT EXISTS validate_tags_scope_update
-		BEFORE UPDATE OF scope ON tags
-		FOR EACH ROW
-		WHEN NEW.scope NOT IN ('paper', 'figure')
-		BEGIN
-			SELECT RAISE(ABORT, 'invalid tag scope');
-		END;`,
-		`CREATE TRIGGER IF NOT EXISTS validate_papers_status_insert
-		BEFORE INSERT ON papers
-		FOR EACH ROW
-		WHEN NEW.extraction_status NOT IN ('queued', 'running', 'manual_pending', 'completed', 'failed', 'cancelled')
-		BEGIN
-			SELECT RAISE(ABORT, 'invalid paper extraction status');
-		END;`,
-		`CREATE TRIGGER IF NOT EXISTS validate_papers_status_update
-		BEFORE UPDATE OF extraction_status ON papers
-		FOR EACH ROW
-		WHEN NEW.extraction_status NOT IN ('queued', 'running', 'manual_pending', 'completed', 'failed', 'cancelled')
-		BEGIN
-			SELECT RAISE(ABORT, 'invalid paper extraction status');
-		END;`,
-		`CREATE TRIGGER IF NOT EXISTS validate_paper_figures_source_insert
-		BEFORE INSERT ON paper_figures
-		FOR EACH ROW
-		WHEN COALESCE(NEW.source, 'auto') NOT IN ('auto', 'manual')
-		BEGIN
-			SELECT RAISE(ABORT, 'invalid figure source');
-		END;`,
-		`CREATE TRIGGER IF NOT EXISTS validate_paper_figures_source_update
-		BEFORE UPDATE OF source ON paper_figures
-		FOR EACH ROW
-		WHEN COALESCE(NEW.source, 'auto') NOT IN ('auto', 'manual')
-		BEGIN
-			SELECT RAISE(ABORT, 'invalid figure source');
-		END;`,
-	} {
-		if _, err := r.db.Exec(statement); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (r *LibraryRepository) ensureIndexes() error {
-	if err := r.ensureUniqueIndex(
-		"idx_papers_stored_pdf_name_unique",
-		"papers",
-		"stored_pdf_name",
-		"数据库中存在重复的文献文件名，无法完成升级，请先清理重复数据",
-	); err != nil {
-		return err
-	}
-	if err := r.ensureUniqueNonEmptyIndex(
-		"idx_papers_pdf_sha256_unique",
-		"papers",
-		"pdf_sha256",
-		"数据库中存在重复的 PDF 指纹，无法完成升级，请先清理重复数据",
-	); err != nil {
-		return err
-	}
-	if err := r.ensureUniqueIndex(
-		"idx_paper_figures_filename_unique",
-		"paper_figures",
-		"filename",
-		"数据库中存在重复的图片文件名，无法完成升级，请先清理重复数据",
-	); err != nil {
-		return err
-	}
-
-	for _, statement := range []string{
-		"CREATE INDEX IF NOT EXISTS idx_paper_figures_updated_at ON paper_figures(updated_at)",
-		"CREATE INDEX IF NOT EXISTS idx_tags_scope ON tags(scope)",
-		"CREATE UNIQUE INDEX IF NOT EXISTS idx_tags_scope_name ON tags(scope, name)",
-	} {
-		if _, err := r.db.Exec(statement); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (r *LibraryRepository) ensureUniqueIndex(indexName, tableName, columnName, duplicateMessage string) error {
-	hasIndex, err := r.hasIndex(indexName)
-	if err != nil {
-		return err
-	}
-	if hasIndex {
-		return nil
-	}
-
-	var duplicateValue string
-	query := fmt.Sprintf(`
-		SELECT %s
-		FROM %s
-		GROUP BY %s
-		HAVING COUNT(*) > 1
-		LIMIT 1
-	`, columnName, tableName, columnName)
-	err = r.db.QueryRow(query).Scan(&duplicateValue)
-	if err != nil && err != sql.ErrNoRows {
-		return err
-	}
-	if err == nil {
-		return apperr.New(apperr.CodeFailedPrecondition, duplicateMessage)
-	}
-
-	_, err = r.db.Exec(fmt.Sprintf("CREATE UNIQUE INDEX %s ON %s(%s)", indexName, tableName, columnName))
-	return err
-}
-
-func (r *LibraryRepository) ensureUniqueNonEmptyIndex(indexName, tableName, columnName, duplicateMessage string) error {
-	hasIndex, err := r.hasIndex(indexName)
-	if err != nil {
-		return err
-	}
-	if hasIndex {
-		return nil
-	}
-
-	var duplicateValue string
-	query := fmt.Sprintf(`
-		SELECT %s
-		FROM %s
-		WHERE COALESCE(TRIM(%s), '') <> ''
-		GROUP BY %s
-		HAVING COUNT(*) > 1
-		LIMIT 1
-	`, columnName, tableName, columnName, columnName)
-	err = r.db.QueryRow(query).Scan(&duplicateValue)
-	if err != nil && err != sql.ErrNoRows {
-		return err
-	}
-	if err == nil {
-		return apperr.New(apperr.CodeFailedPrecondition, duplicateMessage)
-	}
-
-	_, err = r.db.Exec(fmt.Sprintf(
-		"CREATE UNIQUE INDEX %s ON %s(%s) WHERE COALESCE(TRIM(%s), '') <> ''",
-		indexName,
-		tableName,
-		columnName,
-		columnName,
-	))
-	return err
-}
-
-func (r *LibraryRepository) ensureFTSSchema() error {
-	papersFTSCreated, err := r.ensureFTSTable("papers_fts", `
-		CREATE VIRTUAL TABLE papers_fts USING fts5(
-			title,
-			original_filename,
-			abstract_text,
-			notes_text,
-			pdf_text,
-			tokenize='trigram'
-		)
-	`)
-	if err != nil {
-		return err
-	}
-	figuresFTSCreated, err := r.ensureFTSTable("figures_fts", `
-		CREATE VIRTUAL TABLE figures_fts USING fts5(
-			original_name,
-			caption,
-			notes_text,
-			tokenize='trigram'
-		)
-	`)
-	if err != nil {
-		return err
-	}
-
-	for _, statement := range []string{
-		`CREATE TRIGGER IF NOT EXISTS papers_fts_insert AFTER INSERT ON papers BEGIN
-			INSERT INTO papers_fts(rowid, title, original_filename, abstract_text, notes_text, pdf_text)
-			VALUES (NEW.id, NEW.title, NEW.original_filename, NEW.abstract_text, NEW.notes_text, NEW.pdf_text);
-		END;`,
-		`CREATE TRIGGER IF NOT EXISTS papers_fts_update AFTER UPDATE ON papers BEGIN
-			DELETE FROM papers_fts WHERE rowid = OLD.id;
-			INSERT INTO papers_fts(rowid, title, original_filename, abstract_text, notes_text, pdf_text)
-			VALUES (NEW.id, NEW.title, NEW.original_filename, NEW.abstract_text, NEW.notes_text, NEW.pdf_text);
-		END;`,
-		`CREATE TRIGGER IF NOT EXISTS papers_fts_delete AFTER DELETE ON papers BEGIN
-			DELETE FROM papers_fts WHERE rowid = OLD.id;
-		END;`,
-		`CREATE TRIGGER IF NOT EXISTS figures_fts_insert AFTER INSERT ON paper_figures BEGIN
-			INSERT INTO figures_fts(rowid, original_name, caption, notes_text)
-			VALUES (NEW.id, NEW.original_name, NEW.caption, NEW.notes_text);
-		END;`,
-		`CREATE TRIGGER IF NOT EXISTS figures_fts_update AFTER UPDATE ON paper_figures BEGIN
-			DELETE FROM figures_fts WHERE rowid = OLD.id;
-			INSERT INTO figures_fts(rowid, original_name, caption, notes_text)
-			VALUES (NEW.id, NEW.original_name, NEW.caption, NEW.notes_text);
-		END;`,
-		`CREATE TRIGGER IF NOT EXISTS figures_fts_delete AFTER DELETE ON paper_figures BEGIN
-			DELETE FROM figures_fts WHERE rowid = OLD.id;
-		END;`,
-	} {
-		if _, err := r.db.Exec(statement); err != nil {
-			return err
-		}
-	}
-
-	paperCount, err := r.countRows("papers")
-	if err != nil {
-		return err
-	}
-	papersFTSCount, err := r.countRows("papers_fts")
-	if err != nil {
-		return err
-	}
-	if papersFTSCreated || paperCount != papersFTSCount {
-		if err := r.rebuildPapersFTS(); err != nil {
-			return err
-		}
-	}
-
-	figureCount, err := r.countRows("paper_figures")
-	if err != nil {
-		return err
-	}
-	figuresFTSCount, err := r.countRows("figures_fts")
-	if err != nil {
-		return err
-	}
-	if figuresFTSCreated || figureCount != figuresFTSCount {
-		if err := r.rebuildFiguresFTS(); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (r *LibraryRepository) ensureFTSTable(tableName, createSQL string) (bool, error) {
-	hasTable, err := r.hasTable(tableName)
-	if err != nil {
-		return false, err
-	}
-	if hasTable {
-		return false, nil
-	}
-	if _, err := r.db.Exec(createSQL); err != nil {
-		return false, err
-	}
-	return true, nil
-}
-
-func (r *LibraryRepository) countRows(tableName string) (int, error) {
-	var count int
-	if err := r.db.QueryRow(fmt.Sprintf("SELECT COUNT(*) FROM %s", tableName)).Scan(&count); err != nil {
-		return 0, err
-	}
-	return count, nil
-}
-
-func (r *LibraryRepository) rebuildPapersFTS() error {
-	tx, err := r.db.Begin()
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-
-	if _, err := tx.Exec("DELETE FROM papers_fts"); err != nil {
-		return err
-	}
-	if _, err := tx.Exec(`
-		INSERT INTO papers_fts(rowid, title, original_filename, abstract_text, notes_text, pdf_text)
-		SELECT id, title, original_filename, abstract_text, notes_text, pdf_text
-		FROM papers
-	`); err != nil {
-		return err
-	}
-	return tx.Commit()
-}
-
-func (r *LibraryRepository) rebuildFiguresFTS() error {
-	tx, err := r.db.Begin()
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-
-	if _, err := tx.Exec("DELETE FROM figures_fts"); err != nil {
-		return err
-	}
-	if _, err := tx.Exec(`
-		INSERT INTO figures_fts(rowid, original_name, caption, notes_text)
-		SELECT id, original_name, caption, notes_text
-		FROM paper_figures
-	`); err != nil {
-		return err
-	}
-	return tx.Commit()
-}
-
+// Close 关闭数据库连接
 func (r *LibraryRepository) Close() error {
 	return r.db.Close()
 }
 
-func (r *LibraryRepository) ensureTagScopeSchema() (err error) {
-	ready, err := r.tagScopeSchemaReady()
-	if err != nil {
-		return err
-	}
-	if ready {
-		_, err = r.db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_tags_scope_name ON tags(scope, name COLLATE NOCASE)")
-		if err != nil {
-			return err
-		}
-		_, err = r.db.Exec("CREATE INDEX IF NOT EXISTS idx_tags_scope ON tags(scope)")
-		return err
-	}
+// ========== 兼容旧接口的委托方法 ==========
+// 以下方法为了保持向后兼容，委托给相应的子仓库
 
-	hasScope, err := r.hasColumn("tags", "scope")
-	if err != nil {
-		return err
-	}
-
-	if _, err = r.db.Exec("PRAGMA foreign_keys = OFF"); err != nil {
-		return err
-	}
-	defer func() {
-		if _, pragmaErr := r.db.Exec("PRAGMA foreign_keys = ON"); err == nil && pragmaErr != nil {
-			err = pragmaErr
-		}
-	}()
-
-	tx, err := r.db.Begin()
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-
-	if err := r.rebuildTagsWithScopes(tx, hasScope); err != nil {
-		return err
-	}
-
-	return tx.Commit()
-}
-
-func (r *LibraryRepository) tagScopeSchemaReady() (bool, error) {
-	hasScope, err := r.hasColumn("tags", "scope")
-	if err != nil || !hasScope {
-		return false, err
-	}
-
-	rows, err := r.db.Query("PRAGMA index_list(tags)")
-	if err != nil {
-		return false, err
-	}
-	indexNames := []string{}
-	indexUnique := map[string]bool{}
-	for rows.Next() {
-		var (
-			seq     int
-			name    string
-			unique  int
-			origin  string
-			partial int
-		)
-		if err := rows.Scan(&seq, &name, &unique, &origin, &partial); err != nil {
-			return false, err
-		}
-		indexNames = append(indexNames, name)
-		indexUnique[name] = unique != 0
-	}
-	if err := rows.Err(); err != nil {
-		return false, err
-	}
-	rows.Close()
-
-	hasScopeNameUnique := false
-	hasLegacyNameUnique := false
-	for _, name := range indexNames {
-		if !indexUnique[name] {
-			continue
-		}
-		columns, err := r.indexColumns(name)
-		if err != nil {
-			return false, err
-		}
-		switch {
-		case len(columns) == 2 && strings.EqualFold(columns[0], "scope") && strings.EqualFold(columns[1], "name"):
-			hasScopeNameUnique = true
-		case len(columns) == 1 && strings.EqualFold(columns[0], "name"):
-			hasLegacyNameUnique = true
-		}
-	}
-	return hasScopeNameUnique && !hasLegacyNameUnique, nil
-}
-
-func (r *LibraryRepository) indexColumns(indexName string) ([]string, error) {
-	query := fmt.Sprintf("PRAGMA index_info('%s')", strings.ReplaceAll(indexName, "'", "''"))
-	rows, err := r.db.Query(query)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	columns := []string{}
-	for rows.Next() {
-		var (
-			seqno int
-			cid   int
-			name  string
-		)
-		if err := rows.Scan(&seqno, &cid, &name); err != nil {
-			return nil, err
-		}
-		columns = append(columns, name)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return columns, nil
-}
-
-func (r *LibraryRepository) rebuildTagsWithScopes(tx *sql.Tx, hasScope bool) error {
-	type legacyTag struct {
-		ID        int64
-		Scope     model.TagScope
-		Name      string
-		Color     string
-		CreatedAt string
-		UpdatedAt string
-	}
-
-	query := "SELECT id, name, color, created_at, updated_at FROM tags ORDER BY id"
-	if hasScope {
-		query = "SELECT id, scope, name, color, created_at, updated_at FROM tags ORDER BY id"
-	}
-
-	rows, err := tx.Query(query)
-	if err != nil {
-		return err
-	}
-	defer rows.Close()
-
-	tags := []legacyTag{}
-	for rows.Next() {
-		var tag legacyTag
-		if hasScope {
-			if err := rows.Scan(&tag.ID, &tag.Scope, &tag.Name, &tag.Color, &tag.CreatedAt, &tag.UpdatedAt); err != nil {
-				return err
-			}
-			tag.Scope = model.NormalizeTagScope(string(tag.Scope))
-		} else {
-			if err := rows.Scan(&tag.ID, &tag.Name, &tag.Color, &tag.CreatedAt, &tag.UpdatedAt); err != nil {
-				return err
-			}
-			tag.Scope = model.TagScopePaper
-		}
-		tags = append(tags, tag)
-	}
-	if err := rows.Err(); err != nil {
-		return err
-	}
-
-	paperUsage, err := r.loadTagUsage(tx, "paper_tags", "paper_id")
-	if err != nil {
-		return err
-	}
-	figureUsage, err := r.loadTagUsage(tx, "figure_tags", "figure_id")
-	if err != nil {
-		return err
-	}
-
-	if _, err := tx.Exec(`
-		CREATE TABLE tags_new (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			scope TEXT NOT NULL DEFAULT 'paper',
-			name TEXT NOT NULL COLLATE NOCASE,
-			color TEXT DEFAULT '#A45C40',
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			UNIQUE(scope, name)
-		)
-	`); err != nil {
-		return err
-	}
-	if _, err := tx.Exec(`
-		CREATE TABLE paper_tags_new (
-			paper_id INTEGER NOT NULL REFERENCES papers(id) ON DELETE CASCADE,
-			tag_id INTEGER NOT NULL REFERENCES tags_new(id) ON DELETE CASCADE,
-			PRIMARY KEY (paper_id, tag_id)
-		)
-	`); err != nil {
-		return err
-	}
-	if _, err := tx.Exec(`
-		CREATE TABLE figure_tags_new (
-			figure_id INTEGER NOT NULL REFERENCES paper_figures(id) ON DELETE CASCADE,
-			tag_id INTEGER NOT NULL REFERENCES tags_new(id) ON DELETE CASCADE,
-			PRIMARY KEY (figure_id, tag_id)
-		)
-	`); err != nil {
-		return err
-	}
-
-	tagIDMap := map[int64]map[model.TagScope]int64{}
-	for _, tag := range tags {
-		scopes := desiredTagScopes(paperUsage[tag.ID], figureUsage[tag.ID], tag.Scope)
-		preferred := tag.Scope
-		if !preferred.Valid() {
-			preferred = scopes[0]
-		}
-
-		tagIDMap[tag.ID] = map[model.TagScope]int64{}
-		for _, scope := range scopes {
-			var newID int64
-			if scope == preferred {
-				if _, err := tx.Exec(`
-					INSERT INTO tags_new (id, scope, name, color, created_at, updated_at)
-					VALUES (?, ?, ?, ?, ?, ?)
-				`, tag.ID, scope, tag.Name, tag.Color, tag.CreatedAt, tag.UpdatedAt); err != nil {
-					return err
-				}
-				newID = tag.ID
-			} else {
-				result, err := tx.Exec(`
-					INSERT INTO tags_new (scope, name, color, created_at, updated_at)
-					VALUES (?, ?, ?, ?, ?)
-				`, scope, tag.Name, tag.Color, tag.CreatedAt, tag.UpdatedAt)
-				if err != nil {
-					return err
-				}
-				newID, err = result.LastInsertId()
-				if err != nil {
-					return err
-				}
-			}
-			tagIDMap[tag.ID][scope] = newID
-		}
-	}
-
-	if err := copyScopedTagLinks(tx, "paper_tags", "paper_id", "paper_tags_new", model.TagScopePaper, tagIDMap); err != nil {
-		return err
-	}
-	if err := copyScopedTagLinks(tx, "figure_tags", "figure_id", "figure_tags_new", model.TagScopeFigure, tagIDMap); err != nil {
-		return err
-	}
-
-	for _, stmt := range []string{
-		"DROP TABLE paper_tags",
-		"DROP TABLE figure_tags",
-		"DROP TABLE tags",
-		"ALTER TABLE tags_new RENAME TO tags",
-		"ALTER TABLE paper_tags_new RENAME TO paper_tags",
-		"ALTER TABLE figure_tags_new RENAME TO figure_tags",
-		"CREATE UNIQUE INDEX idx_tags_scope_name ON tags(scope, name COLLATE NOCASE)",
-		"CREATE INDEX idx_tags_scope ON tags(scope)",
-		"CREATE INDEX idx_paper_tags_tag_id ON paper_tags(tag_id)",
-		"CREATE INDEX idx_figure_tags_tag_id ON figure_tags(tag_id)",
-	} {
-		if _, err := tx.Exec(stmt); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (r *LibraryRepository) loadTagUsage(tx *sql.Tx, tableName, ownerColumn string) (map[int64]bool, error) {
-	query := fmt.Sprintf("SELECT DISTINCT tag_id FROM %s WHERE %s IS NOT NULL", tableName, ownerColumn)
-	rows, err := tx.Query(query)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	usage := map[int64]bool{}
-	for rows.Next() {
-		var tagID int64
-		if err := rows.Scan(&tagID); err != nil {
-			return nil, err
-		}
-		usage[tagID] = true
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return usage, nil
-}
-
-func desiredTagScopes(usedByPaper, usedByFigure bool, current model.TagScope) []model.TagScope {
-	switch {
-	case usedByPaper && usedByFigure:
-		return []model.TagScope{model.TagScopePaper, model.TagScopeFigure}
-	case usedByPaper:
-		return []model.TagScope{model.TagScopePaper}
-	case usedByFigure:
-		return []model.TagScope{model.TagScopeFigure}
-	case current.Valid():
-		return []model.TagScope{current}
-	default:
-		return []model.TagScope{model.TagScopePaper}
-	}
-}
-
-func copyScopedTagLinks(tx *sql.Tx, sourceTable, ownerColumn, targetTable string, scope model.TagScope, tagIDMap map[int64]map[model.TagScope]int64) error {
-	query := fmt.Sprintf("SELECT %s, tag_id FROM %s", ownerColumn, sourceTable)
-	rows, err := tx.Query(query)
-	if err != nil {
-		return err
-	}
-	defer rows.Close()
-
-	insertStmt := fmt.Sprintf("INSERT OR IGNORE INTO %s (%s, tag_id) VALUES (?, ?)", targetTable, ownerColumn)
-	for rows.Next() {
-		var ownerID, legacyTagID int64
-		if err := rows.Scan(&ownerID, &legacyTagID); err != nil {
-			return err
-		}
-		newID := tagIDMap[legacyTagID][scope]
-		if newID == 0 {
-			return fmt.Errorf("missing migrated tag for legacy tag %d and scope %s", legacyTagID, scope)
-		}
-		if _, err := tx.Exec(insertStmt, ownerID, newID); err != nil {
-			return err
-		}
-	}
-	return rows.Err()
-}
-
-func (r *LibraryRepository) GroupExists(id int64) (bool, error) {
-	var count int
-	if err := r.db.QueryRow("SELECT COUNT(*) FROM groups WHERE id = ?", id).Scan(&count); err != nil {
-		return false, wrapDBError(err, "查询分组失败")
-	}
-	return count > 0, nil
-}
-
+// CreatePaper 创建文献（委托给 Paper 仓库）
 func (r *LibraryRepository) CreatePaper(input PaperUpsertInput) (*model.Paper, error) {
-	tx, err := r.db.Begin()
-	if err != nil {
-		return nil, wrapDBError(err, "创建文献失败")
-	}
-	defer tx.Rollback()
-
-	result, err := tx.Exec(`
-		INSERT INTO papers (
-			title, original_filename, stored_pdf_name, pdf_sha256, file_size, content_type,
-			pdf_text, abstract_text, notes_text, paper_notes_text, boxes_json, extraction_status, extractor_message, extractor_job_id, group_id
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`,
-		input.Title,
-		input.OriginalFilename,
-		input.StoredPDFName,
-		input.PDFSHA256,
-		input.FileSize,
-		input.ContentType,
-		input.PDFText,
-		input.AbstractText,
-		input.NotesText,
-		input.PaperNotesText,
-		input.BoxesJSON,
-		input.ExtractionStatus,
-		input.ExtractorMessage,
-		input.ExtractorJobID,
-		input.GroupID,
-	)
-	if err != nil {
-		return nil, wrapConflictDBError(err, "文献文件已存在", "创建文献失败")
-	}
-
-	paperID, err := result.LastInsertId()
-	if err != nil {
-		return nil, wrapDBError(err, "读取文献 ID 失败")
-	}
-
-	if err := r.syncPaperTags(tx, paperID, input.Tags); err != nil {
-		return nil, wrapDBError(err, "保存文献标签失败")
-	}
-
-	for _, figure := range input.Figures {
-		if _, err := tx.Exec(`
-				INSERT INTO paper_figures (
-					paper_id, filename, original_name, content_type, page_number, figure_index, source, caption, bbox_json, created_at, updated_at
-				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-			`,
-			paperID,
-			figure.Filename,
-			figure.OriginalName,
-			figure.ContentType,
-			figure.PageNumber,
-			figure.FigureIndex,
-			firstNonEmpty(strings.TrimSpace(figure.Source), "auto"),
-			figure.Caption,
-			figure.BBoxJSON,
-		); err != nil {
-			return nil, wrapConflictDBError(err, "图片文件已存在", "保存文献图片失败")
-		}
-	}
-
-	if err := tx.Commit(); err != nil {
-		return nil, wrapDBError(err, "提交文献事务失败")
-	}
-
-	return r.GetPaperDetail(paperID)
+	return r.Paper.CreatePaper(input)
 }
 
-func (r *LibraryRepository) FindPaperByPDFSHA256(pdfSHA256 string) (*model.Paper, error) {
-	pdfSHA256 = strings.TrimSpace(pdfSHA256)
-	if pdfSHA256 == "" {
-		return nil, nil
-	}
-
-	var paperID int64
-	err := r.db.QueryRow(`
-		SELECT id
-		FROM papers
-		WHERE pdf_sha256 = ?
-		LIMIT 1
-	`, pdfSHA256).Scan(&paperID)
-	if err == sql.ErrNoRows {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, wrapDBError(err, "查询重复文献失败")
-	}
-
-	return r.GetPaperDetail(paperID)
-}
-
-type PaperChecksumBackfillItem struct {
-	ID            int64
-	StoredPDFName string
-}
-
-func (r *LibraryRepository) ListPapersMissingPDFSHA256() ([]PaperChecksumBackfillItem, error) {
-	rows, err := r.db.Query(`
-		SELECT id, stored_pdf_name
-		FROM papers
-		WHERE COALESCE(TRIM(pdf_sha256), '') = ''
-		ORDER BY id ASC
-	`)
-	if err != nil {
-		return nil, wrapDBError(err, "查询待补全文献指纹失败")
-	}
-	defer rows.Close()
-
-	items := []PaperChecksumBackfillItem{}
-	for rows.Next() {
-		var item PaperChecksumBackfillItem
-		if err := rows.Scan(&item.ID, &item.StoredPDFName); err != nil {
-			return nil, wrapDBError(err, "查询待补全文献指纹失败")
-		}
-		items = append(items, item)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, wrapDBError(err, "查询待补全文献指纹失败")
-	}
-	return items, nil
-}
-
-func (r *LibraryRepository) UpdatePaperPDFSHA256(id int64, pdfSHA256 string) error {
-	result, err := r.db.Exec(`
-		UPDATE papers
-		SET pdf_sha256 = ?, updated_at = CURRENT_TIMESTAMP
-		WHERE id = ?
-	`, strings.TrimSpace(pdfSHA256), id)
-	if err != nil {
-		return wrapConflictDBError(err, "文献 PDF 指纹已存在", "更新文献 PDF 指纹失败")
-	}
-	return ensureRowsAffected(result, "paper not found")
-}
-
+// UpdatePaper 更新文献（委托给 Paper 仓库）
 func (r *LibraryRepository) UpdatePaper(id int64, input PaperUpdateInput) (*model.Paper, error) {
-	tx, err := r.db.Begin()
-	if err != nil {
-		return nil, wrapDBError(err, "更新文献失败")
-	}
-	defer tx.Rollback()
-
-	result, err := tx.Exec(`
-		UPDATE papers
-		SET title = ?, abstract_text = ?, notes_text = ?, paper_notes_text = ?, group_id = ?, updated_at = CURRENT_TIMESTAMP
-		WHERE id = ?
-	`, input.Title, input.AbstractText, input.NotesText, input.PaperNotesText, input.GroupID, id)
-	if err != nil {
-		return nil, wrapDBError(err, "更新文献失败")
-	}
-
-	if err := ensureRowsAffected(result, "paper not found"); err != nil {
-		return nil, err
-	}
-
-	if err := r.syncPaperTags(tx, id, input.Tags); err != nil {
-		return nil, wrapDBError(err, "更新文献标签失败")
-	}
-
-	if err := tx.Commit(); err != nil {
-		return nil, wrapDBError(err, "提交文献事务失败")
-	}
-
-	return r.GetPaperDetail(id)
+	return r.Paper.UpdatePaper(id, input)
 }
 
-func (r *LibraryRepository) UpdateFigure(id int64, input FigureUpdateInput) (*model.Paper, error) {
-	tx, err := r.db.Begin()
-	if err != nil {
-		return nil, wrapDBError(err, "更新图片信息失败")
-	}
-	defer tx.Rollback()
-
-	var paperID int64
-	if err := tx.QueryRow("SELECT paper_id FROM paper_figures WHERE id = ?", id).Scan(&paperID); err != nil {
-		if err == sql.ErrNoRows {
-			return nil, notFoundError("figure not found")
-		}
-		return nil, wrapDBError(err, "更新图片信息失败")
-	}
-
-	result, err := tx.Exec(`
-		UPDATE paper_figures
-		SET caption = ?, notes_text = ?, updated_at = CURRENT_TIMESTAMP
-		WHERE id = ?
-	`, input.Caption, input.NotesText, id)
-	if err != nil {
-		return nil, wrapDBError(err, "更新图片信息失败")
-	}
-	if err := ensureRowsAffected(result, "figure not found"); err != nil {
-		return nil, err
-	}
-
-	if err := r.syncFigureTags(tx, id, input.Tags); err != nil {
-		return nil, wrapDBError(err, "更新图片标签失败")
-	}
-
-	if _, err := tx.Exec(`
-		UPDATE papers
-		SET updated_at = CURRENT_TIMESTAMP
-		WHERE id = ?
-	`, paperID); err != nil {
-		return nil, wrapDBError(err, "更新图片信息失败")
-	}
-
-	if err := tx.Commit(); err != nil {
-		return nil, wrapDBError(err, "提交图片事务失败")
-	}
-
-	return r.GetPaperDetail(paperID)
-}
-
-func (r *LibraryRepository) UpdateFigureTags(id int64, tags []TagUpsertInput) (*model.Paper, error) {
-	figure, err := r.GetFigure(id)
-	if err != nil {
-		return nil, err
-	}
-	if figure == nil {
-		return nil, notFoundError("figure not found")
-	}
-
-	return r.UpdateFigure(id, FigureUpdateInput{
-		Caption:   figure.Caption,
-		NotesText: figure.NotesText,
-		Tags:      tags,
-	})
-}
-
+// DeletePaper 删除文献（委托给 Paper 仓库）
 func (r *LibraryRepository) DeletePaper(id int64) error {
-	result, err := r.db.Exec("DELETE FROM papers WHERE id = ?", id)
-	if err != nil {
-		return wrapDBError(err, "删除文献失败")
-	}
-	return ensureRowsAffected(result, "paper not found")
+	return r.Paper.DeletePaper(id)
 }
 
-func (r *LibraryRepository) PurgeLibrary() error {
-	tx, err := r.db.Begin()
-	if err != nil {
-		return wrapDBError(err, "清空数据库失败")
-	}
-	defer tx.Rollback()
-
-	for _, stmt := range []string{
-		"DELETE FROM papers",
-		"DELETE FROM groups",
-		"DELETE FROM tags",
-		"DELETE FROM sqlite_sequence WHERE name IN ('papers', 'paper_figures', 'groups', 'tags')",
-	} {
-		if _, err := tx.Exec(stmt); err != nil {
-			return wrapDBError(err, "清空数据库失败")
-		}
-	}
-
-	return wrapDBError(tx.Commit(), "提交清空数据库事务失败")
+// GetPaperDetail 获取文献详情（委托给 Paper 仓库）
+func (r *LibraryRepository) GetPaperDetail(id int64) (*model.Paper, error) {
+	return r.Paper.GetPaperDetail(id)
 }
 
-func (r *LibraryRepository) GetAppSetting(key string) (string, error) {
-	var value string
-	if err := r.db.QueryRow("SELECT value FROM app_settings WHERE key = ?", key).Scan(&value); err != nil {
-		if err == sql.ErrNoRows {
-			return "", nil
-		}
-		return "", wrapDBError(err, "读取应用设置失败")
-	}
-	return value, nil
+// ListPapers 查询文献列表（委托给 Paper 仓库）
+func (r *LibraryRepository) ListPapers(filter model.PaperFilter) ([]model.Paper, int, error) {
+	return r.Paper.ListPapers(filter)
 }
 
-func (r *LibraryRepository) UpsertAppSetting(key, value string) error {
-	_, err := r.db.Exec(`
-		INSERT INTO app_settings (key, value)
-		VALUES (?, ?)
-		ON CONFLICT(key) DO UPDATE SET
-			value = excluded.value,
-			updated_at = CURRENT_TIMESTAMP
-	`, key, value)
-	return wrapDBError(err, "保存应用设置失败")
+// ListPapersByExtractionStatuses 根据解析状态查询文献（委托给 Paper 仓库）
+func (r *LibraryRepository) ListPapersByExtractionStatuses(statuses []string) ([]model.Paper, error) {
+	return r.Paper.ListPapersByExtractionStatuses(statuses)
 }
 
+// FindPaperByPDFSHA256 根据 PDF SHA256 查找文献（委托给 Paper 仓库）
+func (r *LibraryRepository) FindPaperByPDFSHA256(pdfSHA256 string) (*model.Paper, error) {
+	return r.Paper.FindPaperByPDFSHA256(pdfSHA256)
+}
+
+// ListPapersMissingPDFSHA256 查询缺少 PDF SHA256 的文献（委托给 Paper 仓库）
+func (r *LibraryRepository) ListPapersMissingPDFSHA256() ([]PaperChecksumBackfillItem, error) {
+	return r.Paper.ListPapersMissingPDFSHA256()
+}
+
+// UpdatePaperPDFSHA256 更新文献 PDF SHA256（委托给 Paper 仓库）
+func (r *LibraryRepository) UpdatePaperPDFSHA256(id int64, pdfSHA256 string) error {
+	return r.Paper.UpdatePaperPDFSHA256(id, pdfSHA256)
+}
+
+// UpdatePaperExtractionState 更新文献解析状态（委托给 Paper 仓库）
 func (r *LibraryRepository) UpdatePaperExtractionState(id int64, status, message, jobID string) error {
-	result, err := r.db.Exec(`
-		UPDATE papers
-		SET extraction_status = ?, extractor_message = ?, extractor_job_id = ?, updated_at = CURRENT_TIMESTAMP
-		WHERE id = ?
-	`, status, message, jobID, id)
-	if err != nil {
-		return wrapDBError(err, "更新文献解析状态失败")
-	}
-
-	return ensureRowsAffected(result, "paper not found")
+	return r.Paper.UpdatePaperExtractionState(id, status, message, jobID)
 }
 
+// ApplyPaperExtractionResult 应用文献解析结果（委托给 Paper 仓库）
 func (r *LibraryRepository) ApplyPaperExtractionResult(
 	id int64,
 	pdfText string,
@@ -1263,1200 +138,192 @@ func (r *LibraryRepository) ApplyPaperExtractionResult(
 	jobID string,
 	figures []FigureUpsertInput,
 ) error {
-	tx, err := r.db.Begin()
-	if err != nil {
-		return wrapDBError(err, "写入文献解析结果失败")
-	}
-	defer tx.Rollback()
-
-	result, err := tx.Exec(`
-		UPDATE papers
-		SET pdf_text = ?, boxes_json = ?, extraction_status = ?, extractor_message = ?, extractor_job_id = ?, updated_at = CURRENT_TIMESTAMP
-		WHERE id = ?
-	`, pdfText, boxesJSON, status, message, jobID, id)
-	if err != nil {
-		return wrapDBError(err, "写入文献解析结果失败")
-	}
-
-	if err := ensureRowsAffected(result, "paper not found"); err != nil {
-		return err
-	}
-
-	if _, err := tx.Exec("DELETE FROM paper_figures WHERE paper_id = ? AND COALESCE(source, 'auto') != 'manual'", id); err != nil {
-		return wrapDBError(err, "更新文献图片失败")
-	}
-
-	for _, figure := range figures {
-		if _, err := tx.Exec(`
-			INSERT INTO paper_figures (
-				paper_id, filename, original_name, content_type, page_number, figure_index, source, caption, bbox_json, created_at, updated_at
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-		`,
-			id,
-			figure.Filename,
-			figure.OriginalName,
-			figure.ContentType,
-			figure.PageNumber,
-			figure.FigureIndex,
-			firstNonEmpty(strings.TrimSpace(figure.Source), "auto"),
-			figure.Caption,
-			figure.BBoxJSON,
-		); err != nil {
-			return wrapConflictDBError(err, "图片文件已存在", "更新文献图片失败")
-		}
-	}
-
-	return wrapDBError(tx.Commit(), "提交文献解析结果失败")
+	return r.Paper.ApplyPaperExtractionResult(id, pdfText, boxesJSON, status, message, jobID, figures)
 }
 
-func (r *LibraryRepository) AddPaperFigures(id int64, figures []FigureUpsertInput) error {
-	return r.ApplyManualFigureChanges(id, figures, nil)
-}
-
+// ApplyManualFigureChanges 应用人工图片修改（委托给 Figure 仓库）
 func (r *LibraryRepository) ApplyManualFigureChanges(id int64, addFigures []FigureUpsertInput, deleteFigureIDs []int64) error {
-	if len(addFigures) == 0 && len(deleteFigureIDs) == 0 {
-		return nil
-	}
-
-	uniqueDeleteIDs := uniqueInt64s(deleteFigureIDs)
-	tx, err := r.db.Begin()
-	if err != nil {
-		return wrapDBError(err, "更新人工图片失败")
-	}
-	defer tx.Rollback()
-
-	result, err := tx.Exec(`
-		UPDATE papers
-		SET updated_at = CURRENT_TIMESTAMP
-		WHERE id = ?
-	`, id)
-	if err != nil {
-		return wrapDBError(err, "更新人工图片失败")
-	}
-	if err := ensureRowsAffected(result, "paper not found"); err != nil {
-		return err
-	}
-
-	if len(uniqueDeleteIDs) > 0 {
-		placeholders := make([]string, len(uniqueDeleteIDs))
-		args := make([]interface{}, 0, len(uniqueDeleteIDs)+1)
-		args = append(args, id)
-		for i, figureID := range uniqueDeleteIDs {
-			placeholders[i] = "?"
-			args = append(args, figureID)
-		}
-
-		var count int
-		if err := tx.QueryRow(
-			`SELECT COUNT(*) FROM paper_figures WHERE paper_id = ? AND id IN (`+strings.Join(placeholders, ",")+`)`,
-			args...,
-		).Scan(&count); err != nil {
-			return wrapDBError(err, "校验待删除图片失败")
-		}
-		if count != len(uniqueDeleteIDs) {
-			return apperr.New(apperr.CodeNotFound, "待替换或删除的图片不存在")
-		}
-
-		if _, err := tx.Exec(
-			`DELETE FROM paper_figures WHERE paper_id = ? AND id IN (`+strings.Join(placeholders, ",")+`)`,
-			args...,
-		); err != nil {
-			return wrapDBError(err, "删除旧图片失败")
-		}
-	}
-
-	for _, figure := range addFigures {
-		if _, err := tx.Exec(`
-			INSERT INTO paper_figures (
-				paper_id, filename, original_name, content_type, page_number, figure_index, source, caption, bbox_json, created_at, updated_at
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-		`,
-			id,
-			figure.Filename,
-			figure.OriginalName,
-			figure.ContentType,
-			figure.PageNumber,
-			figure.FigureIndex,
-			firstNonEmpty(strings.TrimSpace(figure.Source), "manual"),
-			figure.Caption,
-			figure.BBoxJSON,
-		); err != nil {
-			return wrapConflictDBError(err, "图片文件已存在", "保存人工图片失败")
-		}
-	}
-
-	return wrapDBError(tx.Commit(), "提交人工图片事务失败")
+	return r.Figure.ApplyManualFigureChanges(id, addFigures, deleteFigureIDs)
 }
 
+// AddPaperFigures 添加文献图片（委托给 Figure 仓库）
+func (r *LibraryRepository) AddPaperFigures(id int64, figures []FigureUpsertInput) error {
+	return r.Figure.ApplyManualFigureChanges(id, figures, nil)
+}
+
+// PurgeLibrary 清空文献库（委托给 Paper 仓库）
+func (r *LibraryRepository) PurgeLibrary() error {
+	return r.Paper.PurgeLibrary()
+}
+
+// GetFigure 获取图片（委托给 Figure 仓库）
 func (r *LibraryRepository) GetFigure(id int64) (*model.FigureListItem, error) {
-	row := r.db.QueryRow(`
-		SELECT
-			pf.id, pf.paper_id, p.title, p.group_id, COALESCE(g.name, ''),
-			pf.filename, pf.page_number, pf.figure_index, pf.source, pf.caption, pf.notes_text, pf.created_at, pf.updated_at
-		FROM paper_figures pf
-		JOIN papers p ON p.id = pf.paper_id
-		LEFT JOIN groups g ON g.id = p.group_id
-		WHERE pf.id = ?
-	`, id)
-
-	var item model.FigureListItem
-	var groupID sql.NullInt64
-	var groupName string
-	if err := row.Scan(
-		&item.ID,
-		&item.PaperID,
-		&item.PaperTitle,
-		&groupID,
-		&groupName,
-		&item.Filename,
-		&item.PageNumber,
-		&item.FigureIndex,
-		&item.Source,
-		&item.Caption,
-		&item.NotesText,
-		&item.CreatedAt,
-		&item.UpdatedAt,
-	); err != nil {
-		if err == sql.ErrNoRows {
-			return nil, nil
-		}
-		return nil, wrapDBError(err, "查询图片失败")
-	}
-
-	if groupID.Valid {
-		item.GroupID = &groupID.Int64
-		item.GroupName = groupName
-	}
-	tagsByFigure, err := r.loadTagsByFigureIDs([]int64{id})
-	if err != nil {
-		return nil, wrapDBError(err, "查询图片标签失败")
-	}
-	item.Tags = tagsByFigure[id]
-	if item.Tags == nil {
-		item.Tags = []model.Tag{}
-	}
-	return &item, nil
+	return r.Figure.GetFigure(id)
 }
 
-func uniqueInt64s(values []int64) []int64 {
-	if len(values) == 0 {
-		return nil
-	}
-
-	seen := make(map[int64]struct{}, len(values))
-	result := make([]int64, 0, len(values))
-	for _, value := range values {
-		if value <= 0 {
-			continue
-		}
-		if _, ok := seen[value]; ok {
-			continue
-		}
-		seen[value] = struct{}{}
-		result = append(result, value)
-	}
-	return result
-}
-
-func (r *LibraryRepository) DeletePaperFigure(id int64) error {
-	result, err := r.db.Exec(`DELETE FROM paper_figures WHERE id = ?`, id)
-	if err != nil {
-		return wrapDBError(err, "删除图片失败")
-	}
-	return ensureRowsAffected(result, "figure not found")
-}
-
-func (r *LibraryRepository) GetPaperDetail(id int64) (*model.Paper, error) {
-	row := r.db.QueryRow(`
-			SELECT
-				p.id, p.title, p.original_filename, p.stored_pdf_name, p.file_size, p.content_type,
-				p.pdf_text, p.abstract_text, p.notes_text, p.paper_notes_text, p.boxes_json, p.extraction_status, p.extractor_message, p.extractor_job_id,
-				p.group_id, COALESCE(g.name, ''),
-				p.created_at, p.updated_at,
-				(SELECT COUNT(*) FROM paper_figures pf WHERE pf.paper_id = p.id)
-		FROM papers p
-		LEFT JOIN groups g ON g.id = p.group_id
-		WHERE p.id = ?
-	`, id)
-
-	paper, err := scanPaper(row, true)
-	if err == sql.ErrNoRows {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, wrapDBError(err, "查询文献失败")
-	}
-
-	tagsByPaper, err := r.loadTagsByPaperIDs([]int64{id})
-	if err != nil {
-		return nil, wrapDBError(err, "查询文献标签失败")
-	}
-	paper.Tags = tagsByPaper[id]
-	if paper.Tags == nil {
-		paper.Tags = []model.Tag{}
-	}
-
-	rows, err := r.db.Query(`
-		SELECT id, filename, original_name, content_type, page_number, figure_index, source, caption, notes_text, bbox_json, created_at, updated_at
-		FROM paper_figures
-		WHERE paper_id = ?
-		ORDER BY page_number ASC, figure_index ASC, id ASC
-	`, id)
-	if err != nil {
-		return nil, wrapDBError(err, "查询文献图片失败")
-	}
-	defer rows.Close()
-
-	paper.Figures = []model.Figure{}
-	figureIDs := []int64{}
-	for rows.Next() {
-		var figure model.Figure
-		var bboxJSON string
-		if err := rows.Scan(
-			&figure.ID,
-			&figure.Filename,
-			&figure.OriginalName,
-			&figure.ContentType,
-			&figure.PageNumber,
-			&figure.FigureIndex,
-			&figure.Source,
-			&figure.Caption,
-			&figure.NotesText,
-			&bboxJSON,
-			&figure.CreatedAt,
-			&figure.UpdatedAt,
-		); err != nil {
-			return nil, wrapDBError(err, "查询文献图片失败")
-		}
-		figure.BBox = rawJSON(bboxJSON)
-		figure.Tags = []model.Tag{}
-		paper.Figures = append(paper.Figures, figure)
-		figureIDs = append(figureIDs, figure.ID)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, wrapDBError(err, "查询文献图片失败")
-	}
-
-	tagsByFigure, err := r.loadTagsByFigureIDs(figureIDs)
-	if err != nil {
-		return nil, wrapDBError(err, "查询图片标签失败")
-	}
-	for i := range paper.Figures {
-		if tags := tagsByFigure[paper.Figures[i].ID]; tags != nil {
-			paper.Figures[i].Tags = tags
-		}
-	}
-
-	return paper, nil
-}
-
-func (r *LibraryRepository) ListPapers(filter model.PaperFilter) ([]model.Paper, int, error) {
-	if filter.Page < 1 {
-		filter.Page = 1
-	}
-	if filter.PageSize < 1 || filter.PageSize > 100 {
-		filter.PageSize = 12
-	}
-
-	whereClause, args := buildPaperWhere(filter)
-
-	var total int
-	countQuery := "SELECT COUNT(*) FROM papers p" + whereClause
-	if err := r.db.QueryRow(countQuery, args...).Scan(&total); err != nil {
-		return nil, 0, wrapDBError(err, "查询文献总数失败")
-	}
-
-	query := `
-			SELECT
-				p.id, p.title, p.original_filename, p.stored_pdf_name, p.file_size, p.content_type,
-				'', p.abstract_text, p.notes_text, p.paper_notes_text, '', p.extraction_status, p.extractor_message, p.extractor_job_id,
-				p.group_id, COALESCE(g.name, ''),
-				p.created_at, p.updated_at,
-				(SELECT COUNT(*) FROM paper_figures pf WHERE pf.paper_id = p.id)
-		FROM papers p
-		LEFT JOIN groups g ON g.id = p.group_id
-	` + whereClause + `
-		ORDER BY p.created_at DESC, p.id DESC
-		LIMIT ? OFFSET ?
-	`
-
-	offset := (filter.Page - 1) * filter.PageSize
-	queryArgs := append(append([]interface{}{}, args...), filter.PageSize, offset)
-	rows, err := r.db.Query(query, queryArgs...)
-	if err != nil {
-		return nil, 0, wrapDBError(err, "查询文献列表失败")
-	}
-	defer rows.Close()
-
-	papers := []model.Paper{}
-	paperIDs := []int64{}
-	for rows.Next() {
-		paper, err := scanPaper(rows, false)
-		if err != nil {
-			return nil, 0, wrapDBError(err, "查询文献列表失败")
-		}
-		paper.Tags = []model.Tag{}
-		paper.Figures = nil
-		papers = append(papers, *paper)
-		paperIDs = append(paperIDs, paper.ID)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, 0, wrapDBError(err, "查询文献列表失败")
-	}
-
-	tagsByPaper, err := r.loadTagsByPaperIDs(paperIDs)
-	if err != nil {
-		return nil, 0, wrapDBError(err, "查询文献标签失败")
-	}
-	for i := range papers {
-		if tags := tagsByPaper[papers[i].ID]; tags != nil {
-			papers[i].Tags = tags
-		}
-	}
-
-	return papers, total, nil
-}
-
-func (r *LibraryRepository) ListPapersByExtractionStatuses(statuses []string) ([]model.Paper, error) {
-	if len(statuses) == 0 {
-		return []model.Paper{}, nil
-	}
-
-	placeholders := make([]string, len(statuses))
-	args := make([]interface{}, len(statuses))
-	for i, status := range statuses {
-		placeholders[i] = "?"
-		args[i] = status
-	}
-
-	rows, err := r.db.Query(`
-		SELECT
-			p.id, p.title, p.original_filename, p.stored_pdf_name, p.file_size, p.content_type,
-			'', p.abstract_text, p.notes_text, p.paper_notes_text, '', p.extraction_status, p.extractor_message, p.extractor_job_id,
-			p.group_id, COALESCE(g.name, ''),
-			p.created_at, p.updated_at,
-			(SELECT COUNT(*) FROM paper_figures pf WHERE pf.paper_id = p.id)
-		FROM papers p
-		LEFT JOIN groups g ON g.id = p.group_id
-		WHERE p.extraction_status IN (`+strings.Join(placeholders, ",")+`)
-		ORDER BY p.updated_at DESC, p.id DESC
-	`, args...)
-	if err != nil {
-		return nil, wrapDBError(err, "查询待恢复文献失败")
-	}
-	defer rows.Close()
-
-	papers := []model.Paper{}
-	for rows.Next() {
-		paper, err := scanPaper(rows, false)
-		if err != nil {
-			return nil, wrapDBError(err, "查询待恢复文献失败")
-		}
-		papers = append(papers, *paper)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, wrapDBError(err, "查询待恢复文献失败")
-	}
-
-	return papers, nil
-}
-
+// ListFigures 查询图片列表（委托给 Figure 仓库）
 func (r *LibraryRepository) ListFigures(filter model.FigureFilter) ([]model.FigureListItem, int, error) {
-	if filter.Page < 1 {
-		filter.Page = 1
-	}
-	if filter.PageSize < 1 || filter.PageSize > 200 {
-		filter.PageSize = 8
-	}
-
-	whereClause, args := buildFigureWhere(filter)
-
-	var total int
-	countQuery := `
-		SELECT COUNT(*)
-		FROM paper_figures pf
-		JOIN papers p ON p.id = pf.paper_id
-	` + whereClause
-	if err := r.db.QueryRow(countQuery, args...).Scan(&total); err != nil {
-		return nil, 0, wrapDBError(err, "查询图片总数失败")
-	}
-
-	query := `
-		SELECT
-			pf.id, pf.paper_id, p.title, p.group_id, COALESCE(g.name, ''),
-			pf.filename, pf.page_number, pf.figure_index, pf.source, pf.caption, pf.notes_text, pf.created_at, pf.updated_at
-		FROM paper_figures pf
-		JOIN papers p ON p.id = pf.paper_id
-		LEFT JOIN groups g ON g.id = p.group_id
-		` + whereClause + `
-		` + buildFigureOrderBy(filter) + `
-		LIMIT ? OFFSET ?
-	`
-
-	offset := (filter.Page - 1) * filter.PageSize
-	queryArgs := append(append([]interface{}{}, args...), filter.PageSize, offset)
-	rows, err := r.db.Query(query, queryArgs...)
-	if err != nil {
-		return nil, 0, wrapDBError(err, "查询图片列表失败")
-	}
-	defer rows.Close()
-
-	figures := []model.FigureListItem{}
-	figureIDs := []int64{}
-	for rows.Next() {
-		var item model.FigureListItem
-		var groupID sql.NullInt64
-		var groupName string
-		if err := rows.Scan(
-			&item.ID,
-			&item.PaperID,
-			&item.PaperTitle,
-			&groupID,
-			&groupName,
-			&item.Filename,
-			&item.PageNumber,
-			&item.FigureIndex,
-			&item.Source,
-			&item.Caption,
-			&item.NotesText,
-			&item.CreatedAt,
-			&item.UpdatedAt,
-		); err != nil {
-			return nil, 0, wrapDBError(err, "查询图片列表失败")
-		}
-		if groupID.Valid {
-			item.GroupID = &groupID.Int64
-			item.GroupName = groupName
-		}
-		item.Tags = []model.Tag{}
-		figures = append(figures, item)
-		figureIDs = append(figureIDs, item.ID)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, 0, wrapDBError(err, "查询图片列表失败")
-	}
-
-	tagsByFigure, err := r.loadTagsByFigureIDs(figureIDs)
-	if err != nil {
-		return nil, 0, wrapDBError(err, "查询图片标签失败")
-	}
-	for i := range figures {
-		if tags := tagsByFigure[figures[i].ID]; tags != nil {
-			figures[i].Tags = tags
-		}
-	}
-
-	return figures, total, nil
+	return r.Figure.ListFigures(filter)
 }
 
+// UpdateFigure 更新图片（委托给 Figure 仓库）
+func (r *LibraryRepository) UpdateFigure(id int64, input FigureUpdateInput) (*model.Paper, error) {
+	// 先执行更新
+	if _, err := r.Figure.UpdateFigure(id, input); err != nil {
+		return nil, err
+	}
+	// 获取关联的 Paper ID 并返回详情
+	figure, err := r.Figure.GetFigure(id)
+	if err != nil {
+		return nil, err
+	}
+	if figure == nil {
+		return nil, apperr.New(apperr.CodeNotFound, "figure not found")
+	}
+	return r.Paper.GetPaperDetail(figure.PaperID)
+}
+
+// UpdateFigureTags 更新图片标签（委托给 Figure 仓库）
+func (r *LibraryRepository) UpdateFigureTags(id int64, tags []TagUpsertInput) (*model.Paper, error) {
+	return r.Figure.UpdateFigureTags(id, tags)
+}
+
+// DeletePaperFigure 删除图片（委托给 Figure 仓库）
+func (r *LibraryRepository) DeletePaperFigure(id int64) error {
+	return r.Figure.DeletePaperFigure(id)
+}
+
+// ListGroups 查询分组列表（委托给 Group 仓库）
 func (r *LibraryRepository) ListGroups() ([]model.Group, error) {
-	rows, err := r.db.Query(`
-		SELECT
-			g.id, g.name, g.description, g.created_at, g.updated_at,
-			COUNT(p.id) AS paper_count
-		FROM groups g
-		LEFT JOIN papers p ON p.group_id = g.id
-		GROUP BY g.id
-		ORDER BY g.name COLLATE NOCASE ASC
-	`)
-	if err != nil {
-		return nil, wrapDBError(err, "查询分组列表失败")
-	}
-	defer rows.Close()
-
-	groups := []model.Group{}
-	for rows.Next() {
-		var group model.Group
-		if err := rows.Scan(
-			&group.ID,
-			&group.Name,
-			&group.Description,
-			&group.CreatedAt,
-			&group.UpdatedAt,
-			&group.PaperCount,
-		); err != nil {
-			return nil, wrapDBError(err, "查询分组列表失败")
-		}
-		groups = append(groups, group)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, wrapDBError(err, "查询分组列表失败")
-	}
-
-	return groups, nil
+	return r.Group.ListGroups()
 }
 
+// CreateGroup 创建分组（委托给 Group 仓库）
 func (r *LibraryRepository) CreateGroup(name, description string) (*model.Group, error) {
-	result, err := r.db.Exec(`
-		INSERT INTO groups (name, description)
-		VALUES (?, ?)
-	`, name, description)
-	if err != nil {
-		return nil, wrapConflictDBError(err, "分组名称已存在", "创建分组失败")
-	}
-
-	id, err := result.LastInsertId()
-	if err != nil {
-		return nil, wrapDBError(err, "读取分组 ID 失败")
-	}
-
-	return r.getGroupByID(id)
+	return r.Group.CreateGroup(name, description)
 }
 
+// UpdateGroup 更新分组（委托给 Group 仓库）
 func (r *LibraryRepository) UpdateGroup(id int64, name, description string) (*model.Group, error) {
-	result, err := r.db.Exec(`
-		UPDATE groups
-		SET name = ?, description = ?, updated_at = CURRENT_TIMESTAMP
-		WHERE id = ?
-	`, name, description, id)
-	if err != nil {
-		return nil, wrapConflictDBError(err, "分组名称已存在", "更新分组失败")
-	}
-
-	if err := ensureRowsAffected(result, "group not found"); err != nil {
-		return nil, err
-	}
-
-	return r.getGroupByID(id)
+	return r.Group.UpdateGroup(id, name, description)
 }
 
+// DeleteGroup 删除分组（委托给 Group 仓库）
 func (r *LibraryRepository) DeleteGroup(id int64) error {
-	result, err := r.db.Exec("DELETE FROM groups WHERE id = ?", id)
-	if err != nil {
-		return wrapDBError(err, "删除分组失败")
-	}
-	return ensureRowsAffected(result, "group not found")
+	return r.Group.DeleteGroup(id)
 }
 
+// GroupExists 检查分组是否存在（委托给 Group 仓库）
+func (r *LibraryRepository) GroupExists(id int64) (bool, error) {
+	return r.Group.GroupExists(id)
+}
+
+// ListTags 查询标签列表（委托给 Tag 仓库）
 func (r *LibraryRepository) ListTags(scope model.TagScope) ([]model.Tag, error) {
-	scope = model.NormalizeTagScope(string(scope))
-	rows, err := r.db.Query(`
-		SELECT
-			t.id, t.scope, t.name, t.color, t.created_at, t.updated_at,
-			(SELECT COUNT(*) FROM paper_tags pt WHERE pt.tag_id = t.id) AS paper_count,
-			(SELECT COUNT(*) FROM figure_tags ft WHERE ft.tag_id = t.id) AS figure_count
-		FROM tags t
-		WHERE t.scope = ?
-		ORDER BY t.name COLLATE NOCASE ASC
-	`, scope)
-	if err != nil {
-		return nil, wrapDBError(err, "查询标签列表失败")
-	}
-	defer rows.Close()
-
-	tags := []model.Tag{}
-	for rows.Next() {
-		var tag model.Tag
-		if err := rows.Scan(
-			&tag.ID,
-			&tag.Scope,
-			&tag.Name,
-			&tag.Color,
-			&tag.CreatedAt,
-			&tag.UpdatedAt,
-			&tag.PaperCount,
-			&tag.FigureCount,
-		); err != nil {
-			return nil, wrapDBError(err, "查询标签列表失败")
-		}
-		tags = append(tags, tag)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, wrapDBError(err, "查询标签列表失败")
-	}
-
-	return tags, nil
+	return r.Tag.ListTags(scope)
 }
 
+// CreateTag 创建标签（委托给 Tag 仓库）
 func (r *LibraryRepository) CreateTag(scope model.TagScope, name, color string) (*model.Tag, error) {
-	scope = model.NormalizeTagScope(string(scope))
-	result, err := r.db.Exec(`
-		INSERT INTO tags (scope, name, color)
-		VALUES (?, ?, ?)
-	`, scope, name, color)
-	if err != nil {
-		return nil, wrapConflictDBError(err, "标签名称已存在", "创建标签失败")
-	}
-
-	id, err := result.LastInsertId()
-	if err != nil {
-		return nil, wrapDBError(err, "读取标签 ID 失败")
-	}
-
-	return r.getTagByID(id)
+	return r.Tag.CreateTag(scope, name, color)
 }
 
+// UpdateTag 更新标签（委托给 Tag 仓库）
 func (r *LibraryRepository) UpdateTag(id int64, name, color string) (*model.Tag, error) {
-	result, err := r.db.Exec(`
-		UPDATE tags
-		SET name = ?, color = ?, updated_at = CURRENT_TIMESTAMP
-		WHERE id = ?
-	`, name, color, id)
-	if err != nil {
-		return nil, wrapConflictDBError(err, "标签名称已存在", "更新标签失败")
-	}
-
-	if err := ensureRowsAffected(result, "tag not found"); err != nil {
-		return nil, err
-	}
-
-	return r.getTagByID(id)
+	return r.Tag.UpdateTag(id, name, color)
 }
 
+// DeleteTag 删除标签（委托给 Tag 仓库）
 func (r *LibraryRepository) DeleteTag(id int64) error {
-	result, err := r.db.Exec("DELETE FROM tags WHERE id = ?", id)
-	if err != nil {
-		return wrapDBError(err, "删除标签失败")
-	}
-	return ensureRowsAffected(result, "tag not found")
+	return r.Tag.DeleteTag(id)
 }
 
+// syncPaperTags 同步文献标签（委托给 Tag 仓库）
 func (r *LibraryRepository) syncPaperTags(tx *sql.Tx, paperID int64, tags []TagUpsertInput) error {
-	return r.syncEntityTags(tx, "paper_tags", "paper_id", paperID, tags, model.TagScopePaper)
+	return r.Tag.SyncPaperTags(tx, paperID, tags)
 }
 
+// syncFigureTags 同步图片标签（委托给 Tag 仓库）
 func (r *LibraryRepository) syncFigureTags(tx *sql.Tx, figureID int64, tags []TagUpsertInput) error {
-	return r.syncEntityTags(tx, "figure_tags", "figure_id", figureID, tags, model.TagScopeFigure)
+	return r.Tag.SyncFigureTags(tx, figureID, tags)
 }
 
-func (r *LibraryRepository) syncEntityTags(tx *sql.Tx, tableName, ownerColumn string, ownerID int64, tags []TagUpsertInput, scope model.TagScope) error {
-	if _, err := tx.Exec(
-		fmt.Sprintf("DELETE FROM %s WHERE %s = ?", tableName, ownerColumn),
-		ownerID,
-	); err != nil {
-		return err
-	}
-
-	if len(tags) == 0 {
-		return nil
-	}
-
-	tagIDs, err := r.upsertTagIDs(tx, scopedTagInputs(tags, scope))
-	if err != nil {
-		return err
-	}
-
-	for _, tagID := range tagIDs {
-		if _, err := tx.Exec(
-			fmt.Sprintf("INSERT OR IGNORE INTO %s (%s, tag_id) VALUES (?, ?)", tableName, ownerColumn),
-			ownerID,
-			tagID,
-		); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func scopedTagInputs(tags []TagUpsertInput, scope model.TagScope) []TagUpsertInput {
-	scope = model.NormalizeTagScope(string(scope))
-	scoped := make([]TagUpsertInput, 0, len(tags))
-	for _, tag := range tags {
-		tag.Scope = scope
-		scoped = append(scoped, tag)
-	}
-	return scoped
-}
-
-func (r *LibraryRepository) upsertTagIDs(tx *sql.Tx, tags []TagUpsertInput) ([]int64, error) {
-	tagIDs := make([]int64, 0, len(tags))
-	for _, tag := range tags {
-		scope := model.NormalizeTagScope(string(tag.Scope))
-		if _, err := tx.Exec(`
-			INSERT INTO tags (scope, name, color)
-			VALUES (?, ?, ?)
-			ON CONFLICT(scope, name) DO UPDATE SET
-				color = CASE
-					WHEN excluded.color <> '' THEN excluded.color
-					ELSE tags.color
-				END,
-				updated_at = CURRENT_TIMESTAMP
-		`, scope, tag.Name, tag.Color); err != nil {
-			return nil, err
-		}
-
-		var id int64
-		if err := tx.QueryRow("SELECT id FROM tags WHERE scope = ? AND name = ?", scope, tag.Name).Scan(&id); err != nil {
-			return nil, err
-		}
-		tagIDs = append(tagIDs, id)
-	}
-
-	sort.Slice(tagIDs, func(i, j int) bool {
-		return tagIDs[i] < tagIDs[j]
-	})
-
-	return tagIDs, nil
-}
-
-func (r *LibraryRepository) getGroupByID(id int64) (*model.Group, error) {
-	row := r.db.QueryRow(`
-		SELECT
-			g.id, g.name, g.description, g.created_at, g.updated_at,
-			COUNT(p.id)
-		FROM groups g
-		LEFT JOIN papers p ON p.group_id = g.id
-		WHERE g.id = ?
-		GROUP BY g.id
-	`, id)
-
-	var group model.Group
-	if err := row.Scan(
-		&group.ID,
-		&group.Name,
-		&group.Description,
-		&group.CreatedAt,
-		&group.UpdatedAt,
-		&group.PaperCount,
-	); err != nil {
-		if err == sql.ErrNoRows {
-			return nil, notFoundError("group not found")
-		}
-		return nil, wrapDBError(err, "查询分组失败")
-	}
-
-	return &group, nil
-}
-
-func (r *LibraryRepository) getTagByID(id int64) (*model.Tag, error) {
-	row := r.db.QueryRow(`
-		SELECT
-			t.id, t.scope, t.name, t.color, t.created_at, t.updated_at,
-			(SELECT COUNT(*) FROM paper_tags pt WHERE pt.tag_id = t.id),
-			(SELECT COUNT(*) FROM figure_tags ft WHERE ft.tag_id = t.id)
-		FROM tags t
-		WHERE t.id = ?
-	`, id)
-
-	var tag model.Tag
-	if err := row.Scan(
-		&tag.ID,
-		&tag.Scope,
-		&tag.Name,
-		&tag.Color,
-		&tag.CreatedAt,
-		&tag.UpdatedAt,
-		&tag.PaperCount,
-		&tag.FigureCount,
-	); err != nil {
-		if err == sql.ErrNoRows {
-			return nil, notFoundError("tag not found")
-		}
-		return nil, wrapDBError(err, "查询标签失败")
-	}
-
-	return &tag, nil
-}
-
+// loadTagsByPaperIDs 批量加载文献标签（委托给 Tag 仓库）
 func (r *LibraryRepository) loadTagsByPaperIDs(paperIDs []int64) (map[int64][]model.Tag, error) {
-	result := make(map[int64][]model.Tag, len(paperIDs))
-	if len(paperIDs) == 0 {
-		return result, nil
-	}
-
-	placeholders := make([]string, len(paperIDs))
-	args := make([]interface{}, len(paperIDs))
-	for i, paperID := range paperIDs {
-		placeholders[i] = "?"
-		args[i] = paperID
-	}
-
-	query := `
-		SELECT pt.paper_id, t.id, t.scope, t.name, t.color, t.created_at, t.updated_at
-		FROM paper_tags pt
-		JOIN tags t ON t.id = pt.tag_id
-		WHERE pt.paper_id IN (` + strings.Join(placeholders, ",") + `)
-		ORDER BY t.name COLLATE NOCASE ASC
-	`
-	rows, err := r.db.Query(query, args...)
-	if err != nil {
-		return nil, wrapDBError(err, "查询文献标签失败")
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var paperID int64
-		var tag model.Tag
-		if err := rows.Scan(
-			&paperID,
-			&tag.ID,
-			&tag.Scope,
-			&tag.Name,
-			&tag.Color,
-			&tag.CreatedAt,
-			&tag.UpdatedAt,
-		); err != nil {
-			return nil, wrapDBError(err, "查询文献标签失败")
-		}
-		result[paperID] = append(result[paperID], tag)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, wrapDBError(err, "查询文献标签失败")
-	}
-
-	return result, nil
+	return r.Tag.LoadTagsByPaperIDs(paperIDs)
 }
 
+// loadTagsByFigureIDs 批量加载图片标签（委托给 Tag 仓库）
 func (r *LibraryRepository) loadTagsByFigureIDs(figureIDs []int64) (map[int64][]model.Tag, error) {
-	result := make(map[int64][]model.Tag, len(figureIDs))
-	if len(figureIDs) == 0 {
-		return result, nil
-	}
-
-	placeholders := make([]string, len(figureIDs))
-	args := make([]interface{}, len(figureIDs))
-	for i, figureID := range figureIDs {
-		placeholders[i] = "?"
-		args[i] = figureID
-	}
-
-	query := `
-		SELECT ft.figure_id, t.id, t.scope, t.name, t.color, t.created_at, t.updated_at
-		FROM figure_tags ft
-		JOIN tags t ON t.id = ft.tag_id
-		WHERE ft.figure_id IN (` + strings.Join(placeholders, ",") + `)
-		ORDER BY t.name COLLATE NOCASE ASC
-	`
-	rows, err := r.db.Query(query, args...)
-	if err != nil {
-		return nil, wrapDBError(err, "查询图片标签失败")
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var figureID int64
-		var tag model.Tag
-		if err := rows.Scan(
-			&figureID,
-			&tag.ID,
-			&tag.Scope,
-			&tag.Name,
-			&tag.Color,
-			&tag.CreatedAt,
-			&tag.UpdatedAt,
-		); err != nil {
-			return nil, wrapDBError(err, "查询图片标签失败")
-		}
-		result[figureID] = append(result[figureID], tag)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, wrapDBError(err, "查询图片标签失败")
-	}
-
-	return result, nil
+	return r.Tag.LoadTagsByFigureIDs(figureIDs)
 }
 
-func buildPaperWhere(filter model.PaperFilter) (string, []interface{}) {
-	conditions := []string{}
-	args := []interface{}{}
-
-	if keyword := strings.TrimSpace(filter.Keyword); keyword != "" {
-		keywordCondition, keywordArgs := buildPaperKeywordCondition(keyword, filter.KeywordScope)
-		conditions = append(conditions, keywordCondition)
-		args = append(args, keywordArgs...)
-	}
-
-	if filter.GroupID != nil {
-		conditions = append(conditions, "p.group_id = ?")
-		args = append(args, *filter.GroupID)
-	}
-
-	if filter.TagID != nil {
-		conditions = append(conditions, "EXISTS (SELECT 1 FROM paper_tags pt WHERE pt.paper_id = p.id AND pt.tag_id = ?)")
-		args = append(args, *filter.TagID)
-	}
-
-	if status := strings.TrimSpace(filter.Status); status != "" {
-		conditions = append(conditions, "p.extraction_status = ?")
-		args = append(args, status)
-	}
-
-	if filter.HasPaperNotes {
-		conditions = append(conditions, "TRIM(COALESCE(p.paper_notes_text, '')) <> ''")
-	}
-
-	if len(conditions) == 0 {
-		return "", args
-	}
-
-	return " WHERE " + strings.Join(conditions, " AND "), args
+// GetAppSetting 获取应用设置（委托给 Setting 仓库）
+func (r *LibraryRepository) GetAppSetting(key string) (string, error) {
+	return r.Setting.GetAppSetting(key)
 }
 
-func normalizePaperKeywordScope(scope string) string {
-	switch strings.ToLower(strings.TrimSpace(scope)) {
-	case "title_abstract":
-		return "title_abstract"
-	case "full_text":
-		return "full_text"
-	default:
-		return "all"
-	}
+// UpsertAppSetting 插入或更新应用设置（委托给 Setting 仓库）
+func (r *LibraryRepository) UpsertAppSetting(key, value string) error {
+	return r.Setting.UpsertAppSetting(key, value)
 }
 
-func buildFigureWhere(filter model.FigureFilter) (string, []interface{}) {
-	conditions := []string{}
-	args := []interface{}{}
-
-	if keyword := strings.TrimSpace(filter.Keyword); keyword != "" {
-		keywordCondition, keywordArgs := buildFigureKeywordCondition(keyword)
-		conditions = append(conditions, keywordCondition)
-		args = append(args, keywordArgs...)
-	}
-
-	if filter.GroupID != nil {
-		conditions = append(conditions, "p.group_id = ?")
-		args = append(args, *filter.GroupID)
-	}
-
-	if filter.TagID != nil {
-		conditions = append(conditions, "EXISTS (SELECT 1 FROM figure_tags ft WHERE ft.figure_id = pf.id AND ft.tag_id = ?)")
-		args = append(args, *filter.TagID)
-	}
-
-	if filter.HasNotes {
-		conditions = append(conditions, "TRIM(COALESCE(pf.notes_text, '')) <> ''")
-	}
-
-	if len(conditions) == 0 {
-		return "", args
-	}
-
-	return " WHERE " + strings.Join(conditions, " AND "), args
-}
-
-func buildPaperKeywordCondition(keyword, scope string) (string, []interface{}) {
-	like := "%" + keyword + "%"
-	switch normalizePaperKeywordScope(scope) {
-	case "title_abstract":
-		return `(
-			p.title LIKE ? OR
-			p.abstract_text LIKE ?
-		)`, []interface{}{like, like}
-	case "full_text":
-		return `(
-			p.title LIKE ? OR
-			p.abstract_text LIKE ? OR
-			p.pdf_text LIKE ?
-		)`, []interface{}{like, like, like}
-	}
-
-	if ftsQuery, ok := buildFTSMatchQuery(keyword); ok {
-		return `(
-			p.id IN (SELECT rowid FROM papers_fts WHERE papers_fts MATCH ?) OR
-			p.paper_notes_text LIKE ? OR
-			EXISTS (
-				SELECT 1
-				FROM paper_tags pt
-				JOIN tags t ON t.id = pt.tag_id
-				WHERE pt.paper_id = p.id AND t.name LIKE ?
-			) OR
-			EXISTS (
-				SELECT 1
-				FROM groups g2
-				WHERE g2.id = p.group_id AND g2.name LIKE ?
-			)
-		)`, []interface{}{ftsQuery, like, like, like}
-	}
-
-	return `(
-		p.title LIKE ? OR
-		p.original_filename LIKE ? OR
-		p.pdf_text LIKE ? OR
-		p.abstract_text LIKE ? OR
-		p.notes_text LIKE ? OR
-		p.paper_notes_text LIKE ? OR
-		EXISTS (
-			SELECT 1
-			FROM paper_tags pt
-			JOIN tags t ON t.id = pt.tag_id
-			WHERE pt.paper_id = p.id AND t.name LIKE ?
-		) OR
-		EXISTS (
-			SELECT 1
-			FROM groups g2
-			WHERE g2.id = p.group_id AND g2.name LIKE ?
-		)
-	)`, []interface{}{like, like, like, like, like, like, like, like}
-}
-
-func buildFigureKeywordCondition(keyword string) (string, []interface{}) {
-	like := "%" + keyword + "%"
-	if ftsQuery, ok := buildFTSMatchQuery(keyword); ok {
-		return `(
-			pf.id IN (SELECT rowid FROM figures_fts WHERE figures_fts MATCH ?) OR
-			p.title LIKE ? OR
-			EXISTS (
-				SELECT 1
-				FROM figure_tags ft
-				JOIN tags t ON t.id = ft.tag_id
-				WHERE ft.figure_id = pf.id AND t.name LIKE ?
-			)
-		)`, []interface{}{ftsQuery, like, like}
-	}
-
-	return `(
-		p.title LIKE ? OR
-		pf.caption LIKE ? OR
-		pf.notes_text LIKE ? OR
-		pf.original_name LIKE ? OR
-		EXISTS (
-			SELECT 1
-			FROM figure_tags ft
-			JOIN tags t ON t.id = ft.tag_id
-			WHERE ft.figure_id = pf.id AND t.name LIKE ?
-		)
-	)`, []interface{}{like, like, like, like, like}
-}
-
-func buildFTSMatchQuery(keyword string) (string, bool) {
-	normalized := strings.Join(strings.Fields(strings.TrimSpace(keyword)), " ")
-	if normalized == "" {
-		return "", false
-	}
-	compact := strings.ReplaceAll(normalized, " ", "")
-	if utf8.RuneCountInString(compact) < 3 {
-		return "", false
-	}
-	return fmt.Sprintf(`"%s"`, strings.ReplaceAll(normalized, `"`, `""`)), true
-}
-
-func buildFigureOrderBy(filter model.FigureFilter) string {
-	if filter.HasNotes {
-		return "ORDER BY COALESCE(pf.updated_at, pf.created_at) DESC, pf.id DESC"
-	}
-	return "ORDER BY p.created_at DESC, pf.page_number ASC, pf.figure_index ASC, pf.id ASC"
-}
-
-type scanner interface {
-	Scan(dest ...interface{}) error
-}
-
-func scanPaper(s scanner, includeHeavyFields bool) (*model.Paper, error) {
-	var paper model.Paper
-	var groupID sql.NullInt64
-	var groupName string
-	var boxesJSON string
-	var pdfText string
-	var abstractText string
-	var notesText string
-	var paperNotesText string
-
-	if err := s.Scan(
-		&paper.ID,
-		&paper.Title,
-		&paper.OriginalFilename,
-		&paper.StoredPDFName,
-		&paper.FileSize,
-		&paper.ContentType,
-		&pdfText,
-		&abstractText,
-		&notesText,
-		&paperNotesText,
-		&boxesJSON,
-		&paper.ExtractionStatus,
-		&paper.ExtractorMessage,
-		&paper.ExtractorJobID,
-		&groupID,
-		&groupName,
-		&paper.CreatedAt,
-		&paper.UpdatedAt,
-		&paper.FigureCount,
-	); err != nil {
-		return nil, err
-	}
-
-	if groupID.Valid {
-		paper.GroupID = &groupID.Int64
-		paper.GroupName = groupName
-	}
-
-	if includeHeavyFields {
-		paper.PDFText = pdfText
-		paper.Boxes = rawJSON(boxesJSON)
-	}
-	paper.AbstractText = abstractText
-	paper.NotesText = notesText
-	paper.PaperNotesText = paperNotesText
-
-	return &paper, nil
-}
-
-func rawJSON(value string) json.RawMessage {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return nil
-	}
-	return json.RawMessage(value)
-}
-
-func firstNonEmpty(values ...string) string {
-	for _, value := range values {
-		if strings.TrimSpace(value) != "" {
-			return value
-		}
-	}
-	return ""
-}
-
-func ensureRowsAffected(result sql.Result, notFoundMessage string) error {
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return wrapDBError(err, "读取数据库影响行数失败")
-	}
-	if rowsAffected == 0 {
-		return notFoundError(notFoundMessage)
-	}
-	return nil
-}
-
-func notFoundError(message string) error {
-	return apperr.Wrap(apperr.CodeNotFound, message, sql.ErrNoRows)
-}
-
-func wrapConflictDBError(err error, conflictMessage, defaultMessage string) error {
-	if err == nil {
-		return nil
-	}
-
-	var appErr *apperr.Error
-	if errors.As(err, &appErr) {
-		return err
-	}
-	if code := sqliteCode(err); code == sqlite3.SQLITE_CONSTRAINT_UNIQUE || code == sqlite3.SQLITE_CONSTRAINT_PRIMARYKEY {
-		return apperr.Wrap(apperr.CodeConflict, conflictMessage, err)
-	}
-	return wrapDBError(err, defaultMessage)
-}
+// 辅助函数（从原文件保留）
 
 func wrapDBError(err error, message string) error {
 	if err == nil {
 		return nil
 	}
-
-	var appErr *apperr.Error
-	if errors.As(err, &appErr) {
-		return err
-	}
-	switch sqliteCode(err) {
-	case sqlite3.SQLITE_CONSTRAINT_UNIQUE, sqlite3.SQLITE_CONSTRAINT_PRIMARYKEY:
-		return apperr.Wrap(apperr.CodeConflict, message, err)
-	case sqlite3.SQLITE_CONSTRAINT_CHECK, sqlite3.SQLITE_CONSTRAINT_TRIGGER:
-		return apperr.Wrap(apperr.CodeInvalidArgument, message, err)
-	}
 	return apperr.Wrap(apperr.CodeInternal, message, err)
 }
 
-func sqliteCode(err error) int {
-	var sqliteErr *sqliteDriver.Error
-	if errors.As(err, &sqliteErr) {
-		return sqliteErr.Code()
+func wrapConflictDBError(err error, conflictMessage, fallbackMessage string) error {
+	if err == nil {
+		return nil
 	}
-	return 0
+	var sqliteErr interface{ Error() string }
+	if errors.As(err, &sqliteErr) {
+		errStr := sqliteErr.Error()
+		if containsAny(errStr, "UNIQUE", "unique") {
+			return apperr.New(apperr.CodeConflict, conflictMessage)
+		}
+	}
+	return apperr.Wrap(apperr.CodeInternal, fallbackMessage, err)
+}
+
+func ensureRowsAffected(result sql.Result, notFoundMessage string) error {
+	n, err := result.RowsAffected()
+	if err != nil {
+		return wrapDBError(err, "检查操作结果失败")
+	}
+	if n == 0 {
+		return apperr.New(apperr.CodeNotFound, notFoundMessage)
+	}
+	return nil
+}
+
+func notFoundError(message string) error {
+	return apperr.New(apperr.CodeNotFound, message)
+}
+
+func containsAny(s string, substrs ...string) bool {
+	for _, substr := range substrs {
+		if contains(s, substr) {
+			return true
+		}
+	}
+	return false
+}
+
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || containsAt(s, substr))
+}
+
+func containsAt(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
 }
