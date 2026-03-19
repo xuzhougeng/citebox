@@ -1,0 +1,46 @@
+/* ===== Library Page ===== */
+
+.library-result-meta {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1.2rem 1.3rem;
+    border-radius: 22px;
+    background:
+        radial-gradient(circle at top right, rgba(65, 103, 136, 0.08), transparent 14rem),
+        linear-gradient(180deg, rgba(255, 253, 249, 0.96), rgba(247, 239, 229, 0.92));
+    border: 1px solid rgba(36, 27, 22, 0.08);
+    box-shadow: 0 14px 28px rgba(78, 51, 33, 0.08);
+}
+
+.library-result-meta h2 {
+    margin: 0.25rem 0 0;
+    font-family: var(--font-display);
+    font-size: clamp(1.5rem, 2vw, 1.9rem);
+}
+
+.library-result-meta p {
+    margin: 0.5rem 0 0;
+    color: var(--muted);
+    line-height: 1.65;
+}
+
+.library-result-meta-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.55rem;
+    justify-content: flex-end;
+}
+
+.library-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.paper-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 1rem;
+}

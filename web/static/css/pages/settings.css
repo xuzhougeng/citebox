@@ -1,0 +1,218 @@
+/* ===== Settings Page ===== */
+
+.manager-head h2,
+.detail-section h3 {
+    margin: 0;
+    font-family: var(--font-display);
+}
+
+.manager-head h3 {
+    margin: 0;
+    color: var(--ink);
+    font-family: var(--font-display);
+}
+
+.manager-head p,
+.manager-item p {
+    color: var(--muted);
+}
+
+.prompt-section-head {
+    margin-top: 0.4rem;
+}
+
+.prompt-section-head p {
+    color: rgba(36, 27, 22, 0.78);
+}
+
+.manager-list {
+    display: grid;
+    gap: 0.8rem;
+}
+
+.manager-item {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.8rem;
+    align-items: flex-start;
+    padding: 0.95rem;
+    border-radius: 16px;
+    background: rgba(255, 252, 248, 0.86);
+    border: 1px solid rgba(36, 27, 22, 0.08);
+}
+
+.manager-item-actions,
+.tag-line {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+}
+
+/* ===== Prompt Template ===== */
+
+.prompt-field {
+    gap: 0.9rem;
+    padding: 1rem 1.05rem 1.05rem;
+    border-radius: 22px;
+    border: 1px solid rgba(36, 27, 22, 0.08);
+    background:
+        radial-gradient(circle at top right, rgba(65, 103, 136, 0.06), transparent 12rem),
+        linear-gradient(180deg, rgba(255, 253, 249, 0.96), rgba(248, 241, 232, 0.92));
+    box-shadow: 0 14px 28px rgba(78, 51, 33, 0.06);
+}
+
+.prompt-field .field-label-text {
+    display: inline-flex;
+    align-items: center;
+    position: relative;
+    min-height: 1.3rem;
+    padding-left: 0.9rem;
+    background: none;
+    border: 0;
+    box-shadow: none;
+    border-radius: 0;
+    font-size: 1rem;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+}
+
+.prompt-field .field-label-text::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 0.24rem;
+    height: 1.1rem;
+    border-radius: 999px;
+    background: linear-gradient(180deg, #a45c40, #416788);
+}
+
+.prompt-field .form-textarea {
+    background: rgba(255, 252, 248, 0.88);
+}
+
+.prompt-template-details {
+    border-top: 1px solid rgba(36, 27, 22, 0.08);
+    padding-top: 0.75rem;
+}
+
+.prompt-template-details summary {
+    cursor: pointer;
+    list-style: none;
+    color: var(--accent-deep);
+    font-size: 0.92rem;
+    font-weight: 700;
+}
+
+.prompt-template-details summary::-webkit-details-marker {
+    display: none;
+}
+
+.prompt-template-details summary::before {
+    content: "展开实际模板";
+}
+
+.prompt-template-details[open] summary::before {
+    content: "收起实际模板";
+}
+
+.prompt-template-note {
+    margin: 0.7rem 0 0;
+    color: var(--muted);
+    line-height: 1.6;
+}
+
+.prompt-template-note code {
+    font-family: "SFMono-Regular", "Menlo", "Monaco", "Cascadia Mono", "Segoe UI Mono", monospace;
+    font-size: 0.88em;
+}
+
+.prompt-template-pre {
+    margin: 0.8rem 0 0;
+    padding: 1rem 1.05rem;
+    border-radius: 18px;
+    border: 1px solid rgba(36, 27, 22, 0.08);
+    background: rgba(255, 252, 248, 0.92);
+    color: var(--ink);
+    font-family: "SFMono-Regular", "Menlo", "Monaco", "Cascadia Mono", "Segoe UI Mono", monospace;
+    font-size: 0.84rem;
+    line-height: 1.62;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+/* ===== Database Management ===== */
+
+.db-actions-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1.5rem;
+    margin-top: 1rem;
+}
+
+.db-action-item {
+    padding: 1.2rem;
+    background: var(--panel-strong);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+}
+
+.db-action-item.danger {
+    border-color: rgba(159, 63, 52, 0.14);
+    background: linear-gradient(180deg, rgba(255, 249, 247, 0.96), rgba(255, 252, 248, 0.94));
+}
+
+.db-action-item h3 {
+    margin: 0 0 0.5rem 0;
+    font-size: 1.1rem;
+    font-family: var(--font-display);
+}
+
+.db-action-item p {
+    margin: 0 0 1rem 0;
+    color: var(--muted);
+    font-size: 0.95rem;
+}
+
+.settings-action-form {
+    display: grid;
+    gap: 0.85rem;
+    padding: 0.95rem;
+    border-radius: 18px;
+    background: rgba(255, 251, 245, 0.78);
+    border: 1px solid rgba(36, 27, 22, 0.08);
+}
+
+.settings-action-form .btn {
+    justify-self: flex-start;
+}
+
+.settings-action-form input[type="file"] {
+    width: 100%;
+    padding: 0.8rem;
+    background: linear-gradient(180deg, rgba(255, 252, 248, 0.96), rgba(247, 240, 230, 0.92));
+    border: 1px dashed rgba(164, 92, 64, 0.28);
+    border-radius: 14px;
+    font-size: 0.9rem;
+    color: var(--muted);
+    cursor: pointer;
+}
+
+.settings-action-form input[type="file"]::file-selector-button {
+    margin-right: 0.9rem;
+    padding: 0.62rem 0.95rem;
+    border: 1px solid rgba(36, 27, 22, 0.12);
+    border-radius: 999px;
+    background: rgba(255, 251, 245, 0.98);
+    color: var(--ink);
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+}
+
+.settings-action-form input[type="file"]:hover::file-selector-button {
+    background: rgba(255, 244, 234, 0.98);
+    border-color: rgba(164, 92, 64, 0.28);
+    transform: translateY(-1px);
+}

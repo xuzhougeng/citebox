@@ -1,0 +1,83 @@
+/* ===== Hero Section ===== */
+
+.hero {
+    display: flex;
+    justify-content: space-between;
+    gap: 2rem;
+    align-items: flex-end;
+    margin-bottom: 1.5rem;
+    padding: 2rem;
+    border-radius: calc(var(--radius) + 6px);
+    background:
+        linear-gradient(135deg, rgba(255, 250, 244, 0.96), rgba(244, 231, 214, 0.84)),
+        linear-gradient(180deg, rgba(164, 92, 64, 0.18), transparent);
+    box-shadow: var(--shadow);
+    border: 1px solid rgba(36, 27, 22, 0.08);
+}
+
+.hero > :first-child {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.hero.compact {
+    align-items: flex-start;
+}
+
+.hero.compact .hero-text {
+    max-width: 68rem;
+}
+
+.eyebrow {
+    margin: 0 0 0.6rem;
+    color: var(--accent-deep);
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    font-size: 0.75rem;
+    font-weight: 700;
+}
+
+.hero h1 {
+    margin: 0;
+    font-family: var(--font-display);
+    font-size: clamp(2rem, 3vw, 3.4rem);
+    line-height: 1.05;
+}
+
+.hero-text {
+    max-width: 54rem;
+    margin: 1rem 0 0;
+    color: var(--muted);
+    font-size: 1.02rem;
+    line-height: 1.7;
+}
+
+.hero-actions {
+    display: flex;
+    align-items: center;
+}
+
+.hero-inline-links {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.55rem;
+    margin: 1rem 0 0;
+    color: var(--muted);
+    font-size: 0.96rem;
+}
+
+.hero-inline-links a {
+    color: var(--accent-deep);
+    font-weight: 700;
+}
+
+.hero-inline-links a:hover {
+    color: var(--accent);
+}
+
+.guide-teaser-text {
+    margin: 0;
+    color: var(--muted);
+    line-height: 1.7;
+}

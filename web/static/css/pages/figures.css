@@ -1,0 +1,293 @@
+/* ===== Figures Page ===== */
+
+.filters-card-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.filters-card-head h2,
+.figure-results-head h2 {
+    margin: 0.2rem 0 0;
+    font-family: var(--font-display);
+    font-size: clamp(1.55rem, 2vw, 2rem);
+}
+
+.filters-card-head p,
+.figure-results-head p {
+    margin: 0.55rem 0 0;
+    max-width: 44rem;
+    color: var(--muted);
+    line-height: 1.65;
+}
+
+.figure-filters-card {
+    position: relative;
+    overflow: hidden;
+    padding: 1.35rem;
+    background:
+        linear-gradient(135deg, rgba(255, 251, 245, 0.96), rgba(244, 231, 214, 0.88)),
+        linear-gradient(90deg, rgba(164, 92, 64, 0.16), transparent 48%);
+    border: 1px solid rgba(164, 92, 64, 0.16);
+    box-shadow: 0 24px 60px rgba(78, 51, 33, 0.14);
+}
+
+.figure-filters-card::after {
+    content: "";
+    position: absolute;
+    right: -3rem;
+    bottom: -4rem;
+    width: 14rem;
+    height: 14rem;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(65, 103, 136, 0.14), transparent 68%);
+    pointer-events: none;
+}
+
+.figure-results-shell {
+    position: relative;
+    margin-top: 1.8rem;
+    padding: 1.45rem;
+    border-radius: calc(var(--radius) + 6px);
+    background:
+        radial-gradient(circle at top right, rgba(65, 103, 136, 0.08), transparent 18rem),
+        linear-gradient(180deg, rgba(255, 252, 248, 0.86), rgba(244, 235, 223, 0.94));
+    border: 1px solid rgba(36, 27, 22, 0.08);
+    box-shadow: var(--shadow);
+}
+
+.figure-results-shell::before {
+    content: "";
+    position: absolute;
+    top: 1rem;
+    left: 1.4rem;
+    right: 1.4rem;
+    height: 4px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, var(--accent), rgba(65, 103, 136, 0.78));
+}
+
+.figure-results-head {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-top: 1.35rem;
+}
+
+.figure-page-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.figure-page-indicator {
+    color: var(--muted);
+    font-size: 0.95rem;
+    white-space: nowrap;
+}
+
+.figure-results-shell .pagination {
+    margin-top: 1.45rem;
+}
+
+/* ===== Figure Grid ===== */
+
+.figure-grid,
+.figure-preview-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 1rem;
+}
+
+.figure-card {
+    padding: 1.1rem;
+    border-radius: 20px;
+    background: rgba(255, 252, 248, 0.88);
+    border: 1px solid rgba(36, 27, 22, 0.08);
+}
+
+.figure-card img {
+    width: 100%;
+    height: 180px;
+    object-fit: cover;
+    border-radius: 14px;
+    background: rgba(36, 27, 22, 0.04);
+}
+
+.figure-card figcaption {
+    display: grid;
+    gap: 0.35rem;
+    margin-top: 0.8rem;
+}
+
+/* ===== Figure Preview Card ===== */
+
+.figure-preview-card {
+    padding: 0;
+    border-radius: 20px;
+    overflow: hidden;
+    background: rgba(255, 253, 249, 0.94);
+    border: 1px solid rgba(36, 27, 22, 0.08);
+    box-shadow: 0 18px 34px rgba(78, 51, 33, 0.08);
+    transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.figure-preview-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 24px 42px rgba(78, 51, 33, 0.12);
+}
+
+.figure-preview-media {
+    display: block;
+    width: 100%;
+    padding: 0;
+    border: none;
+    background: none;
+    text-align: left;
+}
+
+.figure-preview-media img {
+    display: block;
+    width: 100%;
+    height: 220px;
+    object-fit: cover;
+    transition: transform 0.18s ease;
+}
+
+.figure-preview-media:hover img {
+    transform: scale(1.02);
+}
+
+.figure-preview-stage {
+    position: relative;
+}
+
+.figure-preview-badges {
+    position: absolute;
+    top: 0.85rem;
+    left: 0.85rem;
+    right: 0.85rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+    pointer-events: none;
+}
+
+.figure-badge {
+    display: inline-flex;
+    align-items: center;
+    max-width: 100%;
+    padding: 0.38rem 0.7rem;
+    border-radius: 999px;
+    background: rgba(255, 250, 244, 0.82);
+    border: 1px solid rgba(36, 27, 22, 0.08);
+    color: var(--ink);
+    font-size: 0.8rem;
+    font-weight: 600;
+    backdrop-filter: blur(10px);
+    box-shadow: 0 8px 22px rgba(36, 27, 22, 0.08);
+}
+
+.figure-badge-strong {
+    background: rgba(36, 27, 22, 0.72);
+    border-color: rgba(255, 250, 244, 0.16);
+    color: #fffaf4;
+}
+
+.figure-badge-accent {
+    background: rgba(79, 111, 82, 0.18);
+    border-color: rgba(79, 111, 82, 0.14);
+    color: #274336;
+}
+
+.figure-preview-body {
+    display: grid;
+    gap: 0.8rem;
+    padding: 1rem 1rem 1.1rem;
+}
+
+.figure-preview-head {
+    display: grid;
+    gap: 0.28rem;
+}
+
+.figure-preview-label {
+    color: var(--muted);
+    font-size: 0.78rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.figure-preview-title {
+    display: -webkit-box;
+    overflow: hidden;
+    margin: 0;
+    font-size: 1rem;
+    line-height: 1.45;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+}
+
+.figure-preview-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+    min-height: 1.8rem;
+}
+
+.figure-preview-tags .chip {
+    padding: 0.3rem 0.62rem;
+    font-size: 0.78rem;
+    opacity: 0.92;
+}
+
+.figure-preview-note {
+    display: grid;
+    gap: 0.35rem;
+    padding: 0.9rem 0.95rem;
+    border-radius: 18px;
+    background: rgba(244, 236, 225, 0.76);
+    border: 1px solid rgba(36, 27, 22, 0.08);
+}
+
+.figure-preview-note.is-empty {
+    background: rgba(255, 252, 248, 0.72);
+    border-style: dashed;
+}
+
+.figure-preview-note-label {
+    color: var(--muted);
+    font-size: 0.74rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.figure-preview-note-text {
+    display: -webkit-box;
+    overflow: hidden;
+    margin: 0;
+    color: var(--ink);
+    line-height: 1.6;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 4;
+}
+
+.figure-preview-note.is-empty .figure-preview-note-text {
+    color: var(--muted);
+}
+
+.figure-preview-empty {
+    display: inline-flex;
+    align-items: center;
+    color: var(--muted);
+    font-size: 0.88rem;
+}
+
+.figure-preview-card .card-actions {
+    margin-top: 0.35rem;
+}

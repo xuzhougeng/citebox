@@ -1,0 +1,42 @@
+/* ===== Drop Zone ===== */
+
+.drop-zone {
+    padding: 3.25rem 1.25rem;
+    border-radius: 24px;
+    border: 1.5px dashed rgba(164, 92, 64, 0.35);
+    background:
+        linear-gradient(135deg, rgba(164, 92, 64, 0.08), rgba(255, 251, 245, 0.7)),
+        repeating-linear-gradient(45deg, rgba(164, 92, 64, 0.05), rgba(164, 92, 64, 0.05) 12px, transparent 12px, transparent 24px);
+    text-align: center;
+    transition: transform 0.18s ease, border-color 0.18s ease;
+}
+
+.drop-zone.dragover {
+    transform: translateY(-2px);
+    border-color: var(--accent);
+}
+
+.drop-title {
+    margin: 0;
+    font-family: var(--font-display);
+    font-size: 1.5rem;
+}
+
+.drop-subtitle {
+    margin: 0.6rem 0 0;
+    color: var(--muted);
+}
+
+.selected-file {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1rem 1.1rem;
+    border-radius: 18px;
+    background: rgba(255, 252, 248, 0.8);
+    border: 1px solid rgba(36, 27, 22, 0.08);
+}
+
+.selected-file.empty {
+    color: var(--muted);
+}

@@ -1,0 +1,31 @@
+/* ===== PDF Text Preview ===== */
+
+.section-head-pdf-text {
+    align-items: center;
+}
+
+.pdf-text-preview {
+    margin-top: 0.5rem;
+}
+
+.pdf-text-snippet {
+    margin: 0;
+    padding: 1rem;
+    border-radius: 12px;
+    background: rgba(255, 252, 248, 0.92);
+    border: 1px solid rgba(36, 27, 22, 0.06);
+    color: var(--ink);
+    line-height: 1.8;
+    font-size: 0.95rem;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    overflow: auto;
+    max-height: 480px;
+    font-family: inherit;
+}
+
+.pdf-text-meta {
+    margin: 0.6rem 0 0;
+    color: var(--muted);
+    font-size: 0.85rem;
+}

@@ -1,0 +1,143 @@
+/* ===== Responsive Styles ===== */
+
+@media (max-width: 1080px) {
+    .shortcut-grid,
+    .overview-grid,
+    .content-layout,
+    .figure-lightbox,
+    .note-lightbox,
+    .ai-layout,
+    .manual-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .summary-strip,
+    .filters-grid,
+    .form-grid,
+    .compact-grid-form,
+    .detail-form-grid,
+    .note-lightbox-meta-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 720px) {
+    .navbar-content,
+    .hero,
+    .page-shell {
+        padding-left: 1rem;
+        padding-right: 1rem;
+    }
+
+    .navbar-content,
+    .hero,
+    .filters-card-head,
+    .library-result-meta,
+    .paper-card-head,
+    .paper-list-head,
+    .paper-list-footer,
+    .meta-row,
+    .result-head,
+    .detail-head,
+    .detail-meta-panel,
+    .selected-file {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .nav-links {
+        width: 100%;
+        justify-content: flex-start;
+        overflow-x: auto;
+    }
+
+    .nav-actions {
+        width: 100%;
+    }
+
+    .summary-strip,
+    .shortcut-grid,
+    .workflow-grid,
+    .filters-grid,
+    .form-grid,
+    .compact-grid-form,
+    .detail-form-grid,
+    .note-lightbox-meta-grid,
+    .inline-form {
+        grid-template-columns: 1fr;
+    }
+
+    .field-span-2 {
+        grid-column: auto;
+    }
+
+    .paper-grid,
+    .figure-grid,
+    .figure-preview-grid,
+    .entity-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .paper-list-row {
+        padding: 1rem;
+    }
+
+    .paper-list-actions,
+    .paper-list-tags,
+    .library-result-meta-tags,
+    .ai-paper-item-head,
+    .ai-help-row {
+        justify-content: flex-start;
+    }
+
+    .modal-dialog {
+        padding: 1rem;
+    }
+
+    .ai-settings-card {
+        position: static;
+    }
+
+    .figure-lightbox-media {
+        min-height: 300px;
+    }
+
+    .note-lightbox-preview-media {
+        min-height: 240px;
+    }
+
+    .manual-sidebar {
+        position: static;
+    }
+
+    .ai-session-bar,
+    .ai-turn-foot,
+    .figure-lightbox-ai-head,
+    .note-lightbox-head-row,
+    .manual-stage-head,
+    .manual-toolbar,
+    .manual-selection-head {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .figure-tag-add {
+        grid-template-columns: 1fr;
+    }
+
+    .figure-ai-suggestion-row {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .ai-page-tools {
+        top: auto;
+        right: 1rem;
+        bottom: 1rem;
+    }
+
+    .ai-help-panel {
+        top: auto;
+        bottom: 3.5rem;
+    }
+}

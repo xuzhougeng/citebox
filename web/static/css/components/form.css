@@ -1,0 +1,188 @@
+/* ===== Forms ===== */
+
+.field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+    color: var(--muted);
+    font-size: 0.95rem;
+}
+
+.field-label-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    width: 100%;
+    align-self: stretch;
+}
+
+.field-label-text {
+    color: var(--ink);
+    font-weight: 600;
+}
+
+.form-input,
+.form-textarea,
+.color-input {
+    width: 100%;
+    border: 1px solid rgba(36, 27, 22, 0.1);
+    border-radius: 16px;
+    background: rgba(255, 252, 248, 0.92);
+    padding: 0.9rem 1rem;
+    color: var(--ink);
+}
+
+.form-input:focus,
+.form-textarea:focus,
+.color-input:focus {
+    outline: none;
+    border-color: rgba(164, 92, 64, 0.5);
+    box-shadow: 0 0 0 4px rgba(164, 92, 64, 0.12);
+}
+
+.checkbox-field {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 1rem;
+    border-radius: 18px;
+    background: rgba(255, 251, 245, 0.72);
+    border: 1px solid rgba(36, 27, 22, 0.08);
+}
+
+.checkbox-field input {
+    margin-top: 0.2rem;
+}
+
+.manager-form {
+    display: grid;
+    gap: 0.8rem;
+    margin: 1rem 0 1.1rem;
+}
+
+.inline-form {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: center;
+}
+
+.upload-form {
+    display: grid;
+    gap: 1rem;
+}
+
+.detail-form {
+    display: grid;
+    gap: 0.9rem;
+    margin-top: 1rem;
+}
+
+.compact-grid {
+    margin-top: 1rem;
+}
+
+/* ===== Field Help ===== */
+
+.field-help {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 1.45rem;
+    height: 1.45rem;
+    border-radius: 999px;
+    border: 1px solid rgba(36, 27, 22, 0.12);
+    background: rgba(36, 27, 22, 0.04);
+    color: rgba(36, 27, 22, 0.78);
+    font-size: 0.82rem;
+    font-weight: 700;
+    cursor: help;
+    outline: none;
+}
+
+.field-help:hover,
+.field-help:focus-visible {
+    border-color: rgba(164, 92, 64, 0.26);
+    background: rgba(164, 92, 64, 0.1);
+    color: var(--accent-deep);
+}
+
+.field-help::after {
+    content: attr(data-help);
+    position: absolute;
+    left: 50%;
+    top: calc(100% + 0.65rem);
+    transform: translateX(-50%);
+    width: min(28rem, calc(100vw - 3rem));
+    padding: 0.85rem 1rem;
+    border-radius: 16px;
+    background: rgba(36, 27, 22, 0.96);
+    color: #fff;
+    font-size: 0.9rem;
+    font-weight: 500;
+    line-height: 1.6;
+    text-align: left;
+    box-shadow: 0 18px 42px rgba(20, 14, 11, 0.28);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 0.18s ease, visibility 0.18s ease, transform 0.18s ease;
+    z-index: 20;
+}
+
+.field-help::before {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: calc(100% + 0.25rem);
+    transform: translateX(-50%) rotate(45deg);
+    width: 0.7rem;
+    height: 0.7rem;
+    background: rgba(36, 27, 22, 0.96);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 0.18s ease, visibility 0.18s ease;
+    z-index: 19;
+}
+
+.field-help:hover::after,
+.field-help:hover::before,
+.field-help:focus-visible::after,
+.field-help:focus-visible::before {
+    opacity: 1;
+    visibility: visible;
+}
+
+.field-help:hover::after,
+.field-help:focus-visible::after {
+    transform: translateX(-50%) translateY(0.1rem);
+}
+
+@media (max-width: 720px) {
+    .field-help::after {
+        left: 0;
+        transform: translateX(0);
+        width: min(22rem, calc(100vw - 2.5rem));
+    }
+
+    .field-help::before {
+        left: 0.8rem;
+        transform: rotate(45deg);
+    }
+
+    .field-help:hover::after,
+    .field-help:focus-visible::after {
+        transform: translateY(0.1rem);
+    }
+}
+
+/* ===== Color Input ===== */
+
+.color-input {
+    width: 5rem;
+    height: 3rem;
+    padding: 0.4rem;
+    cursor: pointer;
+}

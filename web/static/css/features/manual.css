@@ -1,0 +1,185 @@
+/* ===== Manual Selection ===== */
+
+.manual-stage-card,
+.manual-sidebar {
+    padding: 1.25rem;
+}
+
+.manual-stage-head,
+.manual-stage-actions,
+.manual-toolbar,
+.manual-toolbar-actions,
+.manual-selection-head,
+.manual-selection-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.manual-stage-head,
+.manual-toolbar,
+.manual-selection-head {
+    justify-content: space-between;
+}
+
+.manual-stage-head h2 {
+    margin: 0.25rem 0 0;
+    font-family: var(--font-display);
+}
+
+.manual-stage-actions,
+.manual-toolbar-actions,
+.manual-selection-actions,
+.manual-submit-row {
+    flex-wrap: wrap;
+}
+
+.manual-hint {
+    color: var(--muted);
+    font-size: 0.94rem;
+    line-height: 1.6;
+}
+
+.manual-preview-shell {
+    margin-top: 1rem;
+    padding: 1rem;
+    border-radius: 22px;
+    background:
+        radial-gradient(circle at top left, rgba(164, 92, 64, 0.08), transparent 18rem),
+        linear-gradient(180deg, rgba(255, 252, 248, 0.9), rgba(244, 235, 223, 0.94));
+    border: 1px solid rgba(36, 27, 22, 0.08);
+}
+
+.manual-preview-scroll {
+    overflow: auto;
+    max-height: 78vh;
+    text-align: center;
+}
+
+.manual-preview-frame {
+    position: relative;
+    display: inline-block;
+    line-height: 0;
+    max-width: 100%;
+    border-radius: 18px;
+}
+
+.manual-preview-frame.is-loading::after {
+    content: "正在加载页图...";
+    position: absolute;
+    inset: 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 16px;
+    background: rgba(255, 251, 245, 0.9);
+    color: var(--muted);
+    font-size: 0.95rem;
+    line-height: 1.5;
+}
+
+.manual-preview-canvas {
+    display: block;
+    max-width: min(100%, 1100px);
+    height: auto;
+    border-radius: 18px;
+    box-shadow: 0 24px 48px rgba(36, 27, 22, 0.12);
+    user-select: none;
+    -webkit-user-drag: none;
+    background: #fff;
+}
+
+.manual-overlay {
+    position: absolute;
+    inset: 0;
+    cursor: crosshair;
+}
+
+.manual-selection-box {
+    position: absolute;
+    border: 2px solid var(--accent);
+    background: rgba(164, 92, 64, 0.14);
+    box-shadow: inset 0 0 0 1px rgba(255, 250, 244, 0.42);
+    pointer-events: none;
+}
+
+.manual-selection-box span {
+    position: absolute;
+    top: -0.95rem;
+    left: -2px;
+    padding: 0.22rem 0.5rem;
+    border-radius: 999px;
+    background: rgba(36, 27, 22, 0.82);
+    color: #fffaf4;
+    font-size: 0.74rem;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.manual-selection-box.draft {
+    border-style: dashed;
+    border-color: var(--info);
+    background: rgba(65, 103, 136, 0.14);
+}
+
+.manual-sidebar {
+    position: sticky;
+    top: 6rem;
+}
+
+.manual-selection-list {
+    display: grid;
+    gap: 0.85rem;
+    margin-top: 1rem;
+    max-height: 60vh;
+    overflow: auto;
+    padding-right: 0.1rem;
+}
+
+.manual-selection-item {
+    display: grid;
+    gap: 0.75rem;
+    padding: 0.95rem;
+    border-radius: 18px;
+    background: rgba(255, 252, 248, 0.86);
+    border: 1px solid rgba(36, 27, 22, 0.08);
+}
+
+.manual-selection-item.is-current-page {
+    border-color: rgba(164, 92, 64, 0.26);
+    box-shadow: 0 16px 30px rgba(78, 51, 33, 0.08);
+}
+
+.manual-selection-head strong,
+.manual-selection-head span {
+    display: block;
+}
+
+.manual-selection-head span {
+    margin-top: 0.22rem;
+    color: var(--muted);
+    font-size: 0.86rem;
+}
+
+.manual-selection-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.manual-selection-meta span {
+    padding: 0.28rem 0.52rem;
+    border-radius: 999px;
+    background: rgba(36, 27, 22, 0.06);
+    color: var(--muted);
+    font-family: "SFMono-Regular", "Menlo", "Monaco", monospace;
+    font-size: 0.77rem;
+}
+
+.manual-selection-caption {
+    min-height: 6.5rem;
+}
+
+.manual-empty-state {
+    padding: 1.4rem;
+}
