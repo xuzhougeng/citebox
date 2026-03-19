@@ -1,0 +1,169 @@
+/* ===== Note Editor Lightbox ===== */
+
+.note-lightbox {
+    display: grid;
+    grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.85fr);
+    gap: 1rem;
+    padding: 1.1rem;
+    border-radius: 28px;
+    background:
+        radial-gradient(circle at top right, rgba(65, 103, 136, 0.08), transparent 18rem),
+        linear-gradient(180deg, rgba(255, 253, 249, 0.98), rgba(244, 236, 225, 0.96));
+}
+
+.note-lightbox-main,
+.note-lightbox-side {
+    display: grid;
+    gap: 1rem;
+    align-content: start;
+}
+
+.note-lightbox-editor-card {
+    display: grid;
+    gap: 1rem;
+    padding: 1.15rem;
+    border-radius: 24px;
+    background: rgba(255, 251, 245, 0.92);
+    border: 1px solid rgba(36, 27, 22, 0.08);
+}
+
+.note-lightbox-head h2 {
+    margin: 0.3rem 0 0;
+    font-family: var(--font-display);
+}
+
+.note-lightbox-head-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.note-lightbox-subtitle {
+    margin: 0.55rem 0 0;
+    color: var(--muted);
+    line-height: 1.65;
+}
+
+.note-lightbox-mode-switch {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0.6rem;
+}
+
+.note-lightbox-meta-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.8rem;
+}
+
+.note-lightbox-meta-item {
+    display: grid;
+    gap: 0.35rem;
+    padding: 0.95rem 1rem;
+    border-radius: 18px;
+    background: rgba(239, 230, 215, 0.48);
+}
+
+.note-lightbox-meta-item > span {
+    color: var(--muted);
+    font-size: 0.82rem;
+}
+
+.note-lightbox-meta-item strong {
+    line-height: 1.5;
+}
+
+.note-lightbox-field {
+    display: grid;
+    gap: 0.55rem;
+}
+
+.note-lightbox-textarea {
+    min-height: 22rem;
+    background: rgba(255, 252, 248, 0.96);
+}
+
+.note-lightbox-render-panel {
+    display: grid;
+    gap: 0.7rem;
+}
+
+.note-lightbox-panel-label {
+    color: var(--muted);
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.note-lightbox-side {
+    padding-top: 0.15rem;
+}
+
+.note-lightbox-preview-card {
+    display: grid;
+    gap: 0.85rem;
+    padding: 1rem;
+    border-radius: 24px;
+    background: rgba(255, 251, 245, 0.9);
+    border: 1px solid rgba(36, 27, 22, 0.08);
+}
+
+.note-lightbox-preview-media {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 320px;
+    border-radius: 20px;
+    background:
+        radial-gradient(circle at top left, rgba(164, 92, 64, 0.12), transparent 16rem),
+        linear-gradient(180deg, rgba(239, 230, 215, 0.72), rgba(255, 252, 248, 0.9));
+}
+
+.note-lightbox-preview-media img {
+    display: block;
+    max-width: 100%;
+    max-height: 28rem;
+    object-fit: contain;
+    border-radius: 18px;
+    box-shadow: 0 22px 44px rgba(36, 27, 22, 0.12);
+}
+
+.note-lightbox-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+}
+
+.note-lightbox-tip {
+    padding: 1rem 1.05rem;
+    border-radius: 18px;
+    background: rgba(79, 111, 82, 0.08);
+    border: 1px solid rgba(79, 111, 82, 0.14);
+}
+
+.note-lightbox-tip span {
+    display: block;
+    color: #274336;
+    font-size: 0.76rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+.note-lightbox-tip p {
+    margin: 0.45rem 0 0;
+    color: var(--muted);
+    line-height: 1.7;
+}
+
+.paper-note-meta-panel {
+    grid-template-columns: 1fr;
+}
+
+.paper-note-meta-panel strong {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}

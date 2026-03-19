@@ -1,0 +1,353 @@
+/* ===== Cards ===== */
+
+.shortcut-card {
+    padding: 1.3rem;
+    border-radius: var(--radius);
+    background: rgba(255, 252, 248, 0.82);
+    border: 1px solid rgba(36, 27, 22, 0.08);
+    box-shadow: var(--shadow);
+}
+
+.shortcut-card h2 {
+    margin: 0.4rem 0;
+    font-family: var(--font-display);
+}
+
+.shortcut-card p {
+    margin: 0;
+    color: var(--muted);
+    line-height: 1.6;
+}
+
+.shortcut-card.compact {
+    padding: 1.15rem 1.2rem;
+    border-radius: 20px;
+}
+
+.shortcut-card.compact h2 {
+    font-size: 1.15rem;
+}
+
+.filters-card,
+.manager-card,
+.upload-card,
+.result-card {
+    border-radius: var(--radius);
+    background: var(--panel);
+    border: 1px solid rgba(36, 27, 22, 0.08);
+    box-shadow: var(--shadow);
+}
+
+.filters-card {
+    padding: 1.2rem;
+    margin-bottom: 1.5rem;
+}
+
+.manager-card {
+    padding: 1.2rem;
+}
+
+.manager-card-divider {
+    height: 1px;
+    margin: 1.1rem 0;
+    background: rgba(36, 27, 22, 0.08);
+}
+
+.upload-card,
+.result-card {
+    padding: 1.4rem;
+}
+
+.stat-card {
+    padding: 1rem 1.1rem;
+    border-radius: 18px;
+    background: rgba(255, 252, 248, 0.8);
+    border: 1px solid rgba(36, 27, 22, 0.08);
+}
+
+.stat-card span {
+    display: block;
+    color: var(--muted);
+    font-size: 0.9rem;
+}
+
+.stat-card strong {
+    display: block;
+    margin-top: 0.45rem;
+    font-size: 1.8rem;
+    font-family: var(--font-display);
+}
+
+.workflow-card {
+    padding: 1.15rem;
+    border-radius: 20px;
+    background: rgba(255, 252, 248, 0.84);
+    border: 1px solid rgba(36, 27, 22, 0.08);
+}
+
+.workflow-card h3 {
+    margin: 0;
+    font-size: 1.06rem;
+    line-height: 1.45;
+}
+
+.workflow-card p {
+    margin: 0.55rem 0 0;
+    color: var(--muted);
+    line-height: 1.65;
+}
+
+.danger-zone-card {
+    border-color: rgba(159, 63, 52, 0.14);
+    background: linear-gradient(180deg, rgba(255, 249, 247, 0.96), rgba(255, 252, 248, 0.94));
+}
+
+/* ===== Paper Cards ===== */
+
+.paper-card {
+    padding: 1.1rem;
+    border-radius: 20px;
+    background: rgba(255, 252, 248, 0.88);
+    border: 1px solid rgba(36, 27, 22, 0.08);
+}
+
+.paper-card h3 {
+    margin: 0.8rem 0 0.35rem;
+    font-size: 1.2rem;
+    line-height: 1.35;
+}
+
+.paper-card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+.paper-list-mode {
+    grid-template-columns: 1fr;
+    gap: 0.85rem;
+}
+
+.paper-list-row {
+    display: grid;
+    gap: 1rem;
+    padding: 1.15rem 1.2rem 1rem;
+    border-radius: 24px;
+    background:
+        radial-gradient(circle at top right, rgba(65, 103, 136, 0.08), transparent 16rem),
+        linear-gradient(180deg, rgba(255, 253, 249, 0.96), rgba(247, 239, 229, 0.92));
+    border: 1px solid rgba(36, 27, 22, 0.1);
+    box-shadow: 0 16px 28px rgba(78, 51, 33, 0.08);
+    transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+.paper-list-row:hover {
+    transform: translateY(-2px);
+    border-color: rgba(164, 92, 64, 0.22);
+    box-shadow: 0 22px 42px rgba(78, 51, 33, 0.12);
+}
+
+.paper-list-main {
+    display: grid;
+    gap: 0.8rem;
+    min-width: 0;
+}
+
+.paper-list-head {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: start;
+    gap: 0.75rem 0.85rem;
+    min-width: 0;
+}
+
+.paper-list-head h3 {
+    margin: 0;
+    min-width: 0;
+    font-size: 1.12rem;
+    line-height: 1.4;
+}
+
+.paper-list-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.7rem;
+}
+
+.paper-list-meta-item {
+    display: grid;
+    gap: 0.2rem;
+    min-width: 8.2rem;
+    padding: 0.7rem 0.82rem;
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.56);
+    border: 1px solid rgba(36, 27, 22, 0.08);
+}
+
+.paper-list-meta-file {
+    flex: 1 1 100%;
+    cursor: pointer;
+    border-radius: 8px;
+    transition: background 0.15s;
+}
+
+.paper-list-meta-file:hover {
+    background: rgba(164, 92, 64, 0.08);
+}
+
+.paper-list-meta-label {
+    color: var(--muted);
+    font-size: 0.72rem;
+    letter-spacing: 0.04em;
+}
+
+.paper-list-meta-value {
+    min-width: 0;
+    color: var(--ink);
+    font-size: 0.92rem;
+    line-height: 1.45;
+}
+
+.paper-list-meta-file .paper-list-meta-value {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.paper-list-summary {
+    display: -webkit-box;
+    overflow: hidden;
+    margin: 0;
+    color: var(--ink);
+    line-height: 1.65;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+}
+
+.paper-list-notice {
+    margin: 0;
+}
+
+.paper-list-footer {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 1rem;
+    min-width: 0;
+    padding-top: 0.95rem;
+    border-top: 1px solid rgba(36, 27, 22, 0.08);
+}
+
+.paper-list-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+    flex: 1 1 auto;
+}
+
+.paper-list-actions {
+    margin-top: 0;
+    flex: 0 0 auto;
+    justify-content: flex-end;
+}
+
+.paper-filename {
+    color: var(--muted);
+}
+
+/* ===== Entity Card ===== */
+
+.entity-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 1rem;
+}
+
+.entity-card {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    align-items: flex-start;
+    padding: 1.1rem;
+    border-radius: 20px;
+    background: rgba(255, 252, 248, 0.88);
+    border: 1px solid rgba(36, 27, 22, 0.08);
+}
+
+.entity-card.active {
+    border-color: rgba(164, 92, 64, 0.38);
+    background: rgba(164, 92, 64, 0.08);
+}
+
+.entity-card h3 {
+    margin: 0 0 0.3rem;
+}
+
+.entity-card p {
+    margin: 0;
+    color: var(--muted);
+    line-height: 1.55;
+}
+
+.entity-card-actions {
+    display: grid;
+    gap: 0.35rem;
+    justify-items: end;
+    text-align: right;
+}
+
+.page-entity-grid {
+    margin-top: 0.2rem;
+}
+
+/* ===== Recent Paper Row ===== */
+
+.recent-paper-list {
+    display: grid;
+    gap: 0.9rem;
+}
+
+.recent-paper-row {
+    display: grid;
+    gap: 0.85rem;
+    padding: 1.05rem 1.1rem;
+    border-radius: 22px;
+    background: rgba(255, 252, 248, 0.82);
+    border: 1px solid rgba(36, 27, 22, 0.08);
+}
+
+.recent-paper-main {
+    display: grid;
+    gap: 0.55rem;
+}
+
+.recent-paper-head {
+    display: grid;
+    gap: 0.45rem;
+    cursor: pointer;
+    transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.recent-paper-head:hover {
+    opacity: 0.84;
+    transform: translateX(2px);
+}
+
+.recent-paper-head h3 {
+    margin: 0;
+    font-size: 1.06rem;
+    line-height: 1.45;
+}
+
+.recent-paper-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.65rem;
+    color: var(--muted);
+    font-size: 0.92rem;
+}
+
+.recent-paper-notice {
+    margin: 0;
+}

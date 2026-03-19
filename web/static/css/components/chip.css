@@ -1,0 +1,83 @@
+/* ===== Chips & Pills ===== */
+
+.chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.38rem 0.72rem;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--chip-color, var(--accent)) 15%, white);
+    border: 1px solid color-mix(in srgb, var(--chip-color, var(--accent)) 35%, white);
+    font-size: 0.85rem;
+}
+
+.chip-row {
+    display: flex;
+    flex-wrap: wrap;
+}
+
+.status-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.38rem 0.75rem;
+    border-radius: 999px;
+    font-size: 0.8rem;
+    font-weight: 700;
+}
+
+.status-pill.success {
+    color: var(--success);
+    background: rgba(79, 111, 82, 0.12);
+}
+
+.status-pill.error {
+    color: var(--error);
+    background: rgba(159, 63, 52, 0.12);
+}
+
+.status-pill.info {
+    color: var(--info);
+    background: rgba(65, 103, 136, 0.12);
+}
+
+.tag-pill,
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 999px;
+    font-size: 0.8rem;
+    font-weight: 700;
+}
+
+.tag-pill {
+    padding: 0.34rem 0.72rem;
+}
+
+.tag-pill.neutral {
+    color: var(--ink);
+    background: rgba(36, 27, 22, 0.08);
+}
+
+.status-badge {
+    padding: 0.34rem 0.7rem;
+}
+
+.status-badge.tone-success {
+    color: var(--success);
+    background: rgba(79, 111, 82, 0.12);
+}
+
+.status-badge.tone-error {
+    color: var(--error);
+    background: rgba(159, 63, 52, 0.12);
+}
+
+.status-badge.tone-info {
+    color: var(--info);
+    background: rgba(65, 103, 136, 0.12);
+}
+
+.tag-dot {
+    width: 0.8rem;
+    height: 0.8rem;
+    border-radius: 50%;
+}

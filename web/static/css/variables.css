@@ -1,0 +1,20 @@
+:root {
+    --bg: #efe6d7;
+    --bg-soft: #f7f2e8;
+    --panel: rgba(255, 251, 245, 0.88);
+    --panel-strong: #fffaf4;
+    --ink: #241b16;
+    --muted: #6e5b4e;
+    --line: rgba(36, 27, 22, 0.12);
+    --accent: #a45c40;
+    --accent-deep: #6f3622;
+    --accent-soft: rgba(164, 92, 64, 0.12);
+    --info: #416788;
+    --success: #4f6f52;
+    --error: #9f3f34;
+    --shadow: 0 20px 60px rgba(78, 51, 33, 0.12);
+    --radius: 22px;
+    --radius-sm: 16px;
+    --font-body: "Avenir Next", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    --font-display: "Iowan Old Style", "Palatino Linotype", "Songti SC", serif;
+}

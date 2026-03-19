@@ -1,0 +1,107 @@
+/* ===== Viewer Page (Paper Detail) ===== */
+
+.detail-head,
+.detail-meta-panel {
+    margin-bottom: 1rem;
+}
+
+.detail-form,
+.detail-section {
+    margin-top: 1rem;
+}
+
+.detail-head h2 {
+    margin: 0.35rem 0 0;
+    font-family: var(--font-display);
+}
+
+.detail-meta-panel {
+    padding: 1rem;
+    border-radius: 18px;
+    background: rgba(239, 230, 215, 0.46);
+    flex-wrap: wrap;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+.detail-meta-panel div {
+    min-width: 180px;
+    display: grid;
+    gap: 0.35rem;
+}
+
+.detail-meta-panel span {
+    color: var(--muted);
+    font-size: 0.86rem;
+}
+
+.detail-section {
+    padding: 1rem;
+    border-radius: 20px;
+    border: 1px solid rgba(36, 27, 22, 0.08);
+    background: rgba(255, 252, 248, 0.8);
+}
+
+.detail-section h3 {
+    margin: 0;
+}
+
+.detail-actions,
+.submit-row,
+.result-actions {
+    margin-top: 1rem;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.result-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+.result-head h2 {
+    margin: 0.35rem 0 0;
+    font-family: var(--font-display);
+}
+
+.result-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+.meta-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+.section-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+.card-actions {
+    margin-top: 1rem;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.muted {
+    color: var(--muted);
+}

@@ -1,0 +1,50 @@
+/* ===== Notices & Toast ===== */
+
+.notice {
+    padding: 0.8rem 0.95rem;
+    border-radius: 14px;
+    font-size: 0.92rem;
+}
+
+.notice.error {
+    color: var(--error);
+    background: rgba(159, 63, 52, 0.1);
+}
+
+.notice.info {
+    color: var(--info);
+    background: rgba(65, 103, 136, 0.1);
+}
+
+.notice.success {
+    color: var(--success);
+    background: rgba(79, 111, 82, 0.1);
+}
+
+.toast {
+    position: fixed;
+    right: 1.2rem;
+    bottom: 1.2rem;
+    z-index: 80;
+    padding: 0.9rem 1rem;
+    border-radius: 14px;
+    color: #fff;
+    box-shadow: var(--shadow);
+}
+
+.toast-success,
+.toast-info {
+    background: rgba(54, 82, 58, 0.92);
+}
+
+.toast-error {
+    background: rgba(144, 47, 42, 0.94);
+}
+
+.empty-state {
+    padding: 2rem;
+    border-radius: var(--radius);
+    background: rgba(255, 252, 248, 0.78);
+    border: 1px dashed rgba(36, 27, 22, 0.14);
+    text-align: center;
+}

@@ -1,0 +1,20 @@
+/* ===== Home Page ===== */
+
+.quick-link-stack {
+    display: grid;
+    gap: 0.9rem;
+}
+
+.workflow-step {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2.4rem;
+    padding: 0.35rem 0.65rem;
+    border-radius: 999px;
+    background: rgba(164, 92, 64, 0.12);
+    color: var(--accent-deep);
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+}

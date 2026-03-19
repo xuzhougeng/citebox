@@ -1,0 +1,132 @@
+/* ===== Figure Lightbox AI ===== */
+
+.figure-lightbox-ai {
+    padding: 1rem;
+    border-radius: 18px;
+    background: rgba(255, 251, 245, 0.86);
+    border: 1px solid rgba(36, 27, 22, 0.08);
+}
+
+.figure-lightbox-ai-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.8rem;
+}
+
+.figure-ai-head-actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.figure-lightbox-ai-head h3,
+.figure-ai-status,
+.figure-ai-supplement span,
+.figure-ai-supplement strong {
+    margin: 0;
+}
+
+.figure-lightbox-ai-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.7rem;
+    margin-top: 1rem;
+}
+
+.figure-lightbox-ai-actions .btn.active {
+    color: #fff8f2;
+    background: linear-gradient(135deg, var(--accent), var(--accent-deep));
+    border-color: transparent;
+}
+
+.figure-ai-result {
+    margin-top: 1rem;
+    padding: 1rem;
+    border-radius: 18px;
+    background: rgba(255, 252, 248, 0.88);
+    border: 1px solid rgba(36, 27, 22, 0.08);
+}
+
+.figure-ai-result.loading {
+    border-style: dashed;
+}
+
+.figure-ai-result.error {
+    border-color: rgba(159, 63, 52, 0.18);
+    background: rgba(159, 63, 52, 0.06);
+}
+
+.figure-ai-result.empty {
+    border-style: dashed;
+    background: rgba(255, 252, 248, 0.72);
+}
+
+.figure-ai-status {
+    color: var(--muted);
+    font-size: 0.84rem;
+    font-weight: 700;
+}
+
+.figure-ai-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.8rem;
+}
+
+.figure-ai-answer {
+    margin-top: 0.7rem;
+    white-space: pre-wrap;
+    line-height: 1.72;
+}
+
+.figure-ai-stream-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 0.9rem;
+}
+
+.figure-ai-supplement {
+    display: grid;
+    gap: 0.45rem;
+    margin-top: 0.9rem;
+    padding-top: 0.9rem;
+    border-top: 1px solid rgba(36, 27, 22, 0.08);
+}
+
+.figure-ai-supplement span {
+    color: var(--muted);
+    font-size: 0.82rem;
+    font-weight: 700;
+}
+
+.figure-ai-tag-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.figure-ai-suggestion-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+.figure-ai-tag-button {
+    border: 1px solid rgba(36, 27, 22, 0.1);
+    cursor: pointer;
+    transition: background 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+}
+
+.figure-ai-tag-button:hover:not(:disabled) {
+    border-color: rgba(164, 92, 64, 0.28);
+    background: rgba(255, 244, 234, 0.96);
+}
+
+.figure-ai-tag-button.is-applied {
+    opacity: 0.55;
+}
