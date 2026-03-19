@@ -237,7 +237,8 @@ func (r *TagRepository) loadTagsByEntityIDs(linkTable, ownerColumn string, owner
 		FROM %s lt
 		JOIN tags t ON t.id = lt.tag_id
 		WHERE lt.%s IN (%s)
-	`, ownerColumn, linkTable, ownerColumn, strings.Join(placeholders, ","))
+		ORDER BY lt.%s ASC, t.name COLLATE NOCASE ASC, t.id ASC
+	`, ownerColumn, linkTable, ownerColumn, strings.Join(placeholders, ","), ownerColumn)
 
 	rows, err := r.db.Query(query, args...)
 	if err != nil {

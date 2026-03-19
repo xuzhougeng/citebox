@@ -38,6 +38,8 @@ const (
 	extractorSettingsKey = "extractor_settings"
 	runtimePasswordKey   = "runtime_admin_password"
 	manualPendingStatus  = "manual_pending"
+	extractionModeAuto   = "auto"
+	extractionModeManual = "manual"
 )
 
 type LibraryServiceOption func(*LibraryService)
@@ -65,9 +67,10 @@ func (e *DuplicatePaperError) Unwrap() error {
 }
 
 type UploadPaperParams struct {
-	Title   string
-	GroupID *int64
-	Tags    []string
+	Title          string
+	GroupID        *int64
+	Tags           []string
+	ExtractionMode string
 }
 
 type UpdatePaperParams struct {
@@ -179,6 +182,9 @@ func NewLibraryService(repo *repository.LibraryRepository, cfg *config.Config, o
 	}
 
 	if err := service.backfillPaperChecksums(); err != nil {
+		return nil, err
+	}
+	if err := service.migrateLegacyManualPendingPapers(); err != nil {
 		return nil, err
 	}
 
@@ -321,11 +327,30 @@ func (s *LibraryService) UploadPaper(file multipart.File, header *multipart.File
 		return nil, err
 	}
 
-	extractionStatus := manualPendingStatus
-	extractorMessage := "未配置自动解析服务，请直接进入人工处理"
-	if autoExtractionConfigured {
+	extractionMode := normalizeExtractionMode(params.ExtractionMode)
+	if extractionMode == "" {
+		if autoExtractionConfigured {
+			extractionMode = extractionModeAuto
+		} else {
+			extractionMode = extractionModeManual
+		}
+	}
+
+	extractionStatus := "completed"
+	extractorMessage := manualWorkflowMessage(!autoExtractionConfigured)
+
+	switch extractionMode {
+	case extractionModeAuto:
+		if !autoExtractionConfigured {
+			os.Remove(pdfPath)
+			return nil, apperr.New(apperr.CodeFailedPrecondition, "未配置自动解析服务，请改用手工标注")
+		}
 		extractionStatus = "queued"
 		extractorMessage = "文献已入库，等待后台解析"
+	case extractionModeManual:
+	default:
+		os.Remove(pdfPath)
+		return nil, apperr.New(apperr.CodeInvalidArgument, "上传模式无效")
 	}
 
 	paper, err := s.repo.CreatePaper(repository.PaperUpsertInput{
@@ -365,7 +390,7 @@ func (s *LibraryService) UploadPaper(file multipart.File, header *multipart.File
 		return nil, err
 	}
 
-	if autoExtractionConfigured {
+	if extractionMode == extractionModeAuto {
 		go s.runPaperExtraction(paper.ID, pdfPath, header.Filename)
 	}
 
@@ -395,6 +420,25 @@ func (s *LibraryService) backfillPaperChecksums() error {
 				s.logger.Warn("skip duplicate historical pdf checksum", "paper_id", item.ID, "stored_pdf_name", item.StoredPDFName, "pdf_sha256", checksum)
 				continue
 			}
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (s *LibraryService) migrateLegacyManualPendingPapers() error {
+	papers, err := s.repo.ListPapersByExtractionStatuses([]string{manualPendingStatus})
+	if err != nil {
+		return err
+	}
+
+	for _, paper := range papers {
+		message := strings.TrimSpace(paper.ExtractorMessage)
+		if message == "" || !strings.Contains(message, "人工录入") {
+			message = manualWorkflowMessage(true)
+		}
+		if err := s.repo.UpdatePaperExtractionState(paper.ID, "completed", message, ""); err != nil {
 			return err
 		}
 	}
@@ -571,7 +615,7 @@ func (s *LibraryService) ReextractPaper(id int64) (*model.Paper, error) {
 		return nil, apperr.New(apperr.CodeConflict, "文献正在解析中，无需重复提交")
 	case "failed", "cancelled", manualPendingStatus:
 	default:
-		return nil, apperr.New(apperr.CodeFailedPrecondition, "当前只有解析失败或待人工处理的文献支持重新解析")
+		return nil, apperr.New(apperr.CodeFailedPrecondition, "当前只有解析失败的文献支持重新解析")
 	}
 
 	pdfPath := filepath.Join(s.config.PapersDir(), paper.StoredPDFName)
@@ -732,9 +776,9 @@ func (s *LibraryService) ManualExtractFigures(id int64, params ManualExtractPara
 	}
 	removeFiles(replacedPaths)
 
-	if paper.ExtractionStatus == "failed" || paper.ExtractionStatus == "cancelled" || paper.ExtractionStatus == manualPendingStatus {
+	if paper.ExtractionStatus == "failed" || paper.ExtractionStatus == "cancelled" || paper.ExtractionStatus == manualPendingStatus || (paper.ExtractionStatus == "completed" && strings.TrimSpace(paper.PDFText) == "") {
 		message := fmt.Sprintf("已人工录入 %d 张图片，可继续补充或替换其他图片", len(items))
-		if paper.ExtractionStatus != manualPendingStatus {
+		if paper.ExtractionStatus == "failed" || paper.ExtractionStatus == "cancelled" {
 			message = fmt.Sprintf("自动解析未完成，已人工录入 %d 张图片", len(items))
 		}
 		if err := s.repo.UpdatePaperExtractionState(id, paper.ExtractionStatus, message, paper.ExtractorJobID); err != nil && !apperr.IsCode(err, apperr.CodeNotFound) {
@@ -1556,6 +1600,23 @@ func normalizeExtractionStatus(status string) string {
 	default:
 		return status
 	}
+}
+
+func normalizeExtractionMode(mode string) string {
+	mode = strings.ToLower(strings.TrimSpace(mode))
+	switch mode {
+	case "", extractionModeAuto, extractionModeManual:
+		return mode
+	default:
+		return mode
+	}
+}
+
+func manualWorkflowMessage(autoUnavailable bool) string {
+	if autoUnavailable {
+		return "未配置自动解析服务，文献已入库，可随时进入手工标注补录图片"
+	}
+	return "已跳过自动解析，文献已入库，可随时进入手工标注补录图片"
 }
 
 func extractorErrorMessage(body []byte) string {

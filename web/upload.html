@@ -69,6 +69,15 @@
                     <input id="tagsInput" class="form-input" type="text" placeholder="多个标签用逗号分隔，例如：review, stem-cell, atlasing">
                 </label>
 
+                <label class="field">
+                    <span>标注方式</span>
+                    <select id="extractionModeSelect" class="form-input">
+                        <option value="auto">自动标注</option>
+                        <option value="manual">手工标注</option>
+                    </select>
+                    <span id="extractionModeHint" class="muted">默认使用自动标注，也可以直接进入手工标注流程。</span>
+                </label>
+
                 <div class="submit-row">
                     <button id="submitUploadBtn" class="btn btn-primary" type="submit">上传文献</button>
                     <a class="btn btn-outline" href="/library">返回文献库</a>

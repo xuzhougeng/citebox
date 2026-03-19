@@ -255,7 +255,7 @@ CREATE UNIQUE INDEX idx_tags_scope_name ON tags(scope, name);
 | `notes_text` | 文献级管理笔记；适合保存整理说明、迁移备注、归档提示 |
 | `paper_notes_text` | 文献级内容笔记；适合保存 AI伴读结果、阅读结论和 Markdown 笔记 |
 | `boxes_json` | 提取框、版面分析等结构化 JSON |
-| `extraction_status` | 解析状态，当前允许 `queued/running/manual_pending/completed/failed/cancelled` |
+| `extraction_status` | 自动解析状态，当前允许 `queued/running/manual_pending/completed/failed/cancelled`；其中 `manual_pending` 仅保留给历史兼容数据 |
 | `extractor_message` | 解析流程的状态说明或错误信息 |
 | `extractor_job_id` | 外部提取服务的任务 ID |
 | `group_id` | 所属分组，可为空 |

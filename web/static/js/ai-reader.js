@@ -194,7 +194,7 @@ const AIReaderPage = {
         if (this.state.papers.length === 0) {
             this.paperList.innerHTML = `
                 <div class="empty-state">
-                    <p>没有找到可用于 AI伴读的已解析文献。</p>
+                    <p>没有找到可用于 AI伴读的文献。</p>
                 </div>
             `;
             return;
@@ -407,7 +407,7 @@ const AIReaderPage = {
         this.stopButton.disabled = !isGenerating;
 
         if (!paper) {
-            this.sessionHint.textContent = '先选择一篇已解析文献，再开始连续提问。';
+            this.sessionHint.textContent = '先选择一篇可用于 AI伴读的文献，再开始连续提问。';
             this.conversation.innerHTML = `
                 <div class="empty-state">
                     <p>当前还没有选中文献。</p>

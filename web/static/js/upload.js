@@ -4,6 +4,7 @@ const UploadPage = {
     activePaperId: null,
     pollInFlight: false,
     lastStatus: '',
+    extractorReady: false,
 
     async init() {
         this.form = document.getElementById('paperUploadForm');
@@ -15,11 +16,16 @@ const UploadPage = {
         this.titleInput = document.getElementById('titleInput');
         this.groupSelect = document.getElementById('groupSelect');
         this.tagsInput = document.getElementById('tagsInput');
+        this.extractionModeSelect = document.getElementById('extractionModeSelect');
+        this.extractionModeHint = document.getElementById('extractionModeHint');
         this.submitButton = document.getElementById('submitUploadBtn');
         this.resultCard = document.getElementById('uploadResult');
 
         this.bindEvents();
-        await this.loadGroups();
+        await Promise.all([
+            this.loadGroups(),
+            this.loadExtractionModeOptions()
+        ]);
     },
 
     bindEvents() {
@@ -91,6 +97,30 @@ const UploadPage = {
         }
     },
 
+    async loadExtractionModeOptions() {
+        try {
+            const settings = await API.getExtractorSettings();
+            this.extractorReady = Boolean(settings.effective_extractor_url);
+        } catch (error) {
+            this.extractorReady = false;
+            Utils.showToast('加载自动解析配置失败，当前仅允许手工标注', 'error');
+        }
+
+        if (!this.extractionModeSelect) return;
+
+        this.extractionModeSelect.innerHTML = `
+            <option value="auto" ${this.extractorReady ? '' : 'disabled'}>自动标注</option>
+            <option value="manual">手工标注</option>
+        `;
+        this.extractionModeSelect.value = this.extractorReady ? 'auto' : 'manual';
+
+        if (this.extractionModeHint) {
+            this.extractionModeHint.textContent = this.extractorReady
+                ? '默认使用自动标注；如需自行框选图片，也可以直接切到手工标注。'
+                : '当前未配置自动解析服务，只能使用手工标注。';
+        }
+    },
+
     setFile(file) {
         if (!file) return;
         const isPDF = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
@@ -121,6 +151,9 @@ const UploadPage = {
         formData.append('pdf', this.file);
         formData.append('title', this.titleInput.value.trim());
         formData.append('tags', this.tagsInput.value.trim());
+        if (this.extractionModeSelect?.value) {
+            formData.append('extraction_mode', this.extractionModeSelect.value);
+        }
         if (this.groupSelect.value) {
             formData.append('group_id', this.groupSelect.value);
         }
@@ -138,7 +171,7 @@ const UploadPage = {
             Utils.showToast(
                 Utils.isProcessingStatus(paper.extraction_status)
                     ? '文献已入库，后台开始解析'
-                    : (paper.extraction_status === 'manual_pending' ? '文献已入库，请继续手动标注' : '文献已入库'),
+                    : '文献已入库',
                 Utils.statusTone(paper.extraction_status)
             );
 
@@ -146,7 +179,10 @@ const UploadPage = {
             this.file = null;
             this.selectedFile.classList.add('empty');
             this.selectedFile.innerHTML = '<span>尚未选择 PDF</span>';
-            await this.loadGroups();
+            await Promise.all([
+                this.loadGroups(),
+                this.loadExtractionModeOptions()
+            ]);
         } catch (error) {
             const duplicatePaperId = Number(error?.payload?.paper?.id || 0);
             if (error?.code === 'CONFLICT' && duplicatePaperId > 0) {
@@ -260,11 +296,11 @@ const UploadPage = {
                     <p>这篇文献的后台解析没有成功完成，可以先回到文献库查看错误信息。</p>
                 </div>
             `;
-        } else if (paper.extraction_status === 'manual_pending') {
+        } else if (paper.extraction_status === 'completed' && !paper.pdf_text && !figures.length) {
             figureContent = `
                 <div class="empty-state">
-                    <h3>当前走手动标注流程</h3>
-                    <p>系统没有启动自动解析，你可以直接打开人工框选提取页，把需要的图片录入到文献里。</p>
+                    <h3>文献已入库，可按需补录图片</h3>
+                    <p>${Utils.escapeHTML(paper.extractor_message || '你可以随时打开人工框选提取页，把需要的图片录入到当前文献。')}</p>
                 </div>
             `;
         } else {
