@@ -411,7 +411,7 @@ const PaperPDFTextViewer = {
 
                         <label class="field note-lightbox-field">
                             <span>PDF 原文</span>
-                            <textarea id="paperPdfTextViewerInput" class="form-textarea note-lightbox-textarea pdf-text-editor-textarea" rows="24" placeholder="在这里补充、修正或整理整篇 PDF 的全文内容">${Utils.escapeHTML(text)}</textarea>
+                            <textarea id="paperPdfTextViewerInput" class="form-textarea note-lightbox-textarea pdf-text-editor-textarea" rows="24" data-native-context-menu="true" placeholder="在这里补充、修正或整理整篇 PDF 的全文内容">${Utils.escapeHTML(text)}</textarea>
                         </label>
 
                         <div class="figure-notes-actions">
@@ -694,7 +694,7 @@ const PaperViewer = {
                 </div>
                 <div class="pdf-text-preview">
                     ${paper.pdf_text ? `
-                        <pre class="pdf-text-snippet">${Utils.escapeHTML(paper.pdf_text.substring(0, 1000))}${paper.pdf_text.length > 1000 ? '\n...' : ''}</pre>
+                        <pre class="pdf-text-snippet" data-native-context-menu="true">${Utils.escapeHTML(paper.pdf_text.substring(0, 1000))}${paper.pdf_text.length > 1000 ? '\n...' : ''}</pre>
                         <p class="pdf-text-meta">共 ${paper.pdf_text.length.toLocaleString()} 字符</p>
                     ` : '<p class="muted">暂无 PDF 原文，点击上方按钮可补充或编辑全文。</p>'}
                 </div>
