@@ -153,6 +153,7 @@ AI 流式阅读通过：
 | `title` | 可选标题 |
 | `group_id` | 可选分组 |
 | `tags` | 逗号分隔标签 |
+| `extraction_mode` | 可选，`auto` 或 `manual`；`manual` 表示跳过自动解析，但文献仍会直接入库 |
 
 #### `PUT /api/papers/{id}`
 

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"strings"
 
+	"github.com/xuzhougeng/citebox/internal/apperr"
 	"github.com/xuzhougeng/citebox/internal/model"
 )
 
@@ -22,6 +23,20 @@ func NewPaperRepository(db *sql.DB, tagRepo *TagRepository, groupRepo *GroupRepo
 
 // CreatePaper 创建文献
 func (r *PaperRepository) CreatePaper(input PaperUpsertInput) (*model.Paper, error) {
+	input.ExtractionStatus = strings.TrimSpace(input.ExtractionStatus)
+	if input.ExtractionStatus == "" {
+		input.ExtractionStatus = "completed"
+	}
+	if !isValidPaperExtractionStatus(input.ExtractionStatus) {
+		return nil, apperr.New(apperr.CodeInvalidArgument, "文献解析状态无效")
+	}
+	for _, figure := range input.Figures {
+		source := strings.TrimSpace(figure.Source)
+		if source != "" && !isValidFigureSource(source) {
+			return nil, apperr.New(apperr.CodeInvalidArgument, "图片来源无效")
+		}
+	}
+
 	tx, err := r.db.Begin()
 	if err != nil {
 		return nil, wrapDBError(err, "创建文献失败")
@@ -492,6 +507,16 @@ func buildPaperWhere(filter model.PaperFilter) (string, []interface{}) {
 	conditions := []string{}
 	args := []interface{}{}
 
+	if keyword := strings.TrimSpace(filter.Keyword); keyword != "" {
+		like := "%" + keyword + "%"
+		if strings.TrimSpace(filter.KeywordScope) == "title_abstract" {
+			conditions = append(conditions, "(p.title LIKE ? OR p.abstract_text LIKE ?)")
+			args = append(args, like, like)
+		} else {
+			conditions = append(conditions, "(p.title LIKE ? OR p.original_filename LIKE ? OR p.abstract_text LIKE ? OR p.notes_text LIKE ? OR p.paper_notes_text LIKE ? OR p.pdf_text LIKE ?)")
+			args = append(args, like, like, like, like, like, like)
+		}
+	}
 	if filter.GroupID != nil && *filter.GroupID > 0 {
 		conditions = append(conditions, "p.group_id = ?")
 		args = append(args, *filter.GroupID)
@@ -507,8 +532,28 @@ func buildPaperWhere(filter model.PaperFilter) (string, []interface{}) {
 	return " WHERE " + strings.Join(conditions, " AND "), args
 }
 
+func isValidPaperExtractionStatus(status string) bool {
+	switch strings.TrimSpace(status) {
+	case "queued", "running", "manual_pending", "completed", "failed", "cancelled":
+		return true
+	default:
+		return false
+	}
+}
+
+func isValidFigureSource(source string) bool {
+	switch strings.TrimSpace(source) {
+	case "auto", "manual":
+		return true
+	default:
+		return false
+	}
+}
+
 // scanPaper 扫描文献数据
-func scanPaper(scanner interface{ Scan(dest ...interface{}) error }, withFullText bool) (*model.Paper, error) {
+func scanPaper(scanner interface {
+	Scan(dest ...interface{}) error
+}, withFullText bool) (*model.Paper, error) {
 	var paper model.Paper
 	var groupID sql.NullInt64
 	var groupName string
@@ -576,5 +621,3 @@ func rawJSON(s string) json.RawMessage {
 	}
 	return json.RawMessage(s)
 }
-
-

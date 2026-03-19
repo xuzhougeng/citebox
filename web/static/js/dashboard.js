@@ -5,7 +5,6 @@ const DashboardPage = {
             totalPapers: 0,
             completedPapers: 0,
             processingPapers: 0,
-            manualPendingPapers: 0,
             failedPapers: 0,
             totalFigures: 0,
             notedFigures: 0
@@ -56,7 +55,6 @@ const DashboardPage = {
                 completedPayload,
                 queuedPayload,
                 runningPayload,
-                manualPendingPayload,
                 failedPayload,
                 cancelledPayload,
                 figuresPayload,
@@ -67,7 +65,6 @@ const DashboardPage = {
                 API.listPapers({ page: 1, page_size: 1, status: 'completed' }),
                 API.listPapers({ page: 1, page_size: 1, status: 'queued' }),
                 API.listPapers({ page: 1, page_size: 1, status: 'running' }),
-                API.listPapers({ page: 1, page_size: 1, status: 'manual_pending' }),
                 API.listPapers({ page: 1, page_size: 1, status: 'failed' }),
                 API.listPapers({ page: 1, page_size: 1, status: 'cancelled' }),
                 API.listFigures({ page: 1, page_size: 1 }),
@@ -79,7 +76,6 @@ const DashboardPage = {
                 totalPapers: allPayload.total || 0,
                 completedPapers: completedPayload.total || 0,
                 processingPapers: (queuedPayload.total || 0) + (runningPayload.total || 0),
-                manualPendingPapers: manualPendingPayload.total || 0,
                 failedPapers: (failedPayload.total || 0) + (cancelledPayload.total || 0),
                 totalFigures: figuresPayload.total || 0,
                 notedFigures: notesPayload.total || 0
@@ -105,16 +101,12 @@ const DashboardPage = {
                 <strong>${stats.totalPapers}</strong>
             </div>
             <div class="stat-card">
-                <span>解析完成</span>
+                <span>已完成</span>
                 <strong>${stats.completedPapers}</strong>
             </div>
             <div class="stat-card">
                 <span>处理中</span>
                 <strong>${stats.processingPapers}</strong>
-            </div>
-            <div class="stat-card">
-                <span>待手动标注</span>
-                <strong>${stats.manualPendingPapers}</strong>
             </div>
             <div class="stat-card">
                 <span>解析异常</span>

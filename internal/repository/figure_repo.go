@@ -313,6 +313,16 @@ func buildFigureWhere(filter model.FigureFilter) (string, []interface{}) {
 	conditions := []string{}
 	args := []interface{}{}
 
+	if keyword := strings.TrimSpace(filter.Keyword); keyword != "" {
+		like := "%" + keyword + "%"
+		conditions = append(conditions, `(p.title LIKE ? OR pf.original_name LIKE ? OR pf.caption LIKE ? OR pf.notes_text LIKE ? OR EXISTS (
+			SELECT 1
+			FROM figure_tags ft
+			JOIN tags t ON t.id = ft.tag_id
+			WHERE ft.figure_id = pf.id AND t.name LIKE ?
+		))`)
+		args = append(args, like, like, like, like, like)
+	}
 	if filter.GroupID != nil && *filter.GroupID > 0 {
 		conditions = append(conditions, "p.group_id = ?")
 		args = append(args, *filter.GroupID)
@@ -320,6 +330,9 @@ func buildFigureWhere(filter model.FigureFilter) (string, []interface{}) {
 	if filter.TagID != nil && *filter.TagID > 0 {
 		conditions = append(conditions, "EXISTS (SELECT 1 FROM figure_tags ft WHERE ft.figure_id = pf.id AND ft.tag_id = ?)")
 		args = append(args, *filter.TagID)
+	}
+	if filter.HasNotes {
+		conditions = append(conditions, "TRIM(COALESCE(pf.notes_text, '')) <> ''")
 	}
 
 	if len(conditions) == 0 {
@@ -330,6 +343,9 @@ func buildFigureWhere(filter model.FigureFilter) (string, []interface{}) {
 
 // buildFigureOrderBy 构建图片排序
 func buildFigureOrderBy(filter model.FigureFilter) string {
+	if filter.HasNotes {
+		return "ORDER BY pf.updated_at DESC, pf.id DESC"
+	}
 	return "ORDER BY pf.created_at DESC, pf.id DESC"
 }
 
@@ -342,5 +358,3 @@ func firstNonEmpty(values ...string) string {
 	}
 	return ""
 }
-
-

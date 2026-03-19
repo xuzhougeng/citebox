@@ -185,7 +185,17 @@ func (r *LibraryRepository) UpdateFigure(id int64, input FigureUpdateInput) (*mo
 
 // UpdateFigureTags 更新图片标签（委托给 Figure 仓库）
 func (r *LibraryRepository) UpdateFigureTags(id int64, tags []TagUpsertInput) (*model.Paper, error) {
-	return r.Figure.UpdateFigureTags(id, tags)
+	if _, err := r.Figure.UpdateFigureTags(id, tags); err != nil {
+		return nil, err
+	}
+	figure, err := r.Figure.GetFigure(id)
+	if err != nil {
+		return nil, err
+	}
+	if figure == nil {
+		return nil, apperr.New(apperr.CodeNotFound, "figure not found")
+	}
+	return r.Paper.GetPaperDetail(figure.PaperID)
 }
 
 // DeletePaperFigure 删除图片（委托给 Figure 仓库）

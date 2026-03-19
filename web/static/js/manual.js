@@ -189,25 +189,30 @@ const ManualPage = {
         if (!paper) return;
 
         const manualCount = (paper.figures || []).filter((figure) => figure.source === 'manual').length;
+        const status = paper.extraction_status || '';
 
         this.pageTitle.textContent = `${paper.title} 的人工框选提取`;
         this.pageSubtitle.textContent = paper.extractor_message
-            ? `自动处理状态：${Utils.statusLabel(paper.extraction_status)}。${paper.extractor_message}`
+            ? ((status === 'queued' || status === 'running' || status === 'failed' || status === 'cancelled')
+                ? `自动解析状态：${Utils.statusLabel(status)}。${paper.extractor_message}`
+                : paper.extractor_message)
             : 'PDF 预览和裁图现在直接在浏览器里完成，提交后会把结果追加到当前文献。';
 
         this.openPDFLink.href = paper.pdf_url ? Utils.resourceViewerURL('pdf', paper.pdf_url) : '/';
-        this.backLibraryLink.href = '/';
+        this.backLibraryLink.href = `/library?paper_id=${encodeURIComponent(paper.id)}`;
         this.pageIndicator.textContent = this.state.pageCount
             ? `第 ${this.state.currentPage} / ${this.state.pageCount} 页`
             : '正在读取 PDF...';
         this.prevPageBtn.disabled = this.state.currentPage <= 1;
         this.nextPageBtn.disabled = !this.state.pageCount || this.state.currentPage >= this.state.pageCount;
+        this.submitBtn.disabled = this.state.submitting;
+        this.submitBtn.textContent = this.state.submitting ? '提取中...' : '提取并录入图片';
 
         this.summaryStrip.innerHTML = `
             <div class="stat-card"><span>PDF 页数</span><strong>${this.state.pageCount || '...'}</strong></div>
             <div class="stat-card"><span>已有图片</span><strong>${paper.figure_count || (paper.figures || []).length || 0}</strong></div>
             <div class="stat-card"><span>人工补录</span><strong>${manualCount}</strong></div>
-            <div class="stat-card"><span>自动状态</span><strong>${Utils.escapeHTML(Utils.statusLabel(paper.extraction_status || ''))}</strong></div>
+            <div class="stat-card"><span>当前状态</span><strong>${Utils.escapeHTML(Utils.statusLabel(status))}</strong></div>
         `;
 
         if (paper.extractor_message) {

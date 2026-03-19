@@ -397,7 +397,7 @@ func TestBuildExtractorUploadBodyUsesRuntimeFileField(t *testing.T) {
 	}
 }
 
-func TestUploadPaperWithoutExtractorConfiguredUsesManualPending(t *testing.T) {
+func TestUploadPaperWithoutExtractorConfiguredUsesCompleted(t *testing.T) {
 	svc, _, _ := newTestService(t)
 
 	content := []byte("%PDF-1.4 test")
@@ -415,11 +415,72 @@ func TestUploadPaperWithoutExtractorConfiguredUsesManualPending(t *testing.T) {
 		t.Fatalf("UploadPaper() error = %v", err)
 	}
 
-	if paper.ExtractionStatus != manualPendingStatus {
-		t.Fatalf("UploadPaper() status = %q, want %q", paper.ExtractionStatus, manualPendingStatus)
+	if paper.ExtractionStatus != "completed" {
+		t.Fatalf("UploadPaper() status = %q, want %q", paper.ExtractionStatus, "completed")
 	}
-	if paper.ExtractorMessage == "" {
-		t.Fatalf("UploadPaper() extractor_message should not be empty")
+	if !strings.Contains(paper.ExtractorMessage, "文献已入库") {
+		t.Fatalf("UploadPaper() extractor_message = %q, want library-ready hint", paper.ExtractorMessage)
+	}
+}
+
+func TestUploadPaperWithAutoModeRequiresConfiguredExtractor(t *testing.T) {
+	svc, _, _ := newTestService(t)
+
+	content := []byte("%PDF-1.4 test")
+	file := &testMultipartFile{Reader: bytes.NewReader(content)}
+	header := &multipart.FileHeader{
+		Filename: "auto-mode.pdf",
+		Size:     int64(len(content)),
+		Header: textproto.MIMEHeader{
+			"Content-Type": []string{"application/pdf"},
+		},
+	}
+
+	_, err := svc.UploadPaper(file, header, UploadPaperParams{
+		Title:          "Auto Mode",
+		ExtractionMode: "auto",
+	})
+	if !apperr.IsCode(err, apperr.CodeFailedPrecondition) {
+		t.Fatalf("UploadPaper() code = %q, want %q", apperr.CodeOf(err), apperr.CodeFailedPrecondition)
+	}
+}
+
+func TestUploadPaperWithManualModeSkipsConfiguredExtractor(t *testing.T) {
+	svc, _, _ := newTestService(t)
+
+	if _, err := svc.UpdateExtractorSettings(model.ExtractorSettings{
+		ExtractorURL:        "http://127.0.0.1:9000/api/v1/extract",
+		ExtractorToken:      "secret",
+		ExtractorFileField:  "upload",
+		TimeoutSeconds:      120,
+		PollIntervalSeconds: 5,
+	}); err != nil {
+		t.Fatalf("UpdateExtractorSettings() error = %v", err)
+	}
+
+	content := []byte("%PDF-1.4 test")
+	file := &testMultipartFile{Reader: bytes.NewReader(content)}
+	header := &multipart.FileHeader{
+		Filename: "manual-mode.pdf",
+		Size:     int64(len(content)),
+		Header: textproto.MIMEHeader{
+			"Content-Type": []string{"application/pdf"},
+		},
+	}
+
+	paper, err := svc.UploadPaper(file, header, UploadPaperParams{
+		Title:          "Manual Mode",
+		ExtractionMode: "manual",
+	})
+	if err != nil {
+		t.Fatalf("UploadPaper() error = %v", err)
+	}
+
+	if paper.ExtractionStatus != "completed" {
+		t.Fatalf("UploadPaper() status = %q, want %q", paper.ExtractionStatus, "completed")
+	}
+	if !strings.Contains(paper.ExtractorMessage, "手工标注") {
+		t.Fatalf("UploadPaper() extractor_message = %q, want manual hint", paper.ExtractorMessage)
 	}
 }
 
@@ -550,5 +611,56 @@ func TestManualExtractFiguresStoresClientRenderedImage(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(cfg.FiguresDir(), manualFigure.Filename)); err != nil {
 		t.Fatalf("stored manual figure missing, stat err = %v", err)
+	}
+}
+
+func TestMigrateLegacyManualPendingPapersMarksCompleted(t *testing.T) {
+	root := t.TempDir()
+	cfg := &config.Config{
+		StorageDir:              filepath.Join(root, "storage"),
+		DatabasePath:            filepath.Join(root, "library.db"),
+		MaxUploadSize:           10 << 20,
+		AdminUsername:           "citebox",
+		AdminPassword:           "citebox123",
+		ExtractorTimeoutSeconds: 1,
+		ExtractorPollInterval:   1,
+		ExtractorFileField:      "file",
+	}
+
+	repo, err := repository.NewLibraryRepository(cfg.DatabasePath)
+	if err != nil {
+		t.Fatalf("NewLibraryRepository() error = %v", err)
+	}
+	t.Cleanup(func() {
+		_ = repo.Close()
+	})
+
+	if _, err := repo.CreatePaper(repository.PaperUpsertInput{
+		Title:            "Legacy Manual Workflow",
+		OriginalFilename: "legacy-manual-workflow.pdf",
+		StoredPDFName:    "legacy_manual_workflow.pdf",
+		FileSize:         256,
+		ContentType:      "application/pdf",
+		ExtractionStatus: manualPendingStatus,
+		ExtractorMessage: "未配置自动解析服务，请直接进入人工处理",
+	}); err != nil {
+		t.Fatalf("CreatePaper() error = %v", err)
+	}
+
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	svc, err := NewLibraryService(repo, cfg, WithLogger(logger), WithoutBackgroundJobs())
+	if err != nil {
+		t.Fatalf("NewLibraryService() error = %v", err)
+	}
+
+	result, err := svc.ListPapers(model.PaperFilter{Status: "completed"})
+	if err != nil {
+		t.Fatalf("ListPapers() error = %v", err)
+	}
+	if result.Total != 1 || len(result.Papers) != 1 {
+		t.Fatalf("ListPapers() total=%d len=%d, want 1/1", result.Total, len(result.Papers))
+	}
+	if !strings.Contains(result.Papers[0].ExtractorMessage, "文献已入库") {
+		t.Fatalf("ListPapers() extractor_message = %q, want migrated library-ready hint", result.Papers[0].ExtractorMessage)
 	}
 }

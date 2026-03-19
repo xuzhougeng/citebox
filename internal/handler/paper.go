@@ -74,9 +74,10 @@ func (h *PaperHandler) Upload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	paper, err := h.service.UploadPaper(file, header, service.UploadPaperParams{
-		Title:   r.FormValue("title"),
-		GroupID: groupID,
-		Tags:    splitCSV(r.FormValue("tags")),
+		Title:          r.FormValue("title"),
+		GroupID:        groupID,
+		Tags:           splitCSV(r.FormValue("tags")),
+		ExtractionMode: r.FormValue("extraction_mode"),
 	})
 	if err != nil {
 		sendError(w, err)
