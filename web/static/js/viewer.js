@@ -4,13 +4,15 @@ const ResourceViewerPage = {
         this.closeButton = document.getElementById('viewerCloseButton');
         this.kindLabel = document.getElementById('viewerKindLabel');
         this.title = document.getElementById('viewerTitle');
+        this.closing = false;
 
         this.closeButton?.addEventListener('click', () => this.close());
         document.addEventListener('keydown', (event) => {
             if (event.key !== 'Escape') return;
             event.preventDefault();
             event.stopPropagation();
-            this.close();
+            event.stopImmediatePropagation();
+            this.close({ deferNavigation: true });
         });
 
         this.render();
@@ -106,7 +108,27 @@ const ResourceViewerPage = {
         }
     },
 
-    close() {
+    close(options = {}) {
+        if (this.closing) {
+            return;
+        }
+
+        this.closing = true;
+        const { deferNavigation = false } = options;
+        const finalizeClose = () => {
+            this.navigateBack();
+        };
+
+        if (deferNavigation) {
+            // Let the Escape event finish first so it does not close restored modals on the previous page.
+            window.setTimeout(finalizeClose, 0);
+            return;
+        }
+
+        finalizeClose();
+    },
+
+    navigateBack() {
         if (window.history.length > 1) {
             window.history.back();
             return;
