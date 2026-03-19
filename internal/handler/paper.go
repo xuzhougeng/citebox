@@ -208,6 +208,7 @@ func (h *PaperHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	var req struct {
 		Title          string   `json:"title"`
+		PDFText        *string  `json:"pdf_text"`
 		AbstractText   string   `json:"abstract_text"`
 		NotesText      string   `json:"notes_text"`
 		PaperNotesText string   `json:"paper_notes_text"`
@@ -221,6 +222,7 @@ func (h *PaperHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	paper, err := h.service.UpdatePaper(id, service.UpdatePaperParams{
 		Title:          req.Title,
+		PDFText:        req.PDFText,
 		AbstractText:   req.AbstractText,
 		NotesText:      req.NotesText,
 		PaperNotesText: req.PaperNotesText,
