@@ -80,6 +80,9 @@ const AppNavigationHotkeys = {
 };
 
 document.addEventListener('DOMContentLoaded', () => {
+    const modalRestoreState = typeof Utils !== 'undefined' && typeof Utils.consumeModalRestoreState === 'function'
+        ? Utils.consumeModalRestoreState()
+        : null;
     const path = window.location.pathname;
     AppNavigationHotkeys.init();
 
@@ -121,5 +124,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (path === '/settings' || path === '/settings.html') {
         SettingsPage.init();
+    }
+
+    if (modalRestoreState && typeof Utils !== 'undefined' && typeof Utils.restoreModalState === 'function') {
+        window.setTimeout(() => {
+            void Utils.restoreModalState(modalRestoreState);
+        }, 0);
     }
 });

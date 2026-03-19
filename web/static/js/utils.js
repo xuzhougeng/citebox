@@ -1,5 +1,8 @@
 // 工具函数模块
 const Utils = {
+    modalRestoreParam: 'restore_modal',
+    modalRestoreStoragePrefix: 'citebox.modalRestore.',
+
     formatFileSize(bytes) {
         if (bytes === 0) return '0 Bytes';
         const k = 1024;
@@ -34,13 +37,157 @@ const Utils = {
     },
 
     resourceViewerURL(kind, src, back = window.location.href) {
+        const resolvedBack = this.buildResourceViewerBackURL(back);
         const params = new URLSearchParams();
         params.set('kind', String(kind || ''));
         params.set('src', String(src || ''));
-        if (back) {
-            params.set('back', String(back));
+        if (resolvedBack) {
+            params.set('back', String(resolvedBack));
         }
         return `/viewer?${params.toString()}`;
+    },
+
+    buildResourceViewerBackURL(back = window.location.href) {
+        const normalizedBack = String(back || '').trim();
+        if (!normalizedBack) {
+            return '';
+        }
+
+        const restoreState = this.captureModalRestoreState();
+        if (!restoreState) {
+            return normalizedBack;
+        }
+
+        const token = this.storeModalRestoreState(restoreState);
+        if (!token) {
+            return normalizedBack;
+        }
+
+        try {
+            const backURL = new URL(normalizedBack, window.location.origin);
+            if (backURL.origin !== window.location.origin) {
+                return normalizedBack;
+            }
+            backURL.searchParams.set(this.modalRestoreParam, token);
+            return `${backURL.pathname}${backURL.search}${backURL.hash}`;
+        } catch (error) {
+            return normalizedBack;
+        }
+    },
+
+    captureModalRestoreState() {
+        if (typeof NoteViewer !== 'undefined' && this.isVisibleModal(NoteViewer.modal) && NoteViewer.currentFigure?.id && NoteViewer.currentFigure?.paper_id) {
+            return {
+                modal: 'figure-note',
+                paperId: Number(NoteViewer.currentFigure.paper_id),
+                figureId: Number(NoteViewer.currentFigure.id)
+            };
+        }
+
+        if (typeof FigureViewer !== 'undefined' && this.isVisibleModal(FigureViewer.modal) && FigureViewer.currentFigure?.id && FigureViewer.currentFigure?.paper_id) {
+            return {
+                modal: 'figure',
+                paperId: Number(FigureViewer.currentFigure.paper_id),
+                figureId: Number(FigureViewer.currentFigure.id)
+            };
+        }
+
+        if (typeof PaperNoteViewer !== 'undefined' && this.isVisibleModal(PaperNoteViewer.modal) && PaperNoteViewer.paper?.id) {
+            return {
+                modal: 'paper-note',
+                paperId: Number(PaperNoteViewer.paper.id)
+            };
+        }
+
+        if (typeof PaperViewer !== 'undefined' && this.isVisibleModal(PaperViewer.modal) && PaperViewer.paper?.id) {
+            return {
+                modal: 'paper',
+                paperId: Number(PaperViewer.paper.id)
+            };
+        }
+
+        return null;
+    },
+
+    isVisibleModal(modal) {
+        return Boolean(modal && !modal.classList.contains('hidden'));
+    },
+
+    storeModalRestoreState(state) {
+        try {
+            const token = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+            window.sessionStorage.setItem(`${this.modalRestoreStoragePrefix}${token}`, JSON.stringify(state));
+            return token;
+        } catch (error) {
+            return '';
+        }
+    },
+
+    consumeModalRestoreState() {
+        const url = new URL(window.location.href);
+        const token = String(url.searchParams.get(this.modalRestoreParam) || '').trim();
+        if (!token) {
+            return null;
+        }
+
+        url.searchParams.delete(this.modalRestoreParam);
+        window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
+
+        try {
+            const storageKey = `${this.modalRestoreStoragePrefix}${token}`;
+            const raw = window.sessionStorage.getItem(storageKey);
+            window.sessionStorage.removeItem(storageKey);
+            if (!raw) {
+                return null;
+            }
+            return JSON.parse(raw);
+        } catch (error) {
+            return null;
+        }
+    },
+
+    async restoreModalState(state) {
+        if (!state || typeof PaperViewer === 'undefined') {
+            return false;
+        }
+
+        const paperId = Number(state.paperId);
+        if (!paperId || !document.getElementById('paperModal')) {
+            return false;
+        }
+
+        try {
+            await PaperViewer.open(paperId);
+
+            if (state.modal === 'paper-note' && typeof PaperViewer.openPaperNotes === 'function') {
+                PaperViewer.openPaperNotes();
+                return true;
+            }
+
+            if (state.modal !== 'figure' && state.modal !== 'figure-note') {
+                return true;
+            }
+
+            if (typeof FigureViewer === 'undefined') {
+                return true;
+            }
+
+            const figureId = Number(state.figureId);
+            const figures = PaperViewer.paper?.figures || [];
+            const figureIndex = figures.findIndex((figure) => Number(figure.id) === figureId);
+            if (figureIndex < 0) {
+                return true;
+            }
+
+            await PaperViewer.openFigurePreview(figureIndex);
+
+            if (state.modal === 'figure-note' && typeof FigureViewer.openNotes === 'function') {
+                await FigureViewer.openNotes();
+            }
+            return true;
+        } catch (error) {
+            return false;
+        }
     },
 
     blobToBase64(blob) {
