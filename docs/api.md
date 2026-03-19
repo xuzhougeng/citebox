@@ -22,6 +22,7 @@
   - 分组：`/api/groups`
   - 标签：`/api/tags`
   - AI：`/api/ai/...`
+    - 包括 `/api/ai/translate`
   - 版本检查：`/api/settings/version`
   - 提取器设置：`/api/settings/extractor`
   - 数据库备份导入导出：`/api/database/...`
@@ -66,6 +67,10 @@
 AI 流式阅读通过：
 
 - `POST /api/ai/read/stream`
+
+划词翻译通过：
+
+- `POST /api/ai/translate`
 
 返回格式是按行分隔的 JSON，也就是 `ndjson`。前端逐行读取后触发 `onEvent(JSON.parse(line))`。
 
@@ -394,6 +399,20 @@ AI 流式阅读通过：
 - `figure_prompt`
 - `tag_prompt`
 - `group_prompt`
+- `translate_prompt`
+- `translation`
+
+说明：
+
+- `scene_models` 中新增 `translate_model_id`
+- `translation` 为翻译规则设置，例如：
+
+```json
+{
+  "primary_language": "中文",
+  "target_language": "英文"
+}
+```
 
 #### `POST /api/ai/settings/check-model`
 
@@ -446,6 +465,36 @@ AI 流式阅读通过：
 - `figure_interpretation`
 - `tag_suggestion`
 - `group_suggestion`
+
+#### `POST /api/ai/translate`
+
+用途：
+
+- 桌面端划词翻译
+- 不依赖 `paper_id`
+- 根据 AI 配置中的翻译规则自动判断方向
+
+请求体：
+
+```json
+{
+  "text": "这是需要翻译的内容"
+}
+```
+
+返回体示例：
+
+```json
+{
+  "success": true,
+  "provider": "openai",
+  "model": "gpt-4.1-mini",
+  "mode": "responses",
+  "source_language": "中文",
+  "target_language": "英文",
+  "translation": "This is the translated text."
+}
+```
 
 #### `POST /api/ai/read/stream`
 

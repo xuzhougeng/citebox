@@ -39,6 +39,7 @@
 @import url('features/markdown.css');
 @import url('features/boxes.css');
 @import url('features/pdf-text.css');
+@import url('features/translate.css');
 
 /* ===== 6. Pages ===== */
 @import url('pages/home.css');

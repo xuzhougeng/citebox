@@ -73,7 +73,7 @@
             <section class="manager-card">
                 <div class="manager-head">
                     <h2>AI 配置</h2>
-                    <p>先维护模型池，再把不同模型绑定到问答、图片解读、标签建议、分组建议等场景。</p>
+                    <p>先维护模型池，再把不同模型绑定到问答、图片解读、标签建议、分组建议和划词翻译等场景。</p>
                 </div>
                 <form id="aiSettingsForm" class="manager-form">
                     <div class="manager-head">
@@ -114,12 +114,32 @@
                             <select id="aiGroupModelSelect" class="form-input"></select>
                         </label>
                         <label class="field">
+                            <span>划词翻译模型</span>
+                            <select id="aiTranslateModelSelect" class="form-input"></select>
+                        </label>
+                        <label class="field">
                             <span>Temperature</span>
                             <input id="aiTemperatureInput" class="form-input" type="number" min="0" max="2" step="0.1">
                         </label>
                         <label class="field">
                             <span>图像数量上限</span>
                             <input id="aiMaxFiguresInput" class="form-input" type="number" min="0" step="1" placeholder="0 表示全部">
+                        </label>
+                    </div>
+
+                    <div class="manager-head prompt-section-head">
+                        <h3>翻译设置</h3>
+                        <p>桌面端划词右键只显示“翻译”。如果选中文本属于主要语言，就翻译到目标语言；否则统一翻译回主要语言。</p>
+                    </div>
+
+                    <div class="form-grid">
+                        <label class="field">
+                            <span>主要语言</span>
+                            <input id="aiTranslationPrimaryLanguageInput" class="form-input" type="text" placeholder="例如：中文">
+                        </label>
+                        <label class="field">
+                            <span>目标语言</span>
+                            <input id="aiTranslationTargetLanguageInput" class="form-input" type="text" placeholder="例如：英文">
                         </label>
                     </div>
 
@@ -358,6 +378,36 @@ User Prompt:
 4. answer 中请直接给出结论、依据和必要的限制说明。</pre>
                         </details>
                     </label>
+                    <label class="field prompt-field">
+                        <span class="field-label-row">
+                            <span class="field-label-text">划词翻译 Prompt</span>
+                            <span class="field-help" tabindex="0" role="note" title="作用于桌面端划词翻译。系统会自动根据翻译设置判断方向，并附带原文和目标语言。" data-help="作用于桌面端划词翻译。系统会自动根据翻译设置判断方向，并附带原文和目标语言。">?</span>
+                        </span>
+                        <textarea id="aiTranslatePromptInput" class="form-textarea" rows="4" placeholder="例如：只返回译文正文，保留换行、术语、缩写和数字单位"></textarea>
+                        <details class="prompt-template-details">
+                            <summary>查看实际模板</summary>
+                            <pre class="prompt-template-pre">System Prompt:
+{System Prompt}
+
+User Prompt:
+任务类型: translate
+
+翻译方向:
+- 原文语言: {系统判断后的原文语言}
+- 目标语言: {系统判断后的目标语言}
+
+场景指令:
+{这里填写的划词翻译 Prompt}
+
+输出要求:
+1. 只返回译文正文，不要附加解释、注释、标题、前缀或代码块。
+2. 保留原文中的换行、列表层级、数字、单位、缩写和专有名词。
+3. 如果原文已经是目标语言，也请只做必要润色后输出正文。
+
+待翻译文本:
+{用户当前选中的文本}</pre>
+                        </details>
+                    </label>
 
                     <div class="submit-row">
                         <button id="restoreAIPromptsButton" class="btn btn-outline" type="button">恢复推荐 Prompt</button>
@@ -519,6 +569,7 @@ User Prompt:
     <script src="/static/js/utils.js"></script>
     <script src="/static/js/api.js"></script>
     <script src="/static/js/settings.js"></script>
+    <script src="/static/js/translate.js"></script>
     <script src="/static/js/main.js"></script>
 </body>
 </html>

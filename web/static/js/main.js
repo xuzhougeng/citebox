@@ -99,6 +99,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (typeof Utils !== 'undefined' && typeof Utils.bindResourceViewerLinks === 'function') {
         Utils.bindResourceViewerLinks();
     }
+    if (typeof DesktopTranslate !== 'undefined' && typeof DesktopTranslate.init === 'function') {
+        DesktopTranslate.init();
+    }
 
     if (path === '/' || path === '/index.html') {
         DashboardPage.init();

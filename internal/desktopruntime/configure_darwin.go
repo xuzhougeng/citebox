@@ -210,6 +210,8 @@ var desktopInternalRoutes = []string{
 }
 
 const desktopBridgeScript = `(function() {
+    window.__CITEBOX_DESKTOP__ = true;
+
     const normalizePath = (path = '') => {
         const normalized = String(path || '').trim();
         if (!normalized || normalized === '/index.html') {

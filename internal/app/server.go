@@ -316,6 +316,15 @@ func buildHandler(
 		}
 	})
 
+	mux.HandleFunc("/api/ai/translate", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPost:
+			aiHandler.Translate(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
 	mux.HandleFunc("/api/ai/read/stream", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodPost:

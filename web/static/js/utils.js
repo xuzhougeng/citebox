@@ -36,6 +36,10 @@ const Utils = {
         return typeof window.citeboxDesktopSaveFile === 'function';
     },
 
+    isDesktopApp() {
+        return window.__CITEBOX_DESKTOP__ === true;
+    },
+
     resourceViewerURL(kind, src, back = window.location.href) {
         const params = new URLSearchParams();
         params.set('kind', String(kind || ''));

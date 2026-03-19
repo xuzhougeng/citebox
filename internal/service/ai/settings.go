@@ -53,7 +53,7 @@ func IsSupportedProvider(provider model.AIProvider) bool {
 // NormalizeAction 标准化 AI 动作
 func NormalizeAction(action model.AIAction) model.AIAction {
 	switch action {
-	case model.AIActionFigureInterpretation, model.AIActionTagSuggestion, model.AIActionGroupSuggestion, model.AIActionPaperQA:
+	case model.AIActionFigureInterpretation, model.AIActionTagSuggestion, model.AIActionGroupSuggestion, model.AIActionPaperQA, model.AIActionTranslate:
 		return action
 	default:
 		return model.AIActionPaperQA
@@ -80,6 +80,8 @@ func ResolveModelForAction(settings model.AISettings, action model.AIAction) (mo
 		modelID = firstNonEmpty(settings.SceneModels.TagModelID, settings.SceneModels.DefaultModelID)
 	case model.AIActionGroupSuggestion:
 		modelID = firstNonEmpty(settings.SceneModels.GroupModelID, settings.SceneModels.DefaultModelID)
+	case model.AIActionTranslate:
+		modelID = firstNonEmpty(settings.SceneModels.TranslateModelID, settings.SceneModels.DefaultModelID)
 	default:
 		modelID = firstNonEmpty(settings.SceneModels.QAModelID, settings.SceneModels.DefaultModelID)
 	}
@@ -136,11 +138,23 @@ func NormalizeSettings(input model.AISettings) (model.AISettings, error) {
 	if strings.TrimSpace(settings.GroupPrompt) == "" {
 		settings.GroupPrompt = defaults.GroupPrompt
 	}
+	if strings.TrimSpace(settings.TranslatePrompt) == "" {
+		settings.TranslatePrompt = defaults.TranslatePrompt
+	}
 	settings.SystemPrompt = strings.TrimSpace(settings.SystemPrompt)
 	settings.QAPrompt = strings.TrimSpace(settings.QAPrompt)
 	settings.FigurePrompt = strings.TrimSpace(settings.FigurePrompt)
 	settings.TagPrompt = strings.TrimSpace(settings.TagPrompt)
 	settings.GroupPrompt = strings.TrimSpace(settings.GroupPrompt)
+	settings.TranslatePrompt = strings.TrimSpace(settings.TranslatePrompt)
+	if strings.TrimSpace(settings.Translation.PrimaryLanguage) == "" {
+		settings.Translation.PrimaryLanguage = defaults.Translation.PrimaryLanguage
+	}
+	if strings.TrimSpace(settings.Translation.TargetLanguage) == "" {
+		settings.Translation.TargetLanguage = defaults.Translation.TargetLanguage
+	}
+	settings.Translation.PrimaryLanguage = strings.TrimSpace(settings.Translation.PrimaryLanguage)
+	settings.Translation.TargetLanguage = strings.TrimSpace(settings.Translation.TargetLanguage)
 
 	models, err := normalizeModels(settings, defaults)
 	if err != nil {
@@ -255,6 +269,7 @@ func normalizeSceneModelSelection(input model.AISceneModelSelection, models []mo
 	selection.FigureModelID = normalizeSceneModelID(selection.FigureModelID, models, selection.DefaultModelID)
 	selection.TagModelID = normalizeSceneModelID(selection.TagModelID, models, selection.DefaultModelID)
 	selection.GroupModelID = normalizeSceneModelID(selection.GroupModelID, models, selection.DefaultModelID)
+	selection.TranslateModelID = normalizeSceneModelID(selection.TranslateModelID, models, selection.DefaultModelID)
 	return selection
 }
 
@@ -297,5 +312,3 @@ func UnmarshalSettings(data string) (model.AISettings, error) {
 	}
 	return NormalizeSettings(settings)
 }
-
-
