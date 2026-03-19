@@ -129,18 +129,13 @@ const ResourceViewerPage = {
     },
 
     navigateBack() {
-        if (window.history.length > 1) {
-            window.history.back();
-            return;
-        }
-
         const params = new URLSearchParams(window.location.search);
         const back = String(params.get('back') || '').trim();
         if (back) {
             try {
                 const backURL = new URL(back, window.location.origin);
                 if (backURL.origin === window.location.origin) {
-                    window.location.assign(backURL.href);
+                    window.location.replace(backURL.href);
                     return;
                 }
             } catch (error) {
@@ -148,12 +143,17 @@ const ResourceViewerPage = {
             }
         }
 
+        if (window.history.length > 1) {
+            window.history.back();
+            return;
+        }
+
         const referrer = String(document.referrer || '').trim();
         if (referrer) {
             try {
                 const referrerURL = new URL(referrer);
                 if (referrerURL.origin === window.location.origin) {
-                    window.location.assign(referrerURL.href);
+                    window.location.replace(referrerURL.href);
                     return;
                 }
             } catch (error) {
@@ -161,7 +161,7 @@ const ResourceViewerPage = {
             }
         }
 
-        window.location.assign('/');
+        window.location.replace('/');
     },
 
     escapeHTML(value = '') {
