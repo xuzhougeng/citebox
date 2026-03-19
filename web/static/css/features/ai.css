@@ -210,11 +210,15 @@
     margin: 0.7rem 0 0;
     color: var(--muted);
     line-height: 1.6;
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 
 .settings-summary-card.action a,
 .settings-summary-box a {
     color: var(--accent-deep);
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 
 .ai-model-summary {

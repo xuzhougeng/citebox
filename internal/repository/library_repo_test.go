@@ -139,6 +139,54 @@ func TestListPapersSearchesPDFTextWithFTS(t *testing.T) {
 	}
 }
 
+func TestListPapersFiltersByPaperTag(t *testing.T) {
+	repo := newTestRepository(t)
+
+	first, err := repo.CreatePaper(PaperUpsertInput{
+		Title:            "Tagged Paper",
+		OriginalFilename: "tagged-paper.pdf",
+		StoredPDFName:    "tagged-paper.pdf",
+		FileSize:         128,
+		ContentType:      "application/pdf",
+		ExtractionStatus: "completed",
+		Tags: []TagUpsertInput{
+			{Name: "review", Color: "#A45C40"},
+		},
+		Figures: []FigureUpsertInput{
+			{Filename: "tagged-paper-figure.png", PageNumber: 1, FigureIndex: 1},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreatePaper(first) error = %v", err)
+	}
+
+	if _, err := repo.CreatePaper(PaperUpsertInput{
+		Title:            "Untagged Paper",
+		OriginalFilename: "untagged-paper.pdf",
+		StoredPDFName:    "untagged-paper.pdf",
+		FileSize:         128,
+		ContentType:      "application/pdf",
+		ExtractionStatus: "completed",
+		Figures: []FigureUpsertInput{
+			{Filename: "untagged-paper-figure.png", PageNumber: 1, FigureIndex: 1},
+		},
+	}); err != nil {
+		t.Fatalf("CreatePaper(second) error = %v", err)
+	}
+
+	tagID := first.Tags[0].ID
+	papers, total, err := repo.ListPapers(model.PaperFilter{TagID: &tagID})
+	if err != nil {
+		t.Fatalf("ListPapers(tag) error = %v", err)
+	}
+	if total != 1 || len(papers) != 1 {
+		t.Fatalf("ListPapers(tag) total=%d len=%d, want 1/1", total, len(papers))
+	}
+	if papers[0].ID != first.ID {
+		t.Fatalf("ListPapers(tag) paper id = %d, want %d", papers[0].ID, first.ID)
+	}
+}
+
 func TestListPapersKeywordScopeTitleAbstract(t *testing.T) {
 	repo := newTestRepository(t)
 

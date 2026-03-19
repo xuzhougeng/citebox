@@ -66,6 +66,17 @@
     align-items: center;
 }
 
+.tag-creator-form {
+    grid-template-columns: minmax(0, 1fr);
+    max-width: none;
+    align-items: start;
+    gap: 0.95rem;
+}
+
+.tag-name-field {
+    grid-column: 1 / -1;
+}
+
 .upload-form {
     display: grid;
     gap: 1rem;
@@ -185,4 +196,66 @@
     height: 3rem;
     padding: 0.4rem;
     cursor: pointer;
+}
+
+.tag-color-field {
+    min-width: 0;
+    padding: 0.95rem 1rem;
+    border-radius: 18px;
+    border: 1px solid rgba(36, 27, 22, 0.08);
+    background: rgba(255, 251, 245, 0.76);
+    margin: 0;
+}
+
+.tag-color-hint {
+    margin: -0.15rem 0 0;
+    color: var(--muted);
+    font-size: 0.9rem;
+    line-height: 1.55;
+}
+
+.tag-color-control-row {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    flex-wrap: wrap;
+}
+
+.tag-color-presets {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.55rem;
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+.tag-color-preset {
+    width: 1.55rem;
+    height: 1.55rem;
+    padding: 0;
+    border: 1px solid rgba(36, 27, 22, 0.14);
+    border-radius: 999px;
+    background: var(--tag-preset-color);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
+    cursor: pointer;
+    transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.tag-color-preset:hover,
+.tag-color-preset:focus-visible {
+    transform: translateY(-1px);
+    border-color: rgba(36, 27, 22, 0.28);
+    box-shadow: 0 0 0 4px rgba(164, 92, 64, 0.12);
+    outline: none;
+}
+
+.tag-color-preset.active {
+    border-color: rgba(36, 27, 22, 0.42);
+    box-shadow: 0 0 0 3px rgba(36, 27, 22, 0.12);
+}
+
+.tag-creator-submit {
+    margin-left: auto;
+    min-height: 3rem;
+    padding-inline: 1.2rem;
 }

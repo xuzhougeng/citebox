@@ -552,6 +552,107 @@ const Utils = {
         });
     },
 
+    promptFields(options = {}) {
+        const {
+            title = '编辑',
+            description = '',
+            confirmLabel = '保存',
+            fields = []
+        } = options;
+
+        return new Promise((resolve) => {
+            const normalizedFields = Array.isArray(fields) ? fields : [];
+            const overlay = document.createElement('div');
+            overlay.className = 'dialog-overlay';
+            overlay.innerHTML = `
+                <div class="dialog-box dialog-box-form">
+                    <div class="dialog-header">
+                        <h3>${Utils.escapeHTML(title)}</h3>
+                    </div>
+                    <form class="dialog-form">
+                        ${description ? `<p class="dialog-form-description">${Utils.escapeHTML(description)}</p>` : ''}
+                        <div class="dialog-form-fields">
+                            ${normalizedFields.map((field) => {
+                                const type = field.type === 'textarea' ? 'textarea' : (field.type || 'text');
+                                const name = Utils.escapeHTML(field.name || '');
+                                const label = Utils.escapeHTML(field.label || field.name || '');
+                                const value = Utils.escapeHTML(field.value ?? '');
+                                const placeholder = Utils.escapeHTML(field.placeholder || '');
+                                const required = field.required ? ' required' : '';
+                                const autocomplete = field.autocomplete ? ` autocomplete="${Utils.escapeHTML(field.autocomplete)}"` : ' autocomplete="off"';
+                                if (type === 'textarea') {
+                                    return `
+                                        <label class="dialog-form-field">
+                                            <span>${label}</span>
+                                            <textarea class="form-textarea" name="${name}" rows="${Number(field.rows) || 4}" placeholder="${placeholder}"${required}${autocomplete}>${value}</textarea>
+                                        </label>
+                                    `;
+                                }
+                                const inputClass = type === 'color' ? 'color-input dialog-form-color-input' : 'form-input';
+                                return `
+                                    <label class="dialog-form-field">
+                                        <span>${label}</span>
+                                        <input class="${inputClass}" type="${Utils.escapeHTML(type)}" name="${name}" value="${value}" placeholder="${placeholder}"${required}${autocomplete}>
+                                    </label>
+                                `;
+                            }).join('')}
+                        </div>
+                        <div class="dialog-footer">
+                            <button class="btn btn-outline dialog-cancel" type="button">取消</button>
+                            <button class="btn btn-primary dialog-confirm" type="submit">${Utils.escapeHTML(confirmLabel)}</button>
+                        </div>
+                    </form>
+                </div>
+            `;
+            document.body.appendChild(overlay);
+            requestAnimationFrame(() => overlay.classList.add('active'));
+
+            const form = overlay.querySelector('.dialog-form');
+            const confirmButton = overlay.querySelector('.dialog-confirm');
+            const inputs = Array.from(form.querySelectorAll('[name]'));
+
+            const collectValues = () => Object.fromEntries(inputs.map((input) => [input.name, input.value]));
+            const validate = () => {
+                const invalid = inputs.some((input) => input.required && !input.value.trim());
+                confirmButton.disabled = invalid;
+            };
+
+            const close = (result) => {
+                document.removeEventListener('keydown', onKeydown);
+                overlay.classList.remove('active');
+                setTimeout(() => overlay.remove(), 200);
+                resolve(result);
+            };
+
+            const onKeydown = (event) => {
+                if (event.key === 'Escape') {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    close(null);
+                }
+            };
+
+            form.addEventListener('submit', (event) => {
+                event.preventDefault();
+                if (confirmButton.disabled) return;
+                close(collectValues());
+            });
+
+            inputs.forEach((input) => {
+                input.addEventListener('input', validate);
+            });
+
+            overlay.querySelector('.dialog-cancel').onclick = () => close(null);
+            overlay.onclick = (event) => {
+                if (event.target === overlay) close(null);
+            };
+
+            document.addEventListener('keydown', onKeydown);
+            validate();
+            setTimeout(() => inputs[0]?.focus(), 0);
+        });
+    },
+
     escapeHTML(value = '') {
         return String(value)
             .replaceAll('&', '&amp;')
