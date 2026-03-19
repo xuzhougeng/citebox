@@ -29,6 +29,10 @@ const FigureViewer = {
 
         this.handleKeydown = (event) => {
             if (!this.modal || this.modal.classList.contains('hidden')) return;
+            if (event.defaultPrevented) return;
+            if (typeof Utils !== 'undefined' && typeof Utils.isTopVisibleModal === 'function' && !Utils.isTopVisibleModal(this.modal)) {
+                return;
+            }
             const target = event.target;
             const isEditableTarget = target instanceof HTMLElement && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName));
             if (event.key === 'Escape') {
@@ -782,7 +786,8 @@ const FigureViewer = {
             totalPages: this.totalPages,
             loadPage: this.loadPage,
             onOpenPaper: this.onOpenPaper,
-            onMetaChanged: this.onMetaChanged
+            onMetaChanged: this.onMetaChanged,
+            returnToFigureViewer: true
         });
     },
 
