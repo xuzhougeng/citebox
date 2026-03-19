@@ -32,7 +32,7 @@ const DesktopTranslate = {
             if (!this.enabled()) {
                 return;
             }
-            if (this.isIgnoredTarget(event.target)) {
+            if (this.shouldKeepNativeMenu(event)) {
                 this.hideMenu();
                 return;
             }
@@ -80,14 +80,47 @@ const DesktopTranslate = {
         return String(window.getSelection?.().toString() || '').trim();
     },
 
-    isIgnoredTarget(target) {
-        const element = target instanceof Element ? target : null;
-        if (!element) return false;
-        if (element.closest('#desktopTranslateMenu, .translate-dialog-overlay')) {
-            return true;
+    shouldKeepNativeMenu(event) {
+        return this.isIgnoredTarget(event.target, event) || this.hasFocusedEditableElement();
+    },
+
+    isIgnoredTarget(target, event) {
+        const elements = this.contextElements(target, event);
+        for (const element of elements) {
+            if (element.closest('#desktopTranslateMenu, .translate-dialog-overlay, [data-native-context-menu="true"]')) {
+                return true;
+            }
+            if (this.isEditableElement(element)) {
+                return true;
+            }
         }
-        const editable = element.closest('input, textarea, select, [contenteditable=""], [contenteditable="true"], [contenteditable="plaintext-only"]');
-        return Boolean(editable);
+        return false;
+    },
+
+    contextElements(target, event) {
+        const elements = [];
+        const pushElement = (candidate) => {
+            if (!(candidate instanceof Element)) return;
+            if (!elements.includes(candidate)) {
+                elements.push(candidate);
+            }
+        };
+
+        pushElement(target);
+        if (typeof event?.composedPath === 'function') {
+            event.composedPath().forEach(pushElement);
+        }
+        pushElement(document.activeElement);
+        return elements;
+    },
+
+    hasFocusedEditableElement() {
+        const active = document.activeElement;
+        return active instanceof Element && this.isEditableElement(active);
+    },
+
+    isEditableElement(element) {
+        return Boolean(element.closest('input, textarea, select, [contenteditable=""], [contenteditable="true"], [contenteditable="plaintext-only"]'));
     },
 
     showMenu(clientX, clientY) {
