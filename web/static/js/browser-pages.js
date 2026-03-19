@@ -40,20 +40,19 @@ const BrowserUI = {
                 </div>
                 <div class="paper-list-footer">
                     <div class="paper-list-tags">${tags}</div>
-                    <div class="card-actions paper-list-actions">
-                        <button class="btn btn-primary" type="button" data-action="open">查看详情</button>
-                        <a class="btn btn-outline" href="/manual?paper_id=${paper.id}">手动标注</a>
-                    </div>
                 </div>
             </article>
         `;
     },
 
-    renderFigureNotePreview(noteText = '', emptyText = '还没有笔记，可把 AI 解读或人工观察先记在这里。') {
+    renderFigureNotePreview(noteText = '', emptyText = '还没有笔记，可把 AI 解读或人工观察先记在这里。', options = {}) {
+        const { interactive = false } = options;
+        const interactiveClass = interactive ? ' figure-preview-note-action' : '';
+        const interactiveAttrs = interactive ? ' data-action="note" role="button" tabindex="0"' : '';
         const normalized = String(noteText || '').replace(/\s+/g, ' ').trim();
         if (!normalized) {
             return `
-                <div class="figure-preview-note is-empty">
+                <div class="figure-preview-note is-empty${interactiveClass}"${interactiveAttrs}>
                     <span class="figure-preview-note-label">图片笔记</span>
                     <p class="figure-preview-note-text">${Utils.escapeHTML(emptyText)}</p>
                 </div>
@@ -62,7 +61,7 @@ const BrowserUI = {
 
         const excerpt = normalized.length > 120 ? `${normalized.slice(0, 120)}...` : normalized;
         return `
-            <div class="figure-preview-note">
+            <div class="figure-preview-note${interactiveClass}"${interactiveAttrs}>
                 <span class="figure-preview-note-label">图片笔记</span>
                 <p class="figure-preview-note-text">${Utils.escapeHTML(excerpt)}</p>
             </div>
@@ -77,10 +76,11 @@ const BrowserUI = {
             emptyNotesText = '还没有笔记，可把 AI 解读或人工观察先记在这里。'
         } = options;
 
-        const noteButtonClass = primaryAction === 'note' ? 'btn btn-primary' : 'btn btn-outline';
-        const previewButtonClass = primaryAction === 'preview' ? 'btn btn-primary' : 'btn btn-outline';
         const hasNotes = Boolean(String(figure.notes_text || '').trim());
         const mediaLabel = mediaAction === 'note' ? '查看笔记' : '查看大图';
+        const notePreview = showNotesPreview
+            ? BrowserUI.renderFigureNotePreview(figure.notes_text, emptyNotesText, { interactive: true })
+            : '';
 
         return `
             <article class="figure-preview-card" data-paper-id="${figure.paper_id}" data-figure-index="${index}">
@@ -98,18 +98,15 @@ const BrowserUI = {
                 <div class="figure-preview-body">
                     <div class="figure-preview-head">
                         <span class="figure-preview-label">来源文献</span>
-                        <strong class="figure-preview-title">${Utils.escapeHTML(figure.paper_title)}</strong>
+                        <div class="figure-preview-title-row">
+                            <strong class="figure-preview-title figure-preview-title-action" data-action="paper" role="button" tabindex="0">${Utils.escapeHTML(figure.paper_title)}</strong>
+                            <a class="figure-preview-origin-link" href="${Utils.resourceViewerURL('image', figure.image_url)}">原图</a>
+                        </div>
                     </div>
                     <div class="figure-preview-tags ${figure.tags?.length ? '' : 'is-empty'}">
                         ${figure.tags?.length ? BrowserUI.renderTagChips(figure.tags || []) : '<span class="figure-preview-empty">无标签</span>'}
                     </div>
-                    ${showNotesPreview ? BrowserUI.renderFigureNotePreview(figure.notes_text, emptyNotesText) : ''}
-                    <div class="card-actions">
-                        <button class="${noteButtonClass}" type="button" data-action="note">查看笔记</button>
-                        <button class="${previewButtonClass}" type="button" data-action="preview">查看大图</button>
-                        <button class="btn btn-outline" type="button" data-action="paper">查看文献</button>
-                        <a class="btn btn-outline" href="${Utils.resourceViewerURL('image', figure.image_url)}">原图</a>
-                    </div>
+                    ${notePreview}
                 </div>
             </article>
         `;

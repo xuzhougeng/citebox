@@ -215,6 +215,13 @@
     gap: 0.28rem;
 }
 
+.figure-preview-title-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
 .figure-preview-label {
     color: var(--muted);
     font-size: 0.78rem;
@@ -230,6 +237,23 @@
     line-height: 1.45;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
+}
+
+.figure-preview-title-action {
+    cursor: pointer;
+    transition: opacity 0.18s ease;
+}
+
+.figure-preview-title-action:hover {
+    opacity: 0.78;
+}
+
+.figure-preview-origin-link {
+    flex: 0 0 auto;
+    color: var(--muted);
+    font-size: 0.82rem;
+    line-height: 1.5;
+    white-space: nowrap;
 }
 
 .figure-preview-tags {
@@ -252,6 +276,16 @@
     border-radius: 18px;
     background: rgba(244, 236, 225, 0.76);
     border: 1px solid rgba(36, 27, 22, 0.08);
+}
+
+.figure-preview-note-action {
+    cursor: pointer;
+    transition: background 0.18s ease, border-color 0.18s ease;
+}
+
+.figure-preview-note-action:hover {
+    background: rgba(249, 243, 234, 0.92);
+    border-color: rgba(164, 92, 64, 0.18);
 }
 
 .figure-preview-note.is-empty {
@@ -288,6 +322,9 @@
     font-size: 0.88rem;
 }
 
-.figure-preview-card .card-actions {
-    margin-top: 0.35rem;
+@media (max-width: 720px) {
+    .figure-preview-title-row {
+        flex-direction: column;
+        align-items: flex-start;
+    }
 }

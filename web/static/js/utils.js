@@ -228,6 +228,15 @@ const Utils = {
         return Boolean(modal && !modal.classList.contains('hidden'));
     },
 
+    isTopVisibleModal(modal) {
+        if (!this.isVisibleModal(modal)) {
+            return false;
+        }
+
+        const visibleModals = Array.from(document.querySelectorAll('.modal-shell:not(.hidden)'));
+        return visibleModals.length > 0 && visibleModals[visibleModals.length - 1] === modal;
+    },
+
     storeModalRestoreState(state) {
         try {
             const token = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;

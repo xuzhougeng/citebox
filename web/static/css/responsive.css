@@ -90,6 +90,16 @@
         justify-content: flex-start;
     }
 
+    .entity-card,
+    .entity-card-actions {
+        align-items: flex-start;
+        text-align: left;
+    }
+
+    .entity-card-actions {
+        justify-content: flex-start;
+    }
+
     .modal-dialog {
         padding: 1rem;
     }

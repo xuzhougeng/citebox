@@ -23,12 +23,16 @@ const NoteViewer = {
 
         this.handleKeydown = (event) => {
             if (!this.modal || this.modal.classList.contains('hidden')) return;
+            if (event.defaultPrevented) return;
+            if (typeof Utils !== 'undefined' && typeof Utils.isTopVisibleModal === 'function' && !Utils.isTopVisibleModal(this.modal)) {
+                return;
+            }
             const target = event.target;
             const isEditableTarget = target instanceof HTMLElement && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName));
             if (event.key === 'Escape') {
                 event.preventDefault();
                 event.stopPropagation();
-                void this.openPreview();
+                void this.close();
                 return;
             }
             if (isEditableTarget) {
@@ -42,10 +46,12 @@ const NoteViewer = {
             }
         };
 
-        this.closeButton.addEventListener('click', () => this.close());
+        this.closeButton.addEventListener('click', () => {
+            void this.close();
+        });
         this.modal.addEventListener('click', (event) => {
             if (event.target === this.modal) {
-                this.close();
+                void this.close();
             }
         });
         this.body.addEventListener('input', (event) => {
@@ -100,6 +106,7 @@ const NoteViewer = {
         this.loadPage = typeof options.loadPage === 'function' ? options.loadPage : null;
         this.onOpenPaper = options.onOpenPaper;
         this.onMetaChanged = options.onMetaChanged;
+        this.returnToFigureViewer = Boolean(options.returnToFigureViewer);
         this.loadingPage = false;
         this.noteDraft = '';
         this.noteMode = 'write';
@@ -114,10 +121,38 @@ const NoteViewer = {
         }
     },
 
-    close() {
+    buildFigureViewerOptions() {
+        return {
+            figures: this.figures || [],
+            index: this.index,
+            page: this.page,
+            totalPages: this.totalPages,
+            loadPage: this.loadPage,
+            onOpenPaper: this.onOpenPaper,
+            onMetaChanged: this.onMetaChanged
+        };
+    },
+
+    async close(options = {}) {
         if (!this.modal) return;
+        if (this.closing) return;
+
+        const restoreFigure = Boolean(options.restoreFigure ?? this.returnToFigureViewer);
+        this.closing = true;
         this.modal.classList.add('hidden');
-        document.body.classList.remove('modal-open');
+
+        if (!document.querySelector('.modal-shell:not(.hidden)')) {
+            document.body.classList.remove('modal-open');
+        }
+
+        try {
+            if (restoreFigure && this.currentFigure && typeof FigureViewer !== 'undefined') {
+                await new Promise((resolve) => window.setTimeout(resolve, 0));
+                await FigureViewer.open(this.buildFigureViewerOptions());
+            }
+        } finally {
+            this.closing = false;
+        }
     },
 
     canMovePrevious() {
@@ -221,22 +256,19 @@ const NoteViewer = {
     async openPreview() {
         if (!this.currentFigure) return;
 
-        this.close();
-        await FigureViewer.open({
-            figures: this.figures || [],
-            index: this.index,
-            page: this.page,
-            totalPages: this.totalPages,
-            loadPage: this.loadPage,
-            onOpenPaper: this.onOpenPaper,
-            onMetaChanged: this.onMetaChanged
-        });
+        if (this.returnToFigureViewer) {
+            await this.close({ restoreFigure: true });
+            return;
+        }
+
+        await this.close({ restoreFigure: false });
+        await FigureViewer.open(this.buildFigureViewerOptions());
     },
 
     async openPaper() {
         if (!this.currentFigure) return;
 
-        this.close();
+        await this.close({ restoreFigure: false });
         if (typeof this.onOpenPaper === 'function') {
             await this.onOpenPaper(this.currentFigure.paper_id);
         }
