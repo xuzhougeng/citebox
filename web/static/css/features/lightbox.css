@@ -165,6 +165,54 @@
     gap: 0.65rem;
 }
 
+.figure-tag-presets {
+    display: grid;
+    gap: 0.55rem;
+}
+
+.figure-tag-presets-label {
+    color: var(--muted);
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.figure-tag-presets-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.figure-tag-preset {
+    padding: 0.42rem 0.72rem;
+    border: 1px solid rgba(36, 27, 22, 0.12);
+    border-radius: 999px;
+    background: rgba(255, 252, 248, 0.94);
+    color: var(--ink);
+    font-size: 0.82rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: border-color 0.18s ease, background 0.18s ease, transform 0.18s ease;
+}
+
+.figure-tag-preset:hover:not(:disabled),
+.figure-tag-preset:focus-visible:not(:disabled) {
+    border-color: rgba(164, 92, 64, 0.3);
+    background: rgba(255, 245, 236, 0.98);
+    transform: translateY(-1px);
+    outline: none;
+}
+
+.figure-tag-preset.is-applied,
+.figure-tag-preset:disabled {
+    border-color: rgba(79, 111, 82, 0.18);
+    background: rgba(79, 111, 82, 0.08);
+    color: #36503f;
+    cursor: default;
+    transform: none;
+}
+
 .figure-tag-empty {
     color: var(--muted);
     font-size: 0.92rem;

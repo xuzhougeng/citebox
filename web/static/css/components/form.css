@@ -77,6 +77,55 @@
     grid-column: 1 / -1;
 }
 
+.tag-preset-panel {
+    display: grid;
+    gap: 0.75rem;
+    min-width: 0;
+    padding: 0.95rem 1rem;
+    border-radius: 18px;
+    border: 1px solid rgba(36, 27, 22, 0.08);
+    background: rgba(255, 251, 245, 0.76);
+    margin: 0;
+}
+
+.tag-preset-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+}
+
+.tag-preset-pill {
+    padding: 0.45rem 0.8rem;
+    border: 1px solid rgba(36, 27, 22, 0.12);
+    border-radius: 999px;
+    background: rgba(255, 252, 248, 0.94);
+    color: var(--ink);
+    font-size: 0.85rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: border-color 0.18s ease, background 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.tag-preset-pill:hover,
+.tag-preset-pill:focus-visible {
+    border-color: rgba(164, 92, 64, 0.28);
+    background: rgba(255, 245, 236, 0.98);
+    box-shadow: 0 0 0 4px rgba(164, 92, 64, 0.08);
+    transform: translateY(-1px);
+    outline: none;
+}
+
+.tag-preset-pill.is-existing {
+    border-color: rgba(65, 103, 136, 0.18);
+    background: rgba(65, 103, 136, 0.07);
+}
+
+.tag-preset-pill.is-active {
+    border-color: rgba(36, 27, 22, 0.24);
+    background: rgba(36, 27, 22, 0.08);
+    box-shadow: 0 0 0 3px rgba(36, 27, 22, 0.08);
+}
+
 .upload-form {
     display: grid;
     gap: 1rem;

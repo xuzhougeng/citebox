@@ -52,6 +52,11 @@
                     <span>标签名称</span>
                     <input id="tagPageNameInput" class="form-input" type="text" placeholder="例如：review" aria-label="标签名称">
                 </label>
+                <div id="tagPresetPanel" class="field tag-preset-panel" hidden>
+                    <span class="field-label-text">常用图片标签</span>
+                    <p class="tag-color-hint">点击已存在标签会直接筛选，点击未创建标签会按当前颜色新建。</p>
+                    <div id="tagPresetList" class="tag-preset-list" role="list" aria-label="常用图片标签"></div>
+                </div>
                 <div class="field tag-color-field">
                     <span class="field-label-text">标签颜色</span>
                     <p class="tag-color-hint">点击常用颜色，或用左侧色块自定义。</p>

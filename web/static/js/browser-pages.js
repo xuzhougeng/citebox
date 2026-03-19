@@ -544,6 +544,8 @@ const TagsPage = {
         this.nameInput = document.getElementById('tagPageNameInput');
         this.colorInput = document.getElementById('tagPageColorInput');
         this.colorPresetList = document.getElementById('tagColorPresetList');
+        this.tagPresetPanel = document.getElementById('tagPresetPanel');
+        this.tagPresetList = document.getElementById('tagPresetList');
         this.creatorTitle = document.getElementById('tagCreatorTitle');
         this.creatorHint = document.getElementById('tagCreatorHint');
         this.submitButton = document.getElementById('tagPageSubmit');
@@ -595,6 +597,12 @@ const TagsPage = {
             const button = event.target.closest('[data-tag-color]');
             if (!button) return;
             this.setTagColor(button.dataset.tagColor);
+        });
+
+        this.tagPresetList?.addEventListener('click', async (event) => {
+            const button = event.target.closest('[data-tag-preset-name]');
+            if (!button) return;
+            await this.handleTagPreset(button.dataset.tagPresetName || '');
         });
 
         this.colorInput?.addEventListener('input', () => {
@@ -723,6 +731,42 @@ const TagsPage = {
         this.nameInput.placeholder = isPaperScope ? '例如：review' : '例如：细胞分裂';
         this.submitButton.textContent = isPaperScope ? '创建文献标签' : '创建图片标签';
         this.renderColorPresets();
+        this.renderTagPresets();
+    },
+
+    renderTagPresets() {
+        if (!this.tagPresetPanel || !this.tagPresetList) return;
+
+        const isFigureScope = this.state.scope === 'figure';
+        this.tagPresetPanel.hidden = !isFigureScope;
+        if (!isFigureScope) {
+            this.tagPresetList.innerHTML = '';
+            return;
+        }
+
+        const presets = Array.isArray(Utils.defaultFigureTagPresets) ? Utils.defaultFigureTagPresets : [];
+        const existing = new Set((this.tags || []).map((tag) => String(tag.name || '').trim().toLowerCase()).filter(Boolean));
+        const selectedTag = this.tags.find((tag) => String(tag.id) === String(this.state.selectedTagId));
+        const selectedName = String(selectedTag?.name || '').trim().toLowerCase();
+
+        this.tagPresetList.innerHTML = presets.map((name) => {
+            const normalized = String(name || '').trim();
+            const key = normalized.toLowerCase();
+            const isExisting = existing.has(key);
+            const isActive = key && key === selectedName;
+            let helper = '点击创建';
+            if (isExisting) {
+                helper = isActive ? '当前已选中' : '点击筛选';
+            }
+            return `
+                <button
+                    class="tag-preset-pill ${isExisting ? 'is-existing' : ''} ${isActive ? 'is-active' : ''}"
+                    type="button"
+                    data-tag-preset-name="${Utils.escapeHTML(normalized)}"
+                    title="${helper}"
+                >${Utils.escapeHTML(normalized)}</button>
+            `;
+        }).join('');
     },
 
     normalizeTagColor(value) {
@@ -781,6 +825,39 @@ const TagsPage = {
             button.classList.toggle('active', isActive);
             button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
         });
+    },
+
+    async handleTagPreset(name) {
+        const normalized = String(name || '').trim();
+        if (!normalized || this.state.scope !== 'figure') return;
+
+        const existing = (this.tags || []).find((tag) => String(tag.name || '').trim().toLowerCase() === normalized.toLowerCase());
+        if (existing) {
+            this.state.selectedTagId = String(existing.id);
+            this.state.page = 1;
+            this.renderTagCards();
+            this.renderTagPresets();
+            await this.loadResults();
+            return;
+        }
+
+        try {
+            await API.createTag({
+                scope: 'figure',
+                name: normalized,
+                color: this.currentTagColor()
+            });
+            await this.loadTags();
+            const created = (this.tags || []).find((tag) => String(tag.name || '').trim().toLowerCase() === normalized.toLowerCase());
+            this.state.selectedTagId = created ? String(created.id) : '';
+            this.state.page = 1;
+            Utils.showToast(`已创建图片标签：${normalized}`);
+            this.renderTagCreator();
+            this.renderTagCards();
+            await this.loadResults();
+        } catch (error) {
+            Utils.showToast(error.message, 'error');
+        }
     },
 
     async loadGlobalCounts() {
