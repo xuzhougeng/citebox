@@ -250,7 +250,7 @@ CREATE UNIQUE INDEX idx_tags_scope_name ON tags(scope, name);
 | `pdf_sha256` | PDF 内容指纹，用于上传去重；仅对非空值要求唯一 |
 | `file_size` | 文件大小 |
 | `content_type` | MIME 类型，默认 `application/pdf` |
-| `pdf_text` | PDF 提取出的全文文本，主要用于检索和 AI伴读 |
+| `pdf_text` | PDF 提取出的全文文本；也允许手动整理为 Markdown，主要用于检索、AI伴读和原文预览 |
 | `abstract_text` | 文献摘要 |
 | `notes_text` | 文献级管理笔记；适合保存整理说明、迁移备注、归档提示 |
 | `paper_notes_text` | 文献级内容笔记；适合保存 AI伴读结果、阅读结论和 Markdown 笔记 |

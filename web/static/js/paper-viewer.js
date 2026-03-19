@@ -276,6 +276,16 @@ const PaperPDFTextViewer = {
             const button = event.target.closest('[data-paper-pdf-action]');
             if (!button) return;
 
+            if (button.dataset.paperPdfAction === 'set-mode') {
+                this.textMode = button.dataset.pdfMode === 'preview' ? 'preview' : 'write';
+                this.render();
+                if (this.textMode === 'write') {
+                    requestAnimationFrame(() => {
+                        this.body.querySelector('#paperPdfTextViewerInput')?.focus();
+                    });
+                }
+                return;
+            }
             if (button.dataset.paperPdfAction === 'save-text') {
                 await this.saveText();
                 return;
@@ -302,11 +312,14 @@ const PaperPDFTextViewer = {
         this.paper = options.paper || null;
         this.onChanged = options.onChanged;
         this.textDraft = this.paper?.pdf_text || '';
+        this.textMode = 'write';
         this.render();
         this.modal.classList.remove('hidden');
         document.body.classList.add('modal-open');
         requestAnimationFrame(() => {
-            this.body.querySelector('#paperPdfTextViewerInput')?.focus();
+            if (this.textMode === 'write') {
+                this.body.querySelector('#paperPdfTextViewerInput')?.focus();
+            }
         });
     },
 
@@ -377,6 +390,7 @@ const PaperPDFTextViewer = {
         const tags = PaperViewer.renderTagChips(paper.tags || []);
         const abstractPreview = String(paper.abstract_text || '').trim();
         const managementNotePreview = String(paper.notes_text || '').trim();
+        const isPreviewMode = this.textMode === 'preview';
 
         this.body.innerHTML = `
             <div class="note-lightbox pdf-text-lightbox">
@@ -389,9 +403,15 @@ const PaperPDFTextViewer = {
                                     <h2>${Utils.escapeHTML(paper.title)}</h2>
                                     <p class="note-lightbox-subtitle">${Utils.escapeHTML(paper.original_filename || '')}</p>
                                 </div>
-                                <div class="pdf-text-head-meta">
-                                    <span class="status-badge tone-${Utils.statusTone(paper.extraction_status)}">${Utils.escapeHTML(Utils.statusLabel(paper.extraction_status))}</span>
-                                    <span class="pdf-text-counter" data-paper-pdf-text-length>${text.length.toLocaleString()} 字符</span>
+                                <div class="pdf-text-head-tools">
+                                    <div class="note-lightbox-mode-switch">
+                                        <button class="btn ${isPreviewMode ? 'btn-outline' : 'btn-primary'}" type="button" data-paper-pdf-action="set-mode" data-pdf-mode="write">编辑</button>
+                                        <button class="btn ${isPreviewMode ? 'btn-primary' : 'btn-outline'}" type="button" data-paper-pdf-action="set-mode" data-pdf-mode="preview">Markdown 预览</button>
+                                    </div>
+                                    <div class="pdf-text-head-meta">
+                                        <span class="status-badge tone-${Utils.statusTone(paper.extraction_status)}">${Utils.escapeHTML(Utils.statusLabel(paper.extraction_status))}</span>
+                                        <span class="pdf-text-counter" data-paper-pdf-text-length>${text.length.toLocaleString()} 字符</span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -409,13 +429,20 @@ const PaperPDFTextViewer = {
                             </div>
                         </div>
 
-                        <label class="field note-lightbox-field">
-                            <span>PDF 原文</span>
-                            <textarea id="paperPdfTextViewerInput" class="form-textarea note-lightbox-textarea pdf-text-editor-textarea" rows="24" data-native-context-menu="true" placeholder="在这里补充、修正或整理整篇 PDF 的全文内容">${Utils.escapeHTML(text)}</textarea>
-                        </label>
+                        ${isPreviewMode ? `
+                            <section class="note-lightbox-render-panel">
+                                <span class="note-lightbox-panel-label">Markdown 预览</span>
+                                <div class="markdown-preview pdf-text-markdown-preview">${Utils.renderMarkdown(text)}</div>
+                            </section>
+                        ` : `
+                            <label class="field note-lightbox-field">
+                                <span>PDF 原文</span>
+                                <textarea id="paperPdfTextViewerInput" class="form-textarea note-lightbox-textarea pdf-text-editor-textarea" rows="24" data-native-context-menu="true" placeholder="在这里补充、修正或整理整篇 PDF 的全文内容，支持使用 Markdown">${Utils.escapeHTML(text)}</textarea>
+                            </label>
+                        `}
 
                         <div class="figure-notes-actions">
-                            <span class="muted">支持多行编辑，按 Ctrl/Cmd + Enter 可快速保存。</span>
+                            <span class="muted">${isPreviewMode ? '预览基于当前草稿渲染；全文较长时首次切换可能稍慢。' : '支持多行编辑和 Markdown 语法，按 Ctrl/Cmd + Enter 可快速保存。'}</span>
                             <div class="pdf-text-inline-actions">
                                 <button class="btn btn-outline" type="button" data-paper-pdf-action="copy-text">复制全文</button>
                                 <button class="btn btn-primary" type="button" data-paper-pdf-action="save-text">保存全文</button>
@@ -690,13 +717,13 @@ const PaperViewer = {
             <section class="detail-section">
                 <div class="section-head section-head-pdf-text">
                     <h3>PDF 原文</h3>
-                    <button type="button" class="btn btn-small btn-outline" data-modal-action="view-pdf-text">查看 / 编辑原文</button>
+                    <button type="button" class="btn btn-small btn-outline" data-modal-action="view-pdf-text">查看 / 编辑 / 预览</button>
                 </div>
                 <div class="pdf-text-preview">
                     ${paper.pdf_text ? `
                         <pre class="pdf-text-snippet" data-native-context-menu="true">${Utils.escapeHTML(paper.pdf_text.substring(0, 1000))}${paper.pdf_text.length > 1000 ? '\n...' : ''}</pre>
                         <p class="pdf-text-meta">共 ${paper.pdf_text.length.toLocaleString()} 字符</p>
-                    ` : '<p class="muted">暂无 PDF 原文，点击上方按钮可补充或编辑全文。</p>'}
+                    ` : '<p class="muted">暂无 PDF 原文，点击上方按钮可补充、编辑或切换 Markdown 预览。</p>'}
                 </div>
             </section>
         `;

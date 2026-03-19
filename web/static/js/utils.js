@@ -2,6 +2,7 @@
 const Utils = {
     modalRestoreParam: 'restore_modal',
     modalRestoreStoragePrefix: 'citebox.modalRestore.',
+    defaultFigureTagPresets: Object.freeze(['图 1', '图 2', '图 3', '图 4', '图 5', '图 6', '图 7', '附图', '图片摘要']),
 
     formatFileSize(bytes) {
         if (bytes === 0) return '0 Bytes';

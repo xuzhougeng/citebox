@@ -620,6 +620,23 @@ const FigureViewer = {
         return this.body.querySelector('#figureNotesInput')?.value ?? (this.currentFigure?.notes_text || '');
     },
 
+    renderPresetTagButtons() {
+        const presets = Array.isArray(Utils.defaultFigureTagPresets) ? Utils.defaultFigureTagPresets : [];
+        const existing = new Set(this.currentFigureTagNames().map((tag) => tag.toLowerCase()));
+        return presets.map((tagName) => {
+            const applied = existing.has(tagName.toLowerCase());
+            return `
+                <button
+                    class="figure-tag-preset ${applied ? 'is-applied' : ''}"
+                    type="button"
+                    data-figure-meta-action="apply-tag"
+                    data-tag-name="${Utils.escapeHTML(tagName)}"
+                    ${applied ? 'disabled' : ''}
+                >${Utils.escapeHTML(tagName)}</button>
+            `;
+        }).join('');
+    },
+
     clearFigureAIState(figureID, options = {}) {
         const preserveActions = new Set((options.preserveActions || []).map((action) => String(action || '')));
         if (!figureID) return;
@@ -1112,6 +1129,12 @@ const FigureViewer = {
                                 <div class="figure-tag-add">
                                     <input id="figurePaperTagInput" class="form-input" type="text" placeholder="添加标签">
                                     <button class="btn btn-outline btn-small" type="button" data-figure-meta-action="add-tag" aria-label="添加标签">+</button>
+                                </div>
+                                <div class="figure-tag-presets">
+                                    <span class="figure-tag-presets-label">快捷标签</span>
+                                    <div class="figure-tag-presets-list">
+                                        ${this.renderPresetTagButtons()}
+                                    </div>
                                 </div>
                             </div>
                         </div>

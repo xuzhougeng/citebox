@@ -4,15 +4,46 @@ const ResourceViewerPage = {
         this.closeButton = document.getElementById('viewerCloseButton');
         this.kindLabel = document.getElementById('viewerKindLabel');
         this.title = document.getElementById('viewerTitle');
+        this.toolbarActions = document.getElementById('viewerToolbarActions');
+        this.resetButton = document.getElementById('viewerResetButton');
         this.closing = false;
+        this.viewState = this.defaultViewState();
+        this.dragState = null;
 
         this.closeButton?.addEventListener('click', () => this.close());
+        this.resetButton?.addEventListener('click', () => {
+            this.resetImageView();
+            this.applyImageTransform();
+        });
         document.addEventListener('keydown', (event) => {
             if (event.key !== 'Escape') return;
             event.preventDefault();
             event.stopPropagation();
             event.stopImmediatePropagation();
             this.close({ deferNavigation: true });
+        });
+        this.stage?.addEventListener('wheel', (event) => {
+            const viewport = event.target.closest('[data-viewer-viewport]');
+            if (!viewport) return;
+            event.preventDefault();
+            this.handleImageWheel(event, viewport);
+        }, { passive: false });
+        this.stage?.addEventListener('pointerdown', (event) => {
+            const viewport = event.target.closest('[data-viewer-viewport]');
+            if (!viewport) return;
+            this.beginImageDrag(event, viewport);
+        });
+        document.addEventListener('pointermove', (event) => {
+            this.updateImageDrag(event);
+        });
+        document.addEventListener('pointerup', (event) => {
+            this.endImageDrag(event);
+        });
+        document.addEventListener('pointercancel', (event) => {
+            this.endImageDrag(event);
+        });
+        window.addEventListener('resize', () => {
+            this.applyImageTransform();
         });
 
         this.render();
@@ -21,28 +52,43 @@ const ResourceViewerPage = {
     render() {
         try {
             const resource = this.resolveResource();
+            this.endImageDrag();
+            this.resetImageView();
             document.title = `${resource.label} - CiteBox`;
             this.kindLabel.textContent = resource.label;
             this.title.textContent = resource.name;
 
             if (resource.kind === 'image') {
+                this.toggleImageToolbar(true);
                 this.stage.className = 'viewer-stage image-mode';
                 this.stage.innerHTML = `
-                    <img class="viewer-image" src="${resource.href}" alt="${this.escapeHTML(resource.name)}">
+                    <div class="viewer-image-viewport" data-viewer-viewport>
+                        <img class="viewer-image" src="${resource.href}" alt="${this.escapeHTML(resource.name)}" data-viewer-image>
+                    </div>
                 `;
                 this.stage.addEventListener('click', (event) => {
                     if (event.target === this.stage) {
                         this.close();
                     }
                 });
+                const image = this.stage.querySelector('[data-viewer-image]');
+                if (image) {
+                    if (image.complete) {
+                        this.applyImageTransform();
+                    } else {
+                        image.addEventListener('load', () => this.applyImageTransform(), { once: true });
+                    }
+                }
                 return;
             }
 
+            this.toggleImageToolbar(false);
             this.stage.className = 'viewer-stage';
             this.stage.innerHTML = `
                 <iframe class="viewer-frame" src="${resource.href}" title="${this.escapeHTML(resource.name)}"></iframe>
             `;
         } catch (error) {
+            this.toggleImageToolbar(false);
             document.title = '文件查看失败 - CiteBox';
             this.kindLabel.textContent = '文件查看';
             this.title.textContent = '无法打开资源';
@@ -54,6 +100,136 @@ const ResourceViewerPage = {
                 </div>
             `;
         }
+    },
+
+    defaultViewState() {
+        return {
+            scale: 1,
+            x: 0,
+            y: 0
+        };
+    },
+
+    resetImageView() {
+        this.viewState = this.defaultViewState();
+        this.dragState = null;
+    },
+
+    toggleImageToolbar(visible) {
+        if (!this.toolbarActions) return;
+        this.toolbarActions.hidden = !visible;
+        if (!visible && this.resetButton) {
+            this.resetButton.disabled = true;
+        }
+    },
+
+    hasImageTransform() {
+        const state = this.viewState || this.defaultViewState();
+        return Math.abs(state.scale - 1) > 0.001 || Math.abs(state.x) > 0.5 || Math.abs(state.y) > 0.5;
+    },
+
+    clampViewState(state = this.viewState || this.defaultViewState()) {
+        const viewport = this.stage?.querySelector('[data-viewer-viewport]');
+        const image = this.stage?.querySelector('[data-viewer-image]');
+        const scale = Math.min(6, Math.max(1, Number(state.scale) || 1));
+        if (!viewport || !image || scale <= 1) {
+            return { scale: 1, x: 0, y: 0 };
+        }
+
+        const baseWidth = image.offsetWidth || image.clientWidth || 0;
+        const baseHeight = image.offsetHeight || image.clientHeight || 0;
+        if (!baseWidth || !baseHeight) {
+            return { scale, x: state.x || 0, y: state.y || 0 };
+        }
+
+        const maxX = Math.max(0, (baseWidth * scale - viewport.clientWidth) / 2);
+        const maxY = Math.max(0, (baseHeight * scale - viewport.clientHeight) / 2);
+        return {
+            scale,
+            x: Math.min(maxX, Math.max(-maxX, Number(state.x) || 0)),
+            y: Math.min(maxY, Math.max(-maxY, Number(state.y) || 0))
+        };
+    },
+
+    applyImageTransform() {
+        const viewport = this.stage?.querySelector('[data-viewer-viewport]');
+        const image = this.stage?.querySelector('[data-viewer-image]');
+        if (!viewport || !image) return;
+
+        this.viewState = this.clampViewState(this.viewState);
+        const state = this.viewState;
+        image.style.transform = `translate(${state.x}px, ${state.y}px) scale(${state.scale})`;
+        image.draggable = false;
+        viewport.classList.toggle('is-zoomed', state.scale > 1);
+        viewport.classList.toggle('is-dragging', Boolean(this.dragState));
+        if (this.resetButton) {
+            this.resetButton.disabled = !this.hasImageTransform();
+        }
+    },
+
+    handleImageWheel(event, viewport) {
+        const previous = this.viewState || this.defaultViewState();
+        const zoomFactor = event.deltaY < 0 ? 1.18 : 1 / 1.18;
+        const nextScale = Math.min(6, Math.max(1, previous.scale * zoomFactor));
+        if (Math.abs(nextScale - previous.scale) < 0.001) return;
+
+        const rect = viewport.getBoundingClientRect();
+        const pointX = event.clientX - (rect.left + rect.width / 2);
+        const pointY = event.clientY - (rect.top + rect.height / 2);
+        const ratio = nextScale / previous.scale;
+
+        this.viewState = {
+            scale: nextScale,
+            x: pointX - ratio * (pointX - previous.x),
+            y: pointY - ratio * (pointY - previous.y)
+        };
+        this.applyImageTransform();
+    },
+
+    beginImageDrag(event, viewport) {
+        if ((event.button !== 0 && event.button !== 1) || (this.viewState?.scale || 1) <= 1) return;
+        event.preventDefault();
+        this.dragState = {
+            pointerID: event.pointerId,
+            startX: event.clientX,
+            startY: event.clientY,
+            originX: this.viewState.x,
+            originY: this.viewState.y
+        };
+        if (typeof viewport.setPointerCapture === 'function') {
+            try {
+                viewport.setPointerCapture(event.pointerId);
+            } catch (error) {
+                // Ignore capture failures for non-primary pointers.
+            }
+        }
+        this.applyImageTransform();
+    },
+
+    updateImageDrag(event) {
+        if (!this.dragState || event.pointerId !== this.dragState.pointerID) return;
+        this.viewState = {
+            ...this.viewState,
+            x: this.dragState.originX + (event.clientX - this.dragState.startX),
+            y: this.dragState.originY + (event.clientY - this.dragState.startY)
+        };
+        this.applyImageTransform();
+    },
+
+    endImageDrag(event = null) {
+        if (!this.dragState) return;
+        if (event && event.pointerId !== this.dragState.pointerID) return;
+
+        const viewport = this.stage?.querySelector('[data-viewer-viewport]');
+        if (viewport && typeof viewport.hasPointerCapture === 'function' && viewport.hasPointerCapture(this.dragState.pointerID)) {
+            try {
+                viewport.releasePointerCapture(this.dragState.pointerID);
+            } catch (error) {
+                // Ignore release failures after cancellation.
+            }
+        }
+        this.dragState = null;
+        this.applyImageTransform();
     },
 
     resolveResource() {
@@ -114,6 +290,7 @@ const ResourceViewerPage = {
         }
 
         this.closing = true;
+        this.endImageDrag();
         const { deferNavigation = false } = options;
         const finalizeClose = () => {
             this.navigateBack();

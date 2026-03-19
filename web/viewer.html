@@ -55,6 +55,19 @@
             font-size: 1rem;
         }
 
+        .viewer-toolbar-actions {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+        }
+
+        .viewer-image-hint {
+            color: rgba(255, 250, 244, 0.68);
+            font-size: 0.82rem;
+        }
+
         .viewer-stage {
             position: relative;
             display: flex;
@@ -65,16 +78,43 @@
         }
 
         .viewer-stage.image-mode {
-            cursor: zoom-out;
+            cursor: default;
+        }
+
+        .viewer-image-viewport {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: min(100%, 1600px);
+            height: calc(100vh - 8rem);
+            overflow: hidden;
+            border-radius: 28px;
+            background:
+                radial-gradient(circle at top left, rgba(164, 92, 64, 0.18), transparent 18rem),
+                linear-gradient(180deg, rgba(64, 49, 42, 0.92), rgba(21, 16, 13, 0.98));
+            touch-action: none;
+            user-select: none;
+        }
+
+        .viewer-image-viewport.is-zoomed {
+            cursor: grab;
+        }
+
+        .viewer-image-viewport.is-dragging {
+            cursor: grabbing;
         }
 
         .viewer-image {
             display: block;
-            max-width: min(100%, 1400px);
-            max-height: calc(100vh - 8rem);
+            max-width: 100%;
+            max-height: 100%;
             border-radius: 20px;
             box-shadow: 0 36px 96px rgba(0, 0, 0, 0.4);
             cursor: default;
+            transform-origin: center center;
+            will-change: transform;
+            user-select: none;
         }
 
         .viewer-frame {
@@ -112,13 +152,17 @@
                 flex-direction: column;
             }
 
+            .viewer-toolbar-actions {
+                justify-content: flex-start;
+            }
+
             .viewer-stage {
                 padding: 1rem;
             }
 
-            .viewer-image,
+            .viewer-image-viewport,
             .viewer-frame {
-                max-height: calc(100vh - 10rem);
+                height: calc(100vh - 10rem);
             }
         }
     </style>
@@ -130,6 +174,10 @@
             <div class="viewer-meta">
                 <span id="viewerKindLabel">文件查看</span>
                 <strong id="viewerTitle">正在加载...</strong>
+            </div>
+            <div id="viewerToolbarActions" class="viewer-toolbar-actions" hidden>
+                <span id="viewerImageHint" class="viewer-image-hint">滚轮缩放，按住左键或中键拖动</span>
+                <button id="viewerResetButton" class="btn btn-outline" type="button" disabled>复原视图</button>
             </div>
         </header>
         <main id="viewerStage" class="viewer-stage" aria-live="polite"></main>
