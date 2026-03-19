@@ -29,3 +29,43 @@
     color: var(--muted);
     font-size: 0.85rem;
 }
+
+.pdf-text-modal-dialog {
+    width: min(1360px, 100%);
+}
+
+.pdf-text-lightbox .note-lightbox-main {
+    min-width: 0;
+}
+
+.pdf-text-head-meta {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0.6rem;
+}
+
+.pdf-text-counter {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.4rem 0.8rem;
+    border-radius: 999px;
+    background: rgba(36, 27, 22, 0.06);
+    color: var(--muted);
+    font-size: 0.82rem;
+    font-weight: 600;
+}
+
+.pdf-text-editor-textarea {
+    min-height: 32rem;
+    font-family: "SFMono-Regular", "Monaco", "Consolas", "Liberation Mono", monospace;
+    line-height: 1.7;
+    white-space: pre-wrap;
+    tab-size: 4;
+}
+
+.pdf-text-inline-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+}

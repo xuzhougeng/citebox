@@ -167,12 +167,14 @@ AI 流式阅读通过：
 - 更新文献详情
 - 保存管理笔记
 - 保存文献笔记
+- 保存或修正 PDF 全文
 
 常用 JSON 字段：
 
 ```json
 {
   "title": "Paper title",
+  "pdf_text": "完整 PDF 文本，可为空字符串",
   "abstract_text": "摘要",
   "notes_text": "管理笔记",
   "paper_notes_text": "文献笔记",
@@ -180,6 +182,11 @@ AI 流式阅读通过：
   "tags": ["tag-a", "tag-b"]
 }
 ```
+
+说明：
+
+- `pdf_text` 为可选字段；传入时会覆盖当前全文内容。
+- 若不传 `pdf_text`，后端会保留已有全文，不会因为只保存笔记或标签而清空正文。
 
 #### `DELETE /api/papers/{id}`
 

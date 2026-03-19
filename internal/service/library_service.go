@@ -75,6 +75,7 @@ type UploadPaperParams struct {
 
 type UpdatePaperParams struct {
 	Title          string
+	PDFText        *string
 	AbstractText   string
 	NotesText      string
 	PaperNotesText string
@@ -471,6 +472,7 @@ func (s *LibraryService) UpdatePaper(id int64, params UpdatePaperParams) (*model
 
 	paper, err := s.repo.UpdatePaper(id, repository.PaperUpdateInput{
 		Title:          title,
+		PDFText:        params.PDFText,
 		AbstractText:   strings.TrimSpace(params.AbstractText),
 		NotesText:      strings.TrimSpace(params.NotesText),
 		PaperNotesText: strings.TrimSpace(params.PaperNotesText),

@@ -110,14 +110,12 @@ const PaperNoteViewer = {
         if (!this.paper) return;
 
         try {
-            const payload = await API.updatePaper(this.paper.id, {
-                title: this.paper.title,
-                abstract_text: this.paper.abstract_text || '',
-                notes_text: this.paper.notes_text || '',
-                paper_notes_text: this.currentNotesDraft(),
-                group_id: this.paper.group_id ?? null,
-                tags: Utils.splitTags(Utils.joinTags(this.paper.tags || []))
-            });
+            const payload = await API.updatePaper(
+                this.paper.id,
+                PaperViewer.buildUpdatePayload(this.paper, {
+                    paper_notes_text: this.currentNotesDraft()
+                })
+            );
             this.paper = payload.paper;
             this.noteDraft = this.paper.paper_notes_text || '';
             if (!this.noteMode || !this.noteDraft.trim()) {
@@ -222,6 +220,239 @@ const PaperNoteViewer = {
     }
 };
 
+const PaperPDFTextViewer = {
+    init() {
+        this.modal = document.getElementById('paperPdfTextModal');
+        this.body = document.getElementById('paperPdfTextModalBody');
+        this.closeButton = document.getElementById('closePaperPdfTextModal');
+        if (!this.modal) {
+            const shell = document.createElement('div');
+            shell.id = 'paperPdfTextModal';
+            shell.className = 'modal-shell hidden';
+            shell.innerHTML = `
+                <div class="modal-dialog figure-modal-dialog note-modal-dialog pdf-text-modal-dialog">
+                    <button id="closePaperPdfTextModal" class="modal-close" type="button" aria-label="关闭">×</button>
+                    <div id="paperPdfTextModalBody"></div>
+                </div>
+            `;
+            document.body.appendChild(shell);
+            this.modal = shell;
+            this.body = shell.querySelector('#paperPdfTextModalBody');
+            this.closeButton = shell.querySelector('#closePaperPdfTextModal');
+        }
+        if (!this.modal || this.initialized) return;
+        this.initialized = true;
+
+        this.handleKeydown = (event) => {
+            if (!this.modal || this.modal.classList.contains('hidden')) return;
+            if (event.defaultPrevented) return;
+            if (typeof Utils !== 'undefined' && typeof Utils.isTopVisibleModal === 'function' && !Utils.isTopVisibleModal(this.modal)) {
+                return;
+            }
+            const target = event.target;
+            const isEditableTarget = target instanceof HTMLElement && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName));
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                event.stopPropagation();
+                this.close();
+                return;
+            }
+            if (isEditableTarget) return;
+        };
+
+        this.closeButton.addEventListener('click', () => this.close());
+        this.modal.addEventListener('click', (event) => {
+            if (event.target === this.modal) {
+                this.close();
+            }
+        });
+        this.body.addEventListener('input', (event) => {
+            const textInput = event.target.closest('#paperPdfTextViewerInput');
+            if (!textInput) return;
+            this.textDraft = textInput.value;
+            this.syncStats();
+        });
+        this.body.addEventListener('click', async (event) => {
+            const button = event.target.closest('[data-paper-pdf-action]');
+            if (!button) return;
+
+            if (button.dataset.paperPdfAction === 'save-text') {
+                await this.saveText();
+                return;
+            }
+            if (button.dataset.paperPdfAction === 'copy-text') {
+                await this.copyText();
+                return;
+            }
+            if (button.dataset.paperPdfAction === 'open-pdf' && this.paper?.pdf_url) {
+                window.open(Utils.resourceViewerURL('pdf', this.paper.pdf_url), '_blank', 'noopener,noreferrer');
+            }
+        });
+        this.body.addEventListener('keydown', async (event) => {
+            const textInput = event.target.closest('#paperPdfTextViewerInput');
+            if (!textInput || event.key !== 'Enter' || (!event.metaKey && !event.ctrlKey)) return;
+            event.preventDefault();
+            await this.saveText();
+        });
+        document.addEventListener('keydown', this.handleKeydown);
+    },
+
+    open(options = {}) {
+        this.init();
+        this.paper = options.paper || null;
+        this.onChanged = options.onChanged;
+        this.textDraft = this.paper?.pdf_text || '';
+        this.render();
+        this.modal.classList.remove('hidden');
+        document.body.classList.add('modal-open');
+        requestAnimationFrame(() => {
+            this.body.querySelector('#paperPdfTextViewerInput')?.focus();
+        });
+    },
+
+    close() {
+        if (!this.modal) return;
+        this.modal.classList.add('hidden');
+        if (!document.querySelector('.modal-shell:not(.hidden)')) {
+            document.body.classList.remove('modal-open');
+        }
+    },
+
+    currentTextDraft() {
+        return this.body.querySelector('#paperPdfTextViewerInput')?.value ?? this.textDraft ?? (this.paper?.pdf_text || '');
+    },
+
+    syncStats() {
+        const counter = this.body.querySelector('[data-paper-pdf-text-length]');
+        if (counter) {
+            counter.textContent = `${this.currentTextDraft().length.toLocaleString()} 字符`;
+        }
+    },
+
+    async saveText() {
+        if (!this.paper) return;
+
+        try {
+            const payload = await API.updatePaper(
+                this.paper.id,
+                PaperViewer.buildUpdatePayload(this.paper, {
+                    pdf_text: this.currentTextDraft()
+                })
+            );
+            this.paper = payload.paper;
+            this.textDraft = this.paper.pdf_text || '';
+            Utils.showToast('PDF 原文已保存');
+            this.render();
+            if (typeof this.onChanged === 'function') {
+                await this.onChanged(payload.paper);
+            }
+        } catch (error) {
+            Utils.showToast(error.message, 'error');
+        }
+    },
+
+    async copyText() {
+        const text = this.currentTextDraft();
+        if (!text) {
+            Utils.showToast('当前没有可复制的 PDF 原文', 'error');
+            return;
+        }
+
+        try {
+            await navigator.clipboard.writeText(text);
+            Utils.showToast('PDF 原文已复制');
+        } catch (error) {
+            Utils.showToast('复制失败，请手动选择文本', 'error');
+        }
+    },
+
+    render() {
+        const paper = this.paper;
+        if (!paper) {
+            this.body.innerHTML = '<div class="empty-state"><h3>没有可展示的 PDF 原文</h3></div>';
+            return;
+        }
+
+        const text = this.currentTextDraft();
+        const tags = PaperViewer.renderTagChips(paper.tags || []);
+        const abstractPreview = String(paper.abstract_text || '').trim();
+        const managementNotePreview = String(paper.notes_text || '').trim();
+
+        this.body.innerHTML = `
+            <div class="note-lightbox pdf-text-lightbox">
+                <section class="note-lightbox-main">
+                    <div class="note-lightbox-editor-card">
+                        <div class="note-lightbox-head">
+                            <div class="note-lightbox-head-row">
+                                <div>
+                                    <p class="eyebrow">PDF Text</p>
+                                    <h2>${Utils.escapeHTML(paper.title)}</h2>
+                                    <p class="note-lightbox-subtitle">${Utils.escapeHTML(paper.original_filename || '')}</p>
+                                </div>
+                                <div class="pdf-text-head-meta">
+                                    <span class="status-badge tone-${Utils.statusTone(paper.extraction_status)}">${Utils.escapeHTML(Utils.statusLabel(paper.extraction_status))}</span>
+                                    <span class="pdf-text-counter" data-paper-pdf-text-length>${text.length.toLocaleString()} 字符</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="note-lightbox-meta-grid">
+                            <div class="note-lightbox-meta-item">
+                                <span>当前分组</span>
+                                <strong>${Utils.escapeHTML(paper.group_name || '未分组')}</strong>
+                            </div>
+                            <div class="note-lightbox-meta-item">
+                                <span>文献标签</span>
+                                <div class="figure-preview-tags ${paper.tags?.length ? '' : 'is-empty'}">
+                                    ${paper.tags?.length ? tags : '<span class="figure-preview-empty">无标签</span>'}
+                                </div>
+                            </div>
+                        </div>
+
+                        <label class="field note-lightbox-field">
+                            <span>PDF 原文</span>
+                            <textarea id="paperPdfTextViewerInput" class="form-textarea note-lightbox-textarea pdf-text-editor-textarea" rows="24" placeholder="在这里补充、修正或整理整篇 PDF 的全文内容">${Utils.escapeHTML(text)}</textarea>
+                        </label>
+
+                        <div class="figure-notes-actions">
+                            <span class="muted">支持多行编辑，按 Ctrl/Cmd + Enter 可快速保存。</span>
+                            <div class="pdf-text-inline-actions">
+                                <button class="btn btn-outline" type="button" data-paper-pdf-action="copy-text">复制全文</button>
+                                <button class="btn btn-primary" type="button" data-paper-pdf-action="save-text">保存全文</button>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <aside class="note-lightbox-side">
+                    <div class="note-lightbox-preview-card">
+                        <div class="detail-meta-panel paper-note-meta-panel">
+                            <div><span>最近更新</span><strong>${Utils.escapeHTML(Utils.formatDate(paper.updated_at || paper.created_at))}</strong></div>
+                            <div><span>提取图片</span><strong>${paper.figure_count || 0}</strong></div>
+                            <div><span>原始文件</span><strong>${Utils.escapeHTML(paper.original_filename || '')}</strong></div>
+                        </div>
+                    </div>
+
+                    <div class="note-lightbox-preview-card">
+                        <div class="note-lightbox-tip">
+                            <span>摘要</span>
+                            <p>${Utils.escapeHTML(abstractPreview || '当前还没有摘要，可在文献详情中补充。')}</p>
+                        </div>
+                        <div class="note-lightbox-tip">
+                            <span>管理笔记</span>
+                            <p>${Utils.escapeHTML(managementNotePreview || '当前没有管理笔记。')}</p>
+                        </div>
+                    </div>
+
+                    <div class="note-lightbox-actions">
+                        <button class="btn btn-outline" type="button" data-paper-pdf-action="open-pdf">打开 PDF</button>
+                    </div>
+                </aside>
+            </div>
+        `;
+    }
+};
+
 const PaperViewer = {
     init() {
         this.modal = document.getElementById('paperModal');
@@ -230,6 +461,7 @@ const PaperViewer = {
         if (!this.modal || this.initialized) return;
         this.initialized = true;
         PaperNoteViewer.init();
+        PaperPDFTextViewer.init();
 
         this.handleKeydown = (event) => {
             if (!this.modal || this.modal.classList.contains('hidden')) return;
@@ -288,6 +520,23 @@ const PaperViewer = {
             return '<span class="muted">无标签</span>';
         }
         return tags.map((tag) => `<span class="chip" style="--chip-color:${tag.color}">${Utils.escapeHTML(tag.name)}</span>`).join('');
+    },
+
+    buildUpdatePayload(paper, overrides = {}) {
+        const hasOverride = (key) => Object.prototype.hasOwnProperty.call(overrides, key);
+        const tags = hasOverride('tags')
+            ? overrides.tags
+            : (paper.tags || []).map((tag) => (typeof tag === 'string' ? tag : tag.name || '')).filter(Boolean);
+
+        return {
+            title: hasOverride('title') ? overrides.title : (paper.title || ''),
+            pdf_text: hasOverride('pdf_text') ? overrides.pdf_text : (paper.pdf_text || ''),
+            abstract_text: hasOverride('abstract_text') ? overrides.abstract_text : (paper.abstract_text || ''),
+            notes_text: hasOverride('notes_text') ? overrides.notes_text : (paper.notes_text || ''),
+            paper_notes_text: hasOverride('paper_notes_text') ? overrides.paper_notes_text : (paper.paper_notes_text || ''),
+            group_id: hasOverride('group_id') ? overrides.group_id : (paper.group_id ?? null),
+            tags: Array.isArray(tags) ? tags : []
+        };
     },
 
     async open(id, onChanged) {
@@ -441,13 +690,13 @@ const PaperViewer = {
             <section class="detail-section">
                 <div class="section-head section-head-pdf-text">
                     <h3>PDF 原文</h3>
-                    <button type="button" class="btn btn-small btn-outline" data-modal-action="view-pdf-text">查看原文</button>
+                    <button type="button" class="btn btn-small btn-outline" data-modal-action="view-pdf-text">查看 / 编辑原文</button>
                 </div>
                 <div class="pdf-text-preview">
                     ${paper.pdf_text ? `
                         <pre class="pdf-text-snippet">${Utils.escapeHTML(paper.pdf_text.substring(0, 1000))}${paper.pdf_text.length > 1000 ? '\n...' : ''}</pre>
                         <p class="pdf-text-meta">共 ${paper.pdf_text.length.toLocaleString()} 字符</p>
-                    ` : '<p class="muted">暂无 PDF 原文</p>'}
+                    ` : '<p class="muted">暂无 PDF 原文，点击上方按钮可补充或编辑全文。</p>'}
                 </div>
             </section>
         `;
@@ -492,14 +741,16 @@ const PaperViewer = {
 
     async save() {
         try {
-            const payload = await API.updatePaper(this.paper.id, {
-                title: document.getElementById('paperViewerTitle').value.trim(),
-                abstract_text: document.getElementById('paperViewerAbstract').value.trim(),
-                notes_text: document.getElementById('paperViewerNotes').value.trim(),
-                paper_notes_text: this.paper.paper_notes_text || '',
-                group_id: document.getElementById('paperViewerGroup').value ? Number(document.getElementById('paperViewerGroup').value) : null,
-                tags: Utils.splitTags(document.getElementById('paperViewerTags').value)
-            });
+            const payload = await API.updatePaper(
+                this.paper.id,
+                this.buildUpdatePayload(this.paper, {
+                    title: document.getElementById('paperViewerTitle').value.trim(),
+                    abstract_text: document.getElementById('paperViewerAbstract').value.trim(),
+                    notes_text: document.getElementById('paperViewerNotes').value.trim(),
+                    group_id: document.getElementById('paperViewerGroup').value ? Number(document.getElementById('paperViewerGroup').value) : null,
+                    tags: Utils.splitTags(document.getElementById('paperViewerTags').value)
+                })
+            );
             this.paper = payload.paper;
             Utils.showToast('文献信息已更新');
             this.render();
@@ -663,135 +914,18 @@ const PaperViewer = {
         `;
     },
     
-    // 打开 PDF 原文查看器
+    // 打开 PDF 原文编辑器
     openPdfTextViewer() {
-        const paper = this.paper;
-        if (!paper.pdf_text) {
-            Utils.showToast('暂无 PDF 原文', 'info');
-            return;
-        }
-        
-        // 创建新窗口/标签页展示原文
-        const win = window.open('', '_blank');
-        if (!win) {
-            Utils.showToast('请允许弹窗以查看原文', 'error');
-            return;
-        }
-        
-        win.document.write(`
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>${Utils.escapeHTML(paper.title)} - PDF 原文</title>
-    <style>
-        :root {
-            --bg: #efe6d7;
-            --bg-soft: #f7f2e8;
-            --ink: #241b16;
-            --muted: #6e5b4e;
-            --accent: #a45c40;
-            --accent-deep: #6f3622;
-        }
-        * { box-sizing: border-box; }
-        body {
-            margin: 0;
-            font-family: "Avenir Next", "PingFang SC", "Microsoft YaHei", sans-serif;
-            color: var(--ink);
-            background: var(--bg);
-            line-height: 1.8;
-        }
-        .header {
-            position: sticky;
-            top: 0;
-            z-index: 10;
-            padding: 1rem 2rem;
-            background: rgba(247, 242, 232, 0.95);
-            backdrop-filter: blur(10px);
-            border-bottom: 1px solid rgba(36, 27, 22, 0.08);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 1rem;
-        }
-        .header h1 {
-            margin: 0;
-            font-size: 1.2rem;
-            color: var(--accent-deep);
-        }
-        .header-meta {
-            color: var(--muted);
-            font-size: 0.9rem;
-        }
-        .toolbar {
-            display: flex;
-            gap: 0.5rem;
-        }
-        .btn {
-            padding: 0.5rem 1rem;
-            border: 1px solid rgba(36, 27, 22, 0.14);
-            border-radius: 999px;
-            background: rgba(255, 251, 245, 0.92);
-            color: var(--ink);
-            font-size: 0.85rem;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        .btn:hover {
-            background: var(--accent);
-            color: white;
-            border-color: var(--accent);
-        }
-        .content {
-            max-width: 900px;
-            margin: 2rem auto;
-            padding: 2.5rem;
-            background: #fffaf4;
-            border-radius: 20px;
-            box-shadow: 0 20px 60px rgba(78, 51, 33, 0.12);
-            white-space: pre-wrap;
-            word-wrap: break-word;
-            font-size: 1rem;
-            line-height: 2;
-        }
-        .empty {
-            text-align: center;
-            color: var(--muted);
-            padding: 4rem;
-        }
-        @media (max-width: 768px) {
-            .header { padding: 1rem; flex-wrap: wrap; }
-            .header h1 { font-size: 1rem; }
-            .content { margin: 1rem; padding: 1.5rem; }
-        }
-    </style>
-</head>
-<body>
-    <div class="header">
-        <div>
-            <h1>${Utils.escapeHTML(paper.title)}</h1>
-            <span class="header-meta">${paper.pdf_text.length.toLocaleString()} 字符</span>
-        </div>
-        <div class="toolbar">
-            <button class="btn" onclick="copyText()">复制全文</button>
-            <button class="btn" onclick="window.close()">关闭</button>
-        </div>
-    </div>
-    <div class="content" id="content">${Utils.escapeHTML(paper.pdf_text)}</div>
-    <script>
-        function copyText() {
-            const text = document.getElementById('content').innerText;
-            navigator.clipboard.writeText(text).then(() => {
-                alert('已复制到剪贴板');
-            }).catch(err => {
-                console.error('复制失败:', err);
-            });
-        }
-    <\/script>
-</body>
-</html>
-        `);
-        win.document.close();
+        PaperPDFTextViewer.open({
+            paper: this.paper,
+            onChanged: async (paper) => {
+                if (!paper) return;
+                this.paper = paper;
+                this.render();
+                if (typeof this.onChanged === 'function') {
+                    await this.onChanged();
+                }
+            }
+        });
     }
 };

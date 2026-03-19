@@ -26,6 +26,7 @@ type PaperUpsertInput struct {
 // PaperUpdateInput 文献更新输入
 type PaperUpdateInput struct {
 	Title          string
+	PDFText        *string
 	AbstractText   string
 	NotesText      string
 	PaperNotesText string

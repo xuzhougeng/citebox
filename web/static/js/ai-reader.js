@@ -738,14 +738,12 @@ const AIReaderPage = {
             }
 
             const nextNotes = currentNotes ? `${currentNotes}\n\n---\n\n${noteBlock}` : noteBlock;
-            const payload = await API.updatePaper(paper.id, {
-                title: latestPaper.title,
-                abstract_text: latestPaper.abstract_text || '',
-                notes_text: latestPaper.notes_text || '',
-                paper_notes_text: nextNotes,
-                group_id: latestPaper.group_id ?? null,
-                tags: (latestPaper.tags || []).map((tag) => tag.name || tag)
-            });
+            const payload = await API.updatePaper(
+                paper.id,
+                PaperViewer.buildUpdatePayload(latestPaper, {
+                    paper_notes_text: nextNotes
+                })
+            );
             this.syncUpdatedPaper(payload.paper);
             Utils.showToast('AI 内容已写入文献笔记');
         } catch (error) {

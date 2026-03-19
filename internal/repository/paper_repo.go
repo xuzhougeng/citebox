@@ -113,11 +113,16 @@ func (r *PaperRepository) UpdatePaper(id int64, input PaperUpdateInput) (*model.
 	}
 	defer tx.Rollback()
 
+	var pdfTextValue interface{}
+	if input.PDFText != nil {
+		pdfTextValue = *input.PDFText
+	}
+
 	result, err := tx.Exec(`
 		UPDATE papers
-		SET title = ?, abstract_text = ?, notes_text = ?, paper_notes_text = ?, group_id = ?, updated_at = CURRENT_TIMESTAMP
+		SET title = ?, pdf_text = COALESCE(?, pdf_text), abstract_text = ?, notes_text = ?, paper_notes_text = ?, group_id = ?, updated_at = CURRENT_TIMESTAMP
 		WHERE id = ?
-	`, input.Title, input.AbstractText, input.NotesText, input.PaperNotesText, input.GroupID, id)
+	`, input.Title, pdfTextValue, input.AbstractText, input.NotesText, input.PaperNotesText, input.GroupID, id)
 	if err != nil {
 		return nil, wrapDBError(err, "更新文献失败")
 	}

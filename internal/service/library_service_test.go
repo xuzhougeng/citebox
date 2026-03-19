@@ -63,6 +63,7 @@ func createTestPaper(t *testing.T, repo *repository.LibraryRepository) *model.Pa
 		StoredPDFName:    "paper_test.pdf",
 		FileSize:         512,
 		ContentType:      "application/pdf",
+		PDFText:          "Atlas full text",
 		AbstractText:     "Atlas abstract",
 		NotesText:        "Atlas notes",
 		PaperNotesText:   "Atlas paper notes",
@@ -194,9 +195,11 @@ func TestUpdatePaperValidationErrors(t *testing.T) {
 func TestUpdatePaperPersistsMetadata(t *testing.T) {
 	svc, repo, _ := newTestService(t)
 	paper := createTestPaper(t, repo)
+	nextPDFText := "Updated full text"
 
 	updated, err := svc.UpdatePaper(paper.ID, UpdatePaperParams{
 		Title:          "Atlas Study Revised",
+		PDFText:        &nextPDFText,
 		AbstractText:   "Updated abstract",
 		NotesText:      "Updated notes",
 		PaperNotesText: "Updated paper notes",
@@ -209,8 +212,28 @@ func TestUpdatePaperPersistsMetadata(t *testing.T) {
 	if updated.AbstractText != "Updated abstract" || updated.NotesText != "Updated notes" || updated.PaperNotesText != "Updated paper notes" {
 		t.Fatalf("UpdatePaper() metadata = (%q, %q, %q), want updated values", updated.AbstractText, updated.NotesText, updated.PaperNotesText)
 	}
+	if updated.PDFText != nextPDFText {
+		t.Fatalf("UpdatePaper() pdf_text = %q, want %q", updated.PDFText, nextPDFText)
+	}
 	if len(updated.Tags) != 2 {
 		t.Fatalf("UpdatePaper() tags = %d, want 2", len(updated.Tags))
+	}
+}
+
+func TestUpdatePaperKeepsPDFTextWhenOmitted(t *testing.T) {
+	svc, repo, _ := newTestService(t)
+	paper := createTestPaper(t, repo)
+
+	updated, err := svc.UpdatePaper(paper.ID, UpdatePaperParams{
+		Title:        "Atlas Study Retitled",
+		AbstractText: "Fresh abstract",
+	})
+	if err != nil {
+		t.Fatalf("UpdatePaper() error = %v", err)
+	}
+
+	if updated.PDFText != "Atlas full text" {
+		t.Fatalf("UpdatePaper() pdf_text = %q, want %q", updated.PDFText, "Atlas full text")
 	}
 }
 
