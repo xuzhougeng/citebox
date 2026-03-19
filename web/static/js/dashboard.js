@@ -60,7 +60,7 @@ const DashboardPage = {
                 figuresPayload,
                 notesPayload
             ] = await Promise.all([
-                API.listPapers({ page: 1, page_size: 6 }),
+                API.listPapers({ page: 1, page_size: 3 }),
                 API.listPapers({ page: 1, page_size: 1 }),
                 API.listPapers({ page: 1, page_size: 1, status: 'completed' }),
                 API.listPapers({ page: 1, page_size: 1, status: 'queued' }),
