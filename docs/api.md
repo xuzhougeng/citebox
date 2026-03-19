@@ -455,11 +455,24 @@ AI 流式阅读通过：
 
 请求体和 `/api/ai/read` 相同。
 
+当前支持的 `action`：
+
+- `paper_qa`
+- `figure_interpretation`
+
 事件类型常见有：
 
+- `meta`
 - `delta`
-- `result`
+- `final`
+- `done`
 - `error`
+
+说明：
+
+- `meta` 会先返回模型、模式、文献 ID、问题文本等元信息
+- `delta` 是增量文本片段，前端可即时拼接渲染
+- `final` 会返回标准化后的完整结果对象
 
 #### `POST /api/ai/read/export`
 

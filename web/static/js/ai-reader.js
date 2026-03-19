@@ -9,6 +9,7 @@ const AIReaderPage = {
         exportingTurnKey: '',
         exportingConversation: false,
         savingNoteTurnKey: '',
+        pendingTurn: null,
         sessions: {}
     },
 
@@ -25,6 +26,7 @@ const AIReaderPage = {
         this.sessionHint = document.getElementById('aiSessionHint');
         this.questionInput = document.getElementById('aiQuestionInput');
         this.runButton = document.getElementById('runAIReaderButton');
+        this.stopButton = document.getElementById('stopAIReaderButton');
         this.exportConversationButton = document.getElementById('exportAIConversationButton');
         this.clearConversationButton = document.getElementById('clearAIConversationButton');
         this.modelSummary = document.getElementById('aiModelSummary');
@@ -58,6 +60,10 @@ const AIReaderPage = {
 
         this.runButton.addEventListener('click', async () => {
             await this.run();
+        });
+
+        this.stopButton.addEventListener('click', () => {
+            this.stopRun();
         });
 
         this.clearConversationButton.addEventListener('click', () => {
@@ -305,13 +311,23 @@ const AIReaderPage = {
         this.state.loading = true;
         this.runButton.disabled = true;
         this.runButton.textContent = '发送中...';
-        this.renderConversation({
-            pendingQuestion: pendingQuestion || this.questionPlaceholder(),
+        const requestState = {
+            paperID,
+            question: pendingQuestion || this.questionPlaceholder(),
+            answer: '',
+            provider: '',
+            model: '',
+            mode: '',
+            includedFigures: 0,
+            abortController: new AbortController(),
+            stopped: false,
             loading: true
-        });
+        };
+        this.state.pendingTurn = requestState;
+        this.renderConversation();
 
         try {
-            const result = await API.readPaperWithAI({
+            await API.readPaperWithAIStream({
                 paper_id: paperID,
                 action: 'paper_qa',
                 question: pendingQuestion,
@@ -319,11 +335,49 @@ const AIReaderPage = {
                     question: turn.question,
                     answer: turn.answer
                 }))
+            }, {
+                signal: requestState.abortController.signal,
+                onEvent: (event) => {
+                    if (this.state.pendingTurn !== requestState) return;
+
+                    if (event.type === 'error') {
+                        throw new Error(event.error || '流式回答失败');
+                    }
+                    if (event.type === 'meta' && event.result) {
+                        requestState.question = event.result.question || requestState.question;
+                        requestState.provider = event.result.provider || '';
+                        requestState.model = event.result.model || '';
+                        requestState.mode = event.result.mode || '';
+                        requestState.includedFigures = event.result.included_figures || 0;
+                        this.scheduleConversationRender();
+                        return;
+                    }
+                    if (event.type === 'delta') {
+                        requestState.answer += event.delta || '';
+                        this.scheduleConversationRender();
+                        return;
+                    }
+                    if (event.type === 'final' && event.result) {
+                        this.pushConversationTurn(event.result, paperID);
+                        this.state.pendingTurn = null;
+                        this.questionInput.value = '';
+                        this.renderConversation();
+                    }
+                }
             });
-            this.pushConversationTurn(result, paperID);
-            this.questionInput.value = '';
-            this.renderConversation();
         } catch (error) {
+            if (error.name === 'AbortError') {
+                if (this.state.pendingTurn === requestState) {
+                    requestState.loading = false;
+                    requestState.stopped = true;
+                    delete requestState.abortController;
+                    this.renderConversation();
+                }
+                return;
+            }
+            if (this.state.pendingTurn === requestState) {
+                this.state.pendingTurn = null;
+            }
             this.renderConversation();
             Utils.showToast(error.message, 'error');
         } finally {
@@ -334,18 +388,23 @@ const AIReaderPage = {
         }
     },
 
-    renderConversation(pending = null) {
+    renderConversation() {
         const paper = this.currentPaper();
         const turns = this.currentConversation();
+        const pending = this.currentPendingTurn();
         const roundCount = turns.length;
+        const displayRoundCount = roundCount + (pending?.loading ? 1 : 0);
         const hasLimitReached = roundCount >= 5;
+        const isGenerating = Boolean(pending?.loading);
 
-        this.roundBadge.textContent = `${roundCount} / 5 轮`;
-        this.clearConversationButton.disabled = !turns.length && !pending;
+        this.roundBadge.textContent = `${Math.min(displayRoundCount, 5)} / 5 轮`;
+        this.clearConversationButton.disabled = this.state.loading || (!turns.length && !pending);
         this.exportConversationButton.disabled = !paper || !turns.length || this.state.exportingConversation;
         this.exportConversationButton.textContent = this.state.exportingConversation ? '导出中...' : '对话导出';
         this.questionInput.disabled = !paper || hasLimitReached || this.state.loading;
         this.runButton.disabled = !paper || hasLimitReached || this.state.loading;
+        this.stopButton.hidden = !isGenerating;
+        this.stopButton.disabled = !isGenerating;
 
         if (!paper) {
             this.sessionHint.textContent = '先选择一篇已解析文献，再开始连续提问。';
@@ -357,7 +416,11 @@ const AIReaderPage = {
             return;
         }
 
-        if (hasLimitReached) {
+        if (pending?.loading) {
+            this.sessionHint.textContent = `正在生成第 ${Math.min(displayRoundCount, 5)} 轮回答，输出会实时显示。`;
+        } else if (pending?.stopped) {
+            this.sessionHint.textContent = '本次生成已停止；当前片段未计入对话历史。';
+        } else if (hasLimitReached) {
             this.sessionHint.textContent = '当前文献已经达到 5 轮上限；如需继续，请先清空对话。';
         } else if (turns.length > 0) {
             this.sessionHint.textContent = `当前文献已累计 ${roundCount} 轮对话，下一次提问会自动带上前文上下文。`;
@@ -425,21 +488,30 @@ const AIReaderPage = {
             `);
         });
 
-        if (pending?.loading) {
+        if (pending) {
+            const assistantBody = pending.answer
+                ? Utils.renderMarkdown(pending.answer, {
+                    resolveFigureSrc: (figureID) => this.resolveFigureImageURL(figureID, paper)
+                })
+                : (pending.stopped ? '这次生成已被手动停止。' : '正在把全文、图片和上下文一起发送给模型。');
+            const assistantBodyClass = pending.answer ? 'ai-turn-body markdown-body' : 'ai-turn-body';
             blocks.push(`
                 <article class="ai-turn ai-turn-user pending">
                     <div class="ai-turn-meta">
-                        <span>发送中</span>
+                        <span>${pending.loading ? '发送中' : '已停止'}</span>
                         <strong>你</strong>
                     </div>
-                    <div class="ai-turn-body">${Utils.escapeHTML(pending.pendingQuestion || '正在发送问题...')}</div>
+                    <div class="ai-turn-body">${Utils.escapeHTML(pending.question || '正在发送问题...')}</div>
                 </article>
                 <article class="ai-turn ai-turn-assistant pending">
                     <div class="ai-turn-meta">
                         <span>AI</span>
-                        <strong>处理中</strong>
+                        <strong>${Utils.escapeHTML(pending.provider || (pending.stopped ? '已停止' : '处理中'))}</strong>
                     </div>
-                    <div class="ai-turn-body">正在把全文、图片和上下文一起发送给模型。</div>
+                    <div class="${assistantBodyClass}">${assistantBody}</div>
+                    <div class="ai-turn-foot">
+                        <span>${Utils.escapeHTML(this.turnMeta(pending))}${pending.stopped ? ' · 未计入历史' : ''}</span>
+                    </div>
                 </article>
             `);
         }
@@ -520,9 +592,31 @@ const AIReaderPage = {
         return figure?.image_url || '';
     },
 
+    currentPendingTurn(paperID = this.state.selectedPaperID) {
+        const pending = this.state.pendingTurn;
+        if (!paperID || !pending || pending.paperID !== paperID) {
+            return null;
+        }
+        return pending;
+    },
+
     currentConversation(paperID = this.state.selectedPaperID) {
         if (!paperID) return [];
         return this.state.sessions[paperID] || [];
+    },
+
+    scheduleConversationRender() {
+        if (this.renderConversationFrame) return;
+        this.renderConversationFrame = window.requestAnimationFrame(() => {
+            this.renderConversationFrame = null;
+            this.renderConversation();
+        });
+    },
+
+    stopRun() {
+        const pending = this.state.pendingTurn;
+        if (!pending?.loading || !pending.abortController) return;
+        pending.abortController.abort();
     },
 
     pushConversationTurn(result, paperID = this.state.selectedPaperID) {
@@ -543,6 +637,9 @@ const AIReaderPage = {
     clearConversation() {
         if (!this.state.selectedPaperID) return;
         delete this.state.sessions[this.state.selectedPaperID];
+        if (this.state.pendingTurn?.paperID === this.state.selectedPaperID) {
+            this.state.pendingTurn = null;
+        }
         this.renderConversation();
     },
 

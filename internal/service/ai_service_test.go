@@ -164,6 +164,93 @@ func TestCheckModelCallsProviderSuccessfully(t *testing.T) {
 	}
 }
 
+func TestReadPaperStreamSupportsPaperQA(t *testing.T) {
+	_, repo, cfg := newTestService(t)
+	aiSvc := NewAIService(repo, cfg, nil)
+	paper := createTestPaper(t, repo)
+	writeFigureFixture(t, filepath.Join(cfg.FiguresDir(), paper.Figures[0].Filename), 320, 220)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/responses" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("ReadAll() error = %v", err)
+		}
+		bodyText := string(body)
+		if !strings.Contains(bodyText, "\"stream\":true") {
+			t.Fatalf("request body = %s, want streaming payload", bodyText)
+		}
+		if strings.Contains(bodyText, "JSON 必须包含 answer") {
+			t.Fatalf("request body = %s, want plain text stream prompt for paper_qa", bodyText)
+		}
+		if !strings.Contains(bodyText, "不要返回 JSON") {
+			t.Fatalf("request body = %s, want plain text output requirements", bodyText)
+		}
+
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = fmt.Fprint(w, "event: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"delta\":\"第一段\"}\n\n")
+		_, _ = fmt.Fprint(w, "event: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"delta\":\"第二段\"}\n\n")
+		_, _ = fmt.Fprint(w, "data: [DONE]\n\n")
+	}))
+	defer server.Close()
+
+	if _, err := aiSvc.UpdateSettings(model.AISettings{
+		Models: []model.AIModelConfig{
+			{
+				ID:              "qa",
+				Name:            "QA",
+				Provider:        model.AIProviderOpenAI,
+				APIKey:          "test-key",
+				BaseURL:         server.URL,
+				Model:           "gpt-test",
+				MaxOutputTokens: 1200,
+			},
+		},
+		SceneModels: model.AISceneModelSelection{
+			DefaultModelID: "qa",
+			QAModelID:      "qa",
+		},
+		SystemPrompt: "system",
+		QAPrompt:     "qa",
+	}); err != nil {
+		t.Fatalf("UpdateSettings() error = %v", err)
+	}
+
+	var events []model.AIReadStreamEvent
+	err := aiSvc.ReadPaperStream(context.Background(), model.AIReadRequest{
+		PaperID:  paper.ID,
+		Action:   model.AIActionPaperQA,
+		Question: "请总结这篇文献。",
+	}, func(event model.AIReadStreamEvent) error {
+		events = append(events, event)
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("ReadPaperStream() error = %v", err)
+	}
+
+	if len(events) != 5 {
+		t.Fatalf("event count = %d, want 5", len(events))
+	}
+	if events[0].Type != "meta" || events[1].Type != "delta" || events[2].Type != "delta" || events[3].Type != "final" || events[4].Type != "done" {
+		t.Fatalf("event types = %#v, want meta/delta/delta/final/done", []string{events[0].Type, events[1].Type, events[2].Type, events[3].Type, events[4].Type})
+	}
+	if events[0].Result == nil || events[0].Result.Action != model.AIActionPaperQA {
+		t.Fatalf("meta result = %#v, want paper_qa metadata", events[0].Result)
+	}
+	if events[3].Result == nil {
+		t.Fatal("final result = nil, want normalized response")
+	}
+	if events[3].Result.Answer != "第一段第二段" {
+		t.Fatalf("final answer = %q, want merged stream text", events[3].Result.Answer)
+	}
+	if events[3].Result.Question != "请总结这篇文献。" {
+		t.Fatalf("final question = %q, want original question", events[3].Result.Question)
+	}
+}
+
 func TestPrepareReadUsesSceneModelMaxOutputTokens(t *testing.T) {
 	svc, repo, _ := newTestService(t)
 	aiSvc := NewAIService(repo, svc.config, nil)

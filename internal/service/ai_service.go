@@ -297,8 +297,8 @@ func (s *AIService) ReadPaperStream(ctx context.Context, input model.AIReadReque
 	if err != nil {
 		return err
 	}
-	if prepared.action != model.AIActionFigureInterpretation {
-		return apperr.New(apperr.CodeInvalidArgument, "当前只有图片解读支持流式输出")
+	if prepared.action != model.AIActionFigureInterpretation && prepared.action != model.AIActionPaperQA {
+		return apperr.New(apperr.CodeInvalidArgument, "当前只有自由提问和图片解读支持流式输出")
 	}
 	mode := aiProviderMode(prepared.settings)
 	if err := onEvent(model.AIReadStreamEvent{
