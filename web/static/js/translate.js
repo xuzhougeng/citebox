@@ -146,11 +146,22 @@ const DesktopTranslate = {
         const text = String(this.pendingText || '').trim();
         this.pendingText = '';
         this.hideMenu();
-        if (!text) {
+        await this.translateText(text, {
+            title: '划词翻译'
+        });
+    },
+
+    async translateText(text, options = {}) {
+        const content = String(text || '').trim();
+        const title = String(options.title || '').trim() || 'AI 翻译';
+        const emptyMessage = String(options.emptyMessage || '').trim() || '没有可翻译的内容';
+        if (!content) {
+            Utils.showToast(emptyMessage, 'error');
             return;
         }
 
         this.renderResultDialog({
+            title,
             loading: true,
             sourceLanguage: '',
             targetLanguage: '',
@@ -158,8 +169,9 @@ const DesktopTranslate = {
         });
 
         try {
-            const result = await API.translateWithAI({ text });
+            const result = await API.translateWithAI({ text: content });
             this.renderResultDialog({
+                title,
                 loading: false,
                 sourceLanguage: result.source_language || '',
                 targetLanguage: result.target_language || '',
@@ -167,6 +179,7 @@ const DesktopTranslate = {
             });
         } catch (error) {
             this.renderResultDialog({
+                title,
                 loading: false,
                 error: error.message || '翻译失败',
                 sourceLanguage: '',
@@ -185,7 +198,7 @@ const DesktopTranslate = {
             <div class="dialog-box translate-dialog-box">
                 <div class="dialog-header translate-dialog-header">
                     <div>
-                        <h3>划词翻译</h3>
+                        <h3>${Utils.escapeHTML(state.title || 'AI 翻译')}</h3>
                         <p class="translate-dialog-subtitle">${this.renderSubtitle(state)}</p>
                     </div>
                     <button class="modal-close translate-dialog-close" type="button" data-translate-dialog-action="close" aria-label="关闭">×</button>

@@ -657,6 +657,10 @@ const FigureViewer = {
             await this.saveCaptionFromInput();
             return;
         }
+        if (button.dataset.figureMetaAction === 'translate-caption') {
+            await this.translateCaptionFromInput();
+            return;
+        }
         if (button.dataset.figureMetaAction === 'open-notes') {
             await this.openNotes();
             return;
@@ -721,6 +725,19 @@ const FigureViewer = {
 
     async saveCaptionFromInput() {
         await this.updateCurrentFigureCaption(this.currentFigureCaptionDraft(), '图片说明已保存');
+    },
+
+    async translateCaptionFromInput() {
+        const caption = this.currentFigureCaptionDraft();
+        if (typeof DesktopTranslate === 'undefined' || typeof DesktopTranslate.translateText !== 'function') {
+            Utils.showToast('翻译功能暂不可用', 'error');
+            return;
+        }
+
+        await DesktopTranslate.translateText(caption, {
+            title: 'Caption 翻译',
+            emptyMessage: '当前没有可翻译的图片说明'
+        });
     },
 
     async updateCurrentFigureCaption(caption, successMessage) {
@@ -1063,7 +1080,10 @@ const FigureViewer = {
                         </label>
                         <div class="figure-notes-actions figure-caption-actions">
                             <span class="muted">caption 会参与检索；按 Ctrl/Cmd + Enter 可快速保存。</span>
-                            <button class="btn btn-outline btn-small" type="button" data-figure-meta-action="save-caption">保存说明</button>
+                            <div class="figure-caption-action-group">
+                                <button class="btn btn-outline btn-small" type="button" data-figure-meta-action="translate-caption">翻译说明</button>
+                                <button class="btn btn-outline btn-small" type="button" data-figure-meta-action="save-caption">保存说明</button>
+                            </div>
                         </div>
                     </div>
                 </section>
