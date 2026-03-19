@@ -94,6 +94,12 @@
     margin-top: -0.1rem;
 }
 
+.figure-caption-action-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.65rem;
+}
+
 .figure-lightbox-side {
     display: grid;
     gap: 1rem;
