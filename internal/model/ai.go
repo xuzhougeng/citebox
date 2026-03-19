@@ -15,6 +15,7 @@ const (
 	AIActionFigureInterpretation AIAction = "figure_interpretation"
 	AIActionTagSuggestion        AIAction = "tag_suggestion"
 	AIActionGroupSuggestion      AIAction = "group_suggestion"
+	AIActionTranslate            AIAction = "translate"
 )
 
 type AIModelConfig struct {
@@ -29,11 +30,17 @@ type AIModelConfig struct {
 }
 
 type AISceneModelSelection struct {
-	DefaultModelID string `json:"default_model_id"`
-	QAModelID      string `json:"qa_model_id"`
-	FigureModelID  string `json:"figure_model_id"`
-	TagModelID     string `json:"tag_model_id"`
-	GroupModelID   string `json:"group_model_id"`
+	DefaultModelID   string `json:"default_model_id"`
+	QAModelID        string `json:"qa_model_id"`
+	FigureModelID    string `json:"figure_model_id"`
+	TagModelID       string `json:"tag_model_id"`
+	GroupModelID     string `json:"group_model_id"`
+	TranslateModelID string `json:"translate_model_id"`
+}
+
+type AITranslationConfig struct {
+	PrimaryLanguage string `json:"primary_language"`
+	TargetLanguage  string `json:"target_language"`
 }
 
 type AISettings struct {
@@ -52,6 +59,8 @@ type AISettings struct {
 	FigurePrompt     string                `json:"figure_prompt"`
 	TagPrompt        string                `json:"tag_prompt"`
 	GroupPrompt      string                `json:"group_prompt"`
+	TranslatePrompt  string                `json:"translate_prompt"`
+	Translation      AITranslationConfig   `json:"translation"`
 }
 
 type AIReadRequest struct {
@@ -68,6 +77,10 @@ type AIReadExportRequest struct {
 	Content   string `json:"content,omitempty"`
 	Scope     string `json:"scope,omitempty"`
 	TurnIndex int    `json:"turn_index,omitempty"`
+}
+
+type AITranslateRequest struct {
+	Text string `json:"text"`
 }
 
 type AIConversationTurn struct {
@@ -105,6 +118,16 @@ type AIReadStreamEvent struct {
 	Code   string          `json:"code,omitempty"`
 }
 
+type AITranslateResponse struct {
+	Success        bool       `json:"success"`
+	Provider       AIProvider `json:"provider"`
+	Model          string     `json:"model"`
+	Mode           string     `json:"mode"`
+	SourceLanguage string     `json:"source_language"`
+	TargetLanguage string     `json:"target_language"`
+	Translation    string     `json:"translation"`
+}
+
 func DefaultAISettings() AISettings {
 	defaultModel := AIModelConfig{
 		ID:               "default-openai",
@@ -123,11 +146,12 @@ func DefaultAISettings() AISettings {
 		OpenAILegacyMode: defaultModel.OpenAILegacyMode,
 		Models:           []AIModelConfig{defaultModel},
 		SceneModels: AISceneModelSelection{
-			DefaultModelID: defaultModel.ID,
-			QAModelID:      defaultModel.ID,
-			FigureModelID:  defaultModel.ID,
-			TagModelID:     defaultModel.ID,
-			GroupModelID:   defaultModel.ID,
+			DefaultModelID:   defaultModel.ID,
+			QAModelID:        defaultModel.ID,
+			FigureModelID:    defaultModel.ID,
+			TagModelID:       defaultModel.ID,
+			GroupModelID:     defaultModel.ID,
+			TranslateModelID: defaultModel.ID,
 		},
 		Temperature:     0.2,
 		MaxOutputTokens: 1200,
@@ -137,5 +161,10 @@ func DefaultAISettings() AISettings {
 		FigurePrompt:    "说明这张图片展示了什么、关键实验设计或对照关系是什么、它支持了什么结论，以及有哪些可能的局限。",
 		TagPrompt:       "给出 3 到 8 个适合检索和归档的图片标签，优先复用已有图片标签；避免过泛词，只有在现有标签不够时再补充必要的新标签。",
 		GroupPrompt:     "请根据整篇文献的主题、方法和用途，判断它最适合放入哪个分组，优先复用已有分组；如果没有合适分组，再给出一个新的分组名称。",
+		TranslatePrompt: "你只负责翻译，不做解释、不补充背景、不总结。必须保持原文含义、语气、术语和格式；如果原文里有专有名词、缩写、数字或单位，优先准确保留。",
+		Translation: AITranslationConfig{
+			PrimaryLanguage: "中文",
+			TargetLanguage:  "英文",
+		},
 	}
 }

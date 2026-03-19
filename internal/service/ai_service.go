@@ -24,6 +24,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/xuzhougeng/citebox/internal/apperr"
 	"github.com/xuzhougeng/citebox/internal/config"
@@ -181,6 +182,62 @@ func (s *AIService) ReadPaper(ctx context.Context, input model.AIReadRequest) (*
 	}
 
 	return buildAIReadResponse(prepared, mode, rawText), nil
+}
+
+func (s *AIService) Translate(ctx context.Context, input model.AITranslateRequest) (*model.AITranslateResponse, error) {
+	text := strings.TrimSpace(input.Text)
+	if text == "" {
+		return nil, apperr.New(apperr.CodeInvalidArgument, "缺少需要翻译的文本")
+	}
+
+	settings, err := s.GetSettings()
+	if err != nil {
+		return nil, err
+	}
+
+	modelConfig, err := resolveModelForAction(*settings, model.AIActionTranslate)
+	if err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(modelConfig.APIKey) == "" {
+		return nil, apperr.New(apperr.CodeFailedPrecondition, "请先在 AI 页面为翻译场景配置可用模型和 API Key")
+	}
+
+	sourceLanguage, targetLanguage := resolveTranslationDirection(settings.Translation, text)
+	systemPrompt, userPrompt := buildAITranslatePrompts(*settings, sourceLanguage, targetLanguage, text)
+
+	runtimeSettings := *settings
+	runtimeSettings.Provider = modelConfig.Provider
+	runtimeSettings.APIKey = modelConfig.APIKey
+	runtimeSettings.BaseURL = modelConfig.BaseURL
+	runtimeSettings.Model = modelConfig.Model
+	runtimeSettings.MaxOutputTokens = modelConfig.MaxOutputTokens
+	runtimeSettings.OpenAILegacyMode = modelConfig.OpenAILegacyMode
+
+	rawText, mode, err := s.callProvider(ctx, &aiReadPrepared{
+		settings:     runtimeSettings,
+		action:       model.AIActionTranslate,
+		systemPrompt: systemPrompt,
+		userPrompt:   userPrompt,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	translation := normalizeTranslationOutput(rawText)
+	if translation == "" {
+		return nil, apperr.New(apperr.CodeUnavailable, "翻译结果为空")
+	}
+
+	return &model.AITranslateResponse{
+		Success:        true,
+		Provider:       runtimeSettings.Provider,
+		Model:          runtimeSettings.Model,
+		Mode:           mode,
+		SourceLanguage: sourceLanguage,
+		TargetLanguage: targetLanguage,
+		Translation:    translation,
+	}, nil
 }
 
 func (s *AIService) ExportReadMarkdown(ctx context.Context, input model.AIReadExportRequest) (string, []byte, error) {
@@ -528,11 +585,23 @@ func normalizeAISettings(input model.AISettings) (model.AISettings, error) {
 	if strings.TrimSpace(settings.GroupPrompt) == "" {
 		settings.GroupPrompt = defaults.GroupPrompt
 	}
+	if strings.TrimSpace(settings.TranslatePrompt) == "" {
+		settings.TranslatePrompt = defaults.TranslatePrompt
+	}
 	settings.SystemPrompt = strings.TrimSpace(settings.SystemPrompt)
 	settings.QAPrompt = strings.TrimSpace(settings.QAPrompt)
 	settings.FigurePrompt = strings.TrimSpace(settings.FigurePrompt)
 	settings.TagPrompt = strings.TrimSpace(settings.TagPrompt)
 	settings.GroupPrompt = strings.TrimSpace(settings.GroupPrompt)
+	settings.TranslatePrompt = strings.TrimSpace(settings.TranslatePrompt)
+	if strings.TrimSpace(settings.Translation.PrimaryLanguage) == "" {
+		settings.Translation.PrimaryLanguage = defaults.Translation.PrimaryLanguage
+	}
+	if strings.TrimSpace(settings.Translation.TargetLanguage) == "" {
+		settings.Translation.TargetLanguage = defaults.Translation.TargetLanguage
+	}
+	settings.Translation.PrimaryLanguage = strings.TrimSpace(settings.Translation.PrimaryLanguage)
+	settings.Translation.TargetLanguage = strings.TrimSpace(settings.Translation.TargetLanguage)
 
 	models, err := normalizeAIModels(settings, defaults)
 	if err != nil {
@@ -647,6 +716,7 @@ func normalizeAISceneModelSelection(input model.AISceneModelSelection, models []
 	selection.FigureModelID = normalizeSceneModelID(selection.FigureModelID, models, selection.DefaultModelID)
 	selection.TagModelID = normalizeSceneModelID(selection.TagModelID, models, selection.DefaultModelID)
 	selection.GroupModelID = normalizeSceneModelID(selection.GroupModelID, models, selection.DefaultModelID)
+	selection.TranslateModelID = normalizeSceneModelID(selection.TranslateModelID, models, selection.DefaultModelID)
 	return selection
 }
 
@@ -679,6 +749,8 @@ func resolveModelForAction(settings model.AISettings, action model.AIAction) (mo
 		modelID = firstNonEmpty(settings.SceneModels.TagModelID, settings.SceneModels.DefaultModelID)
 	case model.AIActionGroupSuggestion:
 		modelID = firstNonEmpty(settings.SceneModels.GroupModelID, settings.SceneModels.DefaultModelID)
+	case model.AIActionTranslate:
+		modelID = firstNonEmpty(settings.SceneModels.TranslateModelID, settings.SceneModels.DefaultModelID)
 	default:
 		modelID = firstNonEmpty(settings.SceneModels.QAModelID, settings.SceneModels.DefaultModelID)
 	}
@@ -844,6 +916,146 @@ func buildPaperNotesContext(paper *model.Paper) string {
 	}
 }
 
+func buildAITranslatePrompts(settings model.AISettings, sourceLanguage, targetLanguage, text string) (string, string) {
+	userPrompt := fmt.Sprintf(
+		`任务类型: translate
+
+翻译方向:
+- 原文语言: %s
+- 目标语言: %s
+
+场景指令:
+%s
+
+输出要求:
+1. 只返回译文正文，不要附加解释、注释、标题、前缀或代码块。
+2. 保留原文中的换行、列表层级、数字、单位、缩写和专有名词。
+3. 如果原文已经是目标语言，也请只做必要润色后输出正文。
+
+待翻译文本:
+%s`,
+		sourceLanguage,
+		targetLanguage,
+		settings.TranslatePrompt,
+		text,
+	)
+	return settings.SystemPrompt, userPrompt
+}
+
+func resolveTranslationDirection(config model.AITranslationConfig, text string) (string, string) {
+	primaryLanguage := strings.TrimSpace(config.PrimaryLanguage)
+	targetLanguage := strings.TrimSpace(config.TargetLanguage)
+	if primaryLanguage == "" {
+		primaryLanguage = model.DefaultAISettings().Translation.PrimaryLanguage
+	}
+	if targetLanguage == "" {
+		targetLanguage = model.DefaultAISettings().Translation.TargetLanguage
+	}
+	if translationTextMatchesPrimaryLanguage(primaryLanguage, text) {
+		return primaryLanguage, targetLanguage
+	}
+	return "其他语言", primaryLanguage
+}
+
+func translationTextMatchesPrimaryLanguage(primaryLanguage, text string) bool {
+	normalizedPrimary := normalizeTranslationLanguageKey(primaryLanguage)
+	detectedLanguage := detectTranslationLanguageKey(text)
+	if normalizedPrimary == "" || detectedLanguage == "" {
+		return false
+	}
+	return normalizedPrimary == detectedLanguage
+}
+
+func normalizeTranslationLanguageKey(language string) string {
+	normalized := strings.ToLower(strings.TrimSpace(language))
+	switch normalized {
+	case "zh", "zh-cn", "zh-hans", "zh-hant", "chinese", "mandarin", "中文", "汉语", "简体中文", "繁體中文", "繁体中文":
+		return "han"
+	case "ja", "jp", "japanese", "日语", "日文", "日本語", "日本语":
+		return "japanese"
+	case "ko", "korean", "韩语", "韓語", "한국어":
+		return "hangul"
+	case "en", "english", "英文", "英语":
+		return "latin"
+	case "fr", "french", "法语", "法文":
+		return "latin"
+	case "de", "german", "德语", "德文":
+		return "latin"
+	case "es", "spanish", "西班牙语", "西班牙文":
+		return "latin"
+	case "pt", "portuguese", "葡萄牙语", "葡萄牙文":
+		return "latin"
+	case "it", "italian", "意大利语", "意大利文":
+		return "latin"
+	case "ru", "russian", "俄语", "俄文":
+		return "cyrillic"
+	case "ar", "arabic", "阿拉伯语", "阿拉伯文":
+		return "arabic"
+	default:
+		return ""
+	}
+}
+
+func detectTranslationLanguageKey(text string) string {
+	type scriptCounts struct {
+		japanese int
+		hangul   int
+		han      int
+		latin    int
+		cyrillic int
+		arabic   int
+	}
+
+	var counts scriptCounts
+	for _, r := range text {
+		switch {
+		case unicode.In(r, unicode.Hiragana, unicode.Katakana):
+			counts.japanese += 2
+		case unicode.In(r, unicode.Hangul):
+			counts.hangul += 2
+		case unicode.In(r, unicode.Han):
+			counts.han++
+		case unicode.In(r, unicode.Cyrillic):
+			counts.cyrillic++
+		case unicode.In(r, unicode.Arabic):
+			counts.arabic++
+		case unicode.In(r, unicode.Latin):
+			if unicode.IsLetter(r) {
+				counts.latin++
+			}
+		}
+	}
+
+	switch {
+	case counts.japanese > 0:
+		return "japanese"
+	case counts.hangul > 0:
+		return "hangul"
+	case counts.han > 0:
+		return "han"
+	case counts.cyrillic > 0:
+		return "cyrillic"
+	case counts.arabic > 0:
+		return "arabic"
+	case counts.latin > 0:
+		return "latin"
+	default:
+		return ""
+	}
+}
+
+func normalizeTranslationOutput(raw string) string {
+	trimmed := strings.TrimSpace(raw)
+	if strings.HasPrefix(trimmed, "```") {
+		trimmed = strings.TrimPrefix(trimmed, "```")
+		if newline := strings.Index(trimmed, "\n"); newline >= 0 {
+			trimmed = trimmed[newline+1:]
+		}
+		trimmed = strings.TrimSpace(strings.TrimSuffix(trimmed, "```"))
+	}
+	return strings.TrimSpace(trimmed)
+}
+
 func aiOutputRequirements(action model.AIAction, structuredOutput bool) string {
 	if structuredOutput {
 		if action == model.AIActionPaperQA {
@@ -883,6 +1095,8 @@ func actionPromptFor(settings model.AISettings, action model.AIAction) string {
 		return settings.TagPrompt
 	case model.AIActionGroupSuggestion:
 		return settings.GroupPrompt
+	case model.AIActionTranslate:
+		return settings.TranslatePrompt
 	default:
 		return settings.QAPrompt
 	}
@@ -903,7 +1117,7 @@ func actionScopeDescription(action model.AIAction) string {
 
 func normalizeAIAction(action model.AIAction) model.AIAction {
 	switch action {
-	case model.AIActionFigureInterpretation, model.AIActionTagSuggestion, model.AIActionGroupSuggestion, model.AIActionPaperQA:
+	case model.AIActionFigureInterpretation, model.AIActionTagSuggestion, model.AIActionGroupSuggestion, model.AIActionPaperQA, model.AIActionTranslate:
 		return action
 	default:
 		return model.AIActionPaperQA

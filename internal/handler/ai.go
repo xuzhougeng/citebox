@@ -85,6 +85,22 @@ func (h *AIHandler) Read(w http.ResponseWriter, r *http.Request) {
 	sendJSON(w, http.StatusOK, result)
 }
 
+func (h *AIHandler) Translate(w http.ResponseWriter, r *http.Request) {
+	var req model.AITranslateRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		sendError(w, apperr.New(apperr.CodeInvalidArgument, "请求体格式错误"))
+		return
+	}
+
+	result, err := h.service.Translate(r.Context(), req)
+	if err != nil {
+		sendError(w, err)
+		return
+	}
+
+	sendJSON(w, http.StatusOK, result)
+}
+
 func (h *AIHandler) ReadStream(w http.ResponseWriter, r *http.Request) {
 	var req model.AIReadRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {

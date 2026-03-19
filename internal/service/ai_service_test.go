@@ -82,7 +82,12 @@ func TestAISettingsDefaultsAndPersistence(t *testing.T) {
 		FigurePrompt:    "custom figure",
 		TagPrompt:       "custom tag",
 		GroupPrompt:     "custom group",
-		SystemPrompt:    "custom system",
+		TranslatePrompt: "custom translate",
+		Translation: model.AITranslationConfig{
+			PrimaryLanguage: "中文",
+			TargetLanguage:  "英文",
+		},
+		SystemPrompt: "custom system",
 	})
 	if err != nil {
 		t.Fatalf("UpdateSettings() error = %v", err)
@@ -110,6 +115,9 @@ func TestAISettingsDefaultsAndPersistence(t *testing.T) {
 	if reloaded.Models[0].MaxOutputTokens != 900 {
 		t.Fatalf("GetSettings() reload model max_output_tokens = %d, want 900", reloaded.Models[0].MaxOutputTokens)
 	}
+	if reloaded.TranslatePrompt != "custom translate" || reloaded.Translation.PrimaryLanguage != "中文" || reloaded.Translation.TargetLanguage != "英文" {
+		t.Fatalf("GetSettings() reload translate settings = %+v, want persisted translate config", reloaded)
+	}
 }
 
 func TestResolveModelForActionUsesSceneSpecificModel(t *testing.T) {
@@ -117,13 +125,15 @@ func TestResolveModelForActionUsesSceneSpecificModel(t *testing.T) {
 	settings.Models = []model.AIModelConfig{
 		{ID: "default", Name: "Default", Provider: model.AIProviderOpenAI, APIKey: "key-1", BaseURL: "https://api.openai.com", Model: "gpt-4.1-mini"},
 		{ID: "figure", Name: "Figure", Provider: model.AIProviderAnthropic, APIKey: "key-2", BaseURL: "https://api.anthropic.com", Model: "claude-test"},
+		{ID: "translate", Name: "Translate", Provider: model.AIProviderGemini, APIKey: "key-3", BaseURL: "https://generativelanguage.googleapis.com", Model: "gemini-test"},
 	}
 	settings.SceneModels = model.AISceneModelSelection{
-		DefaultModelID: "default",
-		QAModelID:      "default",
-		FigureModelID:  "figure",
-		TagModelID:     "default",
-		GroupModelID:   "default",
+		DefaultModelID:   "default",
+		QAModelID:        "default",
+		FigureModelID:    "figure",
+		TagModelID:       "default",
+		GroupModelID:     "default",
+		TranslateModelID: "translate",
 	}
 
 	resolved, err := resolveModelForAction(settings, model.AIActionFigureInterpretation)
@@ -132,6 +142,107 @@ func TestResolveModelForActionUsesSceneSpecificModel(t *testing.T) {
 	}
 	if resolved.ID != "figure" || resolved.Provider != model.AIProviderAnthropic {
 		t.Fatalf("resolveModelForAction() = %+v, want figure-scoped model", resolved)
+	}
+
+	translated, err := resolveModelForAction(settings, model.AIActionTranslate)
+	if err != nil {
+		t.Fatalf("resolveModelForAction(translate) error = %v", err)
+	}
+	if translated.ID != "translate" || translated.Provider != model.AIProviderGemini {
+		t.Fatalf("resolveModelForAction(translate) = %+v, want translate-scoped model", translated)
+	}
+}
+
+func TestResolveTranslationDirection(t *testing.T) {
+	config := model.AITranslationConfig{
+		PrimaryLanguage: "中文",
+		TargetLanguage:  "英文",
+	}
+
+	source, target := resolveTranslationDirection(config, "这是中文句子。")
+	if source != "中文" || target != "英文" {
+		t.Fatalf("resolveTranslationDirection(chinese) = %q -> %q, want 中文 -> 英文", source, target)
+	}
+
+	source, target = resolveTranslationDirection(config, "This is an English sentence.")
+	if source != "其他语言" || target != "中文" {
+		t.Fatalf("resolveTranslationDirection(english) = %q -> %q, want 其他语言 -> 中文", source, target)
+	}
+}
+
+func TestTranslateUsesSceneModelAndReturnsTranslation(t *testing.T) {
+	_, repo, cfg := newTestService(t)
+	aiSvc := NewAIService(repo, cfg, nil)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/responses" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("ReadAll() error = %v", err)
+		}
+		bodyText := string(body)
+		if !strings.Contains(bodyText, "任务类型: translate") {
+			t.Fatalf("request body missing translate prompt: %s", bodyText)
+		}
+		if !strings.Contains(bodyText, "原文语言: 中文") {
+			t.Fatalf("request body missing source language: %s", bodyText)
+		}
+		if !strings.Contains(bodyText, "目标语言: 英文") {
+			t.Fatalf("request body missing target language: %s", bodyText)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"output_text":"Translated output"}`))
+	}))
+	defer server.Close()
+
+	if _, err := aiSvc.UpdateSettings(model.AISettings{
+		Models: []model.AIModelConfig{
+			{
+				ID:              "default",
+				Name:            "Default",
+				Provider:        model.AIProviderOpenAI,
+				APIKey:          "default-key",
+				BaseURL:         "https://api.openai.com",
+				Model:           "gpt-default",
+				MaxOutputTokens: 1200,
+			},
+			{
+				ID:              "translate",
+				Name:            "Translate",
+				Provider:        model.AIProviderOpenAI,
+				APIKey:          "translate-key",
+				BaseURL:         server.URL,
+				Model:           "gpt-translate",
+				MaxOutputTokens: 800,
+			},
+		},
+		SceneModels: model.AISceneModelSelection{
+			DefaultModelID:   "default",
+			TranslateModelID: "translate",
+		},
+		SystemPrompt:    "system",
+		TranslatePrompt: "translate prompt",
+		Translation: model.AITranslationConfig{
+			PrimaryLanguage: "中文",
+			TargetLanguage:  "英文",
+		},
+	}); err != nil {
+		t.Fatalf("UpdateSettings() error = %v", err)
+	}
+
+	result, err := aiSvc.Translate(context.Background(), model.AITranslateRequest{
+		Text: "这是一个测试。",
+	})
+	if err != nil {
+		t.Fatalf("Translate() error = %v", err)
+	}
+	if !result.Success || result.Model != "gpt-translate" || result.SourceLanguage != "中文" || result.TargetLanguage != "英文" {
+		t.Fatalf("Translate() = %+v, want translate-scoped result metadata", result)
+	}
+	if result.Translation != "Translated output" {
+		t.Fatalf("Translate() translation = %q, want translated text", result.Translation)
 	}
 }
 

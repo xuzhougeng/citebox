@@ -11,13 +11,17 @@ const SettingsPage = {
         this.figureModelSelect = document.getElementById('aiFigureModelSelect');
         this.tagModelSelect = document.getElementById('aiTagModelSelect');
         this.groupModelSelect = document.getElementById('aiGroupModelSelect');
+        this.translateModelSelect = document.getElementById('aiTranslateModelSelect');
         this.temperatureInput = document.getElementById('aiTemperatureInput');
         this.maxFiguresInput = document.getElementById('aiMaxFiguresInput');
+        this.translationPrimaryLanguageInput = document.getElementById('aiTranslationPrimaryLanguageInput');
+        this.translationTargetLanguageInput = document.getElementById('aiTranslationTargetLanguageInput');
         this.systemPromptInput = document.getElementById('aiSystemPromptInput');
         this.qaPromptInput = document.getElementById('aiQAPromptInput');
         this.figurePromptInput = document.getElementById('aiFigurePromptInput');
         this.tagPromptInput = document.getElementById('aiTagPromptInput');
         this.groupPromptInput = document.getElementById('aiGroupPromptInput');
+        this.translatePromptInput = document.getElementById('aiTranslatePromptInput');
         this.restoreAIPromptsButton = document.getElementById('restoreAIPromptsButton');
         this.aiModelModal = document.getElementById('aiModelModal');
         this.closeAIModelModalButton = document.getElementById('closeAIModelModal');
@@ -138,6 +142,9 @@ const SettingsPage = {
         this.figurePromptInput.value = settings.figure_prompt || '';
         this.tagPromptInput.value = settings.tag_prompt || '';
         this.groupPromptInput.value = settings.group_prompt || '';
+        this.translatePromptInput.value = settings.translate_prompt || '';
+        this.translationPrimaryLanguageInput.value = settings.translation?.primary_language || '中文';
+        this.translationTargetLanguageInput.value = settings.translation?.target_language || '英文';
 
         this.renderAIModels();
         this.renderSceneModelSelectors(settings.scene_models || {});
@@ -150,11 +157,16 @@ const SettingsPage = {
             scene_models: sceneModels,
             temperature: this.temperatureInput.value === '' ? 0.2 : Number(this.temperatureInput.value),
             max_figures: Number(this.maxFiguresInput.value || 0),
+            translation: {
+                primary_language: this.translationPrimaryLanguageInput.value.trim(),
+                target_language: this.translationTargetLanguageInput.value.trim()
+            },
             system_prompt: this.systemPromptInput.value.trim(),
             qa_prompt: this.qaPromptInput.value.trim(),
             figure_prompt: this.figurePromptInput.value.trim(),
             tag_prompt: this.tagPromptInput.value.trim(),
-            group_prompt: this.groupPromptInput.value.trim()
+            group_prompt: this.groupPromptInput.value.trim(),
+            translate_prompt: this.translatePromptInput.value.trim()
         };
     },
 
@@ -187,6 +199,7 @@ const SettingsPage = {
             this.figurePromptInput.value = defaults.figure_prompt || '';
             this.tagPromptInput.value = defaults.tag_prompt || '';
             this.groupPromptInput.value = defaults.group_prompt || '';
+            this.translatePromptInput.value = defaults.translate_prompt || '';
             Utils.showToast('已恢复推荐 Prompt，记得点击“保存 AI 配置”');
         } catch (error) {
             Utils.showToast(error.message, 'error');
@@ -476,7 +489,8 @@ const SettingsPage = {
             qa_model_id: selection.qa_model_id || this.qaModelSelect?.value || '',
             figure_model_id: selection.figure_model_id || this.figureModelSelect?.value || '',
             tag_model_id: selection.tag_model_id || this.tagModelSelect?.value || '',
-            group_model_id: selection.group_model_id || this.groupModelSelect?.value || ''
+            group_model_id: selection.group_model_id || this.groupModelSelect?.value || '',
+            translate_model_id: selection.translate_model_id || this.translateModelSelect?.value || ''
         };
         const options = this.aiModelDraft.map((item) => {
             const label = `${item.name || '未命名模型'} · ${item.provider || 'openai'} / ${item.model || '未填写模型名'}`;
@@ -488,7 +502,8 @@ const SettingsPage = {
             [this.qaModelSelect, safeSelection.qa_model_id],
             [this.figureModelSelect, safeSelection.figure_model_id],
             [this.tagModelSelect, safeSelection.tag_model_id],
-            [this.groupModelSelect, safeSelection.group_model_id]
+            [this.groupModelSelect, safeSelection.group_model_id],
+            [this.translateModelSelect, safeSelection.translate_model_id]
         ].forEach(([element, selectedValue], index) => {
             if (!element) return;
             element.innerHTML = options;
@@ -507,7 +522,8 @@ const SettingsPage = {
             qa_model_id: this.qaModelSelect?.value || defaultModelID,
             figure_model_id: this.figureModelSelect?.value || defaultModelID,
             tag_model_id: this.tagModelSelect?.value || defaultModelID,
-            group_model_id: this.groupModelSelect?.value || defaultModelID
+            group_model_id: this.groupModelSelect?.value || defaultModelID,
+            translate_model_id: this.translateModelSelect?.value || defaultModelID
         };
     },
 
