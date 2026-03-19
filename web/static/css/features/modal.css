@@ -57,6 +57,10 @@
     background: linear-gradient(180deg, rgba(255, 248, 246, 0.98), rgba(255, 252, 248, 0.97));
 }
 
+.dialog-box-form {
+    width: min(520px, 100%);
+}
+
 .dialog-header h3,
 .dialog-body p {
     margin: 0;
@@ -136,4 +140,35 @@
 .dialog-confirm-input {
     font-family: "SFMono-Regular", "Menlo", "Monaco", "Cascadia Mono", "Segoe UI Mono", monospace;
     letter-spacing: 0.08em;
+}
+
+.dialog-form {
+    display: grid;
+    gap: 1rem;
+}
+
+.dialog-form-description {
+    margin: 0;
+    color: var(--muted);
+    line-height: 1.65;
+}
+
+.dialog-form-fields {
+    display: grid;
+    gap: 0.9rem;
+}
+
+.dialog-form-field {
+    display: grid;
+    gap: 0.5rem;
+}
+
+.dialog-form-field span {
+    color: var(--ink);
+    font-size: 0.92rem;
+    font-weight: 600;
+}
+
+.dialog-form-color-input {
+    width: 5.5rem;
 }

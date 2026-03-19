@@ -521,6 +521,10 @@ func buildPaperWhere(filter model.PaperFilter) (string, []interface{}) {
 		conditions = append(conditions, "p.group_id = ?")
 		args = append(args, *filter.GroupID)
 	}
+	if filter.TagID != nil && *filter.TagID > 0 {
+		conditions = append(conditions, "EXISTS (SELECT 1 FROM paper_tags pt WHERE pt.paper_id = p.id AND pt.tag_id = ?)")
+		args = append(args, *filter.TagID)
+	}
 	if filter.Status != "" {
 		conditions = append(conditions, "p.extraction_status = ?")
 		args = append(args, filter.Status)

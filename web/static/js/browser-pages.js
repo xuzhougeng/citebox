@@ -480,12 +480,21 @@ const GroupsPage = {
     async editGroup(id) {
         const group = this.groups.find((item) => item.id === id);
         if (!group) return;
-        const name = window.prompt('新的分组名称', group.name);
-        if (name === null) return;
-        const description = window.prompt('新的分组说明', group.description || '');
-        if (description === null) return;
+        const values = await Utils.promptFields({
+            title: '修改分组',
+            description: '更新分组名称和说明，便于后续筛选和归类。',
+            confirmLabel: '保存分组',
+            fields: [
+                { name: 'name', label: '分组名称', value: group.name || '', required: true, placeholder: '例如：单细胞图谱' },
+                { name: 'description', label: '分组说明', value: group.description || '', placeholder: '一句话说明这个分组的用途' }
+            ]
+        });
+        if (!values) return;
         try {
-            await API.updateGroup(id, { name, description });
+            await API.updateGroup(id, {
+                name: values.name.trim(),
+                description: values.description.trim()
+            });
             Utils.showToast('分组已更新');
             await this.reload();
         } catch (error) {
@@ -507,6 +516,18 @@ const GroupsPage = {
 };
 
 const TagsPage = {
+    defaultTagColor: '#A45C40',
+    colorStorageKey: 'citebox_tag_page_color',
+    colorPresets: [
+        { value: '#A45C40', label: '陶土棕' },
+        { value: '#C97A40', label: '琥珀橙' },
+        { value: '#D4A017', label: '金黄' },
+        { value: '#6E9F5B', label: '橄榄绿' },
+        { value: '#2F7D6B', label: '青绿' },
+        { value: '#416788', label: '钢蓝' },
+        { value: '#5B5F97', label: '靛蓝' },
+        { value: '#A05C7B', label: '莓果紫' }
+    ],
     state: { scope: 'paper', selectedTagId: '', page: 1, totalPaperCount: 0, totalFigureCount: 0 },
 
     async init() {
@@ -522,6 +543,7 @@ const TagsPage = {
         this.form = document.getElementById('tagPageForm');
         this.nameInput = document.getElementById('tagPageNameInput');
         this.colorInput = document.getElementById('tagPageColorInput');
+        this.colorPresetList = document.getElementById('tagColorPresetList');
         this.creatorTitle = document.getElementById('tagCreatorTitle');
         this.creatorHint = document.getElementById('tagCreatorHint');
         this.submitButton = document.getElementById('tagPageSubmit');
@@ -531,19 +553,37 @@ const TagsPage = {
         this.scopeHint = document.getElementById('tagScopeHint');
         this.resultList = document.getElementById('tagResultList');
         this.pagination = document.getElementById('tagPagination');
+        this.contextMenu = document.getElementById('tagContextMenu');
+
+        if (!this.contextMenu) {
+            this.contextMenu = document.createElement('div');
+            this.contextMenu.id = 'tagContextMenu';
+            this.contextMenu.className = 'tag-context-menu hidden';
+            this.contextMenu.innerHTML = `
+                <button type="button" data-tag-menu-action="edit">改名</button>
+                <button type="button" class="danger" data-tag-menu-action="delete">删除</button>
+            `;
+            document.body.appendChild(this.contextMenu);
+        }
+
+        if (this.colorInput) {
+            this.colorInput.value = this.loadSavedTagColor();
+        }
     },
 
     bind() {
         this.form.addEventListener('submit', async (event) => {
             event.preventDefault();
             try {
+                const color = this.currentTagColor();
                 await API.createTag({
                     scope: this.state.scope,
                     name: this.nameInput.value.trim(),
-                    color: this.colorInput.value
+                    color
                 });
-                this.form.reset();
-                this.colorInput.value = '#A45C40';
+                this.nameInput.value = '';
+                this.setTagColor(color);
+                this.nameInput.focus();
                 Utils.showToast('标签已创建');
                 await this.reload();
             } catch (error) {
@@ -551,24 +591,64 @@ const TagsPage = {
             }
         });
 
+        this.colorPresetList?.addEventListener('click', (event) => {
+            const button = event.target.closest('[data-tag-color]');
+            if (!button) return;
+            this.setTagColor(button.dataset.tagColor);
+        });
+
+        this.colorInput?.addEventListener('input', () => {
+            this.setTagColor(this.colorInput.value);
+        });
+
         this.grid.addEventListener('click', async (event) => {
+            this.hideContextMenu();
             const card = event.target.closest('[data-tag-id]');
             if (!card) return;
-            const action = event.target.closest('[data-action]');
             const id = card.dataset.tagId;
-            if (!action) {
-                this.state.selectedTagId = id;
-                this.state.page = 1;
-                this.renderTagCards();
-                await this.loadResults();
+            this.state.selectedTagId = id;
+            this.state.page = 1;
+            this.renderTagCards();
+            await this.loadResults();
+        });
+
+        this.grid.addEventListener('contextmenu', (event) => {
+            const card = event.target.closest('[data-tag-id]');
+            const id = String(card?.dataset.tagId || '');
+            if (!card || !id) return;
+            event.preventDefault();
+            this.showContextMenu(id, event.clientX, event.clientY);
+        });
+
+        this.contextMenu.addEventListener('click', async (event) => {
+            const button = event.target.closest('[data-tag-menu-action]');
+            if (!button) return;
+            const id = Number(this.contextMenu.dataset.tagId || 0);
+            this.hideContextMenu();
+            if (!id) return;
+            if (button.dataset.tagMenuAction === 'edit') {
+                await this.editTag(id);
                 return;
             }
-            if (action.dataset.action === 'edit-tag') {
-                await this.editTag(Number(id));
+            if (button.dataset.tagMenuAction === 'delete') {
+                await this.deleteTag(id);
             }
-            if (action.dataset.action === 'delete-tag') {
-                await this.deleteTag(Number(id));
+        });
+
+        document.addEventListener('click', (event) => {
+            if (this.contextMenu.classList.contains('hidden')) return;
+            if (event.target.closest('#tagContextMenu')) return;
+            this.hideContextMenu();
+        });
+
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+                this.hideContextMenu();
             }
+        });
+
+        document.addEventListener('scroll', () => {
+            this.hideContextMenu();
         });
 
         this.scopeSwitch.addEventListener('click', async (event) => {
@@ -578,6 +658,7 @@ const TagsPage = {
             this.state.selectedTagId = '';
             this.state.page = 1;
             await this.loadTags();
+            this.hideContextMenu();
             this.renderTagCreator();
             this.renderScopeSwitch();
             this.renderTagCards();
@@ -641,6 +722,65 @@ const TagsPage = {
             : '给图片补充内容、实验类型或局部特征等检索维度。';
         this.nameInput.placeholder = isPaperScope ? '例如：review' : '例如：细胞分裂';
         this.submitButton.textContent = isPaperScope ? '创建文献标签' : '创建图片标签';
+        this.renderColorPresets();
+    },
+
+    normalizeTagColor(value) {
+        const normalized = String(value || '').trim().toUpperCase();
+        if (/^#[0-9A-F]{6}$/.test(normalized)) {
+            return normalized;
+        }
+        return this.defaultTagColor;
+    },
+
+    loadSavedTagColor() {
+        try {
+            return this.normalizeTagColor(window.localStorage.getItem(this.colorStorageKey));
+        } catch (error) {
+            return this.defaultTagColor;
+        }
+    },
+
+    currentTagColor() {
+        return this.normalizeTagColor(this.colorInput?.value || this.loadSavedTagColor());
+    },
+
+    setTagColor(color) {
+        const normalized = this.normalizeTagColor(color);
+        if (this.colorInput) {
+            this.colorInput.value = normalized;
+        }
+        try {
+            window.localStorage.setItem(this.colorStorageKey, normalized);
+        } catch (error) {
+            // Ignore storage failures and keep the current in-memory value.
+        }
+        this.syncColorPresetSelection(normalized);
+    },
+
+    renderColorPresets() {
+        if (!this.colorPresetList) return;
+        const currentColor = this.currentTagColor();
+        this.colorPresetList.innerHTML = this.colorPresets.map((preset) => `
+            <button
+                class="tag-color-preset ${preset.value === currentColor ? 'active' : ''}"
+                type="button"
+                data-tag-color="${preset.value}"
+                aria-label="${preset.label}"
+                aria-pressed="${preset.value === currentColor ? 'true' : 'false'}"
+                title="${preset.label}"
+                style="--tag-preset-color:${preset.value}"
+            ></button>
+        `).join('');
+    },
+
+    syncColorPresetSelection(color = this.currentTagColor()) {
+        if (!this.colorPresetList) return;
+        this.colorPresetList.querySelectorAll('[data-tag-color]').forEach((button) => {
+            const isActive = this.normalizeTagColor(button.dataset.tagColor) === color;
+            button.classList.toggle('active', isActive);
+            button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+        });
     },
 
     async loadGlobalCounts() {
@@ -663,21 +803,23 @@ const TagsPage = {
         const isPaperScope = this.state.scope === 'paper';
         const totalCount = isPaperScope ? this.state.totalPaperCount : this.state.totalFigureCount;
         const allCard = `
-            <article class="entity-card ${this.state.selectedTagId ? '' : 'active'}" data-tag-id="">
-                <div><h3>${isPaperScope ? '全部文献标签' : '全部图片标签'}</h3><p>${isPaperScope ? '查看所有标签下的文献' : '查看所有标签下的图片'}</p></div>
-                <strong>${totalCount}</strong>
+            <article class="entity-card tag-entity-card ${this.state.selectedTagId ? '' : 'active'}" data-tag-id="" title="点击查看全部">
+                <div class="tag-entity-main">
+                    <div class="tag-entity-chip tag-entity-chip-global">
+                        <span class="tag-entity-label">${isPaperScope ? '全部文献' : '全部图片'}</span>
+                        <span class="tag-card-count">${totalCount}</span>
+                    </div>
+                </div>
             </article>
         `;
         this.grid.innerHTML = allCard + this.tags.map((tag) => `
-            <article class="entity-card ${String(tag.id) === String(this.state.selectedTagId) ? 'active' : ''}" data-tag-id="${tag.id}">
-                <div>
-                    <h3 class="tag-line"><span class="tag-dot" style="background:${tag.color}"></span>${Utils.escapeHTML(tag.name)}</h3>
-                    <p>${isPaperScope ? `关联文献 ${tag.paper_count || 0} 篇` : `关联图片 ${tag.figure_count || 0} 张`}</p>
-                </div>
-                <div class="entity-card-actions">
-                    <strong>${isPaperScope ? (tag.paper_count || 0) : (tag.figure_count || 0)}</strong>
-                    <button class="ghost-btn" type="button" data-action="edit-tag">改名</button>
-                    <button class="ghost-btn danger" type="button" data-action="delete-tag">删除</button>
+            <article class="entity-card tag-entity-card ${String(tag.id) === String(this.state.selectedTagId) ? 'active' : ''}" data-tag-id="${tag.id}" title="点击筛选，右键可改名或删除">
+                <div class="tag-entity-main">
+                    <div class="tag-entity-chip">
+                        <span class="tag-dot" style="background:${tag.color}"></span>
+                        <span class="tag-entity-label">${Utils.escapeHTML(tag.name)}</span>
+                        <span class="tag-card-count">${isPaperScope ? (tag.paper_count || 0) : (tag.figure_count || 0)}</span>
+                    </div>
                 </div>
             </article>
         `).join('');
@@ -689,6 +831,26 @@ const TagsPage = {
         this.scopeHint.textContent = isPaperScope
             ? '这里展示带有当前标签的文献列表。'
             : '这里展示带有当前标签的图片列表。';
+    },
+
+    showContextMenu(id, clientX, clientY) {
+        if (!this.contextMenu) return;
+        this.contextMenu.dataset.tagId = String(id);
+        this.contextMenu.classList.remove('hidden');
+        this.contextMenu.style.left = '0px';
+        this.contextMenu.style.top = '0px';
+
+        const rect = this.contextMenu.getBoundingClientRect();
+        const left = Math.max(12, Math.min(clientX, window.innerWidth - rect.width - 12));
+        const top = Math.max(12, Math.min(clientY, window.innerHeight - rect.height - 12));
+        this.contextMenu.style.left = `${left}px`;
+        this.contextMenu.style.top = `${top}px`;
+    },
+
+    hideContextMenu() {
+        if (!this.contextMenu) return;
+        this.contextMenu.classList.add('hidden');
+        this.contextMenu.dataset.tagId = '';
     },
 
     pageSize() {
@@ -760,12 +922,21 @@ const TagsPage = {
     async editTag(id) {
         const tag = this.tags.find((item) => item.id === id);
         if (!tag) return;
-        const name = window.prompt('新的标签名称', tag.name);
-        if (name === null) return;
-        const color = window.prompt('新的标签颜色（HEX）', tag.color || '#A45C40');
-        if (color === null) return;
+        const values = await Utils.promptFields({
+            title: '编辑标签',
+            description: '可以同时调整标签名称和颜色。',
+            confirmLabel: '保存标签',
+            fields: [
+                { name: 'name', label: '标签名称', value: tag.name || '', required: true, placeholder: '例如：review' },
+                { name: 'color', label: '标签颜色', type: 'color', value: this.normalizeTagColor(tag.color || this.defaultTagColor), required: true }
+            ]
+        });
+        if (!values) return;
         try {
-            await API.updateTag(id, { name, color });
+            await API.updateTag(id, {
+                name: values.name.trim(),
+                color: this.normalizeTagColor(values.color)
+            });
             Utils.showToast('标签已更新');
             await this.reload();
         } catch (error) {

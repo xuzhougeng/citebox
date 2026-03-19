@@ -47,15 +47,25 @@
                 <h2 id="tagCreatorTitle">新建文献标签</h2>
                 <p id="tagCreatorHint">标签适合轻量、多维、可叠加的整理方式。</p>
             </div>
-            <form id="tagPageForm" class="manager-form inline-form">
-                <input id="tagPageNameInput" class="form-input" type="text" placeholder="例如：review">
-                <input id="tagPageColorInput" class="color-input" type="color" value="#A45C40">
-                <button id="tagPageSubmit" class="btn btn-primary" type="submit">创建文献标签</button>
+            <form id="tagPageForm" class="manager-form tag-creator-form">
+                <label class="field tag-name-field">
+                    <span>标签名称</span>
+                    <input id="tagPageNameInput" class="form-input" type="text" placeholder="例如：review" aria-label="标签名称">
+                </label>
+                <div class="field tag-color-field">
+                    <span class="field-label-text">标签颜色</span>
+                    <p class="tag-color-hint">点击常用颜色，或用左侧色块自定义。</p>
+                    <div class="tag-color-control-row">
+                        <input id="tagPageColorInput" class="color-input" type="color" value="#A45C40" aria-label="标签颜色" title="选择标签颜色">
+                        <div id="tagColorPresetList" class="tag-color-presets" role="listbox" aria-label="常用标签颜色"></div>
+                        <button id="tagPageSubmit" class="btn btn-primary tag-creator-submit" type="submit">创建文献标签</button>
+                    </div>
+                </div>
             </form>
         </section>
 
         <section class="section-stack stack-spacious">
-            <div id="tagCardGrid" class="entity-grid page-entity-grid"></div>
+            <div id="tagCardGrid" class="entity-grid page-entity-grid tag-entity-grid"></div>
             <section class="filters-card">
                 <div class="manager-head">
                     <h2 id="tagHeadline">全部文献标签下的文献</h2>

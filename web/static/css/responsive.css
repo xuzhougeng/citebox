@@ -63,8 +63,17 @@
     .compact-grid-form,
     .detail-form-grid,
     .note-lightbox-meta-grid,
-    .inline-form {
+    .inline-form,
+    .tag-creator-form {
         grid-template-columns: 1fr;
+    }
+
+    .tag-color-control-row {
+        align-items: flex-start;
+    }
+
+    .tag-creator-submit {
+        margin-left: 0;
     }
 
     .field-span-2 {
