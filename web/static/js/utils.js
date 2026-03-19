@@ -37,17 +37,18 @@ const Utils = {
     },
 
     resourceViewerURL(kind, src, back = window.location.href) {
-        const resolvedBack = this.buildResourceViewerBackURL(back);
         const params = new URLSearchParams();
         params.set('kind', String(kind || ''));
         params.set('src', String(src || ''));
-        if (resolvedBack) {
-            params.set('back', String(resolvedBack));
+        const normalizedBack = String(back || '').trim();
+        if (normalizedBack) {
+            params.set('back', normalizedBack);
         }
         return `/viewer?${params.toString()}`;
     },
 
-    buildResourceViewerBackURL(back = window.location.href) {
+    buildResourceViewerBackURL(back = window.location.href, options = {}) {
+        const { replaceCurrentHistory = false } = options;
         const normalizedBack = String(back || '').trim();
         if (!normalizedBack) {
             return '';
@@ -63,16 +64,130 @@ const Utils = {
             return normalizedBack;
         }
 
+        const resolvedBack = this.applyModalRestoreToken(normalizedBack, token);
+        if (!resolvedBack) {
+            return normalizedBack;
+        }
+
+        if (replaceCurrentHistory) {
+            this.replaceCurrentHistoryURL(resolvedBack);
+        }
+
+        return resolvedBack;
+    },
+
+    applyModalRestoreToken(back = '', token = '') {
+        const normalizedBack = String(back || '').trim();
+        const normalizedToken = String(token || '').trim();
+        if (!normalizedBack || !normalizedToken) {
+            return '';
+        }
+
         try {
             const backURL = new URL(normalizedBack, window.location.origin);
             if (backURL.origin !== window.location.origin) {
                 return normalizedBack;
             }
-            backURL.searchParams.set(this.modalRestoreParam, token);
+            backURL.searchParams.set(this.modalRestoreParam, normalizedToken);
             return `${backURL.pathname}${backURL.search}${backURL.hash}`;
         } catch (error) {
-            return normalizedBack;
+            return '';
         }
+    },
+
+    replaceCurrentHistoryURL(nextURL = '') {
+        const normalizedURL = String(nextURL || '').trim();
+        if (!normalizedURL) {
+            return false;
+        }
+
+        try {
+            const resolvedURL = new URL(normalizedURL, window.location.origin);
+            if (resolvedURL.origin !== window.location.origin) {
+                return false;
+            }
+            window.history.replaceState(window.history.state, '', `${resolvedURL.pathname}${resolvedURL.search}${resolvedURL.hash}`);
+            return true;
+        } catch (error) {
+            return false;
+        }
+    },
+
+    buildResourceViewerNavigationURL(kind, src, back = window.location.href, options = {}) {
+        const resolvedBack = this.buildResourceViewerBackURL(back, options);
+        return this.resourceViewerURL(kind, src, resolvedBack || back);
+    },
+
+    openResourceViewer(kind, src, back = window.location.href, options = {}) {
+        const targetURL = this.buildResourceViewerNavigationURL(kind, src, back, {
+            replaceCurrentHistory: true,
+            ...options
+        });
+        window.location.href = targetURL;
+        return targetURL;
+    },
+
+    parseResourceViewerNavigationURL(href = '') {
+        try {
+            const url = new URL(String(href || ''), window.location.origin);
+            if (url.origin !== window.location.origin) {
+                return null;
+            }
+
+            const pathname = (url.pathname || '').replace(/\/+$/, '') || '/';
+            if (pathname !== '/viewer') {
+                return null;
+            }
+
+            const kind = String(url.searchParams.get('kind') || '').trim();
+            const src = String(url.searchParams.get('src') || '').trim();
+            if (!kind || !src) {
+                return null;
+            }
+
+            return {
+                kind,
+                src,
+                back: String(url.searchParams.get('back') || window.location.href).trim()
+            };
+        } catch (error) {
+            return null;
+        }
+    },
+
+    bindResourceViewerLinks() {
+        if (this.resourceViewerLinksBound) {
+            return;
+        }
+
+        this.resourceViewerLinksBound = true;
+        document.addEventListener('click', (event) => {
+            if (event.defaultPrevented || event.button !== 0) {
+                return;
+            }
+            if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+                return;
+            }
+
+            const targetElement = event.target instanceof Element ? event.target : null;
+            const link = targetElement?.closest('a[href]');
+            if (!link || link.hasAttribute('download')) {
+                return;
+            }
+
+            const target = String(link.getAttribute('target') || '').trim().toLowerCase();
+            if (target && target !== '_self') {
+                return;
+            }
+
+            const resource = this.parseResourceViewerNavigationURL(link.href);
+            if (!resource) {
+                return;
+            }
+
+            event.preventDefault();
+            this.openResourceViewer(resource.kind, resource.src, resource.back);
+        });
     },
 
     captureModalRestoreState() {
@@ -146,9 +261,51 @@ const Utils = {
         }
     },
 
+    isModalRestoreStateActive(state) {
+        if (!state) {
+            return false;
+        }
+
+        const modal = String(state.modal || '').trim();
+        const paperId = Number(state.paperId);
+        const figureId = Number(state.figureId);
+
+        if (modal === 'figure-note') {
+            return typeof NoteViewer !== 'undefined'
+                && this.isVisibleModal(NoteViewer.modal)
+                && Number(NoteViewer.currentFigure?.id) === figureId
+                && Number(NoteViewer.currentFigure?.paper_id) === paperId;
+        }
+
+        if (modal === 'figure') {
+            return typeof FigureViewer !== 'undefined'
+                && this.isVisibleModal(FigureViewer.modal)
+                && Number(FigureViewer.currentFigure?.id) === figureId
+                && Number(FigureViewer.currentFigure?.paper_id) === paperId;
+        }
+
+        if (modal === 'paper-note') {
+            return typeof PaperNoteViewer !== 'undefined'
+                && this.isVisibleModal(PaperNoteViewer.modal)
+                && Number(PaperNoteViewer.paper?.id) === paperId;
+        }
+
+        if (modal === 'paper') {
+            return typeof PaperViewer !== 'undefined'
+                && this.isVisibleModal(PaperViewer.modal)
+                && Number(PaperViewer.paper?.id) === paperId;
+        }
+
+        return false;
+    },
+
     async restoreModalState(state) {
         if (!state || typeof PaperViewer === 'undefined') {
             return false;
+        }
+
+        if (this.isModalRestoreStateActive(state)) {
+            return true;
         }
 
         const paperId = Number(state.paperId);

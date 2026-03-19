@@ -135,6 +135,10 @@ const ResourceViewerPage = {
             try {
                 const backURL = new URL(back, window.location.origin);
                 if (backURL.origin === window.location.origin) {
+                    if (this.shouldUseHistoryBack(backURL)) {
+                        window.history.back();
+                        return;
+                    }
                     window.location.replace(backURL.href);
                     return;
                 }
@@ -162,6 +166,34 @@ const ResourceViewerPage = {
         }
 
         window.location.replace('/');
+    },
+
+    shouldUseHistoryBack(backURL) {
+        if (window.history.length <= 1) {
+            return false;
+        }
+
+        const referrer = String(document.referrer || '').trim();
+        if (!referrer) {
+            return false;
+        }
+
+        try {
+            const referrerURL = new URL(referrer, window.location.origin);
+            if (referrerURL.origin !== window.location.origin) {
+                return false;
+            }
+            return this.normalizeBackComparisonURL(referrerURL) === this.normalizeBackComparisonURL(backURL);
+        } catch (error) {
+            return false;
+        }
+    },
+
+    normalizeBackComparisonURL(url) {
+        const normalized = new URL(url, window.location.origin);
+        normalized.hash = '';
+        normalized.searchParams.delete('restore_modal');
+        return `${normalized.pathname}${normalized.search}`;
     },
 
     escapeHTML(value = '') {

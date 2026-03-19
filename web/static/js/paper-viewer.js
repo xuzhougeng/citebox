@@ -457,7 +457,7 @@ const PaperViewer = {
 
     async openFigurePreview(index) {
         if (typeof FigureViewer === 'undefined') {
-            window.location.href = Utils.resourceViewerURL('image', this.paper?.figures?.[index]?.image_url);
+            Utils.openResourceViewer('image', this.paper?.figures?.[index]?.image_url);
             return;
         }
 
