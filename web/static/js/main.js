@@ -79,12 +79,26 @@ const AppNavigationHotkeys = {
     }
 };
 
-document.addEventListener('DOMContentLoaded', () => {
+function restorePendingModalState() {
     const modalRestoreState = typeof Utils !== 'undefined' && typeof Utils.consumeModalRestoreState === 'function'
         ? Utils.consumeModalRestoreState()
         : null;
+
+    if (!modalRestoreState || typeof Utils === 'undefined' || typeof Utils.restoreModalState !== 'function') {
+        return;
+    }
+
+    window.setTimeout(() => {
+        void Utils.restoreModalState(modalRestoreState);
+    }, 0);
+}
+
+document.addEventListener('DOMContentLoaded', () => {
     const path = window.location.pathname;
     AppNavigationHotkeys.init();
+    if (typeof Utils !== 'undefined' && typeof Utils.bindResourceViewerLinks === 'function') {
+        Utils.bindResourceViewerLinks();
+    }
 
     if (path === '/' || path === '/index.html') {
         DashboardPage.init();
@@ -126,9 +140,9 @@ document.addEventListener('DOMContentLoaded', () => {
         SettingsPage.init();
     }
 
-    if (modalRestoreState && typeof Utils !== 'undefined' && typeof Utils.restoreModalState === 'function') {
-        window.setTimeout(() => {
-            void Utils.restoreModalState(modalRestoreState);
-        }, 0);
-    }
+    restorePendingModalState();
+});
+
+window.addEventListener('pageshow', () => {
+    restorePendingModalState();
 });
