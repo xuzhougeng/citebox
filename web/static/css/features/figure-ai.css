@@ -3,8 +3,8 @@
 .figure-lightbox-ai {
     padding: 1rem;
     border-radius: 18px;
-    background: rgba(255, 251, 245, 0.86);
-    border: 1px solid rgba(36, 27, 22, 0.08);
+    background: rgba(var(--surface-rgb), 0.86);
+    border: 1px solid rgba(var(--ink-rgb), 0.08);
 }
 
 .figure-lightbox-ai-head {
@@ -36,7 +36,7 @@
 }
 
 .figure-lightbox-ai-actions .btn.active {
-    color: #fff8f2;
+    color: var(--on-accent);
     background: linear-gradient(135deg, var(--accent), var(--accent-deep));
     border-color: transparent;
 }
@@ -45,8 +45,8 @@
     margin-top: 1rem;
     padding: 1rem;
     border-radius: 18px;
-    background: rgba(255, 252, 248, 0.88);
-    border: 1px solid rgba(36, 27, 22, 0.08);
+    background: rgba(var(--surface-rgb), 0.88);
+    border: 1px solid rgba(var(--ink-rgb), 0.08);
 }
 
 .figure-ai-result.loading {
@@ -54,13 +54,13 @@
 }
 
 .figure-ai-result.error {
-    border-color: rgba(159, 63, 52, 0.18);
-    background: rgba(159, 63, 52, 0.06);
+    border-color: rgba(var(--error-rgb), 0.18);
+    background: rgba(var(--error-rgb), 0.06);
 }
 
 .figure-ai-result.empty {
     border-style: dashed;
-    background: rgba(255, 252, 248, 0.72);
+    background: rgba(var(--surface-rgb), 0.72);
 }
 
 .figure-ai-status {
@@ -93,7 +93,7 @@
     gap: 0.45rem;
     margin-top: 0.9rem;
     padding-top: 0.9rem;
-    border-top: 1px solid rgba(36, 27, 22, 0.08);
+    border-top: 1px solid rgba(var(--ink-rgb), 0.08);
 }
 
 .figure-ai-supplement span {
@@ -117,14 +117,14 @@
 }
 
 .figure-ai-tag-button {
-    border: 1px solid rgba(36, 27, 22, 0.1);
+    border: 1px solid rgba(var(--ink-rgb), 0.1);
     cursor: pointer;
     transition: background 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
 }
 
 .figure-ai-tag-button:hover:not(:disabled) {
-    border-color: rgba(164, 92, 64, 0.28);
-    background: rgba(255, 244, 234, 0.96);
+    border-color: rgba(var(--accent-rgb), 0.28);
+    background: rgba(var(--surface-rgb), 0.96);
 }
 
 .figure-ai-tag-button.is-applied {

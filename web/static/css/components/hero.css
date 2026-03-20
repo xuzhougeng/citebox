@@ -9,10 +9,10 @@
     padding: 2rem;
     border-radius: calc(var(--radius) + 6px);
     background:
-        linear-gradient(135deg, rgba(255, 250, 244, 0.96), rgba(244, 231, 214, 0.84)),
-        linear-gradient(180deg, rgba(164, 92, 64, 0.18), transparent);
+        linear-gradient(135deg, rgba(var(--surface-rgb), 0.96), rgba(var(--bg-rgb), 0.84)),
+        linear-gradient(180deg, rgba(var(--accent-rgb), 0.18), transparent);
     box-shadow: var(--shadow);
-    border: 1px solid rgba(36, 27, 22, 0.08);
+    border: 1px solid rgba(var(--ink-rgb), 0.08);
 }
 
 .hero > :first-child {

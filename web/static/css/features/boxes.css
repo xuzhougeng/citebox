@@ -33,7 +33,7 @@
 .boxes-count {
     padding: 0.35rem 0.9rem;
     border-radius: 999px;
-    background: rgba(164, 92, 64, 0.12);
+    background: rgba(var(--accent-rgb), 0.12);
     color: var(--accent-deep);
     font-size: 0.85rem;
     font-weight: 700;
@@ -52,8 +52,8 @@
 .boxes-page-group {
     padding: 1rem 1.2rem;
     border-radius: 16px;
-    background: rgba(255, 252, 248, 0.92);
-    border: 1px solid rgba(36, 27, 22, 0.06);
+    background: rgba(var(--surface-rgb), 0.92);
+    border: 1px solid rgba(var(--ink-rgb), 0.06);
 }
 
 .boxes-page-header {
@@ -62,7 +62,7 @@
     justify-content: space-between;
     margin-bottom: 0.8rem;
     padding-bottom: 0.6rem;
-    border-bottom: 1px solid rgba(36, 27, 22, 0.08);
+    border-bottom: 1px solid rgba(var(--ink-rgb), 0.08);
 }
 
 .boxes-page-number {
@@ -85,14 +85,14 @@
 .box-item {
     padding: 0.85rem 1rem;
     border-radius: 12px;
-    background: rgba(239, 230, 215, 0.5);
-    border: 1px solid rgba(36, 27, 22, 0.06);
+    background: rgba(var(--bg-rgb), 0.5);
+    border: 1px solid rgba(var(--ink-rgb), 0.06);
     transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 
 .box-item:hover {
     transform: translateX(3px);
-    box-shadow: 0 4px 12px rgba(36, 27, 22, 0.06);
+    box-shadow: 0 4px 12px rgba(var(--ink-rgb), 0.06);
 }
 
 .box-item-header {
@@ -110,7 +110,7 @@
     justify-content: center;
     border-radius: 50%;
     background: var(--accent);
-    color: #fff;
+    color: var(--on-accent);
     font-size: 0.75rem;
     font-weight: 700;
 }
@@ -125,7 +125,7 @@
     margin-left: auto;
     padding: 0.2rem 0.6rem;
     border-radius: 999px;
-    background: rgba(79, 111, 82, 0.12);
+    background: rgba(var(--success-rgb), 0.12);
     color: var(--success);
     font-size: 0.75rem;
     font-weight: 700;
@@ -143,7 +143,7 @@
 .coord-item {
     padding: 0.25rem 0.5rem;
     border-radius: 6px;
-    background: rgba(36, 27, 22, 0.04);
+    background: rgba(var(--ink-rgb), 0.04);
 }
 
 .coord-arrow {
@@ -155,14 +155,14 @@
     margin-left: auto;
     padding: 0.2rem 0.5rem;
     border-radius: 6px;
-    background: rgba(164, 92, 64, 0.08);
+    background: rgba(var(--accent-rgb), 0.08);
     color: var(--accent-deep);
 }
 
 .box-item-text {
     margin-top: 0.6rem;
     padding-top: 0.6rem;
-    border-top: 1px dashed rgba(36, 27, 22, 0.1);
+    border-top: 1px dashed rgba(var(--ink-rgb), 0.1);
     font-size: 0.88rem;
     color: var(--ink);
     line-height: 1.6;

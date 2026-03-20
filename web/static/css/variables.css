@@ -1,4 +1,7 @@
+/* ===== Theme System ===== */
+
 :root {
+    /* --- Named Semantic Tokens --- */
     --bg: #efe6d7;
     --bg-soft: #f7f2e8;
     --panel: rgba(255, 251, 245, 0.88);
@@ -15,6 +18,177 @@
     --shadow: 0 20px 60px rgba(78, 51, 33, 0.12);
     --radius: 22px;
     --radius-sm: 16px;
+
+    /* --- RGB Component Tokens (for rgba usage across components) --- */
+    --ink-rgb: 36, 27, 22;
+    --surface-rgb: 255, 252, 248;
+    --accent-rgb: 164, 92, 64;
+    --accent-deep-rgb: 111, 54, 34;
+    --error-rgb: 159, 63, 52;
+    --info-rgb: 65, 103, 136;
+    --success-rgb: 79, 111, 82;
+    --shadow-rgb: 78, 51, 33;
+    --shadow-deep-rgb: 20, 14, 11;
+    --bg-rgb: 239, 230, 215;
+
+    /* --- Special Tokens --- */
+    --on-accent: #fff8f2;
+    --on-ink: #fff;
+    --modal-bg: #fffaf4;
+    --body-bg-1: #f6efe5;
+    --body-bg-2: #efe6d7;
+    --body-bg-3: #eadfcf;
+    --highlight: rgba(255, 255, 255, 0.5);
+    --code-bg: #2f261f;
+    --code-text: #f8efe3;
+    --code-inline-bg: #f4ece1;
+    --tooltip-bg: rgba(36, 27, 22, 0.96);
+    --tooltip-text: #fff;
+
+    /* --- Typography --- */
     --font-body: "Avenir Next", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
     --font-display: "Iowan Old Style", "Palatino Linotype", "Songti SC", serif;
+}
+
+/* ===== Light Theme ===== */
+
+[data-theme="light"] {
+    --bg: #f2f4f8;
+    --bg-soft: #f8f9fc;
+    --panel: rgba(255, 255, 255, 0.88);
+    --panel-strong: #ffffff;
+    --ink: #1c2030;
+    --muted: #5c6478;
+    --line: rgba(28, 32, 48, 0.1);
+    --accent: #3868a8;
+    --accent-deep: #1c3a68;
+    --accent-soft: rgba(56, 104, 168, 0.1);
+    --info: #3868a8;
+    --success: #2c7a44;
+    --error: #c43830;
+    --shadow: 0 20px 60px rgba(28, 32, 48, 0.07);
+
+    --ink-rgb: 28, 32, 48;
+    --surface-rgb: 255, 255, 255;
+    --accent-rgb: 56, 104, 168;
+    --accent-deep-rgb: 28, 58, 104;
+    --error-rgb: 196, 56, 48;
+    --info-rgb: 56, 104, 168;
+    --success-rgb: 44, 122, 68;
+    --shadow-rgb: 28, 32, 48;
+    --shadow-deep-rgb: 10, 12, 20;
+    --bg-rgb: 242, 244, 248;
+
+    --on-accent: #f0f4fa;
+    --on-ink: #fff;
+    --modal-bg: #ffffff;
+    --body-bg-1: #f8f9fc;
+    --body-bg-2: #f2f4f8;
+    --body-bg-3: #eaecf2;
+    --highlight: rgba(255, 255, 255, 0.7);
+    --code-bg: #1e2230;
+    --code-text: #e0dce4;
+    --code-inline-bg: #e8eaf0;
+    --tooltip-bg: rgba(28, 32, 48, 0.96);
+    --tooltip-text: #fff;
+}
+
+/* ===== Dark Theme ===== */
+
+[data-theme="dark"] {
+    --bg: #181a1e;
+    --bg-soft: #1e2228;
+    --panel: rgba(30, 34, 40, 0.88);
+    --panel-strong: #242830;
+    --ink: #dcd9d2;
+    --muted: #8a8680;
+    --line: rgba(220, 217, 210, 0.1);
+    --accent: #d4a060;
+    --accent-deep: #e8b878;
+    --accent-soft: rgba(212, 160, 96, 0.12);
+    --info: #68a4d8;
+    --success: #68ac6c;
+    --error: #d86860;
+    --shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+
+    --ink-rgb: 220, 217, 210;
+    --surface-rgb: 30, 34, 40;
+    --accent-rgb: 212, 160, 96;
+    --accent-deep-rgb: 232, 184, 120;
+    --error-rgb: 216, 104, 96;
+    --info-rgb: 104, 164, 216;
+    --success-rgb: 104, 172, 108;
+    --shadow-rgb: 0, 0, 0;
+    --shadow-deep-rgb: 0, 0, 0;
+    --bg-rgb: 24, 26, 30;
+
+    --on-accent: #181a1e;
+    --on-ink: #181a1e;
+    --modal-bg: #242830;
+    --body-bg-1: #1e2228;
+    --body-bg-2: #181a1e;
+    --body-bg-3: #14161a;
+    --highlight: rgba(255, 255, 255, 0.06);
+    --code-bg: #1a1c22;
+    --code-text: #dcd9d2;
+    --code-inline-bg: rgba(255, 255, 255, 0.06);
+    --tooltip-bg: rgba(240, 238, 232, 0.96);
+    --tooltip-text: #181a1e;
+}
+
+/* ===== Dark Theme Overrides ===== */
+
+[data-theme="dark"] .chip {
+    background: color-mix(in srgb, var(--chip-color, var(--accent)) 20%, var(--panel-strong));
+    border-color: color-mix(in srgb, var(--chip-color, var(--accent)) 35%, var(--panel-strong));
+}
+
+/* ===== Theme Transition ===== */
+
+html.theme-transition,
+html.theme-transition *,
+html.theme-transition *::before,
+html.theme-transition *::after {
+    transition: background-color 0.35s ease, color 0.35s ease, border-color 0.35s ease, box-shadow 0.35s ease, background 0.35s ease !important;
+}
+
+/* ===== Theme Switcher ===== */
+
+.theme-switcher {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.theme-dot {
+    position: relative;
+    width: 1.4rem;
+    height: 1.4rem;
+    padding: 0;
+    border: 2px solid rgba(var(--ink-rgb), 0.14);
+    border-radius: 50%;
+    background: var(--dot-bg);
+    overflow: hidden;
+    cursor: pointer;
+    transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.theme-dot::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 50%;
+    height: 100%;
+    background: var(--dot-accent);
+}
+
+.theme-dot:hover {
+    transform: scale(1.18);
+    border-color: rgba(var(--ink-rgb), 0.3);
+}
+
+.theme-dot.active {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px rgba(var(--accent-rgb), 0.28);
 }

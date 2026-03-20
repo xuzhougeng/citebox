@@ -8,9 +8,9 @@ body {
     font-family: var(--font-body);
     color: var(--ink);
     background:
-        radial-gradient(circle at top left, rgba(164, 92, 64, 0.18), transparent 22rem),
-        radial-gradient(circle at top right, rgba(79, 111, 82, 0.14), transparent 24rem),
-        linear-gradient(180deg, #f6efe5 0%, #efe6d7 45%, #eadfcf 100%);
+        radial-gradient(circle at top left, rgba(var(--accent-rgb), 0.18), transparent 22rem),
+        radial-gradient(circle at top right, rgba(var(--success-rgb), 0.14), transparent 24rem),
+        linear-gradient(180deg, var(--body-bg-1) 0%, var(--body-bg-2) 45%, var(--body-bg-3) 100%);
 }
 
 a {

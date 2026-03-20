@@ -8,10 +8,10 @@
     padding: 1.2rem 1.3rem;
     border-radius: 22px;
     background:
-        radial-gradient(circle at top right, rgba(65, 103, 136, 0.08), transparent 14rem),
-        linear-gradient(180deg, rgba(255, 253, 249, 0.96), rgba(247, 239, 229, 0.92));
-    border: 1px solid rgba(36, 27, 22, 0.08);
-    box-shadow: 0 14px 28px rgba(78, 51, 33, 0.08);
+        radial-gradient(circle at top right, rgba(var(--info-rgb), 0.08), transparent 14rem),
+        linear-gradient(180deg, rgba(var(--surface-rgb), 0.96), rgba(var(--surface-rgb), 0.92));
+    border: 1px solid rgba(var(--ink-rgb), 0.08);
+    box-shadow: 0 14px 28px rgba(var(--shadow-rgb), 0.08);
 }
 
 .library-result-meta h2 {

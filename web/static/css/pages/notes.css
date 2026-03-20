@@ -4,8 +4,8 @@
     margin-top: 1.8rem;
     padding: 1.45rem;
     border-radius: calc(var(--radius) + 6px);
-    background: linear-gradient(180deg, rgba(255, 252, 248, 0.86), rgba(244, 235, 223, 0.94));
-    border: 1px solid rgba(36, 27, 22, 0.08);
+    background: linear-gradient(180deg, rgba(var(--surface-rgb), 0.86), rgba(var(--bg-rgb), 0.94));
+    border: 1px solid rgba(var(--ink-rgb), 0.08);
     box-shadow: var(--shadow);
 }
 
@@ -35,14 +35,14 @@
     gap: 1rem;
     padding: 1rem;
     border-radius: 16px;
-    background: rgba(255, 252, 248, 0.92);
-    border: 1px solid rgba(36, 27, 22, 0.06);
+    background: rgba(var(--surface-rgb), 0.92);
+    border: 1px solid rgba(var(--ink-rgb), 0.06);
     transition: box-shadow 0.15s, border-color 0.15s;
 }
 
 .note-row:hover {
-    border-color: rgba(164, 92, 64, 0.18);
-    box-shadow: 0 4px 16px rgba(36, 27, 22, 0.06);
+    border-color: rgba(var(--accent-rgb), 0.18);
+    box-shadow: 0 4px 16px rgba(var(--ink-rgb), 0.06);
 }
 
 .note-row-paper {
@@ -57,7 +57,7 @@
     left: 0;
     width: 4px;
     border-radius: 0 999px 999px 0;
-    background: linear-gradient(180deg, rgba(164, 92, 64, 0.92), rgba(65, 103, 136, 0.82));
+    background: linear-gradient(180deg, rgba(var(--accent-rgb), 0.92), rgba(var(--info-rgb), 0.82));
 }
 
 .note-row-thumb {
@@ -69,7 +69,7 @@
     width: 80px;
     height: 80px;
     padding: 0;
-    border: 1px solid rgba(36, 27, 22, 0.08);
+    border: 1px solid rgba(var(--ink-rgb), 0.08);
     border-radius: 10px;
     overflow: hidden;
     cursor: pointer;
@@ -107,7 +107,7 @@
 }
 
 .note-row-source:hover {
-    background: rgba(164, 92, 64, 0.08);
+    background: rgba(var(--accent-rgb), 0.08);
 }
 
 .note-row-page {
@@ -128,7 +128,7 @@
 }
 
 .note-row-text:hover {
-    background: rgba(164, 92, 64, 0.06);
+    background: rgba(var(--accent-rgb), 0.06);
 }
 
 .note-row-foot {

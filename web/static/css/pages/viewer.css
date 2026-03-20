@@ -18,7 +18,7 @@
 .detail-meta-panel {
     padding: 1rem;
     border-radius: 18px;
-    background: rgba(239, 230, 215, 0.46);
+    background: rgba(var(--bg-rgb), 0.46);
     flex-wrap: wrap;
     display: flex;
     align-items: center;
@@ -40,8 +40,8 @@
 .detail-section {
     padding: 1rem;
     border-radius: 20px;
-    border: 1px solid rgba(36, 27, 22, 0.08);
-    background: rgba(255, 252, 248, 0.8);
+    border: 1px solid rgba(var(--ink-rgb), 0.08);
+    background: rgba(var(--surface-rgb), 0.8);
 }
 
 .detail-section h3 {

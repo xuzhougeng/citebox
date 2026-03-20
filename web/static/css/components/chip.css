@@ -26,17 +26,17 @@
 
 .status-pill.success {
     color: var(--success);
-    background: rgba(79, 111, 82, 0.12);
+    background: rgba(var(--success-rgb), 0.12);
 }
 
 .status-pill.error {
     color: var(--error);
-    background: rgba(159, 63, 52, 0.12);
+    background: rgba(var(--error-rgb), 0.12);
 }
 
 .status-pill.info {
     color: var(--info);
-    background: rgba(65, 103, 136, 0.12);
+    background: rgba(var(--info-rgb), 0.12);
 }
 
 .tag-pill,
@@ -54,7 +54,7 @@
 
 .tag-pill.neutral {
     color: var(--ink);
-    background: rgba(36, 27, 22, 0.08);
+    background: rgba(var(--ink-rgb), 0.08);
 }
 
 .status-badge {
@@ -63,17 +63,17 @@
 
 .status-badge.tone-success {
     color: var(--success);
-    background: rgba(79, 111, 82, 0.12);
+    background: rgba(var(--success-rgb), 0.12);
 }
 
 .status-badge.tone-error {
     color: var(--error);
-    background: rgba(159, 63, 52, 0.12);
+    background: rgba(var(--error-rgb), 0.12);
 }
 
 .status-badge.tone-info {
     color: var(--info);
-    background: rgba(65, 103, 136, 0.12);
+    background: rgba(var(--info-rgb), 0.12);
 }
 
 .tag-dot {
