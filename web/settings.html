@@ -85,6 +85,7 @@
                             <div class="submit-row">
                                 <button id="addAIModelButton" class="btn btn-outline" type="button">添加模型</button>
                             </div>
+                            <p id="aiModelAutosaveStatus" class="settings-inline-status">模型配置修改后会自动保存。</p>
 
                             <div class="manager-head">
                                 <h3>场景绑定</h3>
@@ -152,13 +153,13 @@
                     <section class="prompt-preset-panel">
                         <div class="prompt-preset-head">
                             <div>
-                                <h4>常用 Prompt 预设</h4>
-                                <p>保存当前的 System Prompt 与各场景 Prompt，方便在不同阅读角色之间快速切换。应用预设后不会自动保存当前 AI 配置。</p>
+                                <h4>角色 Prompt</h4>
+                                <p>这里保存的是可复用的角色信息，不会保存当前整套场景 Prompt。保存后可在 AI 伴读聊天框中通过 <code>@角色名</code> 直接调用。</p>
                             </div>
-                            <button id="saveCurrentPromptPresetButton" class="btn btn-outline" type="button">保存当前为预设</button>
+                            <button id="addAIRolePromptButton" class="btn btn-outline" type="button">新增角色 Prompt</button>
                         </div>
-                        <div id="aiPromptPresetList" class="prompt-preset-list">
-                            <div class="prompt-preset-empty">还没有保存常用 Prompt。先把当前配置整理好，再保存成预设。</div>
+                        <div id="aiRolePromptList" class="prompt-preset-list">
+                            <div class="prompt-preset-empty">还没有保存角色 Prompt。新增一个角色后，就可以在 AI 伴读聊天框中通过 <code>@角色名</code> 直接调用。</div>
                         </div>
                     </section>
 
@@ -428,8 +429,9 @@ User Prompt:
 
                     <div class="submit-row">
                         <button id="restoreAIPromptsButton" class="btn btn-outline" type="button">恢复推荐 Prompt</button>
-                        <button class="btn btn-primary" type="submit">保存 AI 配置</button>
+                        <button id="saveAIPromptsButton" class="btn btn-primary" type="button">保存 Prompt 配置</button>
                     </div>
+                    <p id="aiPromptSaveStatus" class="settings-inline-status">Prompt 修改后需要单独点击保存。</p>
                 </form>
             </section>
 
@@ -573,9 +575,9 @@ User Prompt:
 
                 <div id="aiModelProviderNote" class="ai-provider-note"></div>
                 <p id="aiModelCheckStatus" class="muted ai-model-check-status">尚未检查</p>
+                <p id="aiModelEditorStatus" class="settings-inline-status">修改后会自动保存。</p>
 
                 <div class="detail-actions ai-model-editor-actions">
-                    <button id="saveAIModelButton" class="btn btn-primary" type="submit">保存模型</button>
                     <button id="checkAIModelButton" class="btn btn-outline" type="button">检查模型</button>
                     <button id="deleteAIModelButton" class="btn btn-outline danger" type="button">删除模型</button>
                 </div>

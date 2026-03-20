@@ -22,8 +22,11 @@ const SettingsPage = {
         this.tagPromptInput = document.getElementById('aiTagPromptInput');
         this.groupPromptInput = document.getElementById('aiGroupPromptInput');
         this.translatePromptInput = document.getElementById('aiTranslatePromptInput');
-        this.promptPresetList = document.getElementById('aiPromptPresetList');
-        this.saveCurrentPromptPresetButton = document.getElementById('saveCurrentPromptPresetButton');
+        this.aiModelAutosaveStatus = document.getElementById('aiModelAutosaveStatus');
+        this.aiPromptSaveStatus = document.getElementById('aiPromptSaveStatus');
+        this.saveAIPromptsButton = document.getElementById('saveAIPromptsButton');
+        this.rolePromptList = document.getElementById('aiRolePromptList');
+        this.addAIRolePromptButton = document.getElementById('addAIRolePromptButton');
         this.restoreAIPromptsButton = document.getElementById('restoreAIPromptsButton');
         this.aiModelModal = document.getElementById('aiModelModal');
         this.closeAIModelModalButton = document.getElementById('closeAIModelModal');
@@ -38,6 +41,7 @@ const SettingsPage = {
         this.aiModelLegacyModeInput = document.getElementById('aiModelLegacyModeInput');
         this.aiModelProviderNote = document.getElementById('aiModelProviderNote');
         this.aiModelCheckStatus = document.getElementById('aiModelCheckStatus');
+        this.aiModelEditorStatus = document.getElementById('aiModelEditorStatus');
         this.checkAIModelButton = document.getElementById('checkAIModelButton');
         this.deleteAIModelButton = document.getElementById('deleteAIModelButton');
 
@@ -67,34 +71,34 @@ const SettingsPage = {
     },
 
     bindEvents() {
-        this.aiSettingsForm.addEventListener('submit', async (event) => {
+        this.aiSettingsForm.addEventListener('submit', (event) => {
             event.preventDefault();
-            await this.saveAISettings();
         });
-        this.addAIModelButton.addEventListener('click', () => this.addAIModel());
+        this.addAIModelButton.addEventListener('click', async () => {
+            await this.addAIModel();
+        });
         this.restoreAIPromptsButton.addEventListener('click', async () => {
             await this.restoreRecommendedPrompts();
         });
-        this.saveCurrentPromptPresetButton.addEventListener('click', async () => {
-            await this.saveCurrentPromptPreset();
+        this.saveAIPromptsButton.addEventListener('click', async () => {
+            await this.savePromptSettings();
         });
-        this.promptPresetList.addEventListener('click', async (event) => {
-            const button = event.target.closest('[data-prompt-preset-action]');
+        this.addAIRolePromptButton.addEventListener('click', async () => {
+            await this.openAIRolePromptEditor();
+        });
+        this.rolePromptList.addEventListener('click', async (event) => {
+            const button = event.target.closest('[data-role-prompt-action]');
             if (!button) return;
 
-            const presetIndex = Number(button.dataset.promptPresetIndex);
-            if (!Number.isInteger(presetIndex) || presetIndex < 0) return;
+            const rolePromptIndex = Number(button.dataset.rolePromptIndex);
+            if (!Number.isInteger(rolePromptIndex) || rolePromptIndex < 0) return;
 
-            if (button.dataset.promptPresetAction === 'apply') {
-                this.applyPromptPreset(presetIndex);
+            if (button.dataset.rolePromptAction === 'edit') {
+                await this.openAIRolePromptEditor(rolePromptIndex);
                 return;
             }
-            if (button.dataset.promptPresetAction === 'overwrite') {
-                await this.overwritePromptPreset(presetIndex);
-                return;
-            }
-            if (button.dataset.promptPresetAction === 'delete') {
-                await this.deletePromptPreset(presetIndex);
+            if (button.dataset.rolePromptAction === 'delete') {
+                await this.deleteAIRolePrompt(rolePromptIndex);
             }
         });
         this.aiModelList.addEventListener('click', (event) => {
@@ -104,18 +108,40 @@ const SettingsPage = {
         });
         this.aiModelEditorForm.addEventListener('submit', async (event) => {
             event.preventDefault();
-            await this.saveEditedAIModel();
+            await this.flushAIModelAutosave();
         });
         this.checkAIModelButton.addEventListener('click', async () => {
             await this.checkActiveAIModel();
         });
-        this.deleteAIModelButton.addEventListener('click', () => this.deleteCurrentAIModel());
-        this.aiModelProviderInput.addEventListener('change', () => this.updateAIModelModalUI());
-        this.closeAIModelModalButton.addEventListener('click', () => this.closeAIModelModal());
+        this.deleteAIModelButton.addEventListener('click', async () => {
+            await this.deleteCurrentAIModel();
+        });
+        this.aiModelProviderInput.addEventListener('change', () => {
+            this.updateAIModelModalUI();
+            this.scheduleAIModelAutosave({ immediate: true });
+        });
+        this.closeAIModelModalButton.addEventListener('click', async () => {
+            await this.closeAIModelModal();
+        });
         this.aiModelModal.addEventListener('click', (event) => {
             if (event.target === this.aiModelModal) {
                 this.closeAIModelModal();
             }
+        });
+        this.bindAIModelAutoSaveInputs();
+        this.bindAIModelEditorAutoSaveInputs();
+        [
+            this.systemPromptInput,
+            this.qaPromptInput,
+            this.figurePromptInput,
+            this.tagPromptInput,
+            this.groupPromptInput,
+            this.translatePromptInput
+        ].forEach((element) => {
+            element?.addEventListener('input', () => {
+                if (this.isHydratingAISettings) return;
+                this.setAIPromptSaveStatus('Prompt 已修改，点击“保存 Prompt 配置”后生效。', 'saving');
+            });
         });
         this.extractorSettingsForm.addEventListener('submit', async (event) => {
             event.preventDefault();
@@ -145,6 +171,57 @@ const SettingsPage = {
         });
     },
 
+    bindAIModelAutoSaveInputs() {
+        [
+            this.defaultModelSelect,
+            this.qaModelSelect,
+            this.figureModelSelect,
+            this.tagModelSelect,
+            this.groupModelSelect,
+            this.translateModelSelect
+        ].forEach((element) => {
+            element?.addEventListener('change', () => {
+                this.scheduleAIModelAutosave({ immediate: true });
+            });
+        });
+
+        [
+            this.temperatureInput,
+            this.maxFiguresInput,
+            this.translationPrimaryLanguageInput,
+            this.translationTargetLanguageInput
+        ].forEach((element) => {
+            element?.addEventListener('input', () => {
+                this.scheduleAIModelAutosave();
+            });
+            element?.addEventListener('change', () => {
+                this.scheduleAIModelAutosave({ immediate: true });
+            });
+        });
+    },
+
+    bindAIModelEditorAutoSaveInputs() {
+        [
+            this.aiModelNameInput,
+            this.aiModelProviderInput,
+            this.aiModelIdentifierInput,
+            this.aiModelMaxTokensInput,
+            this.aiModelBaseURLInput,
+            this.aiModelAPIKeyInput,
+            this.aiModelLegacyModeInput
+        ].forEach((element) => {
+            if (!element) return;
+            element.addEventListener('input', () => {
+                if (this.isHydratingAIModelEditor) return;
+                this.scheduleAIModelAutosave();
+            });
+            element.addEventListener('change', () => {
+                if (this.isHydratingAIModelEditor) return;
+                this.scheduleAIModelAutosave({ immediate: true });
+            });
+        });
+    },
+
     async bootstrap() {
         try {
             await Promise.all([this.loadAISettings(), this.loadExtractorSettings(), this.loadVersionStatus()]);
@@ -155,31 +232,67 @@ const SettingsPage = {
 
     async loadAISettings() {
         const settings = await API.getAISettings();
+        this.applyAISettings(settings, {
+            overwritePromptInputs: true,
+            overwriteRolePrompts: true
+        });
+        this.setAIModelAutosaveStatus('模型配置修改后会自动保存。');
+        this.setAIPromptSaveStatus('Prompt 修改后需要单独点击保存。');
+    },
 
+    applyAISettings(settings = {}, options = {}) {
+        const {
+            overwritePromptInputs = true,
+            overwriteRolePrompts = true
+        } = options;
+
+        this.isHydratingAISettings = true;
         this.aiModelDraft = Array.isArray(settings.models) && settings.models.length
             ? settings.models.map((item) => ({ ...item }))
             : [this.createAIModelDraft()];
-        this.promptPresetDraft = Array.isArray(settings.prompt_presets)
-            ? settings.prompt_presets.map((item) => ({ ...item }))
-            : [];
         this.temperatureInput.value = settings.temperature ?? 0.2;
         this.maxFiguresInput.value = settings.max_figures ?? 0;
+        this.translationPrimaryLanguageInput.value = settings.translation?.primary_language || '中文';
+        this.translationTargetLanguageInput.value = settings.translation?.target_language || '英文';
+
+        if (overwritePromptInputs) {
+            this.applyPromptSettingsToInputs(settings);
+        }
+        this.savedPromptSettings = this.extractPromptSettings(settings);
+        if (overwriteRolePrompts) {
+            this.rolePromptDraft = Array.isArray(settings.role_prompts)
+                ? settings.role_prompts.map((item) => ({ ...item }))
+                : [];
+        }
+
+        this.renderAIModels();
+        this.renderSceneModelSelectors(settings.scene_models || {});
+        this.renderRolePromptList();
+        this.isHydratingAISettings = false;
+    },
+
+    applyPromptSettingsToInputs(settings = {}) {
         this.systemPromptInput.value = settings.system_prompt || '';
         this.qaPromptInput.value = settings.qa_prompt || '';
         this.figurePromptInput.value = settings.figure_prompt || '';
         this.tagPromptInput.value = settings.tag_prompt || '';
         this.groupPromptInput.value = settings.group_prompt || '';
         this.translatePromptInput.value = settings.translate_prompt || '';
-        this.translationPrimaryLanguageInput.value = settings.translation?.primary_language || '中文';
-        this.translationTargetLanguageInput.value = settings.translation?.target_language || '英文';
-
-        this.renderAIModels();
-        this.renderSceneModelSelectors(settings.scene_models || {});
-        this.renderPromptPresetList();
     },
 
-    buildAISettingsPayload(options = {}) {
-        const { models = this.aiModelDraft, sceneModels = this.readSceneModelSelections() } = options;
+    extractPromptSettings(settings = {}) {
+        return {
+            system_prompt: settings.system_prompt || '',
+            qa_prompt: settings.qa_prompt || '',
+            figure_prompt: settings.figure_prompt || '',
+            tag_prompt: settings.tag_prompt || '',
+            group_prompt: settings.group_prompt || '',
+            translate_prompt: settings.translate_prompt || ''
+        };
+    },
+
+    buildAIModelSettingsPayload(options = {}) {
+        const { models = this.currentAIModelsForSave(), sceneModels = this.readSceneModelSelections() } = options;
         return {
             models: this.getAIPayloadModels(models),
             scene_models: sceneModels,
@@ -188,29 +301,121 @@ const SettingsPage = {
             translation: {
                 primary_language: this.translationPrimaryLanguageInput.value.trim(),
                 target_language: this.translationTargetLanguageInput.value.trim()
-            },
+            }
+        };
+    },
+
+    buildAIPromptSettingsPayload() {
+        return {
             system_prompt: this.systemPromptInput.value.trim(),
             qa_prompt: this.qaPromptInput.value.trim(),
             figure_prompt: this.figurePromptInput.value.trim(),
             tag_prompt: this.tagPromptInput.value.trim(),
             group_prompt: this.groupPromptInput.value.trim(),
-            translate_prompt: this.translatePromptInput.value.trim(),
-            prompt_presets: this.getPromptPresetPayload()
+            translate_prompt: this.translatePromptInput.value.trim()
         };
     },
 
-    async persistAISettings(payload, successMessage) {
-        await API.updateAISettings(payload);
-        await this.loadAISettings();
-        if (successMessage) {
-            Utils.showToast(successMessage);
+    setInlineStatus(element, message, tone = '') {
+        if (!element) return;
+        element.textContent = message || '';
+        element.classList.remove('is-success', 'is-error', 'is-saving');
+        if (tone) {
+            element.classList.add(`is-${tone}`);
         }
     },
 
-    async saveAISettings() {
-        const payload = this.buildAISettingsPayload();
+    setAIModelAutosaveStatus(message, tone = '') {
+        this.setInlineStatus(this.aiModelAutosaveStatus, message, tone);
+    },
 
-        await this.persistAISettings(payload, 'AI 配置已保存');
+    setAIPromptSaveStatus(message, tone = '') {
+        this.setInlineStatus(this.aiPromptSaveStatus, message, tone);
+    },
+
+    setAIModelEditorStatus(message, tone = '') {
+        this.setInlineStatus(this.aiModelEditorStatus, message, tone);
+    },
+
+    scheduleAIModelAutosave(options = {}) {
+        if (this.isHydratingAISettings || this.isHydratingAIModelEditor) return;
+
+        const { immediate = false } = options;
+        window.clearTimeout(this.aiModelAutosaveTimer);
+        this.setAIModelAutosaveStatus(immediate ? '模型配置保存中...' : '检测到修改，正在准备自动保存...', 'saving');
+        this.setAIModelEditorStatus('当前模型修改后会自动保存。', 'saving');
+
+        if (immediate) {
+            void this.persistAIModelSettings();
+            return;
+        }
+
+        this.aiModelAutosaveTimer = window.setTimeout(() => {
+            this.aiModelAutosaveTimer = 0;
+            void this.persistAIModelSettings();
+        }, 450);
+    },
+
+    async flushAIModelAutosave() {
+        window.clearTimeout(this.aiModelAutosaveTimer);
+        this.aiModelAutosaveTimer = 0;
+        await this.persistAIModelSettings();
+    },
+
+    async persistAIModelSettings(options = {}) {
+        if (this.isHydratingAISettings) return;
+
+        const { successMessage = '' } = options;
+        const requestID = (this.aiModelAutosaveRequestID || 0) + 1;
+        this.aiModelAutosaveRequestID = requestID;
+        this.setAIModelAutosaveStatus('模型配置保存中...', 'saving');
+        this.setAIModelEditorStatus('模型配置保存中...', 'saving');
+
+        try {
+            const response = await API.updateAIModelSettings(this.buildAIModelSettingsPayload());
+            if (requestID !== this.aiModelAutosaveRequestID) return;
+            this.applyAISettings(response.settings || {}, {
+                overwritePromptInputs: false,
+                overwriteRolePrompts: false
+            });
+            this.setAIModelAutosaveStatus('模型配置已自动保存。', 'success');
+            this.setAIModelEditorStatus('模型配置已自动保存。', 'success');
+            if (successMessage) {
+                Utils.showToast(successMessage);
+            }
+        } catch (error) {
+            if (requestID !== this.aiModelAutosaveRequestID) return;
+            this.setAIModelAutosaveStatus(`自动保存失败：${error.message}`, 'error');
+            this.setAIModelEditorStatus(`自动保存失败：${error.message}`, 'error');
+            Utils.showToast(error.message, 'error');
+        }
+    },
+
+    async savePromptSettings() {
+        const button = this.saveAIPromptsButton;
+        const originalLabel = button?.textContent || '';
+        if (button) {
+            button.disabled = true;
+            button.textContent = '保存中...';
+        }
+
+        try {
+            const response = await API.updateAIPromptSettings(this.buildAIPromptSettingsPayload());
+            this.applyAISettings(response.settings || {}, {
+                overwritePromptInputs: true,
+                overwriteRolePrompts: false
+            });
+            this.setAIPromptSaveStatus('Prompt 配置已保存。', 'success');
+            Utils.showToast('Prompt 配置已保存');
+        } catch (error) {
+            this.setAIPromptSaveStatus(`保存失败：${error.message}`, 'error');
+            Utils.showToast(error.message, 'error');
+        } finally {
+            if (button) {
+                button.disabled = false;
+                button.textContent = originalLabel || '保存 Prompt 配置';
+            }
+        }
     },
 
     async restoreRecommendedPrompts() {
@@ -223,13 +428,9 @@ const SettingsPage = {
 
         try {
             const defaults = await API.getDefaultAISettings();
-            this.systemPromptInput.value = defaults.system_prompt || '';
-            this.qaPromptInput.value = defaults.qa_prompt || '';
-            this.figurePromptInput.value = defaults.figure_prompt || '';
-            this.tagPromptInput.value = defaults.tag_prompt || '';
-            this.groupPromptInput.value = defaults.group_prompt || '';
-            this.translatePromptInput.value = defaults.translate_prompt || '';
-            Utils.showToast('已恢复推荐 Prompt，记得点击“保存 AI 配置”');
+            this.applyPromptSettingsToInputs(defaults || {});
+            this.setAIPromptSaveStatus('已恢复推荐 Prompt，点击“保存 Prompt 配置”后生效。', 'saving');
+            Utils.showToast('已恢复推荐 Prompt，记得点击“保存 Prompt 配置”');
         } catch (error) {
             Utils.showToast(error.message, 'error');
         } finally {
@@ -241,179 +442,134 @@ const SettingsPage = {
     },
 
     readCurrentPromptFields() {
-        return {
-            system_prompt: this.systemPromptInput.value.trim(),
-            qa_prompt: this.qaPromptInput.value.trim(),
-            figure_prompt: this.figurePromptInput.value.trim(),
-            tag_prompt: this.tagPromptInput.value.trim(),
-            group_prompt: this.groupPromptInput.value.trim(),
-            translate_prompt: this.translatePromptInput.value.trim()
-        };
+        return this.buildAIPromptSettingsPayload();
     },
 
-    promptPresetPayloadFromValues(name, values = {}) {
+    rolePromptPayloadFromValues(name, prompt = '') {
         return {
             name: String(name || '').trim(),
-            system_prompt: String(values.system_prompt || '').trim(),
-            qa_prompt: String(values.qa_prompt || '').trim(),
-            figure_prompt: String(values.figure_prompt || '').trim(),
-            tag_prompt: String(values.tag_prompt || '').trim(),
-            group_prompt: String(values.group_prompt || '').trim(),
-            translate_prompt: String(values.translate_prompt || '').trim()
+            prompt: String(prompt || '').trim()
         };
     },
 
-    getPromptPresetPayload() {
-        const presets = Array.isArray(this.promptPresetDraft) ? this.promptPresetDraft : [];
-        return presets.map((item) => this.promptPresetPayloadFromValues(item.name, item));
-    },
-
-    promptPresetFieldCount(preset = {}) {
-        return [
-            preset.system_prompt,
-            preset.qa_prompt,
-            preset.figure_prompt,
-            preset.tag_prompt,
-            preset.group_prompt,
-            preset.translate_prompt
-        ].filter((value) => String(value || '').trim()).length;
-    },
-
-    promptPresetExcerpt(value, fallback) {
+    rolePromptExcerpt(value, fallback) {
         const normalized = String(value || '').replace(/\s+/g, ' ').trim();
         if (!normalized) return fallback;
         return normalized.length > 72 ? `${normalized.slice(0, 72)}...` : normalized;
     },
 
-    renderPromptPresetList() {
-        if (!this.promptPresetList) return;
+    renderRolePromptList() {
+        if (!this.rolePromptList) return;
 
-        const presets = Array.isArray(this.promptPresetDraft) ? this.promptPresetDraft : [];
-        if (!presets.length) {
-            this.promptPresetList.innerHTML = '<div class="prompt-preset-empty">还没有保存常用 Prompt。先把当前配置整理好，再保存成预设。</div>';
+        const rolePrompts = Array.isArray(this.rolePromptDraft) ? this.rolePromptDraft : [];
+        if (!rolePrompts.length) {
+            this.rolePromptList.innerHTML = '<div class="prompt-preset-empty">还没有保存角色 Prompt。新增一个角色后，就可以在 AI 伴读聊天框里通过 <code>@角色名</code> 直接调用。</div>';
             return;
         }
 
-        this.promptPresetList.innerHTML = presets.map((preset, index) => {
-            const fieldCount = this.promptPresetFieldCount(preset);
+        this.rolePromptList.innerHTML = rolePrompts.map((rolePrompt, index) => {
             return `
                 <article class="prompt-preset-card">
                     <div class="prompt-preset-card-head">
                         <div>
-                            <strong>${Utils.escapeHTML(preset.name || '未命名预设')}</strong>
-                            <span>已保存 ${fieldCount} / 6 项 Prompt</span>
+                            <strong>${Utils.escapeHTML(rolePrompt.name || '未命名角色')}</strong>
+                            <span>聊天时输入 ${Utils.escapeHTML(`@${rolePrompt.name || '角色名'}`)} 即可调用</span>
                         </div>
                     </div>
                     <div class="prompt-preset-preview">
                         <div class="prompt-preset-preview-item">
-                            <span>System</span>
-                            <p>${Utils.escapeHTML(this.promptPresetExcerpt(preset.system_prompt, '留空时保存会回退到推荐 System Prompt'))}</p>
-                        </div>
-                        <div class="prompt-preset-preview-item">
-                            <span>问答</span>
-                            <p>${Utils.escapeHTML(this.promptPresetExcerpt(preset.qa_prompt, '留空时保存会回退到推荐问答 Prompt'))}</p>
-                        </div>
-                        <div class="prompt-preset-preview-item">
-                            <span>解图</span>
-                            <p>${Utils.escapeHTML(this.promptPresetExcerpt(preset.figure_prompt, '留空时保存会回退到推荐图片解读 Prompt'))}</p>
+                            <span>角色 Prompt</span>
+                            <p>${Utils.escapeHTML(this.rolePromptExcerpt(rolePrompt.prompt, '未填写角色 Prompt'))}</p>
                         </div>
                     </div>
                     <div class="prompt-preset-card-actions">
-                        <button class="btn btn-outline btn-small" type="button" data-prompt-preset-action="apply" data-prompt-preset-index="${index}">应用到当前</button>
-                        <button class="btn btn-outline btn-small" type="button" data-prompt-preset-action="overwrite" data-prompt-preset-index="${index}">用当前覆盖</button>
-                        <button class="btn btn-outline btn-small danger" type="button" data-prompt-preset-action="delete" data-prompt-preset-index="${index}">删除</button>
+                        <button class="btn btn-outline btn-small" type="button" data-role-prompt-action="edit" data-role-prompt-index="${index}">编辑</button>
+                        <button class="btn btn-outline btn-small danger" type="button" data-role-prompt-action="delete" data-role-prompt-index="${index}">删除</button>
                     </div>
                 </article>
             `;
         }).join('');
     },
 
-    applyPromptPreset(index) {
-        const preset = this.promptPresetDraft?.[index];
-        if (!preset) return;
-
-        this.systemPromptInput.value = preset.system_prompt || '';
-        this.qaPromptInput.value = preset.qa_prompt || '';
-        this.figurePromptInput.value = preset.figure_prompt || '';
-        this.tagPromptInput.value = preset.tag_prompt || '';
-        this.groupPromptInput.value = preset.group_prompt || '';
-        this.translatePromptInput.value = preset.translate_prompt || '';
-        Utils.showToast(`已应用预设：${preset.name}，记得点击“保存 AI 配置”`);
-    },
-
-    async saveCurrentPromptPreset() {
+    async openAIRolePromptEditor(index = -1) {
+        const current = index >= 0 ? this.rolePromptDraft?.[index] : null;
         const values = await Utils.promptFields({
-            title: '保存常用 Prompt',
-            description: '只保存 Prompt，不会修改当前已生效的 AI 配置。',
-            confirmLabel: '保存预设',
+            title: current ? `编辑角色 Prompt · ${current.name}` : '新建角色 Prompt',
+            description: '角色 Prompt 只保存角色信息。保存后可在 AI 伴读聊天框中输入 @角色名 直接调用。',
+            confirmLabel: current ? '保存角色' : '创建角色',
             fields: [
                 {
                     name: 'name',
-                    label: '预设名称',
+                    label: '角色名称',
                     placeholder: '例如：严格证据模式',
+                    value: current?.name || '',
+                    required: true
+                },
+                {
+                    name: 'prompt',
+                    label: '角色 Prompt',
+                    type: 'textarea',
+                    rows: 8,
+                    placeholder: '例如：你是一名严格的论文审稿人，优先指出证据链、方法缺口和结论边界。',
+                    value: current?.prompt || '',
                     required: true
                 }
             ]
         });
         if (!values) return;
 
-        const presetName = String(values.name || '').trim();
-        if (!presetName) return;
+        const roleName = String(values.name || '').trim();
+        const rolePrompt = String(values.prompt || '').trim();
+        if (!roleName || !rolePrompt) return;
 
-        const nextPreset = this.promptPresetPayloadFromValues(presetName, this.readCurrentPromptFields());
-        const existingIndex = this.findPromptPresetIndexByName(presetName);
-        let nextPresets = [...(this.promptPresetDraft || [])];
-        let successMessage = `已保存预设：${presetName}`;
+        const nextRolePrompt = this.rolePromptPayloadFromValues(roleName, rolePrompt);
+        const existingIndex = this.findAIRolePromptIndexByName(roleName);
+        const editingCurrent = index >= 0;
+        let nextRolePrompts = [...(this.rolePromptDraft || [])];
+        let successMessage = editingCurrent ? `已更新角色：${roleName}` : `已保存角色：${roleName}`;
 
-        if (existingIndex >= 0) {
-            const confirmed = await Utils.confirm(`已存在同名预设“${Utils.escapeHTML(presetName)}”，是否用当前 Prompt 覆盖？`, '覆盖 Prompt 预设');
+        if (existingIndex >= 0 && existingIndex !== index) {
+            const confirmed = await Utils.confirm(`已存在同名角色“${Utils.escapeHTML(roleName)}”，是否覆盖？`, '覆盖角色 Prompt');
             if (!confirmed) return;
-            nextPresets.splice(existingIndex, 1, nextPreset);
-            successMessage = `已更新预设：${presetName}`;
+            nextRolePrompts.splice(existingIndex, 1, nextRolePrompt);
+            if (editingCurrent && index >= 0 && index > existingIndex) {
+                nextRolePrompts.splice(index, 1);
+            }
+            successMessage = `已更新角色：${roleName}`;
+        } else if (editingCurrent && index >= 0) {
+            nextRolePrompts.splice(index, 1, nextRolePrompt);
         } else {
-            nextPresets = [nextPreset, ...nextPresets];
+            nextRolePrompts = [nextRolePrompt, ...nextRolePrompts];
         }
 
-        await this.persistPromptPresets(nextPresets, successMessage);
+        await this.persistAIRolePrompts(nextRolePrompts, successMessage);
     },
 
-    async overwritePromptPreset(index) {
-        const preset = this.promptPresetDraft?.[index];
-        if (!preset) return;
+    async deleteAIRolePrompt(index) {
+        const rolePrompt = this.rolePromptDraft?.[index];
+        if (!rolePrompt) return;
 
-        const confirmed = await Utils.confirm(`确定要用当前编辑区里的 Prompt 覆盖“${Utils.escapeHTML(preset.name)}”吗？`, '覆盖 Prompt 预设');
+        const confirmed = await Utils.confirm(`确定要删除角色“${Utils.escapeHTML(rolePrompt.name)}”吗？`, '删除角色 Prompt');
         if (!confirmed) return;
 
-        const nextPresets = [...this.promptPresetDraft];
-        nextPresets.splice(index, 1, this.promptPresetPayloadFromValues(preset.name, this.readCurrentPromptFields()));
-        await this.persistPromptPresets(nextPresets, `已更新预设：${preset.name}`);
+        const nextRolePrompts = this.rolePromptDraft.filter((_, itemIndex) => itemIndex !== index);
+        await this.persistAIRolePrompts(nextRolePrompts, `已删除角色：${rolePrompt.name}`);
     },
 
-    async deletePromptPreset(index) {
-        const preset = this.promptPresetDraft?.[index];
-        if (!preset) return;
-
-        const confirmed = await Utils.confirm(`确定要删除预设“${Utils.escapeHTML(preset.name)}”吗？`, '删除 Prompt 预设');
-        if (!confirmed) return;
-
-        const nextPresets = this.promptPresetDraft.filter((_, itemIndex) => itemIndex !== index);
-        await this.persistPromptPresets(nextPresets, `已删除预设：${preset.name}`);
-    },
-
-    findPromptPresetIndexByName(name) {
+    findAIRolePromptIndexByName(name) {
         const normalized = String(name || '').trim().toLowerCase();
         if (!normalized) return -1;
-        return (this.promptPresetDraft || []).findIndex((item) => String(item.name || '').trim().toLowerCase() === normalized);
+        return (this.rolePromptDraft || []).findIndex((item) => String(item.name || '').trim().toLowerCase() === normalized);
     },
 
-    async persistPromptPresets(nextPresets, successMessage) {
-        const response = await API.updateAIPromptPresets({
-            prompt_presets: nextPresets.map((item) => this.promptPresetPayloadFromValues(item.name, item))
+    async persistAIRolePrompts(nextRolePrompts, successMessage) {
+        const response = await API.updateAIRolePrompts({
+            role_prompts: nextRolePrompts.map((item) => this.rolePromptPayloadFromValues(item.name, item.prompt))
         });
-        this.promptPresetDraft = Array.isArray(response.prompt_presets)
-            ? response.prompt_presets.map((item) => ({ ...item }))
+        this.rolePromptDraft = Array.isArray(response.role_prompts)
+            ? response.role_prompts.map((item) => ({ ...item }))
             : [];
-        this.renderPromptPresetList();
+        this.renderRolePromptList();
         Utils.showToast(successMessage);
     },
 
@@ -575,23 +731,34 @@ const SettingsPage = {
         return `${provider} / ${modelName}`;
     },
 
-    addAIModel() {
-        this.openAIModelEditor(this.createAIModelDraft(), { isNew: true });
+    async addAIModel() {
+        const nextModel = this.createAIModelDraft();
+        const nextModels = [...(this.aiModelDraft || []), nextModel];
+        const response = await API.updateAIModelSettings(this.buildAIModelSettingsPayload({
+            models: nextModels,
+            sceneModels: this.readSceneModelSelections()
+        }));
+        this.applyAISettings(response.settings || {}, {
+            overwritePromptInputs: false,
+            overwriteRolePrompts: false
+        });
+        this.setAIModelAutosaveStatus('已新增模型。', 'success');
+        this.openAIModelEditor(nextModel.id);
+        Utils.showToast('已新增模型');
     },
 
-    openAIModelEditor(target, options = {}) {
-        const isNew = Boolean(options.isNew);
+    openAIModelEditor(target) {
         const model = typeof target === 'string'
             ? this.aiModelDraft.find((item) => item.id === target)
-            : target;
+            : (target || null);
         if (!model) return;
 
         this.activeAIModelID = model.id;
         this.renderAIModels();
 
-        this.editingAIModel = { ...model };
-        this.editingAIModelIsNew = isNew;
-        this.aiModelModalTitle.textContent = isNew ? '新增模型' : `编辑模型 · ${this.aiModelButtonTitle(model)}`;
+        this.editingAIModelID = model.id;
+        this.isHydratingAIModelEditor = true;
+        this.aiModelModalTitle.textContent = `编辑模型 · ${this.aiModelButtonTitle(model)}`;
         this.aiModelNameInput.value = model.name || '';
         this.aiModelProviderInput.value = model.provider || 'openai';
         this.aiModelIdentifierInput.value = model.model || '';
@@ -600,18 +767,20 @@ const SettingsPage = {
         this.aiModelAPIKeyInput.value = model.api_key || '';
         this.aiModelLegacyModeInput.checked = Boolean(model.openai_legacy_mode);
         this.aiModelCheckStatus.textContent = model.check_status || '尚未检查';
-        this.deleteAIModelButton.disabled = isNew || this.aiModelDraft.length <= 1;
+        this.deleteAIModelButton.disabled = this.aiModelDraft.length <= 1;
         this.updateAIModelModalUI();
+        this.setAIModelEditorStatus('修改后自动保存。');
         this.aiModelModal.classList.remove('hidden');
         document.body.classList.add('modal-open');
+        this.isHydratingAIModelEditor = false;
     },
 
-    closeAIModelModal() {
+    async closeAIModelModal() {
         if (!this.aiModelModal) return;
+        await this.flushAIModelAutosave();
         this.aiModelModal.classList.add('hidden');
         document.body.classList.remove('modal-open');
-        this.editingAIModel = null;
-        this.editingAIModelIsNew = false;
+        this.editingAIModelID = '';
         this.activeAIModelID = '';
         this.renderAIModels();
     },
@@ -628,7 +797,7 @@ const SettingsPage = {
 
     readAIModelFromModal() {
         const model = {
-            ...(this.editingAIModel || this.createAIModelDraft()),
+            ...(this.aiModelDraft.find((item) => item.id === this.editingAIModelID) || this.createAIModelDraft()),
             name: this.aiModelNameInput.value.trim(),
             provider: this.aiModelProviderInput.value,
             model: this.aiModelIdentifierInput.value.trim(),
@@ -644,21 +813,12 @@ const SettingsPage = {
         return model;
     },
 
-    async saveEditedAIModel() {
-        const model = this.readAIModelFromModal();
-        const nextModels = this.editingAIModelIsNew
-            ? [...this.aiModelDraft, model]
-            : this.aiModelDraft.map((item) => item.id === model.id ? model : item);
-        const selection = this.readSceneModelSelections();
-        const payload = this.buildAISettingsPayload({
-            models: nextModels,
-            sceneModels: selection
-        });
-
-        await this.persistAISettings(payload, '模型已保存');
-        if (!this.aiModelModal.classList.contains('hidden')) {
-            this.closeAIModelModal();
+    currentAIModelsForSave() {
+        if (!this.editingAIModelID || this.aiModelModal?.classList.contains('hidden')) {
+            return this.aiModelDraft || [];
         }
+        const model = this.readAIModelFromModal();
+        return (this.aiModelDraft || []).map((item) => item.id === model.id ? model : item);
     },
 
     async deleteAIModel(modelID) {
@@ -666,26 +826,29 @@ const SettingsPage = {
             Utils.showToast('至少需要保留一个 AI 模型', 'error');
             return;
         }
-        const selection = this.readSceneModelSelections();
         const nextModels = this.aiModelDraft.filter((item) => item.id !== modelID);
-        const payload = this.buildAISettingsPayload({
+        const response = await API.updateAIModelSettings(this.buildAIModelSettingsPayload({
             models: nextModels,
-            sceneModels: selection
+            sceneModels: this.readSceneModelSelections()
+        }));
+        this.applyAISettings(response.settings || {}, {
+            overwritePromptInputs: false,
+            overwriteRolePrompts: false
         });
-
-        await this.persistAISettings(payload, '模型已删除');
+        this.setAIModelAutosaveStatus('模型已删除。', 'success');
+        Utils.showToast('模型已删除');
     },
 
     async deleteCurrentAIModel() {
-        if (!this.editingAIModel?.id) return;
+        if (!this.editingAIModelID) return;
         if (this.aiModelDraft.length <= 1) {
             Utils.showToast('至少需要保留一个 AI 模型', 'error');
             return;
         }
 
-        await this.deleteAIModel(this.editingAIModel.id);
+        await this.deleteAIModel(this.editingAIModelID);
         if (!this.aiModelModal.classList.contains('hidden')) {
-            this.closeAIModelModal();
+            await this.closeAIModelModal();
         }
     },
 
@@ -765,9 +928,11 @@ const SettingsPage = {
             });
             const statusText = `${result.message} · ${result.provider} / ${result.model} / ${result.mode}`;
             this.aiModelCheckStatus.textContent = statusText;
+            this.setAIModelEditorStatus('模型检查通过。', 'success');
             Utils.showToast('模型检查通过');
         } catch (error) {
             this.aiModelCheckStatus.textContent = `检查失败：${error.message}`;
+            this.setAIModelEditorStatus(`模型检查失败：${error.message}`, 'error');
             Utils.showToast(error.message, 'error');
         } finally {
             this.checkAIModelButton.disabled = false;

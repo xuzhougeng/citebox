@@ -277,12 +277,32 @@ const API = {
         });
     },
 
-    getAIPromptPresets() {
-        return requestJSON(`${API_BASE}/ai/prompt-presets`);
+    updateAIModelSettings(data) {
+        return requestJSON(`${API_BASE}/ai/settings/models`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        });
     },
 
-    updateAIPromptPresets(data) {
-        return requestJSON(`${API_BASE}/ai/prompt-presets`, {
+    updateAIPromptSettings(data) {
+        return requestJSON(`${API_BASE}/ai/settings/prompts`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        });
+    },
+
+    getAIRolePrompts() {
+        return requestJSON(`${API_BASE}/ai/role-prompts`);
+    },
+
+    updateAIRolePrompts(data) {
+        return requestJSON(`${API_BASE}/ai/role-prompts`, {
             method: 'PUT',
             headers: {
                 'Content-Type': 'application/json'

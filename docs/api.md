@@ -389,7 +389,7 @@ AI 流式阅读通过：
 
 用途：
 
-- 保存 AI 设置
+- 兼容性接口：整块保存 AI 设置
 
 主要字段：
 
@@ -410,7 +410,7 @@ AI 流式阅读通过：
 - `group_prompt`
 - `translate_prompt`
 - `translation`
-- `prompt_presets`
+- `role_prompts`
 
 说明：
 
@@ -424,62 +424,110 @@ AI 流式阅读通过：
 }
 ```
 
-- `prompt_presets` 是用户自定义的常用 Prompt 预设列表；每个预设包含：
+- `role_prompts` 是用户自定义的角色 Prompt 列表；每个角色包含：
   - `name`
-  - `system_prompt`
-  - `qa_prompt`
-  - `figure_prompt`
-  - `tag_prompt`
-  - `group_prompt`
-  - `translate_prompt`
+  - `prompt`
 
-#### `GET /api/ai/prompt-presets`
+#### `PUT /api/ai/settings/models`
 
 用途：
 
-- 单独获取用户保存的常用 Prompt 预设
-
-返回：
-
-```json
-{
-  "prompt_presets": [
-    {
-      "name": "严格证据模式",
-      "system_prompt": "优先引用原文证据",
-      "qa_prompt": "先回答结论，再给证据和限制",
-      "figure_prompt": "先解释实验设计，再解释图像结论",
-      "tag_prompt": "",
-      "group_prompt": "",
-      "translate_prompt": ""
-    }
-  ]
-}
-```
-
-#### `PUT /api/ai/prompt-presets`
-
-用途：
-
-- 保存、覆盖或清空用户常用 Prompt 预设
+- 单独保存模型配置、场景绑定、温度、图片数量上限和翻译规则
 
 请求体：
 
 ```json
 {
-  "prompt_presets": [
+  "models": [
+    {
+      "id": "default-openai",
+      "name": "OpenAI Default",
+      "provider": "openai",
+      "api_key": "...",
+      "base_url": "https://api.openai.com",
+      "model": "gpt-4.1-mini",
+      "max_output_tokens": 1200,
+      "openai_legacy_mode": false
+    }
+  ],
+  "scene_models": {
+    "default_model_id": "default-openai",
+    "qa_model_id": "default-openai",
+    "figure_model_id": "default-openai",
+    "tag_model_id": "default-openai",
+    "group_model_id": "default-openai",
+    "translate_model_id": "default-openai"
+  },
+  "temperature": 0.2,
+  "max_figures": 0,
+  "translation": {
+    "primary_language": "中文",
+    "target_language": "英文"
+  }
+}
+```
+
+#### `PUT /api/ai/settings/prompts`
+
+用途：
+
+- 单独保存 Prompt 配置
+
+请求体：
+
+```json
+{
+  "system_prompt": "你是一名帮助用户阅读科研论文的 AI 助手。",
+  "qa_prompt": "请结合全文和图片回答用户问题。",
+  "figure_prompt": "优先说明图像内容、结论和局限。",
+  "tag_prompt": "优先复用已有图片标签。",
+  "group_prompt": "优先复用已有分组。",
+  "translate_prompt": "只返回译文正文。"
+}
+```
+
+#### `GET /api/ai/role-prompts`
+
+用途：
+
+- 单独获取用户保存的角色 Prompt 列表
+
+返回：
+
+```json
+{
+  "role_prompts": [
     {
       "name": "严格证据模式",
-      "system_prompt": "优先引用原文证据",
-      "qa_prompt": "先回答结论，再给证据和限制",
-      "figure_prompt": "先解释实验设计，再解释图像结论",
-      "tag_prompt": "",
-      "group_prompt": "",
-      "translate_prompt": ""
+      "prompt": "你是一名严格的论文审稿人，优先指出证据链、方法缺口和结论边界。"
     }
   ]
 }
 ```
+
+#### `PUT /api/ai/role-prompts`
+
+用途：
+
+- 保存、覆盖或清空用户角色 Prompt 列表
+
+请求体：
+
+```json
+{
+  "role_prompts": [
+    {
+      "name": "严格证据模式",
+      "prompt": "你是一名严格的论文审稿人，优先指出证据链、方法缺口和结论边界。"
+    }
+  ]
+}
+```
+
+说明：
+
+- AI 伴读聊天框支持通过 `@角色名` 直接调用已保存的角色 Prompt。
+- 旧的 `/api/ai/prompt-presets` 仍作为兼容别名保留，但语义已与 `role-prompts` 一致。
 
 #### `POST /api/ai/settings/check-model`
 

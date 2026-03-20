@@ -43,18 +43,30 @@ type AITranslationConfig struct {
 	TargetLanguage  string `json:"target_language"`
 }
 
-type AIPromptPreset struct {
-	Name            string `json:"name"`
+type AIRolePrompt struct {
+	Name   string `json:"name"`
+	Prompt string `json:"prompt"`
+}
+
+type AIRolePromptCollection struct {
+	RolePrompts []AIRolePrompt `json:"role_prompts"`
+}
+
+type AIModelSettingsUpdate struct {
+	Models      []AIModelConfig       `json:"models"`
+	SceneModels AISceneModelSelection `json:"scene_models"`
+	Temperature float64               `json:"temperature"`
+	MaxFigures  int                   `json:"max_figures"`
+	Translation AITranslationConfig   `json:"translation"`
+}
+
+type AIPromptSettingsUpdate struct {
 	SystemPrompt    string `json:"system_prompt"`
 	QAPrompt        string `json:"qa_prompt"`
 	FigurePrompt    string `json:"figure_prompt"`
 	TagPrompt       string `json:"tag_prompt"`
 	GroupPrompt     string `json:"group_prompt"`
 	TranslatePrompt string `json:"translate_prompt"`
-}
-
-type AIPromptPresetCollection struct {
-	PromptPresets []AIPromptPreset `json:"prompt_presets"`
 }
 
 type AISettings struct {
@@ -75,7 +87,7 @@ type AISettings struct {
 	GroupPrompt      string                `json:"group_prompt"`
 	TranslatePrompt  string                `json:"translate_prompt"`
 	Translation      AITranslationConfig   `json:"translation"`
-	PromptPresets    []AIPromptPreset      `json:"prompt_presets"`
+	RolePrompts      []AIRolePrompt        `json:"role_prompts"`
 }
 
 type AIReadRequest struct {
@@ -181,6 +193,6 @@ func DefaultAISettings() AISettings {
 			PrimaryLanguage: "中文",
 			TargetLanguage:  "英文",
 		},
-		PromptPresets: []AIPromptPreset{},
+		RolePrompts: []AIRolePrompt{},
 	}
 }
