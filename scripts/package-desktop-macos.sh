@@ -91,6 +91,9 @@ cat > "${CONTENTS_DIR}/Info.plist" <<EOF
 EOF
 
 if [[ -n "${CODESIGN_IDENTITY:-}" ]]; then
+    # Trim whitespace/newlines (common when pasted into CI secrets)
+    CODESIGN_IDENTITY="${CODESIGN_IDENTITY#"${CODESIGN_IDENTITY%%[![:space:]]*}"}"
+    CODESIGN_IDENTITY="${CODESIGN_IDENTITY%"${CODESIGN_IDENTITY##*[![:space:]]}"}"
     codesign --force --deep --options runtime --sign "${CODESIGN_IDENTITY}" "${APP_DIR}"
 fi
 
