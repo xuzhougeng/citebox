@@ -37,6 +37,7 @@ import (
 
 const (
 	aiSettingsKey                = "ai_settings"
+	aiPromptPresetsKey           = "ai_prompt_presets"
 	aiFigureImageMaxBytes        = 3 * 1024 * 1024
 	aiFigureImageTotalBudget     = 12 * 1024 * 1024
 	aiFigureImageMaxDimension    = 2200
@@ -109,17 +110,36 @@ func (s *AIService) GetSettings() (*model.AISettings, error) {
 	if err != nil {
 		return nil, err
 	}
+	promptPresets, err := s.GetPromptPresets()
+	if err != nil {
+		return nil, err
+	}
+	normalized.PromptPresets = promptPresets
 
 	return &normalized, nil
 }
 
 func (s *AIService) UpdateSettings(input model.AISettings) (*model.AISettings, error) {
+	savePromptPresets := input.PromptPresets != nil
+	var promptPresets []model.AIPromptPreset
+	var err error
+	if savePromptPresets {
+		promptPresets, err = normalizeAIPromptPresets(input.PromptPresets)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	input.PromptPresets = nil
 	settings, err := normalizeAISettings(input)
 	if err != nil {
 		return nil, err
 	}
 
-	payload, err := json.Marshal(settings)
+	storedSettings := settings
+	storedSettings.PromptPresets = nil
+
+	payload, err := json.Marshal(storedSettings)
 	if err != nil {
 		return nil, apperr.Wrap(apperr.CodeInternal, "序列化 AI 设置失败", err)
 	}
@@ -128,7 +148,60 @@ func (s *AIService) UpdateSettings(input model.AISettings) (*model.AISettings, e
 		return nil, err
 	}
 
+	if savePromptPresets {
+		if _, err := s.UpdatePromptPresets(promptPresets); err != nil {
+			return nil, err
+		}
+		settings.PromptPresets = promptPresets
+		return &settings, nil
+	}
+
+	existingPromptPresets, err := s.GetPromptPresets()
+	if err != nil {
+		return nil, err
+	}
+	settings.PromptPresets = existingPromptPresets
+
 	return &settings, nil
+}
+
+func (s *AIService) GetPromptPresets() ([]model.AIPromptPreset, error) {
+	raw, err := s.repo.GetAppSetting(aiPromptPresetsKey)
+	if err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(raw) == "" {
+		return []model.AIPromptPreset{}, nil
+	}
+
+	var presets []model.AIPromptPreset
+	if err := json.Unmarshal([]byte(raw), &presets); err != nil {
+		return nil, apperr.Wrap(apperr.CodeInternal, "解析 Prompt 预设失败", err)
+	}
+
+	return normalizeAIPromptPresets(presets)
+}
+
+func (s *AIService) UpdatePromptPresets(input []model.AIPromptPreset) ([]model.AIPromptPreset, error) {
+	presets, err := normalizeAIPromptPresets(input)
+	if err != nil {
+		return nil, err
+	}
+	if len(presets) == 0 {
+		if err := s.repo.DeleteAppSetting(aiPromptPresetsKey); err != nil {
+			return nil, err
+		}
+		return []model.AIPromptPreset{}, nil
+	}
+
+	payload, err := json.Marshal(presets)
+	if err != nil {
+		return nil, apperr.Wrap(apperr.CodeInternal, "序列化 Prompt 预设失败", err)
+	}
+	if err := s.repo.UpsertAppSetting(aiPromptPresetsKey, string(payload)); err != nil {
+		return nil, err
+	}
+	return presets, nil
 }
 
 func (s *AIService) CheckModel(ctx context.Context, input model.AIModelConfig) (*model.AIModelCheckResponse, error) {
@@ -622,6 +695,41 @@ func normalizeAISettings(input model.AISettings) (model.AISettings, error) {
 	settings.OpenAILegacyMode = defaultModel.OpenAILegacyMode
 
 	return settings, nil
+}
+
+func normalizeAIPromptPresets(input []model.AIPromptPreset) ([]model.AIPromptPreset, error) {
+	if len(input) == 0 {
+		return []model.AIPromptPreset{}, nil
+	}
+	if len(input) > 50 {
+		return nil, apperr.New(apperr.CodeInvalidArgument, "Prompt 预设数量不能超过 50 个")
+	}
+
+	presets := make([]model.AIPromptPreset, 0, len(input))
+	seenNames := make(map[string]struct{}, len(input))
+	for _, item := range input {
+		preset := model.AIPromptPreset{
+			Name:            strings.TrimSpace(item.Name),
+			SystemPrompt:    strings.TrimSpace(item.SystemPrompt),
+			QAPrompt:        strings.TrimSpace(item.QAPrompt),
+			FigurePrompt:    strings.TrimSpace(item.FigurePrompt),
+			TagPrompt:       strings.TrimSpace(item.TagPrompt),
+			GroupPrompt:     strings.TrimSpace(item.GroupPrompt),
+			TranslatePrompt: strings.TrimSpace(item.TranslatePrompt),
+		}
+		if preset.Name == "" {
+			return nil, apperr.New(apperr.CodeInvalidArgument, "Prompt 预设名称不能为空")
+		}
+
+		lookupKey := strings.ToLower(preset.Name)
+		if _, exists := seenNames[lookupKey]; exists {
+			return nil, apperr.New(apperr.CodeInvalidArgument, "Prompt 预设名称不能重复")
+		}
+		seenNames[lookupKey] = struct{}{}
+		presets = append(presets, preset)
+	}
+
+	return presets, nil
 }
 
 func normalizeAIModels(settings model.AISettings, defaults model.AISettings) ([]model.AIModelConfig, error) {

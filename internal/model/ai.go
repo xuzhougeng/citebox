@@ -43,6 +43,20 @@ type AITranslationConfig struct {
 	TargetLanguage  string `json:"target_language"`
 }
 
+type AIPromptPreset struct {
+	Name            string `json:"name"`
+	SystemPrompt    string `json:"system_prompt"`
+	QAPrompt        string `json:"qa_prompt"`
+	FigurePrompt    string `json:"figure_prompt"`
+	TagPrompt       string `json:"tag_prompt"`
+	GroupPrompt     string `json:"group_prompt"`
+	TranslatePrompt string `json:"translate_prompt"`
+}
+
+type AIPromptPresetCollection struct {
+	PromptPresets []AIPromptPreset `json:"prompt_presets"`
+}
+
 type AISettings struct {
 	Provider         AIProvider            `json:"provider"`
 	APIKey           string                `json:"api_key"`
@@ -61,6 +75,7 @@ type AISettings struct {
 	GroupPrompt      string                `json:"group_prompt"`
 	TranslatePrompt  string                `json:"translate_prompt"`
 	Translation      AITranslationConfig   `json:"translation"`
+	PromptPresets    []AIPromptPreset      `json:"prompt_presets"`
 }
 
 type AIReadRequest struct {
@@ -166,5 +181,6 @@ func DefaultAISettings() AISettings {
 			PrimaryLanguage: "中文",
 			TargetLanguage:  "英文",
 		},
+		PromptPresets: []AIPromptPreset{},
 	}
 }

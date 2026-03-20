@@ -22,6 +22,8 @@ const SettingsPage = {
         this.tagPromptInput = document.getElementById('aiTagPromptInput');
         this.groupPromptInput = document.getElementById('aiGroupPromptInput');
         this.translatePromptInput = document.getElementById('aiTranslatePromptInput');
+        this.promptPresetList = document.getElementById('aiPromptPresetList');
+        this.saveCurrentPromptPresetButton = document.getElementById('saveCurrentPromptPresetButton');
         this.restoreAIPromptsButton = document.getElementById('restoreAIPromptsButton');
         this.aiModelModal = document.getElementById('aiModelModal');
         this.closeAIModelModalButton = document.getElementById('closeAIModelModal');
@@ -72,6 +74,28 @@ const SettingsPage = {
         this.addAIModelButton.addEventListener('click', () => this.addAIModel());
         this.restoreAIPromptsButton.addEventListener('click', async () => {
             await this.restoreRecommendedPrompts();
+        });
+        this.saveCurrentPromptPresetButton.addEventListener('click', async () => {
+            await this.saveCurrentPromptPreset();
+        });
+        this.promptPresetList.addEventListener('click', async (event) => {
+            const button = event.target.closest('[data-prompt-preset-action]');
+            if (!button) return;
+
+            const presetIndex = Number(button.dataset.promptPresetIndex);
+            if (!Number.isInteger(presetIndex) || presetIndex < 0) return;
+
+            if (button.dataset.promptPresetAction === 'apply') {
+                this.applyPromptPreset(presetIndex);
+                return;
+            }
+            if (button.dataset.promptPresetAction === 'overwrite') {
+                await this.overwritePromptPreset(presetIndex);
+                return;
+            }
+            if (button.dataset.promptPresetAction === 'delete') {
+                await this.deletePromptPreset(presetIndex);
+            }
         });
         this.aiModelList.addEventListener('click', (event) => {
             const button = event.target.closest('[data-model-id]');
@@ -135,6 +159,9 @@ const SettingsPage = {
         this.aiModelDraft = Array.isArray(settings.models) && settings.models.length
             ? settings.models.map((item) => ({ ...item }))
             : [this.createAIModelDraft()];
+        this.promptPresetDraft = Array.isArray(settings.prompt_presets)
+            ? settings.prompt_presets.map((item) => ({ ...item }))
+            : [];
         this.temperatureInput.value = settings.temperature ?? 0.2;
         this.maxFiguresInput.value = settings.max_figures ?? 0;
         this.systemPromptInput.value = settings.system_prompt || '';
@@ -148,6 +175,7 @@ const SettingsPage = {
 
         this.renderAIModels();
         this.renderSceneModelSelectors(settings.scene_models || {});
+        this.renderPromptPresetList();
     },
 
     buildAISettingsPayload(options = {}) {
@@ -166,7 +194,8 @@ const SettingsPage = {
             figure_prompt: this.figurePromptInput.value.trim(),
             tag_prompt: this.tagPromptInput.value.trim(),
             group_prompt: this.groupPromptInput.value.trim(),
-            translate_prompt: this.translatePromptInput.value.trim()
+            translate_prompt: this.translatePromptInput.value.trim(),
+            prompt_presets: this.getPromptPresetPayload()
         };
     },
 
@@ -209,6 +238,183 @@ const SettingsPage = {
                 button.textContent = originalLabel || '恢复推荐 Prompt';
             }
         }
+    },
+
+    readCurrentPromptFields() {
+        return {
+            system_prompt: this.systemPromptInput.value.trim(),
+            qa_prompt: this.qaPromptInput.value.trim(),
+            figure_prompt: this.figurePromptInput.value.trim(),
+            tag_prompt: this.tagPromptInput.value.trim(),
+            group_prompt: this.groupPromptInput.value.trim(),
+            translate_prompt: this.translatePromptInput.value.trim()
+        };
+    },
+
+    promptPresetPayloadFromValues(name, values = {}) {
+        return {
+            name: String(name || '').trim(),
+            system_prompt: String(values.system_prompt || '').trim(),
+            qa_prompt: String(values.qa_prompt || '').trim(),
+            figure_prompt: String(values.figure_prompt || '').trim(),
+            tag_prompt: String(values.tag_prompt || '').trim(),
+            group_prompt: String(values.group_prompt || '').trim(),
+            translate_prompt: String(values.translate_prompt || '').trim()
+        };
+    },
+
+    getPromptPresetPayload() {
+        const presets = Array.isArray(this.promptPresetDraft) ? this.promptPresetDraft : [];
+        return presets.map((item) => this.promptPresetPayloadFromValues(item.name, item));
+    },
+
+    promptPresetFieldCount(preset = {}) {
+        return [
+            preset.system_prompt,
+            preset.qa_prompt,
+            preset.figure_prompt,
+            preset.tag_prompt,
+            preset.group_prompt,
+            preset.translate_prompt
+        ].filter((value) => String(value || '').trim()).length;
+    },
+
+    promptPresetExcerpt(value, fallback) {
+        const normalized = String(value || '').replace(/\s+/g, ' ').trim();
+        if (!normalized) return fallback;
+        return normalized.length > 72 ? `${normalized.slice(0, 72)}...` : normalized;
+    },
+
+    renderPromptPresetList() {
+        if (!this.promptPresetList) return;
+
+        const presets = Array.isArray(this.promptPresetDraft) ? this.promptPresetDraft : [];
+        if (!presets.length) {
+            this.promptPresetList.innerHTML = '<div class="prompt-preset-empty">还没有保存常用 Prompt。先把当前配置整理好，再保存成预设。</div>';
+            return;
+        }
+
+        this.promptPresetList.innerHTML = presets.map((preset, index) => {
+            const fieldCount = this.promptPresetFieldCount(preset);
+            return `
+                <article class="prompt-preset-card">
+                    <div class="prompt-preset-card-head">
+                        <div>
+                            <strong>${Utils.escapeHTML(preset.name || '未命名预设')}</strong>
+                            <span>已保存 ${fieldCount} / 6 项 Prompt</span>
+                        </div>
+                    </div>
+                    <div class="prompt-preset-preview">
+                        <div class="prompt-preset-preview-item">
+                            <span>System</span>
+                            <p>${Utils.escapeHTML(this.promptPresetExcerpt(preset.system_prompt, '留空时保存会回退到推荐 System Prompt'))}</p>
+                        </div>
+                        <div class="prompt-preset-preview-item">
+                            <span>问答</span>
+                            <p>${Utils.escapeHTML(this.promptPresetExcerpt(preset.qa_prompt, '留空时保存会回退到推荐问答 Prompt'))}</p>
+                        </div>
+                        <div class="prompt-preset-preview-item">
+                            <span>解图</span>
+                            <p>${Utils.escapeHTML(this.promptPresetExcerpt(preset.figure_prompt, '留空时保存会回退到推荐图片解读 Prompt'))}</p>
+                        </div>
+                    </div>
+                    <div class="prompt-preset-card-actions">
+                        <button class="btn btn-outline btn-small" type="button" data-prompt-preset-action="apply" data-prompt-preset-index="${index}">应用到当前</button>
+                        <button class="btn btn-outline btn-small" type="button" data-prompt-preset-action="overwrite" data-prompt-preset-index="${index}">用当前覆盖</button>
+                        <button class="btn btn-outline btn-small danger" type="button" data-prompt-preset-action="delete" data-prompt-preset-index="${index}">删除</button>
+                    </div>
+                </article>
+            `;
+        }).join('');
+    },
+
+    applyPromptPreset(index) {
+        const preset = this.promptPresetDraft?.[index];
+        if (!preset) return;
+
+        this.systemPromptInput.value = preset.system_prompt || '';
+        this.qaPromptInput.value = preset.qa_prompt || '';
+        this.figurePromptInput.value = preset.figure_prompt || '';
+        this.tagPromptInput.value = preset.tag_prompt || '';
+        this.groupPromptInput.value = preset.group_prompt || '';
+        this.translatePromptInput.value = preset.translate_prompt || '';
+        Utils.showToast(`已应用预设：${preset.name}，记得点击“保存 AI 配置”`);
+    },
+
+    async saveCurrentPromptPreset() {
+        const values = await Utils.promptFields({
+            title: '保存常用 Prompt',
+            description: '只保存 Prompt，不会修改当前已生效的 AI 配置。',
+            confirmLabel: '保存预设',
+            fields: [
+                {
+                    name: 'name',
+                    label: '预设名称',
+                    placeholder: '例如：严格证据模式',
+                    required: true
+                }
+            ]
+        });
+        if (!values) return;
+
+        const presetName = String(values.name || '').trim();
+        if (!presetName) return;
+
+        const nextPreset = this.promptPresetPayloadFromValues(presetName, this.readCurrentPromptFields());
+        const existingIndex = this.findPromptPresetIndexByName(presetName);
+        let nextPresets = [...(this.promptPresetDraft || [])];
+        let successMessage = `已保存预设：${presetName}`;
+
+        if (existingIndex >= 0) {
+            const confirmed = await Utils.confirm(`已存在同名预设“${Utils.escapeHTML(presetName)}”，是否用当前 Prompt 覆盖？`, '覆盖 Prompt 预设');
+            if (!confirmed) return;
+            nextPresets.splice(existingIndex, 1, nextPreset);
+            successMessage = `已更新预设：${presetName}`;
+        } else {
+            nextPresets = [nextPreset, ...nextPresets];
+        }
+
+        await this.persistPromptPresets(nextPresets, successMessage);
+    },
+
+    async overwritePromptPreset(index) {
+        const preset = this.promptPresetDraft?.[index];
+        if (!preset) return;
+
+        const confirmed = await Utils.confirm(`确定要用当前编辑区里的 Prompt 覆盖“${Utils.escapeHTML(preset.name)}”吗？`, '覆盖 Prompt 预设');
+        if (!confirmed) return;
+
+        const nextPresets = [...this.promptPresetDraft];
+        nextPresets.splice(index, 1, this.promptPresetPayloadFromValues(preset.name, this.readCurrentPromptFields()));
+        await this.persistPromptPresets(nextPresets, `已更新预设：${preset.name}`);
+    },
+
+    async deletePromptPreset(index) {
+        const preset = this.promptPresetDraft?.[index];
+        if (!preset) return;
+
+        const confirmed = await Utils.confirm(`确定要删除预设“${Utils.escapeHTML(preset.name)}”吗？`, '删除 Prompt 预设');
+        if (!confirmed) return;
+
+        const nextPresets = this.promptPresetDraft.filter((_, itemIndex) => itemIndex !== index);
+        await this.persistPromptPresets(nextPresets, `已删除预设：${preset.name}`);
+    },
+
+    findPromptPresetIndexByName(name) {
+        const normalized = String(name || '').trim().toLowerCase();
+        if (!normalized) return -1;
+        return (this.promptPresetDraft || []).findIndex((item) => String(item.name || '').trim().toLowerCase() === normalized);
+    },
+
+    async persistPromptPresets(nextPresets, successMessage) {
+        const response = await API.updateAIPromptPresets({
+            prompt_presets: nextPresets.map((item) => this.promptPresetPayloadFromValues(item.name, item))
+        });
+        this.promptPresetDraft = Array.isArray(response.prompt_presets)
+            ? response.prompt_presets.map((item) => ({ ...item }))
+            : [];
+        this.renderPromptPresetList();
+        Utils.showToast(successMessage);
     },
 
     async loadExtractorSettings() {

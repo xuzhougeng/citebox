@@ -69,6 +69,9 @@ func TestAISettingsDefaultsAndPersistence(t *testing.T) {
 	if len(defaults.Models) != 1 || defaults.SceneModels.DefaultModelID == "" {
 		t.Fatalf("GetSettings() defaults = %+v, want default model pool and scene bindings", defaults)
 	}
+	if len(defaults.PromptPresets) != 0 {
+		t.Fatalf("GetSettings() defaults prompt_presets = %+v, want empty list", defaults.PromptPresets)
+	}
 
 	updated, err := aiSvc.UpdateSettings(model.AISettings{
 		Provider:        model.AIProviderAnthropic,
@@ -117,6 +120,45 @@ func TestAISettingsDefaultsAndPersistence(t *testing.T) {
 	}
 	if reloaded.TranslatePrompt != "custom translate" || reloaded.Translation.PrimaryLanguage != "中文" || reloaded.Translation.TargetLanguage != "英文" {
 		t.Fatalf("GetSettings() reload translate settings = %+v, want persisted translate config", reloaded)
+	}
+}
+
+func TestAIPromptPresetsPersistence(t *testing.T) {
+	_, repo, cfg := newTestService(t)
+	aiSvc := NewAIService(repo, cfg, nil)
+
+	saved, err := aiSvc.UpdatePromptPresets([]model.AIPromptPreset{
+		{
+			Name:            "严格证据模式",
+			SystemPrompt:    "优先引用原文",
+			QAPrompt:        "先回答结论",
+			FigurePrompt:    "先解释设计再解释结论",
+			TagPrompt:       "优先复用已有标签",
+			GroupPrompt:     "优先复用已有分组",
+			TranslatePrompt: "只返回译文",
+		},
+	})
+	if err != nil {
+		t.Fatalf("UpdatePromptPresets() error = %v", err)
+	}
+	if len(saved) != 1 || saved[0].Name != "严格证据模式" {
+		t.Fatalf("UpdatePromptPresets() = %+v, want single normalized preset", saved)
+	}
+
+	settings, err := aiSvc.GetSettings()
+	if err != nil {
+		t.Fatalf("GetSettings() error = %v", err)
+	}
+	if len(settings.PromptPresets) != 1 || settings.PromptPresets[0].FigurePrompt != "先解释设计再解释结论" {
+		t.Fatalf("GetSettings() prompt_presets = %+v, want persisted presets", settings.PromptPresets)
+	}
+
+	reloaded, err := aiSvc.GetPromptPresets()
+	if err != nil {
+		t.Fatalf("GetPromptPresets() error = %v", err)
+	}
+	if len(reloaded) != 1 || reloaded[0].TranslatePrompt != "只返回译文" {
+		t.Fatalf("GetPromptPresets() = %+v, want persisted preset list", reloaded)
 	}
 }
 

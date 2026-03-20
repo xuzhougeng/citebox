@@ -4,9 +4,7 @@
 基础功能
 
 - [] 提取配色，配色库;
-- [] 写入笔记在图片解读过程中被禁用，因为输出时无法正常保存
 - [] github action添加macos的app的认证
-- [] 预设角色/Prompt, 自己可以保存常用的Prompt
 
 
 高级功能
@@ -26,6 +24,8 @@
 
 已完成
 
+- [x] 写入笔记在图片解读过程中应该被禁用，因为输出时无法正常保存
+- [x] 预设角色/Prompt, 自己可以保存常用的Prompt
 - [x] 桌面端支持 Windows 安装器发布和 macOS DMG 分发
 - [x] modal-dialog figure-modal-dialog 中 figure-lightbox-media 支持在这里面进行图片的缩放（中键）和拖动，和复原
 - [x] 替换已有图片这个页面里面的option value信息太多，保留第几页就行。

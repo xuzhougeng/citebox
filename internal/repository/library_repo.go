@@ -278,6 +278,11 @@ func (r *LibraryRepository) UpsertAppSetting(key, value string) error {
 	return r.Setting.UpsertAppSetting(key, value)
 }
 
+// DeleteAppSetting 删除应用设置（委托给 Setting 仓库）
+func (r *LibraryRepository) DeleteAppSetting(key string) error {
+	return r.Setting.DeleteAppSetting(key)
+}
+
 // 辅助函数（从原文件保留）
 
 func wrapDBError(err error, message string) error {

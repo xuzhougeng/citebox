@@ -34,6 +34,18 @@ func (h *AIHandler) GetDefaultSettings(w http.ResponseWriter, r *http.Request) {
 	sendJSON(w, http.StatusOK, model.DefaultAISettings())
 }
 
+func (h *AIHandler) GetPromptPresets(w http.ResponseWriter, r *http.Request) {
+	promptPresets, err := h.service.GetPromptPresets()
+	if err != nil {
+		sendError(w, err)
+		return
+	}
+
+	sendJSON(w, http.StatusOK, model.AIPromptPresetCollection{
+		PromptPresets: promptPresets,
+	})
+}
+
 func (h *AIHandler) UpdateSettings(w http.ResponseWriter, r *http.Request) {
 	var req model.AISettings
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -50,6 +62,25 @@ func (h *AIHandler) UpdateSettings(w http.ResponseWriter, r *http.Request) {
 	sendJSON(w, http.StatusOK, map[string]interface{}{
 		"success":  true,
 		"settings": settings,
+	})
+}
+
+func (h *AIHandler) UpdatePromptPresets(w http.ResponseWriter, r *http.Request) {
+	var req model.AIPromptPresetCollection
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		sendError(w, apperr.New(apperr.CodeInvalidArgument, "请求体格式错误"))
+		return
+	}
+
+	promptPresets, err := h.service.UpdatePromptPresets(req.PromptPresets)
+	if err != nil {
+		sendError(w, err)
+		return
+	}
+
+	sendJSON(w, http.StatusOK, map[string]interface{}{
+		"success":        true,
+		"prompt_presets": promptPresets,
 	})
 }
 
