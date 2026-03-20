@@ -866,7 +866,49 @@ const FigureViewer = {
         }
     },
 
+    isCurrentAINoteWriteDisabled(kind) {
+        if (kind !== 'answer') return false;
+        const figureID = Number(this.currentFigure?.id || 0);
+        return Boolean(
+            this.aiRequestState?.loading
+            && this.aiRequestState.figureID === figureID
+            && this.aiRequestState.action === 'figure_interpretation'
+        );
+    },
+
+    aiNoteWriteDisabledReason(kind) {
+        if (!this.isCurrentAINoteWriteDisabled(kind)) return '';
+        return '图片解读输出中，完成后才能写入笔记';
+    },
+
+    renderAIHeadActions(options = {}) {
+        const {
+            copyKind = '',
+            noteKind = '',
+            disableNote = false,
+            noteTitle = ''
+        } = options;
+        const buttons = [];
+
+        if (copyKind) {
+            buttons.push(`<button class="btn btn-outline btn-small" type="button" data-figure-ai-copy="${Utils.escapeHTML(copyKind)}">复制</button>`);
+        }
+        if (noteKind) {
+            const titleAttr = noteTitle ? ` title="${Utils.escapeHTML(noteTitle)}"` : '';
+            buttons.push(`<button class="btn btn-outline btn-small" type="button" data-figure-ai-note="${Utils.escapeHTML(noteKind)}" ${disableNote ? 'disabled' : ''}${titleAttr}>写入笔记</button>`);
+        }
+
+        if (!buttons.length) return '';
+        return `<div class="figure-ai-head-actions">${buttons.join('')}</div>`;
+    },
+
     async appendAIResultToNotes(kind) {
+        const disabledReason = this.aiNoteWriteDisabledReason(kind);
+        if (disabledReason) {
+            Utils.showToast(disabledReason, 'info');
+            return;
+        }
+
         const text = this.copyTextForCurrentResult(kind);
         if (!text) {
             Utils.showToast('当前没有可写入笔记的内容', 'error');
@@ -937,7 +979,11 @@ const FigureViewer = {
         if (isLoading && requestState.waitingForContent) {
             const fallback = this.currentAIResult();
             if (fallback) {
-                return this.renderAICachedResult(fallback, currentTagNames, true);
+                return this.renderAICachedResult(fallback, currentTagNames, {
+                    isWaiting: true,
+                    disableNote: this.isCurrentAINoteWriteDisabled('answer'),
+                    noteTitle: this.aiNoteWriteDisabledReason('answer')
+                });
             }
             return `
                 <div class="figure-ai-result loading">
@@ -954,12 +1000,14 @@ const FigureViewer = {
                 <div class="figure-ai-result loading">
                     <div class="figure-ai-head">
                         <p class="figure-ai-status">${Utils.escapeHTML(activeLabel)}进行中</p>
-                        ${requestState.answer ? `
-                            <div class="figure-ai-head-actions">
-                                <button class="btn btn-outline btn-small" type="button" data-figure-ai-copy="answer">复制</button>
-                                <button class="btn btn-outline btn-small" type="button" data-figure-ai-note="answer">写入笔记</button>
-                            </div>
-                        ` : ''}
+                        ${requestState.answer
+                            ? this.renderAIHeadActions({
+                                copyKind: 'answer',
+                                noteKind: 'answer',
+                                disableNote: this.isCurrentAINoteWriteDisabled('answer'),
+                                noteTitle: this.aiNoteWriteDisabledReason('answer')
+                            })
+                            : ''}
                     </div>
                     <div class="figure-ai-answer">${Utils.escapeHTML(requestState.answer || '正在结合全文、摘要、标签和图片生成结果。')}</div>
                     <div class="figure-ai-stream-actions">
@@ -986,12 +1034,12 @@ const FigureViewer = {
                 <div class="figure-ai-result">
                     <div class="figure-ai-head">
                         <p class="figure-ai-status">${Utils.escapeHTML(activeLabel)}已停止</p>
-                        ${requestState.answer ? `
-                            <div class="figure-ai-head-actions">
-                                <button class="btn btn-outline btn-small" type="button" data-figure-ai-copy="answer">复制</button>
-                                <button class="btn btn-outline btn-small" type="button" data-figure-ai-note="answer">写入笔记</button>
-                            </div>
-                        ` : ''}
+                        ${requestState.answer
+                            ? this.renderAIHeadActions({
+                                copyKind: 'answer',
+                                noteKind: 'answer'
+                            })
+                            : ''}
                     </div>
                     <div class="figure-ai-answer">${Utils.escapeHTML(requestState.answer || '这次解读已被手动停止。')}</div>
                 </div>
@@ -1008,10 +1056,19 @@ const FigureViewer = {
             `;
         }
 
-        return this.renderAICachedResult(result, currentTagNames, false);
+        return this.renderAICachedResult(result, currentTagNames, {
+            isWaiting: false,
+            disableNote: this.isCurrentAINoteWriteDisabled('answer'),
+            noteTitle: this.aiNoteWriteDisabledReason('answer')
+        });
     },
 
-    renderAICachedResult(result, currentTagNames, isWaiting) {
+    renderAICachedResult(result, currentTagNames, options = {}) {
+        const {
+            isWaiting = false,
+            disableNote = false,
+            noteTitle = ''
+        } = options;
         const tags = (result.suggested_tags || []).map((tag) => `
             <button class="tag-pill neutral figure-ai-tag-button ${currentTagNames.has(tag.trim().toLowerCase()) ? 'is-applied' : ''}" type="button" data-figure-meta-action="apply-tag" data-tag-name="${Utils.escapeHTML(tag)}" ${currentTagNames.has(tag.trim().toLowerCase()) ? 'disabled' : ''}>
                 ${Utils.escapeHTML(tag)}
@@ -1022,12 +1079,14 @@ const FigureViewer = {
             <div class="figure-ai-result ${isWaiting ? 'loading' : ''}">
                 <div class="figure-ai-head">
                     <p class="figure-ai-status">${Utils.escapeHTML(this.aiActionLabel(result.action))} · ${Utils.escapeHTML(result.provider)} · ${Utils.escapeHTML(result.model)} · ${Utils.escapeHTML(result.mode)}${isWaiting ? ' · 加载中' : ''}</p>
-                    ${result.answer ? `
-                        <div class="figure-ai-head-actions">
-                            <button class="btn btn-outline btn-small" type="button" data-figure-ai-copy="answer">复制</button>
-                            <button class="btn btn-outline btn-small" type="button" data-figure-ai-note="answer">写入笔记</button>
-                        </div>
-                    ` : ''}
+                    ${result.answer
+                        ? this.renderAIHeadActions({
+                            copyKind: 'answer',
+                            noteKind: 'answer',
+                            disableNote,
+                            noteTitle
+                        })
+                        : ''}
                 </div>
                 <div class="figure-ai-answer">${Utils.escapeHTML(result.answer || '模型没有返回文本结果。')}</div>
                 ${(result.suggested_tags || []).length ? `

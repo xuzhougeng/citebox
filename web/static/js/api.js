@@ -277,6 +277,20 @@ const API = {
         });
     },
 
+    getAIPromptPresets() {
+        return requestJSON(`${API_BASE}/ai/prompt-presets`);
+    },
+
+    updateAIPromptPresets(data) {
+        return requestJSON(`${API_BASE}/ai/prompt-presets`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        });
+    },
+
     checkAIModel(data) {
         return requestJSON(`${API_BASE}/ai/settings/check-model`, {
             method: 'POST',

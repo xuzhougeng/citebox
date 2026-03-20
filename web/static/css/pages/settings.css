@@ -154,6 +154,113 @@ details[open] > .settings-subsection-toggle::after {
     background: rgba(var(--surface-rgb), 0.88);
 }
 
+.prompt-preset-panel {
+    display: grid;
+    gap: 0.9rem;
+    padding: 1rem 1.05rem 1.05rem;
+    border-radius: 22px;
+    border: 1px solid rgba(var(--ink-rgb), 0.08);
+    background:
+        radial-gradient(circle at top left, rgba(var(--accent-rgb), 0.08), transparent 12rem),
+        linear-gradient(180deg, rgba(var(--surface-rgb), 0.96), rgba(var(--surface-rgb), 0.92));
+    box-shadow: 0 14px 28px rgba(var(--shadow-rgb), 0.05);
+}
+
+.prompt-preset-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    align-items: flex-start;
+}
+
+.prompt-preset-head h4 {
+    margin: 0;
+    font-size: 1rem;
+    font-family: var(--font-display);
+}
+
+.prompt-preset-head p {
+    margin: 0.35rem 0 0;
+    color: var(--muted);
+    line-height: 1.6;
+}
+
+.prompt-preset-list {
+    display: grid;
+    gap: 0.8rem;
+}
+
+.prompt-preset-empty {
+    padding: 1rem 1.05rem;
+    border-radius: 16px;
+    border: 1px dashed rgba(var(--ink-rgb), 0.14);
+    color: var(--muted);
+    background: rgba(var(--surface-rgb), 0.72);
+}
+
+.prompt-preset-card {
+    display: grid;
+    gap: 0.85rem;
+    padding: 0.95rem 1rem;
+    border-radius: 18px;
+    border: 1px solid rgba(var(--ink-rgb), 0.08);
+    background: rgba(var(--surface-rgb), 0.84);
+}
+
+.prompt-preset-card-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    align-items: flex-start;
+}
+
+.prompt-preset-card-head strong {
+    display: block;
+    color: var(--ink);
+}
+
+.prompt-preset-card-head span {
+    display: block;
+    margin-top: 0.2rem;
+    color: var(--muted);
+    font-size: 0.9rem;
+}
+
+.prompt-preset-preview {
+    display: grid;
+    gap: 0.6rem;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.prompt-preset-preview-item {
+    padding: 0.75rem 0.8rem;
+    border-radius: 14px;
+    background: rgba(var(--surface-rgb), 0.9);
+    border: 1px solid rgba(var(--ink-rgb), 0.06);
+}
+
+.prompt-preset-preview-item span {
+    display: inline-flex;
+    margin-bottom: 0.35rem;
+    color: var(--muted);
+    font-size: 0.82rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+}
+
+.prompt-preset-preview-item p {
+    margin: 0;
+    color: var(--ink);
+    font-size: 0.9rem;
+    line-height: 1.55;
+}
+
+.prompt-preset-card-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+}
+
 .prompt-template-details {
     border-top: 1px solid rgba(var(--ink-rgb), 0.08);
     padding-top: 0.75rem;

@@ -22,6 +22,7 @@
   - 分组：`/api/groups`
   - 标签：`/api/tags`
   - AI：`/api/ai/...`
+    - 包括 `/api/ai/prompt-presets`
     - 包括 `/api/ai/translate`
   - 版本检查：`/api/settings/version`
   - 提取器设置：`/api/settings/extractor`
@@ -409,6 +410,7 @@ AI 流式阅读通过：
 - `group_prompt`
 - `translate_prompt`
 - `translation`
+- `prompt_presets`
 
 说明：
 
@@ -419,6 +421,63 @@ AI 流式阅读通过：
 {
   "primary_language": "中文",
   "target_language": "英文"
+}
+```
+
+- `prompt_presets` 是用户自定义的常用 Prompt 预设列表；每个预设包含：
+  - `name`
+  - `system_prompt`
+  - `qa_prompt`
+  - `figure_prompt`
+  - `tag_prompt`
+  - `group_prompt`
+  - `translate_prompt`
+
+#### `GET /api/ai/prompt-presets`
+
+用途：
+
+- 单独获取用户保存的常用 Prompt 预设
+
+返回：
+
+```json
+{
+  "prompt_presets": [
+    {
+      "name": "严格证据模式",
+      "system_prompt": "优先引用原文证据",
+      "qa_prompt": "先回答结论，再给证据和限制",
+      "figure_prompt": "先解释实验设计，再解释图像结论",
+      "tag_prompt": "",
+      "group_prompt": "",
+      "translate_prompt": ""
+    }
+  ]
+}
+```
+
+#### `PUT /api/ai/prompt-presets`
+
+用途：
+
+- 保存、覆盖或清空用户常用 Prompt 预设
+
+请求体：
+
+```json
+{
+  "prompt_presets": [
+    {
+      "name": "严格证据模式",
+      "system_prompt": "优先引用原文证据",
+      "qa_prompt": "先回答结论，再给证据和限制",
+      "figure_prompt": "先解释实验设计，再解释图像结论",
+      "tag_prompt": "",
+      "group_prompt": "",
+      "translate_prompt": ""
+    }
+  ]
 }
 ```
 

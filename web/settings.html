@@ -149,6 +149,19 @@
                         </summary>
                         <div class="settings-subsection-body">
 
+                    <section class="prompt-preset-panel">
+                        <div class="prompt-preset-head">
+                            <div>
+                                <h4>常用 Prompt 预设</h4>
+                                <p>保存当前的 System Prompt 与各场景 Prompt，方便在不同阅读角色之间快速切换。应用预设后不会自动保存当前 AI 配置。</p>
+                            </div>
+                            <button id="saveCurrentPromptPresetButton" class="btn btn-outline" type="button">保存当前为预设</button>
+                        </div>
+                        <div id="aiPromptPresetList" class="prompt-preset-list">
+                            <div class="prompt-preset-empty">还没有保存常用 Prompt。先把当前配置整理好，再保存成预设。</div>
+                        </div>
+                    </section>
+
                     <label class="field prompt-field">
                         <span class="field-label-row">
                             <span class="field-label-text">System Prompt</span>
