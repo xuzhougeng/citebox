@@ -26,9 +26,9 @@
 .form-textarea,
 .color-input {
     width: 100%;
-    border: 1px solid rgba(36, 27, 22, 0.1);
+    border: 1px solid rgba(var(--ink-rgb), 0.1);
     border-radius: 16px;
-    background: rgba(255, 252, 248, 0.92);
+    background: rgba(var(--surface-rgb), 0.92);
     padding: 0.9rem 1rem;
     color: var(--ink);
 }
@@ -37,8 +37,8 @@
 .form-textarea:focus,
 .color-input:focus {
     outline: none;
-    border-color: rgba(164, 92, 64, 0.5);
-    box-shadow: 0 0 0 4px rgba(164, 92, 64, 0.12);
+    border-color: rgba(var(--accent-rgb), 0.5);
+    box-shadow: 0 0 0 4px rgba(var(--accent-rgb), 0.12);
 }
 
 .checkbox-field {
@@ -47,8 +47,8 @@
     gap: 0.75rem;
     padding: 1rem;
     border-radius: 18px;
-    background: rgba(255, 251, 245, 0.72);
-    border: 1px solid rgba(36, 27, 22, 0.08);
+    background: rgba(var(--surface-rgb), 0.72);
+    border: 1px solid rgba(var(--ink-rgb), 0.08);
 }
 
 .checkbox-field input {
@@ -83,8 +83,8 @@
     min-width: 0;
     padding: 0.95rem 1rem;
     border-radius: 18px;
-    border: 1px solid rgba(36, 27, 22, 0.08);
-    background: rgba(255, 251, 245, 0.76);
+    border: 1px solid rgba(var(--ink-rgb), 0.08);
+    background: rgba(var(--surface-rgb), 0.76);
     margin: 0;
 }
 
@@ -96,9 +96,9 @@
 
 .tag-preset-pill {
     padding: 0.45rem 0.8rem;
-    border: 1px solid rgba(36, 27, 22, 0.12);
+    border: 1px solid rgba(var(--ink-rgb), 0.12);
     border-radius: 999px;
-    background: rgba(255, 252, 248, 0.94);
+    background: rgba(var(--surface-rgb), 0.94);
     color: var(--ink);
     font-size: 0.85rem;
     font-weight: 700;
@@ -108,22 +108,22 @@
 
 .tag-preset-pill:hover,
 .tag-preset-pill:focus-visible {
-    border-color: rgba(164, 92, 64, 0.28);
-    background: rgba(255, 245, 236, 0.98);
-    box-shadow: 0 0 0 4px rgba(164, 92, 64, 0.08);
+    border-color: rgba(var(--accent-rgb), 0.28);
+    background: rgba(var(--surface-rgb), 0.98);
+    box-shadow: 0 0 0 4px rgba(var(--accent-rgb), 0.08);
     transform: translateY(-1px);
     outline: none;
 }
 
 .tag-preset-pill.is-existing {
-    border-color: rgba(65, 103, 136, 0.18);
-    background: rgba(65, 103, 136, 0.07);
+    border-color: rgba(var(--info-rgb), 0.18);
+    background: rgba(var(--info-rgb), 0.07);
 }
 
 .tag-preset-pill.is-active {
-    border-color: rgba(36, 27, 22, 0.24);
-    background: rgba(36, 27, 22, 0.08);
-    box-shadow: 0 0 0 3px rgba(36, 27, 22, 0.08);
+    border-color: rgba(var(--ink-rgb), 0.24);
+    background: rgba(var(--ink-rgb), 0.08);
+    box-shadow: 0 0 0 3px rgba(var(--ink-rgb), 0.08);
 }
 
 .upload-form {
@@ -152,9 +152,9 @@
     width: 1.45rem;
     height: 1.45rem;
     border-radius: 999px;
-    border: 1px solid rgba(36, 27, 22, 0.12);
-    background: rgba(36, 27, 22, 0.04);
-    color: rgba(36, 27, 22, 0.78);
+    border: 1px solid rgba(var(--ink-rgb), 0.12);
+    background: rgba(var(--ink-rgb), 0.04);
+    color: rgba(var(--ink-rgb), 0.78);
     font-size: 0.82rem;
     font-weight: 700;
     cursor: help;
@@ -163,8 +163,8 @@
 
 .field-help:hover,
 .field-help:focus-visible {
-    border-color: rgba(164, 92, 64, 0.26);
-    background: rgba(164, 92, 64, 0.1);
+    border-color: rgba(var(--accent-rgb), 0.26);
+    background: rgba(var(--accent-rgb), 0.1);
     color: var(--accent-deep);
 }
 
@@ -177,13 +177,13 @@
     width: min(28rem, calc(100vw - 3rem));
     padding: 0.85rem 1rem;
     border-radius: 16px;
-    background: rgba(36, 27, 22, 0.96);
-    color: #fff;
+    background: var(--tooltip-bg);
+    color: var(--tooltip-text);
     font-size: 0.9rem;
     font-weight: 500;
     line-height: 1.6;
     text-align: left;
-    box-shadow: 0 18px 42px rgba(20, 14, 11, 0.28);
+    box-shadow: 0 18px 42px rgba(var(--shadow-deep-rgb), 0.28);
     opacity: 0;
     visibility: hidden;
     pointer-events: none;
@@ -199,7 +199,7 @@
     transform: translateX(-50%) rotate(45deg);
     width: 0.7rem;
     height: 0.7rem;
-    background: rgba(36, 27, 22, 0.96);
+    background: var(--tooltip-bg);
     opacity: 0;
     visibility: hidden;
     pointer-events: none;
@@ -251,8 +251,8 @@
     min-width: 0;
     padding: 0.95rem 1rem;
     border-radius: 18px;
-    border: 1px solid rgba(36, 27, 22, 0.08);
-    background: rgba(255, 251, 245, 0.76);
+    border: 1px solid rgba(var(--ink-rgb), 0.08);
+    background: rgba(var(--surface-rgb), 0.76);
     margin: 0;
 }
 
@@ -282,7 +282,7 @@
     width: 1.55rem;
     height: 1.55rem;
     padding: 0;
-    border: 1px solid rgba(36, 27, 22, 0.14);
+    border: 1px solid rgba(var(--ink-rgb), 0.14);
     border-radius: 999px;
     background: var(--tag-preset-color);
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
@@ -293,14 +293,14 @@
 .tag-color-preset:hover,
 .tag-color-preset:focus-visible {
     transform: translateY(-1px);
-    border-color: rgba(36, 27, 22, 0.28);
-    box-shadow: 0 0 0 4px rgba(164, 92, 64, 0.12);
+    border-color: rgba(var(--ink-rgb), 0.28);
+    box-shadow: 0 0 0 4px rgba(var(--accent-rgb), 0.12);
     outline: none;
 }
 
 .tag-color-preset.active {
-    border-color: rgba(36, 27, 22, 0.42);
-    box-shadow: 0 0 0 3px rgba(36, 27, 22, 0.12);
+    border-color: rgba(var(--ink-rgb), 0.42);
+    box-shadow: 0 0 0 3px rgba(var(--ink-rgb), 0.12);
 }
 
 .tag-creator-submit {

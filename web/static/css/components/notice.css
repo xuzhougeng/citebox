@@ -8,17 +8,17 @@
 
 .notice.error {
     color: var(--error);
-    background: rgba(159, 63, 52, 0.1);
+    background: rgba(var(--error-rgb), 0.1);
 }
 
 .notice.info {
     color: var(--info);
-    background: rgba(65, 103, 136, 0.1);
+    background: rgba(var(--info-rgb), 0.1);
 }
 
 .notice.success {
     color: var(--success);
-    background: rgba(79, 111, 82, 0.1);
+    background: rgba(var(--success-rgb), 0.1);
 }
 
 .toast {
@@ -44,7 +44,7 @@
 .empty-state {
     padding: 2rem;
     border-radius: var(--radius);
-    background: rgba(255, 252, 248, 0.78);
-    border: 1px dashed rgba(36, 27, 22, 0.14);
+    background: rgba(var(--surface-rgb), 0.78);
+    border: 1px dashed rgba(var(--ink-rgb), 0.14);
     text-align: center;
 }

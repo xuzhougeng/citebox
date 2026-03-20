@@ -7,8 +7,8 @@
     padding: 1.1rem;
     border-radius: 28px;
     background:
-        radial-gradient(circle at top right, rgba(65, 103, 136, 0.08), transparent 18rem),
-        linear-gradient(180deg, rgba(255, 253, 249, 0.98), rgba(244, 236, 225, 0.96));
+        radial-gradient(circle at top right, rgba(var(--info-rgb), 0.08), transparent 18rem),
+        linear-gradient(180deg, rgba(var(--surface-rgb), 0.98), rgba(var(--bg-rgb), 0.96));
 }
 
 .note-lightbox-main,
@@ -23,8 +23,8 @@
     gap: 1rem;
     padding: 1.15rem;
     border-radius: 24px;
-    background: rgba(255, 251, 245, 0.92);
-    border: 1px solid rgba(36, 27, 22, 0.08);
+    background: rgba(var(--surface-rgb), 0.92);
+    border: 1px solid rgba(var(--ink-rgb), 0.08);
 }
 
 .note-lightbox-head h2 {
@@ -63,7 +63,7 @@
     gap: 0.35rem;
     padding: 0.95rem 1rem;
     border-radius: 18px;
-    background: rgba(239, 230, 215, 0.48);
+    background: rgba(var(--bg-rgb), 0.48);
 }
 
 .note-lightbox-meta-item > span {
@@ -82,7 +82,7 @@
 
 .note-lightbox-textarea {
     min-height: 22rem;
-    background: rgba(255, 252, 248, 0.96);
+    background: rgba(var(--surface-rgb), 0.96);
 }
 
 .note-lightbox-render-panel {
@@ -107,8 +107,8 @@
     gap: 0.85rem;
     padding: 1rem;
     border-radius: 24px;
-    background: rgba(255, 251, 245, 0.9);
-    border: 1px solid rgba(36, 27, 22, 0.08);
+    background: rgba(var(--surface-rgb), 0.9);
+    border: 1px solid rgba(var(--ink-rgb), 0.08);
 }
 
 .note-lightbox-preview-media {
@@ -118,8 +118,8 @@
     min-height: 320px;
     border-radius: 20px;
     background:
-        radial-gradient(circle at top left, rgba(164, 92, 64, 0.12), transparent 16rem),
-        linear-gradient(180deg, rgba(239, 230, 215, 0.72), rgba(255, 252, 248, 0.9));
+        radial-gradient(circle at top left, rgba(var(--accent-rgb), 0.12), transparent 16rem),
+        linear-gradient(180deg, rgba(var(--bg-rgb), 0.72), rgba(var(--surface-rgb), 0.9));
 }
 
 .note-lightbox-preview-media img {
@@ -128,7 +128,7 @@
     max-height: 28rem;
     object-fit: contain;
     border-radius: 18px;
-    box-shadow: 0 22px 44px rgba(36, 27, 22, 0.12);
+    box-shadow: 0 22px 44px rgba(var(--ink-rgb), 0.12);
 }
 
 .note-lightbox-actions {
@@ -140,13 +140,13 @@
 .note-lightbox-tip {
     padding: 1rem 1.05rem;
     border-radius: 18px;
-    background: rgba(79, 111, 82, 0.08);
-    border: 1px solid rgba(79, 111, 82, 0.14);
+    background: rgba(var(--success-rgb), 0.08);
+    border: 1px solid rgba(var(--success-rgb), 0.14);
 }
 
 .note-lightbox-tip span {
     display: block;
-    color: #274336;
+    color: var(--success);
     font-size: 0.76rem;
     font-weight: 700;
     letter-spacing: 0.12em;

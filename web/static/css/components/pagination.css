@@ -10,15 +10,15 @@
 .pagination button {
     min-width: 2.5rem;
     padding: 0.65rem 0.9rem;
-    border: 1px solid rgba(36, 27, 22, 0.1);
+    border: 1px solid rgba(var(--ink-rgb), 0.1);
     border-radius: 999px;
-    background: rgba(255, 252, 248, 0.8);
+    background: rgba(var(--surface-rgb), 0.8);
     transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease, opacity 0.2s ease;
 }
 
 .pagination button:hover:not(:disabled) {
-    border-color: rgba(164, 92, 64, 0.32);
-    background: rgba(255, 248, 242, 0.96);
+    border-color: rgba(var(--accent-rgb), 0.32);
+    background: rgba(var(--surface-rgb), 0.96);
 }
 
 .pagination button:disabled {
@@ -28,7 +28,7 @@
 
 .pagination button.active {
     background: var(--ink);
-    color: #fff;
+    color: var(--on-ink);
 }
 
 .pagination-ellipsis {

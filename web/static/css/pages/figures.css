@@ -28,10 +28,10 @@
     overflow: hidden;
     padding: 1.35rem;
     background:
-        linear-gradient(135deg, rgba(255, 251, 245, 0.96), rgba(244, 231, 214, 0.88)),
-        linear-gradient(90deg, rgba(164, 92, 64, 0.16), transparent 48%);
-    border: 1px solid rgba(164, 92, 64, 0.16);
-    box-shadow: 0 24px 60px rgba(78, 51, 33, 0.14);
+        linear-gradient(135deg, rgba(var(--surface-rgb), 0.96), rgba(var(--bg-rgb), 0.88)),
+        linear-gradient(90deg, rgba(var(--accent-rgb), 0.16), transparent 48%);
+    border: 1px solid rgba(var(--accent-rgb), 0.16);
+    box-shadow: 0 24px 60px rgba(var(--shadow-rgb), 0.14);
 }
 
 .figure-filters-card::after {
@@ -42,7 +42,7 @@
     width: 14rem;
     height: 14rem;
     border-radius: 50%;
-    background: radial-gradient(circle, rgba(65, 103, 136, 0.14), transparent 68%);
+    background: radial-gradient(circle, rgba(var(--info-rgb), 0.14), transparent 68%);
     pointer-events: none;
 }
 
@@ -52,9 +52,9 @@
     padding: 1.45rem;
     border-radius: calc(var(--radius) + 6px);
     background:
-        radial-gradient(circle at top right, rgba(65, 103, 136, 0.08), transparent 18rem),
-        linear-gradient(180deg, rgba(255, 252, 248, 0.86), rgba(244, 235, 223, 0.94));
-    border: 1px solid rgba(36, 27, 22, 0.08);
+        radial-gradient(circle at top right, rgba(var(--info-rgb), 0.08), transparent 18rem),
+        linear-gradient(180deg, rgba(var(--surface-rgb), 0.86), rgba(var(--bg-rgb), 0.94));
+    border: 1px solid rgba(var(--ink-rgb), 0.08);
     box-shadow: var(--shadow);
 }
 
@@ -66,7 +66,7 @@
     right: 1.4rem;
     height: 4px;
     border-radius: 999px;
-    background: linear-gradient(90deg, var(--accent), rgba(65, 103, 136, 0.78));
+    background: linear-gradient(90deg, var(--accent), rgba(var(--info-rgb), 0.78));
 }
 
 .figure-results-head {
@@ -106,8 +106,8 @@
 .figure-card {
     padding: 1.1rem;
     border-radius: 20px;
-    background: rgba(255, 252, 248, 0.88);
-    border: 1px solid rgba(36, 27, 22, 0.08);
+    background: rgba(var(--surface-rgb), 0.88);
+    border: 1px solid rgba(var(--ink-rgb), 0.08);
 }
 
 .figure-card img {
@@ -115,7 +115,7 @@
     height: 180px;
     object-fit: cover;
     border-radius: 14px;
-    background: rgba(36, 27, 22, 0.04);
+    background: rgba(var(--ink-rgb), 0.04);
 }
 
 .figure-card figcaption {
@@ -130,15 +130,15 @@
     padding: 0;
     border-radius: 20px;
     overflow: hidden;
-    background: rgba(255, 253, 249, 0.94);
-    border: 1px solid rgba(36, 27, 22, 0.08);
-    box-shadow: 0 18px 34px rgba(78, 51, 33, 0.08);
+    background: rgba(var(--surface-rgb), 0.94);
+    border: 1px solid rgba(var(--ink-rgb), 0.08);
+    box-shadow: 0 18px 34px rgba(var(--shadow-rgb), 0.08);
     transition: transform 0.18s ease, box-shadow 0.18s ease;
 }
 
 .figure-preview-card:hover {
     transform: translateY(-3px);
-    box-shadow: 0 24px 42px rgba(78, 51, 33, 0.12);
+    box-shadow: 0 24px 42px rgba(var(--shadow-rgb), 0.12);
 }
 
 .figure-preview-media {
@@ -183,25 +183,25 @@
     max-width: 100%;
     padding: 0.38rem 0.7rem;
     border-radius: 999px;
-    background: rgba(255, 250, 244, 0.82);
-    border: 1px solid rgba(36, 27, 22, 0.08);
+    background: rgba(var(--surface-rgb), 0.82);
+    border: 1px solid rgba(var(--ink-rgb), 0.08);
     color: var(--ink);
     font-size: 0.8rem;
     font-weight: 600;
     backdrop-filter: blur(10px);
-    box-shadow: 0 8px 22px rgba(36, 27, 22, 0.08);
+    box-shadow: 0 8px 22px rgba(var(--ink-rgb), 0.08);
 }
 
 .figure-badge-strong {
-    background: rgba(36, 27, 22, 0.72);
-    border-color: rgba(255, 250, 244, 0.16);
-    color: #fffaf4;
+    background: rgba(var(--ink-rgb), 0.72);
+    border-color: rgba(var(--surface-rgb), 0.16);
+    color: var(--on-accent);
 }
 
 .figure-badge-accent {
-    background: rgba(79, 111, 82, 0.18);
-    border-color: rgba(79, 111, 82, 0.14);
-    color: #274336;
+    background: rgba(var(--success-rgb), 0.18);
+    border-color: rgba(var(--success-rgb), 0.14);
+    color: var(--success);
 }
 
 .figure-preview-body {
@@ -274,8 +274,8 @@
     gap: 0.35rem;
     padding: 0.9rem 0.95rem;
     border-radius: 18px;
-    background: rgba(244, 236, 225, 0.76);
-    border: 1px solid rgba(36, 27, 22, 0.08);
+    background: rgba(var(--bg-rgb), 0.76);
+    border: 1px solid rgba(var(--ink-rgb), 0.08);
 }
 
 .figure-preview-note-action {
@@ -284,12 +284,12 @@
 }
 
 .figure-preview-note-action:hover {
-    background: rgba(249, 243, 234, 0.92);
-    border-color: rgba(164, 92, 64, 0.18);
+    background: rgba(var(--surface-rgb), 0.92);
+    border-color: rgba(var(--accent-rgb), 0.18);
 }
 
 .figure-preview-note.is-empty {
-    background: rgba(255, 252, 248, 0.72);
+    background: rgba(var(--surface-rgb), 0.72);
     border-style: dashed;
 }
 
