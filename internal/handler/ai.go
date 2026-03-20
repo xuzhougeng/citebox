@@ -34,15 +34,15 @@ func (h *AIHandler) GetDefaultSettings(w http.ResponseWriter, r *http.Request) {
 	sendJSON(w, http.StatusOK, model.DefaultAISettings())
 }
 
-func (h *AIHandler) GetPromptPresets(w http.ResponseWriter, r *http.Request) {
-	promptPresets, err := h.service.GetPromptPresets()
+func (h *AIHandler) GetRolePrompts(w http.ResponseWriter, r *http.Request) {
+	rolePrompts, err := h.service.GetRolePrompts()
 	if err != nil {
 		sendError(w, err)
 		return
 	}
 
-	sendJSON(w, http.StatusOK, model.AIPromptPresetCollection{
-		PromptPresets: promptPresets,
+	sendJSON(w, http.StatusOK, model.AIRolePromptCollection{
+		RolePrompts: rolePrompts,
 	})
 }
 
@@ -65,22 +65,60 @@ func (h *AIHandler) UpdateSettings(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *AIHandler) UpdatePromptPresets(w http.ResponseWriter, r *http.Request) {
-	var req model.AIPromptPresetCollection
+func (h *AIHandler) UpdateModelSettings(w http.ResponseWriter, r *http.Request) {
+	var req model.AIModelSettingsUpdate
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		sendError(w, apperr.New(apperr.CodeInvalidArgument, "请求体格式错误"))
 		return
 	}
 
-	promptPresets, err := h.service.UpdatePromptPresets(req.PromptPresets)
+	settings, err := h.service.UpdateModelSettings(req)
 	if err != nil {
 		sendError(w, err)
 		return
 	}
 
 	sendJSON(w, http.StatusOK, map[string]interface{}{
-		"success":        true,
-		"prompt_presets": promptPresets,
+		"success":  true,
+		"settings": settings,
+	})
+}
+
+func (h *AIHandler) UpdatePromptSettings(w http.ResponseWriter, r *http.Request) {
+	var req model.AIPromptSettingsUpdate
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		sendError(w, apperr.New(apperr.CodeInvalidArgument, "请求体格式错误"))
+		return
+	}
+
+	settings, err := h.service.UpdatePromptSettings(req)
+	if err != nil {
+		sendError(w, err)
+		return
+	}
+
+	sendJSON(w, http.StatusOK, map[string]interface{}{
+		"success":  true,
+		"settings": settings,
+	})
+}
+
+func (h *AIHandler) UpdateRolePrompts(w http.ResponseWriter, r *http.Request) {
+	var req model.AIRolePromptCollection
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		sendError(w, apperr.New(apperr.CodeInvalidArgument, "请求体格式错误"))
+		return
+	}
+
+	rolePrompts, err := h.service.UpdateRolePrompts(req.RolePrompts)
+	if err != nil {
+		sendError(w, err)
+		return
+	}
+
+	sendJSON(w, http.StatusOK, map[string]interface{}{
+		"success":      true,
+		"role_prompts": rolePrompts,
 	})
 }
 

@@ -25,6 +25,8 @@ const AIReaderPage = {
         this.roundBadge = document.getElementById('aiRoundBadge');
         this.sessionHint = document.getElementById('aiSessionHint');
         this.questionInput = document.getElementById('aiQuestionInput');
+        this.rolePromptHint = document.getElementById('aiRolePromptHint');
+        this.rolePromptQuickList = document.getElementById('aiRolePromptQuickList');
         this.runButton = document.getElementById('runAIReaderButton');
         this.stopButton = document.getElementById('stopAIReaderButton');
         this.exportConversationButton = document.getElementById('exportAIConversationButton');
@@ -74,6 +76,12 @@ const AIReaderPage = {
             await this.downloadConversationMarkdown();
         });
 
+        this.rolePromptQuickList.addEventListener('click', (event) => {
+            const button = event.target.closest('[data-ai-role-name]');
+            if (!button) return;
+            this.insertRolePromptMention(button.dataset.aiRoleName || '');
+        });
+
         this.conversation.addEventListener('click', async (event) => {
             const button = event.target.closest('[data-download-turn-index]');
             if (!button) return;
@@ -116,6 +124,7 @@ const AIReaderPage = {
         this.state.extractorSettings = extractorSettings;
         this.renderConfigSummary();
         this.renderModelSummary();
+        this.renderRolePromptHints();
     },
 
     renderConfigSummary() {
@@ -147,6 +156,26 @@ const AIReaderPage = {
                 <p>统一维护 AI 与 PDF 提取服务参数。</p>
             </article>
         `;
+    },
+
+    renderRolePromptHints() {
+        const rolePrompts = this.availableRolePrompts();
+        if (!this.rolePromptHint || !this.rolePromptQuickList) {
+            return;
+        }
+
+        if (!rolePrompts.length) {
+            this.rolePromptHint.textContent = '还没有配置角色 Prompt。到配置页新增后，就可以在这里用 @角色名 调用。';
+            this.rolePromptQuickList.innerHTML = '';
+            return;
+        }
+
+        this.rolePromptHint.textContent = '输入 @角色名 直接调用角色 Prompt，也可以点击下面的快捷项插入。';
+        this.rolePromptQuickList.innerHTML = rolePrompts.map((item) => `
+            <button class="ai-role-chip" type="button" data-ai-role-name="${Utils.escapeHTML(item.name)}">
+                ${Utils.escapeHTML(`@${item.name}`)}
+            </button>
+        `).join('');
     },
 
     async loadPapers() {
@@ -763,8 +792,37 @@ const AIReaderPage = {
         return items.join(' · ');
     },
 
+    availableRolePrompts() {
+        const rolePrompts = this.state.aiSettings?.role_prompts;
+        return Array.isArray(rolePrompts) ? rolePrompts.filter((item) => String(item?.name || '').trim()) : [];
+    },
+
+    insertRolePromptMention(name) {
+        const normalizedName = String(name || '').trim();
+        if (!normalizedName || !this.questionInput) return;
+
+        const mention = `@${normalizedName}`;
+        if ((this.questionInput.value || '').includes(mention)) {
+            this.questionInput.focus();
+            return;
+        }
+
+        const input = this.questionInput;
+        const start = Number.isFinite(input.selectionStart) ? input.selectionStart : input.value.length;
+        const end = Number.isFinite(input.selectionEnd) ? input.selectionEnd : input.value.length;
+        const prefix = input.value.slice(0, start);
+        const suffix = input.value.slice(end);
+        const needsLeadingSpace = prefix && !/\s$/.test(prefix);
+        const nextValue = `${prefix}${needsLeadingSpace ? ' ' : ''}${mention} ${suffix}`;
+        input.value = nextValue;
+
+        const caret = `${prefix}${needsLeadingSpace ? ' ' : ''}${mention} `.length;
+        input.focus();
+        input.setSelectionRange(caret, caret);
+    },
+
     questionPlaceholder() {
-        return '例如：请解释这篇文章的核心结论，以及哪些图片最关键。';
+        return '例如：@严格证据模式 请解释这篇文章的核心结论，以及哪些图片最关键。';
     },
 
     defaultModel(provider) {

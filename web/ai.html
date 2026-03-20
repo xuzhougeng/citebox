@@ -44,6 +44,10 @@
                             <span class="ai-help-key">Ctrl/Cmd + Enter</span>
                             <p>直接发送当前问题。</p>
                         </div>
+                        <div class="ai-help-row">
+                            <span class="ai-help-key">@角色名</span>
+                            <p>直接调用配置页里保存的角色 Prompt，例如 <code>@严格证据模式</code>。</p>
+                        </div>
                     </div>
                 </div>
             </details>
@@ -101,7 +105,11 @@
                 <div id="aiConversation" class="ai-conversation"></div>
                 <label class="field ai-question-field">
                     <span class="ai-question-label">想让 AI 帮你什么？</span>
-                    <textarea id="aiQuestionInput" class="form-textarea ai-question-input" rows="5" placeholder="例如：请解释这篇文章的核心结论，以及哪些图片最关键。"></textarea>
+                    <div class="ai-role-prompt-bar">
+                        <p id="aiRolePromptHint" class="ai-role-prompt-hint">输入 @角色名 直接调用角色 Prompt，也可以点击下面的快捷项插入。</p>
+                        <div id="aiRolePromptQuickList" class="ai-role-prompt-list"></div>
+                    </div>
+                    <textarea id="aiQuestionInput" class="form-textarea ai-question-input" rows="5" placeholder="例如：@严格证据模式 请解释这篇文章的核心结论，以及哪些图片最关键。"></textarea>
                 </label>
                 <div class="submit-row">
                     <button id="runAIReaderButton" class="btn btn-primary" type="button">发送问题</button>

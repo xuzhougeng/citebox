@@ -69,8 +69,8 @@ func TestAISettingsDefaultsAndPersistence(t *testing.T) {
 	if len(defaults.Models) != 1 || defaults.SceneModels.DefaultModelID == "" {
 		t.Fatalf("GetSettings() defaults = %+v, want default model pool and scene bindings", defaults)
 	}
-	if len(defaults.PromptPresets) != 0 {
-		t.Fatalf("GetSettings() defaults prompt_presets = %+v, want empty list", defaults.PromptPresets)
+	if len(defaults.RolePrompts) != 0 {
+		t.Fatalf("GetSettings() defaults role_prompts = %+v, want empty list", defaults.RolePrompts)
 	}
 
 	updated, err := aiSvc.UpdateSettings(model.AISettings{
@@ -123,42 +123,142 @@ func TestAISettingsDefaultsAndPersistence(t *testing.T) {
 	}
 }
 
-func TestAIPromptPresetsPersistence(t *testing.T) {
+func TestAIRolePromptsPersistence(t *testing.T) {
 	_, repo, cfg := newTestService(t)
 	aiSvc := NewAIService(repo, cfg, nil)
 
-	saved, err := aiSvc.UpdatePromptPresets([]model.AIPromptPreset{
+	saved, err := aiSvc.UpdateRolePrompts([]model.AIRolePrompt{
 		{
-			Name:            "严格证据模式",
-			SystemPrompt:    "优先引用原文",
-			QAPrompt:        "先回答结论",
-			FigurePrompt:    "先解释设计再解释结论",
-			TagPrompt:       "优先复用已有标签",
-			GroupPrompt:     "优先复用已有分组",
-			TranslatePrompt: "只返回译文",
+			Name:   "严格证据模式",
+			Prompt: "你是一名严格审稿人，优先检查证据链和结论边界。",
 		},
 	})
 	if err != nil {
-		t.Fatalf("UpdatePromptPresets() error = %v", err)
+		t.Fatalf("UpdateRolePrompts() error = %v", err)
 	}
 	if len(saved) != 1 || saved[0].Name != "严格证据模式" {
-		t.Fatalf("UpdatePromptPresets() = %+v, want single normalized preset", saved)
+		t.Fatalf("UpdateRolePrompts() = %+v, want single normalized role prompt", saved)
 	}
 
 	settings, err := aiSvc.GetSettings()
 	if err != nil {
 		t.Fatalf("GetSettings() error = %v", err)
 	}
-	if len(settings.PromptPresets) != 1 || settings.PromptPresets[0].FigurePrompt != "先解释设计再解释结论" {
-		t.Fatalf("GetSettings() prompt_presets = %+v, want persisted presets", settings.PromptPresets)
+	if len(settings.RolePrompts) != 1 || settings.RolePrompts[0].Prompt != "你是一名严格审稿人，优先检查证据链和结论边界。" {
+		t.Fatalf("GetSettings() role_prompts = %+v, want persisted role prompts", settings.RolePrompts)
 	}
 
-	reloaded, err := aiSvc.GetPromptPresets()
+	reloaded, err := aiSvc.GetRolePrompts()
 	if err != nil {
-		t.Fatalf("GetPromptPresets() error = %v", err)
+		t.Fatalf("GetRolePrompts() error = %v", err)
 	}
-	if len(reloaded) != 1 || reloaded[0].TranslatePrompt != "只返回译文" {
-		t.Fatalf("GetPromptPresets() = %+v, want persisted preset list", reloaded)
+	if len(reloaded) != 1 || reloaded[0].Prompt != "你是一名严格审稿人，优先检查证据链和结论边界。" {
+		t.Fatalf("GetRolePrompts() = %+v, want persisted role prompt list", reloaded)
+	}
+}
+
+func TestGetRolePromptsMigratesLegacyPromptPresets(t *testing.T) {
+	_, repo, cfg := newTestService(t)
+	aiSvc := NewAIService(repo, cfg, nil)
+
+	if err := repo.UpsertAppSetting(aiRolePromptsKey, `[{"name":"严格证据模式","system_prompt":"优先引用原文","qa_prompt":"先回答结论","translate_prompt":"只返回译文"}]`); err != nil {
+		t.Fatalf("UpsertAppSetting() error = %v", err)
+	}
+
+	rolePrompts, err := aiSvc.GetRolePrompts()
+	if err != nil {
+		t.Fatalf("GetRolePrompts() error = %v", err)
+	}
+	if len(rolePrompts) != 1 || rolePrompts[0].Name != "严格证据模式" {
+		t.Fatalf("GetRolePrompts() = %+v, want migrated legacy role prompt", rolePrompts)
+	}
+	for _, want := range []string{"System Prompt", "优先引用原文", "通用问答 Prompt", "只返回译文"} {
+		if !strings.Contains(rolePrompts[0].Prompt, want) {
+			t.Fatalf("migrated role prompt missing %q\n%s", want, rolePrompts[0].Prompt)
+		}
+	}
+}
+
+func TestSplitAISettingsUpdatesPreserveOtherSections(t *testing.T) {
+	_, repo, cfg := newTestService(t)
+	aiSvc := NewAIService(repo, cfg, nil)
+
+	if _, err := aiSvc.UpdateSettings(model.AISettings{
+		Models: []model.AIModelConfig{
+			{ID: "qa", Name: "QA", Provider: model.AIProviderOpenAI, APIKey: "key-1", BaseURL: "https://api.openai.com", Model: "gpt-4.1-mini", MaxOutputTokens: 1200},
+		},
+		SceneModels: model.AISceneModelSelection{
+			DefaultModelID: "qa",
+			QAModelID:      "qa",
+		},
+		Temperature:     0.2,
+		MaxFigures:      2,
+		SystemPrompt:    "base system",
+		QAPrompt:        "base qa",
+		FigurePrompt:    "base figure",
+		TagPrompt:       "base tag",
+		GroupPrompt:     "base group",
+		TranslatePrompt: "base translate",
+		Translation: model.AITranslationConfig{
+			PrimaryLanguage: "中文",
+			TargetLanguage:  "英文",
+		},
+		RolePrompts: []model.AIRolePrompt{
+			{Name: "导师", Prompt: "你是一名导师。"},
+		},
+	}); err != nil {
+		t.Fatalf("UpdateSettings() error = %v", err)
+	}
+
+	if _, err := aiSvc.UpdateModelSettings(model.AIModelSettingsUpdate{
+		Models: []model.AIModelConfig{
+			{ID: "qa", Name: "QA Fast", Provider: model.AIProviderAnthropic, APIKey: "key-2", BaseURL: "https://api.anthropic.com", Model: "claude-test", MaxOutputTokens: 900},
+		},
+		SceneModels: model.AISceneModelSelection{
+			DefaultModelID: "qa",
+			QAModelID:      "qa",
+		},
+		Temperature: 0.3,
+		MaxFigures:  4,
+		Translation: model.AITranslationConfig{
+			PrimaryLanguage: "中文",
+			TargetLanguage:  "日文",
+		},
+	}); err != nil {
+		t.Fatalf("UpdateModelSettings() error = %v", err)
+	}
+
+	afterModelUpdate, err := aiSvc.GetSettings()
+	if err != nil {
+		t.Fatalf("GetSettings() after model update error = %v", err)
+	}
+	if afterModelUpdate.SystemPrompt != "base system" || afterModelUpdate.QAPrompt != "base qa" {
+		t.Fatalf("model update should preserve prompt settings, got %+v", afterModelUpdate)
+	}
+	if len(afterModelUpdate.RolePrompts) != 1 || afterModelUpdate.RolePrompts[0].Name != "导师" {
+		t.Fatalf("model update should preserve role prompts, got %+v", afterModelUpdate.RolePrompts)
+	}
+
+	if _, err := aiSvc.UpdatePromptSettings(model.AIPromptSettingsUpdate{
+		SystemPrompt:    "updated system",
+		QAPrompt:        "updated qa",
+		FigurePrompt:    "updated figure",
+		TagPrompt:       "updated tag",
+		GroupPrompt:     "updated group",
+		TranslatePrompt: "updated translate",
+	}); err != nil {
+		t.Fatalf("UpdatePromptSettings() error = %v", err)
+	}
+
+	afterPromptUpdate, err := aiSvc.GetSettings()
+	if err != nil {
+		t.Fatalf("GetSettings() after prompt update error = %v", err)
+	}
+	if afterPromptUpdate.Models[0].Provider != model.AIProviderAnthropic || afterPromptUpdate.Translation.TargetLanguage != "日文" {
+		t.Fatalf("prompt update should preserve model settings, got %+v", afterPromptUpdate)
+	}
+	if len(afterPromptUpdate.RolePrompts) != 1 || afterPromptUpdate.RolePrompts[0].Prompt != "你是一名导师。" {
+		t.Fatalf("prompt update should preserve role prompts, got %+v", afterPromptUpdate.RolePrompts)
 	}
 }
 
@@ -788,9 +888,11 @@ func TestBuildAIPromptsIncludePaperContext(t *testing.T) {
 		[]model.Tag{{Name: "Microscopy"}},
 		model.AIActionFigureInterpretation,
 		"请解释关键图片。",
+		"请解释关键图片。",
 		nil,
 		[]string{"- 第 1 页图 1：caption=Overview"},
 		1,
+		nil,
 		true,
 	)
 
@@ -830,11 +932,13 @@ func TestBuildAIPromptsIncludeConversationHistoryForPaperQA(t *testing.T) {
 		nil,
 		model.AIActionPaperQA,
 		"这篇文章最关键的证据是什么？",
+		"这篇文章最关键的证据是什么？",
 		[]model.AIConversationTurn{
 			{Question: "先概括一下这篇文章。", Answer: "它主要研究细胞图谱。"},
 		},
 		nil,
 		0,
+		nil,
 		true,
 	)
 
@@ -848,6 +952,44 @@ func TestBuildAIPromptsIncludeConversationHistoryForPaperQA(t *testing.T) {
 	} {
 		if !strings.Contains(userPrompt, want) {
 			t.Fatalf("userPrompt missing %q\n%s", want, userPrompt)
+		}
+	}
+}
+
+func TestBuildAIPromptsIncludeActiveRolePromptsForPaperQA(t *testing.T) {
+	settings := model.DefaultAISettings()
+	paper := &model.Paper{
+		ID:               10,
+		Title:            "Role Study",
+		OriginalFilename: "role-study.pdf",
+		PDFText:          "Role full text.",
+	}
+
+	systemPrompt, userPrompt := buildAIPrompts(
+		settings,
+		paper,
+		nil,
+		nil,
+		model.AIActionPaperQA,
+		"@严格证据模式 请总结结论。",
+		"请总结结论。",
+		nil,
+		nil,
+		0,
+		[]model.AIRolePrompt{
+			{Name: "严格证据模式", Prompt: "优先引用原文证据，并明确不确定性。"},
+		},
+		true,
+	)
+
+	for _, want := range []string{"@严格证据模式", "角色调用:", "请总结结论。"} {
+		if !strings.Contains(userPrompt, want) {
+			t.Fatalf("userPrompt missing %q\n%s", want, userPrompt)
+		}
+	}
+	for _, want := range []string{"当前用户通过 @ 调用的角色 Prompt", "严格证据模式", "优先引用原文证据"} {
+		if !strings.Contains(systemPrompt, want) {
+			t.Fatalf("systemPrompt missing %q\n%s", want, systemPrompt)
 		}
 	}
 }
@@ -868,9 +1010,11 @@ func TestBuildAIPromptsIncludeFigureReferenceFormatForPaperQA(t *testing.T) {
 		nil,
 		model.AIActionPaperQA,
 		"请结合图片说明主要发现。",
+		"请结合图片说明主要发现。",
 		nil,
 		[]string{"- figure_id=182；标签=第 3 页图 1；caption=Signal map；如需插图请使用 ![第 3 页图 1](figure://182)"},
 		1,
+		nil,
 		true,
 	)
 
@@ -914,9 +1058,11 @@ func TestBuildAIPromptsUsePlainTextRequirementsForStreamingInterpretation(t *tes
 		nil,
 		model.AIActionFigureInterpretation,
 		"请解读这张图。",
+		"请解读这张图。",
 		nil,
 		[]string{"- 第 2 页图 3：caption=Signal map"},
 		1,
+		nil,
 		false,
 	)
 

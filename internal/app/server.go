@@ -298,12 +298,41 @@ func buildHandler(
 		}
 	})
 
+	mux.HandleFunc("/api/ai/settings/models", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPut:
+			aiHandler.UpdateModelSettings(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	mux.HandleFunc("/api/ai/settings/prompts", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPut:
+			aiHandler.UpdatePromptSettings(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	mux.HandleFunc("/api/ai/role-prompts", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			aiHandler.GetRolePrompts(w, r)
+		case http.MethodPut:
+			aiHandler.UpdateRolePrompts(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
 	mux.HandleFunc("/api/ai/prompt-presets", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
-			aiHandler.GetPromptPresets(w, r)
+			aiHandler.GetRolePrompts(w, r)
 		case http.MethodPut:
-			aiHandler.UpdatePromptPresets(w, r)
+			aiHandler.UpdateRolePrompts(w, r)
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}

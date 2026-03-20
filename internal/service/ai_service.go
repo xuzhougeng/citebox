@@ -21,6 +21,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -37,7 +38,7 @@ import (
 
 const (
 	aiSettingsKey                = "ai_settings"
-	aiPromptPresetsKey           = "ai_prompt_presets"
+	aiRolePromptsKey             = "ai_prompt_presets"
 	aiFigureImageMaxBytes        = 3 * 1024 * 1024
 	aiFigureImageTotalBudget     = 12 * 1024 * 1024
 	aiFigureImageMaxDimension    = 2200
@@ -67,15 +68,27 @@ type aiStructuredResult struct {
 	SuggestedGroup string
 }
 
+type legacyAIPromptPreset struct {
+	Name            string `json:"name"`
+	SystemPrompt    string `json:"system_prompt"`
+	QAPrompt        string `json:"qa_prompt"`
+	FigurePrompt    string `json:"figure_prompt"`
+	TagPrompt       string `json:"tag_prompt"`
+	GroupPrompt     string `json:"group_prompt"`
+	TranslatePrompt string `json:"translate_prompt"`
+}
+
 type aiReadPrepared struct {
-	settings        model.AISettings
-	action          model.AIAction
-	question        string
-	paper           *model.Paper
-	systemPrompt    string
-	userPrompt      string
-	includedFigures int
-	images          []aiImageInput
+	settings          model.AISettings
+	action            model.AIAction
+	question          string
+	promptQuestion    string
+	activeRolePrompts []model.AIRolePrompt
+	paper             *model.Paper
+	systemPrompt      string
+	userPrompt        string
+	includedFigures   int
+	images            []aiImageInput
 }
 
 func NewAIService(repo *repository.LibraryRepository, cfg *config.Config, logger *slog.Logger) *AIService {
@@ -110,34 +123,34 @@ func (s *AIService) GetSettings() (*model.AISettings, error) {
 	if err != nil {
 		return nil, err
 	}
-	promptPresets, err := s.GetPromptPresets()
+	rolePrompts, err := s.GetRolePrompts()
 	if err != nil {
 		return nil, err
 	}
-	normalized.PromptPresets = promptPresets
+	normalized.RolePrompts = rolePrompts
 
 	return &normalized, nil
 }
 
 func (s *AIService) UpdateSettings(input model.AISettings) (*model.AISettings, error) {
-	savePromptPresets := input.PromptPresets != nil
-	var promptPresets []model.AIPromptPreset
+	saveRolePrompts := input.RolePrompts != nil
+	var rolePrompts []model.AIRolePrompt
 	var err error
-	if savePromptPresets {
-		promptPresets, err = normalizeAIPromptPresets(input.PromptPresets)
+	if saveRolePrompts {
+		rolePrompts, err = normalizeAIRolePrompts(input.RolePrompts)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	input.PromptPresets = nil
+	input.RolePrompts = nil
 	settings, err := normalizeAISettings(input)
 	if err != nil {
 		return nil, err
 	}
 
 	storedSettings := settings
-	storedSettings.PromptPresets = nil
+	storedSettings.RolePrompts = nil
 
 	payload, err := json.Marshal(storedSettings)
 	if err != nil {
@@ -148,60 +161,94 @@ func (s *AIService) UpdateSettings(input model.AISettings) (*model.AISettings, e
 		return nil, err
 	}
 
-	if savePromptPresets {
-		if _, err := s.UpdatePromptPresets(promptPresets); err != nil {
+	if saveRolePrompts {
+		if _, err := s.UpdateRolePrompts(rolePrompts); err != nil {
 			return nil, err
 		}
-		settings.PromptPresets = promptPresets
+		settings.RolePrompts = rolePrompts
 		return &settings, nil
 	}
 
-	existingPromptPresets, err := s.GetPromptPresets()
+	existingRolePrompts, err := s.GetRolePrompts()
 	if err != nil {
 		return nil, err
 	}
-	settings.PromptPresets = existingPromptPresets
+	settings.RolePrompts = existingRolePrompts
 
 	return &settings, nil
 }
 
-func (s *AIService) GetPromptPresets() ([]model.AIPromptPreset, error) {
-	raw, err := s.repo.GetAppSetting(aiPromptPresetsKey)
+func (s *AIService) UpdateModelSettings(input model.AIModelSettingsUpdate) (*model.AISettings, error) {
+	current, err := s.GetSettings()
+	if err != nil {
+		return nil, err
+	}
+
+	next := *current
+	next.Models = input.Models
+	next.SceneModels = input.SceneModels
+	next.Temperature = input.Temperature
+	next.MaxFigures = input.MaxFigures
+	next.Translation = input.Translation
+	next.RolePrompts = nil
+
+	return s.UpdateSettings(next)
+}
+
+func (s *AIService) UpdatePromptSettings(input model.AIPromptSettingsUpdate) (*model.AISettings, error) {
+	current, err := s.GetSettings()
+	if err != nil {
+		return nil, err
+	}
+
+	next := *current
+	next.SystemPrompt = input.SystemPrompt
+	next.QAPrompt = input.QAPrompt
+	next.FigurePrompt = input.FigurePrompt
+	next.TagPrompt = input.TagPrompt
+	next.GroupPrompt = input.GroupPrompt
+	next.TranslatePrompt = input.TranslatePrompt
+	next.RolePrompts = nil
+
+	return s.UpdateSettings(next)
+}
+
+func (s *AIService) GetRolePrompts() ([]model.AIRolePrompt, error) {
+	raw, err := s.repo.GetAppSetting(aiRolePromptsKey)
 	if err != nil {
 		return nil, err
 	}
 	if strings.TrimSpace(raw) == "" {
-		return []model.AIPromptPreset{}, nil
+		return []model.AIRolePrompt{}, nil
 	}
 
-	var presets []model.AIPromptPreset
-	if err := json.Unmarshal([]byte(raw), &presets); err != nil {
-		return nil, apperr.Wrap(apperr.CodeInternal, "解析 Prompt 预设失败", err)
+	rolePrompts, err := parseStoredAIRolePrompts(raw)
+	if err != nil {
+		return nil, apperr.Wrap(apperr.CodeInternal, "解析角色 Prompt 失败", err)
 	}
-
-	return normalizeAIPromptPresets(presets)
+	return rolePrompts, nil
 }
 
-func (s *AIService) UpdatePromptPresets(input []model.AIPromptPreset) ([]model.AIPromptPreset, error) {
-	presets, err := normalizeAIPromptPresets(input)
+func (s *AIService) UpdateRolePrompts(input []model.AIRolePrompt) ([]model.AIRolePrompt, error) {
+	rolePrompts, err := normalizeAIRolePrompts(input)
 	if err != nil {
 		return nil, err
 	}
-	if len(presets) == 0 {
-		if err := s.repo.DeleteAppSetting(aiPromptPresetsKey); err != nil {
+	if len(rolePrompts) == 0 {
+		if err := s.repo.DeleteAppSetting(aiRolePromptsKey); err != nil {
 			return nil, err
 		}
-		return []model.AIPromptPreset{}, nil
+		return []model.AIRolePrompt{}, nil
 	}
 
-	payload, err := json.Marshal(presets)
+	payload, err := json.Marshal(rolePrompts)
 	if err != nil {
-		return nil, apperr.Wrap(apperr.CodeInternal, "序列化 Prompt 预设失败", err)
+		return nil, apperr.Wrap(apperr.CodeInternal, "序列化角色 Prompt 失败", err)
 	}
-	if err := s.repo.UpsertAppSetting(aiPromptPresetsKey, string(payload)); err != nil {
+	if err := s.repo.UpsertAppSetting(aiRolePromptsKey, string(payload)); err != nil {
 		return nil, err
 	}
-	return presets, nil
+	return rolePrompts, nil
 }
 
 func (s *AIService) CheckModel(ctx context.Context, input model.AIModelConfig) (*model.AIModelCheckResponse, error) {
@@ -496,6 +543,14 @@ func (s *AIService) prepareRead(input model.AIReadRequest, structuredOutput bool
 	if question == "" {
 		question = defaultAIQuestion(action)
 	}
+	promptQuestion := question
+	var activeRolePrompts []model.AIRolePrompt
+	if action == model.AIActionPaperQA {
+		promptQuestion, activeRolePrompts = resolveAIRolePrompts(question, settings.RolePrompts)
+	}
+	if promptQuestion == "" {
+		promptQuestion = defaultAIQuestion(action)
+	}
 	history, err := normalizeConversationHistory(action, input.History)
 	if err != nil {
 		return nil, err
@@ -531,7 +586,7 @@ func (s *AIService) prepareRead(input model.AIReadRequest, structuredOutput bool
 		return nil, err
 	}
 
-	systemPrompt, userPrompt := buildAIPrompts(*settings, paper, groups, tags, action, question, history, figureSummaries, len(images), structuredOutput)
+	systemPrompt, userPrompt := buildAIPrompts(*settings, paper, groups, tags, action, question, promptQuestion, history, figureSummaries, len(images), activeRolePrompts, structuredOutput)
 
 	runtimeSettings := *settings
 	runtimeSettings.Provider = modelConfig.Provider
@@ -550,14 +605,16 @@ func (s *AIService) prepareRead(input model.AIReadRequest, structuredOutput bool
 	)
 
 	return &aiReadPrepared{
-		settings:        runtimeSettings,
-		action:          action,
-		question:        question,
-		paper:           paper,
-		systemPrompt:    systemPrompt,
-		userPrompt:      userPrompt,
-		includedFigures: len(images),
-		images:          images,
+		settings:          runtimeSettings,
+		action:            action,
+		question:          question,
+		promptQuestion:    promptQuestion,
+		activeRolePrompts: activeRolePrompts,
+		paper:             paper,
+		systemPrompt:      systemPrompt,
+		userPrompt:        userPrompt,
+		includedFigures:   len(images),
+		images:            images,
 	}, nil
 }
 
@@ -697,39 +754,82 @@ func normalizeAISettings(input model.AISettings) (model.AISettings, error) {
 	return settings, nil
 }
 
-func normalizeAIPromptPresets(input []model.AIPromptPreset) ([]model.AIPromptPreset, error) {
+func parseStoredAIRolePrompts(raw string) ([]model.AIRolePrompt, error) {
+	var rolePrompts []model.AIRolePrompt
+	if err := json.Unmarshal([]byte(raw), &rolePrompts); err == nil {
+		normalized, normalizeErr := normalizeAIRolePrompts(rolePrompts)
+		if normalizeErr == nil || strings.Contains(raw, "\"prompt\"") || len(rolePrompts) == 0 {
+			return normalized, normalizeErr
+		}
+	}
+
+	var legacyPresets []legacyAIPromptPreset
+	if err := json.Unmarshal([]byte(raw), &legacyPresets); err != nil {
+		return nil, err
+	}
+
+	rolePrompts = make([]model.AIRolePrompt, 0, len(legacyPresets))
+	for _, item := range legacyPresets {
+		rolePrompts = append(rolePrompts, convertLegacyPromptPresetToRolePrompt(item))
+	}
+
+	return normalizeAIRolePrompts(rolePrompts)
+}
+
+func convertLegacyPromptPresetToRolePrompt(input legacyAIPromptPreset) model.AIRolePrompt {
+	sections := make([]string, 0, 6)
+	appendSection := func(label, value string) {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			return
+		}
+		sections = append(sections, fmt.Sprintf("%s:\n%s", label, value))
+	}
+
+	appendSection("System Prompt", input.SystemPrompt)
+	appendSection("通用问答 Prompt", input.QAPrompt)
+	appendSection("图片解读 Prompt", input.FigurePrompt)
+	appendSection("Tag 建议 Prompt", input.TagPrompt)
+	appendSection("分组建议 Prompt", input.GroupPrompt)
+	appendSection("翻译 Prompt", input.TranslatePrompt)
+
+	return model.AIRolePrompt{
+		Name:   strings.TrimSpace(input.Name),
+		Prompt: strings.Join(sections, "\n\n"),
+	}
+}
+
+func normalizeAIRolePrompts(input []model.AIRolePrompt) ([]model.AIRolePrompt, error) {
 	if len(input) == 0 {
-		return []model.AIPromptPreset{}, nil
+		return []model.AIRolePrompt{}, nil
 	}
 	if len(input) > 50 {
-		return nil, apperr.New(apperr.CodeInvalidArgument, "Prompt 预设数量不能超过 50 个")
+		return nil, apperr.New(apperr.CodeInvalidArgument, "角色 Prompt 数量不能超过 50 个")
 	}
 
-	presets := make([]model.AIPromptPreset, 0, len(input))
+	rolePrompts := make([]model.AIRolePrompt, 0, len(input))
 	seenNames := make(map[string]struct{}, len(input))
 	for _, item := range input {
-		preset := model.AIPromptPreset{
-			Name:            strings.TrimSpace(item.Name),
-			SystemPrompt:    strings.TrimSpace(item.SystemPrompt),
-			QAPrompt:        strings.TrimSpace(item.QAPrompt),
-			FigurePrompt:    strings.TrimSpace(item.FigurePrompt),
-			TagPrompt:       strings.TrimSpace(item.TagPrompt),
-			GroupPrompt:     strings.TrimSpace(item.GroupPrompt),
-			TranslatePrompt: strings.TrimSpace(item.TranslatePrompt),
+		rolePrompt := model.AIRolePrompt{
+			Name:   strings.TrimSpace(item.Name),
+			Prompt: strings.TrimSpace(item.Prompt),
 		}
-		if preset.Name == "" {
-			return nil, apperr.New(apperr.CodeInvalidArgument, "Prompt 预设名称不能为空")
+		if rolePrompt.Name == "" {
+			return nil, apperr.New(apperr.CodeInvalidArgument, "角色名称不能为空")
+		}
+		if rolePrompt.Prompt == "" {
+			return nil, apperr.New(apperr.CodeInvalidArgument, "角色 Prompt 不能为空")
 		}
 
-		lookupKey := strings.ToLower(preset.Name)
+		lookupKey := strings.ToLower(rolePrompt.Name)
 		if _, exists := seenNames[lookupKey]; exists {
-			return nil, apperr.New(apperr.CodeInvalidArgument, "Prompt 预设名称不能重复")
+			return nil, apperr.New(apperr.CodeInvalidArgument, "角色名称不能重复")
 		}
 		seenNames[lookupKey] = struct{}{}
-		presets = append(presets, preset)
+		rolePrompts = append(rolePrompts, rolePrompt)
 	}
 
-	return presets, nil
+	return rolePrompts, nil
 }
 
 func normalizeAIModels(settings model.AISettings, defaults model.AISettings) ([]model.AIModelConfig, error) {
@@ -887,10 +987,12 @@ func buildAIPrompts(
 	groups []model.Group,
 	tags []model.Tag,
 	action model.AIAction,
-	question string,
+	displayQuestion string,
+	promptQuestion string,
 	history []model.AIConversationTurn,
 	figureSummaries []string,
 	includedFigures int,
+	activeRolePrompts []model.AIRolePrompt,
 	structuredOutput bool,
 ) (string, string) {
 	groupName := "未分组"
@@ -946,8 +1048,12 @@ func buildAIPrompts(
 		conversationSection = buildConversationSection(history)
 	}
 
+	rolePromptNames := buildAIRolePromptNames(activeRolePrompts)
 	outputRequirements := strings.TrimSpace(aiOutputRequirements(action, structuredOutput))
 	scopeDescription := actionScopeDescription(action)
+	if strings.TrimSpace(displayQuestion) == "" {
+		displayQuestion = promptQuestion
+	}
 
 	userPrompt := fmt.Sprintf(`任务类型: %s
 
@@ -975,6 +1081,12 @@ func buildAIPrompts(
 用户问题:
 %s
 
+原始输入:
+%s
+
+角色调用:
+%s
+
 历史对话:
 %s
 
@@ -998,14 +1110,22 @@ func buildAIPrompts(
 		figureSection,
 		existingTagNames,
 		existingGroupNames,
-		question,
+		promptQuestion,
+		displayQuestion,
+		rolePromptNames,
 		conversationSection,
 		actionPromptFor(settings, action),
 		fullText,
 		outputRequirements,
 	)
 
-	return settings.SystemPrompt, userPrompt
+	systemPrompt := settings.SystemPrompt
+	roleSystemPrompt := buildAIRolePromptSystemSection(activeRolePrompts)
+	if roleSystemPrompt != "" {
+		systemPrompt = strings.TrimSpace(systemPrompt + "\n\n" + roleSystemPrompt)
+	}
+
+	return systemPrompt, userPrompt
 }
 
 func buildPaperNotesContext(paper *model.Paper) string {
@@ -1022,6 +1142,90 @@ func buildPaperNotesContext(paper *model.Paper) string {
 	default:
 		return "管理笔记:\n" + managementNotes + "\n\n文献笔记:\n" + paperNotes
 	}
+}
+
+func resolveAIRolePrompts(question string, available []model.AIRolePrompt) (string, []model.AIRolePrompt) {
+	if strings.TrimSpace(question) == "" || len(available) == 0 {
+		return strings.TrimSpace(question), nil
+	}
+
+	type candidate struct {
+		rolePrompt model.AIRolePrompt
+		token      string
+	}
+
+	candidates := make([]candidate, 0, len(available))
+	for _, item := range available {
+		name := strings.TrimSpace(item.Name)
+		if name == "" {
+			continue
+		}
+		candidates = append(candidates, candidate{
+			rolePrompt: item,
+			token:      "@" + name,
+		})
+	}
+	sort.SliceStable(candidates, func(i, j int) bool {
+		return len([]rune(candidates[i].rolePrompt.Name)) > len([]rune(candidates[j].rolePrompt.Name))
+	})
+
+	cleanedQuestion := question
+	activeRolePrompts := make([]model.AIRolePrompt, 0, len(candidates))
+	seenNames := make(map[string]struct{}, len(candidates))
+	for _, item := range candidates {
+		if !strings.Contains(cleanedQuestion, item.token) {
+			continue
+		}
+		cleanedQuestion = strings.ReplaceAll(cleanedQuestion, item.token, " ")
+		lookupKey := strings.ToLower(strings.TrimSpace(item.rolePrompt.Name))
+		if _, exists := seenNames[lookupKey]; exists {
+			continue
+		}
+		seenNames[lookupKey] = struct{}{}
+		activeRolePrompts = append(activeRolePrompts, item.rolePrompt)
+	}
+
+	return strings.Join(strings.Fields(cleanedQuestion), " "), activeRolePrompts
+}
+
+func buildAIRolePromptNames(rolePrompts []model.AIRolePrompt) string {
+	if len(rolePrompts) == 0 {
+		return "未调用角色 Prompt。"
+	}
+
+	names := make([]string, 0, len(rolePrompts))
+	for _, item := range rolePrompts {
+		name := strings.TrimSpace(item.Name)
+		if name == "" {
+			continue
+		}
+		names = append(names, "@"+name)
+	}
+	if len(names) == 0 {
+		return "未调用角色 Prompt。"
+	}
+	return strings.Join(names, "，")
+}
+
+func buildAIRolePromptSystemSection(rolePrompts []model.AIRolePrompt) string {
+	if len(rolePrompts) == 0 {
+		return ""
+	}
+
+	sections := make([]string, 0, len(rolePrompts))
+	for _, item := range rolePrompts {
+		name := strings.TrimSpace(item.Name)
+		prompt := strings.TrimSpace(item.Prompt)
+		if name == "" || prompt == "" {
+			continue
+		}
+		sections = append(sections, fmt.Sprintf("角色：%s\n%s", name, prompt))
+	}
+	if len(sections) == 0 {
+		return ""
+	}
+
+	return "以下是当前用户通过 @ 调用的角色 Prompt，请在本次回答中一并遵守：\n\n" + strings.Join(sections, "\n\n")
 }
 
 func buildAITranslatePrompts(settings model.AISettings, sourceLanguage, targetLanguage, text string) (string, string) {

@@ -17,6 +17,24 @@
     color: var(--muted);
 }
 
+.settings-inline-status {
+    margin: 0;
+    color: var(--muted);
+    line-height: 1.6;
+}
+
+.settings-inline-status.is-success {
+    color: var(--success);
+}
+
+.settings-inline-status.is-error {
+    color: var(--error);
+}
+
+.settings-inline-status.is-saving {
+    color: var(--accent-deep);
+}
+
 /* ===== Collapsible Sections ===== */
 
 .settings-collapsible-toggle,
@@ -183,6 +201,12 @@ details[open] > .settings-subsection-toggle::after {
     margin: 0.35rem 0 0;
     color: var(--muted);
     line-height: 1.6;
+}
+
+.prompt-preset-head p code,
+.prompt-preset-empty code {
+    font-family: "SFMono-Regular", "Menlo", "Monaco", "Cascadia Mono", "Segoe UI Mono", monospace;
+    font-size: 0.88em;
 }
 
 .prompt-preset-list {
