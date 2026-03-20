@@ -32,3 +32,41 @@ Go tests are colocated as `*_test.go` files, especially under `internal/reposito
 Recent history favors short imperative subjects, e.g. `Add notes workspace and markdown preview` or scoped fixes like `fix: set http.Server.Addr to respect ServerPort config`. Keep commits focused. PRs should describe user-visible impact, call out schema/config changes, list verification commands, and include screenshots for navigation or layout changes. If you touch database structure, update `docs/database.md` in the same PR. If you change frontend-to-backend API routes, request fields, response shapes, or API usage semantics, update `docs/api.md` in the same PR.
 
 When changing database schema, note models, or note semantics, update the relevant documentation immediately in the same change instead of leaving docs drift for later.
+
+## TODO Workflow
+
+When the user asks to work from `TODO`:
+
+- Treat the repository-root `TODO` file as the current backlog source of truth unless the user says otherwise.
+- Read the relevant section first, estimate scope, then implement items in the requested order.
+- Update `TODO` in the same change: mark finished items as `[x]`. If the file already has an `已完成` section, move completed entries there instead of leaving duplicate copies in the active section.
+- Keep the original task wording unless a clarification is necessary to reflect the final behavior more accurately.
+
+## Release Note Workflow
+
+When the user asks for release notes:
+
+- Only use committed changes inside the requested tag range. Never include uncommitted files.
+- Check `git log --oneline <from_tag>..<to_tag>` and `git diff --stat <from_tag>..<to_tag>` first, then read specific files only when needed.
+- Group by user-visible themes, not by commit. Skip internal-only refactors unless they affect behavior.
+- Mention platform or page scope when relevant, such as `macOS desktop`, `AI 伴读页`, or `viewer-page`.
+- Use this format unless the user asks otherwise:
+
+```md
+## What's Changed
+
+### 功能标题
+
+- 说明一个用户可见变化
+- 说明具体行为变化
+- 说明带来的实际收益
+- 如有必要，说明影响范围或平台
+
+### 功能标题
+
+- 说明一个用户可见变化
+- 说明具体行为变化
+- 说明带来的实际收益
+
+**Full Changelog**: https://github.com/xuzhougeng/citebox/compare/<from_tag>...<to_tag>
+```
