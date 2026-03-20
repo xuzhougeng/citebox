@@ -351,22 +351,22 @@ package-desktop-linux:
 package-desktop-darwin:
 	@echo ""
 	@echo "========================================"
-	@echo "Creating macOS Desktop Package"
+	@echo "Creating macOS Desktop DMG"
 	@echo "Version: $(VERSION)"
 	@echo "========================================"
-	@bash scripts/package-desktop-unix.sh macos $(VERSION)
+	@bash scripts/package-desktop-macos.sh $(VERSION)
 	@echo ""
-	@echo "Note: This package contains the host-architecture binary."
+	@echo "Note: This DMG contains the host-architecture app bundle."
 
 package-desktop-windows:
 	@echo ""
 	@echo "========================================"
-	@echo "Creating Windows Desktop Package"
+	@echo "Creating Windows Desktop Installer"
 	@echo "Version: $(VERSION)"
 	@echo "========================================"
 	@pwsh -File scripts/package-desktop-windows.ps1 -Version $(VERSION)
 	@echo ""
-	@echo "Note: This package contains the host-architecture binary."
+	@echo "Note: This installer contains the host-architecture binary."
 
 # =============================================================================
 # Build All Packages
@@ -407,12 +407,12 @@ help:
 	@echo "Windows:"
 	@echo "  make build-windows  - Build Windows executable"
 	@echo "  make package-windows - Create Windows ZIP package"
-	@echo "  make package-desktop-windows - Create Windows desktop ZIP package"
+	@echo "  make package-desktop-windows - Create Windows desktop installer (.exe)"
 	@echo ""
 	@echo "macOS:"
 	@echo "  make build-darwin   - Build macOS executables (Intel + Apple Silicon)"
 	@echo "  make package-darwin - Create macOS ZIP package"
-	@echo "  make package-desktop-darwin - Create macOS desktop tar.gz package"
+	@echo "  make package-desktop-darwin - Create macOS desktop DMG"
 	@echo ""
 	@echo "Linux:"
 	@echo "  make build-linux    - Build Linux executables (x86_64 + ARM64)"

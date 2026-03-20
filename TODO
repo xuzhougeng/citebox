@@ -22,6 +22,7 @@
 
 已完成
 
+- [x] 桌面端支持 Windows 安装器发布和 macOS DMG 分发
 - [x] modal-dialog figure-modal-dialog 中 figure-lightbox-media 支持在这里面进行图片的缩放（中键）和拖动，和复原
 - [x] 替换已有图片这个页面里面的option value信息太多，保留第几页就行。
 - [x] 文献库的关键词检索，可以限定在title和abstract，还是full text.

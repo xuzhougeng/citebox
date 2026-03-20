@@ -43,7 +43,7 @@ jobs:
             platform: macos
             package_kind: desktop
             base_name: citebox-desktop
-            archive_ext: .tar.gz
+            archive_ext: .dmg
           - label: Linux Desktop
             runner: ubuntu-latest
             platform: linux
@@ -55,7 +55,7 @@ jobs:
             platform: windows
             package_kind: desktop
             base_name: citebox-desktop
-            archive_ext: .zip
+            archive_ext: .exe
 
     steps:
       - name: Checkout repository
@@ -107,15 +107,25 @@ jobs:
           }
           go env CC CXX CGO_ENABLED
 
+      - name: Install NSIS
+        if: matrix.platform == 'windows' && matrix.package_kind == 'desktop'
+        shell: pwsh
+        run: choco install nsis -y --no-progress
+
       - name: Package server release for macOS or Linux
         if: matrix.package_kind == 'server' && matrix.platform != 'windows'
         shell: bash
         run: ./scripts/package-unix.sh "${{ matrix.platform }}" "${VERSION}"
 
-      - name: Package desktop release for macOS or Linux
-        if: matrix.package_kind == 'desktop' && matrix.platform != 'windows'
+      - name: Package Linux desktop release
+        if: matrix.package_kind == 'desktop' && matrix.platform == 'linux'
         shell: bash
-        run: bash ./scripts/package-desktop-unix.sh "${{ matrix.platform }}" "${VERSION}"
+        run: bash ./scripts/package-desktop-unix.sh linux "${VERSION}"
+
+      - name: Package macOS desktop release
+        if: matrix.package_kind == 'desktop' && matrix.platform == 'macos'
+        shell: bash
+        run: bash ./scripts/package-desktop-macos.sh "${VERSION}"
 
       - name: Package Windows server release
         if: matrix.package_kind == 'server' && matrix.platform == 'windows'
@@ -131,7 +141,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.base_name }}-${{ matrix.platform }}-${{ env.VERSION }}
-          path: dist/${{ matrix.base_name }}-${{ matrix.platform }}-${{ env.VERSION }}
+          path: dist/${{ matrix.base_name }}-${{ matrix.platform }}-${{ env.VERSION }}${{ matrix.archive_ext }}
           if-no-files-found: error
 
   publish:
@@ -156,37 +166,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          shopt -s nullglob
-
-          dirs=(release-assets/*)
-          if [ ${#dirs[@]} -eq 0 ]; then
-              echo "No release artifact directories found" >&2
-              exit 1
-          fi
-
-          mkdir -p release-bundles
-          files=()
-
-          for dir in "${dirs[@]}"; do
-              [ -d "${dir}" ] || continue
-              name="$(basename "${dir}")"
-
-              if [[ "${name}" == *-windows-* ]]; then
-                  archive="release-bundles/${name}.zip"
-                  (
-                      cd release-assets
-                      zip -rq "../${archive}" "${name}"
-                  )
-              else
-                  archive="release-bundles/${name}.tar.gz"
-                  tar -C release-assets -czf "${archive}" "${name}"
-              fi
-
-              files+=("${archive}")
-          done
+          mapfile -d '' files < <(find release-assets -type f -print0 | sort -z)
 
           if [ ${#files[@]} -eq 0 ]; then
-              echo "No release bundles created" >&2
+              echo "No release files found" >&2
               exit 1
           fi
 
