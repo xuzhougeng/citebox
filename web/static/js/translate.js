@@ -22,6 +22,7 @@ const DesktopTranslate = {
         this.menu.id = 'desktopTranslateMenu';
         this.menu.className = 'translate-context-menu hidden';
         this.menu.innerHTML = `
+            <button type="button" data-translate-action="copy">复制</button>
             <button type="button" data-translate-action="translate">翻译</button>
         `;
         document.body.appendChild(this.menu);
@@ -38,7 +39,7 @@ const DesktopTranslate = {
             }
 
             const selectedText = this.currentSelectionText();
-            if (!selectedText) {
+            if (!String(selectedText || '').trim()) {
                 this.hideMenu();
                 return;
             }
@@ -51,6 +52,12 @@ const DesktopTranslate = {
         document.addEventListener('click', async (event) => {
             const target = event.target instanceof Element ? event.target : null;
             const actionButton = target?.closest('[data-translate-action]');
+            if (actionButton?.dataset.translateAction === 'copy') {
+                event.preventDefault();
+                event.stopPropagation();
+                await this.copySelection();
+                return;
+            }
             if (actionButton?.dataset.translateAction === 'translate') {
                 event.preventDefault();
                 event.stopPropagation();
@@ -77,7 +84,7 @@ const DesktopTranslate = {
     },
 
     currentSelectionText() {
-        return String(window.getSelection?.().toString() || '').trim();
+        return String(window.getSelection?.().toString() || '');
     },
 
     shouldKeepNativeMenu(event) {
@@ -148,6 +155,20 @@ const DesktopTranslate = {
         this.hideMenu();
         await this.translateText(text, {
             title: '划词翻译'
+        });
+    },
+
+    async copySelection() {
+        const text = String(this.pendingText || '');
+        this.pendingText = '';
+        this.hideMenu();
+        if (!text.trim()) {
+            Utils.showToast('没有可复制的内容', 'error');
+            return;
+        }
+        await this.copyText(text, {
+            successMessage: '已复制所选内容',
+            errorMessage: '复制失败，请手动选择文本'
         });
     },
 
@@ -266,11 +287,29 @@ const DesktopTranslate = {
             return;
         }
 
+        await this.copyText(content, {
+            successMessage: '译文已复制',
+            errorMessage: '复制失败，请手动选择文本'
+        });
+    },
+
+    async copyText(text = '', messages = {}) {
+        const content = String(text || '');
+        if (!content.trim()) {
+            return false;
+        }
+
         try {
-            await navigator.clipboard.writeText(content);
-            Utils.showToast('译文已复制');
+            if (typeof window.citeboxDesktopWriteClipboardText === 'function') {
+                await window.citeboxDesktopWriteClipboardText(content);
+            } else {
+                await navigator.clipboard.writeText(content);
+            }
+            Utils.showToast(messages.successMessage || '已复制');
+            return true;
         } catch (error) {
-            Utils.showToast('复制失败，请手动选择文本', 'error');
+            Utils.showToast(messages.errorMessage || '复制失败，请手动选择文本', 'error');
+            return false;
         }
     },
 
