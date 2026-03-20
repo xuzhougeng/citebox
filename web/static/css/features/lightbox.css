@@ -196,21 +196,24 @@
     transition: border-color 0.18s ease, background 0.18s ease, transform 0.18s ease;
 }
 
-.figure-tag-preset:hover:not(:disabled),
-.figure-tag-preset:focus-visible:not(:disabled) {
+.figure-tag-preset:hover,
+.figure-tag-preset:focus-visible {
     border-color: rgba(164, 92, 64, 0.3);
     background: rgba(255, 245, 236, 0.98);
     transform: translateY(-1px);
     outline: none;
 }
 
-.figure-tag-preset.is-applied,
-.figure-tag-preset:disabled {
+.figure-tag-preset.is-applied {
     border-color: rgba(79, 111, 82, 0.18);
     background: rgba(79, 111, 82, 0.08);
     color: #36503f;
-    cursor: default;
-    transform: none;
+}
+
+.figure-tag-preset.is-applied:hover,
+.figure-tag-preset.is-applied:focus-visible {
+    border-color: rgba(79, 111, 82, 0.3);
+    background: rgba(79, 111, 82, 0.14);
 }
 
 .figure-tag-empty {

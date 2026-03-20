@@ -625,13 +625,15 @@ const FigureViewer = {
         const existing = new Set(this.currentFigureTagNames().map((tag) => tag.toLowerCase()));
         return presets.map((tagName) => {
             const applied = existing.has(tagName.toLowerCase());
+            const action = applied ? 'remove-tag' : 'apply-tag';
             return `
                 <button
                     class="figure-tag-preset ${applied ? 'is-applied' : ''}"
                     type="button"
-                    data-figure-meta-action="apply-tag"
+                    data-figure-meta-action="${action}"
                     data-tag-name="${Utils.escapeHTML(tagName)}"
-                    ${applied ? 'disabled' : ''}
+                    aria-pressed="${applied ? 'true' : 'false'}"
+                    title="${applied ? `再次点击取消 ${Utils.escapeHTML(tagName)}` : `点击添加 ${Utils.escapeHTML(tagName)}`}"
                 >${Utils.escapeHTML(tagName)}</button>
             `;
         }).join('');
