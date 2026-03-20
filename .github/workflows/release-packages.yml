@@ -149,10 +149,10 @@ jobs:
         env:
           MAC_CERT_P12_BASE64: ${{ secrets.MAC_CERT_P12_BASE64 }}
           MAC_CERT_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
-          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
         run: |
           set -euo pipefail
           KEYCHAIN_PATH="${RUNNER_TEMP}/citebox-build.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -base64 24)"
           python3 -c 'import base64, os; open("cert.p12", "wb").write(base64.b64decode(os.environ["MAC_CERT_P12_BASE64"].strip()))'
 
           security create-keychain -p "${KEYCHAIN_PASSWORD}" "${KEYCHAIN_PATH}"
