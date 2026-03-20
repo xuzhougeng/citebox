@@ -3,6 +3,36 @@ param(
     [string]$Version
 )
 
+function Resolve-Makensis {
+    $command = Get-Command "makensis" -CommandType Application -ErrorAction SilentlyContinue
+    if ($null -ne $command) {
+        return $command.Source
+    }
+
+    $candidatePaths = @(
+        (Join-Path $env:ProgramFiles "NSIS\makensis.exe"),
+        (Join-Path ${env:ProgramFiles(x86)} "NSIS\makensis.exe")
+    )
+
+    if ($env:ChocolateyInstall) {
+        $candidatePaths += Get-ChildItem `
+            -Path (Join-Path $env:ChocolateyInstall "lib") `
+            -Filter "makensis.exe" `
+            -File `
+            -Recurse `
+            -ErrorAction SilentlyContinue |
+            Select-Object -ExpandProperty FullName
+    }
+
+    foreach ($path in $candidatePaths) {
+        if ($path -and (Test-Path $path)) {
+            return (Resolve-Path $path).Path
+        }
+    }
+
+    throw "makensis not found. Searched PATH, Program Files, and Chocolatey install directories."
+}
+
 $ErrorActionPreference = "Stop"
 
 $binaryName = "citebox-desktop"
@@ -160,33 +190,3 @@ Set-Content -Path $nsisScriptPath -Value $nsisScript -Encoding ascii
 & $makensis $nsisScriptPath | Write-Host
 
 Write-Host "Created $installerPath"
-
-function Resolve-Makensis {
-    $command = Get-Command "makensis" -CommandType Application -ErrorAction SilentlyContinue
-    if ($null -ne $command) {
-        return $command.Source
-    }
-
-    $candidatePaths = @(
-        (Join-Path $env:ProgramFiles "NSIS\makensis.exe"),
-        (Join-Path ${env:ProgramFiles(x86)} "NSIS\makensis.exe")
-    )
-
-    if ($env:ChocolateyInstall) {
-        $candidatePaths += Get-ChildItem `
-            -Path (Join-Path $env:ChocolateyInstall "lib") `
-            -Filter "makensis.exe" `
-            -File `
-            -Recurse `
-            -ErrorAction SilentlyContinue |
-            Select-Object -ExpandProperty FullName
-    }
-
-    foreach ($path in $candidatePaths) {
-        if ($path -and (Test-Path $path)) {
-            return (Resolve-Path $path).Path
-        }
-    }
-
-    throw "makensis not found. Searched PATH, Program Files, and Chocolatey install directories."
-}
