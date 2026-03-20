@@ -2,18 +2,17 @@ package main
 
 import (
 	"errors"
-	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
 	"os"
-	"path/filepath"
 	"time"
 
 	webview "github.com/webview/webview_go"
 
 	"github.com/xuzhougeng/citebox/internal/app"
 	"github.com/xuzhougeng/citebox/internal/config"
+	"github.com/xuzhougeng/citebox/internal/desktopapp"
 	"github.com/xuzhougeng/citebox/internal/desktopicon"
 	"github.com/xuzhougeng/citebox/internal/desktopruntime"
 	"github.com/xuzhougeng/citebox/internal/logging"
@@ -35,7 +34,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	webRoot, err := resolveWebRoot()
+	webRoot, err := desktopapp.ResolveWebRoot()
 	if err != nil {
 		logger.Error("failed to resolve desktop web assets", "error", err)
 		os.Exit(1)
@@ -99,27 +98,6 @@ func main() {
 	if err := server.Close(); err != nil {
 		logger.Warn("failed to close desktop server", "error", err)
 	}
-}
-
-func resolveWebRoot() (string, error) {
-	executablePath, err := os.Executable()
-	if err != nil {
-		return "", err
-	}
-
-	candidates := []string{
-		filepath.Join(filepath.Dir(executablePath), "web"),
-		"web",
-	}
-
-	for _, candidate := range candidates {
-		indexPath := filepath.Join(candidate, "index.html")
-		if _, err := os.Stat(indexPath); err == nil {
-			return candidate, nil
-		}
-	}
-
-	return "", fmt.Errorf("cannot find web assets next to the executable or current working directory")
 }
 
 func waitForServerReady(url string, timeout time.Duration) error {

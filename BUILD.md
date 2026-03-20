@@ -29,9 +29,12 @@ git push origin v0.1.0
 
 产物格式：
 
-- macOS: `citebox-macos-v0.1.0.tar.gz`
-- Linux: `citebox-linux-v0.1.0.tar.gz`
-- Windows: `citebox-windows-v0.1.0.zip`
+- macOS: `citebox-macos-{version}.tar.gz`
+- Linux: `citebox-linux-{version}.tar.gz`
+- Windows: `citebox-windows-{version}.zip`
+- macOS Desktop: `citebox-desktop-macos-{version}.dmg`
+- Linux Desktop: `citebox-desktop-linux-{version}.tar.gz`
+- Windows Desktop: `citebox-desktop-windows-{version}.exe`
 
 说明：
 
@@ -101,17 +104,11 @@ dist/citebox-desktop-linux-{version}.tar.gz
 ├── start.sh
 └── README.txt
 
-dist/citebox-desktop-macos-{version}.tar.gz
-├── citebox-desktop
-├── web/
-├── start.sh
-└── README.txt
+dist/citebox-desktop-macos-{version}.dmg
+└── CiteBox.app
 
-dist/citebox-desktop-windows-{version}.zip
-├── citebox-desktop.exe
-├── web/
-├── start.bat
-└── README.txt
+dist/citebox-desktop-windows-{version}.exe
+└── Windows installer
 ```
 
 ### Linux 依赖
@@ -131,12 +128,21 @@ sudo apt install libgtk-3-dev libwebkit2gtk-4.0-dev
 
 ### Windows 说明
 
-Windows 桌面包当前按“原生 runner 直接编译”接入 GitHub Actions：
+Windows 桌面安装包当前按“原生 runner 直接编译 + NSIS 打包”接入 GitHub Actions：
 
 - 不额外安装 MSYS2
 - 直接依赖 `windows-latest` runner 现成的本机编译环境
-- 如果首轮 CI 发现该 runner 缺少可用的 cgo C/C++ 编译器，再回头补专用工具链
+- 通过 `choco install nsis` 提供安装器打包能力
 - 打包时会以 GUI 子系统构建桌面版，因此双击启动默认不弹出终端窗口
+- 安装器默认按用户安装到 `%LocalAppData%\Programs\CiteBox\`
+
+### macOS 说明
+
+macOS 桌面包当前会生成标准 `.app`，再封装成 `.dmg`：
+
+- `CiteBox.app` 内的前端资源放在 `Contents/Resources/web/`
+- DMG 内会同时附带 `/Applications` 快捷方式，方便拖拽安装
+- 若设置 `CODESIGN_IDENTITY`，打包脚本会在生成 DMG 前对 `.app` 执行签名
 
 ---
 
@@ -323,10 +329,10 @@ CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build ./cmd/server
 # 系统设置 → 隐私与安全性 → 安全性 → 仍要打开
 
 # 方法2：移除隔离属性
-xattr -d com.apple.quarantine citebox
+xattr -d com.apple.quarantine /Applications/CiteBox.app
 
 # 方法3：签名（开发者）
-codesign -s "Developer ID" citebox
+codesign -s "Developer ID" /Applications/CiteBox.app
 ```
 
 ### 3. Linux 端口权限
