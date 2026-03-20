@@ -152,22 +152,29 @@ jobs:
           KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
         run: |
           set -euo pipefail
+          KEYCHAIN_PATH="${RUNNER_TEMP}/citebox-build.keychain-db"
           python3 -c 'import base64, os; open("cert.p12", "wb").write(base64.b64decode(os.environ["MAC_CERT_P12_BASE64"].strip()))'
 
-          security create-keychain -p "${KEYCHAIN_PASSWORD}" build.keychain
-          security list-keychains -d user -s build.keychain
-          security default-keychain -s build.keychain
-          security unlock-keychain -p "${KEYCHAIN_PASSWORD}" build.keychain
-          security set-keychain-settings -lut 21600 build.keychain
-          security import cert.p12 -k build.keychain -P "${MAC_CERT_PASSWORD}" -T /usr/bin/codesign -T /usr/bin/security -T /usr/bin/xcrun
-          security set-key-partition-list -S apple-tool:,apple: -s -k "${KEYCHAIN_PASSWORD}" build.keychain
+          security create-keychain -p "${KEYCHAIN_PASSWORD}" "${KEYCHAIN_PATH}"
+          security list-keychains -d user -s "${KEYCHAIN_PATH}"
+          security default-keychain -s "${KEYCHAIN_PATH}"
+          security unlock-keychain -p "${KEYCHAIN_PASSWORD}" "${KEYCHAIN_PATH}"
+          security set-keychain-settings -lut 21600 "${KEYCHAIN_PATH}"
+          security import cert.p12 -k "${KEYCHAIN_PATH}" -P "${MAC_CERT_PASSWORD}" -T /usr/bin/codesign -T /usr/bin/security -T /usr/bin/xcrun
+          security set-key-partition-list -S apple-tool:,apple: -s -k "${KEYCHAIN_PASSWORD}" "${KEYCHAIN_PATH}"
 
           echo "Codesigning identities after import:"
-          security find-identity -v -p codesigning
-          if ! security find-identity -v -p codesigning | grep -q 'Developer ID Application'; then
+          security find-identity -v -p codesigning "${KEYCHAIN_PATH}"
+          codesign_identity="$(security find-identity -v -p codesigning "${KEYCHAIN_PATH}" | awk '/Developer ID Application/ {print $2; exit}')"
+          if [[ -z "${codesign_identity}" ]]; then
             echo "::error::No Developer ID Application identity in keychain. Check MAC_CERT_P12_BASE64 / MAC_CERT_PASSWORD and that the .p12 includes the private key." >&2
             exit 1
           fi
+          {
+            echo "CODESIGN_IDENTITY=${codesign_identity}"
+            echo "CODESIGN_KEYCHAIN=${KEYCHAIN_PATH}"
+          } >> "${GITHUB_ENV}"
+          rm -f cert.p12
 
       - name: Package server release for macOS or Linux
         if: matrix.package_kind == 'server' && matrix.platform != 'windows'
@@ -182,8 +189,6 @@ jobs:
       - name: Package macOS desktop release
         if: matrix.package_kind == 'desktop' && matrix.platform == 'macos'
         shell: bash
-        env:
-          CODESIGN_IDENTITY: ${{ secrets.CODESIGN_IDENTITY }}
         run: bash ./scripts/package-desktop-macos.sh "${VERSION}"
 
       - name: Notarize macOS desktop DMG
