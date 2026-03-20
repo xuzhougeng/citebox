@@ -7,6 +7,7 @@ package desktopruntime
 #cgo LDFLAGS: -framework Cocoa
 #import <Cocoa/Cocoa.h>
 #include <stdlib.h>
+#include <string.h>
 
 static NSView *citebox_find_first_responder_view(NSView *view) {
 	if (view == nil) {
@@ -168,6 +169,52 @@ static const char *citebox_save_file(const char *filenameCString, const void *by
 		return NULL;
 	}
 }
+
+static char *citebox_read_clipboard_text(void) {
+	@autoreleasepool {
+		NSPasteboard *pasteboard = [NSPasteboard generalPasteboard];
+		if (pasteboard == nil) {
+			return NULL;
+		}
+
+		NSString *text = [pasteboard stringForType:NSPasteboardTypeString];
+		if (text == nil) {
+			return NULL;
+		}
+
+		const char *utf8 = [text UTF8String];
+		if (utf8 == NULL) {
+			return NULL;
+		}
+
+		return strdup(utf8);
+	}
+}
+
+static const char *citebox_write_clipboard_text(const char *textCString) {
+	@autoreleasepool {
+		if (textCString == NULL) {
+			return "missing text";
+		}
+
+		NSPasteboard *pasteboard = [NSPasteboard generalPasteboard];
+		if (pasteboard == nil) {
+			return "missing pasteboard";
+		}
+
+		NSString *text = [NSString stringWithUTF8String:textCString];
+		if (text == nil) {
+			text = @"";
+		}
+
+		[pasteboard clearContents];
+		if (![pasteboard setString:text forType:NSPasteboardTypeString]) {
+			return "failed to write clipboard";
+		}
+
+		return NULL;
+	}
+}
 */
 import "C"
 
@@ -261,6 +308,165 @@ const desktopBridgeScript = `(function() {
         void window.citeboxDesktopOpenExternal(url.href).catch(() => {});
     };
 
+    const textInputTypes = new Set(['', 'text', 'search', 'url', 'tel', 'password', 'email']);
+    const isTextInput = (element) => {
+        if (!(element instanceof HTMLInputElement) || element.disabled) {
+            return false;
+        }
+        return textInputTypes.has(String(element.type || '').toLowerCase());
+    };
+
+    const isTextControl = (element) => {
+        if (element instanceof HTMLTextAreaElement) {
+            return !element.disabled;
+        }
+        return isTextInput(element);
+    };
+
+    const resolveTextControl = (event) => {
+        const candidates = [];
+        const pushCandidate = (candidate) => {
+            if (!(candidate instanceof Element)) {
+                return;
+            }
+            if (!candidates.includes(candidate)) {
+                candidates.push(candidate);
+            }
+        };
+
+        pushCandidate(event.target);
+        if (typeof event.composedPath === 'function') {
+            event.composedPath().forEach(pushCandidate);
+        }
+        pushCandidate(document.activeElement);
+
+        for (const candidate of candidates) {
+            if (isTextControl(candidate)) {
+                return candidate;
+            }
+            const closest = typeof candidate.closest === 'function'
+                ? candidate.closest('textarea, input')
+                : null;
+            if (isTextControl(closest)) {
+                return closest;
+            }
+        }
+        return null;
+    };
+
+    const currentSelectionRange = (element) => {
+        const fallback = String(element.value || '').length;
+        const start = typeof element.selectionStart === 'number' ? element.selectionStart : fallback;
+        const end = typeof element.selectionEnd === 'number' ? element.selectionEnd : start;
+        return {
+            start: Math.min(start, end),
+            end: Math.max(start, end)
+        };
+    };
+
+    const dispatchTextControlInput = (element) => {
+        element.dispatchEvent(new Event('input', { bubbles: true }));
+    };
+
+    const selectAllText = (element) => {
+        element.focus();
+        if (typeof element.select === 'function') {
+            element.select();
+            return;
+        }
+        if (typeof element.setSelectionRange === 'function') {
+            const length = String(element.value || '').length;
+            element.setSelectionRange(0, length);
+        }
+    };
+
+    const selectedText = (element) => {
+        const range = currentSelectionRange(element);
+        return String(element.value || '').slice(range.start, range.end);
+    };
+
+    const replaceSelection = (element, text) => {
+        const range = currentSelectionRange(element);
+        element.focus();
+        if (typeof element.setRangeText === 'function') {
+            element.setRangeText(String(text || ''), range.start, range.end, 'end');
+        } else {
+            const value = String(element.value || '');
+            const next = value.slice(0, range.start) + String(text || '') + value.slice(range.end);
+            element.value = next;
+            const caret = range.start + String(text || '').length;
+            if (typeof element.setSelectionRange === 'function') {
+                element.setSelectionRange(caret, caret);
+            }
+        }
+        dispatchTextControlInput(element);
+    };
+
+    document.addEventListener('keydown', (event) => {
+        if (event.defaultPrevented || event.isComposing) {
+            return;
+        }
+        if ((!event.metaKey && !event.ctrlKey) || event.altKey || event.shiftKey) {
+            return;
+        }
+
+        const key = String(event.key || '').toLowerCase();
+        if (!['a', 'c', 'x', 'v'].includes(key)) {
+            return;
+        }
+
+        const control = resolveTextControl(event);
+        if (!control) {
+            return;
+        }
+
+        if (key === 'a') {
+            event.preventDefault();
+            event.stopPropagation();
+            selectAllText(control);
+            return;
+        }
+
+        if (key === 'c') {
+            const text = selectedText(control);
+            if (!text || typeof window.citeboxDesktopWriteClipboardText !== 'function') {
+                return;
+            }
+            event.preventDefault();
+            event.stopPropagation();
+            void window.citeboxDesktopWriteClipboardText(text).catch(() => {});
+            return;
+        }
+
+        if (key === 'x') {
+            const text = selectedText(control);
+            if (!text || control.readOnly || typeof window.citeboxDesktopWriteClipboardText !== 'function') {
+                return;
+            }
+            event.preventDefault();
+            event.stopPropagation();
+            void window.citeboxDesktopWriteClipboardText(text)
+                .then(() => {
+                    replaceSelection(control, '');
+                })
+                .catch(() => {});
+            return;
+        }
+
+        if (key === 'v') {
+            if (control.readOnly || typeof window.citeboxDesktopReadClipboardText !== 'function') {
+                return;
+            }
+            event.preventDefault();
+            event.stopPropagation();
+            void window.citeboxDesktopReadClipboardText()
+                .then((text) => {
+                    replaceSelection(control, String(text || ''));
+                })
+                .catch(() => {});
+        }
+    }, true);
+
     document.addEventListener('click', (event) => {
         if (event.defaultPrevented || event.button !== 0) {
             return;
@@ -328,6 +534,16 @@ func Configure(w webview.WebView, appName string) error {
 	}); err != nil {
 		return fmt.Errorf("bind external opener: %w", err)
 	}
+	if err := w.Bind("citeboxDesktopReadClipboardText", func() (string, error) {
+		return readClipboardText()
+	}); err != nil {
+		return fmt.Errorf("bind clipboard reader: %w", err)
+	}
+	if err := w.Bind("citeboxDesktopWriteClipboardText", func(text string) error {
+		return writeClipboardText(text)
+	}); err != nil {
+		return fmt.Errorf("bind clipboard writer: %w", err)
+	}
 	if err := w.Bind("citeboxDesktopSaveFile", func(filename string, dataBase64 string) (map[string]bool, error) {
 		saved, err := saveFile(filename, dataBase64)
 		if err != nil {
@@ -384,4 +600,23 @@ func saveFile(filename string, dataBase64 string) (bool, error) {
 	}
 
 	return didSave != 0, nil
+}
+
+func readClipboardText() (string, error) {
+	value := C.citebox_read_clipboard_text()
+	if value == nil {
+		return "", nil
+	}
+	defer C.free(unsafe.Pointer(value))
+	return C.GoString(value), nil
+}
+
+func writeClipboardText(text string) error {
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+
+	if errMessage := C.citebox_write_clipboard_text(cText); errMessage != nil {
+		return fmt.Errorf("write clipboard: %s", C.GoString(errMessage))
+	}
+	return nil
 }

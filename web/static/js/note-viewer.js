@@ -39,9 +39,14 @@ const NoteViewer = {
                 return;
             }
             if (event.key === 'ArrowLeft') {
+                event.preventDefault();
+                event.stopPropagation();
                 void this.previous();
+                return;
             }
             if (event.key === 'ArrowRight') {
+                event.preventDefault();
+                event.stopPropagation();
                 void this.next();
             }
         };
