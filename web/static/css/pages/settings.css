@@ -17,12 +17,74 @@
     color: var(--muted);
 }
 
-.prompt-section-head {
-    margin-top: 0.4rem;
+/* ===== Collapsible Sections ===== */
+
+.settings-collapsible-toggle,
+.settings-subsection-toggle {
+    cursor: pointer;
+    list-style: none;
+    position: relative;
+    padding-right: 1.8rem;
 }
 
-.prompt-section-head p {
-    color: rgba(var(--ink-rgb), 0.78);
+.settings-collapsible-toggle::-webkit-details-marker,
+.settings-subsection-toggle::-webkit-details-marker {
+    display: none;
+}
+
+.settings-collapsible-toggle h2 {
+    margin: 0;
+    font-family: var(--font-display);
+}
+
+.settings-collapsible-toggle p {
+    color: var(--muted);
+}
+
+.settings-subsection-toggle h3 {
+    margin: 0;
+    color: var(--ink);
+    font-family: var(--font-display);
+}
+
+.settings-subsection-toggle p {
+    color: var(--muted);
+}
+
+.settings-collapsible-toggle::after,
+.settings-subsection-toggle::after {
+    content: "";
+    position: absolute;
+    right: 0;
+    top: 0.5rem;
+    width: 0.5rem;
+    height: 0.5rem;
+    border-right: 2px solid rgba(var(--ink-rgb), 0.35);
+    border-bottom: 2px solid rgba(var(--ink-rgb), 0.35);
+    transform: rotate(45deg);
+    transition: transform 0.25s ease;
+}
+
+.settings-subsection-toggle::after {
+    top: 0.35rem;
+}
+
+details[open] > .settings-collapsible-toggle::after,
+details[open] > .settings-subsection-toggle::after {
+    transform: rotate(-135deg);
+}
+
+.settings-subsection {
+    padding: 0.9rem 1.05rem;
+    border-radius: 18px;
+    border: 1px solid rgba(var(--ink-rgb), 0.06);
+    background: rgba(var(--surface-rgb), 0.64);
+}
+
+.settings-subsection-body {
+    display: grid;
+    gap: 0.8rem;
+    margin-top: 0.8rem;
 }
 
 .manager-list {
