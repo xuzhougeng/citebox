@@ -143,6 +143,7 @@ macOS 桌面包当前会生成标准 `.app`，再封装成 `.dmg`：
 - `CiteBox.app` 内的前端资源放在 `Contents/Resources/web/`
 - DMG 内会同时附带 `/Applications` 快捷方式，方便拖拽安装
 - 若设置 `CODESIGN_IDENTITY`，打包脚本会在生成 DMG 前对 `.app` 执行签名
+- `CODESIGN_IDENTITY` 可使用证书显示名或 SHA-1 指纹；若证书位于自定义 keychain，可额外设置 `CODESIGN_KEYCHAIN`
 
 ---
 

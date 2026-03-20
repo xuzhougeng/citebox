@@ -29,6 +29,25 @@ cleanup() {
 }
 trap cleanup EXIT
 
+trim_value() {
+    local value="${1:-}"
+    local first_char=""
+    local last_char=""
+
+    value="${value#"${value%%[![:space:]]*}"}"
+    value="${value%"${value##*[![:space:]]}"}"
+
+    if [[ ${#value} -ge 2 ]]; then
+        first_char="${value:0:1}"
+        last_char="${value:${#value}-1:1}"
+        if [[ "${first_char}" == "${last_char}" && ( "${first_char}" == "\"" || "${first_char}" == "'" ) ]]; then
+            value="${value:1:${#value}-2}"
+        fi
+    fi
+
+    printf '%s' "${value}"
+}
+
 rm -rf "${PACKAGE_DIR}"
 rm -f "${DMG_PATH}"
 mkdir -p "${MACOS_DIR}" "${RESOURCES_DIR}"
@@ -91,10 +110,20 @@ cat > "${CONTENTS_DIR}/Info.plist" <<EOF
 EOF
 
 if [[ -n "${CODESIGN_IDENTITY:-}" ]]; then
-    # Trim whitespace/newlines (common when pasted into CI secrets)
-    CODESIGN_IDENTITY="${CODESIGN_IDENTITY#"${CODESIGN_IDENTITY%%[![:space:]]*}"}"
-    CODESIGN_IDENTITY="${CODESIGN_IDENTITY%"${CODESIGN_IDENTITY##*[![:space:]]}"}"
-    codesign --force --deep --options runtime --sign "${CODESIGN_IDENTITY}" "${APP_DIR}"
+    CODESIGN_IDENTITY="$(trim_value "${CODESIGN_IDENTITY}")"
+    CODESIGN_KEYCHAIN="$(trim_value "${CODESIGN_KEYCHAIN:-}")"
+
+    if [[ -z "${CODESIGN_IDENTITY}" ]]; then
+        echo "CODESIGN_IDENTITY is empty after trimming" >&2
+        exit 1
+    fi
+
+    codesign_args=(--force --deep --options runtime --sign "${CODESIGN_IDENTITY}")
+    if [[ -n "${CODESIGN_KEYCHAIN}" ]]; then
+        codesign_args+=(--keychain "${CODESIGN_KEYCHAIN}")
+    fi
+
+    codesign "${codesign_args[@]}" "${APP_DIR}"
 fi
 
 mkdir -p "${DMG_ROOT}"
