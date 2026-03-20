@@ -40,16 +40,14 @@
         </section>
 
         <section class="section-stack">
-            <section class="manager-card">
-                <div class="manager-head">
-                    <div>
-                        <h2>版本信息</h2>
-                        <p>检查当前运行中的 CiteBox 是否已经落后于 GitHub 上的最新正式版本。</p>
-                    </div>
-                    <div class="submit-row">
-                        <a id="versionReleaseLink" class="btn btn-outline hidden" href="#" target="_blank" rel="noreferrer">查看 Release</a>
-                        <button id="checkVersionButton" class="btn btn-primary" type="button">检查更新</button>
-                    </div>
+            <details class="manager-card settings-collapsible" open>
+                <summary class="settings-collapsible-toggle">
+                    <h2>版本信息</h2>
+                    <p>检查当前运行中的 CiteBox 是否已经落后于 GitHub 上的最新正式版本。</p>
+                </summary>
+                <div class="submit-row">
+                    <a id="versionReleaseLink" class="btn btn-outline hidden" href="#" target="_blank" rel="noreferrer">查看 Release</a>
+                    <button id="checkVersionButton" class="btn btn-primary" type="button">检查更新</button>
                 </div>
                 <div id="versionSummary" class="settings-summary-box">
                     <div>
@@ -69,85 +67,87 @@
                         <strong>载入中...</strong>
                     </div>
                 </div>
-            </section>
+            </details>
 
             <section class="manager-card">
                 <div class="manager-head">
                     <h2>AI 配置</h2>
-                    <p>先维护模型池，再把不同模型绑定到问答、图片解读、标签建议、分组建议和划词翻译等场景。</p>
+                    <p>管理模型、场景绑定、Prompt 模板和翻译设置。</p>
                 </div>
                 <form id="aiSettingsForm" class="manager-form">
-                    <div class="manager-head">
-                        <h3>模型池</h3>
-                        <p>点击模型名按钮即可修改；新增模型会先弹出配置窗口，保存后再加入模型池。</p>
-                    </div>
+                    <details class="settings-subsection" open>
+                        <summary class="settings-subsection-toggle">
+                            <h3>模型配置</h3>
+                            <p>添加模型、场景绑定和翻译设置。</p>
+                        </summary>
+                        <div class="settings-subsection-body">
+                            <div id="aiModelList" class="manager-list"></div>
+                            <div class="submit-row">
+                                <button id="addAIModelButton" class="btn btn-outline" type="button">添加模型</button>
+                            </div>
 
-                    <div id="aiModelList" class="manager-list"></div>
+                            <div class="manager-head">
+                                <h3>场景绑定</h3>
+                                <p>为不同 AI 场景选择默认模型；如果没有特别指定，系统会回退到默认模型。</p>
+                            </div>
+                            <div class="form-grid">
+                                <label class="field">
+                                    <span>默认模型</span>
+                                    <select id="aiDefaultModelSelect" class="form-input"></select>
+                                </label>
+                                <label class="field">
+                                    <span>通用问答模型</span>
+                                    <select id="aiQAModelSelect" class="form-input"></select>
+                                </label>
+                                <label class="field">
+                                    <span>图片解读模型</span>
+                                    <select id="aiFigureModelSelect" class="form-input"></select>
+                                </label>
+                                <label class="field">
+                                    <span>Tag 建议模型</span>
+                                    <select id="aiTagModelSelect" class="form-input"></select>
+                                </label>
+                                <label class="field">
+                                    <span>分组建议模型</span>
+                                    <select id="aiGroupModelSelect" class="form-input"></select>
+                                </label>
+                                <label class="field">
+                                    <span>划词翻译模型</span>
+                                    <select id="aiTranslateModelSelect" class="form-input"></select>
+                                </label>
+                                <label class="field">
+                                    <span>Temperature</span>
+                                    <input id="aiTemperatureInput" class="form-input" type="number" min="0" max="2" step="0.1">
+                                </label>
+                                <label class="field">
+                                    <span>图像数量上限</span>
+                                    <input id="aiMaxFiguresInput" class="form-input" type="number" min="0" step="1" placeholder="0 表示全部">
+                                </label>
+                            </div>
 
-                    <div class="submit-row">
-                        <button id="addAIModelButton" class="btn btn-outline" type="button">添加模型</button>
-                    </div>
+                            <div class="manager-head">
+                                <h3>翻译设置</h3>
+                                <p>桌面端划词右键只显示“翻译”。如果选中文本属于主要语言，就翻译到目标语言；否则统一翻译回主要语言。</p>
+                            </div>
+                            <div class="form-grid">
+                                <label class="field">
+                                    <span>主要语言</span>
+                                    <input id="aiTranslationPrimaryLanguageInput" class="form-input" type="text" placeholder="例如：中文">
+                                </label>
+                                <label class="field">
+                                    <span>目标语言</span>
+                                    <input id="aiTranslationTargetLanguageInput" class="form-input" type="text" placeholder="例如：英文">
+                                </label>
+                            </div>
+                        </div>
+                    </details>
 
-                    <div class="manager-head">
-                        <h3>场景绑定</h3>
-                        <p>为不同 AI 场景选择默认模型；如果没有特别指定，系统会回退到默认模型。</p>
-                    </div>
-
-                    <div class="form-grid">
-                        <label class="field">
-                            <span>默认模型</span>
-                            <select id="aiDefaultModelSelect" class="form-input"></select>
-                        </label>
-                        <label class="field">
-                            <span>通用问答模型</span>
-                            <select id="aiQAModelSelect" class="form-input"></select>
-                        </label>
-                        <label class="field">
-                            <span>图片解读模型</span>
-                            <select id="aiFigureModelSelect" class="form-input"></select>
-                        </label>
-                        <label class="field">
-                            <span>Tag 建议模型</span>
-                            <select id="aiTagModelSelect" class="form-input"></select>
-                        </label>
-                        <label class="field">
-                            <span>分组建议模型</span>
-                            <select id="aiGroupModelSelect" class="form-input"></select>
-                        </label>
-                        <label class="field">
-                            <span>划词翻译模型</span>
-                            <select id="aiTranslateModelSelect" class="form-input"></select>
-                        </label>
-                        <label class="field">
-                            <span>Temperature</span>
-                            <input id="aiTemperatureInput" class="form-input" type="number" min="0" max="2" step="0.1">
-                        </label>
-                        <label class="field">
-                            <span>图像数量上限</span>
-                            <input id="aiMaxFiguresInput" class="form-input" type="number" min="0" step="1" placeholder="0 表示全部">
-                        </label>
-                    </div>
-
-                    <div class="manager-head prompt-section-head">
-                        <h3>翻译设置</h3>
-                        <p>桌面端划词右键只显示“翻译”。如果选中文本属于主要语言，就翻译到目标语言；否则统一翻译回主要语言。</p>
-                    </div>
-
-                    <div class="form-grid">
-                        <label class="field">
-                            <span>主要语言</span>
-                            <input id="aiTranslationPrimaryLanguageInput" class="form-input" type="text" placeholder="例如：中文">
-                        </label>
-                        <label class="field">
-                            <span>目标语言</span>
-                            <input id="aiTranslationTargetLanguageInput" class="form-input" type="text" placeholder="例如：英文">
-                        </label>
-                    </div>
-
-                    <div class="manager-head prompt-section-head">
-                        <h3>Prompt 设置</h3>
-                        <p>这里配置各个 AI 场景的主要任务指令；场景范围、论文内容、当前图片信息和输出格式会由系统自动拼接。</p>
-                    </div>
+                    <details class="settings-subsection" open>
+                        <summary class="settings-subsection-toggle">
+                            <h3>Prompt 设置</h3>
+                            <p>这里配置各个 AI 场景的主要任务指令；场景范围、论文内容、当前图片信息和输出格式会由系统自动拼接。</p>
+                        </summary>
+                        <div class="settings-subsection-body">
 
                     <label class="field prompt-field">
                         <span class="field-label-row">
@@ -410,6 +410,9 @@ User Prompt:
                         </details>
                     </label>
 
+                        </div>
+                    </details>
+
                     <div class="submit-row">
                         <button id="restoreAIPromptsButton" class="btn btn-outline" type="button">恢复推荐 Prompt</button>
                         <button class="btn btn-primary" type="submit">保存 AI 配置</button>
@@ -417,11 +420,11 @@ User Prompt:
                 </form>
             </section>
 
-            <section class="manager-card">
-                <div class="manager-head">
+            <details class="manager-card settings-collapsible" open>
+                <summary class="settings-collapsible-toggle">
                     <h2>PDF 提取服务配置</h2>
                     <p>配置 PDF 提取服务的连接信息，用于上传时自动解析文献。</p>
-                </div>
+                </summary>
                 <form id="extractorSettingsForm" class="manager-form">
                     <div class="form-grid">
                         <label class="field field-span-2">
@@ -454,13 +457,13 @@ User Prompt:
                         <button class="btn btn-primary" type="submit">保存提取服务配置</button>
                     </div>
                 </form>
-            </section>
+            </details>
 
-            <section class="manager-card">
-                <div class="manager-head">
+            <details class="manager-card settings-collapsible" open>
+                <summary class="settings-collapsible-toggle">
                     <h2>账号管理</h2>
                     <p>修改登录密码或登出系统。</p>
-                </div>
+                </summary>
                 <div class="db-actions-grid">
                     <div class="db-action-item">
                         <h3>修改密码</h3>
@@ -478,13 +481,13 @@ User Prompt:
                         <button id="logoutButton" class="btn btn-outline" type="button">安全登出</button>
                     </div>
                 </div>
-            </section>
+            </details>
 
-            <section class="manager-card danger-zone-card">
-                <div class="manager-head">
+            <details class="manager-card danger-zone-card settings-collapsible" open>
+                <summary class="settings-collapsible-toggle">
                     <h2>数据库管理</h2>
                     <p>导出、导入或清空数据库。导入会覆盖现有数据，请谨慎操作。</p>
-                </div>
+                </summary>
                 <div class="db-actions-grid">
                     <div class="db-action-item">
                         <h3>导出数据库</h3>
@@ -505,7 +508,7 @@ User Prompt:
                         <button id="purgeDbButton" class="btn btn-outline danger" type="button">清空数据库</button>
                     </div>
                 </div>
-            </section>
+            </details>
         </section>
     </main>
 
