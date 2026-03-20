@@ -110,7 +110,38 @@ jobs:
       - name: Install NSIS
         if: matrix.platform == 'windows' && matrix.package_kind == 'desktop'
         shell: pwsh
-        run: choco install nsis -y --no-progress
+        run: |
+          choco install nsis -y --no-progress
+
+          $nsisDirs = @(
+            (Join-Path $env:ProgramFiles "NSIS"),
+            (Join-Path ${env:ProgramFiles(x86)} "NSIS")
+          )
+
+          foreach ($dir in $nsisDirs) {
+            if (Test-Path (Join-Path $dir "makensis.exe")) {
+              Add-Content -Path $env:GITHUB_PATH -Value $dir
+              Write-Host "Added NSIS to PATH: $dir"
+              exit 0
+            }
+          }
+
+          if ($env:ChocolateyInstall) {
+            $makensis = Get-ChildItem `
+              -Path (Join-Path $env:ChocolateyInstall "lib") `
+              -Filter "makensis.exe" `
+              -File `
+              -Recurse `
+              -ErrorAction SilentlyContinue |
+              Select-Object -First 1 -ExpandProperty DirectoryName
+            if ($makensis) {
+              Add-Content -Path $env:GITHUB_PATH -Value $makensis
+              Write-Host "Added NSIS to PATH: $makensis"
+              exit 0
+            }
+          }
+
+          throw "NSIS installed but makensis.exe was not found."
 
       - name: Package server release for macOS or Linux
         if: matrix.package_kind == 'server' && matrix.platform != 'windows'

@@ -25,10 +25,7 @@ if (Test-Path $installerPath) {
 New-Item -ItemType Directory -Path $payloadDir -Force | Out-Null
 New-Item -ItemType Directory -Path $supportDir -Force | Out-Null
 
-$makensis = Get-Command "makensis" -ErrorAction SilentlyContinue
-if ($null -eq $makensis) {
-    throw "makensis not found. Install NSIS and retry."
-}
+$makensis = Resolve-Makensis
 
 $env:CGO_ENABLED = "1"
 $env:GOOS = "windows"
@@ -160,6 +157,36 @@ $nsisScript = $nsisScript.Replace("__VERSION__", $Version)
 
 Set-Content -Path $nsisScriptPath -Value $nsisScript -Encoding ascii
 
-& $makensis.Source $nsisScriptPath | Write-Host
+& $makensis $nsisScriptPath | Write-Host
 
 Write-Host "Created $installerPath"
+
+function Resolve-Makensis {
+    $command = Get-Command "makensis" -CommandType Application -ErrorAction SilentlyContinue
+    if ($null -ne $command) {
+        return $command.Source
+    }
+
+    $candidatePaths = @(
+        (Join-Path $env:ProgramFiles "NSIS\makensis.exe"),
+        (Join-Path ${env:ProgramFiles(x86)} "NSIS\makensis.exe")
+    )
+
+    if ($env:ChocolateyInstall) {
+        $candidatePaths += Get-ChildItem `
+            -Path (Join-Path $env:ChocolateyInstall "lib") `
+            -Filter "makensis.exe" `
+            -File `
+            -Recurse `
+            -ErrorAction SilentlyContinue |
+            Select-Object -ExpandProperty FullName
+    }
+
+    foreach ($path in $candidatePaths) {
+        if ($path -and (Test-Path $path)) {
+            return (Resolve-Path $path).Path
+        }
+    }
+
+    throw "makensis not found. Searched PATH, Program Files, and Chocolatey install directories."
+}
