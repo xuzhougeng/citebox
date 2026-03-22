@@ -23,6 +23,7 @@ type Config struct {
 	ExtractorFileField      string
 	ExtractorTimeoutSeconds int
 	ExtractorPollInterval   int
+	WeixinBridgeEnabled     bool
 }
 
 func Load() *Config {
@@ -41,6 +42,7 @@ func Load() *Config {
 		ExtractorFileField:      getEnv("PDF_EXTRACTOR_FILE_FIELD", "file"),
 		ExtractorTimeoutSeconds: getEnvInt("PDF_EXTRACTOR_TIMEOUT_SECONDS", 300),
 		ExtractorPollInterval:   getEnvInt("PDF_EXTRACTOR_POLL_INTERVAL_SECONDS", 2),
+		WeixinBridgeEnabled:     getEnvBool("WEIXIN_BRIDGE_ENABLED", false),
 	}
 }
 
@@ -85,6 +87,18 @@ func getEnvInt(key string, defaultValue int) int {
 	if value := os.Getenv(key); value != "" {
 		if intVal, err := strconv.Atoi(value); err == nil {
 			return intVal
+		}
+	}
+	return defaultValue
+}
+
+func getEnvBool(key string, defaultValue bool) bool {
+	if value := strings.TrimSpace(os.Getenv(key)); value != "" {
+		switch strings.ToLower(value) {
+		case "1", "true", "yes", "on":
+			return true
+		case "0", "false", "no", "off":
+			return false
 		}
 	}
 	return defaultValue

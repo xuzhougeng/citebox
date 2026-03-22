@@ -1,6 +1,7 @@
 package weixin
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -16,7 +17,7 @@ const (
 	BotType        = "3"
 )
 
-// Client wraps the subset of the iLink Bot HTTP API used for binding.
+// Client wraps the subset of the iLink Bot HTTP API used by CiteBox.
 type Client struct {
 	baseURL    string
 	token      string
@@ -99,6 +100,69 @@ func (c *Client) GetQRCodeStatus(ctx context.Context, qrcode string) (*QRCodeSta
 	return &result, nil
 }
 
+func (c *Client) GetUpdates(ctx context.Context, buf string) (*GetUpdatesResponse, error) {
+	body := GetUpdatesRequest{
+		GetUpdatesBuf: buf,
+		BaseInfo:      baseInfo(),
+	}
+	var result GetUpdatesResponse
+	if err := c.post(ctx, "/ilink/bot/getupdates", body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+func (c *Client) SendTextMessage(ctx context.Context, toUserID, text, contextToken string) error {
+	body := SendMessageRequest{
+		Msg: Message{
+			ToUserID:     toUserID,
+			ClientID:     generateClientID(),
+			MessageType:  MessageTypeBot,
+			MessageState: MessageStateFinish,
+			ContextToken: contextToken,
+			ItemList: []MessageItem{
+				{
+					Type:     ItemTypeText,
+					TextItem: &TextItem{Text: text},
+				},
+			},
+		},
+		BaseInfo: baseInfo(),
+	}
+	var result SendMessageResponse
+	if err := c.post(ctx, "/ilink/bot/sendmessage", body, &result); err != nil {
+		return err
+	}
+	if result.Ret != 0 {
+		return fmt.Errorf("sendmessage ret=%d errcode=%d: %s", result.Ret, result.ErrCode, result.Message)
+	}
+	return nil
+}
+
+func (c *Client) post(ctx context.Context, path string, body any, result any) error {
+	payload, err := json.Marshal(body)
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+path, bytes.NewReader(payload))
+	if err != nil {
+		return err
+	}
+	c.setHeaders(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("iLink API %s returned %d", path, resp.StatusCode)
+	}
+	return json.NewDecoder(resp.Body).Decode(result)
+}
+
 func (c *Client) setHeaders(req *http.Request) {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("AuthorizationType", "ilink_bot_token")
@@ -107,4 +171,12 @@ func (c *Client) setHeaders(req *http.Request) {
 	if c.token != "" {
 		req.Header.Set("Authorization", "Bearer "+c.token)
 	}
+}
+
+func baseInfo() BaseInfo {
+	return BaseInfo{ChannelVersion: ChannelVersion}
+}
+
+func generateClientID() string {
+	return fmt.Sprintf("openclaw-weixin-%d-%d", time.Now().UnixMilli(), rand.IntN(100000))
 }

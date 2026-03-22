@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -27,10 +28,12 @@ type Options struct {
 }
 
 type Server struct {
-	cfg        *config.Config
-	logger     *slog.Logger
-	repo       *repository.LibraryRepository
-	httpServer *http.Server
+	cfg          *config.Config
+	logger       *slog.Logger
+	repo         *repository.LibraryRepository
+	httpServer   *http.Server
+	bridgeCancel context.CancelFunc
+	bridgeDone   chan struct{}
 }
 
 func NewServer(opts Options) (*Server, error) {
@@ -72,17 +75,42 @@ func NewServer(opts Options) (*Server, error) {
 		return nil, err
 	}
 
+	aiSvc := service.NewAIService(repo, cfg, logger.With("component", "ai_service"))
+
 	httpServer := &http.Server{
 		Addr:    ":" + cfg.ServerPort,
-		Handler: buildHandler(cfg, logger, librarySvc, repo, absoluteWebRoot),
+		Handler: buildHandler(cfg, logger, librarySvc, aiSvc, repo, absoluteWebRoot),
 	}
 
-	return &Server{
+	server := &Server{
 		cfg:        cfg,
 		logger:     logger,
 		repo:       repo,
 		httpServer: httpServer,
-	}, nil
+	}
+
+	if cfg.WeixinBridgeEnabled {
+		bridgeCtx, bridgeCancel := context.WithCancel(context.Background())
+		bridgeDone := make(chan struct{})
+		bridge := service.NewWeixinIMBridge(
+			librarySvc,
+			aiSvc,
+			logger.With("component", "weixin_im_bridge"),
+			cfg.StorageDir,
+		)
+
+		server.bridgeCancel = bridgeCancel
+		server.bridgeDone = bridgeDone
+
+		go func() {
+			defer close(bridgeDone)
+			if err := bridge.Run(bridgeCtx); err != nil && !errors.Is(err, context.Canceled) {
+				logger.Error("weixin IM bridge stopped", "error", err)
+			}
+		}()
+	}
+
+	return server, nil
 }
 
 func (s *Server) ListenAndServe() error {
@@ -107,6 +135,17 @@ func (s *Server) Serve(listener net.Listener) error {
 }
 
 func (s *Server) Close() error {
+	if s.bridgeCancel != nil {
+		s.bridgeCancel()
+	}
+	if s.bridgeDone != nil {
+		select {
+		case <-s.bridgeDone:
+		case <-time.After(3 * time.Second):
+			s.logger.Warn("timeout waiting for weixin IM bridge shutdown")
+		}
+	}
+
 	var serverErr error
 	if s.httpServer != nil {
 		serverErr = s.httpServer.Close()
@@ -144,10 +183,10 @@ func buildHandler(
 	cfg *config.Config,
 	logger *slog.Logger,
 	librarySvc *service.LibraryService,
+	aiSvc *service.AIService,
 	repo *repository.LibraryRepository,
 	webRoot string,
 ) http.Handler {
-	aiSvc := service.NewAIService(repo, cfg, logger.With("component", "ai_service"))
 	versionSvc := service.NewVersionService()
 	paperHandler := handler.NewPaperHandler(librarySvc)
 	figureHandler := handler.NewFigureHandler(librarySvc)
