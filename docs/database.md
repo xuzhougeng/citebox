@@ -99,7 +99,7 @@ erDiagram
 - `papers.notes_text` 是文献级管理笔记，适合保存迁移说明、整理备注和管理信息
 - `papers.paper_notes_text` 是文献级内容笔记，适合保存 AI伴读结果、阅读结论和结构化摘要
 - `paper_figures.notes_text` 是图片级笔记，用于图片库、笔记页和全文检索
-- `app_settings` 当前除了提取器配置外，也会保存 `ai_settings` 以及角色 Prompt 等 JSON 设置项；历史上的 `ai_prompt_presets` 键现在承载角色 Prompt 数据
+- `app_settings` 当前除了提取器配置外，也会保存 `ai_settings`、`weixin_binding` 以及角色 Prompt 等 JSON 设置项；历史上的 `ai_prompt_presets` 键现在承载角色 Prompt 数据
 - 历史升级时，旧的 `papers.notes_text` 会迁移到 `papers.paper_notes_text`，避免原有 AI 内容继续混在管理笔记里
 - `papers_fts` / `figures_fts` 是全文索引表，不是业务真表
 
@@ -244,7 +244,7 @@ CREATE UNIQUE INDEX idx_tags_scope_name ON tags(scope, name);
 
 | 字段 | 用途 |
 | --- | --- |
-| `key` | 设置项名称，例如 `ai_settings`、历史兼容键 `ai_prompt_presets`、提取器配置项 |
+| `key` | 设置项名称，例如 `ai_settings`、`weixin_binding`、历史兼容键 `ai_prompt_presets`、提取器配置项 |
 | `value` | 对应设置的字符串或 JSON 内容 |
 | `created_at` | 创建时间 |
 | `updated_at` | 最近修改时间 |

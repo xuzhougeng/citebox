@@ -65,6 +65,12 @@ const SettingsPage = {
         this.newPasswordInput = document.getElementById('newPassword');
         this.confirmPasswordInput = document.getElementById('confirmPassword');
         this.logoutButton = document.getElementById('logoutButton');
+        this.weixinBindingSummary = document.getElementById('weixinBindingSummary');
+        this.weixinQRCodePanel = document.getElementById('weixinQRCodePanel');
+        this.weixinQRCodeImage = document.getElementById('weixinQRCodeImage');
+        this.weixinQRCodeLink = document.getElementById('weixinQRCodeLink');
+        this.weixinBindingStatus = document.getElementById('weixinBindingStatus');
+        this.startWeixinBindingButton = document.getElementById('startWeixinBindingButton');
 
         this.bindEvents();
         this.bootstrap();
@@ -162,6 +168,9 @@ const SettingsPage = {
             await this.changePassword();
         });
         this.logoutButton.addEventListener('click', () => this.logout());
+        this.startWeixinBindingButton.addEventListener('click', async () => {
+            await this.startWeixinBinding();
+        });
         document.addEventListener('keydown', (event) => {
             if (event.key === 'Escape' && this.aiModelModal && !this.aiModelModal.classList.contains('hidden')) {
                 event.preventDefault();
@@ -224,10 +233,15 @@ const SettingsPage = {
 
     async bootstrap() {
         try {
-            await Promise.all([this.loadAISettings(), this.loadExtractorSettings(), this.loadVersionStatus()]);
+            await Promise.all([this.loadAISettings(), this.loadExtractorSettings(), this.loadVersionStatus(), this.loadAuthSettings()]);
         } catch (error) {
             Utils.showToast(error.message, 'error');
         }
+    },
+
+    async loadAuthSettings() {
+        const settings = await API.getAuthSettings();
+        this.renderAuthSettings(settings || {});
     },
 
     async loadAISettings() {
@@ -624,6 +638,135 @@ const SettingsPage = {
         const response = await API.updateExtractorSettings(payload);
         this.renderExtractorSummary(response.settings);
         Utils.showToast('PDF 提取服务配置已保存');
+    },
+
+    renderAuthSettings(settings = {}) {
+        this.authSettings = settings;
+        this.renderWeixinBindingSummary(settings.weixin_binding || {});
+    },
+
+    renderWeixinBindingSummary(binding = {}) {
+        if (!this.weixinBindingSummary) return;
+
+        const isBound = Boolean(binding.bound);
+        const title = isBound
+            ? `已绑定 ${Utils.escapeHTML(binding.account_id || '微信账号')}`
+            : '当前未绑定微信';
+        const detail = isBound
+            ? [
+                binding.user_id ? `用户 ID：${Utils.escapeHTML(binding.user_id)}` : '',
+                binding.bound_at ? `绑定时间：${Utils.escapeHTML(Utils.formatDate(binding.bound_at))}` : '',
+                binding.base_url ? `接入域名：${Utils.escapeHTML(binding.base_url)}` : ''
+            ].filter(Boolean).join('<br>')
+            : '绑定后将保存 bot_token、账号 ID 和服务端返回的 base URL，后续可继续扩展消息桥接。';
+
+        this.weixinBindingSummary.innerHTML = `
+            <span>WeChat Binding</span>
+            <strong>${title}</strong>
+            <p>${detail}</p>
+        `;
+
+        if (this.startWeixinBindingButton) {
+            this.startWeixinBindingButton.textContent = isBound ? '重新绑定' : '开始绑定';
+        }
+    },
+
+    setWeixinBindingStatus(message, tone = '') {
+        this.setInlineStatus(this.weixinBindingStatus, message, tone);
+    },
+
+    async startWeixinBinding() {
+        const button = this.startWeixinBindingButton;
+        const originalLabel = button?.textContent || '开始绑定';
+        if (button) {
+            button.disabled = true;
+            button.textContent = '生成二维码中...';
+        }
+
+        this.stopWeixinBindingPolling();
+
+        try {
+            const result = await API.startWeixinBinding();
+            this.pendingWeixinQRCode = result.qrcode || '';
+
+            if (this.weixinQRCodeImage) {
+                this.weixinQRCodeImage.src = result.qrcode_data_url || '';
+            }
+            if (this.weixinQRCodeLink) {
+                this.weixinQRCodeLink.href = result.qrcode_content || '#';
+                this.weixinQRCodeLink.textContent = result.qrcode_content || '二维码内容不可用';
+            }
+            this.weixinQRCodePanel?.classList.remove('hidden');
+            this.setWeixinBindingStatus(result.message || '请使用微信扫码完成绑定', 'saving');
+
+            if (!this.pendingWeixinQRCode) {
+                throw new Error('二维码会话为空，无法跟踪绑定状态');
+            }
+
+            this.scheduleWeixinBindingPoll(1200);
+            Utils.showToast('微信二维码已生成');
+        } catch (error) {
+            this.setWeixinBindingStatus(error.message, 'error');
+            Utils.showToast(error.message, 'error');
+        } finally {
+            if (button) {
+                button.disabled = false;
+                button.textContent = this.authSettings?.weixin_binding?.bound ? '重新绑定' : (originalLabel || '开始绑定');
+            }
+        }
+    },
+
+    scheduleWeixinBindingPoll(delay = 1500) {
+        this.stopWeixinBindingPolling();
+        this.weixinBindingPollTimer = window.setTimeout(async () => {
+            await this.pollWeixinBindingStatus();
+        }, delay);
+    },
+
+    stopWeixinBindingPolling() {
+        window.clearTimeout(this.weixinBindingPollTimer);
+        this.weixinBindingPollTimer = 0;
+    },
+
+    async pollWeixinBindingStatus() {
+        if (!this.pendingWeixinQRCode) return;
+
+        try {
+            const result = await API.getWeixinBindingStatus(this.pendingWeixinQRCode);
+            const status = result.status || 'wait';
+            const message = result.message || '等待微信扫码';
+
+            if (status === 'confirmed') {
+                this.stopWeixinBindingPolling();
+                this.pendingWeixinQRCode = '';
+                this.authSettings = {
+                    ...(this.authSettings || {}),
+                    weixin_binding: result.binding || {}
+                };
+                this.renderWeixinBindingSummary(result.binding || {});
+                this.weixinQRCodePanel?.classList.add('hidden');
+                this.setWeixinBindingStatus(message, 'success');
+                Utils.showToast(message || '微信绑定成功');
+                return;
+            }
+
+            if (status === 'expired') {
+                this.stopWeixinBindingPolling();
+                this.pendingWeixinQRCode = '';
+                this.setWeixinBindingStatus(message, 'error');
+                return;
+            }
+
+            this.setWeixinBindingStatus(
+                status === 'scaned' ? (message || '二维码已扫描，请在微信中确认登录') : message,
+                'saving'
+            );
+            this.scheduleWeixinBindingPoll(status === 'scaned' ? 900 : 1500);
+        } catch (error) {
+            this.stopWeixinBindingPolling();
+            this.setWeixinBindingStatus(error.message, 'error');
+            Utils.showToast(error.message, 'error');
+        }
     },
 
     renderVersionSummary(status = {}) {

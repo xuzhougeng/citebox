@@ -27,11 +27,12 @@ import (
 )
 
 type LibraryService struct {
-	repo            *repository.LibraryRepository
-	config          *config.Config
-	httpClient      *http.Client
-	logger          *slog.Logger
-	startBackground bool
+	repo                *repository.LibraryRepository
+	config              *config.Config
+	httpClient          *http.Client
+	logger              *slog.Logger
+	startBackground     bool
+	weixinClientFactory func(token string) weixinBindingClient
 }
 
 const (
@@ -171,11 +172,12 @@ func NewLibraryService(repo *repository.LibraryRepository, cfg *config.Config, o
 	}
 
 	service := &LibraryService{
-		repo:            repo,
-		config:          cfg,
-		logger:          slog.Default().With("component", "library_service"),
-		startBackground: true,
-		httpClient:      &http.Client{},
+		repo:                repo,
+		config:              cfg,
+		logger:              slog.Default().With("component", "library_service"),
+		startBackground:     true,
+		httpClient:          &http.Client{},
+		weixinClientFactory: defaultWeixinBindingClientFactory,
 	}
 
 	for _, opt := range opts {
@@ -1815,6 +1817,7 @@ func (s *LibraryService) GetAuthSettings() model.AuthSettings {
 	return model.AuthSettings{
 		Username:       s.config.AdminUsername,
 		PasswordFromDB: s.GetRuntimePassword() != s.config.AdminPassword,
+		WeixinBinding:  s.getWeixinBindingSummary(),
 	}
 }
 

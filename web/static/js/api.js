@@ -430,6 +430,17 @@ const API = {
         return requestJSON(`${API_BASE}/auth/settings`);
     },
 
+    startWeixinBinding() {
+        return requestJSON(`${API_BASE}/auth/weixin/bind`, {
+            method: 'POST'
+        });
+    },
+
+    getWeixinBindingStatus(qrcode) {
+        const query = new URLSearchParams({ qrcode: String(qrcode || '') });
+        return requestJSON(`${API_BASE}/auth/weixin/bind/status?${query.toString()}`);
+    },
+
     changePassword(data) {
         return requestJSON(`${API_BASE}/auth/change-password`, {
             method: 'POST',

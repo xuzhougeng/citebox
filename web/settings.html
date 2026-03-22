@@ -479,9 +479,26 @@ User Prompt:
             <details class="manager-card settings-collapsible" open>
                 <summary class="settings-collapsible-toggle">
                     <h2>账号管理</h2>
-                    <p>修改登录密码或登出系统。</p>
+                    <p>管理登录凭证与微信绑定状态。</p>
                 </summary>
                 <div class="db-actions-grid">
+                    <div class="db-action-item">
+                        <h3>绑定微信</h3>
+                        <p>扫码绑定 CiteBox 使用的微信 iLink Bot 凭证，当前仅保存绑定信息，不接收消息。</p>
+                        <div class="settings-action-form weixin-binding-panel">
+                            <div id="weixinBindingSummary" class="weixin-binding-summary"></div>
+                            <div id="weixinQRCodePanel" class="weixin-qr-panel hidden">
+                                <img id="weixinQRCodeImage" class="weixin-qr-image" alt="微信绑定二维码">
+                                <p class="muted">请使用微信扫码。二维码过期后可重新生成。</p>
+                                <p id="weixinBindingStatus" class="settings-inline-status">等待微信扫码</p>
+                                <p class="weixin-qr-fallback">
+                                    二维码内容：
+                                    <a id="weixinQRCodeLink" href="#" target="_blank" rel="noreferrer">打开原始链接</a>
+                                </p>
+                            </div>
+                            <button id="startWeixinBindingButton" class="btn btn-secondary" type="button">开始绑定</button>
+                        </div>
+                    </div>
                     <div class="db-action-item">
                         <h3>修改密码</h3>
                         <p>更改管理员账号的登录密码</p>

@@ -63,6 +63,26 @@ func (h *AuthHandler) GetAuthSettings(w http.ResponseWriter, r *http.Request) {
 	sendJSON(w, http.StatusOK, settings)
 }
 
+func (h *AuthHandler) StartWeixinBinding(w http.ResponseWriter, r *http.Request) {
+	result, err := h.libraryService.StartWeixinBinding(r.Context())
+	if err != nil {
+		sendError(w, err)
+		return
+	}
+
+	sendJSON(w, http.StatusOK, result)
+}
+
+func (h *AuthHandler) GetWeixinBindingStatus(w http.ResponseWriter, r *http.Request) {
+	result, err := h.libraryService.GetWeixinBindingStatus(r.Context(), r.URL.Query().Get("qrcode"))
+	if err != nil {
+		sendError(w, err)
+		return
+	}
+
+	sendJSON(w, http.StatusOK, result)
+}
+
 func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	var req model.ChangePasswordRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {

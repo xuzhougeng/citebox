@@ -5,6 +5,7 @@ go 1.21
 require (
 	github.com/webview/webview_go v0.0.0-20240220051247-56f456ca3a43
 	modernc.org/sqlite v1.27.0
+	rsc.io/qr v0.2.0
 )
 
 require (

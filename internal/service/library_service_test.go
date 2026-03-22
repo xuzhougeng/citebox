@@ -2,7 +2,9 @@ package service
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"image"
 	"image/color"
@@ -10,6 +12,8 @@ import (
 	"io"
 	"log/slog"
 	"mime/multipart"
+	"net/http"
+	"net/http/httptest"
 	"net/textproto"
 	"os"
 	"path/filepath"
@@ -20,6 +24,7 @@ import (
 	"github.com/xuzhougeng/citebox/internal/config"
 	"github.com/xuzhougeng/citebox/internal/model"
 	"github.com/xuzhougeng/citebox/internal/repository"
+	"github.com/xuzhougeng/citebox/internal/weixin"
 )
 
 func newTestService(t *testing.T) (*LibraryService, *repository.LibraryRepository, *config.Config) {
@@ -115,6 +120,16 @@ func testPNGDataURL(t *testing.T, width, height int) string {
 	return "data:image/png;base64," + base64.StdEncoding.EncodeToString(buf.Bytes())
 }
 
+func useWeixinBindingTestServer(t *testing.T, svc *LibraryService, handler http.Handler) {
+	t.Helper()
+
+	server := httptest.NewServer(handler)
+	t.Cleanup(server.Close)
+	svc.weixinClientFactory = func(token string) weixinBindingClient {
+		return weixin.NewClient(server.URL, token, server.Client())
+	}
+}
+
 func TestListPapersAppliesDefaultsAndDecoratesURLs(t *testing.T) {
 	svc, repo, _ := newTestService(t)
 	createTestPaper(t, repo)
@@ -149,6 +164,91 @@ func TestGetPaperDecoratesFigureURLs(t *testing.T) {
 	}
 	if got.Figures[0].Source != "auto" {
 		t.Fatalf("GetPaper() figure source = %q, want %q", got.Figures[0].Source, "auto")
+	}
+}
+
+func TestStartWeixinBindingReturnsQRCodeDataURL(t *testing.T) {
+	svc, _, _ := newTestService(t)
+	useWeixinBindingTestServer(t, svc, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/ilink/bot/get_bot_qrcode" {
+			t.Fatalf("path = %q, want %q", r.URL.Path, "/ilink/bot/get_bot_qrcode")
+		}
+		if got := r.URL.Query().Get("bot_type"); got != "3" {
+			t.Fatalf("bot_type = %q, want %q", got, "3")
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"ret":                0,
+			"qrcode":             "session-123",
+			"qrcode_img_content": "https://example.invalid/wechat-bind",
+		})
+	}))
+
+	result, err := svc.StartWeixinBinding(context.Background())
+	if err != nil {
+		t.Fatalf("StartWeixinBinding() error = %v", err)
+	}
+	if result.QRCode != "session-123" {
+		t.Fatalf("StartWeixinBinding() qrcode = %q, want %q", result.QRCode, "session-123")
+	}
+	if !strings.HasPrefix(result.QRCodeDataURL, "data:image/png;base64,") {
+		t.Fatalf("StartWeixinBinding() qrcode_data_url = %q, want PNG data URL", result.QRCodeDataURL)
+	}
+	if result.Status != "wait" {
+		t.Fatalf("StartWeixinBinding() status = %q, want %q", result.Status, "wait")
+	}
+}
+
+func TestGetWeixinBindingStatusConfirmedPersistsBinding(t *testing.T) {
+	svc, repo, _ := newTestService(t)
+	useWeixinBindingTestServer(t, svc, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/ilink/bot/get_qrcode_status" {
+			t.Fatalf("path = %q, want %q", r.URL.Path, "/ilink/bot/get_qrcode_status")
+		}
+		if got := r.URL.Query().Get("qrcode"); got != "session-123" {
+			t.Fatalf("qrcode = %q, want %q", got, "session-123")
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"ret":           0,
+			"status":        "confirmed",
+			"bot_token":     "bot-token-123",
+			"baseurl":       "https://ilinkai.weixin.qq.com",
+			"ilink_bot_id":  "bot@im.bot",
+			"ilink_user_id": "user@im.wechat",
+			"message":       "",
+		})
+	}))
+
+	result, err := svc.GetWeixinBindingStatus(context.Background(), "session-123")
+	if err != nil {
+		t.Fatalf("GetWeixinBindingStatus() error = %v", err)
+	}
+	if result.Status != "confirmed" {
+		t.Fatalf("GetWeixinBindingStatus() status = %q, want %q", result.Status, "confirmed")
+	}
+	if !result.Binding.Bound || result.Binding.AccountID != "bot@im.bot" || result.Binding.UserID != "user@im.wechat" {
+		t.Fatalf("GetWeixinBindingStatus() binding = %+v, want persisted binding summary", result.Binding)
+	}
+
+	settings := svc.GetAuthSettings()
+	if !settings.WeixinBinding.Bound || settings.WeixinBinding.AccountID != "bot@im.bot" {
+		t.Fatalf("GetAuthSettings() weixin_binding = %+v, want persisted binding", settings.WeixinBinding)
+	}
+
+	raw, err := repo.GetAppSetting(weixinBindingKey)
+	if err != nil {
+		t.Fatalf("GetAppSetting(%q) error = %v", weixinBindingKey, err)
+	}
+	if !strings.Contains(raw, `"token":"bot-token-123"`) {
+		t.Fatalf("saved weixin binding = %q, want token persisted", raw)
+	}
+}
+
+func TestGetWeixinBindingStatusRejectsEmptyQRCode(t *testing.T) {
+	svc, _, _ := newTestService(t)
+
+	_, err := svc.GetWeixinBindingStatus(context.Background(), " ")
+	if !apperr.IsCode(err, apperr.CodeInvalidArgument) {
+		t.Fatalf("GetWeixinBindingStatus() code = %q, want %q", apperr.CodeOf(err), apperr.CodeInvalidArgument)
 	}
 }
 

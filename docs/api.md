@@ -777,6 +777,55 @@ AI 流式阅读通过：
 用途：
 
 - 获取当前认证设置摘要
+- 返回管理员用户名、密码是否已落库，以及微信绑定摘要
+
+响应示例：
+
+```json
+{
+  "username": "citebox",
+  "password_from_db": false,
+  "weixin_binding": {
+    "bound": true,
+    "account_id": "xxx@im.bot",
+    "user_id": "xxx@im.wechat",
+    "base_url": "https://ilinkai.weixin.qq.com",
+    "bound_at": "2026-03-22T07:12:34Z"
+  }
+}
+```
+
+#### `POST /api/auth/weixin/bind`
+
+用途：
+
+- 发起一次新的微信绑定二维码流程
+
+成功后返回：
+
+```json
+{
+  "qrcode": "session-id",
+  "qrcode_content": "https://...",
+  "qrcode_data_url": "data:image/png;base64,...",
+  "status": "wait",
+  "message": "请使用微信扫码完成绑定"
+}
+```
+
+#### `GET /api/auth/weixin/bind/status?qrcode=<session-id>`
+
+用途：
+
+- 轮询当前二维码绑定状态
+- 在状态变为 `confirmed` 时保存绑定凭证到 `app_settings.weixin_binding`
+
+状态值：
+
+- `wait`
+- `scaned`
+- `confirmed`
+- `expired`
 
 #### `POST /api/auth/change-password`
 

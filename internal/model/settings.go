@@ -17,6 +17,7 @@ type ChangePasswordRequest struct {
 }
 
 type AuthSettings struct {
-	Username        string `json:"username"`
-	PasswordFromDB  bool   `json:"password_from_db"`
+	Username       string               `json:"username"`
+	PasswordFromDB bool                 `json:"password_from_db"`
+	WeixinBinding  WeixinBindingSummary `json:"weixin_binding"`
 }
