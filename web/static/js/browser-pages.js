@@ -519,7 +519,7 @@ const PalettesPage = {
         ` : '';
         this.grid.innerHTML = palettes.length
             ? palettes.map((palette) => this.renderPaletteCard(palette)).join('')
-            : '<div class="empty-state"><h3>还没有保存任何配色</h3><p>先从子图区域点击“获取配色”，这里才会出现内容。</p></div>';
+            : '<div class="empty-state"><h3>还没有保存任何配色</h3><p>先提取子图，系统会自动生成配色并出现在这里。</p></div>';
         BrowserUI.renderPagination(this.pagination, this.state.page, this.state.totalPages);
     },
 
