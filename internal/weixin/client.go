@@ -6,7 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"math/rand/v2"
+	"math/rand"
 	"net/http"
 	"strconv"
 	"time"
@@ -178,5 +178,5 @@ func baseInfo() BaseInfo {
 }
 
 func generateClientID() string {
-	return fmt.Sprintf("openclaw-weixin-%d-%d", time.Now().UnixMilli(), rand.IntN(100000))
+	return fmt.Sprintf("openclaw-weixin-%d-%d", time.Now().UnixMilli(), rand.Intn(100000))
 }
