@@ -1353,18 +1353,24 @@ const FigureViewer = {
 
         const countLabel = loading ? '加载中...' : `${subfigures.length} 张`;
         if (!workspaceOpen) {
+            const countBadge = loading ? '...' : String(subfigures.length);
             return `
                 <section class="figure-lightbox-subfigure is-entry">
-                    <div class="figure-subfigure-entry">
-                        <div class="figure-subfigure-entry-copy">
-                            <p class="eyebrow">Subfigure</p>
-                            <strong>子图提取</strong>
-                            <span>已有 ${Utils.escapeHTML(countLabel)}，只在需要时再打开工作台，结果主要用于配色。</span>
+                    <button
+                        class="figure-subfigure-entry-trigger"
+                        type="button"
+                        data-figure-action="toggle-subfigure-crop"
+                        aria-label="打开子图提取或查看，当前已有 ${Utils.escapeHTML(countLabel)}"
+                    >
+                        <div class="figure-subfigure-entry">
+                            <div class="figure-subfigure-entry-copy">
+                                <p class="eyebrow">子图</p>
+                                <strong>子图提取或查看</strong>
+                                <span>点击后进入工作台，查看已有子图或继续提取新的区域。</span>
+                            </div>
+                            <span class="figure-subfigure-entry-count">${Utils.escapeHTML(countBadge)}</span>
                         </div>
-                        <div class="figure-subfigure-entry-actions">
-                            <button class="btn btn-outline btn-small" type="button" data-figure-action="toggle-subfigure-crop">子图提取</button>
-                        </div>
-                    </div>
+                    </button>
                 </section>
             `;
         }
