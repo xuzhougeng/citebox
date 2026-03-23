@@ -372,6 +372,7 @@ const PalettesPage = {
 
     async init() {
         PaperViewer.init();
+        FigureViewer.init();
         this.cache();
         this.bind();
         await this.loadGroups();
