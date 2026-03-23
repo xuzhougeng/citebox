@@ -804,6 +804,23 @@ const TagsPage = {
     },
 
     bind() {
+        this.figureActions = createFigureCollectionActions({
+            getFigures: () => this.figures || [],
+            getPage: () => this.state.page,
+            getTotalPages: () => this.totalPages || 1,
+            loadPage: async (page) => {
+                const payload = await this.fetchFigureResults(page);
+                this.renderFigureResults(payload, page);
+                return payload;
+            },
+            openPaper: async (paperID) => {
+                await PaperViewer.open(Number(paperID), async () => await this.reload());
+            },
+            onMetaChanged: async () => {
+                await this.reload();
+            }
+        });
+
         this.form.addEventListener('submit', async (event) => {
             event.preventDefault();
             try {

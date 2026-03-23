@@ -57,6 +57,18 @@ const FigureViewer = {
                 event.preventDefault();
                 event.stopPropagation();
                 void this.next();
+                return;
+            }
+            const tagShortcuts = {
+                '1': '图 1', '2': '图 2', '3': '图 3', '4': '图 4',
+                '5': '图 5', '6': '图 6', '7': '图 7',
+                '9': '附图', '0': '图片摘要'
+            };
+            const shortcutTag = tagShortcuts[event.key];
+            if (shortcutTag) {
+                event.preventDefault();
+                event.stopPropagation();
+                void this.toggleTag(shortcutTag);
             }
         };
 
@@ -1203,6 +1215,16 @@ const FigureViewer = {
 
         const draftTags = this.currentFigureTagNames().filter((tag) => tag.toLowerCase() !== normalized.toLowerCase());
         await this.updateCurrentFigureTags(draftTags, `已移除标签：${normalized}`);
+    },
+
+    async toggleTag(tagName) {
+        if (!this.currentFigure) return;
+        const existing = new Set(this.currentFigureTagNames().map((t) => t.toLowerCase()));
+        if (existing.has(tagName.toLowerCase())) {
+            await this.removeTag(tagName);
+        } else {
+            await this.applySuggestedTag(tagName);
+        }
     },
 
     async updateCurrentFigureTags(tags, successMessage) {
