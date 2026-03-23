@@ -89,26 +89,24 @@ func NewServer(opts Options) (*Server, error) {
 		httpServer: httpServer,
 	}
 
-	if cfg.WeixinBridgeEnabled {
-		bridgeCtx, bridgeCancel := context.WithCancel(context.Background())
-		bridgeDone := make(chan struct{})
-		bridge := service.NewWeixinIMBridge(
-			librarySvc,
-			aiSvc,
-			logger.With("component", "weixin_im_bridge"),
-			cfg.StorageDir,
-		)
+	bridgeCtx, bridgeCancel := context.WithCancel(context.Background())
+	bridgeDone := make(chan struct{})
+	bridge := service.NewWeixinIMBridge(
+		librarySvc,
+		aiSvc,
+		logger.With("component", "weixin_im_bridge"),
+		cfg.StorageDir,
+	)
 
-		server.bridgeCancel = bridgeCancel
-		server.bridgeDone = bridgeDone
+	server.bridgeCancel = bridgeCancel
+	server.bridgeDone = bridgeDone
 
-		go func() {
-			defer close(bridgeDone)
-			if err := bridge.Run(bridgeCtx); err != nil && !errors.Is(err, context.Canceled) {
-				logger.Error("weixin IM bridge stopped", "error", err)
-			}
-		}()
-	}
+	go func() {
+		defer close(bridgeDone)
+		if err := bridge.Run(bridgeCtx); err != nil && !errors.Is(err, context.Canceled) {
+			logger.Error("weixin IM bridge stopped", "error", err)
+		}
+	}()
 
 	return server, nil
 }
@@ -471,6 +469,17 @@ func buildHandler(
 		}
 	})
 
+	mux.HandleFunc("/api/settings/weixin-bridge", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			settingsHandler.GetWeixinBridgeSettings(w, r)
+		case http.MethodPut:
+			settingsHandler.UpdateWeixinBridgeSettings(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
 	mux.HandleFunc("/api/settings/version", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
@@ -493,6 +502,8 @@ func buildHandler(
 		switch r.Method {
 		case http.MethodPost:
 			authHandler.StartWeixinBinding(w, r)
+		case http.MethodDelete:
+			authHandler.UnbindWeixin(w, r)
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}

@@ -11,6 +11,10 @@ type ExtractorSettings struct {
 	EffectiveJobsURL      string `json:"effective_jobs_url"`
 }
 
+type WeixinBridgeSettings struct {
+	Enabled bool `json:"enabled"`
+}
+
 type ChangePasswordRequest struct {
 	CurrentPassword string `json:"current_password"`
 	NewPassword     string `json:"new_password"`
@@ -20,4 +24,5 @@ type AuthSettings struct {
 	Username       string               `json:"username"`
 	PasswordFromDB bool                 `json:"password_from_db"`
 	WeixinBinding  WeixinBindingSummary `json:"weixin_binding"`
+	WeixinBridge   WeixinBridgeSettings `json:"weixin_bridge"`
 }

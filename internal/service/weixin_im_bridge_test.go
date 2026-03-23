@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/xuzhougeng/citebox/internal/model"
 	"github.com/xuzhougeng/citebox/internal/repository"
@@ -82,6 +83,68 @@ func newTestWeixinBridge(t *testing.T, svc *LibraryService, aiReader weixinAIRea
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	return NewWeixinIMBridge(svc, aiReader, logger, storageDir)
+}
+
+func TestWeixinIMBridgeRunReportsDisabledState(t *testing.T) {
+	svc, _, cfg := newTestService(t)
+	var logs bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&logs, nil))
+	bridge := NewWeixinIMBridge(svc, &fakeWeixinAIReader{answer: "ok"}, logger, cfg.StorageDir)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() {
+		done <- bridge.Run(ctx)
+	}()
+
+	time.Sleep(50 * time.Millisecond)
+	cancel()
+
+	select {
+	case err := <-done:
+		if err != nil && err != context.Canceled {
+			t.Fatalf("Run() error = %v, want nil or context.Canceled", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Run() did not stop after context cancellation")
+	}
+
+	if got := logs.String(); !strings.Contains(got, "is disabled; enable it in Settings") {
+		t.Fatalf("Run() logs = %q, want disabled bridge hint", got)
+	}
+}
+
+func TestWeixinIMBridgeRunWarnsWhenBindingMissing(t *testing.T) {
+	svc, _, cfg := newTestService(t)
+	if _, err := svc.UpdateWeixinBridgeSettings(model.WeixinBridgeSettings{Enabled: true}); err != nil {
+		t.Fatalf("UpdateWeixinBridgeSettings() error = %v", err)
+	}
+
+	var logs bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&logs, nil))
+	bridge := NewWeixinIMBridge(svc, &fakeWeixinAIReader{answer: "ok"}, logger, cfg.StorageDir)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() {
+		done <- bridge.Run(ctx)
+	}()
+
+	time.Sleep(50 * time.Millisecond)
+	cancel()
+
+	select {
+	case err := <-done:
+		if err != nil && err != context.Canceled {
+			t.Fatalf("Run() error = %v, want nil or context.Canceled", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Run() did not stop after context cancellation")
+	}
+
+	if got := logs.String(); !strings.Contains(got, "no active binding found") {
+		t.Fatalf("Run() logs = %q, want missing binding warning", got)
+	}
 }
 
 func TestWeixinIMBridgeSearchAndSelectPaperByResultNumber(t *testing.T) {
@@ -311,6 +374,45 @@ func TestWeixinIMBridgeRejectsNonPDFFiles(t *testing.T) {
 	}
 	if result.Total != 0 {
 		t.Fatalf("paper total = %d, want 0 after rejected import", result.Total)
+	}
+}
+
+func TestShouldHandleWeixinMessageAllowsBoundUserWithNonLegacyMessageType(t *testing.T) {
+	ok, reason := shouldHandleWeixinMessage(
+		weixinBindingRecord{
+			UserID:    "user@im.wechat",
+			AccountID: "bot@im.bot",
+		},
+		weixin.Message{
+			FromUserID:  "user@im.wechat",
+			ToUserID:    "bot@im.bot",
+			MessageType: weixin.MessageTypeBot,
+		},
+	)
+
+	if !ok {
+		t.Fatalf("shouldHandleWeixinMessage() ok = false, reason = %q, want true for bound user message", reason)
+	}
+}
+
+func TestShouldHandleWeixinMessageRejectsBotEcho(t *testing.T) {
+	ok, reason := shouldHandleWeixinMessage(
+		weixinBindingRecord{
+			UserID:    "user@im.wechat",
+			AccountID: "bot@im.bot",
+		},
+		weixin.Message{
+			FromUserID:  "bot@im.bot",
+			ToUserID:    "user@im.wechat",
+			MessageType: weixin.MessageTypeBot,
+		},
+	)
+
+	if ok {
+		t.Fatal("shouldHandleWeixinMessage() ok = true, want false for bot echo")
+	}
+	if reason != "bot_echo" {
+		t.Fatalf("shouldHandleWeixinMessage() reason = %q, want %q", reason, "bot_echo")
 	}
 }
 

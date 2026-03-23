@@ -2263,6 +2263,7 @@ func (s *LibraryService) GetAuthSettings() model.AuthSettings {
 		Username:       s.config.AdminUsername,
 		PasswordFromDB: s.GetRuntimePassword() != s.config.AdminPassword,
 		WeixinBinding:  s.getWeixinBindingSummary(),
+		WeixinBridge:   s.getWeixinBridgeSettingsSummary(),
 	}
 }
 

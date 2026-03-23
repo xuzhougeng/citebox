@@ -116,6 +116,13 @@ func (s *LibraryService) GetWeixinBindingStatus(ctx context.Context, qrcode stri
 	return result, nil
 }
 
+func (s *LibraryService) UnbindWeixin() error {
+	if err := s.repo.DeleteAppSetting(weixinBindingKey); err != nil {
+		return apperr.Wrap(apperr.CodeInternal, "删除微信绑定信息失败", err)
+	}
+	return nil
+}
+
 func (s *LibraryService) getWeixinBindingSummary() model.WeixinBindingSummary {
 	record, err := s.loadWeixinBinding()
 	if err != nil {

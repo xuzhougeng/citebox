@@ -101,7 +101,7 @@ go run ./cmd/desktop
 | `PDF_EXTRACTOR_POLL_INTERVAL_SECONDS` | `2` | 轮询异步任务状态的间隔秒数 |
 | `ADMIN_USERNAME` | `citebox` | 登录用户名 |
 | `ADMIN_PASSWORD` | `citebox123` | 初始登录密码 |
-| `WEIXIN_BRIDGE_ENABLED` | `false` | 启用微信 IM 桥接；需先在设置页完成微信绑定 |
+| `WEIXIN_BRIDGE_ENABLED` | `false` | 微信 IM 桥接的默认开关；若尚未在设置页保存过桥接配置，则使用该默认值 |
 
 ## 解析后端约定
 
@@ -188,9 +188,14 @@ export PDF_EXTRACTOR_URL=http://127.0.0.1:8000/api/v1/extract
 
 当前版本支持单用户微信 IM 桥接。接入方式：
 
-1. 在设置页完成微信绑定。
-2. 启动服务时设置 `WEIXIN_BRIDGE_ENABLED=1`。
+1. 在设置页打开“微信 IM 桥接”。
+2. 在设置页完成微信绑定。
 3. 服务会在后台长轮询微信消息，并复用现有文献检索、文献问答、图片解读和笔记写入能力。
+
+补充说明：
+
+- `WEIXIN_BRIDGE_ENABLED` 现在只作为默认值；首次启动后如果你还没在设置页保存过桥接配置，会回退到这个环境变量
+- 一旦在设置页保存过“微信 IM 桥接”开关，后续以数据库中的运行时配置为准，不必再依赖环境变量
 
 已支持的交互：
 

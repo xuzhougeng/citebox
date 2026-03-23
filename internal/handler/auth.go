@@ -83,6 +83,18 @@ func (h *AuthHandler) GetWeixinBindingStatus(w http.ResponseWriter, r *http.Requ
 	sendJSON(w, http.StatusOK, result)
 }
 
+func (h *AuthHandler) UnbindWeixin(w http.ResponseWriter, r *http.Request) {
+	if err := h.libraryService.UnbindWeixin(); err != nil {
+		sendError(w, err)
+		return
+	}
+
+	sendJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"message": "微信绑定已解除",
+	})
+}
+
 func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	var req model.ChangePasswordRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {

@@ -76,10 +76,36 @@ func NewWeixinIMBridge(libraryService *LibraryService, aiService weixinAIReader,
 
 func (b *WeixinIMBridge) Run(ctx context.Context) error {
 	b.logger.Info("weixin IM bridge loop started")
+	waitingForEnable := false
+	waitingForBinding := false
 
 	for {
 		if err := ctx.Err(); err != nil {
 			return err
+		}
+
+		enabled, err := b.libraryService.isWeixinBridgeEnabled()
+		if err != nil {
+			b.logger.Warn("load weixin bridge settings failed", "error", err)
+			if !sleepContext(ctx, 5*time.Second) {
+				return ctx.Err()
+			}
+			continue
+		}
+		if !enabled {
+			if !waitingForEnable {
+				b.logger.Info("weixin IM bridge is disabled; enable it in Settings to start polling")
+				waitingForEnable = true
+			}
+			waitingForBinding = false
+			if !sleepContext(ctx, 5*time.Second) {
+				return ctx.Err()
+			}
+			continue
+		}
+		if waitingForEnable {
+			b.logger.Info("weixin IM bridge enabled, checking binding state")
+			waitingForEnable = false
 		}
 
 		binding, err := b.libraryService.loadWeixinBinding()
@@ -91,10 +117,18 @@ func (b *WeixinIMBridge) Run(ctx context.Context) error {
 			continue
 		}
 		if strings.TrimSpace(binding.Token) == "" {
+			if !waitingForBinding {
+				b.logger.Warn("weixin IM bridge enabled but no active binding found; complete Weixin binding in Settings before expecting message replies")
+				waitingForBinding = true
+			}
 			if !sleepContext(ctx, 5*time.Second) {
 				return ctx.Err()
 			}
 			continue
+		}
+		if waitingForBinding {
+			b.logger.Info("weixin binding detected, starting IM polling")
+			waitingForBinding = false
 		}
 
 		client := weixin.NewClient(binding.BaseURL, binding.Token, nil)
@@ -118,6 +152,15 @@ func (b *WeixinIMBridge) runPolling(ctx context.Context, client *weixin.Client, 
 			return err
 		}
 
+		enabled, err := b.libraryService.isWeixinBridgeEnabled()
+		if err != nil {
+			return err
+		}
+		if !enabled {
+			b.logger.Info("weixin IM bridge disabled, stopping poller")
+			return nil
+		}
+
 		latestBinding, err := b.libraryService.loadWeixinBinding()
 		if err == nil && !sameWeixinBinding(binding, latestBinding) {
 			b.logger.Info("weixin binding changed, restarting poller")
@@ -138,18 +181,41 @@ func (b *WeixinIMBridge) runPolling(ctx context.Context, client *weixin.Client, 
 				b.logger.Warn("save weixin sync buffer failed", "error", err)
 			}
 		}
+		if len(resp.Msgs) > 0 {
+			b.logger.Info("received weixin updates", "message_count", len(resp.Msgs))
+		}
 
 		for _, message := range resp.Msgs {
-			if message.MessageType != weixin.MessageTypeUser {
-				continue
-			}
-			if strings.TrimSpace(binding.UserID) != "" && strings.TrimSpace(message.FromUserID) != strings.TrimSpace(binding.UserID) {
-				b.logger.Warn("ignore message from unexpected weixin user", "from_user_id", message.FromUserID)
+			if ok, reason := shouldHandleWeixinMessage(binding, message); !ok {
+				switch reason {
+				case "unexpected_sender":
+					b.logger.Warn(
+						"ignore message from unexpected weixin user",
+						"from_user_id", strings.TrimSpace(message.FromUserID),
+						"to_user_id", strings.TrimSpace(message.ToUserID),
+						"message_type", message.MessageType,
+					)
+				case "unexpected_recipient":
+					b.logger.Warn(
+						"ignore weixin message to unexpected recipient",
+						"from_user_id", strings.TrimSpace(message.FromUserID),
+						"to_user_id", strings.TrimSpace(message.ToUserID),
+						"message_type", message.MessageType,
+					)
+				}
 				continue
 			}
 
+			b.logger.Info(
+				"handle weixin message",
+				"from_user_id", strings.TrimSpace(message.FromUserID),
+				"to_user_id", strings.TrimSpace(message.ToUserID),
+				"message_type", message.MessageType,
+				"message_state", message.MessageState,
+			)
 			reply := trimWeixinReply(b.handleIncomingMessage(ctx, message))
 			if reply == "" {
+				b.logger.Info("skip empty weixin reply", "from_user_id", strings.TrimSpace(message.FromUserID))
 				continue
 			}
 			if err := client.SendTextMessage(ctx, message.FromUserID, reply, message.ContextToken); err != nil {
@@ -730,6 +796,30 @@ func (b *WeixinIMBridge) loadSyncBuf() string {
 		return ""
 	}
 	return strings.TrimSpace(string(data))
+}
+
+func shouldHandleWeixinMessage(binding weixinBindingRecord, message weixin.Message) (bool, string) {
+	fromUserID := strings.TrimSpace(message.FromUserID)
+	toUserID := strings.TrimSpace(message.ToUserID)
+	boundUserID := strings.TrimSpace(binding.UserID)
+	accountID := strings.TrimSpace(binding.AccountID)
+
+	switch {
+	case strings.TrimSpace(message.GroupID) != "":
+		return false, "group_message"
+	case fromUserID == "":
+		return false, "missing_sender"
+	case accountID != "" && fromUserID == accountID:
+		return false, "bot_echo"
+	case boundUserID != "" && fromUserID != boundUserID:
+		return false, "unexpected_sender"
+	case accountID != "" && toUserID != "" && toUserID != accountID:
+		return false, "unexpected_recipient"
+	case boundUserID == "" && accountID == "" && message.MessageType != weixin.MessageTypeUser:
+		return false, "unknown_sender_type"
+	default:
+		return true, ""
+	}
 }
 
 func extractWeixinText(message weixin.Message) string {

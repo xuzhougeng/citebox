@@ -451,6 +451,20 @@ const API = {
         });
     },
 
+    getWeixinBridgeSettings() {
+        return requestJSON(`${API_BASE}/settings/weixin-bridge`);
+    },
+
+    updateWeixinBridgeSettings(data) {
+        return requestJSON(`${API_BASE}/settings/weixin-bridge`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        });
+    },
+
     getVersionStatus(forceRefresh = false) {
         const suffix = forceRefresh ? '?refresh=1' : '';
         return requestJSON(`${API_BASE}/settings/version${suffix}`);
@@ -470,6 +484,12 @@ const API = {
     startWeixinBinding() {
         return requestJSON(`${API_BASE}/auth/weixin/bind`, {
             method: 'POST'
+        });
+    },
+
+    unbindWeixin() {
+        return requestJSON(`${API_BASE}/auth/weixin/bind`, {
+            method: 'DELETE'
         });
     },
 

@@ -826,6 +826,34 @@ AI 流式阅读通过：
 
 - 保存提取器配置
 
+#### `GET /api/settings/weixin-bridge`
+
+用途：
+
+- 获取当前微信 IM 桥接开关
+
+响应示例：
+
+```json
+{
+  "enabled": true
+}
+```
+
+#### `PUT /api/settings/weixin-bridge`
+
+用途：
+
+- 保存当前微信 IM 桥接开关
+
+请求体：
+
+```json
+{
+  "enabled": true
+}
+```
+
 ### 数据库导入导出
 
 #### `GET /api/database/export`
@@ -882,7 +910,7 @@ AI 流式阅读通过：
 用途：
 
 - 获取当前认证设置摘要
-- 返回管理员用户名、密码是否已落库，以及微信绑定摘要
+- 返回管理员用户名、密码是否已落库、微信桥接开关，以及微信绑定摘要
 
 响应示例：
 
@@ -890,6 +918,9 @@ AI 流式阅读通过：
 {
   "username": "citebox",
   "password_from_db": false,
+  "weixin_bridge": {
+    "enabled": true
+  },
   "weixin_binding": {
     "bound": true,
     "account_id": "xxx@im.bot",

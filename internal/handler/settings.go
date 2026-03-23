@@ -50,6 +50,35 @@ func (h *SettingsHandler) UpdateExtractorSettings(w http.ResponseWriter, r *http
 	})
 }
 
+func (h *SettingsHandler) GetWeixinBridgeSettings(w http.ResponseWriter, r *http.Request) {
+	settings, err := h.libraryService.GetWeixinBridgeSettings()
+	if err != nil {
+		sendError(w, err)
+		return
+	}
+
+	sendJSON(w, http.StatusOK, settings)
+}
+
+func (h *SettingsHandler) UpdateWeixinBridgeSettings(w http.ResponseWriter, r *http.Request) {
+	var req model.WeixinBridgeSettings
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		sendError(w, apperr.New(apperr.CodeInvalidArgument, "请求体格式错误"))
+		return
+	}
+
+	settings, err := h.libraryService.UpdateWeixinBridgeSettings(req)
+	if err != nil {
+		sendError(w, err)
+		return
+	}
+
+	sendJSON(w, http.StatusOK, map[string]interface{}{
+		"success":  true,
+		"settings": settings,
+	})
+}
+
 func (h *SettingsHandler) GetVersionStatus(w http.ResponseWriter, r *http.Request) {
 	refresh := false
 	switch r.URL.Query().Get("refresh") {

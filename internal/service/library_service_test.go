@@ -252,6 +252,51 @@ func TestGetWeixinBindingStatusRejectsEmptyQRCode(t *testing.T) {
 	}
 }
 
+func TestGetWeixinBridgeSettingsDefaultsToConfig(t *testing.T) {
+	svc, _, _ := newTestService(t)
+
+	settings, err := svc.GetWeixinBridgeSettings()
+	if err != nil {
+		t.Fatalf("GetWeixinBridgeSettings() error = %v", err)
+	}
+	if settings.Enabled {
+		t.Fatalf("GetWeixinBridgeSettings() enabled = %v, want false by default", settings.Enabled)
+	}
+}
+
+func TestUpdateWeixinBridgeSettingsPersistsAndAppearsInAuthSettings(t *testing.T) {
+	svc, repo, _ := newTestService(t)
+
+	settings, err := svc.UpdateWeixinBridgeSettings(model.WeixinBridgeSettings{Enabled: true})
+	if err != nil {
+		t.Fatalf("UpdateWeixinBridgeSettings() error = %v", err)
+	}
+	if !settings.Enabled {
+		t.Fatalf("UpdateWeixinBridgeSettings() enabled = %v, want true", settings.Enabled)
+	}
+
+	reloaded, err := svc.GetWeixinBridgeSettings()
+	if err != nil {
+		t.Fatalf("GetWeixinBridgeSettings() reload error = %v", err)
+	}
+	if !reloaded.Enabled {
+		t.Fatalf("GetWeixinBridgeSettings() reload enabled = %v, want true", reloaded.Enabled)
+	}
+
+	authSettings := svc.GetAuthSettings()
+	if !authSettings.WeixinBridge.Enabled {
+		t.Fatalf("GetAuthSettings() weixin_bridge = %+v, want enabled", authSettings.WeixinBridge)
+	}
+
+	raw, err := repo.GetAppSetting(weixinBridgeSettingsKey)
+	if err != nil {
+		t.Fatalf("GetAppSetting(%q) error = %v", weixinBridgeSettingsKey, err)
+	}
+	if !strings.Contains(raw, `"enabled":true`) {
+		t.Fatalf("saved weixin bridge settings = %q, want enabled persisted", raw)
+	}
+}
+
 func TestDeletePaperRemovesFilesAndReturnsNotFound(t *testing.T) {
 	svc, repo, cfg := newTestService(t)
 	paper := createTestPaper(t, repo)

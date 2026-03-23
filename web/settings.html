@@ -485,9 +485,18 @@ User Prompt:
                 <div class="db-actions-grid">
                     <div class="db-action-item">
                         <h3>绑定微信</h3>
-                        <p>扫码绑定 CiteBox 使用的微信 iLink Bot 凭证，当前仅保存绑定信息，不接收消息。</p>
+                        <p>在这里启用或停用微信 IM 桥接，并管理 CiteBox 使用的微信 iLink Bot 绑定。</p>
                         <div class="settings-action-form weixin-binding-panel">
                             <div id="weixinBindingSummary" class="weixin-binding-summary"></div>
+                            <label class="field checkbox-field">
+                                <input id="weixinBridgeEnabledInput" type="checkbox">
+                                <span>
+                                    <strong>启用微信 IM 桥接</strong><br>
+                                    开启后 CiteBox 会在后台轮询微信消息；关闭后将停止接收和回复微信消息。
+                                </span>
+                            </label>
+                            <p id="weixinBridgeSaveStatus" class="settings-inline-status">修改后点击保存桥接配置。</p>
+                            <button id="saveWeixinBridgeButton" class="btn btn-secondary" type="button">保存微信桥接配置</button>
                             <div id="weixinQRCodePanel" class="weixin-qr-panel hidden">
                                 <img id="weixinQRCodeImage" class="weixin-qr-image" alt="微信绑定二维码">
                                 <p class="muted">请使用微信扫码。二维码过期后可重新生成。</p>
@@ -497,7 +506,10 @@ User Prompt:
                                     <a id="weixinQRCodeLink" href="#" target="_blank" rel="noreferrer">打开原始链接</a>
                                 </p>
                             </div>
-                            <button id="startWeixinBindingButton" class="btn btn-secondary" type="button">开始绑定</button>
+                            <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
+                                <button id="startWeixinBindingButton" class="btn btn-secondary" type="button">开始绑定</button>
+                                <button id="unbindWeixinButton" class="btn btn-danger hidden" type="button">解除绑定</button>
+                            </div>
                         </div>
                     </div>
                     <div class="db-action-item">

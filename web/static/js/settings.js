@@ -70,7 +70,11 @@ const SettingsPage = {
         this.weixinQRCodeImage = document.getElementById('weixinQRCodeImage');
         this.weixinQRCodeLink = document.getElementById('weixinQRCodeLink');
         this.weixinBindingStatus = document.getElementById('weixinBindingStatus');
+        this.weixinBridgeEnabledInput = document.getElementById('weixinBridgeEnabledInput');
+        this.weixinBridgeSaveStatus = document.getElementById('weixinBridgeSaveStatus');
+        this.saveWeixinBridgeButton = document.getElementById('saveWeixinBridgeButton');
         this.startWeixinBindingButton = document.getElementById('startWeixinBindingButton');
+        this.unbindWeixinButton = document.getElementById('unbindWeixinButton');
 
         this.bindEvents();
         this.bootstrap();
@@ -168,8 +172,17 @@ const SettingsPage = {
             await this.changePassword();
         });
         this.logoutButton.addEventListener('click', () => this.logout());
+        this.weixinBridgeEnabledInput?.addEventListener('change', () => {
+            this.setWeixinBridgeSaveStatus('桥接配置已修改，点击“保存微信桥接配置”后生效。', 'saving');
+        });
+        this.saveWeixinBridgeButton?.addEventListener('click', async () => {
+            await this.saveWeixinBridgeSettings();
+        });
         this.startWeixinBindingButton.addEventListener('click', async () => {
             await this.startWeixinBinding();
+        });
+        this.unbindWeixinButton?.addEventListener('click', async () => {
+            await this.unbindWeixin();
         });
         document.addEventListener('keydown', (event) => {
             if (event.key === 'Escape' && this.aiModelModal && !this.aiModelModal.classList.contains('hidden')) {
@@ -640,28 +653,76 @@ const SettingsPage = {
         Utils.showToast('PDF 提取服务配置已保存');
     },
 
+    async saveWeixinBridgeSettings() {
+        const button = this.saveWeixinBridgeButton;
+        const originalLabel = button?.textContent || '保存微信桥接配置';
+        if (button) {
+            button.disabled = true;
+            button.textContent = '保存中...';
+        }
+
+        try {
+            const response = await API.updateWeixinBridgeSettings({
+                enabled: Boolean(this.weixinBridgeEnabledInput?.checked)
+            });
+            this.authSettings = {
+                ...(this.authSettings || {}),
+                weixin_bridge: response.settings || {}
+            };
+            this.renderAuthSettings(this.authSettings);
+            this.setWeixinBridgeSaveStatus(
+                response.settings?.enabled ? '微信 IM 桥接已启用。' : '微信 IM 桥接已关闭。',
+                'success'
+            );
+            Utils.showToast(response.settings?.enabled ? '微信 IM 桥接已启用' : '微信 IM 桥接已关闭');
+        } catch (error) {
+            this.setWeixinBridgeSaveStatus(`保存失败：${error.message}`, 'error');
+            Utils.showToast(error.message, 'error');
+        } finally {
+            if (button) {
+                button.disabled = false;
+                button.textContent = originalLabel;
+            }
+        }
+    },
+
     renderAuthSettings(settings = {}) {
         this.authSettings = settings;
+        this.renderWeixinBridgeControls(settings.weixin_bridge || {});
         this.renderWeixinBindingSummary(settings.weixin_binding || {});
+    },
+
+    renderWeixinBridgeControls(settings = {}) {
+        const enabled = Boolean(settings.enabled);
+        if (this.weixinBridgeEnabledInput) {
+            this.weixinBridgeEnabledInput.checked = enabled;
+        }
+        if (!this.weixinBridgeSaveStatus?.textContent) {
+            this.setWeixinBridgeSaveStatus(
+                enabled ? '微信 IM 桥接当前已启用。' : '微信 IM 桥接当前已关闭。',
+                enabled ? 'success' : ''
+            );
+        }
     },
 
     renderWeixinBindingSummary(binding = {}) {
         if (!this.weixinBindingSummary) return;
 
         const isBound = Boolean(binding.bound);
-        const title = isBound
-            ? `已绑定 ${Utils.escapeHTML(binding.account_id || '微信账号')}`
-            : '当前未绑定微信';
-        const detail = isBound
-            ? [
-                binding.user_id ? `用户 ID：${Utils.escapeHTML(binding.user_id)}` : '',
-                binding.bound_at ? `绑定时间：${Utils.escapeHTML(Utils.formatDate(binding.bound_at))}` : '',
-                binding.base_url ? `接入域名：${Utils.escapeHTML(binding.base_url)}` : ''
-            ].filter(Boolean).join('<br>')
-            : '绑定后将保存 bot_token、账号 ID 和服务端返回的 base URL，后续可继续扩展消息桥接。';
+        const bridgeEnabled = Boolean(this.authSettings?.weixin_bridge?.enabled);
+        const title = bridgeEnabled ? '微信 IM 已启用' : '微信 IM 已关闭';
+        const detail = [
+            bridgeEnabled ? '桥接状态：后台会轮询微信消息并尝试自动回复。' : '桥接状态：当前不会接收或回复微信消息。',
+            isBound
+                ? `绑定账号：${Utils.escapeHTML(binding.account_id || '微信账号')}`
+                : '当前未绑定微信，可先保存桥接开关，再扫码完成绑定。',
+            binding.user_id ? `用户 ID：${Utils.escapeHTML(binding.user_id)}` : '',
+            binding.bound_at ? `绑定时间：${Utils.escapeHTML(Utils.formatDate(binding.bound_at))}` : '',
+            binding.base_url ? `接入域名：${Utils.escapeHTML(binding.base_url)}` : ''
+        ].filter(Boolean).join('<br>');
 
         this.weixinBindingSummary.innerHTML = `
-            <span>WeChat Binding</span>
+            <span>WeChat Bridge</span>
             <strong>${title}</strong>
             <p>${detail}</p>
         `;
@@ -669,10 +730,17 @@ const SettingsPage = {
         if (this.startWeixinBindingButton) {
             this.startWeixinBindingButton.textContent = isBound ? '重新绑定' : '开始绑定';
         }
+        if (this.unbindWeixinButton) {
+            this.unbindWeixinButton.classList.toggle('hidden', !isBound);
+        }
     },
 
     setWeixinBindingStatus(message, tone = '') {
         this.setInlineStatus(this.weixinBindingStatus, message, tone);
+    },
+
+    setWeixinBridgeSaveStatus(message, tone = '') {
+        this.setInlineStatus(this.weixinBridgeSaveStatus, message, tone);
     },
 
     async startWeixinBinding() {
@@ -716,6 +784,22 @@ const SettingsPage = {
         }
     },
 
+    async unbindWeixin() {
+        if (!confirm('确定要解除微信绑定吗？解除后将停止接收微信消息。')) return;
+        try {
+            await API.unbindWeixin();
+            if (this.authSettings) {
+                this.authSettings.weixin_binding = {};
+            }
+            this.renderWeixinBindingSummary({});
+            this.weixinQRCodePanel?.classList.add('hidden');
+            this.setWeixinBindingStatus('');
+            Utils.showToast('微信绑定已解除');
+        } catch (error) {
+            Utils.showToast(error.message, 'error');
+        }
+    },
+
     scheduleWeixinBindingPoll(delay = 1500) {
         this.stopWeixinBindingPolling();
         this.weixinBindingPollTimer = window.setTimeout(async () => {
@@ -743,7 +827,7 @@ const SettingsPage = {
                     ...(this.authSettings || {}),
                     weixin_binding: result.binding || {}
                 };
-                this.renderWeixinBindingSummary(result.binding || {});
+                this.renderAuthSettings(this.authSettings);
                 this.weixinQRCodePanel?.classList.add('hidden');
                 this.setWeixinBindingStatus(message, 'success');
                 Utils.showToast(message || '微信绑定成功');
