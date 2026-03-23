@@ -492,7 +492,7 @@ const PalettesPage = {
                         <button class="btn btn-outline btn-small" type="button" data-action="copy-hex">复制 HEX</button>
                         <button class="btn btn-outline btn-small" type="button" data-action="copy-css">复制 CSS</button>
                         <button class="btn btn-outline btn-small" type="button" data-action="paper">来源文献</button>
-                        <a class="btn btn-outline btn-small" href="${imageViewerURL}">原图</a>
+
                         <button class="btn btn-outline btn-small danger" type="button" data-action="delete">删除</button>
                     </div>
                 </div>
