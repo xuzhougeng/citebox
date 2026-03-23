@@ -261,7 +261,7 @@ const UploadPage = {
     },
 
     renderResult(paper) {
-        const figures = paper.figures || [];
+        const figures = (paper.figures || []).filter((figure) => !figure.parent_figure_id);
         const statusTone = Utils.statusTone(paper.extraction_status);
         const tags = (paper.tags || [])
             .map((tag) => `<span class="chip" style="--chip-color:${tag.color}">${Utils.escapeHTML(tag.name)}</span>`)

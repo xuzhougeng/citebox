@@ -101,6 +101,24 @@ func (h *FigureHandler) CreateSubfigures(w http.ResponseWriter, r *http.Request)
 	})
 }
 
+func (h *FigureHandler) ServeImage(w http.ResponseWriter, r *http.Request) {
+	id, err := parseIDWithSuffix(r.URL.Path, "/api/figures/", "/image")
+	if err != nil {
+		sendError(w, apperr.New(apperr.CodeInvalidArgument, "figure id 无效"))
+		return
+	}
+
+	data, contentType, _, err := h.service.GetFigureImage(id)
+	if err != nil {
+		sendError(w, err)
+		return
+	}
+
+	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Cache-Control", "private, max-age=300")
+	_, _ = w.Write(data)
+}
+
 func (h *FigureHandler) CreatePalette(w http.ResponseWriter, r *http.Request) {
 	id, err := parseIDWithSuffix(r.URL.Path, "/api/figures/", "/palette")
 	if err != nil {

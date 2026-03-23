@@ -481,13 +481,14 @@ func (b *WeixinIMBridge) listFigures() string {
 	if errText != "" {
 		return errText
 	}
-	if len(paper.Figures) == 0 {
+	figures := topLevelFigures(paper.Figures)
+	if len(figures) == 0 {
 		return "当前文献没有图片。"
 	}
 
 	var lines []string
 	lines = append(lines, fmt.Sprintf("文献 [%d] %s 的图片：", paper.ID, clipRunes(paper.Title, 48)))
-	for index, figure := range paper.Figures {
+	for index, figure := range figures {
 		caption := firstNonEmpty(strings.TrimSpace(figure.Caption), strings.TrimSpace(figure.OriginalName), "未命名图片")
 		lines = append(lines, fmt.Sprintf("%d. [ID %d] 第 %d 页 · 图 %d", index+1, figure.ID, figure.PageNumber, figure.FigureIndex))
 		lines = append(lines, fmt.Sprintf("   %s", clipRunes(caption, 56)))
@@ -501,6 +502,7 @@ func (b *WeixinIMBridge) selectFigure(arg string) string {
 	if errText != "" {
 		return errText
 	}
+	figures := topLevelFigures(paper.Figures)
 
 	arg = strings.TrimSpace(arg)
 	if arg == "" {
@@ -513,12 +515,12 @@ func (b *WeixinIMBridge) selectFigure(arg string) string {
 	}
 
 	var figure *model.Figure
-	if value <= len(paper.Figures) {
-		figure = &paper.Figures[value-1]
+	if value <= len(figures) {
+		figure = &figures[value-1]
 	} else {
-		for index := range paper.Figures {
-			if paper.Figures[index].ID == int64(value) {
-				figure = &paper.Figures[index]
+		for index := range figures {
+			if figures[index].ID == int64(value) {
+				figure = &figures[index]
 				break
 			}
 		}
@@ -659,7 +661,7 @@ func (b *WeixinIMBridge) statusText() string {
 
 	lines := []string{
 		fmt.Sprintf("当前文献：[ID %d] %s", paper.ID, clipRunes(paper.Title, 72)),
-		fmt.Sprintf("图片数量：%d", len(paper.Figures)),
+		fmt.Sprintf("图片数量：%d", len(topLevelFigures(paper.Figures))),
 		fmt.Sprintf("历史问答：%d 轮", len(state.QAHistory)),
 	}
 
@@ -688,7 +690,7 @@ func (b *WeixinIMBridge) formatPaperSelection(paper *model.Paper, autoSelected b
 
 	var lines []string
 	lines = append(lines, fmt.Sprintf("%s [ID %d] %s", prefix, paper.ID, clipRunes(strings.TrimSpace(paper.Title), 72)))
-	lines = append(lines, fmt.Sprintf("状态：%s | 图片：%d 张", paper.ExtractionStatus, len(paper.Figures)))
+	lines = append(lines, fmt.Sprintf("状态：%s | 图片：%d 张", paper.ExtractionStatus, len(topLevelFigures(paper.Figures))))
 
 	summary := firstNonEmpty(strings.TrimSpace(paper.AbstractText), strings.TrimSpace(paper.PaperNotesText), strings.TrimSpace(paper.NotesText))
 	if summary != "" {

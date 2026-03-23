@@ -15,11 +15,8 @@ import (
 	"image/jpeg"
 	"io"
 	"log/slog"
-	"mime"
 	"net/http"
 	"net/url"
-	"os"
-	"path/filepath"
 	"regexp"
 	"sort"
 	"strconv"
@@ -422,7 +419,7 @@ func (s *AIService) ExportReadMarkdown(ctx context.Context, input model.AIReadEx
 			}
 
 			var assetData []byte
-			assetPath, assetData, err = s.loadMarkdownExportAsset(figure)
+			assetPath, assetData, err = s.loadMarkdownExportAsset(paper, figure)
 			if err != nil {
 				rewriteErr = err
 				return match
@@ -640,14 +637,19 @@ func buildAIReadResponse(prepared *aiReadPrepared, mode, rawText string) *model.
 	}
 }
 
-func (s *AIService) loadMarkdownExportAsset(figure model.Figure) (string, []byte, error) {
-	assetPath := filepath.Join(s.config.FiguresDir(), figure.Filename)
-	data, err := os.ReadFile(assetPath)
+func (s *AIService) loadMarkdownExportAsset(paper *model.Paper, figure model.Figure) (string, []byte, error) {
+	if paper == nil {
+		return "", nil, apperr.New(apperr.CodeNotFound, "paper not found")
+	}
+
+	paperFigure := findFigureByID(paper.Figures, figure.ID)
+	if paperFigure == nil {
+		return "", nil, apperr.New(apperr.CodeNotFound, fmt.Sprintf("导出失败：图片不存在（figure #%d）", figure.ID))
+	}
+
+	data, _, err := loadFigureImageData(s.config.FiguresDir(), paper.Figures, *paperFigure)
 	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return "", nil, apperr.New(apperr.CodeNotFound, fmt.Sprintf("导出失败：图片文件不存在（figure #%d）", figure.ID))
-		}
-		return "", nil, apperr.Wrap(apperr.CodeInternal, "读取导出图片失败", err)
+		return "", nil, err
 	}
 
 	return "assets/" + aiReadExportAssetName(figure), data, nil
@@ -1504,7 +1506,7 @@ func selectFiguresForAI(paper *model.Paper, action model.AIAction, figureID int6
 		return nil, apperr.New(apperr.CodeInvalidArgument, "指定图片不存在于当前文献")
 	}
 
-	figures := paper.Figures
+	figures := topLevelFigures(paper.Figures)
 	if maxFigures > 0 && len(figures) > maxFigures {
 		figures = figures[:maxFigures]
 	}
@@ -1523,26 +1525,17 @@ func (s *AIService) loadFigureInputs(paper *model.Paper, figures []model.Figure,
 		if budgetReached {
 			continue
 		}
-		if strings.TrimSpace(figure.Filename) == "" {
-			continue
-		}
-
-		imagePath := filepath.Join(s.config.FiguresDir(), figure.Filename)
-		data, err := os.ReadFile(imagePath)
+		data, mimeType, err := loadFigureImageData(s.config.FiguresDir(), paper.Figures, figure)
 		if err != nil {
-			if os.IsNotExist(err) {
-				s.logger.Warn("ai figure file missing", "paper_id", paper.ID, "filename", figure.Filename)
+			if apperr.IsCode(err, apperr.CodeNotFound) {
+				s.logger.Warn("ai figure image missing",
+					"paper_id", paper.ID,
+					"figure_id", figure.ID,
+					"filename", figure.Filename,
+				)
 				continue
 			}
-			return nil, nil, apperr.Wrap(apperr.CodeInternal, "读取图片文件失败", err)
-		}
-
-		mimeType := strings.TrimSpace(figure.ContentType)
-		if mimeType == "" {
-			mimeType = mime.TypeByExtension(strings.ToLower(filepath.Ext(figure.Filename)))
-		}
-		if mimeType == "" {
-			mimeType = "image/png"
+			return nil, nil, err
 		}
 
 		compressedData, compressedMIMEType, err := compressAIImage(data, mimeType)

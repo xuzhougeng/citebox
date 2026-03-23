@@ -598,7 +598,7 @@ const PaperViewer = {
                 </option>
             `))
             .join('');
-        const figures = paper.figures || [];
+        const figures = (paper.figures || []).filter((figure) => !figure.parent_figure_id);
         const statusClass = Utils.statusTone(paper.extraction_status);
         const paperNotePreview = String(paper.paper_notes_text || '').replace(/\s+/g, ' ').trim();
         
@@ -732,7 +732,7 @@ const PaperViewer = {
 
     paperFiguresForViewer() {
         const paper = this.paper;
-        return (paper.figures || []).map((figure) => ({
+        return (paper.figures || []).filter((figure) => !figure.parent_figure_id).map((figure) => ({
             ...figure,
             paper_id: paper.id,
             paper_title: paper.title,
@@ -744,7 +744,7 @@ const PaperViewer = {
 
     async openFigurePreview(index) {
         if (typeof FigureViewer === 'undefined') {
-            Utils.openResourceViewer('image', this.paper?.figures?.[index]?.image_url);
+            Utils.openResourceViewer('image', this.paperFiguresForViewer()?.[index]?.image_url);
             return;
         }
 

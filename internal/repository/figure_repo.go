@@ -360,7 +360,7 @@ func (r *FigureRepository) ApplyManualFigureChanges(id int64, addFigures []Figur
 
 // buildFigureWhere 构建图片查询条件
 func buildFigureWhere(filter model.FigureFilter) (string, []interface{}) {
-	conditions := []string{}
+	conditions := []string{"pf.parent_figure_id IS NULL"}
 	args := []interface{}{}
 
 	if keyword := strings.TrimSpace(filter.Keyword); keyword != "" {
@@ -385,9 +385,6 @@ func buildFigureWhere(filter model.FigureFilter) (string, []interface{}) {
 		conditions = append(conditions, "TRIM(COALESCE(pf.notes_text, '')) <> ''")
 	}
 
-	if len(conditions) == 0 {
-		return "", args
-	}
 	return " WHERE " + strings.Join(conditions, " AND "), args
 }
 

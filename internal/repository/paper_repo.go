@@ -183,7 +183,7 @@ func (r *PaperRepository) GetPaperDetail(id int64) (*model.Paper, error) {
 				p.pdf_text, p.abstract_text, p.notes_text, p.paper_notes_text, p.boxes_json, p.extraction_status, p.extractor_message, p.extractor_job_id,
 				p.group_id, COALESCE(g.name, ''),
 				p.created_at, p.updated_at,
-				(SELECT COUNT(*) FROM paper_figures pf WHERE pf.paper_id = p.id)
+				(SELECT COUNT(*) FROM paper_figures pf WHERE pf.paper_id = p.id AND pf.parent_figure_id IS NULL)
 		FROM papers p
 		LEFT JOIN groups g ON g.id = p.group_id
 		WHERE p.id = ?
@@ -307,7 +307,7 @@ func (r *PaperRepository) ListPapers(filter model.PaperFilter) ([]model.Paper, i
 				'', p.abstract_text, p.notes_text, p.paper_notes_text, '', p.extraction_status, p.extractor_message, p.extractor_job_id,
 				p.group_id, COALESCE(g.name, ''),
 				p.created_at, p.updated_at,
-				(SELECT COUNT(*) FROM paper_figures pf WHERE pf.paper_id = p.id)
+				(SELECT COUNT(*) FROM paper_figures pf WHERE pf.paper_id = p.id AND pf.parent_figure_id IS NULL)
 		FROM papers p
 		LEFT JOIN groups g ON g.id = p.group_id
 	` + whereClause + `
@@ -371,7 +371,7 @@ func (r *PaperRepository) ListPapersByExtractionStatuses(statuses []string) ([]m
 			'', p.abstract_text, p.notes_text, p.paper_notes_text, '', p.extraction_status, p.extractor_message, p.extractor_job_id,
 			p.group_id, COALESCE(g.name, ''),
 			p.created_at, p.updated_at,
-			(SELECT COUNT(*) FROM paper_figures pf WHERE pf.paper_id = p.id)
+			(SELECT COUNT(*) FROM paper_figures pf WHERE pf.paper_id = p.id AND pf.parent_figure_id IS NULL)
 		FROM papers p
 		LEFT JOIN groups g ON g.id = p.group_id
 		WHERE p.extraction_status IN (`+strings.Join(placeholders, ",")+`)

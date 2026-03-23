@@ -17,6 +17,7 @@ import (
 	"net/textproto"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -722,7 +723,11 @@ func TestCreateSubfiguresAssignsLabelAndDecoratesParent(t *testing.T) {
 	paper := createTestPaper(t, repo)
 
 	parentPath := filepath.Join(cfg.FiguresDir(), paper.Figures[0].Filename)
-	if err := os.WriteFile(parentPath, []byte("img"), 0o644); err != nil {
+	parentData, err := decodeBase64(testPNGDataURL(t, 80, 60))
+	if err != nil {
+		t.Fatalf("decodeBase64() error = %v", err)
+	}
+	if err := os.WriteFile(parentPath, parentData, 0o644); err != nil {
 		t.Fatalf("WriteFile(parent figure) error = %v", err)
 	}
 
@@ -774,17 +779,234 @@ func TestCreateSubfiguresAssignsLabelAndDecoratesParent(t *testing.T) {
 	if len(parentFigure.Subfigures) != 1 || parentFigure.Subfigures[0].ID != childFigure.ID {
 		t.Fatalf("CreateSubfigures() parent subfigures = %+v, want child %d", parentFigure.Subfigures, childFigure.ID)
 	}
-	if _, err := os.Stat(filepath.Join(cfg.FiguresDir(), childFigure.Filename)); err != nil {
-		t.Fatalf("stored subfigure missing, stat err = %v", err)
+	if !strings.HasPrefix(childFigure.Filename, virtualSubfigureFilenamePrefix) {
+		t.Fatalf("CreateSubfigures() filename = %q, want virtual metadata filename", childFigure.Filename)
+	}
+	if childFigure.ImageURL != "/api/figures/"+strconv.FormatInt(childFigure.ID, 10)+"/image" {
+		t.Fatalf("CreateSubfigures() image_url = %q, want dynamic image route", childFigure.ImageURL)
 	}
 }
 
-func TestDeleteFigureRemovesSubfigureBranchFiles(t *testing.T) {
+func TestCreateSubfiguresUsesManualLabelAndAutoFallback(t *testing.T) {
 	svc, repo, cfg := newTestService(t)
 	paper := createTestPaper(t, repo)
 
 	parentPath := filepath.Join(cfg.FiguresDir(), paper.Figures[0].Filename)
-	if err := os.WriteFile(parentPath, []byte("img"), 0o644); err != nil {
+	parentData, err := decodeBase64(testPNGDataURL(t, 80, 60))
+	if err != nil {
+		t.Fatalf("decodeBase64() error = %v", err)
+	}
+	if err := os.WriteFile(parentPath, parentData, 0o644); err != nil {
+		t.Fatalf("WriteFile(parent figure) error = %v", err)
+	}
+
+	updated, addedCount, err := svc.CreateSubfigures(paper.Figures[0].ID, CreateSubfiguresParams{
+		Regions: []model.SubfigureExtractionRegion{
+			{
+				X:      0.08,
+				Y:      0.10,
+				Width:  0.22,
+				Height: 0.28,
+				Label:  "B",
+			},
+			{
+				X:      0.40,
+				Y:      0.20,
+				Width:  0.20,
+				Height: 0.25,
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreateSubfigures() error = %v", err)
+	}
+	if addedCount != 2 {
+		t.Fatalf("CreateSubfigures() addedCount = %d, want 2", addedCount)
+	}
+
+	var labels []string
+	var displayLabels []string
+	for _, figure := range updated.Figures {
+		if figure.ParentFigureID == nil {
+			continue
+		}
+		labels = append(labels, figure.SubfigureLabel)
+		displayLabels = append(displayLabels, figure.DisplayLabel)
+	}
+	if !containsString(labels, "b") {
+		t.Fatalf("CreateSubfigures() labels = %+v, want normalized manual label b", labels)
+	}
+	if !containsString(labels, "a") {
+		t.Fatalf("CreateSubfigures() labels = %+v, want auto fallback label a", labels)
+	}
+	if !containsString(displayLabels, "Fig 1b") {
+		t.Fatalf("CreateSubfigures() displayLabels = %+v, want manual display label Fig 1b", displayLabels)
+	}
+	if !containsString(displayLabels, "Fig 1a") {
+		t.Fatalf("CreateSubfigures() displayLabels = %+v, want auto display label", displayLabels)
+	}
+}
+
+func TestCreateSubfiguresAllowsAddingAAfterExistingB(t *testing.T) {
+	svc, repo, cfg := newTestService(t)
+	paper := createTestPaper(t, repo)
+
+	parentPath := filepath.Join(cfg.FiguresDir(), paper.Figures[0].Filename)
+	parentData, err := decodeBase64(testPNGDataURL(t, 80, 60))
+	if err != nil {
+		t.Fatalf("decodeBase64() error = %v", err)
+	}
+	if err := os.WriteFile(parentPath, parentData, 0o644); err != nil {
+		t.Fatalf("WriteFile(parent figure) error = %v", err)
+	}
+
+	if _, addedCount, err := svc.CreateSubfigures(paper.Figures[0].ID, CreateSubfiguresParams{
+		Regions: []model.SubfigureExtractionRegion{
+			{
+				X:      0.08,
+				Y:      0.10,
+				Width:  0.22,
+				Height: 0.28,
+				Label:  "b",
+			},
+		},
+	}); err != nil {
+		t.Fatalf("CreateSubfigures(first) error = %v", err)
+	} else if addedCount != 1 {
+		t.Fatalf("CreateSubfigures(first) addedCount = %d, want 1", addedCount)
+	}
+
+	updated, addedCount, err := svc.CreateSubfigures(paper.Figures[0].ID, CreateSubfiguresParams{
+		Regions: []model.SubfigureExtractionRegion{
+			{
+				X:      0.40,
+				Y:      0.20,
+				Width:  0.20,
+				Height: 0.25,
+				Label:  "a",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreateSubfigures(second) error = %v", err)
+	}
+	if addedCount != 1 {
+		t.Fatalf("CreateSubfigures(second) addedCount = %d, want 1", addedCount)
+	}
+
+	var labels []string
+	for _, figure := range updated.Figures {
+		if figure.ParentFigureID == nil {
+			continue
+		}
+		labels = append(labels, figure.SubfigureLabel)
+	}
+	if !containsString(labels, "a") || !containsString(labels, "b") {
+		t.Fatalf("CreateSubfigures(second) labels = %+v, want both a and b", labels)
+	}
+}
+
+func TestGetFigureImageRendersSubfigureCrop(t *testing.T) {
+	svc, repo, cfg := newTestService(t)
+	paper := createTestPaper(t, repo)
+
+	parentPath := filepath.Join(cfg.FiguresDir(), paper.Figures[0].Filename)
+	parentData, err := decodeBase64(testPNGDataURL(t, 100, 80))
+	if err != nil {
+		t.Fatalf("decodeBase64() error = %v", err)
+	}
+	if err := os.WriteFile(parentPath, parentData, 0o644); err != nil {
+		t.Fatalf("WriteFile(parent figure) error = %v", err)
+	}
+
+	updated, _, err := svc.CreateSubfigures(paper.Figures[0].ID, CreateSubfiguresParams{
+		Regions: []model.SubfigureExtractionRegion{
+			{
+				X:       0.1,
+				Y:       0.2,
+				Width:   0.3,
+				Height:  0.25,
+				Caption: "Panel A",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreateSubfigures() error = %v", err)
+	}
+
+	var childFigure *model.Figure
+	for i := range updated.Figures {
+		if updated.Figures[i].ParentFigureID != nil {
+			childFigure = &updated.Figures[i]
+			break
+		}
+	}
+	if childFigure == nil {
+		t.Fatalf("CreateSubfigures() figures = %+v, want child figure", updated.Figures)
+	}
+
+	data, contentType, filename, err := svc.GetFigureImage(childFigure.ID)
+	if err != nil {
+		t.Fatalf("GetFigureImage() error = %v", err)
+	}
+	if contentType != "image/png" {
+		t.Fatalf("GetFigureImage() content_type = %q, want %q", contentType, "image/png")
+	}
+	if filename != "figure-original_a.png" {
+		t.Fatalf("GetFigureImage() filename = %q, want %q", filename, "figure-original_a.png")
+	}
+
+	img, err := png.Decode(bytes.NewReader(data))
+	if err != nil {
+		t.Fatalf("png.Decode() error = %v", err)
+	}
+	if got := img.Bounds().Dx(); got != 30 {
+		t.Fatalf("GetFigureImage() width = %d, want 30", got)
+	}
+	if got := img.Bounds().Dy(); got != 20 {
+		t.Fatalf("GetFigureImage() height = %d, want 20", got)
+	}
+}
+
+func TestCreateSubfiguresRejectsNonAlphabeticManualLabel(t *testing.T) {
+	svc, repo, cfg := newTestService(t)
+	paper := createTestPaper(t, repo)
+
+	parentPath := filepath.Join(cfg.FiguresDir(), paper.Figures[0].Filename)
+	parentData, err := decodeBase64(testPNGDataURL(t, 64, 48))
+	if err != nil {
+		t.Fatalf("decodeBase64() error = %v", err)
+	}
+	if err := os.WriteFile(parentPath, parentData, 0o644); err != nil {
+		t.Fatalf("WriteFile(parent figure) error = %v", err)
+	}
+
+	_, _, err = svc.CreateSubfigures(paper.Figures[0].ID, CreateSubfiguresParams{
+		Regions: []model.SubfigureExtractionRegion{
+			{
+				X:      0.12,
+				Y:      0.15,
+				Width:  0.25,
+				Height: 0.25,
+				Label:  "12345",
+			},
+		},
+	})
+	if !apperr.IsCode(err, apperr.CodeInvalidArgument) {
+		t.Fatalf("CreateSubfigures() code = %q, want %q", apperr.CodeOf(err), apperr.CodeInvalidArgument)
+	}
+}
+
+func TestDeleteFigureRemovesParentFileForSubfigureBranch(t *testing.T) {
+	svc, repo, cfg := newTestService(t)
+	paper := createTestPaper(t, repo)
+
+	parentPath := filepath.Join(cfg.FiguresDir(), paper.Figures[0].Filename)
+	parentData, err := decodeBase64(testPNGDataURL(t, 64, 48))
+	if err != nil {
+		t.Fatalf("decodeBase64() error = %v", err)
+	}
+	if err := os.WriteFile(parentPath, parentData, 0o644); err != nil {
 		t.Fatalf("WriteFile(parent figure) error = %v", err)
 	}
 
@@ -813,10 +1035,8 @@ func TestDeleteFigureRemovesSubfigureBranchFiles(t *testing.T) {
 	if childFigure == nil {
 		t.Fatalf("CreateSubfigures() missing child figure: %+v", updated.Figures)
 	}
-
-	childPath := filepath.Join(cfg.FiguresDir(), childFigure.Filename)
-	if _, err := os.Stat(childPath); err != nil {
-		t.Fatalf("subfigure file missing before delete, stat err = %v", err)
+	if !strings.HasPrefix(childFigure.Filename, virtualSubfigureFilenamePrefix) {
+		t.Fatalf("CreateSubfigures() filename = %q, want virtual metadata filename", childFigure.Filename)
 	}
 
 	result, err := svc.DeleteFigure(paper.Figures[0].ID)
@@ -828,9 +1048,6 @@ func TestDeleteFigureRemovesSubfigureBranchFiles(t *testing.T) {
 	}
 	if _, err := os.Stat(parentPath); !os.IsNotExist(err) {
 		t.Fatalf("parent figure file still exists, stat err = %v", err)
-	}
-	if _, err := os.Stat(childPath); !os.IsNotExist(err) {
-		t.Fatalf("subfigure file still exists, stat err = %v", err)
 	}
 }
 
@@ -908,6 +1125,44 @@ func TestCreateOrUpdateFigurePaletteRejectsParentFigure(t *testing.T) {
 	})
 	if !apperr.IsCode(err, apperr.CodeFailedPrecondition) {
 		t.Fatalf("CreateOrUpdateFigurePalette() code = %q, want %q", apperr.CodeOf(err), apperr.CodeFailedPrecondition)
+	}
+}
+
+func TestListFiguresExcludesSubfigures(t *testing.T) {
+	svc, repo, cfg := newTestService(t)
+	paper := createTestPaper(t, repo)
+
+	parentPath := filepath.Join(cfg.FiguresDir(), paper.Figures[0].Filename)
+	parentData, err := decodeBase64(testPNGDataURL(t, 60, 40))
+	if err != nil {
+		t.Fatalf("decodeBase64() error = %v", err)
+	}
+	if err := os.WriteFile(parentPath, parentData, 0o644); err != nil {
+		t.Fatalf("WriteFile(parent figure) error = %v", err)
+	}
+
+	if _, _, err := svc.CreateSubfigures(paper.Figures[0].ID, CreateSubfiguresParams{
+		Regions: []model.SubfigureExtractionRegion{
+			{
+				X:      0.15,
+				Y:      0.2,
+				Width:  0.3,
+				Height: 0.35,
+			},
+		},
+	}); err != nil {
+		t.Fatalf("CreateSubfigures() error = %v", err)
+	}
+
+	result, err := svc.ListFigures(model.FigureFilter{})
+	if err != nil {
+		t.Fatalf("ListFigures() error = %v", err)
+	}
+	if result.Total != 1 || len(result.Figures) != 1 {
+		t.Fatalf("ListFigures() total=%d len=%d, want 1/1", result.Total, len(result.Figures))
+	}
+	if result.Figures[0].ParentFigureID != nil {
+		t.Fatalf("ListFigures() returned subfigure: %+v", result.Figures[0])
 	}
 }
 
@@ -1025,4 +1280,13 @@ func TestMigrateLegacyManualPendingPapersMarksCompleted(t *testing.T) {
 	if !strings.Contains(result.Papers[0].ExtractorMessage, "文献已入库") {
 		t.Fatalf("ListPapers() extractor_message = %q, want migrated library-ready hint", result.Papers[0].ExtractorMessage)
 	}
+}
+
+func containsString(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
 }

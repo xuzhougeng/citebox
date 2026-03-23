@@ -563,9 +563,7 @@ func (s *LibraryService) DeletePaper(id int64) error {
 	}
 
 	paths := []string{filepath.Join(s.config.PapersDir(), paper.StoredPDFName)}
-	for _, figure := range paper.Figures {
-		paths = append(paths, filepath.Join(s.config.FiguresDir(), figure.Filename))
-	}
+	paths = append(paths, collectFigureFilePaths(paper.Figures, s.config.FiguresDir())...)
 	removeFiles(paths)
 	return nil
 }
@@ -712,48 +710,24 @@ func (s *LibraryService) CreateSubfigures(parentFigureID int64, params CreateSub
 		if figure.ParentFigureID == nil || *figure.ParentFigureID != parentFigureID {
 			continue
 		}
-		label := strings.ToLower(strings.TrimSpace(figure.SubfigureLabel))
+		label := subfigureLabelKey(figure.SubfigureLabel)
 		if label != "" {
 			existingLabels[label] = struct{}{}
 		}
 	}
 
 	items := make([]repository.FigureUpsertInput, 0, len(params.Regions))
-	newPaths := make([]string, 0, len(params.Regions))
-	for idx, rawRegion := range params.Regions {
+	for _, rawRegion := range params.Regions {
 		region, err := normalizeSubfigureRegion(rawRegion)
 		if err != nil {
-			removeFiles(newPaths)
 			return nil, 0, err
 		}
 
 		label, err := resolveNextSubfigureLabel(region.Label, existingLabels)
 		if err != nil {
-			removeFiles(newPaths)
 			return nil, 0, err
 		}
-		existingLabels[label] = struct{}{}
-
-		binary, err := decodeBase64(region.ImageData)
-		if err != nil {
-			removeFiles(newPaths)
-			return nil, 0, apperr.Wrap(apperr.CodeInvalidArgument, "解码子图图片失败", err)
-		}
-
-		contentType := http.DetectContentType(binary)
-		if !strings.HasPrefix(contentType, "image/") {
-			removeFiles(newPaths)
-			return nil, 0, apperr.New(apperr.CodeInvalidArgument, "子图提取结果不是有效图片")
-		}
-
-		ext := extensionForFigure(contentType, "subfigure.png")
-		storedName := fmt.Sprintf("figure_%d_subfigure_%d%s", time.Now().UnixNano(), idx+1, ext)
-		targetPath := filepath.Join(s.config.FiguresDir(), storedName)
-		if err := os.WriteFile(targetPath, binary, 0o644); err != nil {
-			removeFiles(newPaths)
-			return nil, 0, apperr.Wrap(apperr.CodeInternal, "保存子图图片失败", err)
-		}
-		newPaths = append(newPaths, targetPath)
+		existingLabels[subfigureLabelKey(label)] = struct{}{}
 
 		bboxJSON, err := json.Marshal(map[string]interface{}{
 			"x":                region.X,
@@ -766,7 +740,6 @@ func (s *LibraryService) CreateSubfigures(parentFigureID int64, params CreateSub
 			"parent_figure_id": parentFigureID,
 		})
 		if err != nil {
-			removeFiles(newPaths)
 			return nil, 0, apperr.Wrap(apperr.CodeInternal, "序列化子图坐标失败", err)
 		}
 
@@ -775,11 +748,12 @@ func (s *LibraryService) CreateSubfigures(parentFigureID int64, params CreateSub
 			baseName = parentFigureDetail.Filename
 		}
 		baseName = strings.TrimSuffix(baseName, filepath.Ext(baseName))
+		ext := extensionForFigure("image/png", "subfigure.png")
 
 		items = append(items, repository.FigureUpsertInput{
-			Filename:       storedName,
+			Filename:       fmt.Sprintf("%s%d_%s%s", virtualSubfigureFilenamePrefix, parentFigureID, label, ext),
 			OriginalName:   fmt.Sprintf("%s_%s%s", baseName, label, ext),
-			ContentType:    contentType,
+			ContentType:    "image/png",
 			PageNumber:     parentFigureDetail.PageNumber,
 			FigureIndex:    parentFigureDetail.FigureIndex,
 			ParentFigureID: &parentFigureID,
@@ -791,7 +765,6 @@ func (s *LibraryService) CreateSubfigures(parentFigureID int64, params CreateSub
 	}
 
 	if err := s.repo.AddPaperFigures(parentFigure.PaperID, items); err != nil {
-		removeFiles(newPaths)
 		return nil, 0, err
 	}
 
@@ -1748,7 +1721,7 @@ func (s *LibraryService) decoratePaper(paper *model.Paper) {
 		if paper.Figures[i].PaletteColors == nil {
 			paper.Figures[i].PaletteColors = []string{}
 		}
-		paper.Figures[i].ImageURL = "/files/figures/" + url.PathEscape(paper.Figures[i].Filename)
+		paper.Figures[i].ImageURL = figureImageURL(paper.Figures[i])
 		paper.Figures[i].DisplayLabel = formatFigureDisplayLabel(paper.Figures[i].FigureIndex, paper.Figures[i].SubfigureLabel)
 		paper.Figures[i].ParentDisplayLabel = ""
 		paper.Figures[i].Subfigures = nil
@@ -1781,7 +1754,11 @@ func (s *LibraryService) decoratePalette(palette *model.Palette) {
 	if palette == nil {
 		return
 	}
-	palette.ImageURL = "/files/figures/" + url.PathEscape(palette.Filename)
+	palette.ImageURL = figureImageURL(model.Figure{
+		ID:             palette.FigureID,
+		Filename:       palette.Filename,
+		ParentFigureID: palette.ParentFigureID,
+	})
 	palette.FigureDisplayLabel = formatFigureDisplayLabel(palette.FigureIndex, palette.SubfigureLabel)
 	if palette.ParentFigureID != nil {
 		palette.ParentDisplayLabel = formatFigureDisplayLabel(palette.FigureIndex, "")
@@ -1833,7 +1810,6 @@ func normalizeManualRegion(region model.ManualExtractionRegion) (model.ManualExt
 func normalizeSubfigureRegion(region model.SubfigureExtractionRegion) (model.SubfigureExtractionRegion, error) {
 	region.Caption = strings.TrimSpace(region.Caption)
 	region.Label = strings.TrimSpace(region.Label)
-	region.ImageData = strings.TrimSpace(region.ImageData)
 	if region.Width <= 0 || region.Height <= 0 {
 		return model.SubfigureExtractionRegion{}, apperr.New(apperr.CodeInvalidArgument, "子图区域的宽高必须大于 0")
 	}
@@ -1842,9 +1818,6 @@ func normalizeSubfigureRegion(region model.SubfigureExtractionRegion) (model.Sub
 	}
 	if region.X+region.Width > 1 || region.Y+region.Height > 1 {
 		return model.SubfigureExtractionRegion{}, apperr.New(apperr.CodeInvalidArgument, "子图区域不能超出图片边界")
-	}
-	if region.ImageData == "" {
-		return model.SubfigureExtractionRegion{}, apperr.New(apperr.CodeInvalidArgument, "缺少子图图片数据")
 	}
 	return region, nil
 }
@@ -1911,9 +1884,9 @@ func resolveNextSubfigureLabel(requested string, used map[string]struct{}) (stri
 	if requested != "" {
 		normalized := normalizeSubfigureLabel(requested)
 		if normalized == "" {
-			return "", apperr.New(apperr.CodeInvalidArgument, "子图命名只支持英文字母")
+			return "", apperr.New(apperr.CodeInvalidArgument, "子图命名只支持英文字母 a-z")
 		}
-		if _, exists := used[normalized]; exists {
+		if _, exists := used[subfigureLabelKey(normalized)]; exists {
 			return "", apperr.New(apperr.CodeConflict, "子图命名已存在")
 		}
 		return normalized, nil
@@ -1942,6 +1915,10 @@ func normalizeSubfigureLabel(label string) string {
 	return label
 }
 
+func subfigureLabelKey(label string) string {
+	return strings.ToLower(strings.TrimSpace(label))
+}
+
 func subfigureLabelForIndex(index int) string {
 	if index < 26 {
 		return string(rune('a' + index))
@@ -1955,6 +1932,7 @@ func collectFigureDeletionTargets(figures []model.Figure, figureID int64, figure
 	targets := []int64{}
 	paths := []string{}
 	seen := map[int64]struct{}{}
+	seenPaths := map[string]struct{}{}
 
 	for _, figure := range figures {
 		if figure.ID != figureID && (figure.ParentFigureID == nil || *figure.ParentFigureID != figureID) {
@@ -1965,7 +1943,12 @@ func collectFigureDeletionTargets(figures []model.Figure, figureID int64, figure
 		}
 		seen[figure.ID] = struct{}{}
 		targets = append(targets, figure.ID)
-		paths = append(paths, filepath.Join(figuresDir, figure.Filename))
+		if path := figurePhysicalFilePath(figuresDir, figure); path != "" {
+			if _, exists := seenPaths[path]; !exists {
+				seenPaths[path] = struct{}{}
+				paths = append(paths, path)
+			}
+		}
 	}
 
 	return targets, paths

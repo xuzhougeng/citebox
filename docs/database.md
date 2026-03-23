@@ -317,7 +317,7 @@ CREATE UNIQUE INDEX idx_tags_scope_name ON tags(scope, name);
 | `content_type` | 图片 MIME 类型 |
 | `page_number` | 来源页码 |
 | `figure_index` | 同页内排序编号 |
-| `parent_figure_id` | 父图 ID；为空表示一级大图，不为空表示这是某张大图下的子图 |
+| `parent_figure_id` | 父图 ID；为空表示一级大图，不为空表示这是某张大图下的子图区域 |
 | `subfigure_label` | 子图后缀，例如 `a` / `b` / `c`；仅对子图有意义 |
 | `source` | 图片来源，当前允许 `auto/manual` |
 | `caption` | 图片标题或图注 |
@@ -398,7 +398,8 @@ CREATE UNIQUE INDEX idx_tags_scope_name ON tags(scope, name);
 ## 这套设计目前为什么合理
 
 - `papers` 和 `paper_figures` 分离，符合“一篇文献有多张图片”的自然关系
-- `paper_figures.parent_figure_id` 让图片支持两级结构：一级大图 + 子图，不需要额外维护第二张业务表
+- `paper_figures.parent_figure_id` 让图片支持两级结构：一级大图 + 子图区域
+- 子图当前只保存裁剪区域元数据；展示图像按需从父图动态裁剪，不再单独生成子图文件
 - `color_palettes.figure_id` 让配色直接绑定到图片，不会出现“配色脱离来源子图”的漂移问题
 - 标签通过 `scope + relation table` 拆成文献标签和图片标签，职责清楚
 - 管理笔记、文献笔记、图片笔记已经分层，不再把 AI 伴读结果继续塞回管理备注

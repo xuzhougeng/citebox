@@ -73,12 +73,20 @@ const FigureViewer = {
                 return;
             }
 
-            const subfigureCaptionInput = event.target.closest('[data-subfigure-field="caption"]');
-            if (!subfigureCaptionInput) return;
-            const selectionID = subfigureCaptionInput.dataset.selectionId;
+            const subfigureFieldInput = event.target.closest('[data-subfigure-field]');
+            if (!subfigureFieldInput) return;
+            const selectionID = subfigureFieldInput.dataset.selectionId;
             const selection = this.findCropSelection(selectionID);
             if (!selection) return;
-            selection.caption = subfigureCaptionInput.value;
+            if (subfigureFieldInput.dataset.subfigureField === 'label') {
+                const normalized = this.normalizeSubfigureLabelInput(subfigureFieldInput.value);
+                if (subfigureFieldInput.value !== normalized) {
+                    subfigureFieldInput.value = normalized;
+                }
+                selection.label = normalized;
+                return;
+            }
+            selection.caption = subfigureFieldInput.value;
         });
         this.body.addEventListener('click', async (event) => {
             const button = event.target.closest('[data-figure-action]');
@@ -318,6 +326,7 @@ const FigureViewer = {
     defaultCropState() {
         return {
             enabled: false,
+            workspaceOpen: false,
             selections: [],
             draft: null,
             pointerId: null,
@@ -462,6 +471,10 @@ const FigureViewer = {
         return Boolean(this.cropState?.enabled);
     },
 
+    isSubfigureWorkspaceOpen() {
+        return Boolean(this.cropState?.workspaceOpen);
+    },
+
     canExtractSubfigures() {
         return Boolean(this.currentFigure) && !this.currentFigure.parent_figure_id;
     },
@@ -472,7 +485,7 @@ const FigureViewer = {
             return;
         }
 
-        if (this.isCropModeEnabled()) {
+        if (this.isSubfigureWorkspaceOpen()) {
             this.cancelSubfigureCropMode();
             return;
         }
@@ -480,7 +493,8 @@ const FigureViewer = {
         this.resetViewportState();
         this.cropState = {
             ...this.defaultCropState(),
-            enabled: true
+            enabled: true,
+            workspaceOpen: true
         };
         this.render();
     },
@@ -500,6 +514,10 @@ const FigureViewer = {
 
     findCropSelection(selectionID) {
         return (this.cropState?.selections || []).find((selection) => selection.id === selectionID);
+    },
+
+    normalizeSubfigureLabelInput(value) {
+        return String(value || '').toLowerCase().replace(/[^a-z]/g, '');
     },
 
     removeCropSelection(selectionID) {
@@ -588,6 +606,7 @@ const FigureViewer = {
             y: draft.y,
             width: draft.width,
             height: draft.height,
+            label: '',
             caption: ''
         } : null;
 
@@ -633,32 +652,6 @@ const FigureViewer = {
         overlay.innerHTML = this.renderCropOverlayContent();
     },
 
-    async buildSubfigureImageData(selection) {
-        const image = this.body?.querySelector('[data-figure-image]');
-        if (!image || !image.naturalWidth || !image.naturalHeight) {
-            throw new Error('当前图片尚未加载完成，无法提取子图');
-        }
-
-        const left = Math.max(0, Math.floor(selection.x * image.naturalWidth));
-        const top = Math.max(0, Math.floor(selection.y * image.naturalHeight));
-        const right = Math.min(image.naturalWidth, Math.ceil((selection.x + selection.width) * image.naturalWidth));
-        const bottom = Math.min(image.naturalHeight, Math.ceil((selection.y + selection.height) * image.naturalHeight));
-        const width = right - left;
-        const height = bottom - top;
-        if (width < 2 || height < 2) {
-            throw new Error('子图区域过小，请重新选择');
-        }
-
-        const canvas = document.createElement('canvas');
-        canvas.width = width;
-        canvas.height = height;
-        const context = canvas.getContext('2d', { alpha: false });
-        context.fillStyle = '#ffffff';
-        context.fillRect(0, 0, width, height);
-        context.drawImage(image, left, top, width, height, 0, 0, width, height);
-        return canvas.toDataURL('image/png');
-    },
-
     async submitSubfigureSelections() {
         if (!this.currentFigure || !this.isCropModeEnabled() || this.cropState.submitting) return;
         if (!(this.cropState.selections || []).length) {
@@ -677,8 +670,8 @@ const FigureViewer = {
                     y: selection.y,
                     width: selection.width,
                     height: selection.height,
-                    caption: String(selection.caption || '').trim(),
-                    image_data: await this.buildSubfigureImageData(selection)
+                    label: String(selection.label || '').trim(),
+                    caption: String(selection.caption || '').trim()
                 });
             }
 
@@ -712,6 +705,18 @@ const FigureViewer = {
     currentFigureSubfigures() {
         const figure = this.currentFigureDetail();
         return Array.isArray(figure?.subfigures) ? figure.subfigures : [];
+    },
+
+    subfigureSelectionTitle(selection, index) {
+        const label = this.normalizeSubfigureLabelInput(selection?.label || '');
+        const figureIndex = Number(this.currentFigure?.figure_index || 0);
+        if (label && figureIndex > 0) {
+            return `Fig ${figureIndex}${label}`;
+        }
+        if (label) {
+            return label;
+        }
+        return `区域 ${index + 1}`;
     },
 
     findFigureInCurrentPaper(figureID) {
@@ -1233,13 +1238,13 @@ const FigureViewer = {
     renderSubfigureSelectionList() {
         const selections = this.cropState?.selections || [];
         if (!selections.length) {
-            return '<div class="figure-subfigure-empty"><p>在图片上拖拽即可框选子图区域。</p></div>';
+            return '<div class="figure-subfigure-empty"><p>左侧拖拽后，新的截取结果会出现在这里。</p></div>';
         }
 
         return selections.map((selection, index) => `
             <article class="figure-subfigure-selection">
                 <div class="figure-subfigure-selection-head">
-                    <strong>区域 ${index + 1}</strong>
+                    <strong>${Utils.escapeHTML(this.subfigureSelectionTitle(selection, index))}</strong>
                     <button class="btn btn-outline btn-small" type="button" data-subfigure-action="remove-selection" data-selection-id="${selection.id}">删除</button>
                 </div>
                 <div class="figure-subfigure-selection-meta">
@@ -1248,6 +1253,18 @@ const FigureViewer = {
                     <span>w ${(selection.width * 100).toFixed(1)}%</span>
                     <span>h ${(selection.height * 100).toFixed(1)}%</span>
                 </div>
+                <label class="field">
+                    <span>名称 / Label</span>
+                    <input
+                        class="form-input"
+                        type="text"
+                        maxlength="12"
+                        placeholder="只支持 a-z；留空自动补 a / b / c"
+                        data-subfigure-field="label"
+                        data-selection-id="${selection.id}"
+                        value="${Utils.escapeHTML(this.normalizeSubfigureLabelInput(selection.label || ''))}"
+                    >
+                </label>
                 <label class="field">
                     <span>Caption / 备注</span>
                     <textarea
@@ -1307,23 +1324,27 @@ const FigureViewer = {
     renderSubfigurePanel(figure) {
         const subfigures = this.currentFigureSubfigures();
         const loading = this.paperDetailPromises.has(Number(figure.paper_id));
+        const workspaceOpen = this.isSubfigureWorkspaceOpen();
 
         if (figure.parent_figure_id) {
             return `
-                <section class="figure-lightbox-subfigure">
+                <section class="figure-lightbox-subfigure is-subfigure-view">
                     <div class="figure-lightbox-ai-head">
                         <div>
                             <p class="eyebrow">Subfigure</p>
                             <h3>子图配色</h3>
                         </div>
+                        <span class="figure-subfigure-count">仅保留配色相关信息</span>
                     </div>
                     <div class="figure-subfigure-summary is-compact">
                         <p>当前查看的是 <strong>${Utils.escapeHTML(figure.display_label || '')}</strong>，来源于 <strong>${Utils.escapeHTML(figure.parent_display_label || '')}</strong>。</p>
+                        <p>子图不会进入独立图片库或独立笔记流，这里只保留预览和配色操作。</p>
                     </div>
                     <div class="figure-subfigure-card-list is-single">
                         ${this.renderSubfigurePaletteCard(figure, { standalone: true })}
                     </div>
                     <div class="figure-subfigure-actions">
+                        <button class="btn btn-outline" type="button" data-figure-action="open-paper">查看来源文献</button>
                         <a class="btn btn-outline" href="/palettes">查看配色库</a>
                     </div>
                 </section>
@@ -1331,40 +1352,62 @@ const FigureViewer = {
         }
 
         const countLabel = loading ? '加载中...' : `${subfigures.length} 张`;
+        if (!workspaceOpen) {
+            return `
+                <section class="figure-lightbox-subfigure is-entry">
+                    <div class="figure-subfigure-entry">
+                        <div class="figure-subfigure-entry-copy">
+                            <p class="eyebrow">Subfigure</p>
+                            <strong>子图提取</strong>
+                            <span>已有 ${Utils.escapeHTML(countLabel)}，只在需要时再打开工作台，结果主要用于配色。</span>
+                        </div>
+                        <div class="figure-subfigure-entry-actions">
+                            <button class="btn btn-outline btn-small" type="button" data-figure-action="toggle-subfigure-crop">子图提取</button>
+                        </div>
+                    </div>
+                </section>
+            `;
+        }
+
         return `
-            <section class="figure-lightbox-subfigure">
+            <section class="figure-lightbox-subfigure is-workspace">
                 <div class="figure-lightbox-ai-head">
                     <div>
                         <p class="eyebrow">Subfigure</p>
-                        <h3>子图提取</h3>
+                        <h3>子图提取工作台</h3>
                     </div>
                     <span class="figure-subfigure-count">已有 ${countLabel}</span>
                 </div>
                 <div class="figure-subfigure-summary">
-                    <p>从当前大图里框选感兴趣的局部，系统会自动命名为不重复的 ${Utils.escapeHTML(figure.display_label || `Fig ${figure.figure_index || '-'}`)}a / b / c ...</p>
-                    <p>提取完成后，可以直接在每张子图底部点击“获取配色”，配色会绑定保存到这张子图。</p>
+                    <p>左侧直接拖拽框选子图区域，右侧集中查看待保存结果和已有子图。</p>
+                    <p>命名只支持 <strong>a-z</strong>；如果你输入大写，保存时会自动转成小写。留空则按 ${Utils.escapeHTML(figure.display_label || `Fig ${figure.figure_index || '-'}`)}a / b / c ... 自动补位。</p>
                 </div>
-                ${subfigures.length
-                    ? `<div class="figure-subfigure-card-list">${subfigures.map((item) => this.renderSubfigurePaletteCard(item)).join('')}</div>`
-                    : '<div class="figure-subfigure-empty"><p>当前还没有提取过子图。</p></div>'}
-                ${this.isCropModeEnabled() ? `
+                <div class="figure-subfigure-workspace-block">
+                    <div class="figure-subfigure-workspace-head">
+                        <strong>当前截取结果</strong>
+                        <span>${(this.cropState.selections || []).length} 个待保存区域</span>
+                    </div>
                     <div class="figure-subfigure-editor">
                         <div class="figure-subfigure-editor-head">
-                            <p>在左侧图片上拖拽框选，右侧会累积待保存的子图。</p>
+                            <p>左侧当前大图保持可操作状态；每框出一个区域，右侧都会累积一条待保存结果。</p>
                             <div class="figure-subfigure-editor-actions">
                                 <button class="btn btn-outline btn-small" type="button" data-figure-action="clear-subfigure-selections" ${(this.cropState.selections || []).length ? '' : 'disabled'}>清空</button>
-                                <button class="btn btn-outline btn-small" type="button" data-figure-action="cancel-subfigure-crop" ${this.cropState.submitting ? 'disabled' : ''}>取消</button>
+                                <button class="btn btn-outline btn-small" type="button" data-figure-action="cancel-subfigure-crop" ${this.cropState.submitting ? 'disabled' : ''}>关闭工作台</button>
                                 <button class="btn btn-primary btn-small" type="button" data-figure-action="save-subfigures" ${(this.cropState.selections || []).length && !this.cropState.submitting ? '' : 'disabled'}>${this.cropState.submitting ? '保存中...' : '保存子图'}</button>
                             </div>
                         </div>
                         <div class="figure-subfigure-selection-list">${this.renderSubfigureSelectionList()}</div>
                     </div>
-                ` : `
-                    <div class="figure-subfigure-actions">
-                        <button class="btn btn-outline" type="button" data-figure-action="toggle-subfigure-crop">开始子图截取</button>
-                        <a class="btn btn-outline" href="/palettes">查看配色库</a>
+                </div>
+                <div class="figure-subfigure-workspace-block">
+                    <div class="figure-subfigure-workspace-head">
+                        <strong>已保存子图</strong>
+                        <span>${countLabel}</span>
                     </div>
-                `}
+                    ${subfigures.length
+                        ? `<div class="figure-subfigure-card-list is-scrollable">${subfigures.map((item) => this.renderSubfigurePaletteCard(item)).join('')}</div>`
+                        : '<div class="figure-subfigure-empty"><p>当前还没有提取过子图。</p></div>'}
+                </div>
             </section>
         `;
     },
@@ -1545,7 +1588,7 @@ const FigureViewer = {
             return;
         }
 
-        const filename = this.currentFigure.filename || 'figure.png';
+        const filename = this.currentFigure.original_name || this.currentFigure.filename || 'figure.png';
         try {
             const response = await fetch(this.currentFigure.image_url, {
                 credentials: 'same-origin'
@@ -1843,9 +1886,14 @@ const FigureViewer = {
         const canNext = this.canMoveNext();
         const aiLoading = Boolean(this.aiRequestState?.loading);
         const cropModeActive = this.isCropModeEnabled();
+        const subfigureWorkspaceOpen = this.isSubfigureWorkspaceOpen();
+        const minimalFigureWorkspace = subfigureWorkspaceOpen || Boolean(figure.parent_figure_id);
         const canUseDesktopSave = Utils.supportsDesktopSave();
         const captionDraft = this.captionDraft ?? (figure.caption || '');
         const notePreview = String(figure.notes_text || '').replace(/\s+/g, ' ').trim();
+        const mediaHint = subfigureWorkspaceOpen
+            ? '左侧拖拽框选，右侧集中保存子图结果'
+            : (figure.parent_figure_id ? '当前是子图预览，右侧仅保留配色相关内容' : '滚轮缩放，按住左键或中键拖动');
         const editableTags = (figure.tags || []).map((tag) => `
             <button class="figure-editable-tag" type="button" data-figure-meta-action="remove-tag" data-tag-name="${Utils.escapeHTML(typeof tag === 'string' ? tag : tag.name || '')}" aria-label="移除标签 ${Utils.escapeHTML(typeof tag === 'string' ? tag : tag.name || '')}">
                 <span>${Utils.escapeHTML(typeof tag === 'string' ? tag : tag.name || '')}</span>
@@ -1853,12 +1901,12 @@ const FigureViewer = {
             </button>
         `).join('');
         this.body.innerHTML = `
-            <div class="figure-lightbox">
+            <div class="figure-lightbox ${subfigureWorkspaceOpen ? 'is-subfigure-workspace' : ''}">
                 <section class="figure-lightbox-media-panel">
                     <div class="figure-lightbox-toolbar">
                         <div class="figure-lightbox-counter">第 ${this.index + 1} / ${total} 张 · 第 ${this.page} / ${this.totalPages} 页</div>
                         <div class="figure-lightbox-nav">
-                            <span class="figure-lightbox-hint">${cropModeActive ? '拖拽框选子图区域，完成后在右侧保存' : '滚轮缩放，按住左键或中键拖动'}</span>
+                            <span class="figure-lightbox-hint">${Utils.escapeHTML(mediaHint)}</span>
                             <button class="btn btn-outline" type="button" data-figure-action="reset-view">复原视图</button>
                             <button class="btn btn-outline" type="button" data-figure-action="prev" ${!canPrev || this.loadingPage || aiLoading || cropModeActive ? 'disabled' : ''}>上一张</button>
                             <button class="btn btn-outline" type="button" data-figure-action="next" ${!canNext || this.loadingPage || aiLoading || cropModeActive ? 'disabled' : ''}>下一张</button>
@@ -1870,19 +1918,21 @@ const FigureViewer = {
                             <div class="figure-crop-overlay ${cropModeActive ? 'is-active' : ''}" data-figure-crop-overlay>${this.renderCropOverlayContent()}</div>
                         </div>
                     </div>
-                    <div class="figure-lightbox-caption figure-lightbox-caption-editor">
-                        <label class="field">
-                            <span>图片说明（Caption）</span>
-                            <textarea id="figureCaptionInput" class="form-textarea figure-caption-input" rows="4" placeholder="解析 caption 有误时，可在这里直接修正。">${Utils.escapeHTML(captionDraft)}</textarea>
-                        </label>
-                        <div class="figure-notes-actions figure-caption-actions">
-                            <span class="muted">caption 会参与检索；按 Ctrl/Cmd + Enter 可快速保存。</span>
-                            <div class="figure-caption-action-group">
-                                <button class="btn btn-outline btn-small" type="button" data-figure-meta-action="translate-caption">翻译说明</button>
-                                <button class="btn btn-outline btn-small" type="button" data-figure-meta-action="save-caption">保存说明</button>
+                    ${minimalFigureWorkspace ? '' : `
+                        <div class="figure-lightbox-caption figure-lightbox-caption-editor">
+                            <label class="field">
+                                <span>图片说明（Caption）</span>
+                                <textarea id="figureCaptionInput" class="form-textarea figure-caption-input" rows="4" placeholder="解析 caption 有误时，可在这里直接修正。">${Utils.escapeHTML(captionDraft)}</textarea>
+                            </label>
+                            <div class="figure-notes-actions figure-caption-actions">
+                                <span class="muted">caption 会参与检索；按 Ctrl/Cmd + Enter 可快速保存。</span>
+                                <div class="figure-caption-action-group">
+                                    <button class="btn btn-outline btn-small" type="button" data-figure-meta-action="translate-caption">翻译说明</button>
+                                    <button class="btn btn-outline btn-small" type="button" data-figure-meta-action="save-caption">保存说明</button>
+                                </div>
                             </div>
                         </div>
-                    </div>
+                    `}
                 </section>
 
                 <aside class="figure-lightbox-side">
@@ -1891,63 +1941,65 @@ const FigureViewer = {
                         <h2>${Utils.escapeHTML(figure.paper_title)}</h2>
                     </div>
 
-                    <div class="figure-lightbox-meta">
-                        <div class="figure-lightbox-meta-item">
-                            <span>来源文献</span>
-                            <strong>${Utils.escapeHTML(figure.paper_title)}</strong>
-                        </div>
-                        <div class="figure-lightbox-meta-item">
-                            <span>定位</span>
-                            <strong>${this.renderFigureLocation(figure)}</strong>
-                        </div>
-                        <div class="figure-lightbox-meta-item figure-lightbox-meta-item-editable">
-                            <span>标签</span>
-                            <div class="figure-tag-editor">
-                                <div class="figure-tag-editor-list ${figure.tags?.length ? '' : 'is-empty'}">
-                                    ${figure.tags?.length ? editableTags : '<span class="figure-tag-empty">暂无标签</span>'}
-                                </div>
-                                <div class="figure-tag-add">
-                                    <input id="figurePaperTagInput" class="form-input" type="text" placeholder="添加标签">
-                                    <button class="btn btn-outline btn-small" type="button" data-figure-meta-action="add-tag" aria-label="添加标签">+</button>
-                                </div>
-                                <div class="figure-tag-presets">
-                                    <span class="figure-tag-presets-label">快捷标签</span>
-                                    <div class="figure-tag-presets-list">
-                                        ${this.renderPresetTagButtons()}
+                    ${this.renderSubfigurePanel(figure)}
+
+                    ${minimalFigureWorkspace ? '' : `
+                        <div class="figure-lightbox-meta">
+                            <div class="figure-lightbox-meta-item">
+                                <span>来源文献</span>
+                                <strong>${Utils.escapeHTML(figure.paper_title)}</strong>
+                            </div>
+                            <div class="figure-lightbox-meta-item">
+                                <span>定位</span>
+                                <strong>${this.renderFigureLocation(figure)}</strong>
+                            </div>
+                            <div class="figure-lightbox-meta-item figure-lightbox-meta-item-editable">
+                                <span>标签</span>
+                                <div class="figure-tag-editor">
+                                    <div class="figure-tag-editor-list ${figure.tags?.length ? '' : 'is-empty'}">
+                                        ${figure.tags?.length ? editableTags : '<span class="figure-tag-empty">暂无标签</span>'}
+                                    </div>
+                                    <div class="figure-tag-add">
+                                        <input id="figurePaperTagInput" class="form-input" type="text" placeholder="添加标签">
+                                        <button class="btn btn-outline btn-small" type="button" data-figure-meta-action="add-tag" aria-label="添加标签">+</button>
+                                    </div>
+                                    <div class="figure-tag-presets">
+                                        <span class="figure-tag-presets-label">快捷标签</span>
+                                        <div class="figure-tag-presets-list">
+                                            ${this.renderPresetTagButtons()}
+                                        </div>
                                     </div>
                                 </div>
                             </div>
-                        </div>
-                        <div class="figure-lightbox-meta-item figure-lightbox-meta-item-editable">
-                            <span>图片笔记</span>
-                            <button class="figure-note-inline-trigger ${notePreview ? '' : 'is-empty'}" type="button" data-figure-meta-action="open-notes" aria-label="打开图片笔记编辑器">
-                                <span class="figure-note-inline-text">${Utils.escapeHTML(notePreview || '还没有图片笔记，点击后在独立笔记面板中编辑。')}</span>
-                                <span class="figure-note-inline-action">打开笔记</span>
-                            </button>
-                        </div>
-                    </div>
-
-                    <div class="figure-lightbox-actions">
-                        <button class="btn btn-primary" type="button" data-figure-action="open-paper">查看来源文献</button>
-                        <a class="btn btn-outline" href="${Utils.resourceViewerURL('image', figure.image_url)}">打开原图</a>
-                        ${canUseDesktopSave
-                            ? '<button class="btn btn-outline" type="button" data-figure-action="download-image">下载图片</button>'
-                            : `<a class="btn btn-outline" href="${figure.image_url}" download="${Utils.escapeHTML(figure.filename || 'figure.png')}">下载图片</a>`}
-                    </div>
-
-                    ${this.renderSubfigurePanel(figure)}
-
-                    <section class="figure-lightbox-ai">
-                        <div class="figure-lightbox-ai-head">
-                            <div>
-                                <p class="eyebrow">AI Shortcut</p>
-                                <h3>快速辅助阅读</h3>
+                            <div class="figure-lightbox-meta-item figure-lightbox-meta-item-editable">
+                                <span>图片笔记</span>
+                                <button class="figure-note-inline-trigger ${notePreview ? '' : 'is-empty'}" type="button" data-figure-meta-action="open-notes" aria-label="打开图片笔记编辑器">
+                                    <span class="figure-note-inline-text">${Utils.escapeHTML(notePreview || '还没有图片笔记，点击后在独立笔记面板中编辑。')}</span>
+                                    <span class="figure-note-inline-action">打开笔记</span>
+                                </button>
                             </div>
-                            <a class="btn btn-outline" href="/ai?paper_id=${figure.paper_id}">自由提问</a>
                         </div>
-                        <div class="figure-lightbox-ai-actions" data-figure-ai-actions>${this.renderAIActionButtons()}</div>
-                        <div data-figure-ai-panel>${this.renderAIResultPanel()}</div>
-                    </section>
+
+                        <div class="figure-lightbox-actions">
+                            <button class="btn btn-primary" type="button" data-figure-action="open-paper">查看来源文献</button>
+                            <a class="btn btn-outline" href="${Utils.resourceViewerURL('image', figure.image_url)}">打开原图</a>
+                            ${canUseDesktopSave
+                                ? '<button class="btn btn-outline" type="button" data-figure-action="download-image">下载图片</button>'
+                                : `<a class="btn btn-outline" href="${figure.image_url}" download="${Utils.escapeHTML(figure.filename || 'figure.png')}">下载图片</a>`}
+                        </div>
+
+                        <section class="figure-lightbox-ai">
+                            <div class="figure-lightbox-ai-head">
+                                <div>
+                                    <p class="eyebrow">AI Shortcut</p>
+                                    <h3>快速辅助阅读</h3>
+                                </div>
+                                <a class="btn btn-outline" href="/ai?paper_id=${figure.paper_id}">自由提问</a>
+                            </div>
+                            <div class="figure-lightbox-ai-actions" data-figure-ai-actions>${this.renderAIActionButtons()}</div>
+                            <div data-figure-ai-panel>${this.renderAIResultPanel()}</div>
+                        </section>
+                    `}
                 </aside>
             </div>
         `;
