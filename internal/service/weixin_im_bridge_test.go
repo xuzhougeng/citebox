@@ -1,15 +1,19 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"io"
 	"log/slog"
+	"mime/multipart"
+	"net/textproto"
 	"strings"
 	"sync"
 	"testing"
 
 	"github.com/xuzhougeng/citebox/internal/model"
 	"github.com/xuzhougeng/citebox/internal/repository"
+	"github.com/xuzhougeng/citebox/internal/weixin"
 )
 
 type fakeWeixinAIReader struct {
@@ -164,6 +168,149 @@ func TestWeixinIMBridgeQuestionCarriesHistory(t *testing.T) {
 	}
 	if len(last.History) != 1 || last.History[0].Question != "第一问" {
 		t.Fatalf("AI history = %+v, want previous QA turn", last.History)
+	}
+}
+
+func TestWeixinIMBridgeImportsPDFFileAndSelectsPaper(t *testing.T) {
+	svc, _, cfg := newTestService(t)
+	bridge := newTestWeixinBridge(t, svc, &fakeWeixinAIReader{answer: "ok"}, cfg.StorageDir)
+	bridge.downloadFile = func(context.Context, weixin.MessageItem) (*weixin.DownloadedFile, error) {
+		return &weixin.DownloadedFile{
+			Filename:    "wechat-upload.bin",
+			ContentType: "application/octet-stream",
+			Data:        []byte("%PDF-1.4 wechat upload"),
+		}, nil
+	}
+
+	reply := bridge.handleIncomingMessage(context.Background(), weixin.Message{
+		ItemList: []weixin.MessageItem{
+			{
+				Type: weixin.ItemTypeFile,
+				FileItem: &weixin.FileItem{
+					FileName: "wechat-upload.bin",
+					Len:      "22",
+					Media: &weixin.CDNMedia{
+						EncryptQueryParam: "encrypted",
+						AESKey:            "aeskey",
+					},
+				},
+			},
+		},
+	})
+
+	if !containsAll(reply, "已从微信导入 PDF", "已选中文献") {
+		t.Fatalf("import reply = %q, want import success message", reply)
+	}
+
+	result, err := svc.ListPapers(model.PaperFilter{})
+	if err != nil {
+		t.Fatalf("ListPapers() error = %v", err)
+	}
+	if result.Total != 1 || len(result.Papers) != 1 {
+		t.Fatalf("paper total = %d papers=%d, want 1", result.Total, len(result.Papers))
+	}
+	if bridge.getContext().CurrentPaperID != result.Papers[0].ID {
+		t.Fatalf("current paper = %d, want %d", bridge.getContext().CurrentPaperID, result.Papers[0].ID)
+	}
+	if got := result.Papers[0].OriginalFilename; got != "wechat-upload.pdf" {
+		t.Fatalf("original filename = %q, want sniffed PDF filename with normalized .pdf suffix", got)
+	}
+}
+
+func TestWeixinIMBridgeReusesExistingPaperForDuplicatePDF(t *testing.T) {
+	svc, _, cfg := newTestService(t)
+	content := []byte("%PDF-1.4 duplicate upload")
+	header := &multipart.FileHeader{
+		Filename: "existing.pdf",
+		Size:     int64(len(content)),
+		Header: textproto.MIMEHeader{
+			"Content-Type": []string{"application/pdf"},
+		},
+	}
+
+	existing, err := svc.UploadPaper(&testMultipartFile{Reader: bytes.NewReader(content)}, header, UploadPaperParams{})
+	if err != nil {
+		t.Fatalf("UploadPaper() error = %v", err)
+	}
+
+	bridge := newTestWeixinBridge(t, svc, &fakeWeixinAIReader{answer: "ok"}, cfg.StorageDir)
+	bridge.downloadFile = func(context.Context, weixin.MessageItem) (*weixin.DownloadedFile, error) {
+		return &weixin.DownloadedFile{
+			Filename:    "wechat-duplicate.pdf",
+			ContentType: "application/pdf",
+			Data:        append([]byte(nil), content...),
+		}, nil
+	}
+
+	reply := bridge.handleIncomingMessage(context.Background(), weixin.Message{
+		ItemList: []weixin.MessageItem{
+			{
+				Type: weixin.ItemTypeFile,
+				FileItem: &weixin.FileItem{
+					FileName: "wechat-duplicate.pdf",
+					Len:      "25",
+					Media: &weixin.CDNMedia{
+						EncryptQueryParam: "encrypted",
+						AESKey:            "aeskey",
+					},
+				},
+			},
+		},
+	})
+
+	if !containsAll(reply, "已在文献库中", "已选中文献") {
+		t.Fatalf("duplicate reply = %q, want duplicate guidance", reply)
+	}
+	if bridge.getContext().CurrentPaperID != existing.ID {
+		t.Fatalf("current paper = %d, want existing %d", bridge.getContext().CurrentPaperID, existing.ID)
+	}
+
+	result, err := svc.ListPapers(model.PaperFilter{})
+	if err != nil {
+		t.Fatalf("ListPapers() error = %v", err)
+	}
+	if result.Total != 1 {
+		t.Fatalf("paper total = %d, want 1 after duplicate import", result.Total)
+	}
+}
+
+func TestWeixinIMBridgeRejectsNonPDFFiles(t *testing.T) {
+	svc, _, cfg := newTestService(t)
+	bridge := newTestWeixinBridge(t, svc, &fakeWeixinAIReader{answer: "ok"}, cfg.StorageDir)
+	bridge.downloadFile = func(context.Context, weixin.MessageItem) (*weixin.DownloadedFile, error) {
+		return &weixin.DownloadedFile{
+			Filename:    "notes.txt",
+			ContentType: "text/plain",
+			Data:        []byte("plain text"),
+		}, nil
+	}
+
+	reply := bridge.handleIncomingMessage(context.Background(), weixin.Message{
+		ItemList: []weixin.MessageItem{
+			{
+				Type: weixin.ItemTypeFile,
+				FileItem: &weixin.FileItem{
+					FileName: "notes.txt",
+					Len:      "10",
+					Media: &weixin.CDNMedia{
+						EncryptQueryParam: "encrypted",
+						AESKey:            "aeskey",
+					},
+				},
+			},
+		},
+	})
+
+	if !strings.Contains(reply, "目前只支持 PDF") {
+		t.Fatalf("reject reply = %q, want PDF-only guidance", reply)
+	}
+
+	result, err := svc.ListPapers(model.PaperFilter{})
+	if err != nil {
+		t.Fatalf("ListPapers() error = %v", err)
+	}
+	if result.Total != 0 {
+		t.Fatalf("paper total = %d, want 0 after rejected import", result.Total)
 	}
 }
 

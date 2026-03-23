@@ -1,11 +1,15 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
+	"mime/multipart"
+	"net/http"
+	"net/textproto"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -41,6 +45,7 @@ type WeixinIMBridge struct {
 	libraryService *LibraryService
 	aiService      weixinAIReader
 	logger         *slog.Logger
+	downloadFile   func(context.Context, weixin.MessageItem) (*weixin.DownloadedFile, error)
 	stateDir       string
 	syncBufPath    string
 	contextPath    string
@@ -58,7 +63,10 @@ func NewWeixinIMBridge(libraryService *LibraryService, aiService weixinAIReader,
 		libraryService: libraryService,
 		aiService:      aiService,
 		logger:         logger.With("component", "weixin_im_bridge"),
-		stateDir:       filepath.Join(storageDir, weixinBridgeStateDirName),
+		downloadFile: func(ctx context.Context, item weixin.MessageItem) (*weixin.DownloadedFile, error) {
+			return weixin.DownloadFileItem(ctx, item, nil, "")
+		},
+		stateDir: filepath.Join(storageDir, weixinBridgeStateDirName),
 	}
 	bridge.syncBufPath = filepath.Join(bridge.stateDir, weixinSyncBufFileName)
 	bridge.contextPath = filepath.Join(bridge.stateDir, weixinContextFileName)
@@ -140,12 +148,7 @@ func (b *WeixinIMBridge) runPolling(ctx context.Context, client *weixin.Client, 
 				continue
 			}
 
-			text := extractWeixinText(message)
-			if text == "" {
-				continue
-			}
-
-			reply := trimWeixinReply(b.handleIncomingText(ctx, text))
+			reply := trimWeixinReply(b.handleIncomingMessage(ctx, message))
 			if reply == "" {
 				continue
 			}
@@ -154,6 +157,18 @@ func (b *WeixinIMBridge) runPolling(ctx context.Context, client *weixin.Client, 
 			}
 		}
 	}
+}
+
+func (b *WeixinIMBridge) handleIncomingMessage(ctx context.Context, message weixin.Message) string {
+	if reply, handled := b.handleIncomingFile(ctx, message); handled {
+		return reply
+	}
+
+	text := extractWeixinText(message)
+	if text == "" {
+		return ""
+	}
+	return b.handleIncomingText(ctx, text)
 }
 
 func (b *WeixinIMBridge) handleIncomingText(ctx context.Context, text string) string {
@@ -200,6 +215,16 @@ func (b *WeixinIMBridge) handleIncomingText(ctx context.Context, text string) st
 	}
 
 	return b.answerCurrentPaper(ctx, text)
+}
+
+func (b *WeixinIMBridge) handleIncomingFile(ctx context.Context, message weixin.Message) (string, bool) {
+	for _, item := range message.ItemList {
+		if item.Type != weixin.ItemTypeFile || item.FileItem == nil {
+			continue
+		}
+		return b.importPDFFile(ctx, item), true
+	}
+	return "", false
 }
 
 func (b *WeixinIMBridge) searchPapers(query string) string {
@@ -251,6 +276,67 @@ func (b *WeixinIMBridge) searchPapers(query string) string {
 	}
 	lines = append(lines, "", "发送 `文献 1` 选中目标文献，或直接回复编号。")
 	return strings.Join(lines, "\n")
+}
+
+func (b *WeixinIMBridge) importPDFFile(ctx context.Context, item weixin.MessageItem) string {
+	fileItem := item.FileItem
+	filename := strings.TrimSpace(fileItem.FileName)
+	if filename == "" {
+		filename = "wechat-upload.bin"
+	}
+
+	if size, ok := parseWeixinFileSize(fileItem.Len); ok && size > b.libraryService.config.MaxUploadSize {
+		return fmt.Sprintf("PDF 大小超过限制 %s。", humanFileSize(b.libraryService.config.MaxUploadSize))
+	}
+
+	downloaded, err := b.downloadFile(ctx, item)
+	if err != nil {
+		return fmt.Sprintf("下载微信文件失败：%v", err)
+	}
+	if downloaded == nil || len(downloaded.Data) == 0 {
+		return "微信文件为空，无法导入。"
+	}
+
+	filename = firstNonEmpty(strings.TrimSpace(downloaded.Filename), filename)
+	contentType := detectWeixinFileContentType(filename, downloaded.ContentType, downloaded.Data)
+	if !isPDF(filename, contentType) {
+		return fmt.Sprintf("暂不支持导入 `%s`，目前只支持 PDF。", clipRunes(filename, 72))
+	}
+	if !strings.EqualFold(filepath.Ext(filename), ".pdf") {
+		ext := filepath.Ext(filename)
+		if ext != "" {
+			filename = strings.TrimSuffix(filename, ext)
+		}
+		filename += ".pdf"
+	}
+
+	file := &weixinMultipartFile{Reader: bytes.NewReader(downloaded.Data)}
+	header := &multipart.FileHeader{
+		Filename: filename,
+		Size:     int64(len(downloaded.Data)),
+		Header: textproto.MIMEHeader{
+			"Content-Type": []string{contentType},
+		},
+	}
+
+	paper, err := b.libraryService.UploadPaper(file, header, UploadPaperParams{})
+	if err != nil {
+		var duplicateErr *DuplicatePaperError
+		if errors.As(err, &duplicateErr) && duplicateErr.Paper != nil {
+			b.activatePaperContext(duplicateErr.Paper.ID, true)
+			return "该 PDF 已在文献库中，已切换到现有文献。\n\n" + b.formatPaperSelection(duplicateErr.Paper, false)
+		}
+		return fmt.Sprintf("导入微信 PDF 失败：%v", err)
+	}
+
+	b.activatePaperContext(paper.ID, true)
+
+	prefix := "已从微信导入 PDF。"
+	if paper.ExtractionStatus == "queued" {
+		prefix = "已从微信导入 PDF，正在后台解析。"
+	}
+
+	return prefix + "\n\n" + b.formatPaperSelection(paper, false)
 }
 
 func (b *WeixinIMBridge) listRecentPapers() string {
@@ -305,11 +391,7 @@ func (b *WeixinIMBridge) selectPaper(arg string) string {
 		return fmt.Sprintf("读取文献失败：%v", err)
 	}
 
-	b.updateContext(func(state *weixinIMContext) {
-		state.CurrentPaperID = paper.ID
-		state.CurrentFigureID = 0
-		state.QAHistory = nil
-	})
+	b.activatePaperContext(paper.ID, false)
 	return b.formatPaperSelection(paper, false)
 }
 
@@ -536,6 +618,17 @@ func (b *WeixinIMBridge) formatPaperSelection(paper *model.Paper, autoSelected b
 	return strings.Join(lines, "\n")
 }
 
+func (b *WeixinIMBridge) activatePaperContext(paperID int64, clearSearch bool) {
+	b.updateContext(func(state *weixinIMContext) {
+		if clearSearch {
+			state.SearchPaperIDs = nil
+		}
+		state.CurrentPaperID = paperID
+		state.CurrentFigureID = 0
+		state.QAHistory = nil
+	})
+}
+
 func (b *WeixinIMBridge) requireCurrentPaper() (*model.Paper, string) {
 	state := b.getContext()
 	if state.CurrentPaperID == 0 {
@@ -651,6 +744,42 @@ func extractWeixinText(message weixin.Message) string {
 	return ""
 }
 
+func detectWeixinFileContentType(filename, reportedContentType string, data []byte) string {
+	reportedContentType = strings.TrimSpace(reportedContentType)
+	if isPDF(filename, reportedContentType) {
+		if strings.Contains(strings.ToLower(reportedContentType), "pdf") {
+			return reportedContentType
+		}
+		return "application/pdf"
+	}
+	if len(data) > 0 {
+		sample := data
+		if len(sample) > 512 {
+			sample = sample[:512]
+		}
+		sniffed := http.DetectContentType(sample)
+		if isPDF(filename, sniffed) {
+			return "application/pdf"
+		}
+	}
+	if reportedContentType != "" {
+		return reportedContentType
+	}
+	return "application/octet-stream"
+}
+
+func parseWeixinFileSize(value string) (int64, bool) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return 0, false
+	}
+	size, err := strconv.ParseInt(value, 10, 64)
+	if err != nil || size < 0 {
+		return 0, false
+	}
+	return size, true
+}
+
 func isWeixinHelpCommand(text string) bool {
 	switch strings.TrimSpace(strings.ToLower(text)) {
 	case "/help", "/h", "帮助":
@@ -668,6 +797,7 @@ func weixinHelpText() string {
 		"`文献 1`：选择检索结果中的文献",
 		"`图片`：查看当前文献的图片列表",
 		"`图片 1`：选择当前文献中的图片",
+		"直接发送 PDF：自动导入文献并切换上下文",
 		"`笔记 内容`：追加文献/图片笔记",
 		"`解读`：解读当前图片",
 		"`状态`：查看当前上下文",
@@ -765,6 +895,14 @@ func sleepContext(ctx context.Context, duration time.Duration) bool {
 	case <-timer.C:
 		return true
 	}
+}
+
+type weixinMultipartFile struct {
+	*bytes.Reader
+}
+
+func (f *weixinMultipartFile) Close() error {
+	return nil
 }
 
 func writeAtomicFile(path string, data []byte) error {

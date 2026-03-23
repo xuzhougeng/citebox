@@ -6,7 +6,10 @@ const (
 	MessageTypeBot     = 2
 	MessageStateFinish = 2
 	ItemTypeText       = 1
+	ItemTypeImage      = 2
 	ItemTypeVoice      = 3
+	ItemTypeFile       = 4
+	ItemTypeVideo      = 5
 )
 
 // BaseInfo is required by the iLink protocol in every POST request body.
@@ -60,15 +63,42 @@ type Message struct {
 type MessageItem struct {
 	Type      int        `json:"type"`
 	TextItem  *TextItem  `json:"text_item,omitempty"`
+	ImageItem *ImageItem `json:"image_item,omitempty"`
 	VoiceItem *VoiceItem `json:"voice_item,omitempty"`
+	FileItem  *FileItem  `json:"file_item,omitempty"`
+	VideoItem *VideoItem `json:"video_item,omitempty"`
 }
 
 type TextItem struct {
 	Text string `json:"text"`
 }
 
+type CDNMedia struct {
+	EncryptQueryParam string `json:"encrypt_query_param,omitempty"`
+	AESKey            string `json:"aes_key,omitempty"`
+	EncryptType       int    `json:"encrypt_type,omitempty"`
+}
+
+type ImageItem struct {
+	Media  *CDNMedia `json:"media,omitempty"`
+	AESKey string    `json:"aeskey,omitempty"`
+	URL    string    `json:"url,omitempty"`
+}
+
 type VoiceItem struct {
-	Text string `json:"text,omitempty"`
+	Media *CDNMedia `json:"media,omitempty"`
+	Text  string    `json:"text,omitempty"`
+}
+
+type FileItem struct {
+	Media    *CDNMedia `json:"media,omitempty"`
+	FileName string    `json:"file_name,omitempty"`
+	MD5      string    `json:"md5,omitempty"`
+	Len      string    `json:"len,omitempty"`
+}
+
+type VideoItem struct {
+	Media *CDNMedia `json:"media,omitempty"`
 }
 
 type SendMessageRequest struct {
