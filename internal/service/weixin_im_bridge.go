@@ -214,12 +214,27 @@ func (b *WeixinIMBridge) runPolling(ctx context.Context, client *weixin.Client, 
 				"message_state", message.MessageState,
 			)
 			reply := trimWeixinReply(b.handleIncomingMessage(ctx, message))
-			if reply == "" {
+			previewPath, previewErr := b.selectedFigurePreviewPath(message, reply)
+			if previewErr != nil {
+				reply = trimWeixinReply(appendWeixinReplyNotice(reply, "图片已选中，但原图预览不可用。"))
+				b.logger.Warn("resolve weixin figure preview failed", "error", previewErr)
+			}
+			if reply == "" && previewPath == "" {
 				b.logger.Info("skip empty weixin reply", "from_user_id", strings.TrimSpace(message.FromUserID))
 				continue
 			}
-			if err := client.SendTextMessage(ctx, message.FromUserID, reply, message.ContextToken); err != nil {
-				b.logger.Warn("send weixin reply failed", "error", err)
+			if reply != "" {
+				if err := client.SendTextMessage(ctx, message.FromUserID, reply, message.ContextToken); err != nil {
+					b.logger.Warn("send weixin reply failed", "error", err)
+				}
+			}
+			if previewPath != "" {
+				if err := client.SendImageFile(ctx, message.FromUserID, previewPath, message.ContextToken); err != nil {
+					b.logger.Warn("send weixin preview image failed", "error", err, "path", previewPath)
+					if err := client.SendTextMessage(ctx, message.FromUserID, "图片已选中，但预览发送失败。", message.ContextToken); err != nil {
+						b.logger.Warn("send weixin preview failure notice failed", "error", err)
+					}
+				}
 			}
 		}
 	}
@@ -477,7 +492,7 @@ func (b *WeixinIMBridge) listFigures() string {
 		lines = append(lines, fmt.Sprintf("%d. [ID %d] 第 %d 页 · 图 %d", index+1, figure.ID, figure.PageNumber, figure.FigureIndex))
 		lines = append(lines, fmt.Sprintf("   %s", clipRunes(caption, 56)))
 	}
-	lines = append(lines, "", "发送 `图片 1` 选中图片，然后可发送 `解读`。")
+	lines = append(lines, "", "发送 `图片 1` 选中图片；如果原图可用，会自动回发图片预览，然后可继续发送 `解读`。")
 	return strings.Join(lines, "\n")
 }
 
@@ -518,7 +533,7 @@ func (b *WeixinIMBridge) selectFigure(arg string) string {
 
 	caption := firstNonEmpty(strings.TrimSpace(figure.Caption), strings.TrimSpace(figure.OriginalName), "未命名图片")
 	return fmt.Sprintf(
-		"已选中图片 [ID %d]\n第 %d 页 · 图 %d\n%s\n\n发送 `解读` 获取图片解读，或 `笔记 你的内容` 追加图片笔记。",
+		"已选中图片 [ID %d]\n第 %d 页 · 图 %d\n%s\n\n如果原图可用，下一条消息会回发图片预览。发送 `解读` 获取图片解读，或 `笔记 你的内容` 追加图片笔记。",
 		figure.ID,
 		figure.PageNumber,
 		figure.FigureIndex,
@@ -798,6 +813,38 @@ func (b *WeixinIMBridge) loadSyncBuf() string {
 	return strings.TrimSpace(string(data))
 }
 
+func (b *WeixinIMBridge) selectedFigurePreviewPath(message weixin.Message, replyText string) (string, error) {
+	if _, ok := matchWeixinCommand(extractWeixinText(message), "/figure", "图片"); !ok {
+		return "", nil
+	}
+	if !strings.HasPrefix(strings.TrimSpace(replyText), "已选中图片 [ID ") {
+		return "", nil
+	}
+
+	_, figure, errText := b.requireCurrentFigure()
+	if errText != "" {
+		return "", nil
+	}
+	return b.figurePreviewPath(figure)
+}
+
+func (b *WeixinIMBridge) figurePreviewPath(figure *model.Figure) (string, error) {
+	if figure == nil {
+		return "", errors.New("figure is nil")
+	}
+
+	filename := filepath.Base(strings.TrimSpace(figure.Filename))
+	if filename == "" {
+		return "", errors.New("figure filename is empty")
+	}
+
+	targetPath := filepath.Join(b.libraryService.config.FiguresDir(), filename)
+	if _, err := os.Stat(targetPath); err != nil {
+		return "", err
+	}
+	return targetPath, nil
+}
+
 func shouldHandleWeixinMessage(binding weixinBindingRecord, message weixin.Message) (bool, string) {
 	fromUserID := strings.TrimSpace(message.FromUserID)
 	toUserID := strings.TrimSpace(message.ToUserID)
@@ -886,7 +933,7 @@ func weixinHelpText() string {
 		"`最近文献`：查看最近几篇文献",
 		"`文献 1`：选择检索结果中的文献",
 		"`图片`：查看当前文献的图片列表",
-		"`图片 1`：选择当前文献中的图片",
+		"`图片 1`：选择当前文献中的图片，并回发原图预览",
 		"直接发送 PDF：自动导入文献并切换上下文",
 		"`笔记 内容`：追加文献/图片笔记",
 		"`解读`：解读当前图片",
@@ -929,6 +976,19 @@ func trimWeixinReply(text string) string {
 		return text
 	}
 	return string(runes[:weixinReplyMaxRunes]) + "\n\n[内容已截断]"
+}
+
+func appendWeixinReplyNotice(text, notice string) string {
+	text = strings.TrimSpace(text)
+	notice = strings.TrimSpace(notice)
+	switch {
+	case text == "":
+		return notice
+	case notice == "":
+		return text
+	default:
+		return text + "\n\n" + notice
+	}
 }
 
 func clipRunes(text string, max int) string {

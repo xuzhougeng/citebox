@@ -7,6 +7,8 @@ import (
 	"log/slog"
 	"mime/multipart"
 	"net/textproto"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -212,6 +214,34 @@ func TestWeixinIMBridgeInterpretCurrentFigureUsesFigureAction(t *testing.T) {
 	}
 	if last.FigureID == 0 || last.PaperID == 0 {
 		t.Fatalf("AI request = %+v, want paper and figure ids", last)
+	}
+}
+
+func TestWeixinIMBridgeSelectFigureResolvesPreviewPath(t *testing.T) {
+	svc, repo, cfg := newTestService(t)
+	paper := createBridgePaper(t, repo, "Preview Atlas", "preview-atlas.pdf")
+	bridge := newTestWeixinBridge(t, svc, &fakeWeixinAIReader{answer: "ok"}, cfg.StorageDir)
+
+	figurePath := filepath.Join(cfg.FiguresDir(), paper.Figures[0].Filename)
+	if err := os.WriteFile(figurePath, []byte("preview-bytes"), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	_ = bridge.handleIncomingText(context.Background(), "搜 Preview Atlas")
+	reply := bridge.handleIncomingText(context.Background(), "图片 1")
+	previewPath, err := bridge.selectedFigurePreviewPath(weixin.Message{
+		ItemList: []weixin.MessageItem{
+			{
+				Type:     weixin.ItemTypeText,
+				TextItem: &weixin.TextItem{Text: "图片 1"},
+			},
+		},
+	}, reply)
+	if err != nil {
+		t.Fatalf("selectedFigurePreviewPath() error = %v", err)
+	}
+	if previewPath != figurePath {
+		t.Fatalf("selectedFigurePreviewPath() path = %q, want %q", previewPath, figurePath)
 	}
 }
 

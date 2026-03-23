@@ -80,9 +80,10 @@ type CDNMedia struct {
 }
 
 type ImageItem struct {
-	Media  *CDNMedia `json:"media,omitempty"`
-	AESKey string    `json:"aeskey,omitempty"`
-	URL    string    `json:"url,omitempty"`
+	Media   *CDNMedia `json:"media,omitempty"`
+	AESKey  string    `json:"aeskey,omitempty"`
+	URL     string    `json:"url,omitempty"`
+	MidSize int       `json:"mid_size,omitempty"`
 }
 
 type VoiceItem struct {
@@ -110,4 +111,24 @@ type SendMessageResponse struct {
 	Ret     int    `json:"ret"`
 	ErrCode int    `json:"errcode"`
 	Message string `json:"message"`
+}
+
+type GetUploadURLRequest struct {
+	FileKey     string   `json:"filekey"`
+	MediaType   int      `json:"media_type"`
+	ToUserID    string   `json:"to_user_id"`
+	RawSize     int      `json:"rawsize"`
+	RawFileMD5  string   `json:"rawfilemd5"`
+	FileSize    int      `json:"filesize"`
+	NoNeedThumb bool     `json:"no_need_thumb"`
+	AESKey      string   `json:"aeskey"`
+	BaseInfo    BaseInfo `json:"base_info"`
+}
+
+type GetUploadURLResponse struct {
+	Ret              int    `json:"ret"`
+	ErrCode          int    `json:"errcode"`
+	Message          string `json:"message"`
+	UploadParam      string `json:"upload_param"`
+	ThumbUploadParam string `json:"thumb_upload_param"`
 }
