@@ -466,17 +466,16 @@ const PalettesPage = {
         const parentLabel = palette.parent_display_label ? ` · 来自 ${palette.parent_display_label}` : '';
         const groupLabel = palette.group_name || '未分组';
         const caption = String(palette.figure_caption || '').trim();
-        const imageViewerURL = Utils.resourceViewerURL('image', palette.image_url);
         return `
             <article class="palette-card" data-palette-id="${palette.id}" data-paper-id="${palette.paper_id}" data-figure-id="${palette.figure_id}" data-figure-label="${Utils.escapeHTML(figureLabel)}" data-palette-colors="${Utils.escapeHTML((palette.colors || []).join(','))}">
-                <a class="palette-card-media" href="${imageViewerURL}">
+                <div class="palette-card-media">
                     <img src="${palette.image_url}" alt="${Utils.escapeHTML(`${palette.paper_title} ${figureLabel}`)}">
                     <div class="palette-card-badges">
                         <span class="figure-badge figure-badge-strong">${Utils.escapeHTML(figureLabel)}</span>
                         <span class="figure-badge">第 ${palette.page_number || '-'} 页</span>
                         <span class="figure-badge">${Utils.escapeHTML(groupLabel)}</span>
                     </div>
-                </a>
+                </div>
                 <div class="palette-card-body">
                     <div class="palette-card-head">
                         <div>
