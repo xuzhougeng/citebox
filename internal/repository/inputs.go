@@ -36,14 +36,16 @@ type PaperUpdateInput struct {
 
 // FigureUpsertInput 图片创建/更新输入
 type FigureUpsertInput struct {
-	Filename     string
-	OriginalName string
-	ContentType  string
-	PageNumber   int
-	FigureIndex  int
-	Source       string
-	Caption      string
-	BBoxJSON     string
+	Filename       string
+	OriginalName   string
+	ContentType    string
+	PageNumber     int
+	FigureIndex    int
+	ParentFigureID *int64
+	SubfigureLabel string
+	Source         string
+	Caption        string
+	BBoxJSON       string
 }
 
 // FigureUpdateInput 图片更新输入

@@ -672,6 +672,123 @@ func TestDeleteFigureRemovesFileAndReturnsUpdatedPaper(t *testing.T) {
 	}
 }
 
+func TestCreateSubfiguresAssignsLabelAndDecoratesParent(t *testing.T) {
+	svc, repo, cfg := newTestService(t)
+	paper := createTestPaper(t, repo)
+
+	parentPath := filepath.Join(cfg.FiguresDir(), paper.Figures[0].Filename)
+	if err := os.WriteFile(parentPath, []byte("img"), 0o644); err != nil {
+		t.Fatalf("WriteFile(parent figure) error = %v", err)
+	}
+
+	updated, addedCount, err := svc.CreateSubfigures(paper.Figures[0].ID, CreateSubfiguresParams{
+		Regions: []model.SubfigureExtractionRegion{
+			{
+				X:         0.12,
+				Y:         0.18,
+				Width:     0.4,
+				Height:    0.45,
+				ImageData: testPNGDataURL(t, 20, 16),
+				Caption:   "Panel A",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreateSubfigures() error = %v", err)
+	}
+	if addedCount != 1 {
+		t.Fatalf("CreateSubfigures() addedCount = %d, want 1", addedCount)
+	}
+	if len(updated.Figures) != 2 {
+		t.Fatalf("CreateSubfigures() figures = %d, want 2", len(updated.Figures))
+	}
+
+	var parentFigure *model.Figure
+	var childFigure *model.Figure
+	for i := range updated.Figures {
+		figure := &updated.Figures[i]
+		if figure.ID == paper.Figures[0].ID {
+			parentFigure = figure
+		}
+		if figure.ParentFigureID != nil {
+			childFigure = figure
+		}
+	}
+	if parentFigure == nil || childFigure == nil {
+		t.Fatalf("CreateSubfigures() figures = %+v, want parent and child", updated.Figures)
+	}
+	if childFigure.SubfigureLabel != "a" {
+		t.Fatalf("CreateSubfigures() subfigure_label = %q, want %q", childFigure.SubfigureLabel, "a")
+	}
+	if childFigure.DisplayLabel != "Fig 1a" {
+		t.Fatalf("CreateSubfigures() display_label = %q, want %q", childFigure.DisplayLabel, "Fig 1a")
+	}
+	if childFigure.ParentDisplayLabel != "Fig 1" {
+		t.Fatalf("CreateSubfigures() parent_display_label = %q, want %q", childFigure.ParentDisplayLabel, "Fig 1")
+	}
+	if len(parentFigure.Subfigures) != 1 || parentFigure.Subfigures[0].ID != childFigure.ID {
+		t.Fatalf("CreateSubfigures() parent subfigures = %+v, want child %d", parentFigure.Subfigures, childFigure.ID)
+	}
+	if _, err := os.Stat(filepath.Join(cfg.FiguresDir(), childFigure.Filename)); err != nil {
+		t.Fatalf("stored subfigure missing, stat err = %v", err)
+	}
+}
+
+func TestDeleteFigureRemovesSubfigureBranchFiles(t *testing.T) {
+	svc, repo, cfg := newTestService(t)
+	paper := createTestPaper(t, repo)
+
+	parentPath := filepath.Join(cfg.FiguresDir(), paper.Figures[0].Filename)
+	if err := os.WriteFile(parentPath, []byte("img"), 0o644); err != nil {
+		t.Fatalf("WriteFile(parent figure) error = %v", err)
+	}
+
+	updated, _, err := svc.CreateSubfigures(paper.Figures[0].ID, CreateSubfiguresParams{
+		Regions: []model.SubfigureExtractionRegion{
+			{
+				X:         0.1,
+				Y:         0.1,
+				Width:     0.35,
+				Height:    0.35,
+				ImageData: testPNGDataURL(t, 18, 12),
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreateSubfigures() error = %v", err)
+	}
+
+	var childFigure *model.Figure
+	for i := range updated.Figures {
+		if updated.Figures[i].ParentFigureID != nil {
+			childFigure = &updated.Figures[i]
+			break
+		}
+	}
+	if childFigure == nil {
+		t.Fatalf("CreateSubfigures() missing child figure: %+v", updated.Figures)
+	}
+
+	childPath := filepath.Join(cfg.FiguresDir(), childFigure.Filename)
+	if _, err := os.Stat(childPath); err != nil {
+		t.Fatalf("subfigure file missing before delete, stat err = %v", err)
+	}
+
+	result, err := svc.DeleteFigure(paper.Figures[0].ID)
+	if err != nil {
+		t.Fatalf("DeleteFigure() error = %v", err)
+	}
+	if len(result.Figures) != 0 {
+		t.Fatalf("DeleteFigure() figures = %d, want 0", len(result.Figures))
+	}
+	if _, err := os.Stat(parentPath); !os.IsNotExist(err) {
+		t.Fatalf("parent figure file still exists, stat err = %v", err)
+	}
+	if _, err := os.Stat(childPath); !os.IsNotExist(err) {
+		t.Fatalf("subfigure file still exists, stat err = %v", err)
+	}
+}
+
 func TestNormalizeManualRegionRejectsMissingImageData(t *testing.T) {
 	if _, err := normalizeManualRegion(model.ManualExtractionRegion{
 		PageNumber: 1,

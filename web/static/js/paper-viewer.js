@@ -612,7 +612,8 @@ const PaperViewer = {
                     </button>
                     <div class="figure-preview-badges">
                         <span class="figure-badge figure-badge-strong">第 ${figure.page_number || '-'} 页</span>
-                        <span class="figure-badge">#${figure.figure_index || '-'}</span>
+                        <span class="figure-badge">${Utils.escapeHTML(figure.display_label || `Fig ${figure.figure_index || '-'}`)}</span>
+                        ${figure.parent_figure_id ? '<span class="figure-badge">子图</span>' : ''}
                         ${figure.source === 'manual' ? '<span class="figure-badge">人工提取</span>' : ''}
                     </div>
                 </div>

@@ -90,6 +90,10 @@ type UpdateFigureParams struct {
 	NotesText *string
 }
 
+type CreateSubfiguresParams struct {
+	Regions []model.SubfigureExtractionRegion
+}
+
 type ManualExtractParams struct {
 	Regions []model.ManualExtractionRegion
 }
@@ -258,6 +262,10 @@ func (s *LibraryService) ListFigures(filter model.FigureFilter) (*model.FigureLi
 		figures[i].ImageURL = "/files/figures/" + url.PathEscape(figures[i].Filename)
 		if figures[i].Tags == nil {
 			figures[i].Tags = []model.Tag{}
+		}
+		figures[i].DisplayLabel = formatFigureDisplayLabel(figures[i].FigureIndex, figures[i].SubfigureLabel)
+		if figures[i].ParentFigureID != nil {
+			figures[i].ParentDisplayLabel = formatFigureDisplayLabel(figures[i].FigureIndex, "")
 		}
 	}
 
@@ -532,13 +540,26 @@ func (s *LibraryService) DeleteFigure(id int64) (*model.Paper, error) {
 		return nil, apperr.New(apperr.CodeNotFound, "figure not found")
 	}
 
-	if err := s.repo.ApplyManualFigureChanges(figure.PaperID, nil, []int64{id}); err != nil {
+	paper, err := s.repo.GetPaperDetail(figure.PaperID)
+	if err != nil {
+		return nil, err
+	}
+	if paper == nil {
+		return nil, apperr.New(apperr.CodeNotFound, "paper not found")
+	}
+
+	deleteFigureIDs, deletePaths := collectFigureDeletionTargets(paper.Figures, id, s.config.FiguresDir())
+	if len(deleteFigureIDs) == 0 {
+		return nil, apperr.New(apperr.CodeNotFound, "figure not found")
+	}
+
+	if err := s.repo.ApplyManualFigureChanges(figure.PaperID, nil, deleteFigureIDs); err != nil {
 		return nil, err
 	}
 
-	removeFiles([]string{filepath.Join(s.config.FiguresDir(), figure.Filename)})
+	removeFiles(deletePaths)
 
-	paper, err := s.repo.GetPaperDetail(figure.PaperID)
+	paper, err = s.repo.GetPaperDetail(figure.PaperID)
 	if err != nil {
 		return nil, err
 	}
@@ -548,6 +569,138 @@ func (s *LibraryService) DeleteFigure(id int64) (*model.Paper, error) {
 
 	s.decoratePaper(paper)
 	return paper, nil
+}
+
+func (s *LibraryService) CreateSubfigures(parentFigureID int64, params CreateSubfiguresParams) (*model.Paper, int, error) {
+	if len(params.Regions) == 0 {
+		return nil, 0, apperr.New(apperr.CodeInvalidArgument, "至少需要框选一个子图区域")
+	}
+
+	parentFigure, err := s.repo.GetFigure(parentFigureID)
+	if err != nil {
+		return nil, 0, err
+	}
+	if parentFigure == nil {
+		return nil, 0, apperr.New(apperr.CodeNotFound, "figure not found")
+	}
+	if parentFigure.ParentFigureID != nil {
+		return nil, 0, apperr.New(apperr.CodeFailedPrecondition, "当前只支持从一级大图提取子图")
+	}
+
+	paper, err := s.repo.GetPaperDetail(parentFigure.PaperID)
+	if err != nil {
+		return nil, 0, err
+	}
+	if paper == nil {
+		return nil, 0, apperr.New(apperr.CodeNotFound, "paper not found")
+	}
+
+	parentFigureDetail := findFigureByID(paper.Figures, parentFigureID)
+	if parentFigureDetail == nil {
+		return nil, 0, apperr.New(apperr.CodeNotFound, "parent figure not found")
+	}
+	if parentFigureDetail.ParentFigureID != nil {
+		return nil, 0, apperr.New(apperr.CodeFailedPrecondition, "当前只支持从一级大图提取子图")
+	}
+
+	existingLabels := map[string]struct{}{}
+	for _, figure := range paper.Figures {
+		if figure.ParentFigureID == nil || *figure.ParentFigureID != parentFigureID {
+			continue
+		}
+		label := strings.ToLower(strings.TrimSpace(figure.SubfigureLabel))
+		if label != "" {
+			existingLabels[label] = struct{}{}
+		}
+	}
+
+	items := make([]repository.FigureUpsertInput, 0, len(params.Regions))
+	newPaths := make([]string, 0, len(params.Regions))
+	for idx, rawRegion := range params.Regions {
+		region, err := normalizeSubfigureRegion(rawRegion)
+		if err != nil {
+			removeFiles(newPaths)
+			return nil, 0, err
+		}
+
+		label, err := resolveNextSubfigureLabel(region.Label, existingLabels)
+		if err != nil {
+			removeFiles(newPaths)
+			return nil, 0, err
+		}
+		existingLabels[label] = struct{}{}
+
+		binary, err := decodeBase64(region.ImageData)
+		if err != nil {
+			removeFiles(newPaths)
+			return nil, 0, apperr.Wrap(apperr.CodeInvalidArgument, "解码子图图片失败", err)
+		}
+
+		contentType := http.DetectContentType(binary)
+		if !strings.HasPrefix(contentType, "image/") {
+			removeFiles(newPaths)
+			return nil, 0, apperr.New(apperr.CodeInvalidArgument, "子图提取结果不是有效图片")
+		}
+
+		ext := extensionForFigure(contentType, "subfigure.png")
+		storedName := fmt.Sprintf("figure_%d_subfigure_%d%s", time.Now().UnixNano(), idx+1, ext)
+		targetPath := filepath.Join(s.config.FiguresDir(), storedName)
+		if err := os.WriteFile(targetPath, binary, 0o644); err != nil {
+			removeFiles(newPaths)
+			return nil, 0, apperr.Wrap(apperr.CodeInternal, "保存子图图片失败", err)
+		}
+		newPaths = append(newPaths, targetPath)
+
+		bboxJSON, err := json.Marshal(map[string]interface{}{
+			"x":                region.X,
+			"y":                region.Y,
+			"width":            region.Width,
+			"height":           region.Height,
+			"unit":             "normalized",
+			"source":           "subfigure_manual",
+			"coordinate_space": "figure",
+			"parent_figure_id": parentFigureID,
+		})
+		if err != nil {
+			removeFiles(newPaths)
+			return nil, 0, apperr.Wrap(apperr.CodeInternal, "序列化子图坐标失败", err)
+		}
+
+		baseName := strings.TrimSpace(parentFigureDetail.OriginalName)
+		if baseName == "" {
+			baseName = parentFigureDetail.Filename
+		}
+		baseName = strings.TrimSuffix(baseName, filepath.Ext(baseName))
+
+		items = append(items, repository.FigureUpsertInput{
+			Filename:       storedName,
+			OriginalName:   fmt.Sprintf("%s_%s%s", baseName, label, ext),
+			ContentType:    contentType,
+			PageNumber:     parentFigureDetail.PageNumber,
+			FigureIndex:    parentFigureDetail.FigureIndex,
+			ParentFigureID: &parentFigureID,
+			SubfigureLabel: label,
+			Source:         "manual",
+			Caption:        strings.TrimSpace(region.Caption),
+			BBoxJSON:       string(bboxJSON),
+		})
+	}
+
+	if err := s.repo.AddPaperFigures(parentFigure.PaperID, items); err != nil {
+		removeFiles(newPaths)
+		return nil, 0, err
+	}
+
+	updatedPaper, err := s.repo.GetPaperDetail(parentFigure.PaperID)
+	if err != nil {
+		return nil, 0, err
+	}
+	if updatedPaper == nil {
+		return nil, 0, apperr.New(apperr.CodeNotFound, "paper not found")
+	}
+
+	s.decoratePaper(updatedPaper)
+	return updatedPaper, len(items), nil
 }
 
 func (s *LibraryService) UpdateFigureTags(id int64, tags []string) (*model.Paper, error) {
@@ -763,14 +916,16 @@ func (s *LibraryService) ManualExtractFigures(id int64, params ManualExtractPara
 		}
 
 		items = append(items, repository.FigureUpsertInput{
-			Filename:     storedName,
-			OriginalName: fmt.Sprintf("%s_p%d_manual_%d%s", strings.TrimSuffix(paper.OriginalFilename, filepath.Ext(paper.OriginalFilename)), region.PageNumber, idx+1, ext),
-			ContentType:  contentType,
-			PageNumber:   region.PageNumber,
-			FigureIndex:  figureIndex,
-			Source:       "manual",
-			Caption:      caption,
-			BBoxJSON:     string(bboxJSON),
+			Filename:       storedName,
+			OriginalName:   fmt.Sprintf("%s_p%d_manual_%d%s", strings.TrimSuffix(paper.OriginalFilename, filepath.Ext(paper.OriginalFilename)), region.PageNumber, idx+1, ext),
+			ContentType:    contentType,
+			PageNumber:     region.PageNumber,
+			FigureIndex:    figureIndex,
+			ParentFigureID: nil,
+			SubfigureLabel: "",
+			Source:         "manual",
+			Caption:        caption,
+			BBoxJSON:       string(bboxJSON),
 		})
 	}
 
@@ -1451,14 +1606,16 @@ func (s *LibraryService) materializeFigures(figures []extractedFigure) ([]reposi
 		paths = append(paths, path)
 
 		items = append(items, repository.FigureUpsertInput{
-			Filename:     storedName,
-			OriginalName: firstNonEmpty(figure.Filename, storedName),
-			ContentType:  contentType,
-			PageNumber:   figure.PageNumber,
-			FigureIndex:  figure.FigureIndex,
-			Source:       "auto",
-			Caption:      figure.Caption,
-			BBoxJSON:     strings.TrimSpace(string(figure.BBox)),
+			Filename:       storedName,
+			OriginalName:   firstNonEmpty(figure.Filename, storedName),
+			ContentType:    contentType,
+			PageNumber:     figure.PageNumber,
+			FigureIndex:    figure.FigureIndex,
+			ParentFigureID: nil,
+			SubfigureLabel: "",
+			Source:         "auto",
+			Caption:        figure.Caption,
+			BBoxJSON:       strings.TrimSpace(string(figure.BBox)),
 		})
 	}
 
@@ -1479,11 +1636,37 @@ func (s *LibraryService) decoratePaper(paper *model.Paper) {
 	if paper.StoredPDFName != "" {
 		paper.PDFURL = "/files/papers/" + url.PathEscape(paper.StoredPDFName)
 	}
+	figuresByID := make(map[int64]*model.Figure, len(paper.Figures))
 	for i := range paper.Figures {
 		if paper.Figures[i].Tags == nil {
 			paper.Figures[i].Tags = []model.Tag{}
 		}
 		paper.Figures[i].ImageURL = "/files/figures/" + url.PathEscape(paper.Figures[i].Filename)
+		paper.Figures[i].DisplayLabel = formatFigureDisplayLabel(paper.Figures[i].FigureIndex, paper.Figures[i].SubfigureLabel)
+		paper.Figures[i].ParentDisplayLabel = ""
+		paper.Figures[i].Subfigures = nil
+		figuresByID[paper.Figures[i].ID] = &paper.Figures[i]
+	}
+	for i := range paper.Figures {
+		if paper.Figures[i].ParentFigureID == nil {
+			continue
+		}
+		parent := figuresByID[*paper.Figures[i].ParentFigureID]
+		if parent == nil {
+			paper.Figures[i].ParentDisplayLabel = formatFigureDisplayLabel(paper.Figures[i].FigureIndex, "")
+			continue
+		}
+		paper.Figures[i].ParentDisplayLabel = parent.DisplayLabel
+	}
+	for i := range paper.Figures {
+		if paper.Figures[i].ParentFigureID == nil {
+			continue
+		}
+		parent := figuresByID[*paper.Figures[i].ParentFigureID]
+		if parent == nil {
+			continue
+		}
+		parent.Subfigures = append(parent.Subfigures, paper.Figures[i])
 	}
 }
 
@@ -1524,6 +1707,101 @@ func normalizeManualRegion(region model.ManualExtractionRegion) (model.ManualExt
 		return model.ManualExtractionRegion{}, apperr.New(apperr.CodeInvalidArgument, "缺少人工提取图片数据")
 	}
 	return region, nil
+}
+
+func normalizeSubfigureRegion(region model.SubfigureExtractionRegion) (model.SubfigureExtractionRegion, error) {
+	region.Caption = strings.TrimSpace(region.Caption)
+	region.Label = strings.TrimSpace(region.Label)
+	region.ImageData = strings.TrimSpace(region.ImageData)
+	if region.Width <= 0 || region.Height <= 0 {
+		return model.SubfigureExtractionRegion{}, apperr.New(apperr.CodeInvalidArgument, "子图区域的宽高必须大于 0")
+	}
+	if region.X < 0 || region.Y < 0 || region.X >= 1 || region.Y >= 1 {
+		return model.SubfigureExtractionRegion{}, apperr.New(apperr.CodeInvalidArgument, "子图区域坐标必须落在图片范围内")
+	}
+	if region.X+region.Width > 1 || region.Y+region.Height > 1 {
+		return model.SubfigureExtractionRegion{}, apperr.New(apperr.CodeInvalidArgument, "子图区域不能超出图片边界")
+	}
+	if region.ImageData == "" {
+		return model.SubfigureExtractionRegion{}, apperr.New(apperr.CodeInvalidArgument, "缺少子图图片数据")
+	}
+	return region, nil
+}
+
+func formatFigureDisplayLabel(figureIndex int, subfigureLabel string) string {
+	if figureIndex <= 0 {
+		return ""
+	}
+	label := strings.TrimSpace(subfigureLabel)
+	if label == "" {
+		return fmt.Sprintf("Fig %d", figureIndex)
+	}
+	return fmt.Sprintf("Fig %d%s", figureIndex, strings.ToLower(label))
+}
+
+func resolveNextSubfigureLabel(requested string, used map[string]struct{}) (string, error) {
+	requested = strings.TrimSpace(requested)
+	if requested != "" {
+		normalized := normalizeSubfigureLabel(requested)
+		if normalized == "" {
+			return "", apperr.New(apperr.CodeInvalidArgument, "子图命名只支持英文字母")
+		}
+		if _, exists := used[normalized]; exists {
+			return "", apperr.New(apperr.CodeConflict, "子图命名已存在")
+		}
+		return normalized, nil
+	}
+
+	for index := 0; index < 26*26; index++ {
+		candidate := subfigureLabelForIndex(index)
+		if _, exists := used[candidate]; exists {
+			continue
+		}
+		return candidate, nil
+	}
+	return "", apperr.New(apperr.CodeResourceExhausted, "子图命名数量已超过当前支持上限")
+}
+
+func normalizeSubfigureLabel(label string) string {
+	label = strings.ToLower(strings.TrimSpace(label))
+	if label == "" {
+		return ""
+	}
+	for _, ch := range label {
+		if ch < 'a' || ch > 'z' {
+			return ""
+		}
+	}
+	return label
+}
+
+func subfigureLabelForIndex(index int) string {
+	if index < 26 {
+		return string(rune('a' + index))
+	}
+	first := (index / 26) - 1
+	second := index % 26
+	return string([]rune{rune('a' + first), rune('a' + second)})
+}
+
+func collectFigureDeletionTargets(figures []model.Figure, figureID int64, figuresDir string) ([]int64, []string) {
+	targets := []int64{}
+	paths := []string{}
+	seen := map[int64]struct{}{}
+
+	for _, figure := range figures {
+		if figure.ID != figureID && (figure.ParentFigureID == nil || *figure.ParentFigureID != figureID) {
+			continue
+		}
+		if _, exists := seen[figure.ID]; exists {
+			continue
+		}
+		seen[figure.ID] = struct{}{}
+		targets = append(targets, figure.ID)
+		paths = append(paths, filepath.Join(figuresDir, figure.Filename))
+	}
+
+	return targets, paths
 }
 
 func (s *LibraryService) normalizeTagInputs(names []string, scope model.TagScope) []repository.TagUpsertInput {

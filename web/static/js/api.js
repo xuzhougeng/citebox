@@ -192,6 +192,16 @@ const API = {
         });
     },
 
+    createSubfigures(id, data) {
+        return requestJSON(`${API_BASE}/figures/${id}/subfigures`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        });
+    },
+
     listGroups() {
         return requestJSON(`${API_BASE}/groups`);
     },

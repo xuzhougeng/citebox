@@ -3,21 +3,35 @@ package model
 import "time"
 
 type FigureListItem struct {
-	ID          int64     `json:"id"`
-	PaperID     int64     `json:"paper_id"`
-	PaperTitle  string    `json:"paper_title"`
-	GroupID     *int64    `json:"group_id,omitempty"`
-	GroupName   string    `json:"group_name,omitempty"`
-	Tags        []Tag     `json:"tags"`
-	Filename    string    `json:"filename"`
-	ImageURL    string    `json:"image_url,omitempty"`
-	PageNumber  int       `json:"page_number"`
-	FigureIndex int       `json:"figure_index"`
-	Source      string    `json:"source,omitempty"`
-	Caption     string    `json:"caption"`
-	NotesText   string    `json:"notes_text,omitempty"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	ID                 int64     `json:"id"`
+	PaperID            int64     `json:"paper_id"`
+	PaperTitle         string    `json:"paper_title"`
+	GroupID            *int64    `json:"group_id,omitempty"`
+	GroupName          string    `json:"group_name,omitempty"`
+	Tags               []Tag     `json:"tags"`
+	Filename           string    `json:"filename"`
+	ImageURL           string    `json:"image_url,omitempty"`
+	PageNumber         int       `json:"page_number"`
+	FigureIndex        int       `json:"figure_index"`
+	ParentFigureID     *int64    `json:"parent_figure_id,omitempty"`
+	SubfigureLabel     string    `json:"subfigure_label,omitempty"`
+	DisplayLabel       string    `json:"display_label,omitempty"`
+	ParentDisplayLabel string    `json:"parent_display_label,omitempty"`
+	Source             string    `json:"source,omitempty"`
+	Caption            string    `json:"caption"`
+	NotesText          string    `json:"notes_text,omitempty"`
+	CreatedAt          time.Time `json:"created_at"`
+	UpdatedAt          time.Time `json:"updated_at"`
+}
+
+type SubfigureExtractionRegion struct {
+	X         float64 `json:"x"`
+	Y         float64 `json:"y"`
+	Width     float64 `json:"width"`
+	Height    float64 `json:"height"`
+	ImageData string  `json:"image_data,omitempty"`
+	Caption   string  `json:"caption,omitempty"`
+	Label     string  `json:"label,omitempty"`
 }
 
 type FigureFilter struct {

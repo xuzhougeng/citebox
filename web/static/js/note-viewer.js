@@ -310,7 +310,7 @@ const NoteViewer = {
                                 <div>
                                     <p class="eyebrow">Figure Notes</p>
                                     <h2>${Utils.escapeHTML(figure.paper_title)}</h2>
-                                    <p class="note-lightbox-subtitle">第 ${figure.page_number || '-'} 页 · #${figure.figure_index || '-'}${figure.source === 'manual' ? ' · 人工提取' : ''}</p>
+                                    <p class="note-lightbox-subtitle">第 ${figure.page_number || '-'} 页 · ${Utils.escapeHTML(figure.display_label || `Fig ${figure.figure_index || '-'}`)}${figure.parent_figure_id ? ` · 来自 ${Utils.escapeHTML(figure.parent_display_label || `Fig ${figure.figure_index || '-'}`)}` : ''}${figure.source === 'manual' ? ' · 人工提取' : ''}</p>
                                 </div>
                                 <div class="note-lightbox-mode-switch">
                                     <button class="btn ${isPreviewMode ? 'btn-outline' : 'btn-primary'}" type="button" data-note-action="set-mode" data-note-mode="write">编辑</button>

@@ -78,6 +78,7 @@ const BrowserUI = {
 
         const hasNotes = Boolean(String(figure.notes_text || '').trim());
         const mediaLabel = mediaAction === 'note' ? '查看笔记' : '查看大图';
+        const figureLabel = figure.display_label || `Fig ${figure.figure_index || '-'}`;
         const notePreview = showNotesPreview
             ? BrowserUI.renderFigureNotePreview(figure.notes_text, emptyNotesText, { interactive: true })
             : '';
@@ -90,8 +91,9 @@ const BrowserUI = {
                     </button>
                     <div class="figure-preview-badges">
                         <span class="figure-badge figure-badge-strong">第 ${figure.page_number || '-'} 页</span>
-                        <span class="figure-badge">#${figure.figure_index || '-'}</span>
+                        <span class="figure-badge">${Utils.escapeHTML(figureLabel)}</span>
                         ${hasNotes ? '<span class="figure-badge figure-badge-accent">有笔记</span>' : ''}
+                        ${figure.parent_figure_id ? '<span class="figure-badge">子图</span>' : ''}
                         ${figure.source === 'manual' ? '<span class="figure-badge">人工提取</span>' : ''}
                     </div>
                 </div>
@@ -138,6 +140,12 @@ function mergeFigureCollectionWithPaper(figures = [], paper) {
             image_url: updatedFigure?.image_url || figure.image_url,
             tags: updatedFigure?.tags || [],
             caption: updatedFigure?.caption ?? figure.caption,
+            page_number: updatedFigure?.page_number ?? figure.page_number,
+            figure_index: updatedFigure?.figure_index ?? figure.figure_index,
+            parent_figure_id: updatedFigure?.parent_figure_id ?? figure.parent_figure_id ?? null,
+            subfigure_label: updatedFigure?.subfigure_label ?? figure.subfigure_label ?? '',
+            display_label: updatedFigure?.display_label ?? figure.display_label ?? '',
+            parent_display_label: updatedFigure?.parent_display_label ?? figure.parent_display_label ?? '',
             source: updatedFigure?.source || figure.source,
             notes_text: updatedFigure?.notes_text ?? figure.notes_text ?? ''
         };
@@ -1297,6 +1305,7 @@ const NotesPage = {
         const noteText = String(figure.notes_text || '').trim().replace(/\s+/g, ' ');
         const preview = noteText.length > 280 ? noteText.slice(0, 280) + '...' : noteText;
         const tags = BrowserUI.renderTagChips(figure.tags || []);
+        const figureLabel = figure.display_label || `Fig ${figure.figure_index || '-'}`;
 
         return `
             <article class="note-row" data-note-kind="figure" data-paper-id="${figure.paper_id}" data-figure-index="${index}">
@@ -1308,7 +1317,7 @@ const NotesPage = {
                 <div class="note-row-body">
                     <div class="note-row-head">
                         <span class="note-row-source" data-action="paper" role="button">${Utils.escapeHTML(figure.paper_title)}</span>
-                        <span class="note-row-page">第 ${figure.page_number || '-'} 页 · #${figure.figure_index || '-'}</span>
+                        <span class="note-row-page">第 ${figure.page_number || '-'} 页 · ${Utils.escapeHTML(figureLabel)}</span>
                     </div>
                     <div class="note-row-text" data-action="note" role="button">${Utils.escapeHTML(preview) || '<span class="muted">空笔记</span>'}</div>
                     <div class="note-row-foot">

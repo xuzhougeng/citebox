@@ -24,8 +24,10 @@ const FigureViewer = {
         this.activeAIByFigure = new Map();
         this.aiRequestState = null;
         this.paperDetails = new Map();
+        this.paperDetailPromises = new Map();
         this.viewState = this.defaultViewState();
         this.dragState = null;
+        this.cropState = this.defaultCropState();
 
         this.handleKeydown = (event) => {
             if (!this.modal || this.modal.classList.contains('hidden')) return;
@@ -65,8 +67,17 @@ const FigureViewer = {
         });
         this.body.addEventListener('input', (event) => {
             const captionInput = event.target.closest('#figureCaptionInput');
-            if (!captionInput) return;
-            this.captionDraft = captionInput.value;
+            if (captionInput) {
+                this.captionDraft = captionInput.value;
+                return;
+            }
+
+            const subfigureCaptionInput = event.target.closest('[data-subfigure-field="caption"]');
+            if (!subfigureCaptionInput) return;
+            const selectionID = subfigureCaptionInput.dataset.selectionId;
+            const selection = this.findCropSelection(selectionID);
+            if (!selection) return;
+            selection.caption = subfigureCaptionInput.value;
         });
         this.body.addEventListener('click', async (event) => {
             const button = event.target.closest('[data-figure-action]');
@@ -89,6 +100,26 @@ const FigureViewer = {
                 }
                 if (button.dataset.figureAction === 'download-image') {
                     await this.downloadCurrentImage();
+                }
+                if (button.dataset.figureAction === 'toggle-subfigure-crop') {
+                    this.toggleSubfigureCropMode();
+                }
+                if (button.dataset.figureAction === 'cancel-subfigure-crop') {
+                    this.cancelSubfigureCropMode();
+                }
+                if (button.dataset.figureAction === 'clear-subfigure-selections') {
+                    this.clearSubfigureSelections();
+                }
+                if (button.dataset.figureAction === 'save-subfigures') {
+                    await this.submitSubfigureSelections();
+                }
+                return;
+            }
+
+            const subfigureButton = event.target.closest('[data-subfigure-action]');
+            if (subfigureButton) {
+                if (subfigureButton.dataset.subfigureAction === 'remove-selection') {
+                    this.removeCropSelection(subfigureButton.dataset.selectionId);
                 }
                 return;
             }
@@ -142,22 +173,30 @@ const FigureViewer = {
         });
         this.body.addEventListener('wheel', (event) => {
             const viewport = event.target.closest('[data-figure-viewport]');
-            if (!viewport || !this.currentFigure) return;
+            if (!viewport || !this.currentFigure || this.isCropModeEnabled()) return;
             event.preventDefault();
             this.handleViewportWheel(event, viewport);
         }, { passive: false });
         this.body.addEventListener('pointerdown', (event) => {
+            const cropOverlay = event.target.closest('[data-figure-crop-overlay]');
+            if (cropOverlay && this.currentFigure && this.isCropModeEnabled()) {
+                this.beginCropSelection(event, cropOverlay);
+                return;
+            }
             const viewport = event.target.closest('[data-figure-viewport]');
-            if (!viewport || !this.currentFigure) return;
+            if (!viewport || !this.currentFigure || this.isCropModeEnabled()) return;
             this.beginViewportDrag(event, viewport);
         });
         document.addEventListener('pointermove', (event) => {
+            this.updateCropSelection(event);
             this.updateViewportDrag(event);
         });
         document.addEventListener('pointerup', (event) => {
+            this.endCropSelection(event);
             this.endViewportDrag(event);
         });
         document.addEventListener('pointercancel', (event) => {
+            this.endCropSelection(event);
             this.endViewportDrag(event);
         });
         document.addEventListener('keydown', this.handleKeydown);
@@ -175,11 +214,13 @@ const FigureViewer = {
         this.loadingPage = false;
         this.captionDraft = '';
         this.resetViewportState();
+        this.resetCropState();
         this.syncCurrentFigureState({ forceDraftFromFigure: true });
         try {
             this.render();
             this.modal.classList.remove('hidden');
             document.body.classList.add('modal-open');
+            this.requestCurrentPaperDetail();
         } catch (error) {
             Utils.showToast(error.message, 'error');
         }
@@ -187,7 +228,9 @@ const FigureViewer = {
 
     close() {
         this.stopAIAction({ preservePartial: false, silent: true });
+        this.endCropSelection();
         this.endViewportDrag();
+        this.resetCropState();
         this.resetViewportState();
         if (!this.modal) return;
         this.modal.classList.add('hidden');
@@ -203,24 +246,28 @@ const FigureViewer = {
     },
 
     async previous() {
-        if (!this.canMovePrevious() || this.loadingPage || this.aiRequestState?.loading) return;
+        if (!this.canMovePrevious() || this.loadingPage || this.aiRequestState?.loading || this.isCropModeEnabled()) return;
         if (this.index > 0) {
             this.index -= 1;
             this.resetViewportState();
+            this.resetCropState();
             this.syncCurrentFigureState({ forceDraftFromFigure: true });
             this.render();
+            this.requestCurrentPaperDetail();
             return;
         }
         await this.loadAdjacentPage(this.page - 1, 'last');
     },
 
     async next() {
-        if (!this.canMoveNext() || this.loadingPage || this.aiRequestState?.loading) return;
+        if (!this.canMoveNext() || this.loadingPage || this.aiRequestState?.loading || this.isCropModeEnabled()) return;
         if (this.index < this.figures.length - 1) {
             this.index += 1;
             this.resetViewportState();
+            this.resetCropState();
             this.syncCurrentFigureState({ forceDraftFromFigure: true });
             this.render();
+            this.requestCurrentPaperDetail();
             return;
         }
         await this.loadAdjacentPage(this.page + 1, 'first');
@@ -242,7 +289,9 @@ const FigureViewer = {
             this.totalPages = Math.max(1, Number(payload.total_pages) || this.totalPages);
             this.index = targetIndex === 'last' ? figures.length - 1 : 0;
             this.resetViewportState();
+            this.resetCropState();
             this.syncCurrentFigureState({ forceDraftFromFigure: true });
+            this.requestCurrentPaperDetail();
         } catch (error) {
             Utils.showToast(error.message, 'error');
         } finally {
@@ -259,6 +308,20 @@ const FigureViewer = {
         };
     },
 
+    defaultCropState() {
+        return {
+            enabled: false,
+            selections: [],
+            draft: null,
+            pointerId: null,
+            submitting: false
+        };
+    },
+
+    resetCropState() {
+        this.cropState = this.defaultCropState();
+    },
+
     resetViewportState() {
         this.viewState = this.defaultViewState();
         this.dragState = null;
@@ -271,14 +334,14 @@ const FigureViewer = {
 
     clampViewState(state = this.viewState || this.defaultViewState()) {
         const viewport = this.body?.querySelector('[data-figure-viewport]');
-        const image = this.body?.querySelector('[data-figure-image]');
+        const stage = this.body?.querySelector('[data-figure-image-stage]');
         const scale = Math.min(6, Math.max(1, Number(state.scale) || 1));
-        if (!viewport || !image || scale <= 1) {
+        if (!viewport || !stage || scale <= 1) {
             return { scale: 1, x: 0, y: 0 };
         }
 
-        const baseWidth = image.offsetWidth || image.clientWidth || 0;
-        const baseHeight = image.offsetHeight || image.clientHeight || 0;
+        const baseWidth = stage.offsetWidth || stage.clientWidth || 0;
+        const baseHeight = stage.offsetHeight || stage.clientHeight || 0;
         if (!baseWidth || !baseHeight) {
             return { scale, x: state.x || 0, y: state.y || 0 };
         }
@@ -295,15 +358,21 @@ const FigureViewer = {
     applyViewTransform() {
         const viewport = this.body?.querySelector('[data-figure-viewport]');
         const image = this.body?.querySelector('[data-figure-image]');
-        if (!viewport || !image) return;
+        const stage = this.body?.querySelector('[data-figure-image-stage]');
+        if (!viewport || !image || !stage) return;
 
         this.viewState = this.clampViewState(this.viewState);
         const state = this.viewState;
-        image.style.transform = `translate(${state.x}px, ${state.y}px) scale(${state.scale})`;
+        stage.style.transform = `translate(${state.x}px, ${state.y}px) scale(${state.scale})`;
         image.draggable = false;
-        viewport.style.cursor = state.scale > 1 ? (this.dragState ? 'grabbing' : 'grab') : 'zoom-in';
+        if (this.isCropModeEnabled()) {
+            viewport.style.cursor = 'crosshair';
+        } else {
+            viewport.style.cursor = state.scale > 1 ? (this.dragState ? 'grabbing' : 'grab') : 'zoom-in';
+        }
         viewport.classList.toggle('is-zoomed', state.scale > 1);
         viewport.classList.toggle('is-dragging', Boolean(this.dragState));
+        viewport.classList.toggle('is-crop-mode', this.isCropModeEnabled());
 
         const resetButton = this.body.querySelector('[data-figure-action="reset-view"]');
         if (resetButton) {
@@ -376,6 +445,283 @@ const FigureViewer = {
         this.applyViewTransform();
     },
 
+    isCropModeEnabled() {
+        return Boolean(this.cropState?.enabled);
+    },
+
+    canExtractSubfigures() {
+        return Boolean(this.currentFigure) && !this.currentFigure.parent_figure_id;
+    },
+
+    toggleSubfigureCropMode() {
+        if (!this.canExtractSubfigures()) {
+            Utils.showToast('当前只支持从一级大图提取子图', 'info');
+            return;
+        }
+
+        if (this.isCropModeEnabled()) {
+            this.cancelSubfigureCropMode();
+            return;
+        }
+
+        this.resetViewportState();
+        this.cropState = {
+            ...this.defaultCropState(),
+            enabled: true
+        };
+        this.render();
+    },
+
+    cancelSubfigureCropMode() {
+        this.endCropSelection();
+        this.resetCropState();
+        this.render();
+    },
+
+    clearSubfigureSelections() {
+        if (!this.isCropModeEnabled() || this.cropState.submitting) return;
+        this.cropState.selections = [];
+        this.cropState.draft = null;
+        this.render();
+    },
+
+    findCropSelection(selectionID) {
+        return (this.cropState?.selections || []).find((selection) => selection.id === selectionID);
+    },
+
+    removeCropSelection(selectionID) {
+        if (!selectionID || !this.isCropModeEnabled() || this.cropState.submitting) return;
+        this.cropState.selections = (this.cropState.selections || []).filter((selection) => selection.id !== selectionID);
+        this.render();
+    },
+
+    cropPointFromOverlay(event, overlay) {
+        const rect = overlay.getBoundingClientRect();
+        const width = rect.width || 0;
+        const height = rect.height || 0;
+        if (!width || !height) {
+            return null;
+        }
+
+        return {
+            x: Math.max(0, Math.min(1, (event.clientX - rect.left) / width)),
+            y: Math.max(0, Math.min(1, (event.clientY - rect.top) / height))
+        };
+    },
+
+    beginCropSelection(event, overlay) {
+        if (!this.isCropModeEnabled() || this.cropState.submitting || event.button !== 0) return;
+
+        const point = this.cropPointFromOverlay(event, overlay);
+        if (!point) return;
+
+        event.preventDefault();
+        event.stopPropagation();
+        this.cropState.pointerId = event.pointerId;
+        this.cropState.draft = {
+            startX: point.x,
+            startY: point.y,
+            x: point.x,
+            y: point.y,
+            width: 0,
+            height: 0
+        };
+        if (typeof overlay.setPointerCapture === 'function') {
+            try {
+                overlay.setPointerCapture(event.pointerId);
+            } catch (error) {
+                // Ignore pointer capture errors from synthetic events.
+            }
+        }
+        this.refreshCropOverlay();
+    },
+
+    updateCropSelection(event) {
+        if (!this.isCropModeEnabled() || !this.cropState?.draft || event.pointerId !== this.cropState.pointerId) return;
+        const overlay = this.body?.querySelector('[data-figure-crop-overlay]');
+        if (!overlay) return;
+
+        const point = this.cropPointFromOverlay(event, overlay);
+        if (!point) return;
+
+        const draft = this.cropState.draft;
+        this.cropState.draft = {
+            ...draft,
+            x: Math.min(draft.startX, point.x),
+            y: Math.min(draft.startY, point.y),
+            width: Math.abs(point.x - draft.startX),
+            height: Math.abs(point.y - draft.startY)
+        };
+        this.refreshCropOverlay();
+    },
+
+    endCropSelection(event = null) {
+        if (!this.isCropModeEnabled() || !this.cropState?.draft) return;
+        if (event && event.pointerId !== this.cropState.pointerId) return;
+
+        const overlay = this.body?.querySelector('[data-figure-crop-overlay]');
+        if (overlay && this.cropState.pointerId !== null && typeof overlay.hasPointerCapture === 'function' && overlay.hasPointerCapture(this.cropState.pointerId)) {
+            try {
+                overlay.releasePointerCapture(this.cropState.pointerId);
+            } catch (error) {
+                // Ignore release failures after pointer cancellation.
+            }
+        }
+
+        const draft = this.cropState.draft;
+        const nextSelection = draft && draft.width >= 0.02 && draft.height >= 0.02 ? {
+            id: `subfigure-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`,
+            x: draft.x,
+            y: draft.y,
+            width: draft.width,
+            height: draft.height,
+            caption: ''
+        } : null;
+
+        this.cropState.pointerId = null;
+        this.cropState.draft = null;
+        if (nextSelection) {
+            this.cropState.selections = [...(this.cropState.selections || []), nextSelection];
+            this.render();
+            return;
+        }
+
+        this.refreshCropOverlay();
+    },
+
+    renderCropOverlayContent() {
+        if (!this.isCropModeEnabled()) return '';
+
+        const boxes = [...(this.cropState?.selections || [])];
+        if (this.cropState?.draft) {
+            boxes.push({
+                id: 'draft',
+                x: this.cropState.draft.x,
+                y: this.cropState.draft.y,
+                width: this.cropState.draft.width,
+                height: this.cropState.draft.height,
+                draft: true
+            });
+        }
+
+        return boxes.map((selection, index) => `
+            <div
+                class="figure-crop-box ${selection.draft ? 'is-draft' : ''}"
+                style="left:${selection.x * 100}%;top:${selection.y * 100}%;width:${selection.width * 100}%;height:${selection.height * 100}%"
+            >
+                <span>${selection.draft ? '拖拽中' : index + 1}</span>
+            </div>
+        `).join('');
+    },
+
+    refreshCropOverlay() {
+        const overlay = this.body?.querySelector('[data-figure-crop-overlay]');
+        if (!overlay) return;
+        overlay.innerHTML = this.renderCropOverlayContent();
+    },
+
+    async buildSubfigureImageData(selection) {
+        const image = this.body?.querySelector('[data-figure-image]');
+        if (!image || !image.naturalWidth || !image.naturalHeight) {
+            throw new Error('当前图片尚未加载完成，无法提取子图');
+        }
+
+        const left = Math.max(0, Math.floor(selection.x * image.naturalWidth));
+        const top = Math.max(0, Math.floor(selection.y * image.naturalHeight));
+        const right = Math.min(image.naturalWidth, Math.ceil((selection.x + selection.width) * image.naturalWidth));
+        const bottom = Math.min(image.naturalHeight, Math.ceil((selection.y + selection.height) * image.naturalHeight));
+        const width = right - left;
+        const height = bottom - top;
+        if (width < 2 || height < 2) {
+            throw new Error('子图区域过小，请重新选择');
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const context = canvas.getContext('2d', { alpha: false });
+        context.fillStyle = '#ffffff';
+        context.fillRect(0, 0, width, height);
+        context.drawImage(image, left, top, width, height, 0, 0, width, height);
+        return canvas.toDataURL('image/png');
+    },
+
+    async submitSubfigureSelections() {
+        if (!this.currentFigure || !this.isCropModeEnabled() || this.cropState.submitting) return;
+        if (!(this.cropState.selections || []).length) {
+            Utils.showToast('请先框选至少一个子图区域', 'error');
+            return;
+        }
+
+        this.cropState.submitting = true;
+        this.render();
+
+        try {
+            const regions = [];
+            for (const selection of this.cropState.selections) {
+                regions.push({
+                    x: selection.x,
+                    y: selection.y,
+                    width: selection.width,
+                    height: selection.height,
+                    caption: String(selection.caption || '').trim(),
+                    image_data: await this.buildSubfigureImageData(selection)
+                });
+            }
+
+            const payload = await API.createSubfigures(this.currentFigure.id, { regions });
+            this.syncPaperMetadata(payload.paper);
+            this.resetCropState();
+            this.render();
+            Utils.showToast(`已提取 ${payload.added_count || 0} 张子图`);
+            if (typeof this.onMetaChanged === 'function') {
+                await this.onMetaChanged(payload.paper);
+            }
+        } catch (error) {
+            this.cropState.submitting = false;
+            this.render();
+            Utils.showToast(error.message, 'error');
+        }
+    },
+
+    currentPaperDetail() {
+        return this.paperDetails.get(Number(this.currentFigure?.paper_id)) || null;
+    },
+
+    currentFigureDetail() {
+        const paper = this.currentPaperDetail();
+        if (!paper) {
+            return this.currentFigure || null;
+        }
+        return (paper.figures || []).find((figure) => Number(figure.id) === Number(this.currentFigure?.id)) || this.currentFigure || null;
+    },
+
+    currentFigureSubfigures() {
+        const figure = this.currentFigureDetail();
+        return Array.isArray(figure?.subfigures) ? figure.subfigures : [];
+    },
+
+    requestCurrentPaperDetail() {
+        const paperID = Number(this.currentFigure?.paper_id || 0);
+        if (!paperID || this.paperDetails.has(paperID) || this.paperDetailPromises.has(paperID)) {
+            return;
+        }
+
+        const promise = API.getPaper(paperID)
+            .then((paper) => {
+                this.syncPaperMetadata(paper);
+                if (Number(this.currentFigure?.paper_id || 0) === paperID) {
+                    this.render();
+                }
+                return paper;
+            })
+            .catch(() => null)
+            .finally(() => {
+                this.paperDetailPromises.delete(paperID);
+            });
+        this.paperDetailPromises.set(paperID, promise);
+    },
+
     syncCurrentFigureState(options = {}) {
         const { forceDraftFromFigure = false } = options;
         this.currentFigure = this.figures?.[this.index];
@@ -420,10 +766,10 @@ const FigureViewer = {
         const prevButton = this.body.querySelector('[data-figure-action="prev"]');
         const nextButton = this.body.querySelector('[data-figure-action="next"]');
         if (prevButton) {
-            prevButton.disabled = !this.canMovePrevious() || this.loadingPage || Boolean(this.aiRequestState?.loading);
+            prevButton.disabled = !this.canMovePrevious() || this.loadingPage || Boolean(this.aiRequestState?.loading) || this.isCropModeEnabled();
         }
         if (nextButton) {
-            nextButton.disabled = !this.canMoveNext() || this.loadingPage || Boolean(this.aiRequestState?.loading);
+            nextButton.disabled = !this.canMoveNext() || this.loadingPage || Boolean(this.aiRequestState?.loading) || this.isCropModeEnabled();
         }
     },
 
@@ -816,6 +1162,104 @@ const FigureViewer = {
         this.syncCurrentFigureState({ forceDraftFromFigure: true });
     },
 
+    renderFigureLocation(figure) {
+        const label = figure.display_label || (figure.subfigure_label ? `Fig ${figure.figure_index || '-'}${figure.subfigure_label}` : `Fig ${figure.figure_index || '-'}`);
+        const source = figure.source === 'manual' ? ' · 人工提取' : '';
+        const parent = figure.parent_figure_id ? ` · 来自 ${figure.parent_display_label || `Fig ${figure.figure_index || '-'}`}` : '';
+        return `第 ${figure.page_number || '-'} 页 · ${Utils.escapeHTML(label)}${parent}${source}`;
+    },
+
+    renderSubfigureSelectionList() {
+        const selections = this.cropState?.selections || [];
+        if (!selections.length) {
+            return '<div class="figure-subfigure-empty"><p>在图片上拖拽即可框选子图区域。</p></div>';
+        }
+
+        return selections.map((selection, index) => `
+            <article class="figure-subfigure-selection">
+                <div class="figure-subfigure-selection-head">
+                    <strong>区域 ${index + 1}</strong>
+                    <button class="btn btn-outline btn-small" type="button" data-subfigure-action="remove-selection" data-selection-id="${selection.id}">删除</button>
+                </div>
+                <div class="figure-subfigure-selection-meta">
+                    <span>x ${(selection.x * 100).toFixed(1)}%</span>
+                    <span>y ${(selection.y * 100).toFixed(1)}%</span>
+                    <span>w ${(selection.width * 100).toFixed(1)}%</span>
+                    <span>h ${(selection.height * 100).toFixed(1)}%</span>
+                </div>
+                <label class="field">
+                    <span>Caption / 备注</span>
+                    <textarea
+                        class="form-textarea figure-subfigure-caption"
+                        rows="2"
+                        placeholder="可选，保存后作为子图说明"
+                        data-subfigure-field="caption"
+                        data-selection-id="${selection.id}"
+                    >${Utils.escapeHTML(selection.caption || '')}</textarea>
+                </label>
+            </article>
+        `).join('');
+    },
+
+    renderSubfigurePanel(figure) {
+        const subfigures = this.currentFigureSubfigures();
+        const loading = this.paperDetailPromises.has(Number(figure.paper_id));
+
+        if (figure.parent_figure_id) {
+            return `
+                <section class="figure-lightbox-subfigure">
+                    <div class="figure-lightbox-ai-head">
+                        <div>
+                            <p class="eyebrow">Subfigure</p>
+                            <h3>子图来源</h3>
+                        </div>
+                    </div>
+                    <div class="figure-subfigure-summary is-compact">
+                        <p>当前查看的是 <strong>${Utils.escapeHTML(figure.display_label || '')}</strong>，来源于 <strong>${Utils.escapeHTML(figure.parent_display_label || '')}</strong>。</p>
+                    </div>
+                </section>
+            `;
+        }
+
+        const countLabel = loading ? '加载中...' : `${subfigures.length} 张`;
+        return `
+            <section class="figure-lightbox-subfigure">
+                <div class="figure-lightbox-ai-head">
+                    <div>
+                        <p class="eyebrow">Subfigure</p>
+                        <h3>子图提取</h3>
+                    </div>
+                    <span class="figure-subfigure-count">已有 ${countLabel}</span>
+                </div>
+                <div class="figure-subfigure-summary">
+                    <p>从当前大图里框选感兴趣的局部，系统会自动命名为不重复的 ${Utils.escapeHTML(figure.display_label || `Fig ${figure.figure_index || '-'}`)}a / b / c ...</p>
+                    ${subfigures.length ? `
+                        <div class="figure-subfigure-chip-list">
+                            ${subfigures.map((item) => `<span class="figure-subfigure-chip">${Utils.escapeHTML(item.display_label || '')}</span>`).join('')}
+                        </div>
+                    ` : '<p class="muted">当前还没有提取过子图。</p>'}
+                </div>
+                ${this.isCropModeEnabled() ? `
+                    <div class="figure-subfigure-editor">
+                        <div class="figure-subfigure-editor-head">
+                            <p>在左侧图片上拖拽框选，右侧会累积待保存的子图。</p>
+                            <div class="figure-subfigure-editor-actions">
+                                <button class="btn btn-outline btn-small" type="button" data-figure-action="clear-subfigure-selections" ${(this.cropState.selections || []).length ? '' : 'disabled'}>清空</button>
+                                <button class="btn btn-outline btn-small" type="button" data-figure-action="cancel-subfigure-crop" ${this.cropState.submitting ? 'disabled' : ''}>取消</button>
+                                <button class="btn btn-primary btn-small" type="button" data-figure-action="save-subfigures" ${(this.cropState.selections || []).length && !this.cropState.submitting ? '' : 'disabled'}>${this.cropState.submitting ? '保存中...' : '保存子图'}</button>
+                            </div>
+                        </div>
+                        <div class="figure-subfigure-selection-list">${this.renderSubfigureSelectionList()}</div>
+                    </div>
+                ` : `
+                    <div class="figure-subfigure-actions">
+                        <button class="btn btn-outline" type="button" data-figure-action="toggle-subfigure-crop">开始子图截取</button>
+                    </div>
+                `}
+            </section>
+        `;
+    },
+
     async openNotes() {
         if (!this.currentFigure) return;
 
@@ -955,7 +1399,9 @@ const FigureViewer = {
     },
 
     buildAIQuestion(action, figure) {
-        const location = `第 ${figure.page_number || '-'} 页图 ${figure.figure_index || '-'}${figure.source === 'manual' ? '（人工提取）' : ''}`;
+        const label = figure.display_label || (figure.subfigure_label ? `Fig ${figure.figure_index || '-'}${figure.subfigure_label}` : `Fig ${figure.figure_index || '-'}`);
+        const parent = figure.parent_figure_id ? `，来自 ${figure.parent_display_label || `Fig ${figure.figure_index || '-'}`}` : '';
+        const location = `第 ${figure.page_number || '-'} 页 ${label}${parent}${figure.source === 'manual' ? '（人工提取）' : ''}`;
         const caption = figure.caption ? `；caption：${figure.caption}` : '';
 
         switch (action) {
@@ -1113,7 +1559,7 @@ const FigureViewer = {
     },
 
     renderAIActionButtons() {
-        const aiLoading = Boolean(this.aiRequestState?.loading);
+        const aiLoading = Boolean(this.aiRequestState?.loading) || this.isCropModeEnabled();
         return `
             <button class="btn btn-outline ${this.activeAIAction() === 'figure_interpretation' ? 'active' : ''}" type="button" data-figure-ai-action="figure_interpretation" ${aiLoading ? 'disabled' : ''}>图片解读</button>
             <button class="btn btn-outline ${this.activeAIAction() === 'tag_suggestion' ? 'active' : ''}" type="button" data-figure-ai-action="tag_suggestion" ${aiLoading ? 'disabled' : ''}>Tag 建议</button>
@@ -1127,11 +1573,13 @@ const FigureViewer = {
             return;
         }
 
+        this.requestCurrentPaperDetail();
         const figure = this.currentFigure;
         const total = this.figures.length;
         const canPrev = this.canMovePrevious();
         const canNext = this.canMoveNext();
         const aiLoading = Boolean(this.aiRequestState?.loading);
+        const cropModeActive = this.isCropModeEnabled();
         const canUseDesktopSave = Utils.supportsDesktopSave();
         const captionDraft = this.captionDraft ?? (figure.caption || '');
         const notePreview = String(figure.notes_text || '').replace(/\s+/g, ' ').trim();
@@ -1147,14 +1595,17 @@ const FigureViewer = {
                     <div class="figure-lightbox-toolbar">
                         <div class="figure-lightbox-counter">第 ${this.index + 1} / ${total} 张 · 第 ${this.page} / ${this.totalPages} 页</div>
                         <div class="figure-lightbox-nav">
-                            <span class="figure-lightbox-hint">滚轮缩放，按住左键或中键拖动</span>
+                            <span class="figure-lightbox-hint">${cropModeActive ? '拖拽框选子图区域，完成后在右侧保存' : '滚轮缩放，按住左键或中键拖动'}</span>
                             <button class="btn btn-outline" type="button" data-figure-action="reset-view">复原视图</button>
-                            <button class="btn btn-outline" type="button" data-figure-action="prev" ${!canPrev || this.loadingPage || aiLoading ? 'disabled' : ''}>上一张</button>
-                            <button class="btn btn-outline" type="button" data-figure-action="next" ${!canNext || this.loadingPage || aiLoading ? 'disabled' : ''}>下一张</button>
+                            <button class="btn btn-outline" type="button" data-figure-action="prev" ${!canPrev || this.loadingPage || aiLoading || cropModeActive ? 'disabled' : ''}>上一张</button>
+                            <button class="btn btn-outline" type="button" data-figure-action="next" ${!canNext || this.loadingPage || aiLoading || cropModeActive ? 'disabled' : ''}>下一张</button>
                         </div>
                     </div>
                     <div class="figure-lightbox-media" data-figure-viewport>
-                        <img src="${figure.image_url}" alt="${Utils.escapeHTML(figure.caption || figure.paper_title)}" data-figure-image>
+                        <div class="figure-lightbox-image-stage" data-figure-image-stage>
+                            <img src="${figure.image_url}" alt="${Utils.escapeHTML(figure.caption || figure.paper_title)}" data-figure-image>
+                            <div class="figure-crop-overlay ${cropModeActive ? 'is-active' : ''}" data-figure-crop-overlay>${this.renderCropOverlayContent()}</div>
+                        </div>
                     </div>
                     <div class="figure-lightbox-caption figure-lightbox-caption-editor">
                         <label class="field">
@@ -1184,7 +1635,7 @@ const FigureViewer = {
                         </div>
                         <div class="figure-lightbox-meta-item">
                             <span>定位</span>
-                            <strong>第 ${figure.page_number || '-'} 页 · #${figure.figure_index || '-'}${figure.source === 'manual' ? ' · 人工提取' : ''}</strong>
+                            <strong>${this.renderFigureLocation(figure)}</strong>
                         </div>
                         <div class="figure-lightbox-meta-item figure-lightbox-meta-item-editable">
                             <span>标签</span>
@@ -1220,6 +1671,8 @@ const FigureViewer = {
                             ? '<button class="btn btn-outline" type="button" data-figure-action="download-image">下载图片</button>'
                             : `<a class="btn btn-outline" href="${figure.image_url}" download="${Utils.escapeHTML(figure.filename || 'figure.png')}">下载图片</a>`}
                     </div>
+
+                    ${this.renderSubfigurePanel(figure)}
 
                     <section class="figure-lightbox-ai">
                         <div class="figure-lightbox-ai-head">

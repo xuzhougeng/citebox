@@ -58,6 +58,8 @@ erDiagram
         TEXT content_type
         INTEGER page_number
         INTEGER figure_index
+        INTEGER parent_figure_id FK
+        TEXT subfigure_label
         TEXT source
         TEXT caption
         TEXT notes_text
@@ -167,6 +169,8 @@ CREATE TABLE paper_figures (
     content_type TEXT DEFAULT '',
     page_number INTEGER DEFAULT 0,
     figure_index INTEGER DEFAULT 0,
+    parent_figure_id INTEGER REFERENCES paper_figures(id) ON DELETE CASCADE,
+    subfigure_label TEXT DEFAULT '',
     source TEXT DEFAULT 'auto' CHECK (source IN ('auto', 'manual')),
     caption TEXT DEFAULT '',
     notes_text TEXT DEFAULT '',
@@ -209,7 +213,11 @@ CREATE UNIQUE INDEX idx_papers_pdf_sha256_unique ON papers(pdf_sha256) WHERE COA
 
 CREATE INDEX idx_paper_figures_paper_id ON paper_figures(paper_id);
 CREATE INDEX idx_paper_figures_updated_at ON paper_figures(updated_at);
+CREATE INDEX idx_paper_figures_parent_figure_id ON paper_figures(parent_figure_id);
 CREATE UNIQUE INDEX idx_paper_figures_filename_unique ON paper_figures(filename);
+CREATE UNIQUE INDEX idx_paper_figures_parent_label_unique
+    ON paper_figures(parent_figure_id, subfigure_label)
+    WHERE parent_figure_id IS NOT NULL AND COALESCE(TRIM(subfigure_label), '') <> '';
 
 CREATE INDEX idx_paper_tags_tag_id ON paper_tags(tag_id);
 CREATE INDEX idx_figure_tags_tag_id ON figure_tags(tag_id);
@@ -224,6 +232,8 @@ CREATE UNIQUE INDEX idx_tags_scope_name ON tags(scope, name);
   - 限制 `tags.scope`
   - 限制 `papers.extraction_status`
   - 限制 `paper_figures.source`
+  - 限制子图必须带 `subfigure_label`
+  - 限制子图只能挂在同一篇文献的一级大图下
 - FTS 同步触发器：
   - `papers` 的增删改会同步 `papers_fts`
   - `paper_figures` 的增删改会同步 `figures_fts`
@@ -283,10 +293,12 @@ CREATE UNIQUE INDEX idx_tags_scope_name ON tags(scope, name);
 | `content_type` | 图片 MIME 类型 |
 | `page_number` | 来源页码 |
 | `figure_index` | 同页内排序编号 |
+| `parent_figure_id` | 父图 ID；为空表示一级大图，不为空表示这是某张大图下的子图 |
+| `subfigure_label` | 子图后缀，例如 `a` / `b` / `c`；仅对子图有意义 |
 | `source` | 图片来源，当前允许 `auto/manual` |
 | `caption` | 图片标题或图注 |
 | `notes_text` | 图片级笔记；适合保存 AI 解读结果、摘录和人工说明 |
-| `bbox_json` | 图片框坐标或定位信息 |
+| `bbox_json` | 图片框坐标或定位信息；一级图通常记录 PDF 页面定位，子图通常记录相对父图的裁切区域 |
 | `created_at` | 图片记录创建时间 |
 | `updated_at` | 图片最近修改时间；笔记、标签更新时会刷新 |
 
@@ -350,6 +362,7 @@ CREATE UNIQUE INDEX idx_tags_scope_name ON tags(scope, name);
 ## 这套设计目前为什么合理
 
 - `papers` 和 `paper_figures` 分离，符合“一篇文献有多张图片”的自然关系
+- `paper_figures.parent_figure_id` 让图片支持两级结构：一级大图 + 子图，不需要额外维护第二张业务表
 - 标签通过 `scope + relation table` 拆成文献标签和图片标签，职责清楚
 - 管理笔记、文献笔记、图片笔记已经分层，不再把 AI 伴读结果继续塞回管理备注
 - `updated_at` 已补到 `paper_figures`，后续能支持“最近编辑的图片笔记”这类视图

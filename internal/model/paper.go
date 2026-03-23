@@ -6,20 +6,25 @@ import (
 )
 
 type Figure struct {
-	ID           int64           `json:"id"`
-	Filename     string          `json:"filename"`
-	OriginalName string          `json:"original_name"`
-	ContentType  string          `json:"content_type"`
-	PageNumber   int             `json:"page_number"`
-	FigureIndex  int             `json:"figure_index"`
-	Source       string          `json:"source,omitempty"`
-	Caption      string          `json:"caption"`
-	NotesText    string          `json:"notes_text,omitempty"`
-	Tags         []Tag           `json:"tags"`
-	BBox         json.RawMessage `json:"bbox,omitempty"`
-	ImageURL     string          `json:"image_url,omitempty"`
-	CreatedAt    time.Time       `json:"created_at"`
-	UpdatedAt    time.Time       `json:"updated_at"`
+	ID                 int64           `json:"id"`
+	Filename           string          `json:"filename"`
+	OriginalName       string          `json:"original_name"`
+	ContentType        string          `json:"content_type"`
+	PageNumber         int             `json:"page_number"`
+	FigureIndex        int             `json:"figure_index"`
+	ParentFigureID     *int64          `json:"parent_figure_id,omitempty"`
+	SubfigureLabel     string          `json:"subfigure_label,omitempty"`
+	DisplayLabel       string          `json:"display_label,omitempty"`
+	ParentDisplayLabel string          `json:"parent_display_label,omitempty"`
+	Source             string          `json:"source,omitempty"`
+	Caption            string          `json:"caption"`
+	NotesText          string          `json:"notes_text,omitempty"`
+	Tags               []Tag           `json:"tags"`
+	BBox               json.RawMessage `json:"bbox,omitempty"`
+	ImageURL           string          `json:"image_url,omitempty"`
+	Subfigures         []Figure        `json:"subfigures,omitempty"`
+	CreatedAt          time.Time       `json:"created_at"`
+	UpdatedAt          time.Time       `json:"updated_at"`
 }
 
 type Paper struct {

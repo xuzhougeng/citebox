@@ -24,7 +24,7 @@ func (r *FigureRepository) GetFigure(id int64) (*model.FigureListItem, error) {
 	row := r.db.QueryRow(`
 		SELECT
 			pf.id, pf.paper_id, p.title, p.group_id, COALESCE(g.name, ''),
-			pf.filename, pf.page_number, pf.figure_index, pf.source, pf.caption, pf.notes_text, pf.created_at, pf.updated_at
+			pf.filename, pf.page_number, pf.figure_index, pf.parent_figure_id, pf.subfigure_label, pf.source, pf.caption, pf.notes_text, pf.created_at, pf.updated_at
 		FROM paper_figures pf
 		JOIN papers p ON p.id = pf.paper_id
 		LEFT JOIN groups g ON g.id = p.group_id
@@ -33,6 +33,7 @@ func (r *FigureRepository) GetFigure(id int64) (*model.FigureListItem, error) {
 
 	var item model.FigureListItem
 	var groupID sql.NullInt64
+	var parentFigureID sql.NullInt64
 	var groupName string
 	if err := row.Scan(
 		&item.ID,
@@ -43,6 +44,8 @@ func (r *FigureRepository) GetFigure(id int64) (*model.FigureListItem, error) {
 		&item.Filename,
 		&item.PageNumber,
 		&item.FigureIndex,
+		&parentFigureID,
+		&item.SubfigureLabel,
 		&item.Source,
 		&item.Caption,
 		&item.NotesText,
@@ -58,6 +61,9 @@ func (r *FigureRepository) GetFigure(id int64) (*model.FigureListItem, error) {
 	if groupID.Valid {
 		item.GroupID = &groupID.Int64
 		item.GroupName = groupName
+	}
+	if parentFigureID.Valid {
+		item.ParentFigureID = &parentFigureID.Int64
 	}
 	tagsByFigure, err := r.tag.LoadTagsByFigureIDs([]int64{id})
 	if err != nil {
@@ -94,7 +100,7 @@ func (r *FigureRepository) ListFigures(filter model.FigureFilter) ([]model.Figur
 	query := `
 		SELECT
 			pf.id, pf.paper_id, p.title, p.group_id, COALESCE(g.name, ''),
-			pf.filename, pf.page_number, pf.figure_index, pf.source, pf.caption, pf.notes_text, pf.created_at, pf.updated_at
+			pf.filename, pf.page_number, pf.figure_index, pf.parent_figure_id, pf.subfigure_label, pf.source, pf.caption, pf.notes_text, pf.created_at, pf.updated_at
 		FROM paper_figures pf
 		JOIN papers p ON p.id = pf.paper_id
 		LEFT JOIN groups g ON g.id = p.group_id
@@ -116,6 +122,7 @@ func (r *FigureRepository) ListFigures(filter model.FigureFilter) ([]model.Figur
 	for rows.Next() {
 		var item model.FigureListItem
 		var groupID sql.NullInt64
+		var parentFigureID sql.NullInt64
 		var groupName string
 		if err := rows.Scan(
 			&item.ID,
@@ -126,6 +133,8 @@ func (r *FigureRepository) ListFigures(filter model.FigureFilter) ([]model.Figur
 			&item.Filename,
 			&item.PageNumber,
 			&item.FigureIndex,
+			&parentFigureID,
+			&item.SubfigureLabel,
 			&item.Source,
 			&item.Caption,
 			&item.NotesText,
@@ -137,6 +146,9 @@ func (r *FigureRepository) ListFigures(filter model.FigureFilter) ([]model.Figur
 		if groupID.Valid {
 			item.GroupID = &groupID.Int64
 			item.GroupName = groupName
+		}
+		if parentFigureID.Valid {
+			item.ParentFigureID = &parentFigureID.Int64
 		}
 		item.Tags = []model.Tag{}
 		figures = append(figures, item)
@@ -288,8 +300,8 @@ func (r *FigureRepository) ApplyManualFigureChanges(id int64, addFigures []Figur
 	for _, figure := range addFigures {
 		if _, err := tx.Exec(`
 			INSERT INTO paper_figures (
-				paper_id, filename, original_name, content_type, page_number, figure_index, source, caption, bbox_json, created_at, updated_at
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+				paper_id, filename, original_name, content_type, page_number, figure_index, parent_figure_id, subfigure_label, source, caption, bbox_json, created_at, updated_at
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 		`,
 			id,
 			figure.Filename,
@@ -297,6 +309,8 @@ func (r *FigureRepository) ApplyManualFigureChanges(id int64, addFigures []Figur
 			figure.ContentType,
 			figure.PageNumber,
 			figure.FigureIndex,
+			figure.ParentFigureID,
+			strings.TrimSpace(figure.SubfigureLabel),
 			firstNonEmpty(strings.TrimSpace(figure.Source), "manual"),
 			figure.Caption,
 			figure.BBoxJSON,

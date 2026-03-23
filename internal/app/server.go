@@ -263,6 +263,16 @@ func buildHandler(
 	})
 
 	mux.HandleFunc("/api/figures/", func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/subfigures") {
+			switch r.Method {
+			case http.MethodPost:
+				figureHandler.CreateSubfigures(w, r)
+			default:
+				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			}
+			return
+		}
+
 		switch r.Method {
 		case http.MethodPut:
 			figureHandler.Update(w, r)

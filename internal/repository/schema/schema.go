@@ -89,6 +89,8 @@ func (m *Manager) initSchema() error {
 		content_type TEXT DEFAULT '',
 		page_number INTEGER DEFAULT 0,
 		figure_index INTEGER DEFAULT 0,
+		parent_figure_id INTEGER REFERENCES paper_figures(id) ON DELETE CASCADE,
+		subfigure_label TEXT DEFAULT '',
 		source TEXT DEFAULT 'auto' CHECK (source IN ('auto', 'manual')),
 		caption TEXT DEFAULT '',
 		notes_text TEXT DEFAULT '',
@@ -130,6 +132,8 @@ func (m *Manager) ensureSchemaColumns() error {
 		{tableName: "paper_figures", name: "source", definition: "TEXT DEFAULT 'auto'"},
 		{tableName: "paper_figures", name: "notes_text", definition: "TEXT DEFAULT ''"},
 		{tableName: "paper_figures", name: "updated_at", definition: "DATETIME"},
+		{tableName: "paper_figures", name: "parent_figure_id", definition: "INTEGER REFERENCES paper_figures(id) ON DELETE CASCADE"},
+		{tableName: "paper_figures", name: "subfigure_label", definition: "TEXT DEFAULT ''"},
 	} {
 		if err := m.ensureColumn(column.tableName, column.name, column.definition); err != nil {
 			return err
@@ -291,6 +295,68 @@ func (m *Manager) ensureValidationTriggers() error {
 		BEGIN
 			SELECT RAISE(ABORT, 'invalid figure source');
 		END;`,
+		`CREATE TRIGGER IF NOT EXISTS validate_subfigure_label_insert
+		BEFORE INSERT ON paper_figures
+		FOR EACH ROW
+		WHEN NEW.parent_figure_id IS NOT NULL AND COALESCE(TRIM(NEW.subfigure_label), '') = ''
+		BEGIN
+			SELECT RAISE(ABORT, 'subfigure label required');
+		END;`,
+		`CREATE TRIGGER IF NOT EXISTS validate_subfigure_label_update
+		BEFORE UPDATE OF parent_figure_id, subfigure_label ON paper_figures
+		FOR EACH ROW
+		WHEN NEW.parent_figure_id IS NOT NULL AND COALESCE(TRIM(NEW.subfigure_label), '') = ''
+		BEGIN
+			SELECT RAISE(ABORT, 'subfigure label required');
+		END;`,
+		`CREATE TRIGGER IF NOT EXISTS validate_subfigure_parent_paper_insert
+		BEFORE INSERT ON paper_figures
+		FOR EACH ROW
+		WHEN NEW.parent_figure_id IS NOT NULL AND EXISTS (
+			SELECT 1
+			FROM paper_figures parent
+			WHERE parent.id = NEW.parent_figure_id
+			  AND parent.paper_id != NEW.paper_id
+		)
+		BEGIN
+			SELECT RAISE(ABORT, 'subfigure parent paper mismatch');
+		END;`,
+		`CREATE TRIGGER IF NOT EXISTS validate_subfigure_parent_paper_update
+		BEFORE UPDATE OF parent_figure_id, paper_id ON paper_figures
+		FOR EACH ROW
+		WHEN NEW.parent_figure_id IS NOT NULL AND EXISTS (
+			SELECT 1
+			FROM paper_figures parent
+			WHERE parent.id = NEW.parent_figure_id
+			  AND parent.paper_id != NEW.paper_id
+		)
+		BEGIN
+			SELECT RAISE(ABORT, 'subfigure parent paper mismatch');
+		END;`,
+		`CREATE TRIGGER IF NOT EXISTS validate_subfigure_depth_insert
+		BEFORE INSERT ON paper_figures
+		FOR EACH ROW
+		WHEN NEW.parent_figure_id IS NOT NULL AND EXISTS (
+			SELECT 1
+			FROM paper_figures parent
+			WHERE parent.id = NEW.parent_figure_id
+			  AND parent.parent_figure_id IS NOT NULL
+		)
+		BEGIN
+			SELECT RAISE(ABORT, 'subfigure depth exceeded');
+		END;`,
+		`CREATE TRIGGER IF NOT EXISTS validate_subfigure_depth_update
+		BEFORE UPDATE OF parent_figure_id ON paper_figures
+		FOR EACH ROW
+		WHEN NEW.parent_figure_id IS NOT NULL AND EXISTS (
+			SELECT 1
+			FROM paper_figures parent
+			WHERE parent.id = NEW.parent_figure_id
+			  AND parent.parent_figure_id IS NOT NULL
+		)
+		BEGIN
+			SELECT RAISE(ABORT, 'subfigure depth exceeded');
+		END;`,
 	} {
 		if _, err := m.db.Exec(statement); err != nil {
 			return err
@@ -327,6 +393,8 @@ func (m *Manager) ensureIndexes() error {
 
 	for _, statement := range []string{
 		"CREATE INDEX IF NOT EXISTS idx_paper_figures_updated_at ON paper_figures(updated_at)",
+		"CREATE INDEX IF NOT EXISTS idx_paper_figures_parent_figure_id ON paper_figures(parent_figure_id)",
+		"CREATE UNIQUE INDEX IF NOT EXISTS idx_paper_figures_parent_label_unique ON paper_figures(parent_figure_id, subfigure_label) WHERE parent_figure_id IS NOT NULL AND COALESCE(TRIM(subfigure_label), '') <> ''",
 		"CREATE INDEX IF NOT EXISTS idx_tags_scope ON tags(scope)",
 		"CREATE UNIQUE INDEX IF NOT EXISTS idx_tags_scope_name ON tags(scope, name)",
 	} {
