@@ -656,6 +656,18 @@ const FigureViewer = {
         overlay.innerHTML = this.renderCropOverlayContent();
     },
 
+    resetSubfigureWorkspaceSelections() {
+        if (!this.isSubfigureWorkspaceOpen()) {
+            this.resetCropState();
+            return;
+        }
+        this.cropState = {
+            ...this.defaultCropState(),
+            enabled: true,
+            workspaceOpen: true
+        };
+    },
+
     async submitSubfigureSelections() {
         if (!this.currentFigure || !this.isCropModeEnabled() || this.cropState.submitting) return;
         if (!(this.cropState.selections || []).length) {
@@ -691,7 +703,7 @@ const FigureViewer = {
                 deferMetaChanged: true
             });
             const latestPaper = generation.paper || payload.paper;
-            this.resetCropState();
+            this.resetSubfigureWorkspaceSelections();
             this.render();
             if (generation.failedCount) {
                 Utils.showToast(`已提取 ${payload.added_count || 0} 张子图，${generation.generatedCount || 0} 张已生成配色`, 'info');
