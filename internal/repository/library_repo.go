@@ -20,6 +20,7 @@ type LibraryRepository struct {
 	// 子仓库
 	Paper   *PaperRepository
 	Figure  *FigureRepository
+	Palette *PaletteRepository
 	Group   *GroupRepository
 	Tag     *TagRepository
 	Setting *SettingRepository
@@ -56,12 +57,14 @@ func NewLibraryRepository(dbPath string) (*LibraryRepository, error) {
 	groupRepo := NewGroupRepository(db)
 	paperRepo := NewPaperRepository(db, tagRepo, groupRepo)
 	figureRepo := NewFigureRepository(db, tagRepo)
+	paletteRepo := NewPaletteRepository(db)
 	settingRepo := NewSettingRepository(db)
 
 	repo := &LibraryRepository{
 		db:      db,
 		Paper:   paperRepo,
 		Figure:  figureRepo,
+		Palette: paletteRepo,
 		Group:   groupRepo,
 		Tag:     tagRepo,
 		Setting: settingRepo,
@@ -201,6 +204,26 @@ func (r *LibraryRepository) UpdateFigureTags(id int64, tags []TagUpsertInput) (*
 // DeletePaperFigure 删除图片（委托给 Figure 仓库）
 func (r *LibraryRepository) DeletePaperFigure(id int64) error {
 	return r.Figure.DeletePaperFigure(id)
+}
+
+func (r *LibraryRepository) UpsertPalette(input PaletteUpsertInput) (*model.Palette, error) {
+	return r.Palette.UpsertPalette(input)
+}
+
+func (r *LibraryRepository) GetPalette(id int64) (*model.Palette, error) {
+	return r.Palette.GetPalette(id)
+}
+
+func (r *LibraryRepository) GetPaletteByFigureID(figureID int64) (*model.Palette, error) {
+	return r.Palette.GetPaletteByFigureID(figureID)
+}
+
+func (r *LibraryRepository) ListPalettes(filter model.PaletteFilter) ([]model.Palette, int, error) {
+	return r.Palette.ListPalettes(filter)
+}
+
+func (r *LibraryRepository) DeletePalette(id int64) error {
+	return r.Palette.DeletePalette(id)
 }
 
 // ListGroups 查询分组列表（委托给 Group 仓库）

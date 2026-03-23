@@ -20,6 +20,10 @@ type FigureListItem struct {
 	Source             string    `json:"source,omitempty"`
 	Caption            string    `json:"caption"`
 	NotesText          string    `json:"notes_text,omitempty"`
+	PaletteID          *int64    `json:"palette_id,omitempty"`
+	PaletteName        string    `json:"palette_name,omitempty"`
+	PaletteColors      []string  `json:"palette_colors,omitempty"`
+	PaletteCount       int       `json:"palette_count,omitempty"`
 	CreatedAt          time.Time `json:"created_at"`
 	UpdatedAt          time.Time `json:"updated_at"`
 }

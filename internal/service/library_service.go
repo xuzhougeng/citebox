@@ -90,6 +90,11 @@ type UpdateFigureParams struct {
 	NotesText *string
 }
 
+type CreatePaletteParams struct {
+	Name   string
+	Colors []string
+}
+
 type CreateSubfiguresParams struct {
 	Regions []model.SubfigureExtractionRegion
 }
@@ -263,6 +268,9 @@ func (s *LibraryService) ListFigures(filter model.FigureFilter) (*model.FigureLi
 		if figures[i].Tags == nil {
 			figures[i].Tags = []model.Tag{}
 		}
+		if figures[i].PaletteColors == nil {
+			figures[i].PaletteColors = []string{}
+		}
 		figures[i].DisplayLabel = formatFigureDisplayLabel(figures[i].FigureIndex, figures[i].SubfigureLabel)
 		if figures[i].ParentFigureID != nil {
 			figures[i].ParentDisplayLabel = formatFigureDisplayLabel(figures[i].FigureIndex, "")
@@ -276,6 +284,37 @@ func (s *LibraryService) ListFigures(filter model.FigureFilter) (*model.FigureLi
 
 	return &model.FigureListResponse{
 		Figures:    figures,
+		Total:      total,
+		Page:       filter.Page,
+		PageSize:   filter.PageSize,
+		TotalPages: totalPages,
+	}, nil
+}
+
+func (s *LibraryService) ListPalettes(filter model.PaletteFilter) (*model.PaletteListResponse, error) {
+	if filter.Page < 1 {
+		filter.Page = 1
+	}
+	if filter.PageSize < 1 {
+		filter.PageSize = 12
+	}
+
+	palettes, total, err := s.repo.ListPalettes(filter)
+	if err != nil {
+		return nil, err
+	}
+
+	for i := range palettes {
+		s.decoratePalette(&palettes[i])
+	}
+
+	totalPages := 0
+	if total > 0 {
+		totalPages = (total + filter.PageSize - 1) / filter.PageSize
+	}
+
+	return &model.PaletteListResponse{
+		Palettes:   palettes,
 		Total:      total,
 		Page:       filter.Page,
 		PageSize:   filter.PageSize,
@@ -569,6 +608,71 @@ func (s *LibraryService) DeleteFigure(id int64) (*model.Paper, error) {
 
 	s.decoratePaper(paper)
 	return paper, nil
+}
+
+func (s *LibraryService) CreateOrUpdateFigurePalette(figureID int64, params CreatePaletteParams) (*model.Palette, *model.Paper, error) {
+	figure, err := s.repo.GetFigure(figureID)
+	if err != nil {
+		return nil, nil, err
+	}
+	if figure == nil {
+		return nil, nil, apperr.New(apperr.CodeNotFound, "figure not found")
+	}
+	if figure.ParentFigureID == nil {
+		return nil, nil, apperr.New(apperr.CodeFailedPrecondition, "当前只支持对子图提取配色")
+	}
+
+	colors, err := normalizePaletteColors(params.Colors)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	name := strings.TrimSpace(params.Name)
+	if name == "" {
+		existing, err := s.repo.GetPaletteByFigureID(figureID)
+		if err != nil {
+			return nil, nil, err
+		}
+		if existing != nil && strings.TrimSpace(existing.Name) != "" {
+			name = strings.TrimSpace(existing.Name)
+		} else {
+			name = defaultPaletteName(*figure)
+		}
+	}
+
+	colorsJSON, err := json.Marshal(colors)
+	if err != nil {
+		return nil, nil, apperr.Wrap(apperr.CodeInternal, "序列化配色失败", err)
+	}
+
+	palette, err := s.repo.UpsertPalette(repository.PaletteUpsertInput{
+		PaperID:    figure.PaperID,
+		FigureID:   figure.ID,
+		Name:       name,
+		ColorsJSON: string(colorsJSON),
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	if palette == nil {
+		return nil, nil, apperr.New(apperr.CodeInternal, "保存配色失败")
+	}
+
+	paper, err := s.repo.GetPaperDetail(figure.PaperID)
+	if err != nil {
+		return nil, nil, err
+	}
+	if paper == nil {
+		return nil, nil, apperr.New(apperr.CodeNotFound, "paper not found")
+	}
+
+	s.decoratePaper(paper)
+	s.decoratePalette(palette)
+	return palette, paper, nil
+}
+
+func (s *LibraryService) DeletePalette(id int64) error {
+	return s.repo.DeletePalette(id)
 }
 
 func (s *LibraryService) CreateSubfigures(parentFigureID int64, params CreateSubfiguresParams) (*model.Paper, int, error) {
@@ -1641,6 +1745,9 @@ func (s *LibraryService) decoratePaper(paper *model.Paper) {
 		if paper.Figures[i].Tags == nil {
 			paper.Figures[i].Tags = []model.Tag{}
 		}
+		if paper.Figures[i].PaletteColors == nil {
+			paper.Figures[i].PaletteColors = []string{}
+		}
 		paper.Figures[i].ImageURL = "/files/figures/" + url.PathEscape(paper.Figures[i].Filename)
 		paper.Figures[i].DisplayLabel = formatFigureDisplayLabel(paper.Figures[i].FigureIndex, paper.Figures[i].SubfigureLabel)
 		paper.Figures[i].ParentDisplayLabel = ""
@@ -1667,6 +1774,20 @@ func (s *LibraryService) decoratePaper(paper *model.Paper) {
 			continue
 		}
 		parent.Subfigures = append(parent.Subfigures, paper.Figures[i])
+	}
+}
+
+func (s *LibraryService) decoratePalette(palette *model.Palette) {
+	if palette == nil {
+		return
+	}
+	palette.ImageURL = "/files/figures/" + url.PathEscape(palette.Filename)
+	palette.FigureDisplayLabel = formatFigureDisplayLabel(palette.FigureIndex, palette.SubfigureLabel)
+	if palette.ParentFigureID != nil {
+		palette.ParentDisplayLabel = formatFigureDisplayLabel(palette.FigureIndex, "")
+	}
+	if palette.Colors == nil {
+		palette.Colors = []string{}
 	}
 }
 
@@ -1728,6 +1849,44 @@ func normalizeSubfigureRegion(region model.SubfigureExtractionRegion) (model.Sub
 	return region, nil
 }
 
+func normalizePaletteColors(colors []string) ([]string, error) {
+	if len(colors) == 0 {
+		return nil, apperr.New(apperr.CodeInvalidArgument, "至少需要一个配色值")
+	}
+
+	result := make([]string, 0, len(colors))
+	seen := map[string]struct{}{}
+	for _, raw := range colors {
+		color, err := normalizePaletteHexColor(raw)
+		if err != nil {
+			return nil, err
+		}
+		if _, exists := seen[color]; exists {
+			continue
+		}
+		seen[color] = struct{}{}
+		result = append(result, color)
+	}
+	if len(result) == 0 {
+		return nil, apperr.New(apperr.CodeInvalidArgument, "没有有效的配色值")
+	}
+	return result, nil
+}
+
+func normalizePaletteHexColor(raw string) (string, error) {
+	color := strings.ToUpper(strings.TrimSpace(raw))
+	if color == "" {
+		return "", apperr.New(apperr.CodeInvalidArgument, "配色值不能为空")
+	}
+	if !strings.HasPrefix(color, "#") || len(color) != 7 {
+		return "", apperr.New(apperr.CodeInvalidArgument, "配色值必须是 #RRGGBB 格式")
+	}
+	if _, err := hex.DecodeString(color[1:]); err != nil {
+		return "", apperr.New(apperr.CodeInvalidArgument, "配色值必须是有效的十六进制颜色")
+	}
+	return color, nil
+}
+
 func formatFigureDisplayLabel(figureIndex int, subfigureLabel string) string {
 	if figureIndex <= 0 {
 		return ""
@@ -1737,6 +1896,14 @@ func formatFigureDisplayLabel(figureIndex int, subfigureLabel string) string {
 		return fmt.Sprintf("Fig %d", figureIndex)
 	}
 	return fmt.Sprintf("Fig %d%s", figureIndex, strings.ToLower(label))
+}
+
+func defaultPaletteName(figure model.FigureListItem) string {
+	label := formatFigureDisplayLabel(figure.FigureIndex, figure.SubfigureLabel)
+	if label == "" {
+		label = "Figure"
+	}
+	return label + " 配色"
 }
 
 func resolveNextSubfigureLabel(requested string, used map[string]struct{}) (string, error) {

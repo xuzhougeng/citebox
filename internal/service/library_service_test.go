@@ -789,6 +789,83 @@ func TestDeleteFigureRemovesSubfigureBranchFiles(t *testing.T) {
 	}
 }
 
+func TestCreateOrUpdateFigurePaletteBindsPaletteToSubfigure(t *testing.T) {
+	svc, repo, _ := newTestService(t)
+	paper := createTestPaper(t, repo)
+
+	updated, _, err := svc.CreateSubfigures(paper.Figures[0].ID, CreateSubfiguresParams{
+		Regions: []model.SubfigureExtractionRegion{
+			{
+				X:         0.15,
+				Y:         0.2,
+				Width:     0.3,
+				Height:    0.35,
+				ImageData: testPNGDataURL(t, 24, 18),
+				Caption:   "Panel A",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreateSubfigures() error = %v", err)
+	}
+
+	var childFigure *model.Figure
+	for i := range updated.Figures {
+		if updated.Figures[i].ParentFigureID != nil {
+			childFigure = &updated.Figures[i]
+			break
+		}
+	}
+	if childFigure == nil {
+		t.Fatalf("CreateSubfigures() figures = %+v, want child figure", updated.Figures)
+	}
+
+	palette, refreshedPaper, err := svc.CreateOrUpdateFigurePalette(childFigure.ID, CreatePaletteParams{
+		Colors: []string{"#aabbcc", "#DDEEFF", "#ddeeff"},
+	})
+	if err != nil {
+		t.Fatalf("CreateOrUpdateFigurePalette() error = %v", err)
+	}
+	if palette.Name != "Fig 1a 配色" {
+		t.Fatalf("CreateOrUpdateFigurePalette() name = %q, want %q", palette.Name, "Fig 1a 配色")
+	}
+	if len(palette.Colors) != 2 || palette.Colors[0] != "#AABBCC" || palette.Colors[1] != "#DDEEFF" {
+		t.Fatalf("CreateOrUpdateFigurePalette() colors = %+v, want normalized unique colors", palette.Colors)
+	}
+
+	var refreshedChild *model.Figure
+	for i := range refreshedPaper.Figures {
+		if refreshedPaper.Figures[i].ID == childFigure.ID {
+			refreshedChild = &refreshedPaper.Figures[i]
+			break
+		}
+	}
+	if refreshedChild == nil {
+		t.Fatalf("CreateOrUpdateFigurePalette() paper figures = %+v, want refreshed child", refreshedPaper.Figures)
+	}
+	if refreshedChild.PaletteCount != 1 {
+		t.Fatalf("CreateOrUpdateFigurePalette() palette_count = %d, want 1", refreshedChild.PaletteCount)
+	}
+	if refreshedChild.PaletteName != "Fig 1a 配色" {
+		t.Fatalf("CreateOrUpdateFigurePalette() palette_name = %q, want %q", refreshedChild.PaletteName, "Fig 1a 配色")
+	}
+	if len(refreshedChild.PaletteColors) != 2 || refreshedChild.PaletteColors[0] != "#AABBCC" || refreshedChild.PaletteColors[1] != "#DDEEFF" {
+		t.Fatalf("CreateOrUpdateFigurePalette() palette_colors = %+v, want persisted colors", refreshedChild.PaletteColors)
+	}
+}
+
+func TestCreateOrUpdateFigurePaletteRejectsParentFigure(t *testing.T) {
+	svc, repo, _ := newTestService(t)
+	paper := createTestPaper(t, repo)
+
+	_, _, err := svc.CreateOrUpdateFigurePalette(paper.Figures[0].ID, CreatePaletteParams{
+		Colors: []string{"#112233"},
+	})
+	if !apperr.IsCode(err, apperr.CodeFailedPrecondition) {
+		t.Fatalf("CreateOrUpdateFigurePalette() code = %q, want %q", apperr.CodeOf(err), apperr.CodeFailedPrecondition)
+	}
+}
+
 func TestNormalizeManualRegionRejectsMissingImageData(t *testing.T) {
 	if _, err := normalizeManualRegion(model.ManualExtractionRegion{
 		PageNumber: 1,

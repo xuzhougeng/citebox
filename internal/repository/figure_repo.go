@@ -24,17 +24,24 @@ func (r *FigureRepository) GetFigure(id int64) (*model.FigureListItem, error) {
 	row := r.db.QueryRow(`
 		SELECT
 			pf.id, pf.paper_id, p.title, p.group_id, COALESCE(g.name, ''),
-			pf.filename, pf.page_number, pf.figure_index, pf.parent_figure_id, pf.subfigure_label, pf.source, pf.caption, pf.notes_text, pf.created_at, pf.updated_at
+			pf.filename, pf.page_number, pf.figure_index, pf.parent_figure_id, pf.subfigure_label, pf.source, pf.caption, pf.notes_text,
+			cp.id, COALESCE(cp.name, ''), COALESCE(cp.colors_json, ''),
+			CASE WHEN cp.id IS NULL THEN 0 ELSE 1 END AS palette_count,
+			pf.created_at, pf.updated_at
 		FROM paper_figures pf
 		JOIN papers p ON p.id = pf.paper_id
 		LEFT JOIN groups g ON g.id = p.group_id
+		LEFT JOIN color_palettes cp ON cp.figure_id = pf.id
 		WHERE pf.id = ?
 	`, id)
 
 	var item model.FigureListItem
 	var groupID sql.NullInt64
 	var parentFigureID sql.NullInt64
+	var paletteID sql.NullInt64
 	var groupName string
+	var paletteName string
+	var paletteColorsJSON string
 	if err := row.Scan(
 		&item.ID,
 		&item.PaperID,
@@ -49,6 +56,10 @@ func (r *FigureRepository) GetFigure(id int64) (*model.FigureListItem, error) {
 		&item.Source,
 		&item.Caption,
 		&item.NotesText,
+		&paletteID,
+		&paletteName,
+		&paletteColorsJSON,
+		&item.PaletteCount,
 		&item.CreatedAt,
 		&item.UpdatedAt,
 	); err != nil {
@@ -65,6 +76,13 @@ func (r *FigureRepository) GetFigure(id int64) (*model.FigureListItem, error) {
 	if parentFigureID.Valid {
 		item.ParentFigureID = &parentFigureID.Int64
 	}
+	paletteRef, paletteTitle, paletteColors, parseErr := parsePaletteSummary(paletteID, paletteName, paletteColorsJSON)
+	if parseErr != nil {
+		return nil, wrapDBError(parseErr, "解析图片配色失败")
+	}
+	item.PaletteID = paletteRef
+	item.PaletteName = paletteTitle
+	item.PaletteColors = paletteColors
 	tagsByFigure, err := r.tag.LoadTagsByFigureIDs([]int64{id})
 	if err != nil {
 		return nil, wrapDBError(err, "查询图片标签失败")
@@ -100,10 +118,14 @@ func (r *FigureRepository) ListFigures(filter model.FigureFilter) ([]model.Figur
 	query := `
 		SELECT
 			pf.id, pf.paper_id, p.title, p.group_id, COALESCE(g.name, ''),
-			pf.filename, pf.page_number, pf.figure_index, pf.parent_figure_id, pf.subfigure_label, pf.source, pf.caption, pf.notes_text, pf.created_at, pf.updated_at
+			pf.filename, pf.page_number, pf.figure_index, pf.parent_figure_id, pf.subfigure_label, pf.source, pf.caption, pf.notes_text,
+			cp.id, COALESCE(cp.name, ''), COALESCE(cp.colors_json, ''),
+			CASE WHEN cp.id IS NULL THEN 0 ELSE 1 END AS palette_count,
+			pf.created_at, pf.updated_at
 		FROM paper_figures pf
 		JOIN papers p ON p.id = pf.paper_id
 		LEFT JOIN groups g ON g.id = p.group_id
+		LEFT JOIN color_palettes cp ON cp.figure_id = pf.id
 		` + whereClause + `
 		` + buildFigureOrderBy(filter) + `
 		LIMIT ? OFFSET ?
@@ -123,7 +145,10 @@ func (r *FigureRepository) ListFigures(filter model.FigureFilter) ([]model.Figur
 		var item model.FigureListItem
 		var groupID sql.NullInt64
 		var parentFigureID sql.NullInt64
+		var paletteID sql.NullInt64
 		var groupName string
+		var paletteName string
+		var paletteColorsJSON string
 		if err := rows.Scan(
 			&item.ID,
 			&item.PaperID,
@@ -138,6 +163,10 @@ func (r *FigureRepository) ListFigures(filter model.FigureFilter) ([]model.Figur
 			&item.Source,
 			&item.Caption,
 			&item.NotesText,
+			&paletteID,
+			&paletteName,
+			&paletteColorsJSON,
+			&item.PaletteCount,
 			&item.CreatedAt,
 			&item.UpdatedAt,
 		); err != nil {
@@ -150,6 +179,13 @@ func (r *FigureRepository) ListFigures(filter model.FigureFilter) ([]model.Figur
 		if parentFigureID.Valid {
 			item.ParentFigureID = &parentFigureID.Int64
 		}
+		paletteRef, paletteTitle, paletteColors, parseErr := parsePaletteSummary(paletteID, paletteName, paletteColorsJSON)
+		if parseErr != nil {
+			return nil, 0, wrapDBError(parseErr, "解析图片配色失败")
+		}
+		item.PaletteID = paletteRef
+		item.PaletteName = paletteTitle
+		item.PaletteColors = paletteColors
 		item.Tags = []model.Tag{}
 		figures = append(figures, item)
 		figureIDs = append(figureIDs, item.ID)

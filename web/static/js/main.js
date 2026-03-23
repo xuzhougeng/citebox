@@ -3,11 +3,12 @@ const AppNavigationHotkeys = {
         { key: '1', path: '/', label: '总览' },
         { key: '2', path: '/library', label: '文献库' },
         { key: '3', path: '/figures', label: '图片库' },
-        { key: '4', path: '/groups', label: '分组' },
-        { key: '5', path: '/tags', label: '标签' },
-        { key: '6', path: '/notes', label: '笔记' },
-        { key: '7', path: '/ai', label: 'AI伴读' },
-        { key: '8', path: '/settings', label: '配置' }
+        { key: '4', path: '/palettes', label: '配色库' },
+        { key: '5', path: '/groups', label: '分组' },
+        { key: '6', path: '/tags', label: '标签' },
+        { key: '7', path: '/notes', label: '笔记' },
+        { key: '8', path: '/ai', label: 'AI伴读' },
+        { key: '9', path: '/settings', label: '配置' }
     ],
 
     init() {
@@ -45,15 +46,15 @@ const AppNavigationHotkeys = {
 
     resolveShortcut(event) {
         const code = String(event.code || '');
-        if (/^Digit[1-8]$/.test(code)) {
+        if (/^Digit[1-9]$/.test(code)) {
             return code.slice(5);
         }
-        if (/^Numpad[1-8]$/.test(code)) {
+        if (/^Numpad[1-9]$/.test(code)) {
             return code.slice(6);
         }
 
         const key = String(event.key || '');
-        return /^[1-8]$/.test(key) ? key : '';
+        return /^[1-9]$/.test(key) ? key : '';
     },
 
     shouldIgnoreKeydown(event) {
@@ -121,6 +122,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (path === '/figures' || path === '/figures.html') {
         FiguresPage.init();
+    }
+
+    if (path === '/palettes' || path === '/palettes.html') {
+        PalettesPage.init();
     }
 
     if (path === '/groups' || path === '/groups.html') {

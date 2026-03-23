@@ -270,6 +270,11 @@ AI 流式阅读通过：
 - `page_size`
 - `total_pages`
 
+补充字段：
+
+- 图片返回里会带 `parent_figure_id` / `subfigure_label`，用于区分子图
+- 如果图片已经绑定配色，还会带 `palette_count`、`palette_id`、`palette_name`、`palette_colors`
+
 #### `PUT /api/figures/{id}`
 
 用途：
@@ -309,6 +314,36 @@ AI 流式阅读通过：
 - 当前只支持从一级大图提取子图，不支持“子图再拆子图”
 - 子图也会出现在图片库、图片笔记页和图片 AI 流程中，作为独立图片记录参与检索和编辑
 
+#### `POST /api/figures/{id}/palette`
+
+用途：
+
+- 从某张子图里提取并保存一组绑定配色
+- 当前只支持对子图调用，不支持直接对一级大图保存配色
+- 同一张图片最多保留一组当前配色；再次调用会更新这组颜色
+
+请求体：
+
+```json
+{
+  "colors": ["#AABBCC", "#DDEEFF"]
+}
+```
+
+可选字段：
+
+- `name`：自定义配色名称；不传时后端会默认生成如 `Fig 1a 配色`
+
+返回：
+
+- `palette`
+- `paper`
+
+说明：
+
+- `palette.figure_id` 表示这组颜色绑定到哪一张图片
+- 前端通常会在子图卡片底部直接调用这个接口，而不是做独立的“无来源配色”保存
+
 常用 JSON 字段：
 
 ```json
@@ -329,6 +364,45 @@ AI 流式阅读通过：
 用途：
 
 - 删除单张图片
+
+### 配色 Palettes
+
+#### `GET /api/palettes`
+
+用途：
+
+- 配色库列表页
+- 按来源文献、分组和子图说明回看已保存配色
+
+常用查询参数：
+
+| 参数 | 类型 | 说明 |
+| --- | --- | --- |
+| `keyword` | string | 配色名称、文献标题、子图 caption、子图后缀搜索 |
+| `group_id` | int | 来源分组 |
+| `page` | int | 页码 |
+| `page_size` | int | 每页数量 |
+
+返回：
+
+- `palettes`
+- `total`
+- `page`
+- `page_size`
+- `total_pages`
+
+返回项里会包含：
+
+- `figure_id`、`figure_display_label`、`parent_display_label`
+- `image_url`，方便直接回看来源图片
+- `colors`，即 `#RRGGBB` 数组
+
+#### `DELETE /api/palettes/{id}`
+
+用途：
+
+- 删除一组已保存配色
+- 只移除配色绑定，不删除原始图片或子图记录
 
 ### 分组 Groups
 

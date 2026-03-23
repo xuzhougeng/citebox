@@ -23,6 +23,10 @@ type Figure struct {
 	BBox               json.RawMessage `json:"bbox,omitempty"`
 	ImageURL           string          `json:"image_url,omitempty"`
 	Subfigures         []Figure        `json:"subfigures,omitempty"`
+	PaletteID          *int64          `json:"palette_id,omitempty"`
+	PaletteName        string          `json:"palette_name,omitempty"`
+	PaletteColors      []string        `json:"palette_colors,omitempty"`
+	PaletteCount       int             `json:"palette_count,omitempty"`
 	CreatedAt          time.Time       `json:"created_at"`
 	UpdatedAt          time.Time       `json:"updated_at"`
 }

@@ -335,24 +335,6 @@
     gap: 0.4rem;
 }
 
-.figure-subfigure-chip-list {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-}
-
-.figure-subfigure-chip {
-    display: inline-flex;
-    align-items: center;
-    padding: 0.4rem 0.72rem;
-    border-radius: 999px;
-    background: rgba(var(--surface-rgb), 0.94);
-    border: 1px solid rgba(var(--ink-rgb), 0.1);
-    color: var(--ink);
-    font-size: 0.82rem;
-    font-weight: 700;
-}
-
 .figure-subfigure-actions {
     display: flex;
     flex-wrap: wrap;
@@ -418,6 +400,130 @@
 .figure-subfigure-empty p {
     margin: 0;
     color: var(--muted);
+}
+
+.figure-subfigure-card-list {
+    display: grid;
+    gap: 0.85rem;
+}
+
+.figure-subfigure-card-list.is-single {
+    gap: 0;
+}
+
+.figure-subfigure-card {
+    display: grid;
+    gap: 0.85rem;
+    padding: 0.95rem;
+    border-radius: 18px;
+    border: 1px solid rgba(var(--ink-rgb), 0.08);
+    background: rgba(var(--surface-rgb), 0.94);
+}
+
+.figure-subfigure-card.is-standalone {
+    background:
+        linear-gradient(180deg, rgba(var(--surface-rgb), 0.98), rgba(var(--bg-rgb), 0.7));
+}
+
+.figure-subfigure-card-media {
+    position: relative;
+    overflow: hidden;
+    border-radius: 16px;
+    background: rgba(var(--bg-rgb), 0.72);
+}
+
+.figure-subfigure-card-media img {
+    display: block;
+    width: 100%;
+    max-height: 220px;
+    object-fit: contain;
+    background: rgba(var(--surface-rgb), 0.92);
+}
+
+.figure-subfigure-card-badges {
+    position: absolute;
+    inset: auto 0 0 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+    padding: 0.75rem;
+    background: linear-gradient(180deg, transparent, rgba(var(--ink-rgb), 0.72));
+}
+
+.figure-subfigure-card-body {
+    display: grid;
+    gap: 0.65rem;
+}
+
+.figure-subfigure-card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+.figure-subfigure-card-head strong {
+    color: var(--ink);
+}
+
+.figure-subfigure-card-head span {
+    color: var(--muted);
+    font-size: 0.82rem;
+    font-weight: 700;
+    text-align: right;
+}
+
+.figure-subfigure-card-caption,
+.figure-subfigure-card-hint {
+    margin: 0;
+    color: var(--muted);
+    line-height: 1.6;
+}
+
+.figure-subfigure-card-caption.is-empty {
+    color: rgba(var(--ink-rgb), 0.55);
+}
+
+.figure-subfigure-card-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+}
+
+.palette-swatch-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.55rem;
+}
+
+.palette-swatch-list.is-compact {
+    gap: 0.45rem;
+}
+
+.palette-swatch {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.36rem 0.55rem;
+    border-radius: 999px;
+    border: 1px solid rgba(var(--ink-rgb), 0.08);
+    background: rgba(var(--surface-rgb), 0.98);
+}
+
+.palette-swatch-chip {
+    display: inline-flex;
+    width: 0.9rem;
+    height: 0.9rem;
+    border-radius: 999px;
+    border: 1px solid rgba(var(--ink-rgb), 0.12);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.3);
+}
+
+.palette-swatch-label {
+    color: var(--ink);
+    font-size: 0.76rem;
+    font-weight: 700;
+    letter-spacing: 0.01em;
 }
 
 /* ===== Figure Notes ===== */

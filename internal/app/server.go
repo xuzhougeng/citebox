@@ -190,6 +190,7 @@ func buildHandler(
 	versionSvc := service.NewVersionService()
 	paperHandler := handler.NewPaperHandler(librarySvc)
 	figureHandler := handler.NewFigureHandler(librarySvc)
+	paletteHandler := handler.NewPaletteHandler(librarySvc)
 	groupHandler := handler.NewGroupHandler(librarySvc)
 	tagHandler := handler.NewTagHandler(librarySvc)
 	aiHandler := handler.NewAIHandler(aiSvc)
@@ -263,6 +264,15 @@ func buildHandler(
 	})
 
 	mux.HandleFunc("/api/figures/", func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/palette") {
+			switch r.Method {
+			case http.MethodPost:
+				figureHandler.CreatePalette(w, r)
+			default:
+				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			}
+			return
+		}
 		if strings.HasSuffix(r.URL.Path, "/subfigures") {
 			switch r.Method {
 			case http.MethodPost:
@@ -278,6 +288,24 @@ func buildHandler(
 			figureHandler.Update(w, r)
 		case http.MethodDelete:
 			figureHandler.Delete(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	mux.HandleFunc("/api/palettes", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			paletteHandler.List(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	mux.HandleFunc("/api/palettes/", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodDelete:
+			paletteHandler.Delete(w, r)
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
@@ -544,6 +572,8 @@ func buildHandler(
 			http.ServeFile(w, r, filepath.Join(webRoot, "viewer.html"))
 		case "/figures", "/figures.html":
 			http.ServeFile(w, r, filepath.Join(webRoot, "figures.html"))
+		case "/palettes", "/palettes.html":
+			http.ServeFile(w, r, filepath.Join(webRoot, "palettes.html"))
 		case "/groups", "/groups.html":
 			http.ServeFile(w, r, filepath.Join(webRoot, "groups.html"))
 		case "/tags", "/tags.html":

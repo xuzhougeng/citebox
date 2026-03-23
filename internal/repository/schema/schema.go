@@ -105,10 +105,21 @@ func (m *Manager) initSchema() error {
 		PRIMARY KEY (figure_id, tag_id)
 	);
 
+	CREATE TABLE IF NOT EXISTS color_palettes (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		paper_id INTEGER NOT NULL REFERENCES papers(id) ON DELETE CASCADE,
+		figure_id INTEGER NOT NULL UNIQUE REFERENCES paper_figures(id) ON DELETE CASCADE,
+		name TEXT DEFAULT '',
+		colors_json TEXT NOT NULL DEFAULT '[]',
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
+
 	CREATE INDEX IF NOT EXISTS idx_papers_group_id ON papers(group_id);
 	CREATE INDEX IF NOT EXISTS idx_papers_created_at ON papers(created_at);
 	CREATE INDEX IF NOT EXISTS idx_papers_status ON papers(extraction_status);
 	CREATE INDEX IF NOT EXISTS idx_paper_figures_paper_id ON paper_figures(paper_id);
+	CREATE INDEX IF NOT EXISTS idx_color_palettes_paper_id ON color_palettes(paper_id);
 	CREATE INDEX IF NOT EXISTS idx_paper_tags_tag_id ON paper_tags(tag_id);
 	CREATE INDEX IF NOT EXISTS idx_figure_tags_tag_id ON figure_tags(tag_id);
 	`
@@ -395,6 +406,7 @@ func (m *Manager) ensureIndexes() error {
 		"CREATE INDEX IF NOT EXISTS idx_paper_figures_updated_at ON paper_figures(updated_at)",
 		"CREATE INDEX IF NOT EXISTS idx_paper_figures_parent_figure_id ON paper_figures(parent_figure_id)",
 		"CREATE UNIQUE INDEX IF NOT EXISTS idx_paper_figures_parent_label_unique ON paper_figures(parent_figure_id, subfigure_label) WHERE parent_figure_id IS NOT NULL AND COALESCE(TRIM(subfigure_label), '') <> ''",
+		"CREATE INDEX IF NOT EXISTS idx_color_palettes_paper_id ON color_palettes(paper_id)",
 		"CREATE INDEX IF NOT EXISTS idx_tags_scope ON tags(scope)",
 		"CREATE UNIQUE INDEX IF NOT EXISTS idx_tags_scope_name ON tags(scope, name)",
 	} {

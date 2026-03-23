@@ -207,10 +207,16 @@ func (r *PaperRepository) GetPaperDetail(id int64) (*model.Paper, error) {
 	}
 
 	rows, err := r.db.Query(`
-		SELECT id, filename, original_name, content_type, page_number, figure_index, parent_figure_id, subfigure_label, source, caption, notes_text, bbox_json, created_at, updated_at
-		FROM paper_figures
-		WHERE paper_id = ?
-		ORDER BY page_number ASC, figure_index ASC, CASE WHEN parent_figure_id IS NULL THEN 0 ELSE 1 END ASC, subfigure_label ASC, id ASC
+		SELECT
+			pf.id, pf.filename, pf.original_name, pf.content_type, pf.page_number, pf.figure_index,
+			pf.parent_figure_id, pf.subfigure_label, pf.source, pf.caption, pf.notes_text, pf.bbox_json,
+			cp.id, COALESCE(cp.name, ''), COALESCE(cp.colors_json, ''),
+			CASE WHEN cp.id IS NULL THEN 0 ELSE 1 END AS palette_count,
+			pf.created_at, pf.updated_at
+		FROM paper_figures pf
+		LEFT JOIN color_palettes cp ON cp.figure_id = pf.id
+		WHERE pf.paper_id = ?
+		ORDER BY pf.page_number ASC, pf.figure_index ASC, CASE WHEN pf.parent_figure_id IS NULL THEN 0 ELSE 1 END ASC, pf.subfigure_label ASC, pf.id ASC
 	`, id)
 	if err != nil {
 		return nil, wrapDBError(err, "查询文献图片失败")
@@ -223,6 +229,9 @@ func (r *PaperRepository) GetPaperDetail(id int64) (*model.Paper, error) {
 		var figure model.Figure
 		var bboxJSON string
 		var parentFigureID sql.NullInt64
+		var paletteID sql.NullInt64
+		var paletteName string
+		var paletteColorsJSON string
 		if err := rows.Scan(
 			&figure.ID,
 			&figure.Filename,
@@ -236,6 +245,10 @@ func (r *PaperRepository) GetPaperDetail(id int64) (*model.Paper, error) {
 			&figure.Caption,
 			&figure.NotesText,
 			&bboxJSON,
+			&paletteID,
+			&paletteName,
+			&paletteColorsJSON,
+			&figure.PaletteCount,
 			&figure.CreatedAt,
 			&figure.UpdatedAt,
 		); err != nil {
@@ -243,6 +256,10 @@ func (r *PaperRepository) GetPaperDetail(id int64) (*model.Paper, error) {
 		}
 		if parentFigureID.Valid {
 			figure.ParentFigureID = &parentFigureID.Int64
+		}
+		figure.PaletteID, figure.PaletteName, figure.PaletteColors, err = parsePaletteSummary(paletteID, paletteName, paletteColorsJSON)
+		if err != nil {
+			return nil, wrapDBError(err, "解析图片配色失败")
 		}
 		figure.BBox = rawJSON(bboxJSON)
 		figure.Tags = []model.Tag{}

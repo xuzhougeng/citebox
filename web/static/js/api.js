@@ -202,6 +202,33 @@ const API = {
         });
     },
 
+    createFigurePalette(id, data) {
+        return requestJSON(`${API_BASE}/figures/${id}/palette`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        });
+    },
+
+    listPalettes(params = {}) {
+        const query = new URLSearchParams();
+        Object.entries(params).forEach(([key, value]) => {
+            if (value !== undefined && value !== null && value !== '') {
+                query.set(key, value);
+            }
+        });
+        const suffix = query.toString() ? `?${query.toString()}` : '';
+        return requestJSON(`${API_BASE}/palettes${suffix}`);
+    },
+
+    deletePalette(id) {
+        return requestJSON(`${API_BASE}/palettes/${id}`, {
+            method: 'DELETE'
+        });
+    },
+
     listGroups() {
         return requestJSON(`${API_BASE}/groups`);
     },

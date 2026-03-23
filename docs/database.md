@@ -5,7 +5,7 @@
 ## 概览
 
 - 数据库类型：SQLite
-- 主要业务表：`groups`、`papers`、`paper_figures`、`tags`
+- 主要业务表：`groups`、`papers`、`paper_figures`、`color_palettes`、`tags`
 - 关系表：`paper_tags`、`figure_tags`
 - 配置表：`app_settings`
 - 全文检索：`papers_fts`、`figures_fts`（FTS5，`trigram` tokenizer）
@@ -16,9 +16,11 @@
 erDiagram
     groups ||--o{ papers : contains
     papers ||--o{ paper_figures : has
+    papers ||--o{ color_palettes : has
     papers ||--o{ paper_tags : tagged_by
     tags ||--o{ paper_tags : applied_to
     paper_figures ||--o{ figure_tags : tagged_by
+    paper_figures ||--o| color_palettes : bound_palette
     tags ||--o{ figure_tags : applied_to
 
     groups {
@@ -87,6 +89,16 @@ erDiagram
         INTEGER tag_id FK
     }
 
+    color_palettes {
+        INTEGER id PK
+        INTEGER paper_id FK
+        INTEGER figure_id FK
+        TEXT name
+        TEXT colors_json
+        DATETIME created_at
+        DATETIME updated_at
+    }
+
     app_settings {
         TEXT key PK
         TEXT value
@@ -101,6 +113,7 @@ erDiagram
 - `papers.notes_text` 是文献级管理笔记，适合保存迁移说明、整理备注和管理信息
 - `papers.paper_notes_text` 是文献级内容笔记，适合保存 AI伴读结果、阅读结论和结构化摘要
 - `paper_figures.notes_text` 是图片级笔记，用于图片库、笔记页和全文检索
+- `color_palettes` 把一组配色绑定到某张具体图片；当前前端只允许对子图提取配色，因此它天然能回溯到来源大图和原始文献
 - `app_settings` 当前除了提取器配置外，也会保存 `ai_settings`、`weixin_binding` 以及角色 Prompt 等 JSON 设置项；历史上的 `ai_prompt_presets` 键现在承载角色 Prompt 数据
 - 历史升级时，旧的 `papers.notes_text` 会迁移到 `papers.paper_notes_text`，避免原有 AI 内容继续混在管理笔记里
 - `papers_fts` / `figures_fts` 是全文索引表，不是业务真表
@@ -185,6 +198,16 @@ CREATE TABLE figure_tags (
     PRIMARY KEY (figure_id, tag_id)
 );
 
+CREATE TABLE color_palettes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    paper_id INTEGER NOT NULL REFERENCES papers(id) ON DELETE CASCADE,
+    figure_id INTEGER NOT NULL UNIQUE REFERENCES paper_figures(id) ON DELETE CASCADE,
+    name TEXT DEFAULT '',
+    colors_json TEXT NOT NULL DEFAULT '[]',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE VIRTUAL TABLE papers_fts USING fts5(
     title,
     original_filename,
@@ -219,6 +242,7 @@ CREATE UNIQUE INDEX idx_paper_figures_parent_label_unique
     ON paper_figures(parent_figure_id, subfigure_label)
     WHERE parent_figure_id IS NOT NULL AND COALESCE(TRIM(subfigure_label), '') <> '';
 
+CREATE INDEX idx_color_palettes_paper_id ON color_palettes(paper_id);
 CREATE INDEX idx_paper_tags_tag_id ON paper_tags(tag_id);
 CREATE INDEX idx_figure_tags_tag_id ON figure_tags(tag_id);
 
@@ -327,6 +351,18 @@ CREATE UNIQUE INDEX idx_tags_scope_name ON tags(scope, name);
 | `figure_id` | 图片 ID |
 | `tag_id` | 标签 ID |
 
+### `color_palettes`
+
+| 字段 | 用途 |
+| --- | --- |
+| `id` | 配色主键 |
+| `paper_id` | 来源文献 ID；方便配色库按文献或分组检索 |
+| `figure_id` | 绑定的图片 ID；当前要求唯一，表示“一张图最多一组当前配色” |
+| `name` | 配色名称；默认会按图片标签生成，如 `Fig 1a 配色` |
+| `colors_json` | 颜色数组 JSON，格式为 `["#RRGGBB", ...]` |
+| `created_at` | 创建时间 |
+| `updated_at` | 最近修改时间 |
+
 ### `app_settings`
 
 | 字段 | 用途 |
@@ -363,6 +399,7 @@ CREATE UNIQUE INDEX idx_tags_scope_name ON tags(scope, name);
 
 - `papers` 和 `paper_figures` 分离，符合“一篇文献有多张图片”的自然关系
 - `paper_figures.parent_figure_id` 让图片支持两级结构：一级大图 + 子图，不需要额外维护第二张业务表
+- `color_palettes.figure_id` 让配色直接绑定到图片，不会出现“配色脱离来源子图”的漂移问题
 - 标签通过 `scope + relation table` 拆成文献标签和图片标签，职责清楚
 - 管理笔记、文献笔记、图片笔记已经分层，不再把 AI 伴读结果继续塞回管理备注
 - `updated_at` 已补到 `paper_figures`，后续能支持“最近编辑的图片笔记”这类视图

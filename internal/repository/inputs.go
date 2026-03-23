@@ -55,6 +55,13 @@ type FigureUpdateInput struct {
 	Tags      []TagUpsertInput
 }
 
+type PaletteUpsertInput struct {
+	PaperID    int64
+	FigureID   int64
+	Name       string
+	ColorsJSON string
+}
+
 // TagUpsertInput 标签创建/更新输入
 type TagUpsertInput struct {
 	Scope model.TagScope

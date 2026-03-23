@@ -1361,3 +1361,71 @@ func TestApplyManualFigureChangesReplacesTarget(t *testing.T) {
 		t.Fatalf("replacement result = %+v", got.Figures[0])
 	}
 }
+
+func TestUpsertPaletteHydratesFigureSummaries(t *testing.T) {
+	repo := newTestRepository(t)
+
+	paper, err := repo.CreatePaper(PaperUpsertInput{
+		Title:            "Palette Study",
+		OriginalFilename: "palette-study.pdf",
+		StoredPDFName:    "palette-study.pdf",
+		FileSize:         128,
+		ContentType:      "application/pdf",
+		ExtractionStatus: "completed",
+		Figures: []FigureUpsertInput{
+			{Filename: "palette-figure.png", PageNumber: 1, FigureIndex: 1, Caption: "Panel A"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreatePaper() error = %v", err)
+	}
+
+	palette, err := repo.UpsertPalette(PaletteUpsertInput{
+		PaperID:    paper.ID,
+		FigureID:   paper.Figures[0].ID,
+		Name:       "Warm Cells",
+		ColorsJSON: `["#AA3300","#44CC88"]`,
+	})
+	if err != nil {
+		t.Fatalf("UpsertPalette() error = %v", err)
+	}
+	if palette == nil || palette.FigureID != paper.Figures[0].ID {
+		t.Fatalf("UpsertPalette() palette = %+v, want bound palette for figure %d", palette, paper.Figures[0].ID)
+	}
+
+	figure, err := repo.GetFigure(paper.Figures[0].ID)
+	if err != nil {
+		t.Fatalf("GetFigure() error = %v", err)
+	}
+	if figure.PaletteCount != 1 {
+		t.Fatalf("GetFigure() palette_count = %d, want 1", figure.PaletteCount)
+	}
+	if figure.PaletteName != "Warm Cells" {
+		t.Fatalf("GetFigure() palette_name = %q, want %q", figure.PaletteName, "Warm Cells")
+	}
+	if len(figure.PaletteColors) != 2 || figure.PaletteColors[0] != "#AA3300" || figure.PaletteColors[1] != "#44CC88" {
+		t.Fatalf("GetFigure() palette_colors = %+v, want saved colors", figure.PaletteColors)
+	}
+
+	detail, err := repo.GetPaperDetail(paper.ID)
+	if err != nil {
+		t.Fatalf("GetPaperDetail() error = %v", err)
+	}
+	if detail.Figures[0].PaletteCount != 1 {
+		t.Fatalf("GetPaperDetail() palette_count = %d, want 1", detail.Figures[0].PaletteCount)
+	}
+	if detail.Figures[0].PaletteName != "Warm Cells" {
+		t.Fatalf("GetPaperDetail() palette_name = %q, want %q", detail.Figures[0].PaletteName, "Warm Cells")
+	}
+
+	list, total, err := repo.ListPalettes(model.PaletteFilter{Keyword: "Warm"})
+	if err != nil {
+		t.Fatalf("ListPalettes() error = %v", err)
+	}
+	if total != 1 || len(list) != 1 {
+		t.Fatalf("ListPalettes() total=%d len=%d, want 1/1", total, len(list))
+	}
+	if list[0].FigureID != paper.Figures[0].ID {
+		t.Fatalf("ListPalettes() figure_id = %d, want %d", list[0].FigureID, paper.Figures[0].ID)
+	}
+}

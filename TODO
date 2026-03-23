@@ -4,12 +4,9 @@
 基础功能
 
 - [] 提取配色，配色库;
-- [] github action添加macos的app的认证
-
 
 高级功能
 
-- [] 子图拆分, a/b/c/d/e/f
 - [] 文献结构化存储 ( 需要自己开发解析算法）
 - [] 支持笔记保存到wolai
 - [] 记忆系统: Memory, 越用越好用？
@@ -41,3 +38,6 @@
 - [x] 小优化，Tag快捷选项，目前有问题：选中后不能通过再次点击来取消，必须强行点击“叉”号，体验上有点差
 - [x] 支持Windows/MacOS的安装包
 - [x] 多theme支持
+- [x] WeChat ClawBot支持
+- [x] 子图拆分, a/b/c/d/e/f
+- [x] github action添加macos的app的认证

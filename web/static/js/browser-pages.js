@@ -6,6 +6,29 @@ const BrowserUI = {
         return tags.map((tag) => `<span class="chip" style="--chip-color:${tag.color}">${Utils.escapeHTML(tag.name)}</span>`).join('');
     },
 
+    renderPaletteSwatches(colors = [], options = {}) {
+        const { compact = false } = options;
+        const list = Array.isArray(colors) ? colors.filter((color) => String(color || '').trim()) : [];
+        if (!list.length) {
+            return '<span class="figure-preview-empty">暂无配色</span>';
+        }
+        return `
+            <div class="palette-swatch-list ${compact ? 'is-compact' : ''}">
+                ${list.map((color) => `
+                    <span class="palette-swatch" title="${Utils.escapeHTML(color)}">
+                        <span class="palette-swatch-chip" style="background:${Utils.escapeHTML(color)}"></span>
+                        <span class="palette-swatch-label">${Utils.escapeHTML(color)}</span>
+                    </span>
+                `).join('')}
+            </div>
+        `;
+    },
+
+    renderPaletteValues(colors = []) {
+        const list = Array.isArray(colors) ? colors.filter((color) => String(color || '').trim()) : [];
+        return list.length ? Utils.escapeHTML(list.join(' · ')) : '暂无配色';
+    },
+
     renderPaperCard(paper) {
         const tags = BrowserUI.renderTagChips(paper.tags || []);
         const statusClass = Utils.statusTone(paper.extraction_status);
@@ -77,6 +100,7 @@ const BrowserUI = {
         } = options;
 
         const hasNotes = Boolean(String(figure.notes_text || '').trim());
+        const hasPalette = Number(figure.palette_count || 0) > 0 || (figure.palette_colors || []).length > 0;
         const mediaLabel = mediaAction === 'note' ? '查看笔记' : '查看大图';
         const figureLabel = figure.display_label || `Fig ${figure.figure_index || '-'}`;
         const notePreview = showNotesPreview
@@ -93,6 +117,7 @@ const BrowserUI = {
                         <span class="figure-badge figure-badge-strong">第 ${figure.page_number || '-'} 页</span>
                         <span class="figure-badge">${Utils.escapeHTML(figureLabel)}</span>
                         ${hasNotes ? '<span class="figure-badge figure-badge-accent">有笔记</span>' : ''}
+                        ${hasPalette ? '<span class="figure-badge figure-badge-accent">有配色</span>' : ''}
                         ${figure.parent_figure_id ? '<span class="figure-badge">子图</span>' : ''}
                         ${figure.source === 'manual' ? '<span class="figure-badge">人工提取</span>' : ''}
                     </div>
@@ -147,7 +172,11 @@ function mergeFigureCollectionWithPaper(figures = [], paper) {
             display_label: updatedFigure?.display_label ?? figure.display_label ?? '',
             parent_display_label: updatedFigure?.parent_display_label ?? figure.parent_display_label ?? '',
             source: updatedFigure?.source || figure.source,
-            notes_text: updatedFigure?.notes_text ?? figure.notes_text ?? ''
+            notes_text: updatedFigure?.notes_text ?? figure.notes_text ?? '',
+            palette_id: updatedFigure?.palette_id ?? figure.palette_id ?? null,
+            palette_name: updatedFigure?.palette_name ?? figure.palette_name ?? '',
+            palette_colors: updatedFigure?.palette_colors ?? figure.palette_colors ?? [],
+            palette_count: updatedFigure?.palette_count ?? figure.palette_count ?? 0
         };
     });
 }
@@ -332,6 +361,199 @@ const FiguresPage = {
         try {
             const payload = await this.fetchFigurePage(page);
             this.renderFigureResults(payload, page);
+        } catch (error) {
+            Utils.showToast(error.message, 'error');
+        }
+    }
+};
+
+const PalettesPage = {
+    state: { page: 1, pageSize: 12, totalPages: 0, filters: { keyword: '', group_id: '' } },
+
+    async init() {
+        PaperViewer.init();
+        this.cache();
+        this.bind();
+        await this.loadGroups();
+        await this.load();
+    },
+
+    cache() {
+        this.keywordInput = document.getElementById('paletteKeywordInput');
+        this.groupFilter = document.getElementById('paletteGroupFilter');
+        this.summaryStrip = document.getElementById('paletteSummaryStrip');
+        this.grid = document.getElementById('paletteGrid');
+        this.pagination = document.getElementById('palettePagination');
+        this.pageControls = document.getElementById('palettePageControls');
+    },
+
+    bind() {
+        const debouncedSearch = Utils.debounce(async () => {
+            this.state.filters.keyword = this.keywordInput.value.trim();
+            await this.load(1);
+        }, 250);
+
+        this.keywordInput.addEventListener('input', debouncedSearch);
+        this.groupFilter.addEventListener('change', async () => {
+            this.state.filters.group_id = this.groupFilter.value;
+            await this.load(1);
+        });
+
+        this.grid.addEventListener('click', async (event) => {
+            const action = event.target.closest('[data-action]');
+            const card = event.target.closest('[data-palette-id]');
+            if (!action || !card) return;
+
+            const paletteID = Number(card.dataset.paletteId || 0);
+            const paperID = Number(card.dataset.paperId || 0);
+            const figureLabel = card.dataset.figureLabel || '当前子图';
+            const colors = String(card.dataset.paletteColors || '').split(',').map((item) => item.trim()).filter(Boolean);
+
+            if (action.dataset.action === 'copy-hex') {
+                await this.copyText(colors.join(', '), `${figureLabel} HEX 已复制`);
+                return;
+            }
+            if (action.dataset.action === 'copy-css') {
+                const cssText = colors.map((color, index) => `--palette-${index + 1}: ${color};`).join('\n');
+                await this.copyText(cssText, `${figureLabel} CSS 变量已复制`);
+                return;
+            }
+            if (action.dataset.action === 'paper' && paperID) {
+                await PaperViewer.open(paperID, async () => await this.load(this.state.page));
+                return;
+            }
+            if (action.dataset.action === 'delete' && paletteID) {
+                await this.deletePalette(paletteID);
+            }
+        });
+
+        Utils.bindPagination(this.pagination, async (page) => await this.load(page));
+        this.pageControls.addEventListener('click', async (event) => {
+            const button = event.target.closest('button[data-page-step]');
+            if (!button || button.disabled) return;
+
+            const step = Number(button.dataset.pageStep);
+            const nextPage = this.state.page + step;
+            if (nextPage < 1 || nextPage > this.state.totalPages) return;
+
+            await this.load(nextPage);
+        });
+    },
+
+    async loadGroups() {
+        const payload = await API.listGroups();
+        const selected = String(this.state.filters.group_id || '');
+        this.groupFilter.innerHTML = '<option value="">全部分组</option>' + (payload.groups || []).map((group) => `
+            <option value="${group.id}" ${String(group.id) === selected ? 'selected' : ''}>${Utils.escapeHTML(group.name)}</option>
+        `).join('');
+    },
+
+    buildPaletteParams(page = this.state.page) {
+        return {
+            page,
+            page_size: this.state.pageSize,
+            keyword: this.state.filters.keyword,
+            group_id: this.state.filters.group_id
+        };
+    },
+
+    async fetchPalettePage(page = this.state.page) {
+        return API.listPalettes(this.buildPaletteParams(page));
+    },
+
+    renderPaletteCard(palette) {
+        const figureLabel = palette.figure_display_label || '子图';
+        const parentLabel = palette.parent_display_label ? ` · 来自 ${palette.parent_display_label}` : '';
+        const groupLabel = palette.group_name || '未分组';
+        const caption = String(palette.figure_caption || '').trim();
+        const imageViewerURL = Utils.resourceViewerURL('image', palette.image_url);
+        return `
+            <article class="palette-card" data-palette-id="${palette.id}" data-paper-id="${palette.paper_id}" data-figure-id="${palette.figure_id}" data-figure-label="${Utils.escapeHTML(figureLabel)}" data-palette-colors="${Utils.escapeHTML((palette.colors || []).join(','))}">
+                <a class="palette-card-media" href="${imageViewerURL}">
+                    <img src="${palette.image_url}" alt="${Utils.escapeHTML(`${palette.paper_title} ${figureLabel}`)}">
+                    <div class="palette-card-badges">
+                        <span class="figure-badge figure-badge-strong">${Utils.escapeHTML(figureLabel)}</span>
+                        <span class="figure-badge">第 ${palette.page_number || '-'} 页</span>
+                        <span class="figure-badge">${Utils.escapeHTML(groupLabel)}</span>
+                    </div>
+                </a>
+                <div class="palette-card-body">
+                    <div class="palette-card-head">
+                        <div>
+                            <p class="palette-card-kicker">${Utils.escapeHTML(figureLabel)}${Utils.escapeHTML(parentLabel)}</p>
+                            <h3>${Utils.escapeHTML(palette.name || `${figureLabel} 配色`)}</h3>
+                        </div>
+                        <span class="palette-card-date">${Utils.formatDate(palette.updated_at || palette.created_at)}</span>
+                    </div>
+                    <p class="palette-card-paper" data-action="paper" role="button" tabindex="0">${Utils.escapeHTML(palette.paper_title)}</p>
+                    ${caption ? `<p class="palette-card-caption">${Utils.escapeHTML(caption)}</p>` : '<p class="palette-card-caption is-empty">这个子图还没有单独说明。</p>'}
+                    <div class="palette-card-swatches">${BrowserUI.renderPaletteSwatches(palette.colors || [])}</div>
+                    <p class="palette-card-values">${BrowserUI.renderPaletteValues(palette.colors || [])}</p>
+                    <div class="palette-card-actions">
+                        <button class="btn btn-outline btn-small" type="button" data-action="copy-hex">复制 HEX</button>
+                        <button class="btn btn-outline btn-small" type="button" data-action="copy-css">复制 CSS</button>
+                        <button class="btn btn-outline btn-small" type="button" data-action="paper">来源文献</button>
+                        <a class="btn btn-outline btn-small" href="${imageViewerURL}">原图</a>
+                        <button class="btn btn-outline btn-small danger" type="button" data-action="delete">删除</button>
+                    </div>
+                </div>
+            </article>
+        `;
+    },
+
+    renderResults(payload, page = this.state.page) {
+        const palettes = payload.palettes || [];
+        const totalPages = payload.total_pages || 0;
+        this.state.page = totalPages ? Math.min(page, totalPages) : 1;
+        this.palettes = palettes;
+        this.state.totalPages = totalPages;
+        this.summaryStrip.innerHTML = `
+            <div class="stat-card"><span>已保存配色</span><strong>${payload.total || 0}</strong></div>
+            <div class="stat-card"><span>当前页</span><strong>${palettes.length}</strong></div>
+            <div class="stat-card"><span>来源分组</span><strong>${Utils.escapeHTML(this.groupFilter.selectedOptions[0]?.textContent || '全部分组')}</strong></div>
+        `;
+        this.pageControls.innerHTML = this.state.totalPages > 1 ? `
+            <button class="btn btn-outline" type="button" data-page-step="-1" ${this.state.page <= 1 ? 'disabled' : ''}>上一页</button>
+            <span class="figure-page-indicator">第 ${this.state.page} / ${this.state.totalPages} 页</span>
+            <button class="btn btn-outline" type="button" data-page-step="1" ${this.state.page >= this.state.totalPages ? 'disabled' : ''}>下一页</button>
+        ` : '';
+        this.grid.innerHTML = palettes.length
+            ? palettes.map((palette) => this.renderPaletteCard(palette)).join('')
+            : '<div class="empty-state"><h3>还没有保存任何配色</h3><p>先从子图区域点击“获取配色”，这里才会出现内容。</p></div>';
+        BrowserUI.renderPagination(this.pagination, this.state.page, this.state.totalPages);
+    },
+
+    async load(page = this.state.page) {
+        try {
+            const payload = await this.fetchPalettePage(page);
+            this.renderResults(payload, page);
+        } catch (error) {
+            Utils.showToast(error.message, 'error');
+        }
+    },
+
+    async copyText(text, successMessage) {
+        if (!String(text || '').trim()) {
+            Utils.showToast('当前没有可复制的配色', 'error');
+            return;
+        }
+
+        try {
+            await navigator.clipboard.writeText(text);
+            Utils.showToast(successMessage || '已复制');
+        } catch (error) {
+            Utils.showToast('复制失败', 'error');
+        }
+    },
+
+    async deletePalette(id) {
+        const confirmed = await Utils.confirm('删除后只会移除这组绑定配色，不会删除原子图。');
+        if (!confirmed) return;
+
+        try {
+            await API.deletePalette(id);
+            Utils.showToast('配色已删除');
+            await this.load(this.state.page);
         } catch (error) {
             Utils.showToast(error.message, 'error');
         }

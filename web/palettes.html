@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>图片库 - CiteBox</title>
+    <title>配色库 - CiteBox</title>
     <link rel="icon" type="image/svg+xml" href="/static/img/citebox-icon.svg">
     <script>(function(){var t=localStorage.getItem("citebox_theme");if(t&&t!=="warm")document.documentElement.setAttribute("data-theme",t)})()</script>
     <link rel="stylesheet" href="/static/css/style.css">
@@ -15,8 +15,8 @@
             <ul class="nav-links">
                 <li><a href="/">总览</a></li>
                 <li><a href="/library">文献库</a></li>
-                <li><a href="/figures" class="active">图片库</a></li>
-                <li><a href="/palettes">配色库</a></li>
+                <li><a href="/figures">图片库</a></li>
+                <li><a href="/palettes" class="active">配色库</a></li>
                 <li><a href="/groups">分组</a></li>
                 <li><a href="/tags">标签</a></li>
                 <li><a href="/notes">笔记</a></li>
@@ -32,9 +32,9 @@
     <main class="page-shell">
         <section class="hero">
             <div>
-                <p class="eyebrow">Image Library</p>
-                <h1>跨文献浏览所有提取图片</h1>
-                <p class="hero-text">浏览所有文献中提取的图片，按标签整理，随时回到来源文献。</p>
+                <p class="eyebrow">Palette Library</p>
+                <h1>沉淀已经绑定到子图的配色</h1>
+                <p class="hero-text">这里只展示从子图里一键提取并保存的配色，每一组颜色都能回溯到具体图片。</p>
             </div>
         </section>
 
@@ -42,41 +42,35 @@
             <div class="filters-card-head">
                 <div>
                     <p class="eyebrow">Filter Dock</p>
-                    <h2>按条件筛选图片</h2>
-                    <p>支持按来源分组和图片标签筛选，快速找到目标图片。</p>
+                    <h2>按来源筛选配色</h2>
+                    <p>可按文献标题、子图说明和来源分组回看配色，确保每组颜色都有图像上下文。</p>
                 </div>
             </div>
-            <div class="filters-grid three-cols">
+            <div class="filters-grid two-cols">
                 <label class="field">
                     <span>关键词</span>
-                    <input id="figureKeywordInput" class="form-input" type="text" placeholder="文献标题、图片说明、标签、笔记">
+                    <input id="paletteKeywordInput" class="form-input" type="text" placeholder="文献标题、子图说明、配色名称">
                 </label>
                 <label class="field">
                     <span>来源分组</span>
-                    <select id="figureGroupFilter" class="form-input">
+                    <select id="paletteGroupFilter" class="form-input">
                         <option value="">全部分组</option>
-                    </select>
-                </label>
-                <label class="field">
-                    <span>图片标签</span>
-                    <select id="figureTagFilter" class="form-input">
-                        <option value="">全部图片标签</option>
                     </select>
                 </label>
             </div>
         </section>
 
-        <section class="figure-results-shell">
-            <section id="figureSummaryStrip" class="summary-strip"></section>
+        <section class="palette-results-shell">
+            <section id="paletteSummaryStrip" class="summary-strip"></section>
             <div class="figure-results-head">
                 <div>
-                    <p class="eyebrow">Library Shelf</p>
-                    <h2>图片库</h2>
+                    <p class="eyebrow">Bound Colors</p>
+                    <h2>配色库</h2>
                 </div>
-                <div id="figurePageControls" class="figure-page-controls"></div>
+                <div id="palettePageControls" class="figure-page-controls"></div>
             </div>
-            <section id="figureGrid" class="figure-preview-grid"></section>
-            <div id="figurePagination" class="pagination"></div>
+            <section id="paletteGrid" class="palette-preview-grid"></section>
+            <div id="palettePagination" class="pagination"></div>
         </section>
     </main>
 
@@ -87,20 +81,11 @@
         </div>
     </div>
 
-    <div id="figureModal" class="modal-shell hidden">
-        <div class="modal-dialog figure-modal-dialog">
-            <button id="closeFigureModal" class="modal-close" type="button" aria-label="关闭">×</button>
-            <div id="figureModalBody"></div>
-        </div>
-    </div>
-
     <script src="/static/js/theme.js"></script>
     <script src="/static/js/utils.js"></script>
     <script src="/static/js/api.js"></script>
     <script src="/static/js/paper-viewer.js"></script>
     <script src="/static/js/browser-pages.js"></script>
-    <script src="/static/js/figure-viewer.js"></script>
-    <script src="/static/js/note-viewer.js"></script>
     <script src="/static/js/translate.js"></script>
     <script src="/static/js/main.js"></script>
 </body>

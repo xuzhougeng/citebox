@@ -28,6 +28,7 @@ const FigureViewer = {
         this.viewState = this.defaultViewState();
         this.dragState = null;
         this.cropState = this.defaultCropState();
+        this.paletteRequestState = this.defaultPaletteRequestState();
 
         this.handleKeydown = (event) => {
             if (!this.modal || this.modal.classList.contains('hidden')) return;
@@ -120,6 +121,12 @@ const FigureViewer = {
             if (subfigureButton) {
                 if (subfigureButton.dataset.subfigureAction === 'remove-selection') {
                     this.removeCropSelection(subfigureButton.dataset.selectionId);
+                }
+                if (subfigureButton.dataset.subfigureAction === 'extract-palette') {
+                    await this.extractPaletteForFigure(Number(subfigureButton.dataset.figureId || 0));
+                }
+                if (subfigureButton.dataset.subfigureAction === 'copy-palette') {
+                    await this.copyPaletteForFigure(Number(subfigureButton.dataset.figureId || 0));
                 }
                 return;
             }
@@ -315,6 +322,12 @@ const FigureViewer = {
             draft: null,
             pointerId: null,
             submitting: false
+        };
+    },
+
+    defaultPaletteRequestState() {
+        return {
+            loadingFigureIDs: new Set()
         };
     },
 
@@ -699,6 +712,35 @@ const FigureViewer = {
     currentFigureSubfigures() {
         const figure = this.currentFigureDetail();
         return Array.isArray(figure?.subfigures) ? figure.subfigures : [];
+    },
+
+    findFigureInCurrentPaper(figureID) {
+        const normalizedID = Number(figureID || 0);
+        if (!normalizedID) return null;
+
+        const paper = this.currentPaperDetail();
+        if (paper) {
+            return (paper.figures || []).find((figure) => Number(figure.id) === normalizedID) || null;
+        }
+
+        if (Number(this.currentFigure?.id || 0) === normalizedID) {
+            return this.currentFigure;
+        }
+        return null;
+    },
+
+    isPaletteLoading(figureID) {
+        return this.paletteRequestState?.loadingFigureIDs?.has(Number(figureID || 0));
+    },
+
+    setPaletteLoading(figureID, loading) {
+        const normalizedID = Number(figureID || 0);
+        if (!normalizedID) return;
+        if (loading) {
+            this.paletteRequestState.loadingFigureIDs.add(normalizedID);
+        } else {
+            this.paletteRequestState.loadingFigureIDs.delete(normalizedID);
+        }
     },
 
     requestCurrentPaperDetail() {
@@ -1162,6 +1204,25 @@ const FigureViewer = {
         this.syncCurrentFigureState({ forceDraftFromFigure: true });
     },
 
+    renderPaletteSwatches(colors = [], options = {}) {
+        const { compact = false } = options;
+        const list = Array.isArray(colors) ? colors.filter((color) => String(color || '').trim()) : [];
+        if (!list.length) {
+            return '<span class="figure-preview-empty">还没有保存配色</span>';
+        }
+
+        return `
+            <div class="palette-swatch-list ${compact ? 'is-compact' : ''}">
+                ${list.map((color) => `
+                    <span class="palette-swatch" title="${Utils.escapeHTML(color)}">
+                        <span class="palette-swatch-chip" style="background:${Utils.escapeHTML(color)}"></span>
+                        <span class="palette-swatch-label">${Utils.escapeHTML(color)}</span>
+                    </span>
+                `).join('')}
+            </div>
+        `;
+    },
+
     renderFigureLocation(figure) {
         const label = figure.display_label || (figure.subfigure_label ? `Fig ${figure.figure_index || '-'}${figure.subfigure_label}` : `Fig ${figure.figure_index || '-'}`);
         const source = figure.source === 'manual' ? ' · 人工提取' : '';
@@ -1201,6 +1262,48 @@ const FigureViewer = {
         `).join('');
     },
 
+    renderSubfigurePaletteCard(figure, options = {}) {
+        if (!figure) return '';
+
+        const { standalone = false } = options;
+        const loading = this.isPaletteLoading(figure.id);
+        const hasPalette = Number(figure.palette_count || 0) > 0 || (figure.palette_colors || []).length > 0;
+        const caption = String(figure.caption || '').trim();
+        const buttonLabel = loading ? '提取中...' : (hasPalette ? '更新配色' : '获取配色');
+        const paletteHint = hasPalette
+            ? `这组颜色已经绑定到 ${figure.display_label || '当前子图'}。`
+            : '点击后会直接从这张子图里提取主色，并绑定保存。';
+
+        return `
+            <article class="figure-subfigure-card ${standalone ? 'is-standalone' : ''}">
+                <div class="figure-subfigure-card-media">
+                    <img src="${figure.image_url}" alt="${Utils.escapeHTML(figure.display_label || figure.paper_title || '子图')}">
+                    <div class="figure-subfigure-card-badges">
+                        <span class="figure-badge figure-badge-strong">${Utils.escapeHTML(figure.display_label || '子图')}</span>
+                        ${figure.parent_display_label ? `<span class="figure-badge">来自 ${Utils.escapeHTML(figure.parent_display_label)}</span>` : ''}
+                        ${hasPalette ? '<span class="figure-badge figure-badge-accent">已绑定配色</span>' : '<span class="figure-badge">未提取配色</span>'}
+                    </div>
+                </div>
+                <div class="figure-subfigure-card-body">
+                    <div class="figure-subfigure-card-head">
+                        <strong>${Utils.escapeHTML(figure.display_label || '子图')}</strong>
+                        <span>${Utils.escapeHTML(hasPalette ? (figure.palette_name || '已保存配色') : '等待提取')}</span>
+                    </div>
+                    <p class="figure-subfigure-card-caption ${caption ? '' : 'is-empty'}">${Utils.escapeHTML(caption || '这个子图还没有单独说明。')}</p>
+                    <div class="figure-subfigure-card-palette">
+                        ${this.renderPaletteSwatches(figure.palette_colors || [], { compact: true })}
+                    </div>
+                    <p class="figure-subfigure-card-hint">${Utils.escapeHTML(paletteHint)}</p>
+                    <div class="figure-subfigure-card-actions">
+                        <button class="btn btn-outline btn-small" type="button" data-subfigure-action="extract-palette" data-figure-id="${figure.id}" ${(loading || this.isCropModeEnabled()) ? 'disabled' : ''}>${buttonLabel}</button>
+                        <button class="btn btn-outline btn-small" type="button" data-subfigure-action="copy-palette" data-figure-id="${figure.id}" ${hasPalette ? '' : 'disabled'}>复制 HEX</button>
+                        <a class="btn btn-outline btn-small" href="${Utils.resourceViewerURL('image', figure.image_url)}">原图</a>
+                    </div>
+                </div>
+            </article>
+        `;
+    },
+
     renderSubfigurePanel(figure) {
         const subfigures = this.currentFigureSubfigures();
         const loading = this.paperDetailPromises.has(Number(figure.paper_id));
@@ -1211,11 +1314,17 @@ const FigureViewer = {
                     <div class="figure-lightbox-ai-head">
                         <div>
                             <p class="eyebrow">Subfigure</p>
-                            <h3>子图来源</h3>
+                            <h3>子图配色</h3>
                         </div>
                     </div>
                     <div class="figure-subfigure-summary is-compact">
                         <p>当前查看的是 <strong>${Utils.escapeHTML(figure.display_label || '')}</strong>，来源于 <strong>${Utils.escapeHTML(figure.parent_display_label || '')}</strong>。</p>
+                    </div>
+                    <div class="figure-subfigure-card-list is-single">
+                        ${this.renderSubfigurePaletteCard(figure, { standalone: true })}
+                    </div>
+                    <div class="figure-subfigure-actions">
+                        <a class="btn btn-outline" href="/palettes">查看配色库</a>
                     </div>
                 </section>
             `;
@@ -1233,12 +1342,11 @@ const FigureViewer = {
                 </div>
                 <div class="figure-subfigure-summary">
                     <p>从当前大图里框选感兴趣的局部，系统会自动命名为不重复的 ${Utils.escapeHTML(figure.display_label || `Fig ${figure.figure_index || '-'}`)}a / b / c ...</p>
-                    ${subfigures.length ? `
-                        <div class="figure-subfigure-chip-list">
-                            ${subfigures.map((item) => `<span class="figure-subfigure-chip">${Utils.escapeHTML(item.display_label || '')}</span>`).join('')}
-                        </div>
-                    ` : '<p class="muted">当前还没有提取过子图。</p>'}
+                    <p>提取完成后，可以直接在每张子图底部点击“获取配色”，配色会绑定保存到这张子图。</p>
                 </div>
+                ${subfigures.length
+                    ? `<div class="figure-subfigure-card-list">${subfigures.map((item) => this.renderSubfigurePaletteCard(item)).join('')}</div>`
+                    : '<div class="figure-subfigure-empty"><p>当前还没有提取过子图。</p></div>'}
                 ${this.isCropModeEnabled() ? `
                     <div class="figure-subfigure-editor">
                         <div class="figure-subfigure-editor-head">
@@ -1254,10 +1362,165 @@ const FigureViewer = {
                 ` : `
                     <div class="figure-subfigure-actions">
                         <button class="btn btn-outline" type="button" data-figure-action="toggle-subfigure-crop">开始子图截取</button>
+                        <a class="btn btn-outline" href="/palettes">查看配色库</a>
                     </div>
                 `}
             </section>
         `;
+    },
+
+    async copyPaletteForFigure(figureID) {
+        const figure = this.findFigureInCurrentPaper(figureID);
+        const colors = Array.isArray(figure?.palette_colors) ? figure.palette_colors.filter(Boolean) : [];
+        if (!colors.length) {
+            Utils.showToast('当前子图还没有保存配色', 'error');
+            return;
+        }
+
+        try {
+            await navigator.clipboard.writeText(colors.join(', '));
+            Utils.showToast(`${figure.display_label || '子图'} 配色已复制`);
+        } catch (error) {
+            Utils.showToast('复制失败', 'error');
+        }
+    },
+
+    loadImageForPaletteExtraction(imageURL) {
+        return new Promise((resolve, reject) => {
+            const image = new Image();
+            image.decoding = 'async';
+            image.onload = () => resolve(image);
+            image.onerror = () => reject(new Error('子图图片加载失败，暂时无法提取配色'));
+            image.src = imageURL;
+        });
+    },
+
+    rgbToHex(r, g, b) {
+        const toHex = (value) => Math.max(0, Math.min(255, value)).toString(16).padStart(2, '0').toUpperCase();
+        return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+    },
+
+    quantizePaletteChannel(value, step = 24) {
+        return Math.max(0, Math.min(255, Math.round(value / step) * step));
+    },
+
+    colorDistance(first, second) {
+        const dr = first.r - second.r;
+        const dg = first.g - second.g;
+        const db = first.b - second.b;
+        return Math.sqrt(dr * dr + dg * dg + db * db);
+    },
+
+    collectPaletteCandidates(data, options = {}) {
+        const { includeNeutral = false, limit = 6 } = options;
+        const buckets = new Map();
+
+        for (let index = 0; index < data.length; index += 4) {
+            const alpha = data[index + 3];
+            if (alpha < 180) continue;
+
+            const red = data[index];
+            const green = data[index + 1];
+            const blue = data[index + 2];
+            const max = Math.max(red, green, blue);
+            const min = Math.min(red, green, blue);
+            const saturation = max - min;
+            const brightness = 0.299 * red + 0.587 * green + 0.114 * blue;
+
+            if (!includeNeutral) {
+                if (brightness > 246 && saturation < 18) continue;
+                if (brightness < 18 && saturation < 18) continue;
+                if (saturation < 14) continue;
+            }
+
+            const r = this.quantizePaletteChannel(red);
+            const g = this.quantizePaletteChannel(green);
+            const b = this.quantizePaletteChannel(blue);
+            const key = `${r},${g},${b}`;
+            const weight = includeNeutral ? 1 : (1 + saturation / 64);
+            const current = buckets.get(key) || { r, g, b, count: 0, saturation };
+            current.count += weight;
+            current.saturation = Math.max(current.saturation, saturation);
+            buckets.set(key, current);
+        }
+
+        const sorted = Array.from(buckets.values()).sort((first, second) => {
+            if (second.count !== first.count) {
+                return second.count - first.count;
+            }
+            return second.saturation - first.saturation;
+        });
+
+        const selected = [];
+        for (const item of sorted) {
+            if (selected.some((existing) => this.colorDistance(existing, item) < 46)) {
+                continue;
+            }
+            selected.push(item);
+            if (selected.length >= limit) {
+                break;
+            }
+        }
+
+        return selected.map((item) => this.rgbToHex(item.r, item.g, item.b));
+    },
+
+    async extractPaletteColorsFromImageURL(imageURL) {
+        const image = await this.loadImageForPaletteExtraction(imageURL);
+        const maxSize = 96;
+        const ratio = Math.min(1, maxSize / Math.max(image.naturalWidth || 1, image.naturalHeight || 1));
+        const width = Math.max(24, Math.round((image.naturalWidth || 1) * ratio));
+        const height = Math.max(24, Math.round((image.naturalHeight || 1) * ratio));
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+
+        const context = canvas.getContext('2d', { willReadFrequently: true });
+        context.drawImage(image, 0, 0, width, height);
+        const imageData = context.getImageData(0, 0, width, height);
+        const primary = this.collectPaletteCandidates(imageData.data, { includeNeutral: false, limit: 6 });
+        if (primary.length >= 3) {
+            return primary;
+        }
+
+        const fallback = this.collectPaletteCandidates(imageData.data, { includeNeutral: true, limit: 6 });
+        if (!fallback.length) {
+            throw new Error('这张子图里没有提取到有效配色');
+        }
+        return fallback;
+    },
+
+    async extractPaletteForFigure(figureID) {
+        const figure = this.findFigureInCurrentPaper(figureID);
+        if (!figure) {
+            Utils.showToast('没有找到对应的子图', 'error');
+            return;
+        }
+        if (!figure.parent_figure_id) {
+            Utils.showToast('当前只支持对子图提取配色', 'error');
+            return;
+        }
+        if (this.isPaletteLoading(figureID)) {
+            return;
+        }
+
+        this.setPaletteLoading(figureID, true);
+        this.render();
+
+        try {
+            const colors = await this.extractPaletteColorsFromImageURL(figure.image_url);
+            const payload = await API.createFigurePalette(figureID, { colors });
+            this.syncPaperMetadata(payload.paper);
+            Utils.showToast(`${figure.display_label || '子图'} 配色已保存`);
+            if (typeof this.onMetaChanged === 'function') {
+                await this.onMetaChanged(payload.paper);
+            }
+        } catch (error) {
+            Utils.showToast(error.message, 'error');
+        } finally {
+            this.setPaletteLoading(figureID, false);
+            this.render();
+        }
     },
 
     async openNotes() {
