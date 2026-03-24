@@ -20,7 +20,7 @@ func testPublicPaths() []PublicPath {
 
 func TestAuthMiddlewareRedirectsHTMLWithoutSession(t *testing.T) {
 	sessionManager := service.NewSessionManager(time.Hour)
-	protected := AuthMiddleware(sessionManager, testPublicPaths())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	protected := AuthMiddleware(sessionManager, testPublicPaths(), false)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
@@ -41,7 +41,7 @@ func TestAuthMiddlewareRedirectsHTMLWithoutSession(t *testing.T) {
 
 func TestAuthMiddlewareReturnsJSONWithoutSession(t *testing.T) {
 	sessionManager := service.NewSessionManager(time.Hour)
-	protected := AuthMiddleware(sessionManager, testPublicPaths())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	protected := AuthMiddleware(sessionManager, testPublicPaths(), false)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
@@ -67,7 +67,7 @@ func TestAuthMiddlewareAllowsValidSession(t *testing.T) {
 	}
 
 	var called bool
-	protected := AuthMiddleware(sessionManager, testPublicPaths())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	protected := AuthMiddleware(sessionManager, testPublicPaths(), false)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
 		w.WriteHeader(http.StatusNoContent)
 	}))
@@ -94,12 +94,54 @@ func TestAuthMiddlewareRedirectsAuthenticatedLoginPage(t *testing.T) {
 		t.Fatalf("Create() error = %v", err)
 	}
 
-	protected := AuthMiddleware(sessionManager, testPublicPaths())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	protected := AuthMiddleware(sessionManager, testPublicPaths(), false)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
 	req := httptest.NewRequest(http.MethodGet, "/login", nil)
 	req.AddCookie(&http.Cookie{Name: service.SessionCookieName, Value: session.ID})
+	w := httptest.NewRecorder()
+
+	protected.ServeHTTP(w, req)
+
+	resp := w.Result()
+	if resp.StatusCode != http.StatusFound {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusFound)
+	}
+	if location := resp.Header.Get("Location"); location != "/" {
+		t.Fatalf("Location = %q, want %q", location, "/")
+	}
+}
+
+func TestAuthMiddlewareBypassesProtectionWhenDisabled(t *testing.T) {
+	sessionManager := service.NewSessionManager(time.Hour)
+	var called bool
+	protected := AuthMiddleware(sessionManager, testPublicPaths(), true)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/papers", nil)
+	w := httptest.NewRecorder()
+
+	protected.ServeHTTP(w, req)
+
+	resp := w.Result()
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusNoContent)
+	}
+	if !called {
+		t.Fatal("next handler was not called")
+	}
+}
+
+func TestAuthMiddlewareRedirectsLoginPageWhenDisabled(t *testing.T) {
+	sessionManager := service.NewSessionManager(time.Hour)
+	protected := AuthMiddleware(sessionManager, testPublicPaths(), true)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/login", nil)
 	w := httptest.NewRecorder()
 
 	protected.ServeHTTP(w, req)

@@ -18,10 +18,21 @@ type PublicPath struct {
 
 // AuthMiddleware protects routes with a session cookie and redirects
 // unauthenticated HTML requests to the login page.
-func AuthMiddleware(sessionManager *service.SessionManager, publicPaths []PublicPath) func(http.Handler) http.Handler {
+// When disableAuth is true, all requests pass through and the login page
+// is redirected back to the app root.
+func AuthMiddleware(sessionManager *service.SessionManager, publicPaths []PublicPath, disableAuth bool) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.Method == http.MethodOptions {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			if disableAuth {
+				if isLoginPath(r.URL.Path) {
+					http.Redirect(w, r, "/", http.StatusFound)
+					return
+				}
 				next.ServeHTTP(w, r)
 				return
 			}

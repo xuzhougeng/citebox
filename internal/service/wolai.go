@@ -405,9 +405,12 @@ func buildWolaiTextBlocks(sections []string) []map[string]any {
 func buildWolaiHeadingBlock(content string, level int) map[string]any {
 	level = maxWolaiHeadingLevel(level)
 	return map[string]any{
-		"type":    "heading",
-		"content": strings.TrimSpace(content),
-		"level":   level,
+		"type": "heading",
+		"content": map[string]any{
+			"title": strings.TrimSpace(content),
+		},
+		"level":          level,
+		"text_alignment": "left",
 	}
 }
 

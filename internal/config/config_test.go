@@ -81,3 +81,12 @@ func TestApplyDesktopDefaultsKeepsExplicitEnv(t *testing.T) {
 		t.Fatalf("unexpected database path: %s", cfg.DatabasePath)
 	}
 }
+
+func TestLoadReadsDisableAuth(t *testing.T) {
+	t.Setenv("DISABLE_AUTH", "1")
+
+	cfg := Load()
+	if !cfg.DisableAuth {
+		t.Fatal("Load() DisableAuth = false, want true")
+	}
+}

@@ -14,6 +14,7 @@ type Config struct {
 	StorageDir              string
 	MaxUploadSize           int64
 	DatabasePath            string
+	DisableAuth             bool
 	AdminUsername           string
 	AdminPassword           string
 	AllowedTypes            []string
@@ -33,6 +34,7 @@ func Load() *Config {
 		StorageDir:              getEnv("STORAGE_DIR", "./data/library"),
 		MaxUploadSize:           getEnvInt64("MAX_UPLOAD_SIZE", 250*1024*1024),
 		DatabasePath:            getEnv("DATABASE_PATH", "./data/library.db"),
+		DisableAuth:             getEnvBool("DISABLE_AUTH", false),
 		AdminUsername:           getEnv("ADMIN_USERNAME", "citebox"),
 		AdminPassword:           getEnv("ADMIN_PASSWORD", "citebox123"),
 		AllowedTypes:            []string{"application/pdf"},

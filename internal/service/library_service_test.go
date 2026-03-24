@@ -115,12 +115,23 @@ func wolaiBlockTypes(blocks []map[string]any) []string {
 func wolaiBlockContents(blocks []map[string]any) []string {
 	contents := make([]string, 0, len(blocks))
 	for _, block := range blocks {
-		content, ok := block["content"].(string)
-		if ok && strings.TrimSpace(content) != "" {
+		if content := wolaiBlockTitle(block); content != "" {
 			contents = append(contents, content)
 		}
 	}
 	return contents
+}
+
+func wolaiBlockTitle(block map[string]any) string {
+	switch content := block["content"].(type) {
+	case string:
+		return strings.TrimSpace(content)
+	case map[string]any:
+		if title, ok := content["title"].(string); ok {
+			return strings.TrimSpace(title)
+		}
+	}
+	return ""
 }
 
 func (f *testMultipartFile) Close() error {
@@ -508,7 +519,7 @@ func TestSavePaperNoteToWolaiBuildsStructuredBlocks(t *testing.T) {
 	}
 	foundConclusionHeading := false
 	for _, block := range calls[1].blocks {
-		if block["type"] == "heading" && block["content"] == "结论" {
+		if block["type"] == "heading" && wolaiBlockTitle(block) == "结论" {
 			foundConclusionHeading = true
 			break
 		}
@@ -628,8 +639,11 @@ func TestBuildWolaiMarkdownBlocksUsesBlockStyles(t *testing.T) {
 		t.Fatalf("buildWolaiMarkdownBlocks() types = %#v", got)
 	}
 
-	if blocks[0]["content"] != "一级标题" || blocks[0]["level"] != 1 {
+	if wolaiBlockTitle(blocks[0]) != "一级标题" || blocks[0]["level"] != 1 {
 		t.Fatalf("heading block = %#v, want level 1 heading", blocks[0])
+	}
+	if _, ok := blocks[0]["content"].(map[string]any); !ok {
+		t.Fatalf("heading block content = %#v, want object with title", blocks[0]["content"])
 	}
 	if blocks[1]["content"] != "无序项" {
 		t.Fatalf("bullet block = %#v, want stripped bullet marker", blocks[1])

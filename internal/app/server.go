@@ -662,7 +662,7 @@ func buildHandler(
 		{Path: "/login.html", Prefix: false},
 		{Path: "/api/auth/login", Prefix: false},
 		{Path: "/static/", Prefix: true},
-	})
+	}, cfg.DisableAuth)
 
 	authenticated := authMiddleware(mux)
 	logged := middleware.RequestLogger(authenticated, logger.With("component", "http"))

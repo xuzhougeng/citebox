@@ -27,7 +27,7 @@ run:
 	go run ./cmd/server
 
 dev: prepare-web-assets
-	go run ./cmd/server
+	DISABLE_AUTH=1 go run ./cmd/server
 
 build-desktop:
 	@mkdir -p bin
