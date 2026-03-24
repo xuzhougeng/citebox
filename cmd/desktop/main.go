@@ -39,6 +39,7 @@ func main() {
 		logger.Error("failed to resolve desktop web assets", "error", err)
 		os.Exit(1)
 	}
+	logger.Info("desktop web assets ready", "web_root", webRoot)
 
 	server, err := app.NewServer(app.Options{
 		Config:  cfg,

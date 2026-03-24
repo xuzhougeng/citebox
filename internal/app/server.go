@@ -59,6 +59,9 @@ func NewServer(opts Options) (*Server, error) {
 	if err := validateWebRoot(absoluteWebRoot); err != nil {
 		return nil, err
 	}
+	if err := registerWebAssetMIMETypes(); err != nil {
+		return nil, fmt.Errorf("register web asset mime types: %w", err)
+	}
 
 	repo, err := repository.NewLibraryRepository(cfg.DatabasePath)
 	if err != nil {
@@ -88,6 +91,8 @@ func NewServer(opts Options) (*Server, error) {
 		repo:       repo,
 		httpServer: httpServer,
 	}
+
+	logger.Info("resolved web root", "web_root", absoluteWebRoot)
 
 	bridgeCtx, bridgeCancel := context.WithCancel(context.Background())
 	bridgeDone := make(chan struct{})
