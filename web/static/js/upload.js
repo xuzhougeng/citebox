@@ -16,10 +16,17 @@ const UploadPage = {
         this.titleInput = document.getElementById('titleInput');
         this.groupSelect = document.getElementById('groupSelect');
         this.tagsInput = document.getElementById('tagsInput');
+        this.tagsSuggestions = document.getElementById('tagsInputSuggestions');
         this.extractionModeSelect = document.getElementById('extractionModeSelect');
         this.extractionModeHint = document.getElementById('extractionModeHint');
         this.submitButton = document.getElementById('submitUploadBtn');
         this.resultCard = document.getElementById('uploadResult');
+
+        this.tagAutocomplete = Utils.bindCommaSeparatedTagInputAutocomplete?.({
+            input: this.tagsInput,
+            panel: this.tagsSuggestions,
+            scope: 'paper'
+        }) || null;
 
         this.bindEvents();
         await Promise.all([
@@ -164,6 +171,7 @@ const UploadPage = {
         try {
             const payload = await API.uploadPaper(formData);
             const paper = payload.paper;
+            this.tagAutocomplete?.mergeTags(paper?.tags || Utils.splitTags(this.tagsInput.value.trim()));
 
             this.renderResult(paper);
             this.startPolling(paper);
@@ -179,6 +187,7 @@ const UploadPage = {
             this.file = null;
             this.selectedFile.classList.add('empty');
             this.selectedFile.innerHTML = '<span>尚未选择 PDF</span>';
+            this.tagAutocomplete?.refresh?.();
             await Promise.all([
                 this.loadGroups(),
                 this.loadExtractionModeOptions()

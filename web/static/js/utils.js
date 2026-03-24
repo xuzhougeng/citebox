@@ -3,6 +3,8 @@ const Utils = {
     modalRestoreParam: 'restore_modal',
     modalRestoreStoragePrefix: 'citebox.modalRestore.',
     defaultFigureTagPresets: Object.freeze(['图 1', '图 2', '图 3', '图 4', '图 5', '图 6', '图 7', '附图', '图片摘要']),
+    tagCatalogs: new Map(),
+    tagCatalogPromises: new Map(),
 
     formatFileSize(bytes) {
         if (bytes === 0) return '0 Bytes';
@@ -39,6 +41,42 @@ const Utils = {
 
     isDesktopApp() {
         return window.__CITEBOX_DESKTOP__ === true;
+    },
+
+    canOpenExternalURL() {
+        return typeof window.citeboxDesktopOpenExternal === 'function';
+    },
+
+    async openExternalURL(value, options = {}) {
+        const normalized = String(value || '').trim();
+        if (!normalized) {
+            return false;
+        }
+
+        let resolvedURL = normalized;
+        try {
+            resolvedURL = new URL(normalized, window.location.href).href;
+        } catch (error) {
+            resolvedURL = normalized;
+        }
+
+        if (this.canOpenExternalURL()) {
+            try {
+                await window.citeboxDesktopOpenExternal(resolvedURL);
+                return true;
+            } catch (error) {
+                // Fall back to browser navigation below.
+            }
+        }
+
+        const target = String(options.target || '_blank').trim().toLowerCase();
+        if (!target || target === '_blank') {
+            window.open(resolvedURL, '_blank', 'noopener,noreferrer');
+            return true;
+        }
+
+        window.location.href = resolvedURL;
+        return true;
     },
 
     resourceViewerURL(kind, src, back = window.location.href) {
@@ -1315,6 +1353,280 @@ const Utils = {
 
     joinTags(tags = []) {
         return tags.map((tag) => tag.name || tag).join(', ');
+    },
+
+    normalizeTagScope(scope = '') {
+        return String(scope || '').trim().toLowerCase() === 'figure' ? 'figure' : 'paper';
+    },
+
+    tagCountKey(scope = '') {
+        return this.normalizeTagScope(scope) === 'figure' ? 'figure_count' : 'paper_count';
+    },
+
+    tagCatalog(scope = '') {
+        const normalizedScope = this.normalizeTagScope(scope);
+        if (!this.tagCatalogs.has(normalizedScope)) {
+            this.tagCatalogs.set(normalizedScope, new Map());
+        }
+        return this.tagCatalogs.get(normalizedScope);
+    },
+
+    mergeScopedTagCatalog(scope = '', tags = []) {
+        const normalizedScope = this.normalizeTagScope(scope);
+        const catalog = this.tagCatalog(normalizedScope);
+        const countKey = this.tagCountKey(normalizedScope);
+
+        (Array.isArray(tags) ? tags : []).forEach((rawTag) => {
+            const name = String(typeof rawTag === 'string' ? rawTag : rawTag?.name || '').trim();
+            if (!name) return;
+
+            const key = name.toLowerCase();
+            const existing = catalog.get(key) || {};
+            const rawCount = typeof rawTag === 'string'
+                ? 1
+                : Number(rawTag?.[countKey] ?? existing[countKey] ?? 0);
+
+            catalog.set(key, {
+                name,
+                [countKey]: Math.max(Number(existing[countKey] || 0), rawCount)
+            });
+        });
+
+        return catalog;
+    },
+
+    ensureScopedTagCatalogLoaded(scope = '') {
+        const normalizedScope = this.normalizeTagScope(scope);
+        const catalog = this.tagCatalog(normalizedScope);
+        if (catalog.size > 0) {
+            return Promise.resolve(catalog);
+        }
+        if (this.tagCatalogPromises.has(normalizedScope)) {
+            return this.tagCatalogPromises.get(normalizedScope);
+        }
+        if (typeof API === 'undefined' || typeof API.listTags !== 'function') {
+            return Promise.resolve(catalog);
+        }
+
+        const promise = API.listTags({ scope: normalizedScope })
+            .then((payload) => {
+                this.mergeScopedTagCatalog(normalizedScope, payload?.tags || []);
+                return this.tagCatalog(normalizedScope);
+            })
+            .catch(() => this.tagCatalog(normalizedScope))
+            .finally(() => {
+                this.tagCatalogPromises.delete(normalizedScope);
+            });
+
+        this.tagCatalogPromises.set(normalizedScope, promise);
+        return promise;
+    },
+
+    parseCommaSeparatedTagInput(value = '') {
+        const raw = String(value || '');
+        const segments = raw.split(',');
+        const currentSegment = segments.pop() ?? '';
+        return {
+            committedTags: segments.map((segment) => segment.trim()).filter(Boolean),
+            query: currentSegment.trim()
+        };
+    },
+
+    filteredScopedTagSuggestions(scope = '', query = '', excludedTags = []) {
+        const normalizedScope = this.normalizeTagScope(scope);
+        const normalizedQuery = String(query || '').trim().toLowerCase();
+        if (!normalizedQuery) {
+            return [];
+        }
+
+        const catalog = this.tagCatalog(normalizedScope);
+        const countKey = this.tagCountKey(normalizedScope);
+        const excluded = new Set(
+            (Array.isArray(excludedTags) ? excludedTags : [])
+                .map((tag) => String(typeof tag === 'string' ? tag : tag?.name || '').trim().toLowerCase())
+                .filter(Boolean)
+        );
+
+        return Array.from(catalog.values())
+            .filter((tag) => tag?.name)
+            .filter((tag) => !excluded.has(tag.name.toLowerCase()))
+            .filter((tag) => tag.name.toLowerCase().includes(normalizedQuery))
+            .sort((first, second) => {
+                const firstName = String(first.name || '');
+                const secondName = String(second.name || '');
+                const firstLower = firstName.toLowerCase();
+                const secondLower = secondName.toLowerCase();
+                const firstStarts = firstLower.startsWith(normalizedQuery) ? 0 : 1;
+                const secondStarts = secondLower.startsWith(normalizedQuery) ? 0 : 1;
+                if (firstStarts !== secondStarts) {
+                    return firstStarts - secondStarts;
+                }
+
+                const firstIndex = firstLower.indexOf(normalizedQuery);
+                const secondIndex = secondLower.indexOf(normalizedQuery);
+                if (firstIndex !== secondIndex) {
+                    return firstIndex - secondIndex;
+                }
+
+                const usageDiff = Number(second[countKey] || 0) - Number(first[countKey] || 0);
+                if (usageDiff !== 0) {
+                    return usageDiff;
+                }
+
+                if (firstName.length !== secondName.length) {
+                    return firstName.length - secondName.length;
+                }
+                return firstName.localeCompare(secondName, 'zh-CN', { sensitivity: 'base' });
+            })
+            .slice(0, 8);
+    },
+
+    renderScopedTagSuggestions(scope = '', query = '', excludedTags = []) {
+        const normalizedScope = this.normalizeTagScope(scope);
+        const countKey = this.tagCountKey(normalizedScope);
+        const suggestions = this.filteredScopedTagSuggestions(normalizedScope, query, excludedTags);
+        if (!suggestions.length) {
+            return '';
+        }
+
+        return suggestions.map((tag) => `
+            <button
+                class="tag-autocomplete-suggestion"
+                type="button"
+                data-tag-autocomplete-suggestion="${this.escapeHTML(tag.name)}"
+            >
+                <span>${this.escapeHTML(tag.name)}</span>
+                ${Number(tag[countKey] || 0) > 0 ? `<small>已用 ${Number(tag[countKey])} 次</small>` : ''}
+            </button>
+        `).join('');
+    },
+
+    applyCommaSeparatedTagSuggestion(value = '', tagName = '') {
+        const normalizedTag = String(tagName || '').trim();
+        if (!normalizedTag) {
+            return String(value || '');
+        }
+
+        const { committedTags } = this.parseCommaSeparatedTagInput(value);
+        const existing = new Set(committedTags.map((tag) => tag.toLowerCase()));
+        if (!existing.has(normalizedTag.toLowerCase())) {
+            committedTags.push(normalizedTag);
+        }
+        return `${committedTags.join(', ')}, `;
+    },
+
+    bindCommaSeparatedTagInputAutocomplete(options = {}) {
+        const input = options.input instanceof HTMLInputElement ? options.input : null;
+        const panel = options.panel instanceof HTMLElement ? options.panel : null;
+        if (!input || !panel) {
+            return null;
+        }
+
+        const scope = this.normalizeTagScope(options.scope);
+        const wrapper = options.wrapper instanceof HTMLElement
+            ? options.wrapper
+            : (input.closest('.tag-autocomplete-field') || panel.parentElement);
+
+        const refresh = () => {
+            const { committedTags, query } = this.parseCommaSeparatedTagInput(input.value);
+            const markup = this.renderScopedTagSuggestions(scope, query, committedTags);
+            panel.innerHTML = markup;
+            panel.classList.toggle('hidden', !markup);
+        };
+
+        const hide = () => {
+            panel.classList.add('hidden');
+        };
+
+        const applySuggestion = (tagName = '') => {
+            const normalizedTag = String(tagName || '').trim();
+            if (!normalizedTag) {
+                return;
+            }
+
+            input.value = this.applyCommaSeparatedTagSuggestion(input.value, normalizedTag);
+            if (typeof input.setSelectionRange === 'function') {
+                const caret = input.value.length;
+                input.setSelectionRange(caret, caret);
+            }
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            input.focus();
+            hide();
+        };
+
+        const handleInput = () => {
+            refresh();
+        };
+        const handleFocus = () => {
+            refresh();
+        };
+        const handleKeydown = (event) => {
+            if (event.key === 'Escape') {
+                hide();
+                return;
+            }
+            if (event.key !== 'Enter' && event.key !== 'Tab') {
+                return;
+            }
+
+            const firstSuggestion = panel.querySelector('[data-tag-autocomplete-suggestion]');
+            if (!firstSuggestion || panel.classList.contains('hidden')) {
+                return;
+            }
+
+            event.preventDefault();
+            applySuggestion(firstSuggestion.dataset.tagAutocompleteSuggestion || '');
+        };
+        const handlePanelMouseDown = (event) => {
+            event.preventDefault();
+        };
+        const handlePanelClick = (event) => {
+            const button = event.target.closest('[data-tag-autocomplete-suggestion]');
+            if (!button) {
+                return;
+            }
+            applySuggestion(button.dataset.tagAutocompleteSuggestion || '');
+        };
+        const handleDocumentClick = (event) => {
+            if (!(event.target instanceof Element)) {
+                hide();
+                return;
+            }
+            if (wrapper?.contains(event.target)) {
+                return;
+            }
+            hide();
+        };
+
+        input.addEventListener('input', handleInput);
+        input.addEventListener('focus', handleFocus);
+        input.addEventListener('keydown', handleKeydown);
+        panel.addEventListener('mousedown', handlePanelMouseDown);
+        panel.addEventListener('click', handlePanelClick);
+        document.addEventListener('click', handleDocumentClick);
+
+        void this.ensureScopedTagCatalogLoaded(scope).then(() => {
+            if (document.contains(input)) {
+                refresh();
+            }
+        });
+
+        return {
+            refresh,
+            hide,
+            mergeTags: (tags = []) => {
+                Utils.mergeScopedTagCatalog(scope, tags);
+                refresh();
+            },
+            destroy: () => {
+                input.removeEventListener('input', handleInput);
+                input.removeEventListener('focus', handleFocus);
+                input.removeEventListener('keydown', handleKeydown);
+                panel.removeEventListener('mousedown', handlePanelMouseDown);
+                panel.removeEventListener('click', handlePanelClick);
+                document.removeEventListener('click', handleDocumentClick);
+            }
+        };
     },
 
     isProcessingStatus(status = '') {

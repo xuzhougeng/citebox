@@ -191,6 +191,10 @@ const AppUpdateNotice = {
             }
             if (button.dataset.updateAction === 'now' && releaseURL) {
                 this.closePrompt();
+                if (typeof Utils !== 'undefined' && typeof Utils.openExternalURL === 'function') {
+                    void Utils.openExternalURL(releaseURL);
+                    return;
+                }
                 window.location.href = releaseURL;
             }
         });

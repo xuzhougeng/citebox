@@ -131,6 +131,66 @@
     gap: 1rem;
 }
 
+.tag-autocomplete-field {
+    position: relative;
+    display: grid;
+    min-width: 0;
+}
+
+.tag-autocomplete-panel {
+    position: absolute;
+    top: calc(100% + 0.45rem);
+    left: 0;
+    right: 0;
+    z-index: 8;
+    display: grid;
+    gap: 0.35rem;
+    max-height: 13rem;
+    overflow: auto;
+    padding: 0.45rem;
+    border: 1px solid rgba(var(--ink-rgb), 0.1);
+    border-radius: 16px;
+    background: rgba(var(--surface-rgb), 0.98);
+    box-shadow: 0 16px 32px rgba(var(--shadow-rgb), 0.14);
+}
+
+.tag-autocomplete-panel.hidden {
+    display: none;
+}
+
+.tag-autocomplete-suggestion {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.8rem;
+    width: 100%;
+    padding: 0.58rem 0.72rem;
+    border: 1px solid rgba(var(--ink-rgb), 0.08);
+    border-radius: 12px;
+    background: rgba(var(--surface-rgb), 0.94);
+    color: var(--ink);
+    text-align: left;
+    cursor: pointer;
+    transition: border-color 0.18s ease, background 0.18s ease, transform 0.18s ease;
+}
+
+.tag-autocomplete-suggestion:hover,
+.tag-autocomplete-suggestion:focus-visible {
+    border-color: rgba(var(--accent-rgb), 0.26);
+    background: rgba(var(--surface-rgb), 1);
+    transform: translateY(-1px);
+    outline: none;
+}
+
+.tag-autocomplete-suggestion span {
+    font-weight: 700;
+}
+
+.tag-autocomplete-suggestion small {
+    color: var(--muted);
+    white-space: nowrap;
+}
+
 .detail-form {
     display: grid;
     gap: 0.9rem;

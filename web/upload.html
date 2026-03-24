@@ -68,7 +68,10 @@
 
                 <label class="field">
                     <span>标签</span>
-                    <input id="tagsInput" class="form-input" type="text" placeholder="多个标签用逗号分隔，例如：review, stem-cell, atlasing">
+                    <div class="tag-autocomplete-field">
+                        <input id="tagsInput" class="form-input" type="text" placeholder="多个标签用逗号分隔，例如：review, stem-cell, atlasing" autocomplete="off" spellcheck="false">
+                        <div id="tagsInputSuggestions" class="tag-autocomplete-panel hidden"></div>
+                    </div>
                 </label>
 
                 <label class="field">

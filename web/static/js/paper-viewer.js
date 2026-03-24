@@ -614,6 +614,8 @@ const PaperViewer = {
     },
 
     close() {
+        this.paperTagAutocomplete?.destroy?.();
+        this.paperTagAutocomplete = null;
         if (!this.modal) return;
         this.modal.classList.add('hidden');
         if (!document.querySelector('.modal-shell:not(.hidden)')) {
@@ -622,6 +624,9 @@ const PaperViewer = {
     },
 
     render() {
+        this.paperTagAutocomplete?.destroy?.();
+        this.paperTagAutocomplete = null;
+
         const paper = this.paper;
         const groupOptions = ['<option value="">未分组</option>']
             .concat(this.groups.map((group) => `
@@ -689,7 +694,10 @@ const PaperViewer = {
                     </label>
                     <label class="field">
                         <span>标签</span>
-                        <input id="paperViewerTags" class="form-input" type="text" value="${Utils.escapeHTML(Utils.joinTags(paper.tags || []))}" placeholder="逗号分隔">
+                        <div class="tag-autocomplete-field">
+                            <input id="paperViewerTags" class="form-input" type="text" value="${Utils.escapeHTML(Utils.joinTags(paper.tags || []))}" placeholder="逗号分隔" autocomplete="off" spellcheck="false">
+                            <div class="tag-autocomplete-panel hidden" data-paper-tag-suggestions></div>
+                        </div>
                     </label>
                     <label class="field field-span-2">
                         <span>摘要</span>
@@ -760,6 +768,13 @@ const PaperViewer = {
                 </div>
             </section>
         `;
+
+        Utils.mergeScopedTagCatalog?.('paper', paper.tags || []);
+        this.paperTagAutocomplete = Utils.bindCommaSeparatedTagInputAutocomplete?.({
+            input: this.body.querySelector('#paperViewerTags'),
+            panel: this.body.querySelector('[data-paper-tag-suggestions]'),
+            scope: 'paper'
+        }) || null;
     },
 
     paperFiguresForViewer() {
@@ -812,6 +827,7 @@ const PaperViewer = {
                 })
             );
             this.paper = payload.paper;
+            Utils.mergeScopedTagCatalog?.('paper', payload.paper?.tags || []);
             Utils.showToast('文献信息已更新');
             this.render();
             if (typeof this.onChanged === 'function') {
