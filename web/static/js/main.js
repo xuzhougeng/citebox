@@ -80,6 +80,126 @@ const AppNavigationHotkeys = {
     }
 };
 
+const AppUpdateNotice = {
+    storageKey: 'citebox.dismissedUpdateVersion',
+
+    init() {
+        if (this.initialized) return;
+        this.initialized = true;
+
+        window.setTimeout(() => {
+            void this.checkAndPrompt();
+        }, 400);
+    },
+
+    async checkAndPrompt() {
+        if (typeof API === 'undefined' || typeof API.getVersionStatus !== 'function') {
+            return;
+        }
+        if (this.isPromptVisible()) {
+            return;
+        }
+
+        try {
+            const status = await API.getVersionStatus(false);
+            if (!status?.has_update || !status.latest_version || !status.latest_release_url) {
+                this.clearDismissedVersion();
+                return;
+            }
+            if (this.dismissedVersion() === String(status.latest_version || '').trim()) {
+                return;
+            }
+            this.showPrompt(status);
+        } catch (error) {
+            // Ignore version prompt failures on page load.
+        }
+    },
+
+    dismissedVersion() {
+        try {
+            return String(window.localStorage.getItem(this.storageKey) || '').trim();
+        } catch (error) {
+            return '';
+        }
+    },
+
+    clearDismissedVersion() {
+        try {
+            window.localStorage.removeItem(this.storageKey);
+        } catch (error) {
+            // Ignore storage failures.
+        }
+    },
+
+    rememberDismissedVersion(version = '') {
+        const normalized = String(version || '').trim();
+        if (!normalized) return;
+        try {
+            window.localStorage.setItem(this.storageKey, normalized);
+        } catch (error) {
+            // Ignore storage failures.
+        }
+    },
+
+    isPromptVisible() {
+        return Boolean(this.overlay && document.body.contains(this.overlay));
+    },
+
+    closePrompt() {
+        if (!this.overlay) return;
+        this.overlay.remove();
+        this.overlay = null;
+    },
+
+    showPrompt(status = {}) {
+        this.closePrompt();
+
+        const currentVersion = String(status.current_version || '当前版本').trim();
+        const latestVersion = String(status.latest_version || '').trim();
+        const releaseURL = String(status.latest_release_url || '').trim();
+        const publishedAt = status.published_at
+            ? `发布时间：${Utils.escapeHTML(Utils.formatDate(status.published_at))}`
+            : '已有新的正式版本可用';
+
+        const overlay = document.createElement('div');
+        overlay.className = 'dialog-overlay';
+        overlay.innerHTML = `
+            <div class="dialog-box dialog-box-update">
+                <div class="dialog-update-head">
+                    <span class="dialog-update-badge">发现更新</span>
+                    <h3>检测到新版本 ${Utils.escapeHTML(latestVersion)}</h3>
+                </div>
+                <div class="dialog-body dialog-update-body">
+                    <p>当前版本是 <strong>${Utils.escapeHTML(currentVersion)}</strong>，建议更新到 <strong>${Utils.escapeHTML(latestVersion)}</strong>。</p>
+                    <p>${publishedAt}</p>
+                </div>
+                <div class="dialog-footer">
+                    <button class="btn btn-outline" type="button" data-update-action="later">暂不更新</button>
+                    <button class="btn btn-primary" type="button" data-update-action="now">立刻更新</button>
+                </div>
+            </div>
+        `;
+
+        overlay.addEventListener('click', (event) => {
+            const button = event.target.closest('[data-update-action]');
+            if (!button) return;
+
+            if (button.dataset.updateAction === 'later') {
+                this.rememberDismissedVersion(latestVersion);
+                this.closePrompt();
+                return;
+            }
+            if (button.dataset.updateAction === 'now' && releaseURL) {
+                this.closePrompt();
+                window.location.href = releaseURL;
+            }
+        });
+
+        document.body.appendChild(overlay);
+        this.overlay = overlay;
+    }
+};
+
 function restorePendingModalState() {
     const modalRestoreState = typeof Utils !== 'undefined' && typeof Utils.consumeModalRestoreState === 'function'
         ? Utils.consumeModalRestoreState()
@@ -149,6 +269,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     restorePendingModalState();
+    AppUpdateNotice.init();
 });
 
 window.addEventListener('pageshow', () => {

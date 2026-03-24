@@ -61,6 +61,43 @@
     width: min(520px, 100%);
 }
 
+.dialog-box-update {
+    width: min(480px, 100%);
+    border: 1px solid rgba(var(--accent-rgb), 0.12);
+    background:
+        radial-gradient(circle at top right, rgba(var(--accent-rgb), 0.1), transparent 14rem),
+        linear-gradient(180deg, rgba(var(--surface-rgb), 0.98), rgba(var(--surface-rgb), 0.96));
+}
+
+.dialog-update-head {
+    display: grid;
+    gap: 0.8rem;
+}
+
+.dialog-update-badge {
+    display: inline-flex;
+    width: fit-content;
+    align-items: center;
+    justify-content: center;
+    padding: 0.36rem 0.72rem;
+    border-radius: 999px;
+    background: rgba(var(--accent-rgb), 0.12);
+    color: var(--accent-deep);
+    font-size: 0.78rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.dialog-update-body {
+    display: grid;
+    gap: 0.7rem;
+}
+
+.dialog-update-body strong {
+    color: var(--ink);
+}
+
 .dialog-header h3,
 .dialog-body p {
     margin: 0;
