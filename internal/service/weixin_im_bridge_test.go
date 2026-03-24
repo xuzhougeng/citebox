@@ -155,7 +155,7 @@ func TestWeixinIMBridgeSearchAndSelectPaperByResultNumber(t *testing.T) {
 	createBridgePaper(t, repo, "Atlas Beta", "atlas-beta.pdf")
 	bridge := newTestWeixinBridge(t, svc, &fakeWeixinAIReader{answer: "ok"}, cfg.StorageDir)
 
-	reply := bridge.handleIncomingText(context.Background(), "搜 Atlas")
+	reply := bridge.handleIncomingText(context.Background(), "/search Atlas")
 	if reply == "" {
 		t.Fatal("search reply is empty")
 	}
@@ -165,7 +165,7 @@ func TestWeixinIMBridgeSearchAndSelectPaperByResultNumber(t *testing.T) {
 		t.Fatalf("search result ids = %v, want 2 ids", state.SearchPaperIDs)
 	}
 
-	reply = bridge.handleIncomingText(context.Background(), "1")
+	reply = bridge.handleIncomingText(context.Background(), "/paper 1")
 	if state.SearchPaperIDs[0] != bridge.getContext().CurrentPaperID {
 		t.Fatalf("current paper = %d, want %d from first search result", bridge.getContext().CurrentPaperID, state.SearchPaperIDs[0])
 	}
@@ -179,8 +179,8 @@ func TestWeixinIMBridgeAppendsPaperNote(t *testing.T) {
 	paper := createBridgePaper(t, repo, "Atlas Unique", "atlas-unique.pdf")
 	bridge := newTestWeixinBridge(t, svc, &fakeWeixinAIReader{answer: "ok"}, cfg.StorageDir)
 
-	_ = bridge.handleIncomingText(context.Background(), "搜 Atlas Unique")
-	reply := bridge.handleIncomingText(context.Background(), "笔记 这是从微信追加的笔记")
+	_ = bridge.handleIncomingText(context.Background(), "/search Atlas Unique")
+	reply := bridge.handleIncomingText(context.Background(), "/note 这是从微信追加的笔记")
 	if reply == "" {
 		t.Fatal("note reply is empty")
 	}
@@ -200,9 +200,9 @@ func TestWeixinIMBridgeInterpretCurrentFigureUsesFigureAction(t *testing.T) {
 	aiReader := &fakeWeixinAIReader{answer: "这是图片解读结果"}
 	bridge := newTestWeixinBridge(t, svc, aiReader, cfg.StorageDir)
 
-	_ = bridge.handleIncomingText(context.Background(), "搜 Figure Atlas")
-	_ = bridge.handleIncomingText(context.Background(), "图片 1")
-	reply := bridge.handleIncomingText(context.Background(), "解读 解释这张图")
+	_ = bridge.handleIncomingText(context.Background(), "/search Figure Atlas")
+	_ = bridge.handleIncomingText(context.Background(), "/figure 1")
+	reply := bridge.handleIncomingText(context.Background(), "/interpret 解释这张图")
 
 	if !containsAll(reply, "图片解读", "这是图片解读结果") {
 		t.Fatalf("interpret reply = %q, want figure interpretation answer", reply)
@@ -227,13 +227,13 @@ func TestWeixinIMBridgeSelectFigureResolvesPreviewPath(t *testing.T) {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
 
-	_ = bridge.handleIncomingText(context.Background(), "搜 Preview Atlas")
-	reply := bridge.handleIncomingText(context.Background(), "图片 1")
+	_ = bridge.handleIncomingText(context.Background(), "/search Preview Atlas")
+	reply := bridge.handleIncomingText(context.Background(), "/figure 1")
 	previewPath, err := bridge.selectedFigurePreviewPath(weixin.Message{
 		ItemList: []weixin.MessageItem{
 			{
 				Type:     weixin.ItemTypeText,
-				TextItem: &weixin.TextItem{Text: "图片 1"},
+				TextItem: &weixin.TextItem{Text: "/figure 1"},
 			},
 		},
 	}, reply)
@@ -251,9 +251,9 @@ func TestWeixinIMBridgeQuestionCarriesHistory(t *testing.T) {
 	aiReader := &fakeWeixinAIReader{answer: "ok"}
 	bridge := newTestWeixinBridge(t, svc, aiReader, cfg.StorageDir)
 
-	_ = bridge.handleIncomingText(context.Background(), "搜 History Atlas")
-	_ = bridge.handleIncomingText(context.Background(), "第一问")
-	_ = bridge.handleIncomingText(context.Background(), "第二问")
+	_ = bridge.handleIncomingText(context.Background(), "/search History Atlas")
+	_ = bridge.handleIncomingText(context.Background(), "/ask 第一问")
+	_ = bridge.handleIncomingText(context.Background(), "/ask 第二问")
 
 	last := aiReader.lastInput()
 	if last.Action != model.AIActionPaperQA {
@@ -261,6 +261,25 @@ func TestWeixinIMBridgeQuestionCarriesHistory(t *testing.T) {
 	}
 	if len(last.History) != 1 || last.History[0].Question != "第一问" {
 		t.Fatalf("AI history = %+v, want previous QA turn", last.History)
+	}
+}
+
+func TestWeixinIMBridgePlainTextReturnsHelpWithoutTriggeringAI(t *testing.T) {
+	svc, repo, cfg := newTestService(t)
+	createBridgePaper(t, repo, "Help Atlas", "help-atlas.pdf")
+	aiReader := &fakeWeixinAIReader{answer: "ok"}
+	bridge := newTestWeixinBridge(t, svc, aiReader, cfg.StorageDir)
+
+	_ = bridge.handleIncomingText(context.Background(), "/search Help Atlas")
+	reply := bridge.handleIncomingText(context.Background(), "第一问")
+
+	if !strings.Contains(reply, "仅响应 slash 命令") {
+		t.Fatalf("plain text reply = %q, want help text", reply)
+	}
+
+	last := aiReader.lastInput()
+	if last.Action != "" {
+		t.Fatalf("AI action = %q, want no AI call for plain text", last.Action)
 	}
 }
 

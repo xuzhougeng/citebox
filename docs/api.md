@@ -534,7 +534,7 @@ AI 流式阅读通过：
 
 说明：
 
-- `scene_models` 中新增 `translate_model_id`
+- `scene_models` 中支持按场景绑定模型，包括 `translate_model_id` 和 `im_intent_model_id`
 - `translation` 为翻译规则设置，例如：
 
 ```json
@@ -573,6 +573,7 @@ AI 流式阅读通过：
   "scene_models": {
     "default_model_id": "default-openai",
     "qa_model_id": "default-openai",
+    "im_intent_model_id": "default-openai",
     "figure_model_id": "default-openai",
     "tag_model_id": "default-openai",
     "group_model_id": "default-openai",

@@ -8,6 +8,7 @@ const SettingsPage = {
         this.addAIModelButton = document.getElementById('addAIModelButton');
         this.defaultModelSelect = document.getElementById('aiDefaultModelSelect');
         this.qaModelSelect = document.getElementById('aiQAModelSelect');
+        this.imIntentModelSelect = document.getElementById('aiIMIntentModelSelect');
         this.figureModelSelect = document.getElementById('aiFigureModelSelect');
         this.tagModelSelect = document.getElementById('aiTagModelSelect');
         this.groupModelSelect = document.getElementById('aiGroupModelSelect');
@@ -216,6 +217,7 @@ const SettingsPage = {
         [
             this.defaultModelSelect,
             this.qaModelSelect,
+            this.imIntentModelSelect,
             this.figureModelSelect,
             this.tagModelSelect,
             this.groupModelSelect,
@@ -1240,6 +1242,7 @@ const SettingsPage = {
         const safeSelection = {
             default_model_id: selection.default_model_id || this.defaultModelSelect?.value || '',
             qa_model_id: selection.qa_model_id || this.qaModelSelect?.value || '',
+            im_intent_model_id: selection.im_intent_model_id || this.imIntentModelSelect?.value || '',
             figure_model_id: selection.figure_model_id || this.figureModelSelect?.value || '',
             tag_model_id: selection.tag_model_id || this.tagModelSelect?.value || '',
             group_model_id: selection.group_model_id || this.groupModelSelect?.value || '',
@@ -1253,6 +1256,7 @@ const SettingsPage = {
         [
             [this.defaultModelSelect, safeSelection.default_model_id],
             [this.qaModelSelect, safeSelection.qa_model_id],
+            [this.imIntentModelSelect, safeSelection.im_intent_model_id],
             [this.figureModelSelect, safeSelection.figure_model_id],
             [this.tagModelSelect, safeSelection.tag_model_id],
             [this.groupModelSelect, safeSelection.group_model_id],
@@ -1273,6 +1277,7 @@ const SettingsPage = {
         return {
             default_model_id: defaultModelID,
             qa_model_id: this.qaModelSelect?.value || defaultModelID,
+            im_intent_model_id: this.imIntentModelSelect?.value || defaultModelID,
             figure_model_id: this.figureModelSelect?.value || defaultModelID,
             tag_model_id: this.tagModelSelect?.value || defaultModelID,
             group_model_id: this.groupModelSelect?.value || defaultModelID,

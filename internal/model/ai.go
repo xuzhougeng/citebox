@@ -32,6 +32,7 @@ type AIModelConfig struct {
 type AISceneModelSelection struct {
 	DefaultModelID   string `json:"default_model_id"`
 	QAModelID        string `json:"qa_model_id"`
+	IMIntentModelID  string `json:"im_intent_model_id"`
 	FigureModelID    string `json:"figure_model_id"`
 	TagModelID       string `json:"tag_model_id"`
 	GroupModelID     string `json:"group_model_id"`
@@ -175,6 +176,7 @@ func DefaultAISettings() AISettings {
 		SceneModels: AISceneModelSelection{
 			DefaultModelID:   defaultModel.ID,
 			QAModelID:        defaultModel.ID,
+			IMIntentModelID:  defaultModel.ID,
 			FigureModelID:    defaultModel.ID,
 			TagModelID:       defaultModel.ID,
 			GroupModelID:     defaultModel.ID,

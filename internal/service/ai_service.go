@@ -923,6 +923,7 @@ func normalizeAISceneModelSelection(input model.AISceneModelSelection, models []
 
 	selection.DefaultModelID = normalizeSceneModelID(selection.DefaultModelID, models, models[0].ID)
 	selection.QAModelID = normalizeSceneModelID(selection.QAModelID, models, selection.DefaultModelID)
+	selection.IMIntentModelID = normalizeSceneModelID(selection.IMIntentModelID, models, selection.DefaultModelID)
 	selection.FigureModelID = normalizeSceneModelID(selection.FigureModelID, models, selection.DefaultModelID)
 	selection.TagModelID = normalizeSceneModelID(selection.TagModelID, models, selection.DefaultModelID)
 	selection.GroupModelID = normalizeSceneModelID(selection.GroupModelID, models, selection.DefaultModelID)

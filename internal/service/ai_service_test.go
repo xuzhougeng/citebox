@@ -69,6 +69,9 @@ func TestAISettingsDefaultsAndPersistence(t *testing.T) {
 	if len(defaults.Models) != 1 || defaults.SceneModels.DefaultModelID == "" {
 		t.Fatalf("GetSettings() defaults = %+v, want default model pool and scene bindings", defaults)
 	}
+	if defaults.SceneModels.IMIntentModelID == "" {
+		t.Fatalf("GetSettings() defaults scene_models = %+v, want IM intent model default", defaults.SceneModels)
+	}
 	if len(defaults.RolePrompts) != 0 {
 		t.Fatalf("GetSettings() defaults role_prompts = %+v, want empty list", defaults.RolePrompts)
 	}
@@ -292,6 +295,39 @@ func TestResolveModelForActionUsesSceneSpecificModel(t *testing.T) {
 	}
 	if translated.ID != "translate" || translated.Provider != model.AIProviderGemini {
 		t.Fatalf("resolveModelForAction(translate) = %+v, want translate-scoped model", translated)
+	}
+}
+
+func TestUpdateModelSettingsPersistsIMIntentModelSelection(t *testing.T) {
+	_, repo, cfg := newTestService(t)
+	aiSvc := NewAIService(repo, cfg, nil)
+
+	if _, err := aiSvc.UpdateModelSettings(model.AIModelSettingsUpdate{
+		Models: []model.AIModelConfig{
+			{ID: "default", Name: "Default", Provider: model.AIProviderOpenAI, APIKey: "key-1", BaseURL: "https://api.openai.com", Model: "gpt-4.1-mini", MaxOutputTokens: 1200},
+			{ID: "intent", Name: "Intent", Provider: model.AIProviderAnthropic, APIKey: "key-2", BaseURL: "https://api.anthropic.com", Model: "claude-test", MaxOutputTokens: 800},
+		},
+		SceneModels: model.AISceneModelSelection{
+			DefaultModelID:  "default",
+			QAModelID:       "default",
+			IMIntentModelID: "intent",
+		},
+		Temperature: 0.2,
+		MaxFigures:  0,
+		Translation: model.AITranslationConfig{
+			PrimaryLanguage: "中文",
+			TargetLanguage:  "英文",
+		},
+	}); err != nil {
+		t.Fatalf("UpdateModelSettings() error = %v", err)
+	}
+
+	settings, err := aiSvc.GetSettings()
+	if err != nil {
+		t.Fatalf("GetSettings() error = %v", err)
+	}
+	if settings.SceneModels.IMIntentModelID != "intent" {
+		t.Fatalf("GetSettings() scene_models = %+v, want im_intent_model_id persisted", settings.SceneModels)
 	}
 }
 

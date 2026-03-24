@@ -261,41 +261,42 @@ func (b *WeixinIMBridge) handleIncomingText(ctx context.Context, text string) st
 		return ""
 	}
 
-	switch {
-	case isWeixinHelpCommand(text):
+	command, arg, ok := parseWeixinSlashCommand(text)
+	if !ok {
 		return weixinHelpText()
-	case text == "/status" || text == "状态":
+	}
+
+	return b.executeWeixinCommand(ctx, command, arg)
+}
+
+func (b *WeixinIMBridge) executeWeixinCommand(ctx context.Context, command, arg string) string {
+	switch command {
+	case "/help", "/h":
+		return weixinHelpText()
+	case "/status":
 		return b.statusText()
-	case text == "/reset" || text == "重置":
+	case "/reset":
 		b.setContext(weixinIMContext{})
-		return "已清空微信上下文。发送 `搜 关键词` 或 `最近文献` 开始。"
-	case text == "/figures" || text == "图片":
+		return "已清空微信上下文。发送 `/search 关键词` 或 `/recent` 开始。"
+	case "/figures":
 		return b.listFigures()
-	case text == "/recent" || text == "最近文献":
+	case "/recent":
 		return b.listRecentPapers()
-	}
-
-	if arg, ok := matchWeixinCommand(text, "/search", "搜"); ok {
+	case "/search":
 		return b.searchPapers(arg)
-	}
-	if arg, ok := matchWeixinCommand(text, "/paper", "文献"); ok {
+	case "/paper":
 		return b.selectPaper(arg)
-	}
-	if arg, ok := matchWeixinCommand(text, "/figure", "图片"); ok {
+	case "/figure":
 		return b.selectFigure(arg)
-	}
-	if arg, ok := matchWeixinCommand(text, "/note", "笔记"); ok {
+	case "/note":
 		return b.appendNote(arg)
-	}
-	if arg, ok := matchWeixinCommand(text, "/interpret", "解读"); ok {
+	case "/interpret":
 		return b.interpretCurrentFigure(ctx, arg)
+	case "/ask", "/qa":
+		return b.answerCurrentPaper(ctx, arg)
+	default:
+		return weixinHelpText()
 	}
-
-	if _, err := strconv.Atoi(text); err == nil && len(b.getContext().SearchPaperIDs) > 0 {
-		return b.selectPaper(text)
-	}
-
-	return b.answerCurrentPaper(ctx, text)
 }
 
 func (b *WeixinIMBridge) handleIncomingFile(ctx context.Context, message weixin.Message) (string, bool) {
@@ -311,7 +312,7 @@ func (b *WeixinIMBridge) handleIncomingFile(ctx context.Context, message weixin.
 func (b *WeixinIMBridge) searchPapers(query string) string {
 	query = strings.TrimSpace(query)
 	if query == "" {
-		return "用法：`搜 关键词`"
+		return "用法：`/search 关键词`"
 	}
 
 	result, err := b.libraryService.ListPapers(model.PaperFilter{
@@ -355,7 +356,7 @@ func (b *WeixinIMBridge) searchPapers(query string) string {
 		lines = append(lines, fmt.Sprintf("%d. [%d] %s", index+1, paper.ID, clipRunes(strings.TrimSpace(paper.Title), 56)))
 		lines = append(lines, fmt.Sprintf("   状态：%s | 图片：%d 张", paper.ExtractionStatus, paper.FigureCount))
 	}
-	lines = append(lines, "", "发送 `文献 1` 选中目标文献，或直接回复编号。")
+	lines = append(lines, "", "发送 `/paper 1` 选中目标文献。")
 	return strings.Join(lines, "\n")
 }
 
@@ -446,14 +447,14 @@ func (b *WeixinIMBridge) listRecentPapers() string {
 		lines = append(lines, fmt.Sprintf("%d. [%d] %s", index+1, paper.ID, clipRunes(strings.TrimSpace(paper.Title), 56)))
 		lines = append(lines, fmt.Sprintf("   更新时间：%s | 图片：%d 张", paper.UpdatedAt.Format("2006-01-02 15:04"), paper.FigureCount))
 	}
-	lines = append(lines, "", "发送 `文献 1` 选中文献。")
+	lines = append(lines, "", "发送 `/paper 1` 选中文献。")
 	return strings.Join(lines, "\n")
 }
 
 func (b *WeixinIMBridge) selectPaper(arg string) string {
 	arg = strings.TrimSpace(arg)
 	if arg == "" {
-		return "用法：`文献 序号` 或 `文献 文献ID`"
+		return "用法：`/paper 序号` 或 `/paper 文献ID`"
 	}
 
 	value, err := strconv.Atoi(arg)
@@ -493,7 +494,7 @@ func (b *WeixinIMBridge) listFigures() string {
 		lines = append(lines, fmt.Sprintf("%d. [ID %d] 第 %d 页 · 图 %d", index+1, figure.ID, figure.PageNumber, figure.FigureIndex))
 		lines = append(lines, fmt.Sprintf("   %s", clipRunes(caption, 56)))
 	}
-	lines = append(lines, "", "发送 `图片 1` 选中图片；如果原图可用，会自动回发图片预览，然后可继续发送 `解读`。")
+	lines = append(lines, "", "发送 `/figure 1` 选中图片；如果原图可用，会自动回发图片预览，然后可继续发送 `/interpret 问题`。")
 	return strings.Join(lines, "\n")
 }
 
@@ -506,7 +507,7 @@ func (b *WeixinIMBridge) selectFigure(arg string) string {
 
 	arg = strings.TrimSpace(arg)
 	if arg == "" {
-		return "用法：`图片 序号`"
+		return "用法：`/figure 序号`"
 	}
 
 	value, err := strconv.Atoi(arg)
@@ -535,7 +536,7 @@ func (b *WeixinIMBridge) selectFigure(arg string) string {
 
 	caption := firstNonEmpty(strings.TrimSpace(figure.Caption), strings.TrimSpace(figure.OriginalName), "未命名图片")
 	return fmt.Sprintf(
-		"已选中图片 [ID %d]\n第 %d 页 · 图 %d\n%s\n\n如果原图可用，下一条消息会回发图片预览。发送 `解读` 获取图片解读，或 `笔记 你的内容` 追加图片笔记。",
+		"已选中图片 [ID %d]\n第 %d 页 · 图 %d\n%s\n\n如果原图可用，下一条消息会回发图片预览。发送 `/interpret 问题` 获取图片解读，或 `/note 你的内容` 追加图片笔记。",
 		figure.ID,
 		figure.PageNumber,
 		figure.FigureIndex,
@@ -546,7 +547,7 @@ func (b *WeixinIMBridge) selectFigure(arg string) string {
 func (b *WeixinIMBridge) appendNote(note string) string {
 	note = strings.TrimSpace(note)
 	if note == "" {
-		return "用法：`笔记 你的内容`"
+		return "用法：`/note 你的内容`"
 	}
 
 	state := b.getContext()
@@ -561,7 +562,7 @@ func (b *WeixinIMBridge) appendNote(note string) string {
 			b.updateContext(func(context *weixinIMContext) {
 				context.CurrentFigureID = 0
 			})
-			return "当前图片已不存在，请重新发送 `图片` 查看列表。"
+			return "当前图片已不存在，请重新发送 `/figures` 查看列表。"
 		}
 
 		nextNotes := appendWeixinNote(figure.NotesText, note)
@@ -614,7 +615,7 @@ func (b *WeixinIMBridge) interpretCurrentFigure(ctx context.Context, question st
 func (b *WeixinIMBridge) answerCurrentPaper(ctx context.Context, question string) string {
 	question = strings.TrimSpace(question)
 	if question == "" {
-		return ""
+		return "用法：`/ask 你的问题`"
 	}
 
 	paper, errText := b.requireCurrentPaper()
@@ -650,13 +651,13 @@ func (b *WeixinIMBridge) answerCurrentPaper(ctx context.Context, question string
 func (b *WeixinIMBridge) statusText() string {
 	state := b.getContext()
 	if state.CurrentPaperID == 0 {
-		return "当前未选中文献。发送 `搜 关键词` 或 `最近文献` 开始。"
+		return "当前未选中文献。发送 `/search 关键词` 或 `/recent` 开始。"
 	}
 
 	paper, err := b.libraryService.GetPaper(state.CurrentPaperID)
 	if err != nil {
 		b.setContext(weixinIMContext{})
-		return "当前文献上下文已失效，请重新发送 `搜 关键词`。"
+		return "当前文献上下文已失效，请重新发送 `/search 关键词`。"
 	}
 
 	lines := []string{
@@ -674,7 +675,7 @@ func (b *WeixinIMBridge) statusText() string {
 	if len(state.SearchPaperIDs) > 0 {
 		lines = append(lines, fmt.Sprintf("最近检索结果：%d 条", len(state.SearchPaperIDs)))
 	}
-	lines = append(lines, "可直接提问，或发送 `图片`、`解读`、`笔记 内容`。")
+	lines = append(lines, "发送 `/ask 问题` 提问，或使用 `/figures`、`/interpret 问题`、`/note 内容`。")
 	return strings.Join(lines, "\n")
 }
 
@@ -697,7 +698,7 @@ func (b *WeixinIMBridge) formatPaperSelection(paper *model.Paper, autoSelected b
 		lines = append(lines, clipRunes(summary, 180))
 	}
 
-	lines = append(lines, "", "现在可以直接提问，发送 `图片` 查看图片列表，或 `笔记 你的内容` 追加文献笔记。")
+	lines = append(lines, "", "现在可以发送 `/ask 问题` 提问，发送 `/figures` 查看图片列表，或 `/note 你的内容` 追加文献笔记。")
 	return strings.Join(lines, "\n")
 }
 
@@ -715,13 +716,13 @@ func (b *WeixinIMBridge) activatePaperContext(paperID int64, clearSearch bool) {
 func (b *WeixinIMBridge) requireCurrentPaper() (*model.Paper, string) {
 	state := b.getContext()
 	if state.CurrentPaperID == 0 {
-		return nil, "请先发送 `搜 关键词` 或 `最近文献` 选择文献。"
+		return nil, "请先发送 `/search 关键词` 或 `/recent` 选择文献。"
 	}
 
 	paper, err := b.libraryService.GetPaper(state.CurrentPaperID)
 	if err != nil {
 		b.setContext(weixinIMContext{})
-		return nil, "当前文献已失效，请重新发送 `搜 关键词`。"
+		return nil, "当前文献已失效，请重新发送 `/search 关键词`。"
 	}
 	return paper, ""
 }
@@ -734,7 +735,7 @@ func (b *WeixinIMBridge) requireCurrentFigure() (*model.Paper, *model.Figure, st
 
 	figureID := b.getContext().CurrentFigureID
 	if figureID == 0 {
-		return nil, nil, "请先发送 `图片` 查看列表，再用 `图片 序号` 选中目标图片。"
+		return nil, nil, "请先发送 `/figures` 查看列表，再用 `/figure 序号` 选中目标图片。"
 	}
 
 	figure := findFigureByID(paper.Figures, figureID)
@@ -742,7 +743,7 @@ func (b *WeixinIMBridge) requireCurrentFigure() (*model.Paper, *model.Figure, st
 		b.updateContext(func(state *weixinIMContext) {
 			state.CurrentFigureID = 0
 		})
-		return nil, nil, "当前图片已失效，请重新发送 `图片` 查看列表。"
+		return nil, nil, "当前图片已失效，请重新发送 `/figures` 查看列表。"
 	}
 	return paper, figure, ""
 }
@@ -816,7 +817,8 @@ func (b *WeixinIMBridge) loadSyncBuf() string {
 }
 
 func (b *WeixinIMBridge) selectedFigurePreviewPath(message weixin.Message, replyText string) (string, error) {
-	if _, ok := matchWeixinCommand(extractWeixinText(message), "/figure", "图片"); !ok {
+	command, _, ok := parseWeixinSlashCommand(extractWeixinText(message))
+	if !ok || command != "/figure" {
 		return "", nil
 	}
 	if !strings.HasPrefix(strings.TrimSpace(replyText), "已选中图片 [ID ") {
@@ -919,44 +921,41 @@ func parseWeixinFileSize(value string) (int64, bool) {
 	return size, true
 }
 
-func isWeixinHelpCommand(text string) bool {
-	switch strings.TrimSpace(strings.ToLower(text)) {
-	case "/help", "/h", "帮助":
-		return true
-	default:
-		return false
-	}
-}
-
 func weixinHelpText() string {
 	return strings.Join([]string{
-		"微信 IM 可用命令：",
-		"`搜 关键词`：搜索文献",
-		"`最近文献`：查看最近几篇文献",
-		"`文献 1`：选择检索结果中的文献",
-		"`图片`：查看当前文献的图片列表",
-		"`图片 1`：选择当前文献中的图片，并回发原图预览",
+		"微信 IM 仅响应 slash 命令。可用命令：",
+		"`/search 关键词`：搜索文献",
+		"`/recent`：查看最近几篇文献",
+		"`/paper 1`：选择检索结果中的文献",
+		"`/figures`：查看当前文献的图片列表",
+		"`/figure 1`：选择当前文献中的图片，并回发原图预览",
 		"直接发送 PDF：自动导入文献并切换上下文",
-		"`笔记 内容`：追加文献/图片笔记",
-		"`解读`：解读当前图片",
-		"`状态`：查看当前上下文",
-		"`重置`：清空当前上下文",
-		"选中文献后，直接发送文字或语音即可进入文献问答。",
+		"`/ask 问题` 或 `/qa 问题`：对当前文献提问",
+		"`/note 内容`：追加文献/图片笔记",
+		"`/interpret 问题`：解读当前图片",
+		"`/status`：查看当前上下文",
+		"`/reset`：清空当前上下文",
+		"`/help`：查看帮助",
+		"未识别到 slash 命令时，会直接返回这份帮助，避免误触发 AI 问答。",
 	}, "\n")
 }
 
-func matchWeixinCommand(text, slashCommand, plainPrefix string) (string, bool) {
+func parseWeixinSlashCommand(text string) (string, string, bool) {
 	trimmed := strings.TrimSpace(text)
-	if trimmed == slashCommand || trimmed == plainPrefix {
-		return "", true
+	if trimmed == "" || !strings.HasPrefix(trimmed, "/") {
+		return "", "", false
 	}
-	if strings.HasPrefix(trimmed, slashCommand+" ") {
-		return strings.TrimSpace(strings.TrimPrefix(trimmed, slashCommand)), true
+
+	fields := strings.Fields(trimmed)
+	if len(fields) == 0 {
+		return "", "", false
 	}
-	if strings.HasPrefix(trimmed, plainPrefix+" ") {
-		return strings.TrimSpace(strings.TrimPrefix(trimmed, plainPrefix)), true
+
+	command := strings.ToLower(fields[0])
+	if len(fields) == 1 {
+		return command, "", true
 	}
-	return "", false
+	return command, strings.TrimSpace(strings.TrimPrefix(trimmed, fields[0])), true
 }
 
 func appendWeixinNote(existing, incoming string) string {
