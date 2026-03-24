@@ -213,7 +213,7 @@ function createFigureCollectionActions(options = {}) {
 }
 
 const FiguresPage = {
-    state: { page: 1, pageSize: 8, totalPages: 0, filters: { keyword: '', group_id: '', tag_id: '' } },
+    state: { page: 1, pageSize: 8, totalPages: 0, filters: { keyword: '', group_id: '', tag_id: '', sort_by: 'created_at' } },
 
     async init() {
         PaperViewer.init();
@@ -229,6 +229,7 @@ const FiguresPage = {
         this.keywordInput = document.getElementById('figureKeywordInput');
         this.groupFilter = document.getElementById('figureGroupFilter');
         this.tagFilter = document.getElementById('figureTagFilter');
+        this.sortFilter = document.getElementById('figureSortFilter');
         this.summaryStrip = document.getElementById('figureSummaryStrip');
         this.grid = document.getElementById('figureGrid');
         this.pagination = document.getElementById('figurePagination');
@@ -266,6 +267,10 @@ const FiguresPage = {
         });
         this.tagFilter.addEventListener('change', async () => {
             this.state.filters.tag_id = this.tagFilter.value;
+            await this.load(1);
+        });
+        this.sortFilter.addEventListener('change', async () => {
+            this.state.filters.sort_by = this.sortFilter.value || 'created_at';
             await this.load(1);
         });
         this.grid.addEventListener('click', async (event) => {
@@ -322,7 +327,8 @@ const FiguresPage = {
             page_size: this.state.pageSize,
             keyword: this.state.filters.keyword,
             group_id: this.state.filters.group_id,
-            tag_id: this.state.filters.tag_id
+            tag_id: this.state.filters.tag_id,
+            sort_by: this.state.filters.sort_by
         };
     },
 
@@ -368,7 +374,7 @@ const FiguresPage = {
 };
 
 const PalettesPage = {
-    state: { page: 1, pageSize: 12, totalPages: 0, filters: { keyword: '', group_id: '' } },
+    state: { page: 1, pageSize: 12, totalPages: 0, filters: { keyword: '', group_id: '', sort_by: 'updated_at' } },
 
     async init() {
         PaperViewer.init();
@@ -382,10 +388,14 @@ const PalettesPage = {
     cache() {
         this.keywordInput = document.getElementById('paletteKeywordInput');
         this.groupFilter = document.getElementById('paletteGroupFilter');
+        this.sortFilter = document.getElementById('paletteSortFilter');
         this.summaryStrip = document.getElementById('paletteSummaryStrip');
         this.grid = document.getElementById('paletteGrid');
         this.pagination = document.getElementById('palettePagination');
         this.pageControls = document.getElementById('palettePageControls');
+        if (this.sortFilter) {
+            this.sortFilter.value = this.state.filters.sort_by;
+        }
     },
 
     bind() {
@@ -397,6 +407,10 @@ const PalettesPage = {
         this.keywordInput.addEventListener('input', debouncedSearch);
         this.groupFilter.addEventListener('change', async () => {
             this.state.filters.group_id = this.groupFilter.value;
+            await this.load(1);
+        });
+        this.sortFilter.addEventListener('change', async () => {
+            this.state.filters.sort_by = this.sortFilter.value || 'updated_at';
             await this.load(1);
         });
 
@@ -454,8 +468,21 @@ const PalettesPage = {
             page,
             page_size: this.state.pageSize,
             keyword: this.state.filters.keyword,
-            group_id: this.state.filters.group_id
+            group_id: this.state.filters.group_id,
+            sort_by: this.state.filters.sort_by
         };
+    },
+
+    currentSortLabel() {
+        switch (this.state.filters.sort_by) {
+        case 'created_at':
+            return '按配色创建时间';
+        case 'paper_created_at_figure_index':
+            return '按文献创建时间，文献内按 Fig 顺序';
+        case 'updated_at':
+        default:
+            return '按配色更新时间';
+        }
     },
 
     async fetchPalettePage(page = this.state.page) {
@@ -511,6 +538,7 @@ const PalettesPage = {
             <div class="stat-card"><span>已保存配色</span><strong>${payload.total || 0}</strong></div>
             <div class="stat-card"><span>当前页</span><strong>${palettes.length}</strong></div>
             <div class="stat-card"><span>来源分组</span><strong>${Utils.escapeHTML(this.groupFilter.selectedOptions[0]?.textContent || '全部分组')}</strong></div>
+            <div class="stat-card"><span>排序方式</span><strong>${Utils.escapeHTML(this.currentSortLabel())}</strong></div>
         `;
         this.pageControls.innerHTML = this.state.totalPages > 1 ? `
             <button class="btn btn-outline" type="button" data-page-step="-1" ${this.state.page <= 1 ? 'disabled' : ''}>上一页</button>
@@ -1282,7 +1310,7 @@ const TagsPage = {
 };
 
 const NotesPage = {
-    state: { mode: 'paper', page: 1, pageSize: 8, totalPages: 0, filters: { keyword: '', group_id: '', tag_id: '' } },
+    state: { mode: 'paper', page: 1, pageSize: 8, totalPages: 0, filters: { keyword: '', group_id: '', tag_id: '', sort_by: 'created_at' } },
 
     async init() {
         PaperViewer.init();
@@ -1300,6 +1328,7 @@ const NotesPage = {
         this.keywordInput = document.getElementById('notesKeywordInput');
         this.groupFilter = document.getElementById('notesGroupFilter');
         this.tagFilter = document.getElementById('notesTagFilter');
+        this.sortFilter = document.getElementById('notesSortFilter');
         this.tagFilterLabel = document.getElementById('notesTagFilterLabel');
         this.typeSwitch = document.getElementById('notesTypeSwitch');
         this.filterDescription = document.getElementById('notesFilterDescription');
@@ -1340,6 +1369,10 @@ const NotesPage = {
             this.state.filters.tag_id = this.tagFilter.value;
             await this.load(1);
         });
+        this.sortFilter.addEventListener('change', async () => {
+            this.state.filters.sort_by = this.sortFilter.value || this.defaultSortByForMode(this.state.mode);
+            await this.load(1);
+        });
         this.typeSwitch.addEventListener('click', async (event) => {
             const button = event.target.closest('[data-notes-mode]');
             if (!button) return;
@@ -1349,6 +1382,7 @@ const NotesPage = {
             this.state.page = 1;
             this.state.totalPages = 0;
             this.state.filters.tag_id = '';
+            this.state.filters.sort_by = this.defaultSortByForMode(nextMode);
             this.syncModeUI();
             await this.loadTags();
             await this.load(1);
@@ -1407,6 +1441,7 @@ const NotesPage = {
             ? '这里只显示已经写过文献笔记的条目，你可以继续编辑、回看内容或跳转到来源文献。'
             : '这里只显示已经写过图片笔记的条目，你可以继续编辑、回看大图或跳转到来源文献。';
         this.tagFilterLabel.textContent = isPaperMode ? '文献标签' : '图片标签';
+        this.syncSortFilter();
 
         Array.from(this.typeSwitch.querySelectorAll('[data-notes-mode]')).forEach((button) => {
             const active = button.dataset.notesMode === this.state.mode;
@@ -1418,6 +1453,41 @@ const NotesPage = {
 
     currentTagScope() {
         return this.state.mode === 'paper' ? 'paper' : 'figure';
+    },
+
+    defaultSortByForMode(mode = this.state.mode) {
+        return mode === 'figure' ? 'updated_at' : 'created_at';
+    },
+
+    sortOptions() {
+        if (this.state.mode === 'figure') {
+            return [
+                { value: 'updated_at', label: '按图片笔记更新时间' },
+                { value: 'paper_created_at_figure_index', label: '按文献创建时间，文献内按 Fig 顺序' },
+                { value: 'created_at', label: '按图片创建时间' }
+            ];
+        }
+        return [
+            { value: 'created_at', label: '按文献创建时间' },
+            { value: 'updated_at', label: '按文献更新时间' }
+        ];
+    },
+
+    syncSortFilter() {
+        if (!this.sortFilter) return;
+        const options = this.sortOptions();
+        const validValues = options.map((option) => option.value);
+        if (!validValues.includes(this.state.filters.sort_by)) {
+            this.state.filters.sort_by = this.defaultSortByForMode(this.state.mode);
+        }
+        this.sortFilter.innerHTML = options.map((option) => `
+            <option value="${option.value}" ${option.value === this.state.filters.sort_by ? 'selected' : ''}>${option.label}</option>
+        `).join('');
+    },
+
+    currentSortLabel() {
+        const match = this.sortOptions().find((option) => option.value === this.state.filters.sort_by);
+        return match ? match.label : '';
     },
 
     async loadGroups() {
@@ -1445,7 +1515,8 @@ const NotesPage = {
             keyword: this.state.filters.keyword,
             group_id: this.state.filters.group_id,
             tag_id: this.state.filters.tag_id,
-            has_paper_notes: true
+            has_paper_notes: true,
+            sort_by: this.state.filters.sort_by
         };
     },
 
@@ -1456,7 +1527,8 @@ const NotesPage = {
             keyword: this.state.filters.keyword,
             group_id: this.state.filters.group_id,
             tag_id: this.state.filters.tag_id,
-            has_notes: true
+            has_notes: true,
+            sort_by: this.state.filters.sort_by
         };
     },
 
@@ -1487,6 +1559,7 @@ const NotesPage = {
             <div class="stat-card"><span>当前页</span><strong>${papers.length}</strong></div>
             <div class="stat-card"><span>来源分组</span><strong>${Utils.escapeHTML(this.groupFilter.selectedOptions[0]?.textContent || '全部分组')}</strong></div>
             <div class="stat-card"><span>文献标签</span><strong>${Utils.escapeHTML(this.tagFilter.selectedOptions[0]?.textContent || '全部文献标签')}</strong></div>
+            <div class="stat-card"><span>排序方式</span><strong>${Utils.escapeHTML(this.currentSortLabel())}</strong></div>
         `;
         this.renderPageControls();
         this.grid.innerHTML = papers.length
@@ -1532,6 +1605,7 @@ const NotesPage = {
             <div class="stat-card"><span>当前页</span><strong>${figures.length}</strong></div>
             <div class="stat-card"><span>来源分组</span><strong>${Utils.escapeHTML(this.groupFilter.selectedOptions[0]?.textContent || '全部分组')}</strong></div>
             <div class="stat-card"><span>图片标签</span><strong>${Utils.escapeHTML(this.tagFilter.selectedOptions[0]?.textContent || '全部图片标签')}</strong></div>
+            <div class="stat-card"><span>排序方式</span><strong>${Utils.escapeHTML(this.currentSortLabel())}</strong></div>
         `;
         this.renderPageControls();
         this.grid.innerHTML = figures.length

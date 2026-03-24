@@ -9,7 +9,8 @@ const LibraryPage = {
             keyword_scope: 'full_text',
             group_id: '',
             tag_id: '',
-            status: 'completed'
+            status: 'completed',
+            sort_by: 'created_at'
         }
     },
 
@@ -62,6 +63,7 @@ const LibraryPage = {
         this.groupFilter = document.getElementById('groupFilter');
         this.tagFilter = document.getElementById('tagFilter');
         this.statusFilter = document.getElementById('statusFilter');
+        this.sortFilter = document.getElementById('sortFilter');
         this.paperList = document.getElementById('paperList');
         this.resultMeta = document.getElementById('libraryResultMeta');
         this.pagination = document.getElementById('pagination');
@@ -79,6 +81,9 @@ const LibraryPage = {
         }
         if (this.statusFilter) {
             this.statusFilter.value = this.state.filters.status;
+        }
+        if (this.sortFilter) {
+            this.sortFilter.value = this.state.filters.sort_by;
         }
     },
 
@@ -112,6 +117,12 @@ const LibraryPage = {
 
         this.statusFilter.addEventListener('change', async () => {
             this.state.filters.status = this.statusFilter.value;
+            this.state.currentPage = 1;
+            await this.loadPapers();
+        });
+
+        this.sortFilter.addEventListener('change', async () => {
+            this.state.filters.sort_by = this.sortFilter.value || 'created_at';
             this.state.currentPage = 1;
             await this.loadPapers();
         });
@@ -197,7 +208,8 @@ const LibraryPage = {
                 keyword_scope: this.state.filters.keyword_scope,
                 group_id: this.state.filters.group_id,
                 tag_id: this.state.filters.tag_id,
-                status: this.state.filters.status
+                status: this.state.filters.status,
+                sort_by: this.state.filters.sort_by
             });
             this.state.papers = payload.papers || [];
             this.state.total = payload.total || 0;
@@ -245,17 +257,19 @@ const LibraryPage = {
             ? Utils.statusLabel(this.state.filters.status)
             : '全部状态';
         const scopeLabel = this.keywordScopeLabel();
+        const sortLabel = this.sortLabel();
 
         this.resultMeta.innerHTML = `
             <div>
                 <p class="eyebrow">Result Set</p>
                 <h2>找到 ${this.state.total || 0} 篇文献</h2>
-                <p>当前聚焦：${Utils.escapeHTML(statusLabel)}。关键词检索范围：${Utils.escapeHTML(scopeLabel)}。</p>
+                <p>当前聚焦：${Utils.escapeHTML(statusLabel)}。关键词检索范围：${Utils.escapeHTML(scopeLabel)}。排序：${Utils.escapeHTML(sortLabel)}。</p>
             </div>
             <div class="library-result-meta-tags">
                 <span class="tag-pill neutral">当前页 ${this.state.papers.length} 篇</span>
                 ${this.state.filters.keyword ? `<span class="tag-pill neutral">关键词：${Utils.escapeHTML(this.state.filters.keyword)}</span>` : ''}
                 <span class="tag-pill neutral">范围：${Utils.escapeHTML(scopeLabel)}</span>
+                <span class="tag-pill neutral">排序：${Utils.escapeHTML(sortLabel)}</span>
                 ${this.state.filters.group_id ? '<span class="tag-pill neutral">已限定分组</span>' : ''}
                 ${this.state.filters.tag_id ? '<span class="tag-pill neutral">已限定标签</span>' : ''}
             </div>
@@ -264,6 +278,10 @@ const LibraryPage = {
 
     keywordScopeLabel() {
         return this.state.filters.keyword_scope === 'title_abstract' ? '标题 + 摘要' : '全文';
+    },
+
+    sortLabel() {
+        return this.state.filters.sort_by === 'updated_at' ? '按文献更新时间' : '按文献创建时间';
     },
 
     updateKeywordPlaceholder() {

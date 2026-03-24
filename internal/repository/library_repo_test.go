@@ -840,6 +840,162 @@ func TestListTagsIncludesPaperAndFigureCounts(t *testing.T) {
 	}
 }
 
+func TestListFiguresSupportsSortModes(t *testing.T) {
+	repo := newTestRepository(t)
+
+	oldPaper, err := repo.CreatePaper(PaperUpsertInput{
+		Title:            "Older Paper",
+		OriginalFilename: "older-paper.pdf",
+		StoredPDFName:    "older-paper.pdf",
+		FileSize:         128,
+		ContentType:      "application/pdf",
+		ExtractionStatus: "completed",
+		Figures: []FigureUpsertInput{
+			{Filename: "older_fig2.png", OriginalName: "older_fig2.png", ContentType: "image/png", PageNumber: 1, FigureIndex: 2, Caption: "Older Fig 2"},
+			{Filename: "older_fig1.png", OriginalName: "older_fig1.png", ContentType: "image/png", PageNumber: 3, FigureIndex: 1, Caption: "Older Fig 1"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreatePaper(oldPaper) error = %v", err)
+	}
+
+	newPaper, err := repo.CreatePaper(PaperUpsertInput{
+		Title:            "Newer Paper",
+		OriginalFilename: "newer-paper.pdf",
+		StoredPDFName:    "newer-paper.pdf",
+		FileSize:         128,
+		ContentType:      "application/pdf",
+		ExtractionStatus: "completed",
+		Figures: []FigureUpsertInput{
+			{Filename: "newer_fig1.png", OriginalName: "newer_fig1.png", ContentType: "image/png", PageNumber: 2, FigureIndex: 1, Caption: "Newer Fig 1"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreatePaper(newPaper) error = %v", err)
+	}
+
+	if _, err := repo.db.Exec(`UPDATE papers SET created_at = '2000-01-01 00:00:00' WHERE id = ?`, oldPaper.ID); err != nil {
+		t.Fatalf("seed old paper created_at error = %v", err)
+	}
+	if _, err := repo.db.Exec(`UPDATE papers SET created_at = '2001-01-01 00:00:00' WHERE id = ?`, newPaper.ID); err != nil {
+		t.Fatalf("seed new paper created_at error = %v", err)
+	}
+	if _, err := repo.db.Exec(`UPDATE paper_figures SET created_at = '2002-01-03 00:00:00' WHERE id = ?`, oldPaper.Figures[0].ID); err != nil {
+		t.Fatalf("seed older fig2 created_at error = %v", err)
+	}
+	if _, err := repo.db.Exec(`UPDATE paper_figures SET created_at = '2002-01-01 00:00:00' WHERE id = ?`, oldPaper.Figures[1].ID); err != nil {
+		t.Fatalf("seed older fig1 created_at error = %v", err)
+	}
+	if _, err := repo.db.Exec(`UPDATE paper_figures SET created_at = '2002-01-02 00:00:00' WHERE id = ?`, newPaper.Figures[0].ID); err != nil {
+		t.Fatalf("seed newer fig1 created_at error = %v", err)
+	}
+	if _, err := repo.db.Exec(`UPDATE paper_figures SET updated_at = '2003-01-03 00:00:00' WHERE id = ?`, oldPaper.Figures[0].ID); err != nil {
+		t.Fatalf("seed older fig2 updated_at error = %v", err)
+	}
+	if _, err := repo.db.Exec(`UPDATE paper_figures SET updated_at = '2003-01-01 00:00:00' WHERE id = ?`, oldPaper.Figures[1].ID); err != nil {
+		t.Fatalf("seed older fig1 updated_at error = %v", err)
+	}
+	if _, err := repo.db.Exec(`UPDATE paper_figures SET updated_at = '2003-01-02 00:00:00' WHERE id = ?`, newPaper.Figures[0].ID); err != nil {
+		t.Fatalf("seed newer fig1 updated_at error = %v", err)
+	}
+
+	byFigureCreated, total, err := repo.ListFigures(model.FigureFilter{SortBy: "created_at", Page: 1, PageSize: 10})
+	if err != nil {
+		t.Fatalf("ListFigures(created_at) error = %v", err)
+	}
+	if total != 3 || len(byFigureCreated) != 3 {
+		t.Fatalf("ListFigures(created_at) total=%d len=%d, want 3/3", total, len(byFigureCreated))
+	}
+	if byFigureCreated[0].ID != oldPaper.Figures[0].ID || byFigureCreated[1].ID != newPaper.Figures[0].ID || byFigureCreated[2].ID != oldPaper.Figures[1].ID {
+		t.Fatalf("ListFigures(created_at) order ids = [%d %d %d], want [%d %d %d]", byFigureCreated[0].ID, byFigureCreated[1].ID, byFigureCreated[2].ID, oldPaper.Figures[0].ID, newPaper.Figures[0].ID, oldPaper.Figures[1].ID)
+	}
+
+	byPaperCreated, total, err := repo.ListFigures(model.FigureFilter{SortBy: "paper_created_at_figure_index", Page: 1, PageSize: 10})
+	if err != nil {
+		t.Fatalf("ListFigures(paper_created_at_figure_index) error = %v", err)
+	}
+	if total != 3 || len(byPaperCreated) != 3 {
+		t.Fatalf("ListFigures(paper_created_at_figure_index) total=%d len=%d, want 3/3", total, len(byPaperCreated))
+	}
+	if byPaperCreated[0].ID != newPaper.Figures[0].ID || byPaperCreated[1].ID != oldPaper.Figures[1].ID || byPaperCreated[2].ID != oldPaper.Figures[0].ID {
+		t.Fatalf("ListFigures(paper_created_at_figure_index) order ids = [%d %d %d], want [%d %d %d]", byPaperCreated[0].ID, byPaperCreated[1].ID, byPaperCreated[2].ID, newPaper.Figures[0].ID, oldPaper.Figures[1].ID, oldPaper.Figures[0].ID)
+	}
+
+	byFigureUpdated, total, err := repo.ListFigures(model.FigureFilter{SortBy: "updated_at", Page: 1, PageSize: 10})
+	if err != nil {
+		t.Fatalf("ListFigures(updated_at) error = %v", err)
+	}
+	if total != 3 || len(byFigureUpdated) != 3 {
+		t.Fatalf("ListFigures(updated_at) total=%d len=%d, want 3/3", total, len(byFigureUpdated))
+	}
+	if byFigureUpdated[0].ID != oldPaper.Figures[0].ID || byFigureUpdated[1].ID != newPaper.Figures[0].ID || byFigureUpdated[2].ID != oldPaper.Figures[1].ID {
+		t.Fatalf("ListFigures(updated_at) order ids = [%d %d %d], want [%d %d %d]", byFigureUpdated[0].ID, byFigureUpdated[1].ID, byFigureUpdated[2].ID, oldPaper.Figures[0].ID, newPaper.Figures[0].ID, oldPaper.Figures[1].ID)
+	}
+}
+
+func TestListPapersSupportsSortModes(t *testing.T) {
+	repo := newTestRepository(t)
+
+	oldPaper, err := repo.CreatePaper(PaperUpsertInput{
+		Title:            "Older Paper",
+		OriginalFilename: "older-paper.pdf",
+		StoredPDFName:    "older-paper.pdf",
+		FileSize:         128,
+		ContentType:      "application/pdf",
+		ExtractionStatus: "completed",
+		Figures: []FigureUpsertInput{
+			{Filename: "older_fig1.png", OriginalName: "older_fig1.png", ContentType: "image/png", PageNumber: 1, FigureIndex: 1},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreatePaper(oldPaper) error = %v", err)
+	}
+
+	newPaper, err := repo.CreatePaper(PaperUpsertInput{
+		Title:            "Newer Paper",
+		OriginalFilename: "newer-paper.pdf",
+		StoredPDFName:    "newer-paper.pdf",
+		FileSize:         128,
+		ContentType:      "application/pdf",
+		ExtractionStatus: "completed",
+		Figures: []FigureUpsertInput{
+			{Filename: "newer_fig1.png", OriginalName: "newer_fig1.png", ContentType: "image/png", PageNumber: 1, FigureIndex: 1},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreatePaper(newPaper) error = %v", err)
+	}
+
+	if _, err := repo.db.Exec(`UPDATE papers SET created_at = '2000-01-01 00:00:00', updated_at = '2002-01-02 00:00:00' WHERE id = ?`, oldPaper.ID); err != nil {
+		t.Fatalf("seed old paper timestamps error = %v", err)
+	}
+	if _, err := repo.db.Exec(`UPDATE papers SET created_at = '2001-01-01 00:00:00', updated_at = '2002-01-01 00:00:00' WHERE id = ?`, newPaper.ID); err != nil {
+		t.Fatalf("seed new paper timestamps error = %v", err)
+	}
+
+	byCreated, total, err := repo.ListPapers(model.PaperFilter{SortBy: "created_at", Page: 1, PageSize: 10})
+	if err != nil {
+		t.Fatalf("ListPapers(created_at) error = %v", err)
+	}
+	if total != 2 || len(byCreated) != 2 {
+		t.Fatalf("ListPapers(created_at) total=%d len=%d, want 2/2", total, len(byCreated))
+	}
+	if byCreated[0].ID != newPaper.ID || byCreated[1].ID != oldPaper.ID {
+		t.Fatalf("ListPapers(created_at) order ids = [%d %d], want [%d %d]", byCreated[0].ID, byCreated[1].ID, newPaper.ID, oldPaper.ID)
+	}
+
+	byUpdated, total, err := repo.ListPapers(model.PaperFilter{SortBy: "updated_at", Page: 1, PageSize: 10})
+	if err != nil {
+		t.Fatalf("ListPapers(updated_at) error = %v", err)
+	}
+	if total != 2 || len(byUpdated) != 2 {
+		t.Fatalf("ListPapers(updated_at) total=%d len=%d, want 2/2", total, len(byUpdated))
+	}
+	if byUpdated[0].ID != oldPaper.ID || byUpdated[1].ID != newPaper.ID {
+		t.Fatalf("ListPapers(updated_at) order ids = [%d %d], want [%d %d]", byUpdated[0].ID, byUpdated[1].ID, oldPaper.ID, newPaper.ID)
+	}
+}
+
 func TestListTagsSeparatesSameNameAcrossScopes(t *testing.T) {
 	repo := newTestRepository(t)
 
@@ -1427,5 +1583,117 @@ func TestUpsertPaletteHydratesFigureSummaries(t *testing.T) {
 	}
 	if list[0].FigureID != paper.Figures[0].ID {
 		t.Fatalf("ListPalettes() figure_id = %d, want %d", list[0].FigureID, paper.Figures[0].ID)
+	}
+}
+
+func TestListPalettesSupportsSortModes(t *testing.T) {
+	repo := newTestRepository(t)
+
+	oldPaper, err := repo.CreatePaper(PaperUpsertInput{
+		Title:            "Older Paper",
+		OriginalFilename: "older-paper.pdf",
+		StoredPDFName:    "older-paper.pdf",
+		FileSize:         128,
+		ContentType:      "application/pdf",
+		ExtractionStatus: "completed",
+		Figures: []FigureUpsertInput{
+			{Filename: "older_fig2.png", OriginalName: "older_fig2.png", ContentType: "image/png", PageNumber: 1, FigureIndex: 2, Caption: "Older Fig 2"},
+			{Filename: "older_fig1.png", OriginalName: "older_fig1.png", ContentType: "image/png", PageNumber: 3, FigureIndex: 1, Caption: "Older Fig 1"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreatePaper(oldPaper) error = %v", err)
+	}
+
+	newPaper, err := repo.CreatePaper(PaperUpsertInput{
+		Title:            "Newer Paper",
+		OriginalFilename: "newer-paper.pdf",
+		StoredPDFName:    "newer-paper.pdf",
+		FileSize:         128,
+		ContentType:      "application/pdf",
+		ExtractionStatus: "completed",
+		Figures: []FigureUpsertInput{
+			{Filename: "newer_fig1.png", OriginalName: "newer_fig1.png", ContentType: "image/png", PageNumber: 2, FigureIndex: 1, Caption: "Newer Fig 1"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreatePaper(newPaper) error = %v", err)
+	}
+
+	oldFig2Palette, err := repo.UpsertPalette(PaletteUpsertInput{
+		PaperID:    oldPaper.ID,
+		FigureID:   oldPaper.Figures[0].ID,
+		Name:       "Older Fig 2 Palette",
+		ColorsJSON: `["#111111","#222222"]`,
+	})
+	if err != nil {
+		t.Fatalf("UpsertPalette(oldFig2) error = %v", err)
+	}
+	oldFig1Palette, err := repo.UpsertPalette(PaletteUpsertInput{
+		PaperID:    oldPaper.ID,
+		FigureID:   oldPaper.Figures[1].ID,
+		Name:       "Older Fig 1 Palette",
+		ColorsJSON: `["#333333","#444444"]`,
+	})
+	if err != nil {
+		t.Fatalf("UpsertPalette(oldFig1) error = %v", err)
+	}
+	newFig1Palette, err := repo.UpsertPalette(PaletteUpsertInput{
+		PaperID:    newPaper.ID,
+		FigureID:   newPaper.Figures[0].ID,
+		Name:       "Newer Fig 1 Palette",
+		ColorsJSON: `["#555555","#666666"]`,
+	})
+	if err != nil {
+		t.Fatalf("UpsertPalette(newFig1) error = %v", err)
+	}
+
+	if _, err := repo.db.Exec(`UPDATE papers SET created_at = '2000-01-01 00:00:00' WHERE id = ?`, oldPaper.ID); err != nil {
+		t.Fatalf("seed old paper created_at error = %v", err)
+	}
+	if _, err := repo.db.Exec(`UPDATE papers SET created_at = '2001-01-01 00:00:00' WHERE id = ?`, newPaper.ID); err != nil {
+		t.Fatalf("seed new paper created_at error = %v", err)
+	}
+	if _, err := repo.db.Exec(`UPDATE color_palettes SET created_at = '2002-01-03 00:00:00', updated_at = '2003-01-01 00:00:00' WHERE id = ?`, oldFig2Palette.ID); err != nil {
+		t.Fatalf("seed old fig2 palette timestamps error = %v", err)
+	}
+	if _, err := repo.db.Exec(`UPDATE color_palettes SET created_at = '2002-01-01 00:00:00', updated_at = '2003-01-03 00:00:00' WHERE id = ?`, oldFig1Palette.ID); err != nil {
+		t.Fatalf("seed old fig1 palette timestamps error = %v", err)
+	}
+	if _, err := repo.db.Exec(`UPDATE color_palettes SET created_at = '2002-01-02 00:00:00', updated_at = '2003-01-02 00:00:00' WHERE id = ?`, newFig1Palette.ID); err != nil {
+		t.Fatalf("seed new fig1 palette timestamps error = %v", err)
+	}
+
+	byCreated, total, err := repo.ListPalettes(model.PaletteFilter{SortBy: "created_at", Page: 1, PageSize: 10})
+	if err != nil {
+		t.Fatalf("ListPalettes(created_at) error = %v", err)
+	}
+	if total != 3 || len(byCreated) != 3 {
+		t.Fatalf("ListPalettes(created_at) total=%d len=%d, want 3/3", total, len(byCreated))
+	}
+	if byCreated[0].ID != oldFig2Palette.ID || byCreated[1].ID != newFig1Palette.ID || byCreated[2].ID != oldFig1Palette.ID {
+		t.Fatalf("ListPalettes(created_at) order ids = [%d %d %d], want [%d %d %d]", byCreated[0].ID, byCreated[1].ID, byCreated[2].ID, oldFig2Palette.ID, newFig1Palette.ID, oldFig1Palette.ID)
+	}
+
+	byUpdated, total, err := repo.ListPalettes(model.PaletteFilter{SortBy: "updated_at", Page: 1, PageSize: 10})
+	if err != nil {
+		t.Fatalf("ListPalettes(updated_at) error = %v", err)
+	}
+	if total != 3 || len(byUpdated) != 3 {
+		t.Fatalf("ListPalettes(updated_at) total=%d len=%d, want 3/3", total, len(byUpdated))
+	}
+	if byUpdated[0].ID != oldFig1Palette.ID || byUpdated[1].ID != newFig1Palette.ID || byUpdated[2].ID != oldFig2Palette.ID {
+		t.Fatalf("ListPalettes(updated_at) order ids = [%d %d %d], want [%d %d %d]", byUpdated[0].ID, byUpdated[1].ID, byUpdated[2].ID, oldFig1Palette.ID, newFig1Palette.ID, oldFig2Palette.ID)
+	}
+
+	byPaperCreated, total, err := repo.ListPalettes(model.PaletteFilter{SortBy: "paper_created_at_figure_index", Page: 1, PageSize: 10})
+	if err != nil {
+		t.Fatalf("ListPalettes(paper_created_at_figure_index) error = %v", err)
+	}
+	if total != 3 || len(byPaperCreated) != 3 {
+		t.Fatalf("ListPalettes(paper_created_at_figure_index) total=%d len=%d, want 3/3", total, len(byPaperCreated))
+	}
+	if byPaperCreated[0].ID != newFig1Palette.ID || byPaperCreated[1].ID != oldFig1Palette.ID || byPaperCreated[2].ID != oldFig2Palette.ID {
+		t.Fatalf("ListPalettes(paper_created_at_figure_index) order ids = [%d %d %d], want [%d %d %d]", byPaperCreated[0].ID, byPaperCreated[1].ID, byPaperCreated[2].ID, newFig1Palette.ID, oldFig1Palette.ID, oldFig2Palette.ID)
 	}
 }

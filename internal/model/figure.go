@@ -43,6 +43,7 @@ type FigureFilter struct {
 	GroupID  *int64 `json:"group_id,omitempty"`
 	TagID    *int64 `json:"tag_id,omitempty"`
 	HasNotes bool   `json:"has_notes,omitempty"`
+	SortBy   string `json:"sort_by,omitempty"`
 	Page     int    `json:"page"`
 	PageSize int    `json:"page_size"`
 }

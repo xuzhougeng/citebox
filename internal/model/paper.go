@@ -71,6 +71,7 @@ type PaperFilter struct {
 	TagID         *int64 `json:"tag_id,omitempty"`
 	Status        string `json:"status"`
 	HasPaperNotes bool   `json:"has_paper_notes,omitempty"`
+	SortBy        string `json:"sort_by,omitempty"`
 	Page          int    `json:"page"`
 	PageSize      int    `json:"page_size"`
 }

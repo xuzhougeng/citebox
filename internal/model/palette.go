@@ -27,6 +27,7 @@ type Palette struct {
 type PaletteFilter struct {
 	Keyword  string `json:"keyword"`
 	GroupID  *int64 `json:"group_id,omitempty"`
+	SortBy   string `json:"sort_by,omitempty"`
 	Page     int    `json:"page"`
 	PageSize int    `json:"page_size"`
 }

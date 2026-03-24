@@ -46,7 +46,7 @@
                     <p>支持按来源分组和图片标签筛选，快速找到目标图片。</p>
                 </div>
             </div>
-            <div class="filters-grid three-cols">
+            <div class="filters-grid">
                 <label class="field">
                     <span>关键词</span>
                     <input id="figureKeywordInput" class="form-input" type="text" placeholder="文献标题、图片说明、标签、笔记">
@@ -61,6 +61,13 @@
                     <span>图片标签</span>
                     <select id="figureTagFilter" class="form-input">
                         <option value="">全部图片标签</option>
+                    </select>
+                </label>
+                <label class="field">
+                    <span>排序方式</span>
+                    <select id="figureSortFilter" class="form-input">
+                        <option value="created_at">按图片创建时间</option>
+                        <option value="paper_created_at_figure_index">按文献创建时间，文献内按 Fig 顺序</option>
                     </select>
                 </label>
             </div>

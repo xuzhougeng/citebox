@@ -31,6 +31,7 @@ func (h *PaletteHandler) List(w http.ResponseWriter, r *http.Request) {
 	result, err := h.service.ListPalettes(model.PaletteFilter{
 		Keyword:  strings.TrimSpace(r.URL.Query().Get("keyword")),
 		GroupID:  groupID,
+		SortBy:   strings.TrimSpace(r.URL.Query().Get("sort_by")),
 		Page:     page,
 		PageSize: pageSize,
 	})

@@ -73,7 +73,7 @@ func (r *PaletteRepository) ListPalettes(filter model.PaletteFilter) ([]model.Pa
 
 	offset := (filter.Page - 1) * filter.PageSize
 	queryArgs := append(append([]interface{}{}, args...), filter.PageSize, offset)
-	rows, err := r.db.Query(paletteSelectSQL+whereClause+` ORDER BY cp.updated_at DESC, cp.id DESC LIMIT ? OFFSET ?`, queryArgs...)
+	rows, err := r.db.Query(paletteSelectSQL+whereClause+` `+buildPaletteOrderBy(filter)+` LIMIT ? OFFSET ?`, queryArgs...)
 	if err != nil {
 		return nil, 0, wrapDBError(err, "查询配色列表失败")
 	}
@@ -123,6 +123,26 @@ func buildPaletteWhere(filter model.PaletteFilter) (string, []interface{}) {
 		return "", args
 	}
 	return " WHERE " + strings.Join(conditions, " AND "), args
+}
+
+func buildPaletteOrderBy(filter model.PaletteFilter) string {
+	switch strings.TrimSpace(filter.SortBy) {
+	case "created_at":
+		return "ORDER BY cp.created_at DESC, cp.id DESC"
+	case "paper_created_at_figure_index":
+		return `ORDER BY
+			p.created_at DESC,
+			p.id DESC,
+			pf.figure_index ASC,
+			pf.page_number ASC,
+			CASE WHEN pf.parent_figure_id IS NULL THEN 0 ELSE 1 END ASC,
+			pf.subfigure_label ASC,
+			cp.id ASC`
+	case "updated_at":
+		fallthrough
+	default:
+		return "ORDER BY cp.updated_at DESC, cp.id DESC"
+	}
 }
 
 type paletteScanner interface {

@@ -41,6 +41,7 @@ func (h *FigureHandler) List(w http.ResponseWriter, r *http.Request) {
 		GroupID:  groupID,
 		TagID:    tagID,
 		HasNotes: hasNotesValue == "1" || strings.EqualFold(hasNotesValue, "true"),
+		SortBy:   strings.TrimSpace(r.URL.Query().Get("sort_by")),
 		Page:     page,
 		PageSize: pageSize,
 	})

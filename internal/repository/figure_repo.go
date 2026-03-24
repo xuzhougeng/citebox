@@ -390,6 +390,21 @@ func buildFigureWhere(filter model.FigureFilter) (string, []interface{}) {
 
 // buildFigureOrderBy 构建图片排序
 func buildFigureOrderBy(filter model.FigureFilter) string {
+	switch strings.TrimSpace(filter.SortBy) {
+	case "updated_at":
+		return "ORDER BY pf.updated_at DESC, pf.id DESC"
+	case "created_at":
+		return "ORDER BY pf.created_at DESC, pf.id DESC"
+	case "paper_created_at_figure_index":
+		return `ORDER BY
+			p.created_at DESC,
+			p.id DESC,
+			pf.figure_index ASC,
+			pf.page_number ASC,
+			CASE WHEN pf.parent_figure_id IS NULL THEN 0 ELSE 1 END ASC,
+			pf.subfigure_label ASC,
+			pf.id ASC`
+	}
 	if filter.HasNotes {
 		return "ORDER BY pf.updated_at DESC, pf.id DESC"
 	}

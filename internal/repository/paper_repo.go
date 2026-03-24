@@ -311,7 +311,7 @@ func (r *PaperRepository) ListPapers(filter model.PaperFilter) ([]model.Paper, i
 		FROM papers p
 		LEFT JOIN groups g ON g.id = p.group_id
 	` + whereClause + `
-		ORDER BY p.created_at DESC, p.id DESC
+		` + buildPaperOrderBy(filter) + `
 		LIMIT ? OFFSET ?
 	`
 
@@ -576,6 +576,17 @@ func buildPaperWhere(filter model.PaperFilter) (string, []interface{}) {
 		return "", args
 	}
 	return " WHERE " + strings.Join(conditions, " AND "), args
+}
+
+func buildPaperOrderBy(filter model.PaperFilter) string {
+	switch strings.TrimSpace(filter.SortBy) {
+	case "updated_at":
+		return "ORDER BY p.updated_at DESC, p.id DESC"
+	case "created_at":
+		fallthrough
+	default:
+		return "ORDER BY p.created_at DESC, p.id DESC"
+	}
 }
 
 func isValidPaperExtractionStatus(status string) bool {

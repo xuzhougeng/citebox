@@ -115,6 +115,7 @@ AI 流式阅读通过：
 | `tag_id` | int | 按文献标签过滤 |
 | `status` | string | 按解析状态过滤 |
 | `has_paper_notes` | bool | 仅返回带文献笔记的文献 |
+| `sort_by` | string | 可选：`created_at` 按文献创建时间倒序；`updated_at` 按文献更新时间倒序 |
 | `page` | int | 页码，从 1 开始 |
 | `page_size` | int | 每页数量 |
 
@@ -261,6 +262,7 @@ AI 流式阅读通过：
 | `group_id` | int | 来源分组 |
 | `tag_id` | int | 图片标签 |
 | `has_notes` | bool | 仅显示带图片笔记的图片 |
+| `sort_by` | string | 可选：`updated_at` 按图片更新时间倒序；`created_at` 按图片创建时间倒序；`paper_created_at_figure_index` 按文献创建时间倒序，文献内按 `Fig 1`、`Fig 2` 顺序 |
 | `page` | int | 页码 |
 | `page_size` | int | 每页数量 |
 
@@ -392,6 +394,7 @@ AI 流式阅读通过：
 | --- | --- | --- |
 | `keyword` | string | 配色名称、文献标题、子图 caption、子图后缀搜索 |
 | `group_id` | int | 来源分组 |
+| `sort_by` | string | 可选：`updated_at` 按配色更新时间倒序；`created_at` 按配色创建时间倒序；`paper_created_at_figure_index` 按文献创建时间倒序，文献内按 `Fig 1`、`Fig 2` 顺序 |
 | `page` | int | 页码 |
 | `page_size` | int | 每页数量 |
 

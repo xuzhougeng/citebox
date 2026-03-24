@@ -43,6 +43,7 @@ func (h *PaperHandler) List(w http.ResponseWriter, r *http.Request) {
 		TagID:         tagID,
 		Status:        strings.TrimSpace(r.URL.Query().Get("status")),
 		HasPaperNotes: hasPaperNotes,
+		SortBy:        strings.TrimSpace(r.URL.Query().Get("sort_by")),
 		Page:          page,
 		PageSize:      pageSize,
 	})
