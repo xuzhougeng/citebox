@@ -17,6 +17,7 @@ import (
 
 const (
 	wolaiSettingsKey           = "wolai_settings"
+	wolaiCreateBlocksBatchSize = 20
 	wolaiTextBlockMaxSize      = 1600
 	wolaiNoteImageTODOText     = "暂不支持保存到 Wolai，等待后续完成。"
 	wolaiTestPageImageTODOText = "TODO：Wolai 图片导出尚未实现，等待后续完成。"
@@ -44,6 +45,14 @@ func defaultWolaiClientFactory(settings model.WolaiSettings) (wolaiClient, error
 		BaseURL: settings.BaseURL,
 		Timeout: 15 * time.Second,
 	})
+}
+
+func wrapWolaiUnavailable(message string, err error) error {
+	message = strings.TrimSpace(message)
+	if err == nil {
+		return apperr.New(apperr.CodeUnavailable, message)
+	}
+	return apperr.Wrap(apperr.CodeUnavailable, fmt.Sprintf("%s: %v", message, err), err)
 }
 
 func (s *LibraryService) GetWolaiSettings() (*model.WolaiSettings, error) {
@@ -91,7 +100,7 @@ func (s *LibraryService) TestWolaiSettings(input model.WolaiSettings) (model.Wol
 	}
 
 	if _, err := client.GetBlock(settings.ParentBlockID); err != nil {
-		return model.WolaiTestResult{}, apperr.Wrap(apperr.CodeUnavailable, "Wolai token 测试失败", err)
+		return model.WolaiTestResult{}, wrapWolaiUnavailable("Wolai token 测试失败", err)
 	}
 
 	return model.WolaiTestResult{
@@ -113,7 +122,7 @@ func (s *LibraryService) InsertWolaiTestPage(input model.WolaiSettings) (model.W
 
 	pageBlock, err := createWolaiNotePage(client, settings.ParentBlockID, "Test Page")
 	if err != nil {
-		return model.WolaiSaveNoteResponse{}, apperr.Wrap(apperr.CodeUnavailable, "创建 Wolai 测试页面失败", err)
+		return model.WolaiSaveNoteResponse{}, wrapWolaiUnavailable("创建 Wolai 测试页面失败", err)
 	}
 	pageID := pageBlock.ID
 	pageURL := strings.TrimSpace(pageBlock.URL)
@@ -126,7 +135,7 @@ func (s *LibraryService) InsertWolaiTestPage(input model.WolaiSettings) (model.W
 		"content":        "Test works",
 		"text_alignment": "left",
 	}}); err != nil {
-		return model.WolaiSaveNoteResponse{}, apperr.Wrap(apperr.CodeUnavailable, "写入 Wolai 测试文本失败", err)
+		return model.WolaiSaveNoteResponse{}, wrapWolaiUnavailable("写入 Wolai 测试文本失败", err)
 	}
 
 	if _, err := client.CreateBlocks(pageID, []map[string]any{{
@@ -134,7 +143,7 @@ func (s *LibraryService) InsertWolaiTestPage(input model.WolaiSettings) (model.W
 		"content":        wolaiTestPageImageTODOText,
 		"text_alignment": "left",
 	}}); err != nil {
-		return model.WolaiSaveNoteResponse{}, apperr.Wrap(apperr.CodeUnavailable, "写入 Wolai 测试页面图片 TODO 失败", err)
+		return model.WolaiSaveNoteResponse{}, wrapWolaiUnavailable("写入 Wolai 测试页面图片 TODO 失败", err)
 	}
 
 	return model.WolaiSaveNoteResponse{
@@ -166,13 +175,13 @@ func (s *LibraryService) SavePaperNoteToWolai(paperID int64, notesText string) (
 
 	pageBlock, err := createWolaiNotePage(client, settings.ParentBlockID, buildPaperNoteWolaiPageTitle(paper))
 	if err != nil {
-		return model.WolaiSaveNoteResponse{}, apperr.Wrap(apperr.CodeUnavailable, "创建 Wolai 文献笔记页面失败", err)
+		return model.WolaiSaveNoteResponse{}, wrapWolaiUnavailable("创建 Wolai 文献笔记页面失败", err)
 	}
 	pageID := pageBlock.ID
 
 	blocks, hasPendingImages := buildPaperNoteWolaiBlocks(paper, content)
-	if _, err := client.CreateBlocks(pageID, blocks); err != nil {
-		return model.WolaiSaveNoteResponse{}, apperr.Wrap(apperr.CodeUnavailable, "写入 Wolai 文献笔记内容失败", err)
+	if err := createWolaiBlocksInBatches(client, pageID, blocks); err != nil {
+		return model.WolaiSaveNoteResponse{}, wrapWolaiUnavailable("写入 Wolai 文献笔记内容失败", err)
 	}
 	pageURL := strings.TrimSpace(pageBlock.URL)
 	if pageURL == "" {
@@ -213,13 +222,13 @@ func (s *LibraryService) SaveFigureNoteToWolai(figureID int64, notesText string)
 
 	pageBlock, err := createWolaiNotePage(client, settings.ParentBlockID, buildFigureNoteWolaiPageTitle(figure))
 	if err != nil {
-		return model.WolaiSaveNoteResponse{}, apperr.Wrap(apperr.CodeUnavailable, "创建 Wolai 图片笔记页面失败", err)
+		return model.WolaiSaveNoteResponse{}, wrapWolaiUnavailable("创建 Wolai 图片笔记页面失败", err)
 	}
 	pageID := pageBlock.ID
 
 	blocks, hasPendingImages := buildFigureNoteWolaiBlocks(figure, content)
-	if _, err := client.CreateBlocks(pageID, blocks); err != nil {
-		return model.WolaiSaveNoteResponse{}, apperr.Wrap(apperr.CodeUnavailable, "写入 Wolai 图片笔记内容失败", err)
+	if err := createWolaiBlocksInBatches(client, pageID, blocks); err != nil {
+		return model.WolaiSaveNoteResponse{}, wrapWolaiUnavailable("写入 Wolai 图片笔记内容失败", err)
 	}
 	pageURL := strings.TrimSpace(pageBlock.URL)
 	if pageURL == "" {
@@ -303,6 +312,27 @@ func createWolaiNotePage(client wolaiClient, parentID, title string) (wolaiapi.C
 	created[0].ID = strings.TrimSpace(created[0].ID)
 	created[0].URL = strings.TrimSpace(created[0].URL)
 	return created[0], nil
+}
+
+func createWolaiBlocksInBatches(client wolaiClient, parentID string, blocks []map[string]any) error {
+	parentID = strings.TrimSpace(parentID)
+	if parentID == "" {
+		return fmt.Errorf("missing Wolai parent block ID")
+	}
+	if len(blocks) == 0 {
+		return nil
+	}
+
+	for start := 0; start < len(blocks); start += wolaiCreateBlocksBatchSize {
+		end := start + wolaiCreateBlocksBatchSize
+		if end > len(blocks) {
+			end = len(blocks)
+		}
+		if _, err := client.CreateBlocks(parentID, blocks[start:end]); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func buildPaperNoteWolaiPageTitle(paper *model.Paper) string {

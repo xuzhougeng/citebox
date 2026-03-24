@@ -603,6 +603,71 @@ func TestSaveFigureNoteToWolaiUsesFigureMetadata(t *testing.T) {
 	}
 }
 
+func TestSavePaperNoteToWolaiBatchesBlocksForWolaiLimit(t *testing.T) {
+	svc, repo, _ := newTestService(t)
+	paper := createTestPaper(t, repo)
+
+	if _, err := svc.UpdateWolaiSettings(model.WolaiSettings{
+		Token:         "wolai-token",
+		ParentBlockID: "paper-root",
+	}); err != nil {
+		t.Fatalf("UpdateWolaiSettings() error = %v", err)
+	}
+
+	type createCall struct {
+		parentID string
+		blocks   []map[string]any
+	}
+
+	var calls []createCall
+	svc.wolaiClientFactory = func(settings model.WolaiSettings) (wolaiClient, error) {
+		return &stubWolaiClient{
+			createBlocksFunc: func(parentID string, blocks any) ([]wolaiapi.CreatedBlock, error) {
+				typed, ok := blocks.([]map[string]any)
+				if !ok {
+					t.Fatalf("blocks type = %T, want []map[string]any", blocks)
+				}
+				calls = append(calls, createCall{parentID: parentID, blocks: typed})
+				if len(calls) == 1 {
+					return []wolaiapi.CreatedBlock{{ID: "paper-note-page", Type: "page"}}, nil
+				}
+				return []wolaiapi.CreatedBlock{{ID: fmt.Sprintf("paper-note-body-%d", len(calls)-1)}}, nil
+			},
+		}, nil
+	}
+
+	parts := make([]string, 0, 12)
+	for i := 1; i <= 12; i++ {
+		parts = append(parts, fmt.Sprintf("## 部分 %d\n\n内容 %d", i, i))
+	}
+	notes := strings.Join(parts, "\n\n")
+
+	result, err := svc.SavePaperNoteToWolai(paper.ID, notes)
+	if err != nil {
+		t.Fatalf("SavePaperNoteToWolai() error = %v", err)
+	}
+	if !result.Success || result.TargetBlockID != "paper-note-page" {
+		t.Fatalf("SavePaperNoteToWolai() result = %+v, want success on paper-note-page", result)
+	}
+	if len(calls) < 3 {
+		t.Fatalf("CreateBlocks() calls = %d, want page call plus at least 2 body batches", len(calls))
+	}
+
+	totalBodyBlocks := 0
+	for i, call := range calls[1:] {
+		if call.parentID != "paper-note-page" {
+			t.Fatalf("body CreateBlocks() call %d parent_id = %q, want %q", i+1, call.parentID, "paper-note-page")
+		}
+		if len(call.blocks) == 0 || len(call.blocks) > wolaiCreateBlocksBatchSize {
+			t.Fatalf("body CreateBlocks() call %d block count = %d, want 1..%d", i+1, len(call.blocks), wolaiCreateBlocksBatchSize)
+		}
+		totalBodyBlocks += len(call.blocks)
+	}
+	if totalBodyBlocks <= wolaiCreateBlocksBatchSize {
+		t.Fatalf("total body blocks = %d, want more than Wolai batch size %d", totalBodyBlocks, wolaiCreateBlocksBatchSize)
+	}
+}
+
 func TestBuildWolaiMarkdownBlocksUsesBlockStyles(t *testing.T) {
 	blocks := buildWolaiMarkdownBlocks(strings.Join([]string{
 		"# 一级标题",
