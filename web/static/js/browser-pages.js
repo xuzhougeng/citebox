@@ -521,7 +521,7 @@ const PalettesPage = {
                         <button class="btn btn-outline btn-small" type="button" data-action="copy-css">复制 CSS</button>
                         <button class="btn btn-outline btn-small" type="button" data-action="paper">来源文献</button>
 
-                        <button class="btn btn-outline btn-small danger" type="button" data-action="delete">删除</button>
+                        <button class="btn btn-outline btn-small danger" type="button" data-action="delete">删除配色</button>
                     </div>
                 </div>
             </article>

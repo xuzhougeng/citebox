@@ -174,6 +174,12 @@ const FigureViewer = {
                 if (subfigureButton.dataset.subfigureAction === 'copy-palette') {
                     await this.copyPaletteForFigure(Number(subfigureButton.dataset.figureId || 0));
                 }
+                if (subfigureButton.dataset.subfigureAction === 'delete-palette') {
+                    await this.deletePaletteForFigure(Number(subfigureButton.dataset.figureId || 0));
+                }
+                if (subfigureButton.dataset.subfigureAction === 'delete-figure') {
+                    await this.deleteSubfigure(Number(subfigureButton.dataset.figureId || 0));
+                }
                 return;
             }
 
@@ -898,6 +904,15 @@ const FigureViewer = {
         this.paperDetailPromises.set(paperID, promise);
     },
 
+    async refreshPaperDetail(paperID) {
+        const normalizedID = Number(paperID || 0);
+        if (!normalizedID) return null;
+
+        const paper = await API.getPaper(normalizedID);
+        this.syncPaperMetadata(paper);
+        return paper;
+    },
+
     syncCurrentFigureState(options = {}) {
         const { forceDraftFromFigure = false } = options;
         const previousFigureID = Number(this.currentFigure?.id || 0);
@@ -1589,6 +1604,24 @@ const FigureViewer = {
             : (hasPalette
                 ? `这组颜色已经绑定到 ${figure.display_label || '当前子图'}。`
                 : (failure ? '点击图片上的按钮重新提取配色。' : '点击图片上的按钮即可提取配色。'));
+        const actions = [];
+        if (hasPalette) {
+            actions.push(`
+                <button class="btn btn-outline btn-small" type="button" data-subfigure-action="copy-palette" data-figure-id="${figure.id}">
+                    复制配色
+                </button>
+            `);
+            actions.push(`
+                <button class="btn btn-outline btn-small danger" type="button" data-subfigure-action="delete-palette" data-figure-id="${figure.id}">
+                    删除配色
+                </button>
+            `);
+        }
+        actions.push(`
+            <button class="btn btn-outline btn-small danger" type="button" data-subfigure-action="delete-figure" data-figure-id="${figure.id}">
+                删除子图
+            </button>
+        `);
 
         return `
             <article class="figure-subfigure-card ${standalone ? 'is-standalone' : ''}">
@@ -1620,6 +1653,9 @@ const FigureViewer = {
                     </div>
                     <p class="figure-subfigure-card-hint">${Utils.escapeHTML(paletteHint)}</p>
                     <p class="figure-subfigure-card-caption ${caption ? '' : 'is-empty'}">${Utils.escapeHTML(caption || '这个子图还没有单独说明。')}</p>
+                    <div class="figure-subfigure-card-actions">
+                        ${actions.join('')}
+                    </div>
                 </div>
             </article>
         `;
@@ -1735,6 +1771,67 @@ const FigureViewer = {
             Utils.showToast(`${figure.display_label || '子图'} 配色已复制`);
         } catch (error) {
             Utils.showToast('复制失败', 'error');
+        }
+    },
+
+    async deletePaletteForFigure(figureID) {
+        const figure = this.findFigureInCurrentPaper(figureID);
+        if (!figure?.palette_id) {
+            Utils.showToast('当前子图还没有可删除的配色', 'error');
+            return;
+        }
+
+        const confirmed = await Utils.confirm(`删除后只会移除 ${figure.display_label || '当前子图'} 的配色，不会删除子图本身。`);
+        if (!confirmed) return;
+
+        try {
+            await API.deletePalette(figure.palette_id);
+            const paper = await this.refreshPaperDetail(figure.paper_id);
+            Utils.showToast('子图配色已删除');
+            this.render();
+            if (paper && typeof this.onMetaChanged === 'function') {
+                await this.onMetaChanged(paper);
+            }
+        } catch (error) {
+            Utils.showToast(error.message, 'error');
+        }
+    },
+
+    async deleteSubfigure(figureID) {
+        const figure = this.findFigureInCurrentPaper(figureID);
+        if (!figure) {
+            Utils.showToast('当前子图不存在或已被删除', 'error');
+            return;
+        }
+        if (!figure.parent_figure_id) {
+            Utils.showToast('这里只支持删除子图', 'error');
+            return;
+        }
+
+        const confirmed = await Utils.confirm(`删除后会移除 ${figure.display_label || '当前子图'} 以及它绑定的配色。`);
+        if (!confirmed) return;
+
+        try {
+            const payload = await API.deleteFigure(figure.id);
+            const isCurrentFigure = Number(this.currentFigure?.id || 0) === Number(figure.id || 0);
+
+            if (payload.paper) {
+                this.syncPaperMetadata(payload.paper);
+            }
+
+            Utils.showToast('子图已删除');
+            if (payload.paper && typeof this.onMetaChanged === 'function') {
+                await this.onMetaChanged(payload.paper);
+            }
+
+            if (isCurrentFigure) {
+                this.close();
+                return;
+            }
+
+            this.render();
+        } catch (error) {
+            Utils.showToast(error.message, 'error');
         }
     },
 

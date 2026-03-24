@@ -20,9 +20,12 @@ import (
 )
 
 type fakeWeixinAIReader struct {
-	mu     sync.Mutex
-	inputs []model.AIReadRequest
-	answer string
+	mu            sync.Mutex
+	inputs        []model.AIReadRequest
+	answer        string
+	searchPlan    *weixinSearchPlan
+	searchPlanErr error
+	searchReview  *weixinSearchReview
 }
 
 func (f *fakeWeixinAIReader) ReadPaper(_ context.Context, input model.AIReadRequest) (*model.AIReadResponse, error) {
@@ -37,6 +40,78 @@ func (f *fakeWeixinAIReader) ReadPaper(_ context.Context, input model.AIReadRequ
 		PaperID:  input.PaperID,
 		Question: input.Question,
 		Answer:   answer,
+	}, nil
+}
+
+func (f *fakeWeixinAIReader) PlanWeixinSearch(_ context.Context, query, forcedTarget string) (*weixinSearchPlan, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	if f.searchPlanErr != nil {
+		return nil, f.searchPlanErr
+	}
+	if f.searchPlan != nil {
+		plan := *f.searchPlan
+		plan.Keywords = append([]string(nil), plan.Keywords...)
+		if normalized := normalizeWeixinSearchTarget(forcedTarget); normalized != "" {
+			plan.Target = normalized
+		}
+		return &plan, nil
+	}
+
+	target := normalizeWeixinSearchTarget(forcedTarget)
+	if target == "" {
+		target = weixinSearchTargetPaper
+	}
+	return &weixinSearchPlan{
+		Target:   target,
+		Keywords: normalizeWeixinSearchKeywords([]string{query}),
+	}, nil
+}
+
+func (f *fakeWeixinAIReader) ReviewWeixinPaperSearch(_ context.Context, _ string, _ []string, candidates []model.Paper) (*weixinSearchReview, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	if f.searchReview != nil {
+		review := *f.searchReview
+		review.SelectedIDs = append([]int64(nil), review.SelectedIDs...)
+		return &review, nil
+	}
+
+	ids := make([]int64, 0, minInt(len(candidates), weixinSearchResultLimit))
+	for _, candidate := range candidates {
+		ids = append(ids, candidate.ID)
+		if len(ids) >= weixinSearchResultLimit {
+			break
+		}
+	}
+	return &weixinSearchReview{
+		Summary:     "已按候选顺序保留最可能结果。",
+		SelectedIDs: ids,
+	}, nil
+}
+
+func (f *fakeWeixinAIReader) ReviewWeixinFigureSearch(_ context.Context, _ string, _ []string, candidates []model.FigureListItem) (*weixinSearchReview, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	if f.searchReview != nil {
+		review := *f.searchReview
+		review.SelectedIDs = append([]int64(nil), review.SelectedIDs...)
+		return &review, nil
+	}
+
+	ids := make([]int64, 0, minInt(len(candidates), weixinSearchResultLimit))
+	for _, candidate := range candidates {
+		ids = append(ids, candidate.ID)
+		if len(ids) >= weixinSearchResultLimit {
+			break
+		}
+	}
+	return &weixinSearchReview{
+		Summary:     "已按候选顺序保留最可能结果。",
+		SelectedIDs: ids,
 	}, nil
 }
 
@@ -71,6 +146,36 @@ func createBridgePaper(t *testing.T, repo *repository.LibraryRepository, title, 
 				PageNumber:   2,
 				FigureIndex:  1,
 				Caption:      title + " figure",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreatePaper() error = %v", err)
+	}
+	return paper
+}
+
+func createBridgePaperWithFigureCaption(t *testing.T, repo *repository.LibraryRepository, title, filename, caption string) *model.Paper {
+	t.Helper()
+
+	paper, err := repo.CreatePaper(repository.PaperUpsertInput{
+		Title:            title,
+		OriginalFilename: filename,
+		StoredPDFName:    filename,
+		FileSize:         256,
+		ContentType:      "application/pdf",
+		PDFText:          title + " full text",
+		AbstractText:     title + " abstract",
+		PaperNotesText:   title + " paper notes",
+		ExtractionStatus: "completed",
+		Figures: []repository.FigureUpsertInput{
+			{
+				Filename:     filename + ".png",
+				OriginalName: filename + ".png",
+				ContentType:  "image/png",
+				PageNumber:   2,
+				FigureIndex:  1,
+				Caption:      caption,
 			},
 		},
 	})
@@ -171,6 +276,60 @@ func TestWeixinIMBridgeSearchAndSelectPaperByResultNumber(t *testing.T) {
 	}
 	if reply == "" {
 		t.Fatal("select reply is empty")
+	}
+}
+
+func TestWeixinIMBridgeSmartPaperSearchUsesPlannedKeywords(t *testing.T) {
+	svc, repo, cfg := newTestService(t)
+	paper := createBridgePaper(t, repo, "Single-cell Atlas Review", "single-cell-atlas-review.pdf")
+	aiReader := &fakeWeixinAIReader{
+		answer: "ok",
+		searchPlan: &weixinSearchPlan{
+			Target:   weixinSearchTargetPaper,
+			Keywords: []string{"single-cell atlas", "review", "atlas"},
+		},
+	}
+	bridge := newTestWeixinBridge(t, svc, aiReader, cfg.StorageDir)
+
+	reply := bridge.handleIncomingText(context.Background(), "/search 我想找单细胞图谱综述")
+
+	if !containsAll(reply, "检索关键词", "评估", "已自动选中文献") {
+		t.Fatalf("smart paper search reply = %q, want planned keyword summary and auto-selected paper", reply)
+	}
+	if bridge.getContext().CurrentPaperID != paper.ID {
+		t.Fatalf("current paper = %d, want %d", bridge.getContext().CurrentPaperID, paper.ID)
+	}
+}
+
+func TestWeixinIMBridgeFigureSearchFallsBackToHeuristics(t *testing.T) {
+	svc, repo, cfg := newTestService(t)
+	first := createBridgePaperWithFigureCaption(t, repo, "Differential Expression Study", "de-study.pdf", "Volcano plot of differential expression genes")
+	second := createBridgePaperWithFigureCaption(t, repo, "Heatmap Study", "heatmap-study.pdf", "Expression heatmap across samples")
+
+	bridge := newTestWeixinBridge(t, svc, &fakeWeixinAIReader{
+		answer:        "ok",
+		searchPlanErr: context.DeadlineExceeded,
+	}, cfg.StorageDir)
+
+	reply := bridge.handleIncomingText(context.Background(), "/search 我想要一张火山图")
+	if !containsAll(reply, "检索关键词", "汇总后最可能的图片", "Volcano plot") {
+		t.Fatalf("figure search reply = %q, want heuristic keyword search result", reply)
+	}
+
+	state := bridge.getContext()
+	if len(state.SearchFigureIDs) == 0 || state.SearchFigureIDs[0] != first.Figures[0].ID {
+		t.Fatalf("search figure ids = %v, want first volcano figure id %d", state.SearchFigureIDs, first.Figures[0].ID)
+	}
+	if len(state.SearchFigureIDs) > 1 && state.SearchFigureIDs[1] == second.Figures[0].ID {
+		t.Fatalf("search figure ids = %v, unexpected heatmap ranked as top fallback result", state.SearchFigureIDs)
+	}
+
+	selectReply := bridge.handleIncomingText(context.Background(), "/figure 1")
+	if !containsAll(selectReply, "已选中图片", "所属文献") {
+		t.Fatalf("select figure reply = %q, want figure selection from search result", selectReply)
+	}
+	if bridge.getContext().CurrentFigureID != first.Figures[0].ID {
+		t.Fatalf("current figure = %d, want %d", bridge.getContext().CurrentFigureID, first.Figures[0].ID)
 	}
 }
 

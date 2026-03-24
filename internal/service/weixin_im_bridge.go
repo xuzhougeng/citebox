@@ -12,6 +12,7 @@ import (
 	"net/textproto"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -27,18 +28,51 @@ const (
 	weixinContextFileName    = "im_context.json"
 	weixinReplyMaxRunes      = 3200
 	weixinHistoryLimit       = 6
+	weixinSearchKeywordLimit = 5
+	weixinSearchResultLimit  = 3
+	weixinSearchProbeLimit   = 3
+	weixinSearchReviewLimit  = 6
+)
+
+const (
+	weixinSearchTargetPaper  = "paper"
+	weixinSearchTargetFigure = "figure"
 )
 
 type weixinAIReader interface {
 	ReadPaper(ctx context.Context, input model.AIReadRequest) (*model.AIReadResponse, error)
+	PlanWeixinSearch(ctx context.Context, query, forcedTarget string) (*weixinSearchPlan, error)
+	ReviewWeixinPaperSearch(ctx context.Context, query string, keywords []string, candidates []model.Paper) (*weixinSearchReview, error)
+	ReviewWeixinFigureSearch(ctx context.Context, query string, keywords []string, candidates []model.FigureListItem) (*weixinSearchReview, error)
 }
 
 type weixinIMContext struct {
 	CurrentPaperID  int64                      `json:"current_paper_id"`
 	CurrentFigureID int64                      `json:"current_figure_id"`
 	SearchPaperIDs  []int64                    `json:"search_paper_ids,omitempty"`
+	SearchFigureIDs []int64                    `json:"search_figure_ids,omitempty"`
 	QAHistory       []model.AIConversationTurn `json:"qa_history,omitempty"`
 	UpdatedAt       string                     `json:"updated_at,omitempty"`
+}
+
+type weixinSearchPlan struct {
+	Target   string   `json:"target"`
+	Keywords []string `json:"keywords"`
+}
+
+type weixinPaperSearchCandidate struct {
+	Paper model.Paper
+	Score int
+}
+
+type weixinFigureSearchCandidate struct {
+	Figure model.FigureListItem
+	Score  int
+}
+
+type weixinSearchReview struct {
+	Summary     string  `json:"summary"`
+	SelectedIDs []int64 `json:"selected_ids"`
 }
 
 type WeixinIMBridge struct {
@@ -277,13 +311,17 @@ func (b *WeixinIMBridge) executeWeixinCommand(ctx context.Context, command, arg 
 		return b.statusText()
 	case "/reset":
 		b.setContext(weixinIMContext{})
-		return "已清空微信上下文。发送 `/search 关键词` 或 `/recent` 开始。"
+		return "已清空微信上下文。发送 `/search 自然语言检索内容` 或 `/recent` 开始。"
 	case "/figures":
 		return b.listFigures()
 	case "/recent":
 		return b.listRecentPapers()
 	case "/search":
-		return b.searchPapers(arg)
+		return b.search(ctx, arg, "")
+	case "/search-papers":
+		return b.search(ctx, arg, weixinSearchTargetPaper)
+	case "/search-figures":
+		return b.search(ctx, arg, weixinSearchTargetFigure)
 	case "/paper":
 		return b.selectPaper(arg)
 	case "/figure":
@@ -309,55 +347,441 @@ func (b *WeixinIMBridge) handleIncomingFile(ctx context.Context, message weixin.
 	return "", false
 }
 
-func (b *WeixinIMBridge) searchPapers(query string) string {
+func (b *WeixinIMBridge) search(ctx context.Context, query, forcedTarget string) string {
 	query = strings.TrimSpace(query)
 	if query == "" {
-		return "用法：`/search 关键词`"
+		switch normalizeWeixinSearchTarget(forcedTarget) {
+		case weixinSearchTargetPaper:
+			return "用法：`/search-papers 自然语言检索内容`"
+		case weixinSearchTargetFigure:
+			return "用法：`/search-figures 自然语言检索内容`"
+		default:
+			return "用法：`/search 自然语言检索内容`"
+		}
 	}
 
-	result, err := b.libraryService.ListPapers(model.PaperFilter{
-		Keyword:  query,
-		Page:     1,
-		PageSize: 5,
-	})
+	plan := b.planWeixinSearch(ctx, query, forcedTarget)
+	switch plan.Target {
+	case weixinSearchTargetFigure:
+		return b.searchFigures(ctx, query, plan.Keywords)
+	default:
+		return b.searchPapers(ctx, query, plan.Keywords)
+	}
+}
+
+func (b *WeixinIMBridge) planWeixinSearch(ctx context.Context, query, forcedTarget string) *weixinSearchPlan {
+	normalizedForcedTarget := normalizeWeixinSearchTarget(forcedTarget)
+	if b.aiService != nil {
+		plan, err := b.aiService.PlanWeixinSearch(ctx, query, normalizedForcedTarget)
+		if err == nil && plan != nil && normalizeWeixinSearchTarget(plan.Target) != "" && len(plan.Keywords) > 0 {
+			return &weixinSearchPlan{
+				Target:   normalizeWeixinSearchTarget(firstNonEmpty(normalizedForcedTarget, plan.Target)),
+				Keywords: normalizeWeixinSearchKeywords(plan.Keywords),
+			}
+		}
+		if err != nil {
+			b.logger.Warn("plan weixin search failed, fallback to heuristic search", "query", query, "forced_target", normalizedForcedTarget, "error", err)
+		}
+	}
+
+	return heuristicWeixinSearchPlan(query, normalizedForcedTarget)
+}
+
+func heuristicWeixinSearchPlan(query, forcedTarget string) *weixinSearchPlan {
+	cleaned := cleanupWeixinSearchQuery(query)
+	target := normalizeWeixinSearchTarget(forcedTarget)
+	if target == "" {
+		target = inferWeixinSearchTarget(query, cleaned)
+	}
+
+	keywords := []string{query}
+	if cleaned != "" && !strings.EqualFold(cleaned, query) {
+		keywords = append(keywords, cleaned)
+	}
+	keywords = append(keywords, expandWeixinSearchKeywords(query, cleaned, target)...)
+	keywords = normalizeWeixinSearchKeywords(keywords)
+	if len(keywords) == 0 {
+		keywords = []string{query}
+	}
+
+	return &weixinSearchPlan{
+		Target:   target,
+		Keywords: keywords,
+	}
+}
+
+func (b *WeixinIMBridge) searchPapers(ctx context.Context, query string, keywords []string) string {
+	keywords = normalizeWeixinSearchKeywords(keywords)
+	if len(keywords) == 0 {
+		keywords = normalizeWeixinSearchKeywords([]string{query})
+	}
+
+	candidates, err := b.collectPaperSearchCandidates(keywords)
 	if err != nil {
 		return fmt.Sprintf("搜索失败：%v", err)
 	}
-	if result.Total == 0 {
+	if len(candidates) == 0 {
 		b.updateContext(func(state *weixinIMContext) {
 			state.SearchPaperIDs = nil
+			state.SearchFigureIDs = nil
 		})
-		return fmt.Sprintf("没有找到和 `%s` 相关的文献。", query)
+		return fmt.Sprintf("没有找到和 `%s` 相关的文献。已尝试关键词：%s", query, strings.Join(keywords, " / "))
 	}
 
-	ids := make([]int64, 0, len(result.Papers))
-	for _, paper := range result.Papers {
-		ids = append(ids, paper.ID)
+	displayCandidates, summary := b.reviewPaperSearchCandidates(ctx, query, keywords, candidates)
+	ids := make([]int64, 0, len(displayCandidates))
+	for _, candidate := range displayCandidates {
+		ids = append(ids, candidate.Paper.ID)
 	}
 
-	if result.Total == 1 && len(result.Papers) == 1 {
-		paper := result.Papers[0]
+	if len(candidates) == 1 && len(displayCandidates) == 1 {
+		paper := displayCandidates[0].Paper
 		b.updateContext(func(state *weixinIMContext) {
 			state.SearchPaperIDs = ids
+			state.SearchFigureIDs = nil
 			state.CurrentPaperID = paper.ID
 			state.CurrentFigureID = 0
 			state.QAHistory = nil
 		})
-		return b.formatPaperSelection(&paper, true)
+		reply := b.formatPaperSelection(&paper, true)
+		if summary != "" {
+			reply = strings.Join([]string{
+				fmt.Sprintf("检索关键词：%s", strings.Join(keywords, " / ")),
+				fmt.Sprintf("评估：%s", summary),
+				"",
+				reply,
+			}, "\n")
+		}
+		return reply
 	}
 
 	b.updateContext(func(state *weixinIMContext) {
 		state.SearchPaperIDs = ids
+		state.SearchFigureIDs = nil
 	})
 
 	var lines []string
-	lines = append(lines, fmt.Sprintf("找到 %d 篇文献，当前展示前 %d 条：", result.Total, len(result.Papers)))
-	for index, paper := range result.Papers {
+	lines = append(lines, fmt.Sprintf("检索关键词：%s", strings.Join(keywords, " / ")))
+	if summary != "" {
+		lines = append(lines, fmt.Sprintf("评估：%s", summary))
+	}
+	lines = append(lines, fmt.Sprintf("汇总后最可能的文献 %d 篇：", len(displayCandidates)))
+	for index, candidate := range displayCandidates {
+		paper := candidate.Paper
 		lines = append(lines, fmt.Sprintf("%d. [%d] %s", index+1, paper.ID, clipRunes(strings.TrimSpace(paper.Title), 56)))
 		lines = append(lines, fmt.Sprintf("   状态：%s | 图片：%d 张", paper.ExtractionStatus, paper.FigureCount))
+		summaryText := firstNonEmpty(strings.TrimSpace(paper.AbstractText), strings.TrimSpace(paper.PaperNotesText), strings.TrimSpace(paper.NotesText))
+		if summaryText != "" {
+			lines = append(lines, fmt.Sprintf("   %s", clipRunes(summaryText, 88)))
+		}
 	}
 	lines = append(lines, "", "发送 `/paper 1` 选中目标文献。")
 	return strings.Join(lines, "\n")
+}
+
+func (b *WeixinIMBridge) searchFigures(ctx context.Context, query string, keywords []string) string {
+	keywords = normalizeWeixinSearchKeywords(keywords)
+	if len(keywords) == 0 {
+		keywords = normalizeWeixinSearchKeywords([]string{query})
+	}
+
+	candidates, err := b.collectFigureSearchCandidates(keywords)
+	if err != nil {
+		return fmt.Sprintf("搜索失败：%v", err)
+	}
+	if len(candidates) == 0 {
+		b.updateContext(func(state *weixinIMContext) {
+			state.SearchFigureIDs = nil
+		})
+		return fmt.Sprintf("没有找到和 `%s` 相关的图片。已尝试关键词：%s", query, strings.Join(keywords, " / "))
+	}
+
+	displayCandidates, summary := b.reviewFigureSearchCandidates(ctx, query, keywords, candidates)
+	ids := make([]int64, 0, len(displayCandidates))
+	for _, candidate := range displayCandidates {
+		ids = append(ids, candidate.Figure.ID)
+	}
+	b.updateContext(func(state *weixinIMContext) {
+		state.SearchFigureIDs = ids
+		state.SearchPaperIDs = nil
+	})
+
+	var lines []string
+	lines = append(lines, fmt.Sprintf("检索关键词：%s", strings.Join(keywords, " / ")))
+	if summary != "" {
+		lines = append(lines, fmt.Sprintf("评估：%s", summary))
+	}
+	lines = append(lines, fmt.Sprintf("汇总后最可能的图片 %d 张：", len(displayCandidates)))
+	for index, candidate := range displayCandidates {
+		figure := candidate.Figure
+		label := firstNonEmpty(figure.DisplayLabel, fmt.Sprintf("图 %d", figure.FigureIndex))
+		lines = append(lines, fmt.Sprintf("%d. [ID %d] %s · %s", index+1, figure.ID, clipRunes(figure.PaperTitle, 40), label))
+		lines = append(lines, fmt.Sprintf("   第 %d 页 | %s", figure.PageNumber, clipRunes(firstNonEmpty(figure.Caption, "无图注"), 88)))
+	}
+	lines = append(lines, "", "发送 `/figure 1` 选中图片并回发预览。")
+	return strings.Join(lines, "\n")
+}
+
+func (b *WeixinIMBridge) collectPaperSearchCandidates(keywords []string) ([]weixinPaperSearchCandidate, error) {
+	byID := map[int64]*weixinPaperSearchCandidate{}
+
+	for keywordIndex, keyword := range keywords {
+		result, err := b.libraryService.ListPapers(model.PaperFilter{
+			Keyword:  keyword,
+			Page:     1,
+			PageSize: weixinSearchProbeLimit,
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		for rank, paper := range result.Papers {
+			score := scoreWeixinPaperCandidate(paper, keyword, keywordIndex, rank)
+			existing, ok := byID[paper.ID]
+			if !ok {
+				candidate := &weixinPaperSearchCandidate{Paper: paper}
+				byID[paper.ID] = candidate
+				existing = candidate
+			}
+			existing.Score += score
+		}
+	}
+
+	candidates := make([]weixinPaperSearchCandidate, 0, len(byID))
+	for _, candidate := range byID {
+		candidates = append(candidates, *candidate)
+	}
+	sort.SliceStable(candidates, func(i, j int) bool {
+		if candidates[i].Score == candidates[j].Score {
+			if candidates[i].Paper.UpdatedAt.Equal(candidates[j].Paper.UpdatedAt) {
+				return candidates[i].Paper.ID > candidates[j].Paper.ID
+			}
+			return candidates[i].Paper.UpdatedAt.After(candidates[j].Paper.UpdatedAt)
+		}
+		return candidates[i].Score > candidates[j].Score
+	})
+	return candidates, nil
+}
+
+func (b *WeixinIMBridge) collectFigureSearchCandidates(keywords []string) ([]weixinFigureSearchCandidate, error) {
+	byID := map[int64]*weixinFigureSearchCandidate{}
+
+	for keywordIndex, keyword := range keywords {
+		result, err := b.libraryService.ListFigures(model.FigureFilter{
+			Keyword:  keyword,
+			Page:     1,
+			PageSize: weixinSearchProbeLimit,
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		for rank, figure := range result.Figures {
+			score := scoreWeixinFigureCandidate(figure, keyword, keywordIndex, rank)
+			existing, ok := byID[figure.ID]
+			if !ok {
+				candidate := &weixinFigureSearchCandidate{Figure: figure}
+				byID[figure.ID] = candidate
+				existing = candidate
+			}
+			existing.Score += score
+		}
+	}
+
+	candidates := make([]weixinFigureSearchCandidate, 0, len(byID))
+	for _, candidate := range byID {
+		candidates = append(candidates, *candidate)
+	}
+	sort.SliceStable(candidates, func(i, j int) bool {
+		if candidates[i].Score == candidates[j].Score {
+			if candidates[i].Figure.UpdatedAt.Equal(candidates[j].Figure.UpdatedAt) {
+				return candidates[i].Figure.ID > candidates[j].Figure.ID
+			}
+			return candidates[i].Figure.UpdatedAt.After(candidates[j].Figure.UpdatedAt)
+		}
+		return candidates[i].Score > candidates[j].Score
+	})
+	return candidates, nil
+}
+
+func (b *WeixinIMBridge) reviewPaperSearchCandidates(ctx context.Context, query string, keywords []string, candidates []weixinPaperSearchCandidate) ([]weixinPaperSearchCandidate, string) {
+	if len(candidates) == 0 {
+		return nil, ""
+	}
+
+	reviewPool := candidates
+	if len(reviewPool) > weixinSearchReviewLimit {
+		reviewPool = append([]weixinPaperSearchCandidate(nil), reviewPool[:weixinSearchReviewLimit]...)
+	}
+
+	summary := localWeixinSearchSummary(keywords, "标题/摘要/标签")
+	if b.aiService == nil {
+		return limitPaperCandidates(reviewPool, weixinSearchResultLimit), summary
+	}
+
+	papers := make([]model.Paper, 0, len(reviewPool))
+	for _, candidate := range reviewPool {
+		papers = append(papers, candidate.Paper)
+	}
+
+	review, err := b.aiService.ReviewWeixinPaperSearch(ctx, query, keywords, papers)
+	if err != nil {
+		b.logger.Warn("review weixin paper search failed, fallback to score-based ranking", "query", query, "error", err)
+		return limitPaperCandidates(reviewPool, weixinSearchResultLimit), summary
+	}
+
+	selected := selectPaperCandidatesByID(reviewPool, review.SelectedIDs)
+	if len(selected) == 0 {
+		return limitPaperCandidates(reviewPool, weixinSearchResultLimit), summary
+	}
+
+	return limitPaperCandidates(selected, weixinSearchResultLimit), firstNonEmpty(review.Summary, summary)
+}
+
+func (b *WeixinIMBridge) reviewFigureSearchCandidates(ctx context.Context, query string, keywords []string, candidates []weixinFigureSearchCandidate) ([]weixinFigureSearchCandidate, string) {
+	if len(candidates) == 0 {
+		return nil, ""
+	}
+
+	reviewPool := candidates
+	if len(reviewPool) > weixinSearchReviewLimit {
+		reviewPool = append([]weixinFigureSearchCandidate(nil), reviewPool[:weixinSearchReviewLimit]...)
+	}
+
+	summary := localWeixinSearchSummary(keywords, "图注/标签/所属文献")
+	if b.aiService == nil {
+		return limitFigureCandidates(reviewPool, weixinSearchResultLimit), summary
+	}
+
+	figures := make([]model.FigureListItem, 0, len(reviewPool))
+	for _, candidate := range reviewPool {
+		figures = append(figures, candidate.Figure)
+	}
+
+	review, err := b.aiService.ReviewWeixinFigureSearch(ctx, query, keywords, figures)
+	if err != nil {
+		b.logger.Warn("review weixin figure search failed, fallback to score-based ranking", "query", query, "error", err)
+		return limitFigureCandidates(reviewPool, weixinSearchResultLimit), summary
+	}
+
+	selected := selectFigureCandidatesByID(reviewPool, review.SelectedIDs)
+	if len(selected) == 0 {
+		return limitFigureCandidates(reviewPool, weixinSearchResultLimit), summary
+	}
+
+	return limitFigureCandidates(selected, weixinSearchResultLimit), firstNonEmpty(review.Summary, summary)
+}
+
+func scoreWeixinPaperCandidate(paper model.Paper, keyword string, keywordIndex, rank int) int {
+	score := 100 - keywordIndex*12 - rank*6
+	text := strings.ToLower(strings.Join([]string{
+		paper.Title,
+		paper.AbstractText,
+		paper.PaperNotesText,
+		paper.NotesText,
+	}, "\n"))
+	lowerKeyword := strings.ToLower(strings.TrimSpace(keyword))
+	if lowerKeyword == "" {
+		return score
+	}
+	if strings.Contains(strings.ToLower(paper.Title), lowerKeyword) {
+		score += 30
+	}
+	if strings.Contains(strings.ToLower(paper.AbstractText), lowerKeyword) {
+		score += 16
+	}
+	if strings.Contains(strings.ToLower(paper.PaperNotesText), lowerKeyword) {
+		score += 8
+	}
+	for _, tag := range paper.Tags {
+		if strings.Contains(strings.ToLower(tag.Name), lowerKeyword) {
+			score += 14
+			break
+		}
+	}
+	if strings.Contains(text, lowerKeyword) {
+		score += 6
+	}
+	return score
+}
+
+func scoreWeixinFigureCandidate(figure model.FigureListItem, keyword string, keywordIndex, rank int) int {
+	score := 100 - keywordIndex*12 - rank*6
+	lowerKeyword := strings.ToLower(strings.TrimSpace(keyword))
+	if lowerKeyword == "" {
+		return score
+	}
+	if strings.Contains(strings.ToLower(figure.Caption), lowerKeyword) {
+		score += 26
+	}
+	if strings.Contains(strings.ToLower(figure.PaperTitle), lowerKeyword) {
+		score += 18
+	}
+	if strings.Contains(strings.ToLower(figure.NotesText), lowerKeyword) {
+		score += 8
+	}
+	for _, tag := range figure.Tags {
+		if strings.Contains(strings.ToLower(tag.Name), lowerKeyword) {
+			score += 14
+			break
+		}
+	}
+	if strings.Contains(strings.ToLower(figure.DisplayLabel), lowerKeyword) {
+		score += 6
+	}
+	return score
+}
+
+func limitPaperCandidates(candidates []weixinPaperSearchCandidate, limit int) []weixinPaperSearchCandidate {
+	if len(candidates) <= limit {
+		return candidates
+	}
+	return append([]weixinPaperSearchCandidate(nil), candidates[:limit]...)
+}
+
+func limitFigureCandidates(candidates []weixinFigureSearchCandidate, limit int) []weixinFigureSearchCandidate {
+	if len(candidates) <= limit {
+		return candidates
+	}
+	return append([]weixinFigureSearchCandidate(nil), candidates[:limit]...)
+}
+
+func selectPaperCandidatesByID(candidates []weixinPaperSearchCandidate, ids []int64) []weixinPaperSearchCandidate {
+	byID := make(map[int64]weixinPaperSearchCandidate, len(candidates))
+	for _, candidate := range candidates {
+		byID[candidate.Paper.ID] = candidate
+	}
+
+	selected := make([]weixinPaperSearchCandidate, 0, len(ids))
+	for _, id := range ids {
+		candidate, ok := byID[id]
+		if !ok {
+			continue
+		}
+		selected = append(selected, candidate)
+	}
+	return selected
+}
+
+func selectFigureCandidatesByID(candidates []weixinFigureSearchCandidate, ids []int64) []weixinFigureSearchCandidate {
+	byID := make(map[int64]weixinFigureSearchCandidate, len(candidates))
+	for _, candidate := range candidates {
+		byID[candidate.Figure.ID] = candidate
+	}
+
+	selected := make([]weixinFigureSearchCandidate, 0, len(ids))
+	for _, id := range ids {
+		candidate, ok := byID[id]
+		if !ok {
+			continue
+		}
+		selected = append(selected, candidate)
+	}
+	return selected
+}
+
+func localWeixinSearchSummary(keywords []string, dimensions string) string {
+	return fmt.Sprintf("已按 %d 个关键词汇总候选，并结合%s做了一次匹配度排序。", len(keywords), dimensions)
 }
 
 func (b *WeixinIMBridge) importPDFFile(ctx context.Context, item weixin.MessageItem) string {
@@ -439,6 +863,7 @@ func (b *WeixinIMBridge) listRecentPapers() string {
 	}
 	b.updateContext(func(state *weixinIMContext) {
 		state.SearchPaperIDs = ids
+		state.SearchFigureIDs = nil
 	})
 
 	var lines []string
@@ -486,6 +911,9 @@ func (b *WeixinIMBridge) listFigures() string {
 	if len(figures) == 0 {
 		return "当前文献没有图片。"
 	}
+	b.updateContext(func(state *weixinIMContext) {
+		state.SearchFigureIDs = nil
+	})
 
 	var lines []string
 	lines = append(lines, fmt.Sprintf("文献 [%d] %s 的图片：", paper.ID, clipRunes(paper.Title, 48)))
@@ -499,21 +927,26 @@ func (b *WeixinIMBridge) listFigures() string {
 }
 
 func (b *WeixinIMBridge) selectFigure(arg string) string {
-	paper, errText := b.requireCurrentPaper()
-	if errText != "" {
-		return errText
-	}
-	figures := topLevelFigures(paper.Figures)
-
 	arg = strings.TrimSpace(arg)
 	if arg == "" {
-		return "用法：`/figure 序号`"
+		return "用法：`/figure 序号` 或 `/figure 图片ID`"
 	}
 
 	value, err := strconv.Atoi(arg)
 	if err != nil || value <= 0 {
 		return "请输入有效的图片序号。"
 	}
+
+	state := b.getContext()
+	if value <= len(state.SearchFigureIDs) && len(state.SearchFigureIDs) > 0 {
+		return b.selectFigureFromSearchResult(state.SearchFigureIDs[value-1])
+	}
+
+	paper, errText := b.requireCurrentPaper()
+	if errText != "" {
+		return errText
+	}
+	figures := topLevelFigures(paper.Figures)
 
 	var figure *model.Figure
 	if value <= len(figures) {
@@ -527,17 +960,57 @@ func (b *WeixinIMBridge) selectFigure(arg string) string {
 		}
 	}
 	if figure == nil {
-		return fmt.Sprintf("未找到序号为 %d 的图片。先发送 `图片` 查看列表。", value)
+		return fmt.Sprintf("未找到序号为 %d 的图片。先发送 `/figures` 查看当前文献图片，或重新 `/search`。", value)
 	}
 
 	b.updateContext(func(state *weixinIMContext) {
 		state.CurrentFigureID = figure.ID
+		state.SearchFigureIDs = nil
+		state.QAHistory = nil
 	})
 
 	caption := firstNonEmpty(strings.TrimSpace(figure.Caption), strings.TrimSpace(figure.OriginalName), "未命名图片")
 	return fmt.Sprintf(
 		"已选中图片 [ID %d]\n第 %d 页 · 图 %d\n%s\n\n如果原图可用，下一条消息会回发图片预览。发送 `/interpret 问题` 获取图片解读，或 `/note 你的内容` 追加图片笔记。",
 		figure.ID,
+		figure.PageNumber,
+		figure.FigureIndex,
+		clipRunes(caption, 180),
+	)
+}
+
+func (b *WeixinIMBridge) selectFigureFromSearchResult(figureID int64) string {
+	figureRef, err := b.libraryService.repo.GetFigure(figureID)
+	if err != nil {
+		return fmt.Sprintf("读取图片失败：%v", err)
+	}
+	if figureRef == nil {
+		return "目标图片不存在，请重新搜索。"
+	}
+
+	paper, err := b.libraryService.GetPaper(figureRef.PaperID)
+	if err != nil {
+		return fmt.Sprintf("读取图片所属文献失败：%v", err)
+	}
+
+	figure := findFigureByID(paper.Figures, figureID)
+	if figure == nil {
+		return "目标图片已失效，请重新搜索。"
+	}
+
+	b.updateContext(func(state *weixinIMContext) {
+		state.CurrentPaperID = paper.ID
+		state.CurrentFigureID = figure.ID
+		state.SearchFigureIDs = nil
+		state.QAHistory = nil
+	})
+
+	caption := firstNonEmpty(strings.TrimSpace(figure.Caption), strings.TrimSpace(figure.OriginalName), "未命名图片")
+	return fmt.Sprintf(
+		"已选中图片 [ID %d]\n所属文献：[ID %d] %s\n第 %d 页 · 图 %d\n%s\n\n如果原图可用，下一条消息会回发图片预览。发送 `/interpret 问题` 获取图片解读，或 `/note 你的内容` 追加图片笔记。",
+		figure.ID,
+		paper.ID,
+		clipRunes(paper.Title, 72),
 		figure.PageNumber,
 		figure.FigureIndex,
 		clipRunes(caption, 180),
@@ -651,13 +1124,20 @@ func (b *WeixinIMBridge) answerCurrentPaper(ctx context.Context, question string
 func (b *WeixinIMBridge) statusText() string {
 	state := b.getContext()
 	if state.CurrentPaperID == 0 {
-		return "当前未选中文献。发送 `/search 关键词` 或 `/recent` 开始。"
+		switch {
+		case len(state.SearchFigureIDs) > 0:
+			return fmt.Sprintf("当前未选中文献，但最近一次图片检索已有 %d 条候选。发送 `/figure 1` 继续，或重新 `/search`。", len(state.SearchFigureIDs))
+		case len(state.SearchPaperIDs) > 0:
+			return fmt.Sprintf("当前未选中文献，但最近一次文献检索已有 %d 条候选。发送 `/paper 1` 继续，或重新 `/search`。", len(state.SearchPaperIDs))
+		default:
+			return "当前未选中文献。发送 `/search 自然语言检索内容` 或 `/recent` 开始。"
+		}
 	}
 
 	paper, err := b.libraryService.GetPaper(state.CurrentPaperID)
 	if err != nil {
 		b.setContext(weixinIMContext{})
-		return "当前文献上下文已失效，请重新发送 `/search 关键词`。"
+		return "当前文献上下文已失效，请重新发送 `/search 自然语言检索内容`。"
 	}
 
 	lines := []string{
@@ -674,6 +1154,9 @@ func (b *WeixinIMBridge) statusText() string {
 
 	if len(state.SearchPaperIDs) > 0 {
 		lines = append(lines, fmt.Sprintf("最近检索结果：%d 条", len(state.SearchPaperIDs)))
+	}
+	if len(state.SearchFigureIDs) > 0 {
+		lines = append(lines, fmt.Sprintf("最近图片候选：%d 条", len(state.SearchFigureIDs)))
 	}
 	lines = append(lines, "发送 `/ask 问题` 提问，或使用 `/figures`、`/interpret 问题`、`/note 内容`。")
 	return strings.Join(lines, "\n")
@@ -706,6 +1189,7 @@ func (b *WeixinIMBridge) activatePaperContext(paperID int64, clearSearch bool) {
 	b.updateContext(func(state *weixinIMContext) {
 		if clearSearch {
 			state.SearchPaperIDs = nil
+			state.SearchFigureIDs = nil
 		}
 		state.CurrentPaperID = paperID
 		state.CurrentFigureID = 0
@@ -716,13 +1200,13 @@ func (b *WeixinIMBridge) activatePaperContext(paperID int64, clearSearch bool) {
 func (b *WeixinIMBridge) requireCurrentPaper() (*model.Paper, string) {
 	state := b.getContext()
 	if state.CurrentPaperID == 0 {
-		return nil, "请先发送 `/search 关键词` 或 `/recent` 选择文献。"
+		return nil, "请先发送 `/search 自然语言检索内容`、`/search-papers ...` 或 `/recent` 选择文献。"
 	}
 
 	paper, err := b.libraryService.GetPaper(state.CurrentPaperID)
 	if err != nil {
 		b.setContext(weixinIMContext{})
-		return nil, "当前文献已失效，请重新发送 `/search 关键词`。"
+		return nil, "当前文献已失效，请重新发送 `/search 自然语言检索内容`。"
 	}
 	return paper, ""
 }
@@ -754,6 +1238,7 @@ func (b *WeixinIMBridge) getContext() weixinIMContext {
 
 	context := b.context
 	context.SearchPaperIDs = append([]int64(nil), context.SearchPaperIDs...)
+	context.SearchFigureIDs = append([]int64(nil), context.SearchFigureIDs...)
 	context.QAHistory = append([]model.AIConversationTurn(nil), context.QAHistory...)
 	return context
 }
@@ -924,11 +1409,13 @@ func parseWeixinFileSize(value string) (int64, bool) {
 func weixinHelpText() string {
 	return strings.Join([]string{
 		"微信 IM 仅响应 slash 命令。可用命令：",
-		"`/search 关键词`：搜索文献",
+		"`/search 自然语言`：自动理解意图，拆成约 5 个关键词后搜索文献或图片，并返回最可能的 1-3 条",
+		"`/search-papers 自然语言`：强制只搜文献",
+		"`/search-figures 自然语言`：强制只搜图片",
 		"`/recent`：查看最近几篇文献",
 		"`/paper 1`：选择检索结果中的文献",
 		"`/figures`：查看当前文献的图片列表",
-		"`/figure 1`：选择当前文献中的图片，并回发原图预览",
+		"`/figure 1`：选择检索结果中的图片或当前文献中的图片，并回发原图预览",
 		"直接发送 PDF：自动导入文献并切换上下文",
 		"`/ask 问题` 或 `/qa 问题`：对当前文献提问",
 		"`/note 内容`：追加文献/图片笔记",
@@ -956,6 +1443,87 @@ func parseWeixinSlashCommand(text string) (string, string, bool) {
 		return command, "", true
 	}
 	return command, strings.TrimSpace(strings.TrimPrefix(trimmed, fields[0])), true
+}
+
+func cleanupWeixinSearchQuery(query string) string {
+	cleaned := strings.TrimSpace(query)
+	replacements := []string{
+		"我想要一张", "我想找一张", "帮我找一张", "给我一张", "来一张",
+		"我想要", "我想找", "帮我找", "帮我搜", "给我找", "有没有", "请帮我找", "请搜索", "搜索一下",
+		"相关文献", "相关文章", "相关论文", "相关图片", "相关配图",
+	}
+	for _, replacement := range replacements {
+		cleaned = strings.ReplaceAll(cleaned, replacement, " ")
+	}
+
+	cleaned = strings.Trim(cleaned, " \t\r\n,，。！？!?:：;；")
+	return strings.Join(strings.Fields(cleaned), " ")
+}
+
+func inferWeixinSearchTarget(query, cleaned string) string {
+	normalized := strings.ToLower(firstNonEmpty(cleaned, query))
+
+	figureSignals := []string{
+		"火山图", "热图", "umap", "t-sne", "tsne", "pca", "dotplot", "dot plot", "violin plot", "小提琴图",
+		"box plot", "箱线图", "scatter", "散点图", "volcano", "heatmap", "kaplan", "survival curve", "生存曲线",
+		"western blot", "免疫荧光", "图片", "配图", "figure", "plot", "想要一张", "来一张",
+	}
+	for _, signal := range figureSignals {
+		if strings.Contains(normalized, signal) {
+			return weixinSearchTargetFigure
+		}
+	}
+
+	return weixinSearchTargetPaper
+}
+
+func expandWeixinSearchKeywords(query, cleaned, target string) []string {
+	type keywordExpansion struct {
+		Needles  []string
+		Keywords []string
+	}
+
+	expansions := []keywordExpansion{
+		{Needles: []string{"火山图", "volcano"}, Keywords: []string{"火山图", "volcano plot", "differential expression", "log2 fold change", "p value"}},
+		{Needles: []string{"热图", "heatmap"}, Keywords: []string{"热图", "heatmap", "expression heatmap", "cluster heatmap"}},
+		{Needles: []string{"umap"}, Keywords: []string{"UMAP", "embedding", "single-cell embedding"}},
+		{Needles: []string{"tsne", "t-sne"}, Keywords: []string{"t-SNE", "embedding", "single-cell embedding"}},
+		{Needles: []string{"pca"}, Keywords: []string{"PCA", "principal component analysis"}},
+		{Needles: []string{"小提琴图", "violin"}, Keywords: []string{"小提琴图", "violin plot"}},
+		{Needles: []string{"点图", "dot plot", "dotplot"}, Keywords: []string{"点图", "dot plot"}},
+		{Needles: []string{"箱线图", "box plot"}, Keywords: []string{"箱线图", "box plot"}},
+		{Needles: []string{"散点图", "scatter"}, Keywords: []string{"散点图", "scatter plot"}},
+		{Needles: []string{"生存曲线", "kaplan", "km曲线", "survival"}, Keywords: []string{"生存曲线", "Kaplan-Meier", "survival curve"}},
+		{Needles: []string{"western blot", "wb"}, Keywords: []string{"western blot", "immunoblot"}},
+		{Needles: []string{"免疫荧光"}, Keywords: []string{"免疫荧光", "immunofluorescence"}},
+		{Needles: []string{"单细胞"}, Keywords: []string{"单细胞", "single cell", "single-cell"}},
+		{Needles: []string{"图谱", "atlas"}, Keywords: []string{"图谱", "atlas"}},
+		{Needles: []string{"综述", "review"}, Keywords: []string{"综述", "review"}},
+		{Needles: []string{"空间转录组"}, Keywords: []string{"空间转录组", "spatial transcriptomics"}},
+		{Needles: []string{"差异表达"}, Keywords: []string{"差异表达", "differential expression"}},
+		{Needles: []string{"轨迹", "拟时"}, Keywords: []string{"轨迹", "trajectory", "pseudotime"}},
+	}
+
+	normalized := strings.ToLower(strings.Join([]string{query, cleaned}, " "))
+	keywords := make([]string, 0, weixinSearchKeywordLimit)
+	for _, expansion := range expansions {
+		matched := false
+		for _, needle := range expansion.Needles {
+			if strings.Contains(normalized, strings.ToLower(needle)) {
+				matched = true
+				break
+			}
+		}
+		if matched {
+			keywords = append(keywords, expansion.Keywords...)
+		}
+	}
+
+	if target == weixinSearchTargetPaper {
+		keywords = append(keywords, strings.TrimSpace(strings.ReplaceAll(cleaned, "文献", "")))
+	}
+
+	return keywords
 }
 
 func appendWeixinNote(existing, incoming string) string {

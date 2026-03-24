@@ -424,6 +424,157 @@ func TestTranslateUsesSceneModelAndReturnsTranslation(t *testing.T) {
 	}
 }
 
+func TestPlanWeixinSearchUsesIntentSceneModel(t *testing.T) {
+	_, repo, cfg := newTestService(t)
+	aiSvc := NewAIService(repo, cfg, nil)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/responses" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("ReadAll() error = %v", err)
+		}
+		bodyText := string(body)
+		if !strings.Contains(bodyText, "微信 IM 检索请求改写成 JSON") {
+			t.Fatalf("request body missing IM search planning prompt: %s", bodyText)
+		}
+		if !strings.Contains(bodyText, "我想找单细胞图谱综述") {
+			t.Fatalf("request body missing original query: %s", bodyText)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"output_text":"{\"target\":\"paper\",\"keywords\":[\"single-cell atlas\",\"review\",\"atlas\",\"single cell\",\"图谱\"]}"}`))
+	}))
+	defer server.Close()
+
+	if _, err := aiSvc.UpdateSettings(model.AISettings{
+		Models: []model.AIModelConfig{
+			{
+				ID:              "default",
+				Name:            "Default",
+				Provider:        model.AIProviderOpenAI,
+				APIKey:          "default-key",
+				BaseURL:         "https://api.openai.com",
+				Model:           "gpt-default",
+				MaxOutputTokens: 1200,
+			},
+			{
+				ID:              "intent",
+				Name:            "Intent",
+				Provider:        model.AIProviderOpenAI,
+				APIKey:          "intent-key",
+				BaseURL:         server.URL,
+				Model:           "gpt-intent",
+				MaxOutputTokens: 600,
+			},
+		},
+		SceneModels: model.AISceneModelSelection{
+			DefaultModelID:  "default",
+			IMIntentModelID: "intent",
+		},
+		SystemPrompt: "system",
+	}); err != nil {
+		t.Fatalf("UpdateSettings() error = %v", err)
+	}
+
+	plan, err := aiSvc.PlanWeixinSearch(context.Background(), "我想找单细胞图谱综述", "")
+	if err != nil {
+		t.Fatalf("PlanWeixinSearch() error = %v", err)
+	}
+	if plan.Target != weixinSearchTargetPaper {
+		t.Fatalf("PlanWeixinSearch() target = %q, want %q", plan.Target, weixinSearchTargetPaper)
+	}
+	if len(plan.Keywords) != weixinSearchKeywordLimit {
+		t.Fatalf("PlanWeixinSearch() keywords = %v, want %d normalized keywords", plan.Keywords, weixinSearchKeywordLimit)
+	}
+	if plan.Keywords[0] != "我想找单细胞图谱综述" {
+		t.Fatalf("PlanWeixinSearch() keywords = %v, want original query preserved as first keyword", plan.Keywords)
+	}
+}
+
+func TestReviewWeixinFigureSearchSendsCompressedImages(t *testing.T) {
+	_, repo, cfg := newTestService(t)
+	aiSvc := NewAIService(repo, cfg, nil)
+
+	paper, err := repo.CreatePaper(repository.PaperUpsertInput{
+		Title:            "Volcano Figure Study",
+		OriginalFilename: "volcano-figure.pdf",
+		StoredPDFName:    "volcano-figure.pdf",
+		FileSize:         256,
+		ContentType:      "application/pdf",
+		PDFText:          "volcano figure full text",
+		ExtractionStatus: "completed",
+		Figures: []repository.FigureUpsertInput{
+			{Filename: "volcano_figure.png", ContentType: "image/png", PageNumber: 4, FigureIndex: 1, Caption: "Volcano plot of DEGs"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreatePaper() error = %v", err)
+	}
+	writeFigureFixture(t, filepath.Join(cfg.FiguresDir(), paper.Figures[0].Filename), 1800, 1200)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/responses" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("ReadAll() error = %v", err)
+		}
+		bodyText := string(body)
+		if !strings.Contains(bodyText, "\"input_image\"") {
+			t.Fatalf("request body missing compressed image payload: %s", bodyText)
+		}
+		if !strings.Contains(bodyText, "附加缩略图顺序对应的候选 ID") {
+			t.Fatalf("request body missing figure review prompt: %s", bodyText)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(fmt.Sprintf(`{"output_text":"{\"summary\":\"高匹配，图注和缩略图都像火山图\",\"selected_ids\":[%d]}"}`, paper.Figures[0].ID)))
+	}))
+	defer server.Close()
+
+	if _, err := aiSvc.UpdateSettings(model.AISettings{
+		Models: []model.AIModelConfig{
+			{
+				ID:              "intent",
+				Name:            "Intent",
+				Provider:        model.AIProviderOpenAI,
+				APIKey:          "intent-key",
+				BaseURL:         server.URL,
+				Model:           "gpt-intent",
+				MaxOutputTokens: 700,
+			},
+		},
+		SceneModels: model.AISceneModelSelection{
+			DefaultModelID:  "intent",
+			IMIntentModelID: "intent",
+		},
+		SystemPrompt: "system",
+	}); err != nil {
+		t.Fatalf("UpdateSettings() error = %v", err)
+	}
+
+	figure, err := repo.GetFigure(paper.Figures[0].ID)
+	if err != nil {
+		t.Fatalf("GetFigure() error = %v", err)
+	}
+	if figure == nil {
+		t.Fatal("GetFigure() returned nil figure")
+	}
+
+	review, err := aiSvc.ReviewWeixinFigureSearch(context.Background(), "我想要一张火山图", []string{"火山图", "volcano plot"}, []model.FigureListItem{*figure})
+	if err != nil {
+		t.Fatalf("ReviewWeixinFigureSearch() error = %v", err)
+	}
+	if len(review.SelectedIDs) != 1 || review.SelectedIDs[0] != paper.Figures[0].ID {
+		t.Fatalf("ReviewWeixinFigureSearch() selected_ids = %v, want [%d]", review.SelectedIDs, paper.Figures[0].ID)
+	}
+	if review.Summary == "" {
+		t.Fatal("ReviewWeixinFigureSearch() summary is empty")
+	}
+}
+
 func TestCheckModelCallsProviderSuccessfully(t *testing.T) {
 	_, repo, cfg := newTestService(t)
 	aiSvc := NewAIService(repo, cfg, nil)
