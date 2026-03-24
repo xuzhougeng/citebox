@@ -1232,7 +1232,10 @@ const FigureViewer = {
 
         try {
             const figureID = Number(this.currentFigure.id);
-            const preserveActions = this.activeAIAction() === 'tag_suggestion' ? ['tag_suggestion'] : [];
+            const preserveActions = ['figure_interpretation'];
+            if (this.activeAIAction() === 'tag_suggestion') {
+                preserveActions.push('tag_suggestion');
+            }
             const payload = await API.updateFigure(this.currentFigure.id, {
                 tags,
                 caption: this.currentFigureCaptionDraft(),
