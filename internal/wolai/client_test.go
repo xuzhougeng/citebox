@@ -96,10 +96,8 @@ func TestCreateBlocksPostsParentAndBlocks(t *testing.T) {
 			}
 
 			return jsonResponse(http.StatusOK, map[string]any{
-				"data": map[string]any{
-					"blocks": []map[string]any{
-						{"id": "block-1"},
-					},
+				"data": []string{
+					"https://www.wolai.com/block-1",
 				},
 			}), nil
 		}),
@@ -114,6 +112,44 @@ func TestCreateBlocksPostsParentAndBlocks(t *testing.T) {
 	}
 	if len(blocks) != 1 || blocks[0].ID != "block-1" {
 		t.Fatalf("CreateBlocks() blocks = %#v, want created block-1", blocks)
+	}
+	if blocks[0].URL != "https://www.wolai.com/block-1" {
+		t.Fatalf("CreateBlocks() url = %q, want Wolai page URL", blocks[0].URL)
+	}
+}
+
+func TestCreateBlocksDecodesObjectPayload(t *testing.T) {
+	client, err := NewClient(Config{
+		Token:   "wolai-token",
+		BaseURL: "https://mock.wolai.test",
+		Timeout: time.Second,
+	})
+	if err != nil {
+		t.Fatalf("NewClient() error = %v", err)
+	}
+
+	client.httpClient = &http.Client{
+		Timeout: time.Second,
+		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			return jsonResponse(http.StatusOK, map[string]any{
+				"data": map[string]any{
+					"blocks": []map[string]any{
+						{"id": "block-2", "type": "text"},
+					},
+				},
+			}), nil
+		}),
+	}
+
+	blocks, err := client.CreateBlocks("parent-1", []map[string]any{{
+		"type":    "text",
+		"content": "hello",
+	}})
+	if err != nil {
+		t.Fatalf("CreateBlocks() error = %v", err)
+	}
+	if len(blocks) != 1 || blocks[0].ID != "block-2" || blocks[0].Type != "text" {
+		t.Fatalf("CreateBlocks() blocks = %#v, want decoded object payload", blocks)
 	}
 }
 

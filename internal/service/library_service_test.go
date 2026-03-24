@@ -583,9 +583,9 @@ func TestInsertWolaiTestPageCreatesChildPageAndUploadsImage(t *testing.T) {
 					return map[string]any{"id": id}, nil
 				}
 				return map[string]any{
-					"id":       id,
-					"space_id": "space-1",
-					"url":      "https://www.wolai.com/workspace/test-page-1",
+					"id":      id,
+					"page_id": "page-root-1",
+					"url":     "https://www.wolai.com/workspace/test-page-1",
 				}, nil
 			},
 			createBlocksFunc: func(parentID string, blocks any) ([]wolaiapi.CreatedBlock, error) {
@@ -597,7 +597,7 @@ func TestInsertWolaiTestPageCreatesChildPageAndUploadsImage(t *testing.T) {
 
 				switch len(calls) {
 				case 1:
-					return []wolaiapi.CreatedBlock{{ID: "test-page-1", Type: "page"}}, nil
+					return []wolaiapi.CreatedBlock{{ID: "test-page-1", Type: "page", URL: "https://www.wolai.com/workspace/test-page-1"}}, nil
 				case 2:
 					return []wolaiapi.CreatedBlock{{ID: "text-block-1", Type: "text"}}, nil
 				case 3:
@@ -662,7 +662,7 @@ func TestInsertWolaiTestPageCreatesChildPageAndUploadsImage(t *testing.T) {
 	if calls[2].parentID != "test-page-1" || len(calls[2].blocks) != 1 || calls[2].blocks[0]["type"] != "image" {
 		t.Fatalf("image CreateBlocks() = %#v", calls[2])
 	}
-	if uploadSessionInput.SpaceID != "space-1" || uploadSessionInput.BlockID != "image-block-1" || uploadSessionInput.Type != "image" {
+	if uploadSessionInput.SpaceID != "page-root-1" || uploadSessionInput.BlockID != "image-block-1" || uploadSessionInput.Type != "image" {
 		t.Fatalf("CreateUploadSession() input = %#v", uploadSessionInput)
 	}
 	if uploadSessionInput.FileName != "wolai-test.png" || uploadSessionInput.OSSPath != "static" || uploadSessionInput.FileSize <= 0 {

@@ -61,10 +61,7 @@ type UploadPolicy struct {
 type CreatedBlock struct {
 	ID   string `json:"id"`
 	Type string `json:"type,omitempty"`
-}
-
-type createBlocksResponse struct {
-	Blocks []CreatedBlock `json:"blocks"`
+	URL  string `json:"url,omitempty"`
 }
 
 func NewClient(cfg Config) (*Client, error) {
@@ -104,11 +101,11 @@ func (c *Client) CreateBlocks(parentID string, blocks any) ([]CreatedBlock, erro
 		"parent_id": strings.TrimSpace(parentID),
 		"blocks":    blocks,
 	}
-	var data createBlocksResponse
-	if err := c.doJSON(http.MethodPost, "/v1/blocks", payload, &data); err != nil {
+	env, err := c.doEnvelope(http.MethodPost, "/v1/blocks", payload)
+	if err != nil {
 		return nil, err
 	}
-	return data.Blocks, nil
+	return decodeCreatedBlocks(env.Data)
 }
 
 func (c *Client) CreateUploadSession(input UploadSessionRequest) (*UploadSession, error) {
@@ -351,4 +348,52 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+func decodeCreatedBlocks(data json.RawMessage) ([]CreatedBlock, error) {
+	if len(data) == 0 {
+		return nil, nil
+	}
+
+	var urlList []string
+	if err := json.Unmarshal(data, &urlList); err == nil {
+		blocks := make([]CreatedBlock, 0, len(urlList))
+		for _, rawURL := range urlList {
+			rawURL = strings.TrimSpace(rawURL)
+			if rawURL == "" {
+				continue
+			}
+			blocks = append(blocks, CreatedBlock{
+				ID:  extractBlockIDFromURL(rawURL),
+				URL: rawURL,
+			})
+		}
+		return blocks, nil
+	}
+
+	var payload struct {
+		Blocks []CreatedBlock `json:"blocks"`
+	}
+	if err := json.Unmarshal(data, &payload); err != nil {
+		return nil, fmt.Errorf("decode created blocks payload: %w", err)
+	}
+	for i := range payload.Blocks {
+		if payload.Blocks[i].ID == "" && payload.Blocks[i].URL != "" {
+			payload.Blocks[i].ID = extractBlockIDFromURL(payload.Blocks[i].URL)
+		}
+	}
+	return payload.Blocks, nil
+}
+
+func extractBlockIDFromURL(rawURL string) string {
+	parsed, err := url.Parse(strings.TrimSpace(rawURL))
+	if err != nil {
+		return ""
+	}
+	path := strings.Trim(parsed.Path, "/")
+	if path == "" {
+		return ""
+	}
+	parts := strings.Split(path, "/")
+	return strings.TrimSpace(parts[len(parts)-1])
 }

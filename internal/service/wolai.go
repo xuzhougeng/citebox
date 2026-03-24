@@ -104,21 +104,25 @@ func (s *LibraryService) InsertWolaiTestPage(input model.WolaiSettings) (model.W
 		return model.WolaiSaveNoteResponse{}, err
 	}
 
-	pageID, err := createWolaiNotePage(client, settings.ParentBlockID, "Test Page")
+	pageBlock, err := createWolaiNotePage(client, settings.ParentBlockID, "Test Page")
 	if err != nil {
 		return model.WolaiSaveNoteResponse{}, apperr.Wrap(apperr.CodeUnavailable, "创建 Wolai 测试页面失败", err)
 	}
+	pageID := pageBlock.ID
+	pageURL := strings.TrimSpace(pageBlock.URL)
+	if pageURL == "" {
+		pageURL = lookupWolaiBlockURL(client, pageID)
+	}
 
-	pageBlock, err := client.GetBlock(pageID)
+	pageMeta, err := client.GetBlock(pageID)
 	if err != nil {
 		return model.WolaiSaveNoteResponse{}, apperr.Wrap(apperr.CodeUnavailable, "读取 Wolai 测试页面信息失败", err)
 	}
 
-	spaceID := extractWolaiSpaceID(pageBlock)
+	spaceID := resolveWolaiUploadSpaceID(pageMeta, settings.ParentBlockID)
 	if spaceID == "" {
-		return model.WolaiSaveNoteResponse{}, apperr.New(apperr.CodeUnavailable, "无法从 Wolai 页面响应中解析 space ID")
+		return model.WolaiSaveNoteResponse{}, apperr.New(apperr.CodeUnavailable, "无法从 Wolai 页面响应中解析上传所需页面 ID")
 	}
-	pageURL := extractWolaiBlockURL(pageBlock)
 
 	if _, err := client.CreateBlocks(pageID, []map[string]any{{
 		"type":           "text",
@@ -189,15 +193,19 @@ func (s *LibraryService) SavePaperNoteToWolai(paperID int64, notesText string) (
 		return model.WolaiSaveNoteResponse{}, err
 	}
 
-	pageID, err := createWolaiNotePage(client, settings.ParentBlockID, buildPaperNoteWolaiPageTitle(paper))
+	pageBlock, err := createWolaiNotePage(client, settings.ParentBlockID, buildPaperNoteWolaiPageTitle(paper))
 	if err != nil {
 		return model.WolaiSaveNoteResponse{}, apperr.Wrap(apperr.CodeUnavailable, "创建 Wolai 文献笔记页面失败", err)
 	}
+	pageID := pageBlock.ID
 
 	if _, err := client.CreateBlocks(pageID, buildPaperNoteWolaiBlocks(paper, content)); err != nil {
 		return model.WolaiSaveNoteResponse{}, apperr.Wrap(apperr.CodeUnavailable, "写入 Wolai 文献笔记内容失败", err)
 	}
-	pageURL := lookupWolaiBlockURL(client, pageID)
+	pageURL := strings.TrimSpace(pageBlock.URL)
+	if pageURL == "" {
+		pageURL = lookupWolaiBlockURL(client, pageID)
+	}
 
 	return model.WolaiSaveNoteResponse{
 		Success:        true,
@@ -226,15 +234,19 @@ func (s *LibraryService) SaveFigureNoteToWolai(figureID int64, notesText string)
 		return model.WolaiSaveNoteResponse{}, err
 	}
 
-	pageID, err := createWolaiNotePage(client, settings.ParentBlockID, buildFigureNoteWolaiPageTitle(figure))
+	pageBlock, err := createWolaiNotePage(client, settings.ParentBlockID, buildFigureNoteWolaiPageTitle(figure))
 	if err != nil {
 		return model.WolaiSaveNoteResponse{}, apperr.Wrap(apperr.CodeUnavailable, "创建 Wolai 图片笔记页面失败", err)
 	}
+	pageID := pageBlock.ID
 
 	if _, err := client.CreateBlocks(pageID, buildFigureNoteWolaiBlocks(figure, content)); err != nil {
 		return model.WolaiSaveNoteResponse{}, apperr.Wrap(apperr.CodeUnavailable, "写入 Wolai 图片笔记内容失败", err)
 	}
-	pageURL := lookupWolaiBlockURL(client, pageID)
+	pageURL := strings.TrimSpace(pageBlock.URL)
+	if pageURL == "" {
+		pageURL = lookupWolaiBlockURL(client, pageID)
+	}
 
 	return model.WolaiSaveNoteResponse{
 		Success:        true,
@@ -294,18 +306,20 @@ func validateWolaiSettings(settings model.WolaiSettings) error {
 	return nil
 }
 
-func createWolaiNotePage(client wolaiClient, parentID, title string) (string, error) {
+func createWolaiNotePage(client wolaiClient, parentID, title string) (wolaiapi.CreatedBlock, error) {
 	created, err := client.CreateBlocks(parentID, []map[string]any{{
 		"type":    "page",
 		"content": title,
 	}})
 	if err != nil {
-		return "", err
+		return wolaiapi.CreatedBlock{}, err
 	}
 	if len(created) == 0 || strings.TrimSpace(created[0].ID) == "" {
-		return "", fmt.Errorf("wolai create blocks response missing page id")
+		return wolaiapi.CreatedBlock{}, fmt.Errorf("wolai create blocks response missing page id")
 	}
-	return strings.TrimSpace(created[0].ID), nil
+	created[0].ID = strings.TrimSpace(created[0].ID)
+	created[0].URL = strings.TrimSpace(created[0].URL)
+	return created[0], nil
 }
 
 func buildWolaiTestImage() ([]byte, error) {
@@ -517,42 +531,26 @@ func normalizeWolaiInlineTitle(value string) string {
 	return strings.Join(strings.Fields(value), " ")
 }
 
-func extractWolaiSpaceID(block map[string]any) string {
-	return findWolaiSpaceID(block)
-}
-
-func findWolaiSpaceID(node any) string {
-	switch value := node.(type) {
-	case map[string]any:
-		if spaceID := strings.TrimSpace(stringValue(value["space_id"])); spaceID != "" {
-			return spaceID
-		}
-		if spaceID := strings.TrimSpace(stringValue(value["spaceId"])); spaceID != "" {
-			return spaceID
-		}
-		if nested, ok := value["space"].(map[string]any); ok {
-			if spaceID := strings.TrimSpace(stringValue(nested["id"])); spaceID != "" {
-				return spaceID
-			}
-		}
-		for _, child := range value {
-			if spaceID := findWolaiSpaceID(child); spaceID != "" {
-				return spaceID
-			}
-		}
-	case []any:
-		for _, child := range value {
-			if spaceID := findWolaiSpaceID(child); spaceID != "" {
-				return spaceID
-			}
-		}
+func stringValue(value any) string {
+	if text, ok := value.(string); ok {
+		return text
 	}
 	return ""
 }
 
-func stringValue(value any) string {
-	if text, ok := value.(string); ok {
-		return text
+func resolveWolaiUploadSpaceID(block map[string]any, fallback string) string {
+	for _, candidate := range []string{
+		stringValue(block["page_id"]),
+		stringValue(block["pageId"]),
+		stringValue(block["parent_id"]),
+		stringValue(block["parentId"]),
+		stringValue(block["space_id"]),
+		stringValue(block["spaceId"]),
+		fallback,
+	} {
+		if candidate = strings.TrimSpace(candidate); candidate != "" {
+			return candidate
+		}
 	}
 	return ""
 }
