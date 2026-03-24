@@ -70,11 +70,11 @@
                 </div>
             </details>
 
-            <section class="manager-card">
-                <div class="manager-head">
+            <details class="manager-card settings-collapsible">
+                <summary class="settings-collapsible-toggle">
                     <h2>模型配置</h2>
                     <p>管理可用模型列表。这里的修改会自动保存。</p>
-                </div>
+                </summary>
                 <div class="manager-form">
                     <div id="aiModelList" class="manager-list"></div>
                     <div class="submit-row">
@@ -82,13 +82,13 @@
                     </div>
                     <p id="aiModelAutosaveStatus" class="settings-inline-status">模型配置修改后会自动保存。</p>
                 </div>
-            </section>
+            </details>
 
-            <section class="manager-card">
-                <div class="manager-head">
+            <details class="manager-card settings-collapsible">
+                <summary class="settings-collapsible-toggle">
                     <h2>场景绑定</h2>
                     <p>为不同 AI 场景选择默认模型，并配置通用运行参数。这里的修改会自动保存。</p>
-                </div>
+                </summary>
                 <div class="manager-form">
                     <div class="form-grid">
                         <label class="field">
@@ -112,10 +112,6 @@
                             <select id="aiGroupModelSelect" class="form-input"></select>
                         </label>
                         <label class="field">
-                            <span>划词翻译模型</span>
-                            <select id="aiTranslateModelSelect" class="form-input"></select>
-                        </label>
-                        <label class="field">
                             <span>Temperature</span>
                             <input id="aiTemperatureInput" class="form-input" type="number" min="0" max="2" step="0.1">
                         </label>
@@ -125,15 +121,19 @@
                         </label>
                     </div>
                 </div>
-            </section>
+            </details>
 
-            <section class="manager-card">
-                <div class="manager-head">
+            <details class="manager-card settings-collapsible">
+                <summary class="settings-collapsible-toggle">
                     <h2>翻译设置</h2>
                     <p>桌面端划词右键只显示“翻译”。这里的修改会自动保存。</p>
-                </div>
+                </summary>
                 <div class="manager-form">
                     <div class="form-grid">
+                        <label class="field">
+                            <span>划词翻译模型</span>
+                            <select id="aiTranslateModelSelect" class="form-input"></select>
+                        </label>
                         <label class="field">
                             <span>主要语言</span>
                             <input id="aiTranslationPrimaryLanguageInput" class="form-input" type="text" placeholder="例如：中文">
@@ -144,13 +144,13 @@
                         </label>
                     </div>
                 </div>
-            </section>
+            </details>
 
-            <section class="manager-card">
-                <div class="manager-head">
+            <details class="manager-card settings-collapsible">
+                <summary class="settings-collapsible-toggle">
                     <h2>Prompt 设置</h2>
                     <p>管理场景 Prompt 和角色 Prompt。这里的修改需要单独点击保存。</p>
-                </div>
+                </summary>
                 <form id="aiSettingsForm" class="manager-form">
                     <div class="settings-subsection-body">
 
@@ -436,7 +436,7 @@ User Prompt:
                     </div>
                     <p id="aiPromptSaveStatus" class="settings-inline-status">Prompt 修改后需要单独点击保存。</p>
                 </form>
-            </section>
+            </details>
 
             <details class="manager-card settings-collapsible" open>
                 <summary class="settings-collapsible-toggle">
