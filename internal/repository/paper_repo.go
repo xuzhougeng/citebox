@@ -550,13 +550,13 @@ func buildPaperWhere(filter model.PaperFilter) (string, []interface{}) {
 	args := []interface{}{}
 
 	if keyword := strings.TrimSpace(filter.Keyword); keyword != "" {
-		like := "%" + keyword + "%"
+		ftsKeyword := ftsEscapeKeyword(keyword)
 		if strings.TrimSpace(filter.KeywordScope) == "title_abstract" {
-			conditions = append(conditions, "(p.title LIKE ? OR p.abstract_text LIKE ?)")
-			args = append(args, like, like)
+			conditions = append(conditions, "p.id IN (SELECT rowid FROM papers_fts WHERE papers_fts MATCH '{title abstract_text}: ' || ?)")
+			args = append(args, ftsKeyword)
 		} else {
-			conditions = append(conditions, "(p.title LIKE ? OR p.original_filename LIKE ? OR p.abstract_text LIKE ? OR p.notes_text LIKE ? OR p.paper_notes_text LIKE ? OR p.pdf_text LIKE ?)")
-			args = append(args, like, like, like, like, like, like)
+			conditions = append(conditions, "p.id IN (SELECT rowid FROM papers_fts WHERE papers_fts MATCH ?)")
+			args = append(args, ftsKeyword)
 		}
 	}
 	if filter.GroupID != nil && *filter.GroupID > 0 {
@@ -570,6 +570,9 @@ func buildPaperWhere(filter model.PaperFilter) (string, []interface{}) {
 	if filter.Status != "" {
 		conditions = append(conditions, "p.extraction_status = ?")
 		args = append(args, filter.Status)
+	}
+	if filter.HasPaperNotes {
+		conditions = append(conditions, "TRIM(COALESCE(p.paper_notes_text, '')) <> ''")
 	}
 
 	if len(conditions) == 0 {

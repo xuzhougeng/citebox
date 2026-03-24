@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/xuzhougeng/citebox/internal/apperr"
 	"github.com/xuzhougeng/citebox/internal/model"
@@ -342,6 +343,14 @@ func ensureRowsAffected(result sql.Result, notFoundMessage string) error {
 
 func notFoundError(message string) error {
 	return apperr.New(apperr.CodeNotFound, message)
+}
+
+// ftsEscapeKeyword escapes special FTS5 characters and wraps the keyword
+// so it is treated as a literal substring match (prefix token).
+func ftsEscapeKeyword(keyword string) string {
+	// Quote the keyword to escape special FTS5 operators (* : ^ etc.)
+	escaped := strings.ReplaceAll(keyword, `"`, `""`)
+	return `"` + escaped + `"`
 }
 
 func containsAny(s string, substrs ...string) bool {

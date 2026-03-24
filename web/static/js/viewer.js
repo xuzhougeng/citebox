@@ -45,6 +45,11 @@ const ResourceViewerPage = {
         window.addEventListener('resize', () => {
             this.applyImageTransform();
         });
+        this.stage?.addEventListener('click', (event) => {
+            if (event.target === this.stage) {
+                this.close();
+            }
+        });
 
         this.render();
     },
@@ -66,11 +71,6 @@ const ResourceViewerPage = {
                         <img class="viewer-image" src="${resource.href}" alt="${this.escapeHTML(resource.name)}" data-viewer-image>
                     </div>
                 `;
-                this.stage.addEventListener('click', (event) => {
-                    if (event.target === this.stage) {
-                        this.close();
-                    }
-                });
                 const image = this.stage.querySelector('[data-viewer-image]');
                 if (image) {
                     if (image.complete) {

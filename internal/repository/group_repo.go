@@ -189,7 +189,7 @@ func (r *GroupRepository) GetGroupStats(id int64) (*model.GroupStats, error) {
 			COUNT(DISTINCT pf.id) AS figure_count
 		FROM groups g
 		LEFT JOIN papers p ON p.group_id = g.id
-		LEFT JOIN paper_figures pf ON pf.paper_id = p.id
+		LEFT JOIN paper_figures pf ON pf.paper_id = p.id AND pf.parent_figure_id IS NULL
 		WHERE g.id = ?
 	`, id).Scan(&stats.PaperCount, &stats.FigureCount); err != nil {
 		if err == sql.ErrNoRows {

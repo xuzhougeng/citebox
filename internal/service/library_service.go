@@ -18,6 +18,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/xuzhougeng/citebox/internal/apperr"
@@ -28,6 +29,7 @@ import (
 
 type LibraryService struct {
 	repo                *repository.LibraryRepository
+	repoMu              sync.RWMutex // protects repo during ImportDatabase
 	config              *config.Config
 	httpClient          *http.Client
 	logger              *slog.Logger
@@ -1272,7 +1274,10 @@ func (s *LibraryService) resumePendingExtractions() {
 }
 
 func (s *LibraryService) processPaperExtractionSync(settings model.ExtractorSettings, paperID int64, pdfPath, originalFilename string) error {
-	if err := s.repo.UpdatePaperExtractionState(paperID, "running", "解析服务正在处理 PDF", ""); err != nil {
+	s.repoMu.RLock()
+	err := s.repo.UpdatePaperExtractionState(paperID, "running", "解析服务正在处理 PDF", "")
+	s.repoMu.RUnlock()
+	if err != nil {
 		return err
 	}
 
@@ -1297,7 +1302,10 @@ func (s *LibraryService) processPaperExtractionJob(settings model.ExtractorSetti
 
 	switch finalStatus.Status {
 	case "completed":
-		if err := s.repo.UpdatePaperExtractionState(paperID, "running", "解析结果已返回，正在写入文献库", finalStatus.JobID); err != nil {
+		s.repoMu.RLock()
+		err = s.repo.UpdatePaperExtractionState(paperID, "running", "解析结果已返回，正在写入文献库", finalStatus.JobID)
+		s.repoMu.RUnlock()
+		if err != nil {
 			return err
 		}
 		result, err := s.getExtractJobResult(settings, finalStatus.JobID)
@@ -1331,7 +1339,10 @@ func (s *LibraryService) processPaperExtractionJobWithExistingJob(settings model
 		return nil
 	}
 
-	if err := s.repo.UpdatePaperExtractionState(paperID, "running", "解析结果已返回，正在写入文献库", finalStatus.JobID); err != nil {
+	s.repoMu.RLock()
+	err = s.repo.UpdatePaperExtractionState(paperID, "running", "解析结果已返回，正在写入文献库", finalStatus.JobID)
+	s.repoMu.RUnlock()
+	if err != nil {
 		return err
 	}
 
@@ -1348,7 +1359,15 @@ func (s *LibraryService) pollExtractJob(settings model.ExtractorSettings, paperI
 		return nil, apperr.New(apperr.CodeFailedPrecondition, "缺少解析任务信息")
 	}
 
+	// Guard against infinite polling: timeout after configured seconds or 30 minutes
+	maxDuration := time.Duration(maxInt(settings.TimeoutSeconds, 1800)) * time.Second
+	deadline := time.Now().Add(maxDuration)
+
 	for {
+		if time.Now().After(deadline) {
+			return nil, apperr.New(apperr.CodeDeadlineExceeded, fmt.Sprintf("轮询解析任务超时（超过 %v）", maxDuration))
+		}
+
 		if current.JobID == "" {
 			return nil, apperr.New(apperr.CodeUnavailable, "解析任务未返回 job_id")
 		}
@@ -1359,30 +1378,38 @@ func (s *LibraryService) pollExtractJob(settings model.ExtractorSettings, paperI
 		}
 		current = status
 
+		s.repoMu.RLock()
 		switch normalizeExtractionStatus(status.Status) {
 		case "queued":
-			if err := s.repo.UpdatePaperExtractionState(paperID, "queued", "文献已提交到解析队列", status.JobID); err != nil {
-				return nil, err
-			}
+			err = s.repo.UpdatePaperExtractionState(paperID, "queued", "文献已提交到解析队列", status.JobID)
 		case "running":
-			if err := s.repo.UpdatePaperExtractionState(paperID, "running", "解析服务正在处理 PDF", status.JobID); err != nil {
-				return nil, err
-			}
+			err = s.repo.UpdatePaperExtractionState(paperID, "running", "解析服务正在处理 PDF", status.JobID)
 		case "completed":
+			s.repoMu.RUnlock()
 			return status, nil
 		case "cancelled":
-			if err := s.repo.UpdatePaperExtractionState(paperID, "cancelled", "解析任务已取消", status.JobID); err != nil {
+			err = s.repo.UpdatePaperExtractionState(paperID, "cancelled", "解析任务已取消", status.JobID)
+			s.repoMu.RUnlock()
+			if err != nil {
 				return nil, err
 			}
 			return status, nil
 		case "failed":
 			message := firstNonEmpty(status.Error, "解析后端返回失败状态")
-			if err := s.repo.UpdatePaperExtractionState(paperID, "failed", message, status.JobID); err != nil {
+			err = s.repo.UpdatePaperExtractionState(paperID, "failed", message, status.JobID)
+			s.repoMu.RUnlock()
+			if err != nil {
 				return nil, err
 			}
 			return status, nil
 		default:
+			s.repoMu.RUnlock()
 			return nil, apperr.New(apperr.CodeUnavailable, fmt.Sprintf("未知的解析任务状态: %s", status.Status))
+		}
+		s.repoMu.RUnlock()
+
+		if err != nil {
+			return nil, err
 		}
 
 		time.Sleep(time.Duration(maxInt(settings.PollIntervalSeconds, 1)) * time.Second)
@@ -1399,6 +1426,7 @@ func (s *LibraryService) persistExtractionResult(paperID int64, jobID string, re
 		return apperr.Wrap(apperr.CodeInternal, "解析图片失败", err)
 	}
 
+	s.repoMu.RLock()
 	err = s.repo.ApplyPaperExtractionResult(
 		paperID,
 		result.PDFText,
@@ -1408,6 +1436,7 @@ func (s *LibraryService) persistExtractionResult(paperID int64, jobID string, re
 		jobID,
 		figures,
 	)
+	s.repoMu.RUnlock()
 	if err != nil {
 		removeFiles(figurePaths)
 		return err
@@ -1418,13 +1447,18 @@ func (s *LibraryService) persistExtractionResult(paperID int64, jobID string, re
 
 func (s *LibraryService) markPaperExtractionFailed(paperID int64, jobID string, err error) {
 	if strings.TrimSpace(jobID) == "" {
+		s.repoMu.RLock()
 		paper, getErr := s.repo.GetPaperDetail(paperID)
+		s.repoMu.RUnlock()
 		if getErr == nil && paper != nil {
 			jobID = paper.ExtractorJobID
 		}
 	}
 	message := firstNonEmpty(errorMessage(err), "解析失败")
-	if updateErr := s.repo.UpdatePaperExtractionState(paperID, "failed", message, jobID); updateErr != nil && !apperr.IsCode(updateErr, apperr.CodeNotFound) {
+	s.repoMu.RLock()
+	updateErr := s.repo.UpdatePaperExtractionState(paperID, "failed", message, jobID)
+	s.repoMu.RUnlock()
+	if updateErr != nil && !apperr.IsCode(updateErr, apperr.CodeNotFound) {
 		s.logger.Warn("mark paper extraction failed state failed",
 			"paper_id", paperID,
 			"job_id", jobID,
@@ -2253,6 +2287,9 @@ func (s *LibraryService) GetAuthSettings() model.AuthSettings {
 }
 
 func (s *LibraryService) ImportDatabase(sourcePath string) error {
+	s.repoMu.Lock()
+	defer s.repoMu.Unlock()
+
 	if err := s.repo.Close(); err != nil {
 		return apperr.Wrap(apperr.CodeInternal, "关闭当前数据库失败", err)
 	}

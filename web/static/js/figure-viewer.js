@@ -21,6 +21,7 @@ const FigureViewer = {
         if (!this.modal || this.initialized) return;
         this.initialized = true;
         this.aiCache = new Map();
+        this.aiCacheMaxSize = 200;
         this.activeAIByFigure = new Map();
         this.aiRequestState = null;
         this.paperDetails = new Map();
@@ -288,7 +289,9 @@ const FigureViewer = {
         this.resetViewportState();
         if (!this.modal) return;
         this.modal.classList.add('hidden');
-        document.body.classList.remove('modal-open');
+        if (!document.querySelector('.modal-shell:not(.hidden)')) {
+            document.body.classList.remove('modal-open');
+        }
     },
 
     canMovePrevious() {
@@ -1040,6 +1043,7 @@ const FigureViewer = {
                 question: this.buildAIQuestion(action, this.currentFigure)
             });
             this.aiCache.set(cacheKey, result);
+            this.evictMapIfNeeded(this.aiCache, this.aiCacheMaxSize);
             this.aiRequestState = null;
             this.refreshAIState();
         } catch (error) {
@@ -1104,6 +1108,7 @@ const FigureViewer = {
                     }
                     if (event.type === 'final' && event.result) {
                         this.aiCache.set(cacheKey, event.result);
+                        this.evictMapIfNeeded(this.aiCache, this.aiCacheMaxSize);
                         this.aiRequestState = null;
                         this.refreshAIState();
                     }
@@ -1491,6 +1496,7 @@ const FigureViewer = {
 
     syncPaperMetadata(paper) {
         this.paperDetails.set(paper.id, paper);
+        this.evictMapIfNeeded(this.paperDetails, 50);
         this.mergeFigureTagCatalogFromPaper(paper);
         this.figures = mergeFigureCollectionWithPaper(this.figures, paper);
         this.syncCurrentFigureState({ forceDraftFromFigure: true });
@@ -2371,5 +2377,13 @@ const FigureViewer = {
             }
         }
         this.refreshFigureTagSuggestions();
+    },
+
+    evictMapIfNeeded(map, maxSize) {
+        if (map.size <= maxSize) return;
+        const keysToDelete = Array.from(map.keys()).slice(0, map.size - maxSize);
+        for (const key of keysToDelete) {
+            map.delete(key);
+        }
     }
 };

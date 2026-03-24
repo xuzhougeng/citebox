@@ -86,6 +86,7 @@ func (h *DatabaseHandler) Import(w http.ResponseWriter, r *http.Request) {
 	if _, err := io.Copy(tempFile, file); err != nil {
 		tempFile.Close()
 		sendError(w, apperr.Wrap(apperr.CodeInternal, "写入临时文件失败", err))
+		return
 	}
 	tempFile.Close()
 

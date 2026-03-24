@@ -364,14 +364,15 @@ func buildFigureWhere(filter model.FigureFilter) (string, []interface{}) {
 	args := []interface{}{}
 
 	if keyword := strings.TrimSpace(filter.Keyword); keyword != "" {
-		like := "%" + keyword + "%"
-		conditions = append(conditions, `(p.title LIKE ? OR pf.original_name LIKE ? OR pf.caption LIKE ? OR pf.notes_text LIKE ? OR EXISTS (
+		ftsKeyword := ftsEscapeKeyword(keyword)
+		conditions = append(conditions, `(pf.id IN (SELECT rowid FROM figures_fts WHERE figures_fts MATCH ?) OR p.title LIKE ? OR EXISTS (
 			SELECT 1
 			FROM figure_tags ft
 			JOIN tags t ON t.id = ft.tag_id
 			WHERE ft.figure_id = pf.id AND t.name LIKE ?
 		))`)
-		args = append(args, like, like, like, like, like)
+		like := "%" + keyword + "%"
+		args = append(args, ftsKeyword, like, like)
 	}
 	if filter.GroupID != nil && *filter.GroupID > 0 {
 		conditions = append(conditions, "p.group_id = ?")

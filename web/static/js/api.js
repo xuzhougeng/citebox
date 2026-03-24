@@ -425,7 +425,11 @@ const API = {
                 const line = buffer.slice(0, newlineIndex).trim();
                 buffer = buffer.slice(newlineIndex + 1);
                 if (line) {
-                    options.onEvent?.(JSON.parse(line));
+                    try {
+                        options.onEvent?.(JSON.parse(line));
+                    } catch (e) {
+                        console.warn('SSE JSON parse error:', e, 'line:', line);
+                    }
                 }
                 newlineIndex = buffer.indexOf('\n');
             }
@@ -433,7 +437,11 @@ const API = {
 
         const tail = (buffer + decoder.decode()).trim();
         if (tail) {
-            options.onEvent?.(JSON.parse(tail));
+            try {
+                options.onEvent?.(JSON.parse(tail));
+            } catch (e) {
+                console.warn('SSE JSON parse error:', e, 'tail:', tail);
+            }
         }
     },
 

@@ -16,6 +16,7 @@ const (
 	CodeResourceExhausted  Code = "RESOURCE_EXHAUSTED"
 	CodeUnsupportedMedia   Code = "UNSUPPORTED_MEDIA_TYPE"
 	CodeUnavailable        Code = "UNAVAILABLE"
+	CodeDeadlineExceeded   Code = "DEADLINE_EXCEEDED"
 	CodeUnauthenticated    Code = "UNAUTHENTICATED"
 	CodeInternal           Code = "INTERNAL"
 )
@@ -104,6 +105,8 @@ func HTTPStatus(err error) int {
 		return http.StatusUnsupportedMediaType
 	case CodeUnavailable:
 		return http.StatusServiceUnavailable
+	case CodeDeadlineExceeded:
+		return http.StatusGatewayTimeout
 	case CodeUnauthenticated:
 		return http.StatusUnauthorized
 	default:

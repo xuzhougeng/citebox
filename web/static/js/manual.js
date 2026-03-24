@@ -315,6 +315,11 @@ const ManualPage = {
         })();
 
         this.state.renderCache.set(pageNumber, renderPromise);
+        // Evict oldest entries to prevent unbounded memory growth
+        if (this.state.renderCache.size > 20) {
+            const oldest = this.state.renderCache.keys().next().value;
+            this.state.renderCache.delete(oldest);
+        }
         return renderPromise;
     },
 

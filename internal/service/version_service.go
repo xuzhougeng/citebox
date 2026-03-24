@@ -162,17 +162,21 @@ func (s *VersionService) fetchLatestRelease(ctx context.Context) (*githubLatestR
 	}
 	defer response.Body.Close()
 
-	var payload githubLatestReleaseResponse
-	if err := json.NewDecoder(response.Body).Decode(&payload); err != nil {
-		return nil, fmt.Errorf("解析版本响应失败: %w", err)
-	}
-
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		message := strings.TrimSpace(payload.Message)
+		var errPayload struct {
+			Message string `json:"message"`
+		}
+		_ = json.NewDecoder(response.Body).Decode(&errPayload)
+		message := strings.TrimSpace(errPayload.Message)
 		if message == "" {
 			message = response.Status
 		}
 		return nil, fmt.Errorf("GitHub Release 查询失败: %s", message)
+	}
+
+	var payload githubLatestReleaseResponse
+	if err := json.NewDecoder(response.Body).Decode(&payload); err != nil {
+		return nil, fmt.Errorf("解析版本响应失败: %w", err)
 	}
 
 	if strings.TrimSpace(payload.TagName) == "" {
