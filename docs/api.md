@@ -882,6 +882,24 @@ AI 流式阅读通过：
 }
 ```
 
+#### `POST /api/settings/wolai/test-page`
+
+用途：
+
+- 创建一个 Wolai 测试页面并写入测试文本
+- 当前不会执行真实图片上传，只会写入一条图片导出 TODO 说明
+
+成功后返回：
+
+```json
+{
+  "success": true,
+  "message": "Wolai 测试页面已创建，并写入测试文本与图片导出 TODO",
+  "target_block_id": "page-or-block-id",
+  "target_block_url": "https://www.wolai.com/..."
+}
+```
+
 #### `GET /api/settings/weixin-bridge`
 
 用途：
@@ -974,6 +992,7 @@ AI 流式阅读通过：
 
 - 如果前端传了 `notes_text`，后端会优先导出当前草稿
 - 后端会把标题、分组、标签、摘要等元信息一并追加成新的文本块
+- 如果笔记里包含 Markdown 图片引用，当前不会上传图片到 Wolai，而是写入 TODO 占位，等待后续完成
 
 #### `POST /api/wolai/figures/{id}/notes`
 
@@ -1002,6 +1021,7 @@ AI 流式阅读通过：
 说明：
 
 - 后端会追加来源文献、页码 / 图号、caption、分组、标签等元信息
+- 如果笔记里包含 Markdown 图片引用，当前不会上传图片到 Wolai，而是写入 TODO 占位，等待后续完成
 - 这些接口不会替代原有本地保存接口，只负责额外导出到 Wolai
 
 ### 鉴权 Auth

@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/url"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -15,11 +16,15 @@ import (
 )
 
 const (
-	wolaiSettingsKey       = "wolai_settings"
-	wolaiTextBlockMaxSize  = 1600
-	wolaiBlackImageDataURL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgYGD4DwABBAEAX+XDSwAAAABJRU5ErkJggg=="
+	wolaiSettingsKey           = "wolai_settings"
+	wolaiTextBlockMaxSize      = 1600
+	wolaiNoteImageTODOText     = "暂不支持保存到 Wolai，等待后续完成。"
+	wolaiTestPageImageTODOText = "TODO：Wolai 图片导出尚未实现，等待后续完成。"
 )
 
+var wolaiMarkdownImagePattern = regexp.MustCompile(`!\[([^\]]*)\]\(([^)\s]+)\)`)
+
+// TODO: Wire note image upload through these methods once Wolai image export is implemented.
 type wolaiClient interface {
 	GetBlock(id string) (map[string]any, error)
 	CreateBlocks(parentID string, blocks any) ([]wolaiapi.CreatedBlock, error)
@@ -120,15 +125,16 @@ func (s *LibraryService) InsertWolaiTestPage(input model.WolaiSettings) (model.W
 	}
 
 	if _, err := client.CreateBlocks(pageID, []map[string]any{{
-		"type": "image",
-		"link": wolaiBlackImageDataURL,
+		"type":           "text",
+		"content":        wolaiTestPageImageTODOText,
+		"text_alignment": "left",
 	}}); err != nil {
-		return model.WolaiSaveNoteResponse{}, apperr.Wrap(apperr.CodeUnavailable, "插入 Wolai 测试图片失败", err)
+		return model.WolaiSaveNoteResponse{}, apperr.Wrap(apperr.CodeUnavailable, "写入 Wolai 测试页面图片 TODO 失败", err)
 	}
 
 	return model.WolaiSaveNoteResponse{
 		Success:        true,
-		Message:        "Wolai 测试页面已创建，并写入测试文本与纯黑图片",
+		Message:        "Wolai 测试页面已创建，并写入测试文本与图片导出 TODO",
 		TargetBlockID:  pageID,
 		TargetBlockURL: pageURL,
 	}, nil
@@ -159,7 +165,8 @@ func (s *LibraryService) SavePaperNoteToWolai(paperID int64, notesText string) (
 	}
 	pageID := pageBlock.ID
 
-	if _, err := client.CreateBlocks(pageID, buildPaperNoteWolaiBlocks(paper, content)); err != nil {
+	blocks, hasPendingImages := buildPaperNoteWolaiBlocks(paper, content)
+	if _, err := client.CreateBlocks(pageID, blocks); err != nil {
 		return model.WolaiSaveNoteResponse{}, apperr.Wrap(apperr.CodeUnavailable, "写入 Wolai 文献笔记内容失败", err)
 	}
 	pageURL := strings.TrimSpace(pageBlock.URL)
@@ -167,9 +174,14 @@ func (s *LibraryService) SavePaperNoteToWolai(paperID int64, notesText string) (
 		pageURL = lookupWolaiBlockURL(client, pageID)
 	}
 
+	message := "文献笔记已保存到 Wolai"
+	if hasPendingImages {
+		message = "文献笔记已保存到 Wolai，笔记内图片已标记 TODO，等待后续完成"
+	}
+
 	return model.WolaiSaveNoteResponse{
 		Success:        true,
-		Message:        "文献笔记已保存到 Wolai",
+		Message:        message,
 		TargetBlockID:  pageID,
 		TargetBlockURL: pageURL,
 	}, nil
@@ -200,7 +212,8 @@ func (s *LibraryService) SaveFigureNoteToWolai(figureID int64, notesText string)
 	}
 	pageID := pageBlock.ID
 
-	if _, err := client.CreateBlocks(pageID, buildFigureNoteWolaiBlocks(figure, content)); err != nil {
+	blocks, hasPendingImages := buildFigureNoteWolaiBlocks(figure, content)
+	if _, err := client.CreateBlocks(pageID, blocks); err != nil {
 		return model.WolaiSaveNoteResponse{}, apperr.Wrap(apperr.CodeUnavailable, "写入 Wolai 图片笔记内容失败", err)
 	}
 	pageURL := strings.TrimSpace(pageBlock.URL)
@@ -208,9 +221,14 @@ func (s *LibraryService) SaveFigureNoteToWolai(figureID int64, notesText string)
 		pageURL = lookupWolaiBlockURL(client, pageID)
 	}
 
+	message := "图片笔记已保存到 Wolai"
+	if hasPendingImages {
+		message = "图片笔记已保存到 Wolai，笔记内图片已标记 TODO，等待后续完成"
+	}
+
 	return model.WolaiSaveNoteResponse{
 		Success:        true,
-		Message:        "图片笔记已保存到 Wolai",
+		Message:        message,
 		TargetBlockID:  pageID,
 		TargetBlockURL: pageURL,
 	}, nil
@@ -286,7 +304,8 @@ func buildPaperNoteWolaiPageTitle(paper *model.Paper) string {
 	return fmt.Sprintf("文献笔记｜%s", buildWolaiNoteSubject(paper.Title, paper.OriginalFilename, "未命名文献"))
 }
 
-func buildPaperNoteWolaiBlocks(paper *model.Paper, notesText string) []map[string]any {
+func buildPaperNoteWolaiBlocks(paper *model.Paper, notesText string) ([]map[string]any, bool) {
+	notesText, hasPendingImages := rewriteWolaiMarkdownImages(notesText)
 	sections := []string{
 		strings.Join([]string{
 			"导出时间：" + time.Now().Format("2006-01-02 15:04:05"),
@@ -301,14 +320,15 @@ func buildPaperNoteWolaiBlocks(paper *model.Paper, notesText string) []map[strin
 	}
 	sections = append(sections, "文献笔记：\n"+strings.TrimSpace(notesText))
 
-	return buildWolaiTextBlocks(sections)
+	return buildWolaiTextBlocks(sections), hasPendingImages
 }
 
 func buildFigureNoteWolaiPageTitle(figure *model.FigureListItem) string {
 	return fmt.Sprintf("图片笔记｜%s", buildWolaiNoteSubject(figure.PaperTitle, figure.Filename, "未命名图片"))
 }
 
-func buildFigureNoteWolaiBlocks(figure *model.FigureListItem, notesText string) []map[string]any {
+func buildFigureNoteWolaiBlocks(figure *model.FigureListItem, notesText string) ([]map[string]any, bool) {
+	notesText, hasPendingImages := rewriteWolaiMarkdownImages(notesText)
 	sections := []string{
 		strings.Join([]string{
 			"导出时间：" + time.Now().Format("2006-01-02 15:04:05"),
@@ -324,7 +344,31 @@ func buildFigureNoteWolaiBlocks(figure *model.FigureListItem, notesText string) 
 	}
 	sections = append(sections, "图片笔记：\n"+strings.TrimSpace(notesText))
 
-	return buildWolaiTextBlocks(sections)
+	return buildWolaiTextBlocks(sections), hasPendingImages
+}
+
+func rewriteWolaiMarkdownImages(notesText string) (string, bool) {
+	normalized := strings.TrimSpace(notesText)
+	if normalized == "" {
+		return "", false
+	}
+
+	replaced := false
+	rewritten := wolaiMarkdownImagePattern.ReplaceAllStringFunc(normalized, func(match string) string {
+		parts := wolaiMarkdownImagePattern.FindStringSubmatch(match)
+		if len(parts) != 3 {
+			return match
+		}
+
+		replaced = true
+		label := normalizeWolaiInlineTitle(parts[1])
+		if label == "" {
+			label = "未命名图片"
+		}
+		return fmt.Sprintf("【TODO：图片“%s”%s】", label, wolaiNoteImageTODOText)
+	})
+
+	return strings.TrimSpace(rewritten), replaced
 }
 
 func buildWolaiTextBlocks(sections []string) []map[string]any {

@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"image"
 	"image/color"
 	"image/png"
@@ -560,7 +561,111 @@ func TestSaveFigureNoteToWolaiUsesFigureMetadata(t *testing.T) {
 	}
 }
 
-func TestInsertWolaiTestPageCreatesChildPageAndInsertsBlackImage(t *testing.T) {
+func TestSavePaperNoteToWolaiReplacesMarkdownImagesWithTODO(t *testing.T) {
+	svc, repo, _ := newTestService(t)
+	paper := createTestPaper(t, repo)
+
+	if _, err := svc.UpdateWolaiSettings(model.WolaiSettings{
+		Token:         "wolai-token",
+		ParentBlockID: "paper-root",
+	}); err != nil {
+		t.Fatalf("UpdateWolaiSettings() error = %v", err)
+	}
+
+	var blocksByCall [][]map[string]any
+	svc.wolaiClientFactory = func(settings model.WolaiSettings) (wolaiClient, error) {
+		return &stubWolaiClient{
+			createBlocksFunc: func(parentID string, blocks any) ([]wolaiapi.CreatedBlock, error) {
+				typed, ok := blocks.([]map[string]any)
+				if !ok {
+					t.Fatalf("blocks type = %T, want []map[string]any", blocks)
+				}
+				blocksByCall = append(blocksByCall, typed)
+				if len(blocksByCall) == 1 {
+					return []wolaiapi.CreatedBlock{{ID: "paper-note-page", Type: "page"}}, nil
+				}
+				return []wolaiapi.CreatedBlock{{ID: "paper-note-body"}}, nil
+			},
+		}, nil
+	}
+
+	result, err := svc.SavePaperNoteToWolai(paper.ID, fmt.Sprintf("结论如下：\n\n![第 1 页图 1](figure://%d)\n\n继续分析。", paper.Figures[0].ID))
+	if err != nil {
+		t.Fatalf("SavePaperNoteToWolai() error = %v", err)
+	}
+	if !strings.Contains(result.Message, "笔记内图片已标记 TODO") {
+		t.Fatalf("SavePaperNoteToWolai() message = %q, want TODO warning", result.Message)
+	}
+	if len(blocksByCall) != 2 {
+		t.Fatalf("CreateBlocks() calls = %d, want 2", len(blocksByCall))
+	}
+
+	joined := make([]string, 0, len(blocksByCall[1]))
+	for _, block := range blocksByCall[1] {
+		joined = append(joined, block["content"].(string))
+	}
+	text := strings.Join(joined, "\n")
+	if strings.Contains(text, fmt.Sprintf("figure://%d", paper.Figures[0].ID)) {
+		t.Fatalf("saved text = %q, want markdown image source removed", text)
+	}
+	if !strings.Contains(text, "【TODO：图片“第 1 页图 1”暂不支持保存到 Wolai，等待后续完成。】") {
+		t.Fatalf("saved text = %q, want image TODO placeholder", text)
+	}
+}
+
+func TestSaveFigureNoteToWolaiReplacesMarkdownImagesWithTODO(t *testing.T) {
+	svc, repo, _ := newTestService(t)
+	paper := createTestPaper(t, repo)
+
+	if _, err := svc.UpdateWolaiSettings(model.WolaiSettings{
+		Token:         "wolai-token",
+		ParentBlockID: "figure-root",
+	}); err != nil {
+		t.Fatalf("UpdateWolaiSettings() error = %v", err)
+	}
+
+	var blocksByCall [][]map[string]any
+	svc.wolaiClientFactory = func(settings model.WolaiSettings) (wolaiClient, error) {
+		return &stubWolaiClient{
+			createBlocksFunc: func(parentID string, blocks any) ([]wolaiapi.CreatedBlock, error) {
+				typed, ok := blocks.([]map[string]any)
+				if !ok {
+					t.Fatalf("blocks type = %T, want []map[string]any", blocks)
+				}
+				blocksByCall = append(blocksByCall, typed)
+				if len(blocksByCall) == 1 {
+					return []wolaiapi.CreatedBlock{{ID: "figure-note-page", Type: "page"}}, nil
+				}
+				return []wolaiapi.CreatedBlock{{ID: "figure-note-body"}}, nil
+			},
+		}, nil
+	}
+
+	result, err := svc.SaveFigureNoteToWolai(paper.Figures[0].ID, "请补看：![局部放大图](https://example.com/figure.png)")
+	if err != nil {
+		t.Fatalf("SaveFigureNoteToWolai() error = %v", err)
+	}
+	if !strings.Contains(result.Message, "笔记内图片已标记 TODO") {
+		t.Fatalf("SaveFigureNoteToWolai() message = %q, want TODO warning", result.Message)
+	}
+	if len(blocksByCall) != 2 {
+		t.Fatalf("CreateBlocks() calls = %d, want 2", len(blocksByCall))
+	}
+
+	joined := make([]string, 0, len(blocksByCall[1]))
+	for _, block := range blocksByCall[1] {
+		joined = append(joined, block["content"].(string))
+	}
+	text := strings.Join(joined, "\n")
+	if strings.Contains(text, "https://example.com/figure.png") {
+		t.Fatalf("saved text = %q, want external image source removed", text)
+	}
+	if !strings.Contains(text, "【TODO：图片“局部放大图”暂不支持保存到 Wolai，等待后续完成。】") {
+		t.Fatalf("saved text = %q, want image TODO placeholder", text)
+	}
+}
+
+func TestInsertWolaiTestPageCreatesChildPageAndWritesImageTODO(t *testing.T) {
 	svc, _, _ := newTestService(t)
 
 	type createCall struct {
@@ -585,7 +690,7 @@ func TestInsertWolaiTestPageCreatesChildPageAndInsertsBlackImage(t *testing.T) {
 				case 2:
 					return []wolaiapi.CreatedBlock{{ID: "text-block-1", Type: "text"}}, nil
 				case 3:
-					return []wolaiapi.CreatedBlock{{ID: "image-block-1", Type: "image"}}, nil
+					return []wolaiapi.CreatedBlock{{ID: "todo-block-1", Type: "text"}}, nil
 				default:
 					t.Fatalf("unexpected CreateBlocks() call #%d", len(calls))
 					return nil, nil
@@ -617,11 +722,14 @@ func TestInsertWolaiTestPageCreatesChildPageAndInsertsBlackImage(t *testing.T) {
 	if calls[1].parentID != "test-page-1" || calls[1].blocks[0]["content"] != "Test works" {
 		t.Fatalf("text CreateBlocks() = %#v", calls[1])
 	}
-	if calls[2].parentID != "test-page-1" || len(calls[2].blocks) != 1 || calls[2].blocks[0]["type"] != "image" {
-		t.Fatalf("image CreateBlocks() = %#v", calls[2])
+	if !strings.Contains(result.Message, "图片导出 TODO") {
+		t.Fatalf("InsertWolaiTestPage() message = %q, want TODO notice", result.Message)
 	}
-	if calls[2].blocks[0]["link"] != wolaiBlackImageDataURL {
-		t.Fatalf("image CreateBlocks() link = %#v, want black PNG data URL", calls[2].blocks[0])
+	if calls[2].parentID != "test-page-1" || len(calls[2].blocks) != 1 || calls[2].blocks[0]["type"] != "text" {
+		t.Fatalf("todo CreateBlocks() = %#v", calls[2])
+	}
+	if calls[2].blocks[0]["content"] != wolaiTestPageImageTODOText {
+		t.Fatalf("todo CreateBlocks() content = %#v, want image TODO text", calls[2].blocks[0])
 	}
 }
 
