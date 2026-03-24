@@ -95,6 +95,12 @@ make package-desktop-darwin
 make package-desktop-windows
 ```
 
+macOS 桌面包默认按 `macOS 14.0+` 构建。需要提高最低版本时可显式覆盖：
+
+```bash
+MACOSX_DEPLOYMENT_TARGET=15.0 make package-desktop-darwin
+```
+
 输出文件：
 
 ```text

@@ -23,6 +23,7 @@ ICON_TMP="$(mktemp -d)"
 BUILD_TIME="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
 BUILDINFO_PKG="github.com/xuzhougeng/citebox/internal/buildinfo"
 PLIST_VERSION="${VERSION#v}"
+MACOS_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-14.0}"
 
 cleanup() {
     rm -rf "${ICON_TMP}"
@@ -52,6 +53,7 @@ rm -rf "${PACKAGE_DIR}"
 rm -f "${DMG_PATH}"
 mkdir -p "${MACOS_DIR}" "${RESOURCES_DIR}"
 
+MACOSX_DEPLOYMENT_TARGET="${MACOS_DEPLOYMENT_TARGET}" \
 CGO_ENABLED=1 GOOS=darwin go build \
     -trimpath \
     -ldflags "-s -w -X ${BUILDINFO_PKG}.Version=${VERSION} -X ${BUILDINFO_PKG}.BuildTime=${BUILD_TIME}" \
@@ -101,6 +103,8 @@ cat > "${CONTENTS_DIR}/Info.plist" <<EOF
     <string>${PLIST_VERSION}</string>
     <key>CFBundleVersion</key>
     <string>${PLIST_VERSION}</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>${MACOS_DEPLOYMENT_TARGET}</string>
     <key>LSApplicationCategoryType</key>
     <string>public.app-category.productivity</string>
     <key>NSHighResolutionCapable</key>
@@ -157,3 +161,4 @@ hdiutil create \
     "${DMG_PATH}" >/dev/null
 
 printf '%s\n' "Created ${DMG_PATH}"
+printf '%s\n' "macOS deployment target: ${MACOS_DEPLOYMENT_TARGET}"
