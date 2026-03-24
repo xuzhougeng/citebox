@@ -41,6 +41,7 @@ const (
 
 type weixinAIReader interface {
 	ReadPaper(ctx context.Context, input model.AIReadRequest) (*model.AIReadResponse, error)
+	PlanWeixinCommand(ctx context.Context, text string, context weixinIntentContext) (*weixinCommandPlan, error)
 	PlanWeixinSearch(ctx context.Context, query, forcedTarget string) (*weixinSearchPlan, error)
 	ReviewWeixinPaperSearch(ctx context.Context, query string, keywords []string, candidates []model.Paper) (*weixinSearchReview, error)
 	ReviewWeixinFigureSearch(ctx context.Context, query string, keywords []string, candidates []model.FigureListItem) (*weixinSearchReview, error)
@@ -58,6 +59,19 @@ type weixinIMContext struct {
 type weixinSearchPlan struct {
 	Target   string   `json:"target"`
 	Keywords []string `json:"keywords"`
+}
+
+type weixinIntentContext struct {
+	CurrentPaperID    int64  `json:"current_paper_id,omitempty"`
+	CurrentPaperTitle string `json:"current_paper_title,omitempty"`
+	CurrentFigureID   int64  `json:"current_figure_id,omitempty"`
+	SearchPaperCount  int    `json:"search_paper_count,omitempty"`
+	SearchFigureCount int    `json:"search_figure_count,omitempty"`
+}
+
+type weixinCommandPlan struct {
+	Command string `json:"command"`
+	Arg     string `json:"arg,omitempty"`
 }
 
 type weixinPaperSearchCandidate struct {
@@ -297,10 +311,56 @@ func (b *WeixinIMBridge) handleIncomingText(ctx context.Context, text string) st
 
 	command, arg, ok := parseWeixinSlashCommand(text)
 	if !ok {
-		return weixinHelpText()
+		planned := b.planWeixinPlainTextCommand(ctx, text)
+		if planned == nil {
+			return weixinHelpText()
+		}
+		return b.executeWeixinCommand(ctx, planned.Command, planned.Arg)
 	}
 
 	return b.executeWeixinCommand(ctx, command, arg)
+}
+
+func (b *WeixinIMBridge) planWeixinPlainTextCommand(ctx context.Context, text string) *weixinCommandPlan {
+	intentContext := b.buildWeixinIntentContext()
+	if b.aiService == nil {
+		return nil
+	}
+
+	plan, err := b.aiService.PlanWeixinCommand(ctx, text, intentContext)
+	if err != nil {
+		b.logger.Warn("plan weixin plain text command failed", "text", text, "error", err)
+		return nil
+	}
+	if plan == nil {
+		return nil
+	}
+
+	normalized := normalizeWeixinPlainTextCommand(plan.Command)
+	if normalized == "" {
+		return nil
+	}
+	return &weixinCommandPlan{
+		Command: normalized,
+		Arg:     strings.TrimSpace(plan.Arg),
+	}
+}
+
+func (b *WeixinIMBridge) buildWeixinIntentContext() weixinIntentContext {
+	state := b.getContext()
+	intentContext := weixinIntentContext{
+		CurrentPaperID:    state.CurrentPaperID,
+		CurrentFigureID:   state.CurrentFigureID,
+		SearchPaperCount:  len(state.SearchPaperIDs),
+		SearchFigureCount: len(state.SearchFigureIDs),
+	}
+	if state.CurrentPaperID > 0 {
+		paper, err := b.libraryService.GetPaper(state.CurrentPaperID)
+		if err == nil && paper != nil {
+			intentContext.CurrentPaperTitle = clipRunes(paper.Title, 120)
+		}
+	}
+	return intentContext
 }
 
 func (b *WeixinIMBridge) executeWeixinCommand(ctx context.Context, command, arg string) string {
@@ -1408,7 +1468,7 @@ func parseWeixinFileSize(value string) (int64, bool) {
 
 func weixinHelpText() string {
 	return strings.Join([]string{
-		"微信 IM 仅响应 slash 命令。可用命令：",
+		"微信 IM 优先响应 slash 命令；普通文字会先通过 LLM 识别成最合适的 slash 操作。可用命令：",
 		"`/search 自然语言`：自动理解意图，拆成约 5 个关键词后搜索文献或图片，并返回最可能的 1-3 条",
 		"`/search-papers 自然语言`：强制只搜文献",
 		"`/search-figures 自然语言`：强制只搜图片",
@@ -1423,7 +1483,7 @@ func weixinHelpText() string {
 		"`/status`：查看当前上下文",
 		"`/reset`：清空当前上下文",
 		"`/help`：查看帮助",
-		"未识别到 slash 命令时，会直接返回这份帮助，避免误触发 AI 问答。",
+		"如果普通文字也无法可靠识别，才会返回这份帮助，避免误触发 AI 问答。",
 	}, "\n")
 }
 
@@ -1443,6 +1503,35 @@ func parseWeixinSlashCommand(text string) (string, string, bool) {
 		return command, "", true
 	}
 	return command, strings.TrimSpace(strings.TrimPrefix(trimmed, fields[0])), true
+}
+
+func normalizeWeixinPlainTextCommand(command string) string {
+	switch strings.ToLower(strings.TrimSpace(command)) {
+	case "/help", "help", "帮助":
+		return "/help"
+	case "/status", "status", "上下文", "状态":
+		return "/status"
+	case "/reset", "reset", "清空", "重置":
+		return "/reset"
+	case "/recent", "recent", "最近":
+		return "/recent"
+	case "/figures", "figures", "图片列表", "看图":
+		return "/figures"
+	case "/search", "search", "搜索":
+		return "/search"
+	case "/search-papers", "search-papers", "search_papers":
+		return "/search-papers"
+	case "/search-figures", "search-figures", "search_figures":
+		return "/search-figures"
+	case "/ask", "ask", "/qa", "qa", "问答":
+		return "/ask"
+	case "/note", "note", "笔记":
+		return "/note"
+	case "/interpret", "interpret", "解图", "解读":
+		return "/interpret"
+	default:
+		return ""
+	}
 }
 
 func cleanupWeixinSearchQuery(query string) string {

@@ -199,7 +199,7 @@ export PDF_EXTRACTOR_URL=http://127.0.0.1:8000/api/v1/extract
 
 已支持的交互：
 
-- 微信 IM 仅响应 slash 命令，普通文字/语音不会直接触发 AI 问答，而是返回帮助
+- 微信 IM 优先响应 slash 命令；普通文字/语音会先通过 LLM 识别成最合适的 slash 操作，识别失败时才返回帮助
 - `/search 自然语言`：自动理解是在找文献还是图片，拆成约 5 个关键词后搜索并汇总最可能的 1-3 条结果
 - `/search-papers 自然语言`：强制只搜索文献
 - `/search-figures 自然语言`：强制只搜索图片

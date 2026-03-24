@@ -20,12 +20,14 @@ import (
 )
 
 type fakeWeixinAIReader struct {
-	mu            sync.Mutex
-	inputs        []model.AIReadRequest
-	answer        string
-	searchPlan    *weixinSearchPlan
-	searchPlanErr error
-	searchReview  *weixinSearchReview
+	mu             sync.Mutex
+	inputs         []model.AIReadRequest
+	answer         string
+	commandPlan    *weixinCommandPlan
+	commandPlanErr error
+	searchPlan     *weixinSearchPlan
+	searchPlanErr  error
+	searchReview   *weixinSearchReview
 }
 
 func (f *fakeWeixinAIReader) ReadPaper(_ context.Context, input model.AIReadRequest) (*model.AIReadResponse, error) {
@@ -41,6 +43,24 @@ func (f *fakeWeixinAIReader) ReadPaper(_ context.Context, input model.AIReadRequ
 		Question: input.Question,
 		Answer:   answer,
 	}, nil
+}
+
+func (f *fakeWeixinAIReader) PlanWeixinCommand(_ context.Context, text string, context weixinIntentContext) (*weixinCommandPlan, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	if f.commandPlanErr != nil {
+		return nil, f.commandPlanErr
+	}
+	if f.commandPlan != nil {
+		plan := *f.commandPlan
+		return &plan, nil
+	}
+
+	if context.CurrentPaperID > 0 {
+		return &weixinCommandPlan{Command: "/ask", Arg: text}, nil
+	}
+	return &weixinCommandPlan{Command: "/search", Arg: text}, nil
 }
 
 func (f *fakeWeixinAIReader) PlanWeixinSearch(_ context.Context, query, forcedTarget string) (*weixinSearchPlan, error) {
@@ -423,22 +443,63 @@ func TestWeixinIMBridgeQuestionCarriesHistory(t *testing.T) {
 	}
 }
 
-func TestWeixinIMBridgePlainTextReturnsHelpWithoutTriggeringAI(t *testing.T) {
+func TestWeixinIMBridgePlainTextSearchRoutesToBestCommand(t *testing.T) {
+	svc, repo, cfg := newTestService(t)
+	createBridgePaperWithFigureCaption(t, repo, "Volcano Atlas", "volcano-atlas.pdf", "Volcano plot for DE genes")
+	aiReader := &fakeWeixinAIReader{
+		answer:      "ok",
+		commandPlan: &weixinCommandPlan{Command: "/search-figures", Arg: "我想要一张火山图"},
+		searchPlan: &weixinSearchPlan{
+			Target:   weixinSearchTargetFigure,
+			Keywords: []string{"火山图", "volcano plot", "differential expression"},
+		},
+	}
+	bridge := newTestWeixinBridge(t, svc, aiReader, cfg.StorageDir)
+
+	reply := bridge.handleIncomingText(context.Background(), "我想要一张火山图")
+
+	if !containsAll(reply, "检索关键词", "汇总后最可能的图片") {
+		t.Fatalf("plain text reply = %q, want auto-routed search result", reply)
+	}
+	if len(bridge.getContext().SearchFigureIDs) == 0 {
+		t.Fatalf("search figure ids = %v, want auto-routed figure search results", bridge.getContext().SearchFigureIDs)
+	}
+}
+
+func TestWeixinIMBridgePlainTextQuestionRoutesToAsk(t *testing.T) {
 	svc, repo, cfg := newTestService(t)
 	createBridgePaper(t, repo, "Help Atlas", "help-atlas.pdf")
-	aiReader := &fakeWeixinAIReader{answer: "ok"}
+	aiReader := &fakeWeixinAIReader{answer: "这是问答结果"}
 	bridge := newTestWeixinBridge(t, svc, aiReader, cfg.StorageDir)
 
 	_ = bridge.handleIncomingText(context.Background(), "/search Help Atlas")
 	reply := bridge.handleIncomingText(context.Background(), "第一问")
 
-	if !strings.Contains(reply, "仅响应 slash 命令") {
-		t.Fatalf("plain text reply = %q, want help text", reply)
+	if !containsAll(reply, "文献问答", "这是问答结果") {
+		t.Fatalf("plain text reply = %q, want auto-routed ask result", reply)
+	}
+	last := aiReader.lastInput()
+	if last.Action != model.AIActionPaperQA {
+		t.Fatalf("AI action = %q, want auto-routed paper QA", last.Action)
+	}
+}
+
+func TestWeixinIMBridgeUnknownSlashCommandReturnsHelpWithoutIntentRouting(t *testing.T) {
+	svc, _, cfg := newTestService(t)
+	aiReader := &fakeWeixinAIReader{
+		answer:      "ok",
+		commandPlan: &weixinCommandPlan{Command: "/ask", Arg: "不应该触发"},
+	}
+	bridge := newTestWeixinBridge(t, svc, aiReader, cfg.StorageDir)
+
+	reply := bridge.handleIncomingText(context.Background(), "/unknown something")
+	if !containsAll(reply, "微信 IM 优先响应 slash 命令", "`/help`") {
+		t.Fatalf("unknown slash reply = %q, want help text", reply)
 	}
 
 	last := aiReader.lastInput()
 	if last.Action != "" {
-		t.Fatalf("AI action = %q, want no AI call for plain text", last.Action)
+		t.Fatalf("AI action = %q, want no AI read call for unknown slash command", last.Action)
 	}
 }
 

@@ -418,6 +418,58 @@ func (s *AIService) PlanWeixinSearch(ctx context.Context, query, forcedTarget st
 	return plan, nil
 }
 
+func (s *AIService) PlanWeixinCommand(ctx context.Context, text string, context weixinIntentContext) (*weixinCommandPlan, error) {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return nil, apperr.New(apperr.CodeInvalidArgument, "缺少 IM 文本")
+	}
+
+	runtimeSettings, err := s.resolveWeixinSearchRuntimeSettings(300)
+	if err != nil {
+		return nil, err
+	}
+	systemPrompt := buildWeixinSearchSystemPrompt(runtimeSettings.SystemPrompt)
+
+	contextSummary := []string{
+		fmt.Sprintf("- current_paper_id: %d", context.CurrentPaperID),
+		fmt.Sprintf("- current_paper_title: %s", firstNonEmpty(context.CurrentPaperTitle, "无")),
+		fmt.Sprintf("- current_figure_id: %d", context.CurrentFigureID),
+		fmt.Sprintf("- search_paper_count: %d", context.SearchPaperCount),
+		fmt.Sprintf("- search_figure_count: %d", context.SearchFigureCount),
+	}
+
+	userPrompt := fmt.Sprintf(`请把下面这条微信 IM 普通文本改写成最合适的 slash 命令 JSON：
+
+输出要求：
+1. 只返回 JSON 对象，不要加 Markdown 代码块。
+2. JSON 必须包含 command 和 arg 两个字段。
+3. command 只能从以下列表中选择：
+   "/help", "/status", "/reset", "/recent", "/figures", "/search", "/search-papers", "/search-figures", "/ask", "/note", "/interpret"
+4. arg 必须是字符串；如果命令不需要参数，就返回空字符串 ""。
+5. 不要返回 "/paper" 或 "/figure"。图片和文献结果选择仍应由用户显式输入 slash 命令完成。
+6. 如果用户是在找文献或图片，用 "/search"、"/search-papers" 或 "/search-figures"。
+7. 如果当前已有文献上下文，而用户是在继续追问当前文献内容，用 "/ask"。
+8. 如果当前已有图片上下文，而用户是在要求解释当前图片，用 "/interpret"。
+9. 如果用户是在追加笔记，用 "/note"。
+10. 识别不准时优先选择最保守、最合理的命令；完全无法判断时返回 "/help"。
+
+当前上下文：
+%s
+
+用户原始文本：
+%s`,
+		strings.Join(contextSummary, "\n"),
+		text,
+	)
+
+	rawText, err := s.callTextProvider(ctx, runtimeSettings, systemPrompt, userPrompt, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return parseWeixinCommandPlan(rawText)
+}
+
 func (s *AIService) ReviewWeixinPaperSearch(ctx context.Context, query string, keywords []string, candidates []model.Paper) (*weixinSearchReview, error) {
 	query = strings.TrimSpace(query)
 	if query == "" {
@@ -659,6 +711,23 @@ func parseWeixinSearchPlan(raw string) (*weixinSearchPlan, error) {
 		return nil, apperr.New(apperr.CodeUnavailable, "IM 检索规划缺少 keywords")
 	}
 	return plan, nil
+}
+
+func parseWeixinCommandPlan(raw string) (*weixinCommandPlan, error) {
+	payload, err := decodeWeixinSearchJSON(raw)
+	if err != nil {
+		return nil, err
+	}
+
+	command := normalizeWeixinPlainTextCommand(firstString(payload["command"], payload["action"], payload["intent"]))
+	if command == "" {
+		return nil, apperr.New(apperr.CodeUnavailable, "IM 命令规划缺少有效 command")
+	}
+
+	return &weixinCommandPlan{
+		Command: command,
+		Arg:     strings.TrimSpace(firstString(payload["arg"], payload["query"], payload["text"])),
+	}, nil
 }
 
 func parseWeixinSearchReview(raw string, allowedIDs []int64) (*weixinSearchReview, error) {
