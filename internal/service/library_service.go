@@ -33,6 +33,7 @@ type LibraryService struct {
 	logger              *slog.Logger
 	startBackground     bool
 	weixinClientFactory func(token string) weixinBindingClient
+	wolaiClientFactory  func(settings model.WolaiSettings) (wolaiClient, error)
 }
 
 const (
@@ -187,6 +188,7 @@ func NewLibraryService(repo *repository.LibraryRepository, cfg *config.Config, o
 		startBackground:     true,
 		httpClient:          &http.Client{},
 		weixinClientFactory: defaultWeixinBindingClientFactory,
+		wolaiClientFactory:  defaultWolaiClientFactory,
 	}
 
 	for _, opt := range opts {

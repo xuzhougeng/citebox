@@ -131,6 +131,25 @@ func useWeixinBindingTestServer(t *testing.T, svc *LibraryService, handler http.
 	}
 }
 
+type stubWolaiClient struct {
+	getBlockFunc     func(id string) (map[string]any, error)
+	createBlocksFunc func(parentID string, blocks any) error
+}
+
+func (c *stubWolaiClient) GetBlock(id string) (map[string]any, error) {
+	if c.getBlockFunc != nil {
+		return c.getBlockFunc(id)
+	}
+	return map[string]any{"id": id}, nil
+}
+
+func (c *stubWolaiClient) CreateBlocks(parentID string, blocks any) error {
+	if c.createBlocksFunc != nil {
+		return c.createBlocksFunc(parentID, blocks)
+	}
+	return nil
+}
+
 func TestListPapersAppliesDefaultsAndDecoratesURLs(t *testing.T) {
 	svc, repo, _ := newTestService(t)
 	createTestPaper(t, repo)
@@ -295,6 +314,177 @@ func TestUpdateWeixinBridgeSettingsPersistsAndAppearsInAuthSettings(t *testing.T
 	}
 	if !strings.Contains(raw, `"enabled":true`) {
 		t.Fatalf("saved weixin bridge settings = %q, want enabled persisted", raw)
+	}
+}
+
+func TestWolaiSettingsPersistAndTestBlockAccess(t *testing.T) {
+	svc, repo, _ := newTestService(t)
+
+	var testedBlockID string
+	svc.wolaiClientFactory = func(settings model.WolaiSettings) (wolaiClient, error) {
+		if settings.Token != "wolai-token" {
+			t.Fatalf("wolai token = %q, want %q", settings.Token, "wolai-token")
+		}
+		if settings.ParentBlockID != "block-123" {
+			t.Fatalf("wolai parent_block_id = %q, want %q", settings.ParentBlockID, "block-123")
+		}
+		if settings.BaseURL != "https://openapi.wolai.com" {
+			t.Fatalf("wolai base_url = %q, want %q", settings.BaseURL, "https://openapi.wolai.com")
+		}
+		return &stubWolaiClient{
+			getBlockFunc: func(id string) (map[string]any, error) {
+				testedBlockID = id
+				return map[string]any{"id": id, "type": "page"}, nil
+			},
+		}, nil
+	}
+
+	updated, err := svc.UpdateWolaiSettings(model.WolaiSettings{
+		Token:         " wolai-token ",
+		ParentBlockID: " block-123 ",
+		BaseURL:       "https://openapi.wolai.com/",
+	})
+	if err != nil {
+		t.Fatalf("UpdateWolaiSettings() error = %v", err)
+	}
+	if updated.Token != "wolai-token" || updated.ParentBlockID != "block-123" || updated.BaseURL != "https://openapi.wolai.com" {
+		t.Fatalf("UpdateWolaiSettings() = %+v, want normalized settings", updated)
+	}
+
+	reloaded, err := svc.GetWolaiSettings()
+	if err != nil {
+		t.Fatalf("GetWolaiSettings() error = %v", err)
+	}
+	if *reloaded != *updated {
+		t.Fatalf("GetWolaiSettings() = %+v, want %+v", reloaded, updated)
+	}
+
+	result, err := svc.TestWolaiSettings(*reloaded)
+	if err != nil {
+		t.Fatalf("TestWolaiSettings() error = %v", err)
+	}
+	if !result.Success {
+		t.Fatalf("TestWolaiSettings() success = %v, want true", result.Success)
+	}
+	if testedBlockID != "block-123" {
+		t.Fatalf("TestWolaiSettings() tested block = %q, want %q", testedBlockID, "block-123")
+	}
+
+	raw, err := repo.GetAppSetting(wolaiSettingsKey)
+	if err != nil {
+		t.Fatalf("GetAppSetting(%q) error = %v", wolaiSettingsKey, err)
+	}
+	if !strings.Contains(raw, `"token":"wolai-token"`) || !strings.Contains(raw, `"parent_block_id":"block-123"`) {
+		t.Fatalf("saved wolai settings = %q, want token and parent_block_id persisted", raw)
+	}
+}
+
+func TestSavePaperNoteToWolaiBuildsStructuredBlocks(t *testing.T) {
+	svc, repo, _ := newTestService(t)
+	paper := createTestPaper(t, repo)
+
+	if _, err := svc.UpdateWolaiSettings(model.WolaiSettings{
+		Token:         "wolai-token",
+		ParentBlockID: "paper-root",
+	}); err != nil {
+		t.Fatalf("UpdateWolaiSettings() error = %v", err)
+	}
+
+	var savedParentID string
+	var savedBlocks []map[string]any
+	svc.wolaiClientFactory = func(settings model.WolaiSettings) (wolaiClient, error) {
+		return &stubWolaiClient{
+			createBlocksFunc: func(parentID string, blocks any) error {
+				savedParentID = parentID
+				typed, ok := blocks.([]map[string]any)
+				if !ok {
+					t.Fatalf("blocks type = %T, want []map[string]any", blocks)
+				}
+				savedBlocks = typed
+				return nil
+			},
+		}, nil
+	}
+
+	result, err := svc.SavePaperNoteToWolai(paper.ID, "## 结论\n\n这个结果支持免疫重编程。")
+	if err != nil {
+		t.Fatalf("SavePaperNoteToWolai() error = %v", err)
+	}
+	if !result.Success || result.TargetBlockID != "paper-root" {
+		t.Fatalf("SavePaperNoteToWolai() result = %+v, want success on paper-root", result)
+	}
+	if savedParentID != "paper-root" {
+		t.Fatalf("CreateBlocks() parent_id = %q, want %q", savedParentID, "paper-root")
+	}
+	if len(savedBlocks) < 3 {
+		t.Fatalf("CreateBlocks() blocks = %#v, want at least 3 blocks", savedBlocks)
+	}
+
+	joined := make([]string, 0, len(savedBlocks))
+	for _, block := range savedBlocks {
+		joined = append(joined, block["content"].(string))
+	}
+	text := strings.Join(joined, "\n")
+	if !strings.Contains(text, "文献笔记｜Atlas Study") {
+		t.Fatalf("saved text = %q, want paper title heading", text)
+	}
+	if !strings.Contains(text, "Atlas abstract") {
+		t.Fatalf("saved text = %q, want abstract included", text)
+	}
+	if !strings.Contains(text, "这个结果支持免疫重编程") {
+		t.Fatalf("saved text = %q, want note body included", text)
+	}
+}
+
+func TestSaveFigureNoteToWolaiUsesFigureMetadata(t *testing.T) {
+	svc, repo, _ := newTestService(t)
+	paper := createTestPaper(t, repo)
+
+	if _, err := svc.UpdateWolaiSettings(model.WolaiSettings{
+		Token:         "wolai-token",
+		ParentBlockID: "figure-root",
+	}); err != nil {
+		t.Fatalf("UpdateWolaiSettings() error = %v", err)
+	}
+
+	var savedBlocks []map[string]any
+	svc.wolaiClientFactory = func(settings model.WolaiSettings) (wolaiClient, error) {
+		return &stubWolaiClient{
+			createBlocksFunc: func(parentID string, blocks any) error {
+				typed, ok := blocks.([]map[string]any)
+				if !ok {
+					t.Fatalf("blocks type = %T, want []map[string]any", blocks)
+				}
+				savedBlocks = typed
+				return nil
+			},
+		}, nil
+	}
+
+	result, err := svc.SaveFigureNoteToWolai(paper.Figures[0].ID, "观察到信号增强。")
+	if err != nil {
+		t.Fatalf("SaveFigureNoteToWolai() error = %v", err)
+	}
+	if !result.Success || result.TargetBlockID != "figure-root" {
+		t.Fatalf("SaveFigureNoteToWolai() result = %+v, want success on figure-root", result)
+	}
+
+	joined := make([]string, 0, len(savedBlocks))
+	for _, block := range savedBlocks {
+		joined = append(joined, block["content"].(string))
+	}
+	text := strings.Join(joined, "\n")
+	if !strings.Contains(text, "图片笔记｜Atlas Study") {
+		t.Fatalf("saved text = %q, want figure title heading", text)
+	}
+	if !strings.Contains(text, "第 1 页") || !strings.Contains(text, "Fig 1") {
+		t.Fatalf("saved text = %q, want figure location metadata", text)
+	}
+	if !strings.Contains(text, "Figure") {
+		t.Fatalf("saved text = %q, want caption included", text)
+	}
+	if !strings.Contains(text, "观察到信号增强") {
+		t.Fatalf("saved text = %q, want note body included", text)
 	}
 }
 

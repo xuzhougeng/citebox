@@ -193,6 +193,7 @@ func buildHandler(
 	tagHandler := handler.NewTagHandler(librarySvc)
 	aiHandler := handler.NewAIHandler(aiSvc)
 	settingsHandler := handler.NewSettingsHandler(librarySvc, versionSvc)
+	wolaiHandler := handler.NewWolaiHandler(librarySvc)
 	databaseHandler := handler.NewDatabaseHandler(librarySvc)
 	sessionManager := service.NewSessionManager(24 * time.Hour)
 	authHandler := handler.NewAuthHandler(librarySvc, sessionManager)
@@ -478,6 +479,26 @@ func buildHandler(
 		}
 	})
 
+	mux.HandleFunc("/api/settings/wolai", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			settingsHandler.GetWolaiSettings(w, r)
+		case http.MethodPut:
+			settingsHandler.UpdateWolaiSettings(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	mux.HandleFunc("/api/settings/wolai/test", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPost:
+			settingsHandler.TestWolaiSettings(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
 	mux.HandleFunc("/api/settings/weixin-bridge", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
@@ -496,6 +517,22 @@ func buildHandler(
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
+	})
+
+	mux.HandleFunc("/api/wolai/papers/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/notes") {
+			wolaiHandler.SavePaperNote(w, r)
+			return
+		}
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	})
+
+	mux.HandleFunc("/api/wolai/figures/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/notes") {
+			wolaiHandler.SaveFigureNote(w, r)
+			return
+		}
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 	})
 
 	mux.HandleFunc("/api/auth/settings", func(w http.ResponseWriter, r *http.Request) {

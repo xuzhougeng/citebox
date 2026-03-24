@@ -479,6 +479,39 @@ User Prompt:
 
             <details class="manager-card settings-collapsible" open>
                 <summary class="settings-collapsible-toggle">
+                    <h2>Wolai 配置</h2>
+                    <p>配置 Wolai token 与目标块 ID，用于把文献笔记或图片笔记追加保存到 Wolai。</p>
+                </summary>
+                <form id="wolaiSettingsForm" class="manager-form">
+                    <div class="form-grid">
+                        <label class="field field-span-2">
+                            <span>Wolai Token</span>
+                            <input id="wolaiTokenInput" class="form-input" type="password" autocomplete="off" placeholder="粘贴可直接调用 OpenAPI 的 token">
+                        </label>
+                        <label class="field field-span-2">
+                            <span>目标块 ID</span>
+                            <input id="wolaiParentBlockIDInput" class="form-input" type="text" placeholder="保存笔记时追加到这个 page / block 下">
+                        </label>
+                        <label class="field field-span-2">
+                            <span>OpenAPI 地址</span>
+                            <input id="wolaiBaseURLInput" class="form-input" type="text" placeholder="默认 https://openapi.wolai.com">
+                        </label>
+                    </div>
+
+                    <p class="muted">测试会直接校验 token 是否能访问上面的目标块；“保存到 Wolai”会把当前笔记草稿追加成新的文本块，不会替代本地保存。</p>
+
+                    <div id="wolaiSummary" class="settings-summary-box"></div>
+                    <p id="wolaiStatus" class="settings-inline-status">修改后可先测试，再保存配置。</p>
+
+                    <div class="submit-row">
+                        <button id="testWolaiButton" class="btn btn-outline" type="button">测试 Token</button>
+                        <button class="btn btn-primary" type="submit">保存 Wolai 配置</button>
+                    </div>
+                </form>
+            </details>
+
+            <details class="manager-card settings-collapsible" open>
+                <summary class="settings-collapsible-toggle">
                     <h2>账号管理</h2>
                     <p>管理登录凭证与微信绑定状态。</p>
                 </summary>

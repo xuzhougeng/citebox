@@ -451,6 +451,30 @@ const API = {
         });
     },
 
+    getWolaiSettings() {
+        return requestJSON(`${API_BASE}/settings/wolai`);
+    },
+
+    updateWolaiSettings(data) {
+        return requestJSON(`${API_BASE}/settings/wolai`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        });
+    },
+
+    testWolaiSettings(data) {
+        return requestJSON(`${API_BASE}/settings/wolai/test`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        });
+    },
+
     getWeixinBridgeSettings() {
         return requestJSON(`${API_BASE}/settings/weixin-bridge`);
     },
@@ -496,6 +520,26 @@ const API = {
     getWeixinBindingStatus(qrcode) {
         const query = new URLSearchParams({ qrcode: String(qrcode || '') });
         return requestJSON(`${API_BASE}/auth/weixin/bind/status?${query.toString()}`);
+    },
+
+    savePaperNoteToWolai(id, data) {
+        return requestJSON(`${API_BASE}/wolai/papers/${id}/notes`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        });
+    },
+
+    saveFigureNoteToWolai(id, data) {
+        return requestJSON(`${API_BASE}/wolai/figures/${id}/notes`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        });
     },
 
     changePassword(data) {

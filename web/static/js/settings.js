@@ -52,6 +52,13 @@ const SettingsPage = {
         this.extractorTimeoutInput = document.getElementById('extractorTimeoutInput');
         this.extractorPollIntervalInput = document.getElementById('extractorPollIntervalInput');
         this.extractorSummary = document.getElementById('extractorSummary');
+        this.wolaiSettingsForm = document.getElementById('wolaiSettingsForm');
+        this.wolaiTokenInput = document.getElementById('wolaiTokenInput');
+        this.wolaiParentBlockIDInput = document.getElementById('wolaiParentBlockIDInput');
+        this.wolaiBaseURLInput = document.getElementById('wolaiBaseURLInput');
+        this.wolaiSummary = document.getElementById('wolaiSummary');
+        this.wolaiStatus = document.getElementById('wolaiStatus');
+        this.testWolaiButton = document.getElementById('testWolaiButton');
         this.versionSummary = document.getElementById('versionSummary');
         this.checkVersionButton = document.getElementById('checkVersionButton');
         this.versionReleaseLink = document.getElementById('versionReleaseLink');
@@ -157,6 +164,13 @@ const SettingsPage = {
             event.preventDefault();
             await this.saveExtractorSettings();
         });
+        this.wolaiSettingsForm?.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            await this.saveWolaiSettings();
+        });
+        this.testWolaiButton?.addEventListener('click', async () => {
+            await this.testWolaiSettings();
+        });
         this.checkVersionButton.addEventListener('click', async () => {
             await this.loadVersionStatus(true);
         });
@@ -246,7 +260,13 @@ const SettingsPage = {
 
     async bootstrap() {
         try {
-            await Promise.all([this.loadAISettings(), this.loadExtractorSettings(), this.loadVersionStatus(), this.loadAuthSettings()]);
+            await Promise.all([
+                this.loadAISettings(),
+                this.loadExtractorSettings(),
+                this.loadWolaiSettings(),
+                this.loadVersionStatus(),
+                this.loadAuthSettings()
+            ]);
         } catch (error) {
             Utils.showToast(error.message, 'error');
         }
@@ -613,6 +633,23 @@ const SettingsPage = {
         this.renderExtractorSummary(settings);
     },
 
+    async loadWolaiSettings() {
+        const settings = await API.getWolaiSettings();
+
+        if (this.wolaiTokenInput) {
+            this.wolaiTokenInput.value = settings.token || '';
+        }
+        if (this.wolaiParentBlockIDInput) {
+            this.wolaiParentBlockIDInput.value = settings.parent_block_id || '';
+        }
+        if (this.wolaiBaseURLInput) {
+            this.wolaiBaseURLInput.value = settings.base_url || 'https://openapi.wolai.com';
+        }
+
+        this.renderWolaiSummary(settings);
+        this.setWolaiStatus('');
+    },
+
     async loadVersionStatus(forceRefresh = false) {
         const button = this.checkVersionButton;
         const originalLabel = button?.textContent || '';
@@ -653,6 +690,47 @@ const SettingsPage = {
         Utils.showToast('PDF 提取服务配置已保存');
     },
 
+    wolaiSettingsPayload() {
+        return {
+            token: this.wolaiTokenInput?.value.trim() || '',
+            parent_block_id: this.wolaiParentBlockIDInput?.value.trim() || '',
+            base_url: this.wolaiBaseURLInput?.value.trim() || 'https://openapi.wolai.com'
+        };
+    },
+
+    async saveWolaiSettings() {
+        const payload = this.wolaiSettingsPayload();
+        const response = await API.updateWolaiSettings(payload);
+        this.renderWolaiSummary(response.settings || payload);
+        this.setWolaiStatus('Wolai 配置已保存。', 'success');
+        Utils.showToast('Wolai 配置已保存');
+    },
+
+    async testWolaiSettings() {
+        const button = this.testWolaiButton;
+        const originalLabel = button?.textContent || '测试 Token';
+        if (button) {
+            button.disabled = true;
+            button.textContent = '测试中...';
+        }
+
+        this.setWolaiStatus('正在校验 Wolai token 与目标块访问权限...', 'saving');
+
+        try {
+            const result = await API.testWolaiSettings(this.wolaiSettingsPayload());
+            this.setWolaiStatus(result.message || 'Wolai token 可用', 'success');
+            Utils.showToast(result.message || 'Wolai token 可用');
+        } catch (error) {
+            this.setWolaiStatus(error.message, 'error');
+            Utils.showToast(error.message, 'error');
+        } finally {
+            if (button) {
+                button.disabled = false;
+                button.textContent = originalLabel;
+            }
+        }
+    },
+
     async saveWeixinBridgeSettings() {
         const button = this.saveWeixinBridgeButton;
         const originalLabel = button?.textContent || '保存微信桥接配置';
@@ -690,6 +768,33 @@ const SettingsPage = {
         this.authSettings = settings;
         this.renderWeixinBridgeControls(settings.weixin_bridge || {});
         this.renderWeixinBindingSummary(settings.weixin_binding || {});
+    },
+
+    renderWolaiSummary(settings = {}) {
+        if (!this.wolaiSummary) return;
+
+        const tokenConfigured = Boolean(String(settings.token || '').trim());
+        const parentBlockID = String(settings.parent_block_id || '').trim();
+        const baseURL = String(settings.base_url || 'https://openapi.wolai.com').trim() || 'https://openapi.wolai.com';
+
+        this.wolaiSummary.innerHTML = `
+            <div>
+                <span>Token</span>
+                <strong>${Utils.escapeHTML(tokenConfigured ? '已配置' : '未配置')}</strong>
+            </div>
+            <div>
+                <span>目标块 ID</span>
+                <strong>${Utils.escapeHTML(parentBlockID || '未填写')}</strong>
+            </div>
+            <div>
+                <span>OpenAPI</span>
+                <strong>${Utils.escapeHTML(baseURL)}</strong>
+            </div>
+            <div>
+                <span>导出行为</span>
+                <strong>追加为新文本块</strong>
+            </div>
+        `;
     },
 
     renderWeixinBridgeControls(settings = {}) {
@@ -737,6 +842,10 @@ const SettingsPage = {
 
     setWeixinBindingStatus(message, tone = '') {
         this.setInlineStatus(this.weixinBindingStatus, message, tone);
+    },
+
+    setWolaiStatus(message, tone = '') {
+        this.setInlineStatus(this.wolaiStatus, message, tone);
     },
 
     setWeixinBridgeSaveStatus(message, tone = '') {

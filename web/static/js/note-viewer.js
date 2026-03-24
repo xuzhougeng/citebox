@@ -85,6 +85,10 @@ const NoteViewer = {
                 await this.saveNotesFromInput();
                 return;
             }
+            if (button.dataset.noteAction === 'save-wolai') {
+                await this.saveNotesToWolai(button);
+                return;
+            }
             if (button.dataset.noteAction === 'open-preview') {
                 await this.openPreview();
                 return;
@@ -222,6 +226,31 @@ const NoteViewer = {
         await this.updateCurrentFigureNotes(this.currentFigureNotesDraft(), '图片笔记已保存');
     },
 
+    async saveNotesToWolai(button) {
+        if (!this.currentFigure) return;
+
+        const actionButton = button instanceof HTMLElement ? button : null;
+        const originalLabel = actionButton?.textContent || '保存到 Wolai';
+        if (actionButton) {
+            actionButton.disabled = true;
+            actionButton.textContent = '保存中...';
+        }
+
+        try {
+            const result = await API.saveFigureNoteToWolai(this.currentFigure.id, {
+                notes_text: this.currentFigureNotesDraft()
+            });
+            Utils.showToast(result.message || '图片笔记已保存到 Wolai');
+        } catch (error) {
+            Utils.showToast(error.message, 'error');
+        } finally {
+            if (actionButton) {
+                actionButton.disabled = false;
+                actionButton.textContent = originalLabel;
+            }
+        }
+    },
+
     async updateCurrentFigureNotes(notesText, successMessage) {
         if (!this.currentFigure) return;
 
@@ -345,7 +374,10 @@ const NoteViewer = {
                         `}
                         <div class="figure-notes-actions">
                             <span class="muted">${isPreviewMode ? '预览基于当前草稿渲染；切回编辑可继续修改。' : '支持多行内容，按 Ctrl/Cmd + Enter 可快速保存。'}</span>
-                            <button class="btn btn-primary" type="button" data-note-action="save-notes">保存笔记</button>
+                            <div style="display:flex;gap:0.6rem;flex-wrap:wrap">
+                                <button class="btn btn-outline" type="button" data-note-action="save-wolai">保存到 Wolai</button>
+                                <button class="btn btn-primary" type="button" data-note-action="save-notes">保存笔记</button>
+                            </div>
                         </div>
                     </div>
                 </section>

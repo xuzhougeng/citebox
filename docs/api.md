@@ -26,6 +26,8 @@
     - 包括 `/api/ai/translate`
   - 版本检查：`/api/settings/version`
   - 提取器设置：`/api/settings/extractor`
+  - Wolai 设置：`/api/settings/wolai`
+  - Wolai 笔记导出：`/api/wolai/...`
   - 数据库备份导入导出：`/api/database/...`
   - 鉴权：`/api/auth/...`
 
@@ -836,6 +838,50 @@ AI 流式阅读通过：
 
 - 保存提取器配置
 
+#### `GET /api/settings/wolai`
+
+用途：
+
+- 获取当前 Wolai 配置
+
+返回字段包括：
+
+- `token`
+- `parent_block_id`
+- `base_url`
+
+#### `PUT /api/settings/wolai`
+
+用途：
+
+- 保存当前 Wolai 配置
+
+请求体示例：
+
+```json
+{
+  "token": "wolai-token",
+  "parent_block_id": "page-or-block-id",
+  "base_url": "https://openapi.wolai.com"
+}
+```
+
+#### `POST /api/settings/wolai/test`
+
+用途：
+
+- 测试当前表单里的 Wolai token 是否可用
+- 同时验证 token 是否能访问指定的 `parent_block_id`
+
+成功后返回：
+
+```json
+{
+  "success": true,
+  "message": "Wolai token 可用，已验证目标块访问权限"
+}
+```
+
 #### `GET /api/settings/weixin-bridge`
 
 用途：
@@ -896,6 +942,67 @@ AI 流式阅读通过：
 | 字段 | 说明 |
 | --- | --- |
 | `database` | `.db` / `.sqlite` / `.sqlite3` 文件 |
+
+### Wolai 笔记导出
+
+#### `POST /api/wolai/papers/{id}/notes`
+
+用途：
+
+- 把当前文献笔记追加保存到 Wolai
+- 使用配置页已保存的 `token` 和 `parent_block_id`
+
+请求体示例：
+
+```json
+{
+  "notes_text": "当前编辑器里的文献笔记草稿"
+}
+```
+
+成功后返回：
+
+```json
+{
+  "success": true,
+  "message": "文献笔记已保存到 Wolai",
+  "target_block_id": "page-or-block-id"
+}
+```
+
+说明：
+
+- 如果前端传了 `notes_text`，后端会优先导出当前草稿
+- 后端会把标题、分组、标签、摘要等元信息一并追加成新的文本块
+
+#### `POST /api/wolai/figures/{id}/notes`
+
+用途：
+
+- 把当前图片笔记追加保存到 Wolai
+
+请求体示例：
+
+```json
+{
+  "notes_text": "当前编辑器里的图片笔记草稿"
+}
+```
+
+成功后返回：
+
+```json
+{
+  "success": true,
+  "message": "图片笔记已保存到 Wolai",
+  "target_block_id": "page-or-block-id"
+}
+```
+
+说明：
+
+- 后端会追加来源文献、页码 / 图号、caption、分组、标签等元信息
+- 这些接口不会替代原有本地保存接口，只负责额外导出到 Wolai
 
 ### 鉴权 Auth
 

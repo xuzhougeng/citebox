@@ -62,6 +62,10 @@ const PaperNoteViewer = {
                 await this.saveNotes();
                 return;
             }
+            if (button.dataset.paperNoteAction === 'save-wolai') {
+                await this.saveNotesToWolai(button);
+                return;
+            }
             if (button.dataset.paperNoteAction === 'open-ai') {
                 window.location.href = `/ai?paper_id=${this.paper?.id || ''}`;
                 return;
@@ -131,6 +135,31 @@ const PaperNoteViewer = {
         }
     },
 
+    async saveNotesToWolai(button) {
+        if (!this.paper) return;
+
+        const actionButton = button instanceof HTMLElement ? button : null;
+        const originalLabel = actionButton?.textContent || '保存到 Wolai';
+        if (actionButton) {
+            actionButton.disabled = true;
+            actionButton.textContent = '保存中...';
+        }
+
+        try {
+            const result = await API.savePaperNoteToWolai(this.paper.id, {
+                notes_text: this.currentNotesDraft()
+            });
+            Utils.showToast(result.message || '文献笔记已保存到 Wolai');
+        } catch (error) {
+            Utils.showToast(error.message, 'error');
+        } finally {
+            if (actionButton) {
+                actionButton.disabled = false;
+                actionButton.textContent = originalLabel;
+            }
+        }
+    },
+
     render() {
         const paper = this.paper;
         if (!paper) {
@@ -188,7 +217,10 @@ const PaperNoteViewer = {
 
                         <div class="figure-notes-actions">
                             <span class="muted">${isPreviewMode ? '预览基于当前草稿渲染；切回编辑可继续修改。' : '支持多行内容，按 Ctrl/Cmd + Enter 可快速保存。'}</span>
-                            <button class="btn btn-primary" type="button" data-paper-note-action="save-notes">保存文献笔记</button>
+                            <div style="display:flex;gap:0.6rem;flex-wrap:wrap">
+                                <button class="btn btn-outline" type="button" data-paper-note-action="save-wolai">保存到 Wolai</button>
+                                <button class="btn btn-primary" type="button" data-paper-note-action="save-notes">保存文献笔记</button>
+                            </div>
                         </div>
                     </div>
                 </section>

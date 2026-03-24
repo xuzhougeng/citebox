@@ -50,6 +50,51 @@ func (h *SettingsHandler) UpdateExtractorSettings(w http.ResponseWriter, r *http
 	})
 }
 
+func (h *SettingsHandler) GetWolaiSettings(w http.ResponseWriter, r *http.Request) {
+	settings, err := h.libraryService.GetWolaiSettings()
+	if err != nil {
+		sendError(w, err)
+		return
+	}
+
+	sendJSON(w, http.StatusOK, settings)
+}
+
+func (h *SettingsHandler) UpdateWolaiSettings(w http.ResponseWriter, r *http.Request) {
+	var req model.WolaiSettings
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		sendError(w, apperr.New(apperr.CodeInvalidArgument, "请求体格式错误"))
+		return
+	}
+
+	settings, err := h.libraryService.UpdateWolaiSettings(req)
+	if err != nil {
+		sendError(w, err)
+		return
+	}
+
+	sendJSON(w, http.StatusOK, map[string]interface{}{
+		"success":  true,
+		"settings": settings,
+	})
+}
+
+func (h *SettingsHandler) TestWolaiSettings(w http.ResponseWriter, r *http.Request) {
+	var req model.WolaiSettings
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		sendError(w, apperr.New(apperr.CodeInvalidArgument, "请求体格式错误"))
+		return
+	}
+
+	result, err := h.libraryService.TestWolaiSettings(req)
+	if err != nil {
+		sendError(w, err)
+		return
+	}
+
+	sendJSON(w, http.StatusOK, result)
+}
+
 func (h *SettingsHandler) GetWeixinBridgeSettings(w http.ResponseWriter, r *http.Request) {
 	settings, err := h.libraryService.GetWeixinBridgeSettings()
 	if err != nil {
