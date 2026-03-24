@@ -1226,11 +1226,12 @@
         CiteBox 是一款面向研究者的文献管理工具。上传 PDF，自动解析图表与元数据，借助 AI 伴读深入理解每一篇论文。从阅读到引用，一站式完成。
       </p>
       <div class="hero-actions">
-        <a href="https://github.com/xuzhougeng/citebox/releases" class="btn-primary" target="_blank">
+        <a href="#download" class="btn-primary">
           <span data-i18n="hero.cta">下载 CiteBox</span>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
         </a>
         <a href="#features" class="btn-secondary" data-i18n="hero.learn">了解更多</a>
+        <a href="https://github.com/xuzhougeng/citebox" class="btn-secondary" target="_blank" rel="noreferrer" data-i18n="hero.github">GitHub</a>
       </div>
     </div>
   </section>
@@ -1429,6 +1430,7 @@
         'hero.desc': 'CiteBox 是一款面向研究者的文献管理工具。上传 PDF，自动解析图表与元数据，借助 AI 伴读深入理解每一篇论文。从阅读到引用，一站式完成。',
         'hero.cta': '下载 CiteBox',
         'hero.learn': '了解更多',
+        'hero.github': 'GitHub',
         'features.label': '核心功能',
         'features.title': '为学术研究而生的每一处细节',
         'features.subtitle': '不只是存储论文——CiteBox 让你与文献建立更深层的对话',
@@ -1493,6 +1495,7 @@
         'hero.desc': 'CiteBox is a literature management tool built for researchers. Upload PDFs, auto-extract figures and metadata, and dive deeper into every paper with AI-powered reading. From reading to citing, all in one place.',
         'hero.cta': 'Download CiteBox',
         'hero.learn': 'Learn More',
+        'hero.github': 'GitHub',
         'features.label': 'Core Features',
         'features.title': 'Every detail crafted for academic research',
         'features.subtitle': 'More than just storing papers — CiteBox builds a deeper dialogue with your literature',
@@ -1617,11 +1620,6 @@
             card.removeAttribute('target');
           }
         });
-        // Also update the hero download button
-        const heroBtn = document.querySelector('.hero-actions .btn-primary');
-        if (heroBtn) {
-          heroBtn.href = release.html_url;
-        }
       })
       .catch(() => {});
 
