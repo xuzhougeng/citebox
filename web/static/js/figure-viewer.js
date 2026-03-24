@@ -25,10 +25,13 @@ const FigureViewer = {
         this.aiRequestState = null;
         this.paperDetails = new Map();
         this.paperDetailPromises = new Map();
+        this.figureTagCatalog = new Map();
+        this.figureTagCatalogPromise = null;
         this.viewState = this.defaultViewState();
         this.dragState = null;
         this.cropState = this.defaultCropState();
         this.paletteRequestState = this.defaultPaletteRequestState();
+        this.tagInputDraft = '';
 
         this.handleKeydown = (event) => {
             if (!this.modal || this.modal.classList.contains('hidden')) return;
@@ -79,6 +82,13 @@ const FigureViewer = {
             }
         });
         this.body.addEventListener('input', (event) => {
+            const tagInput = event.target.closest('#figurePaperTagInput');
+            if (tagInput) {
+                this.tagInputDraft = tagInput.value;
+                this.refreshFigureTagSuggestions();
+                return;
+            }
+
             const captionInput = event.target.closest('#figureCaptionInput');
             if (captionInput) {
                 this.captionDraft = captionInput.value;
@@ -100,7 +110,22 @@ const FigureViewer = {
             }
             selection.caption = subfigureFieldInput.value;
         });
+        this.body.addEventListener('focusin', (event) => {
+            const tagInput = event.target.closest('#figurePaperTagInput');
+            if (!tagInput) return;
+            this.refreshFigureTagSuggestions();
+        });
         this.body.addEventListener('click', async (event) => {
+            const tagSuggestion = event.target.closest('[data-figure-tag-suggestion]');
+            if (tagSuggestion) {
+                await this.applyExistingTagSuggestion(tagSuggestion.dataset.figureTagSuggestion || '');
+                return;
+            }
+
+            if (!event.target.closest('.figure-tag-add-input')) {
+                this.hideFigureTagSuggestions();
+            }
+
             const button = event.target.closest('[data-figure-action]');
             if (button) {
                 if (button.dataset.figureAction === 'prev') {
@@ -244,6 +269,7 @@ const FigureViewer = {
         this.resetViewportState();
         this.resetCropState();
         this.syncCurrentFigureState({ forceDraftFromFigure: true });
+        this.ensureFigureTagCatalogLoaded();
         try {
             this.render();
             this.modal.classList.remove('hidden');
@@ -871,10 +897,58 @@ const FigureViewer = {
 
     syncCurrentFigureState(options = {}) {
         const { forceDraftFromFigure = false } = options;
+        const previousFigureID = Number(this.currentFigure?.id || 0);
         this.currentFigure = this.figures?.[this.index];
+        if (previousFigureID !== Number(this.currentFigure?.id || 0)) {
+            this.tagInputDraft = '';
+        }
         if (forceDraftFromFigure || typeof this.captionDraft !== 'string') {
             this.captionDraft = this.currentFigure?.caption || '';
         }
+    },
+
+    mergeFigureTagCatalog(tags = []) {
+        (Array.isArray(tags) ? tags : []).forEach((rawTag) => {
+            const name = String(typeof rawTag === 'string' ? rawTag : rawTag?.name || '').trim();
+            if (!name) return;
+
+            const key = name.toLowerCase();
+            const existing = this.figureTagCatalog.get(key) || {};
+            const rawCount = typeof rawTag === 'string' ? 1 : Number(rawTag?.figure_count ?? 0);
+            this.figureTagCatalog.set(key, {
+                name,
+                figure_count: Math.max(Number(existing.figure_count || 0), rawCount)
+            });
+        });
+    },
+
+    mergeFigureTagCatalogFromPaper(paper) {
+        if (!paper) return;
+        (paper.figures || []).forEach((figure) => {
+            this.mergeFigureTagCatalog(figure.tags || []);
+        });
+    },
+
+    ensureFigureTagCatalogLoaded() {
+        if (this.figureTagCatalog.size > 0) {
+            return Promise.resolve(this.figureTagCatalog);
+        }
+        if (this.figureTagCatalogPromise) {
+            return this.figureTagCatalogPromise;
+        }
+
+        this.figureTagCatalogPromise = API.listTags({ scope: 'figure' })
+            .then((payload) => {
+                this.mergeFigureTagCatalog(payload?.tags || []);
+                this.refreshFigureTagSuggestions();
+                return this.figureTagCatalog;
+            })
+            .catch(() => this.figureTagCatalog)
+            .finally(() => {
+                this.figureTagCatalogPromise = null;
+            });
+
+        return this.figureTagCatalogPromise;
     },
 
     aiCacheKey(figureID, action) {
@@ -1110,6 +1184,80 @@ const FigureViewer = {
         return this.tagNames(this.currentFigure?.tags || []);
     },
 
+    filteredFigureTagSuggestions(query = this.tagInputDraft) {
+        const normalizedQuery = String(query || '').trim().toLowerCase();
+        if (!normalizedQuery) {
+            return [];
+        }
+
+        const appliedTags = new Set(this.currentFigureTagNames().map((tag) => tag.toLowerCase()));
+        return Array.from(this.figureTagCatalog.values())
+            .filter((tag) => tag?.name)
+            .filter((tag) => !appliedTags.has(tag.name.toLowerCase()))
+            .filter((tag) => tag.name.toLowerCase().includes(normalizedQuery))
+            .sort((first, second) => {
+                const firstName = String(first.name || '');
+                const secondName = String(second.name || '');
+                const firstLower = firstName.toLowerCase();
+                const secondLower = secondName.toLowerCase();
+                const firstStarts = firstLower.startsWith(normalizedQuery) ? 0 : 1;
+                const secondStarts = secondLower.startsWith(normalizedQuery) ? 0 : 1;
+                if (firstStarts !== secondStarts) {
+                    return firstStarts - secondStarts;
+                }
+
+                const firstIndex = firstLower.indexOf(normalizedQuery);
+                const secondIndex = secondLower.indexOf(normalizedQuery);
+                if (firstIndex !== secondIndex) {
+                    return firstIndex - secondIndex;
+                }
+
+                const usageDiff = Number(second.figure_count || 0) - Number(first.figure_count || 0);
+                if (usageDiff !== 0) {
+                    return usageDiff;
+                }
+
+                if (firstName.length !== secondName.length) {
+                    return firstName.length - secondName.length;
+                }
+                return firstName.localeCompare(secondName, 'zh-CN', { sensitivity: 'base' });
+            })
+            .slice(0, 8);
+    },
+
+    renderFigureTagSuggestionList(query = this.tagInputDraft) {
+        const suggestions = this.filteredFigureTagSuggestions(query);
+        if (!suggestions.length) {
+            return '';
+        }
+
+        return suggestions.map((tag) => `
+            <button
+                class="figure-tag-suggestion"
+                type="button"
+                data-figure-tag-suggestion="${Utils.escapeHTML(tag.name)}"
+            >
+                <span>${Utils.escapeHTML(tag.name)}</span>
+                ${Number(tag.figure_count || 0) > 0 ? `<small>已用 ${Number(tag.figure_count)} 次</small>` : ''}
+            </button>
+        `).join('');
+    },
+
+    refreshFigureTagSuggestions() {
+        const panel = this.body?.querySelector('[data-figure-tag-suggestions]');
+        if (!panel) return;
+
+        const markup = this.renderFigureTagSuggestionList(this.tagInputDraft);
+        panel.innerHTML = markup;
+        panel.classList.toggle('hidden', !markup);
+    },
+
+    hideFigureTagSuggestions() {
+        const panel = this.body?.querySelector('[data-figure-tag-suggestions]');
+        if (!panel) return;
+        panel.classList.add('hidden');
+    },
+
     currentFigureCaptionDraft() {
         return this.body.querySelector('#figureCaptionInput')?.value ?? this.captionDraft ?? (this.currentFigure?.caption || '');
     },
@@ -1189,24 +1337,46 @@ const FigureViewer = {
 
     async applySuggestedTag(tagName) {
         const normalized = tagName.trim();
-        if (!normalized) return;
+        if (!normalized) return false;
 
         const draftTags = this.currentFigureTagNames();
         const existing = new Set(draftTags.map((tag) => tag.toLowerCase()));
         if (existing.has(normalized.toLowerCase())) {
             Utils.showToast('这个标签已经存在', 'info');
-            return;
+            return false;
         }
 
         draftTags.push(normalized);
-        await this.updateCurrentFigureTags(draftTags, `已添加标签：${normalized}`);
+        return this.updateCurrentFigureTags(draftTags, `已添加标签：${normalized}`);
     },
 
     async addTagFromInput() {
         const input = this.body.querySelector('#figurePaperTagInput');
         const value = input?.value.trim() || '';
         if (!value) return;
-        await this.applySuggestedTag(value);
+        const added = await this.applySuggestedTag(value);
+        if (!added) return;
+
+        this.tagInputDraft = '';
+        if (input) {
+            input.value = '';
+        }
+        this.refreshFigureTagSuggestions();
+    },
+
+    async applyExistingTagSuggestion(tagName) {
+        const normalized = String(tagName || '').trim();
+        if (!normalized) return;
+
+        const applied = await this.applySuggestedTag(normalized);
+        if (!applied) return;
+
+        this.tagInputDraft = '';
+        const input = this.body.querySelector('#figurePaperTagInput');
+        if (input) {
+            input.value = '';
+        }
+        this.refreshFigureTagSuggestions();
     },
 
     async removeTag(tagName) {
@@ -1243,13 +1413,16 @@ const FigureViewer = {
             });
             this.clearFigureAIState(figureID, { preserveActions });
             this.syncPaperMetadata(payload.paper);
+            this.mergeFigureTagCatalog(tags);
             Utils.showToast(successMessage);
             this.render();
             if (typeof this.onMetaChanged === 'function') {
                 await this.onMetaChanged(payload.paper);
             }
+            return true;
         } catch (error) {
             Utils.showToast(error.message, 'error');
+            return false;
         }
     },
 
@@ -1318,6 +1491,7 @@ const FigureViewer = {
 
     syncPaperMetadata(paper) {
         this.paperDetails.set(paper.id, paper);
+        this.mergeFigureTagCatalogFromPaper(paper);
         this.figures = mergeFigureCollectionWithPaper(this.figures, paper);
         this.syncCurrentFigureState({ forceDraftFromFigure: true });
     },
@@ -2141,7 +2315,10 @@ const FigureViewer = {
                                         ${figure.tags?.length ? editableTags : '<span class="figure-tag-empty">暂无标签</span>'}
                                     </div>
                                     <div class="figure-tag-add">
-                                        <input id="figurePaperTagInput" class="form-input" type="text" placeholder="添加标签">
+                                        <div class="figure-tag-add-input">
+                                            <input id="figurePaperTagInput" class="form-input" type="text" placeholder="添加标签" value="${Utils.escapeHTML(this.tagInputDraft || '')}" autocomplete="off" spellcheck="false">
+                                            <div class="figure-tag-autocomplete hidden" data-figure-tag-suggestions></div>
+                                        </div>
                                         <button class="btn btn-outline btn-small" type="button" data-figure-meta-action="add-tag" aria-label="添加标签">+</button>
                                     </div>
                                     <div class="figure-tag-presets">
@@ -2193,5 +2370,6 @@ const FigureViewer = {
                 image.addEventListener('load', () => this.applyViewTransform(), { once: true });
             }
         }
+        this.refreshFigureTagSuggestions();
     }
 };
