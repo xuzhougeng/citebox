@@ -58,7 +58,9 @@ const SettingsPage = {
         this.wolaiBaseURLInput = document.getElementById('wolaiBaseURLInput');
         this.wolaiSummary = document.getElementById('wolaiSummary');
         this.wolaiStatus = document.getElementById('wolaiStatus');
+        this.wolaiResultLink = document.getElementById('wolaiResultLink');
         this.testWolaiButton = document.getElementById('testWolaiButton');
+        this.testWolaiInsertButton = document.getElementById('testWolaiInsertButton');
         this.versionSummary = document.getElementById('versionSummary');
         this.checkVersionButton = document.getElementById('checkVersionButton');
         this.versionReleaseLink = document.getElementById('versionReleaseLink');
@@ -170,6 +172,9 @@ const SettingsPage = {
         });
         this.testWolaiButton?.addEventListener('click', async () => {
             await this.testWolaiSettings();
+        });
+        this.testWolaiInsertButton?.addEventListener('click', async () => {
+            await this.insertWolaiTestPage();
         });
         this.checkVersionButton.addEventListener('click', async () => {
             await this.loadVersionStatus(true);
@@ -648,6 +653,7 @@ const SettingsPage = {
 
         this.renderWolaiSummary(settings);
         this.setWolaiStatus('');
+        this.renderWolaiResultLink('');
     },
 
     async loadVersionStatus(forceRefresh = false) {
@@ -703,6 +709,7 @@ const SettingsPage = {
         const response = await API.updateWolaiSettings(payload);
         this.renderWolaiSummary(response.settings || payload);
         this.setWolaiStatus('Wolai 配置已保存。', 'success');
+        this.renderWolaiResultLink('');
         Utils.showToast('Wolai 配置已保存');
     },
 
@@ -715,6 +722,7 @@ const SettingsPage = {
         }
 
         this.setWolaiStatus('正在校验 Wolai token 与目标块访问权限...', 'saving');
+        this.renderWolaiResultLink('');
 
         try {
             const result = await API.testWolaiSettings(this.wolaiSettingsPayload());
@@ -722,6 +730,33 @@ const SettingsPage = {
             Utils.showToast(result.message || 'Wolai token 可用');
         } catch (error) {
             this.setWolaiStatus(error.message, 'error');
+            Utils.showToast(error.message, 'error');
+        } finally {
+            if (button) {
+                button.disabled = false;
+                button.textContent = originalLabel;
+            }
+        }
+    },
+
+    async insertWolaiTestPage() {
+        const button = this.testWolaiInsertButton;
+        const originalLabel = button?.textContent || '插入测试页面';
+        if (button) {
+            button.disabled = true;
+            button.textContent = '插入中...';
+        }
+
+        this.setWolaiStatus('正在创建 Wolai 测试页面，并上传纯色测试图片...', 'saving');
+
+        try {
+            const result = await API.insertWolaiTestPage(this.wolaiSettingsPayload());
+            this.setWolaiStatus(result.message || 'Wolai 测试页面已创建', 'success');
+            this.renderWolaiResultLink(result.target_block_url || '');
+            Utils.showToast(result.message || 'Wolai 测试页面已创建');
+        } catch (error) {
+            this.setWolaiStatus(error.message, 'error');
+            this.renderWolaiResultLink('');
             Utils.showToast(error.message, 'error');
         } finally {
             if (button) {
@@ -792,7 +827,7 @@ const SettingsPage = {
             </div>
             <div>
                 <span>导出行为</span>
-                <strong>追加为新文本块</strong>
+                <strong>新建块页面后写入内容</strong>
             </div>
         `;
     },
@@ -846,6 +881,19 @@ const SettingsPage = {
 
     setWolaiStatus(message, tone = '') {
         this.setInlineStatus(this.wolaiStatus, message, tone);
+    },
+
+    renderWolaiResultLink(url) {
+        if (!this.wolaiResultLink) return;
+
+        const normalizedURL = String(url || '').trim();
+        if (!normalizedURL) {
+            this.wolaiResultLink.textContent = '';
+            return;
+        }
+
+        this.wolaiResultLink.innerHTML = `最新测试页面：<a href="${Utils.escapeHTML(normalizedURL)}" target="_blank" rel="noreferrer">${Utils.escapeHTML(normalizedURL)}</a>`;
+        this.wolaiResultLink.classList.remove('is-success', 'is-error', 'is-saving');
     },
 
     setWeixinBridgeSaveStatus(message, tone = '') {

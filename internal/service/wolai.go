@@ -1,8 +1,15 @@
 package service
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"image"
+	"image/color"
+	"image/png"
+	"io"
+	"net/url"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -18,7 +25,10 @@ const (
 
 type wolaiClient interface {
 	GetBlock(id string) (map[string]any, error)
-	CreateBlocks(parentID string, blocks any) error
+	CreateBlocks(parentID string, blocks any) ([]wolaiapi.CreatedBlock, error)
+	CreateUploadSession(input wolaiapi.UploadSessionRequest) (*wolaiapi.UploadSession, error)
+	UploadFile(session wolaiapi.UploadSession, filename, contentType string, file io.Reader) error
+	UpdateBlockFile(blockID, fileID string) error
 }
 
 func defaultWolaiClientFactory(settings model.WolaiSettings) (wolaiClient, error) {
@@ -83,6 +93,83 @@ func (s *LibraryService) TestWolaiSettings(input model.WolaiSettings) (model.Wol
 	}, nil
 }
 
+func (s *LibraryService) InsertWolaiTestPage(input model.WolaiSettings) (model.WolaiSaveNoteResponse, error) {
+	settings := normalizeWolaiSettings(input)
+	if err := validateWolaiSettings(settings); err != nil {
+		return model.WolaiSaveNoteResponse{}, err
+	}
+
+	client, err := s.newWolaiClient(settings)
+	if err != nil {
+		return model.WolaiSaveNoteResponse{}, err
+	}
+
+	pageID, err := createWolaiNotePage(client, settings.ParentBlockID, "Test Page")
+	if err != nil {
+		return model.WolaiSaveNoteResponse{}, apperr.Wrap(apperr.CodeUnavailable, "创建 Wolai 测试页面失败", err)
+	}
+
+	pageBlock, err := client.GetBlock(pageID)
+	if err != nil {
+		return model.WolaiSaveNoteResponse{}, apperr.Wrap(apperr.CodeUnavailable, "读取 Wolai 测试页面信息失败", err)
+	}
+
+	spaceID := extractWolaiSpaceID(pageBlock)
+	if spaceID == "" {
+		return model.WolaiSaveNoteResponse{}, apperr.New(apperr.CodeUnavailable, "无法从 Wolai 页面响应中解析 space ID")
+	}
+	pageURL := extractWolaiBlockURL(pageBlock)
+
+	if _, err := client.CreateBlocks(pageID, []map[string]any{{
+		"type":           "text",
+		"content":        "Test works",
+		"text_alignment": "left",
+	}}); err != nil {
+		return model.WolaiSaveNoteResponse{}, apperr.Wrap(apperr.CodeUnavailable, "写入 Wolai 测试文本失败", err)
+	}
+
+	imageBlocks, err := client.CreateBlocks(pageID, []map[string]any{{
+		"type": "image",
+	}})
+	if err != nil {
+		return model.WolaiSaveNoteResponse{}, apperr.Wrap(apperr.CodeUnavailable, "创建 Wolai 测试图片块失败", err)
+	}
+	if len(imageBlocks) == 0 || strings.TrimSpace(imageBlocks[0].ID) == "" {
+		return model.WolaiSaveNoteResponse{}, apperr.New(apperr.CodeUnavailable, "Wolai 测试图片块创建成功但未返回块 ID")
+	}
+
+	imageBytes, err := buildWolaiTestImage()
+	if err != nil {
+		return model.WolaiSaveNoteResponse{}, apperr.Wrap(apperr.CodeInternal, "生成 Wolai 测试图片失败", err)
+	}
+
+	session, err := client.CreateUploadSession(wolaiapi.UploadSessionRequest{
+		SpaceID:  spaceID,
+		FileSize: int64(len(imageBytes)),
+		BlockID:  strings.TrimSpace(imageBlocks[0].ID),
+		Type:     "image",
+		FileName: "wolai-test.png",
+		OSSPath:  "static",
+	})
+	if err != nil {
+		return model.WolaiSaveNoteResponse{}, apperr.Wrap(apperr.CodeUnavailable, "创建 Wolai 测试图片上传会话失败", err)
+	}
+
+	if err := client.UploadFile(*session, "wolai-test.png", "image/png", bytes.NewReader(imageBytes)); err != nil {
+		return model.WolaiSaveNoteResponse{}, apperr.Wrap(apperr.CodeUnavailable, "上传 Wolai 测试图片失败", err)
+	}
+	if err := client.UpdateBlockFile(strings.TrimSpace(imageBlocks[0].ID), strings.TrimSpace(session.FileID)); err != nil {
+		return model.WolaiSaveNoteResponse{}, apperr.Wrap(apperr.CodeUnavailable, "回填 Wolai 测试图片失败", err)
+	}
+
+	return model.WolaiSaveNoteResponse{
+		Success:        true,
+		Message:        "Wolai 测试页面已创建，并写入测试文本与纯色图片",
+		TargetBlockID:  pageID,
+		TargetBlockURL: pageURL,
+	}, nil
+}
+
 func (s *LibraryService) SavePaperNoteToWolai(paperID int64, notesText string) (model.WolaiSaveNoteResponse, error) {
 	paper, err := s.repo.GetPaperDetail(paperID)
 	if err != nil {
@@ -102,14 +189,21 @@ func (s *LibraryService) SavePaperNoteToWolai(paperID int64, notesText string) (
 		return model.WolaiSaveNoteResponse{}, err
 	}
 
-	if err := client.CreateBlocks(settings.ParentBlockID, buildPaperNoteWolaiBlocks(paper, content)); err != nil {
-		return model.WolaiSaveNoteResponse{}, apperr.Wrap(apperr.CodeUnavailable, "保存文献笔记到 Wolai 失败", err)
+	pageID, err := createWolaiNotePage(client, settings.ParentBlockID, buildPaperNoteWolaiPageTitle(paper))
+	if err != nil {
+		return model.WolaiSaveNoteResponse{}, apperr.Wrap(apperr.CodeUnavailable, "创建 Wolai 文献笔记页面失败", err)
 	}
 
+	if _, err := client.CreateBlocks(pageID, buildPaperNoteWolaiBlocks(paper, content)); err != nil {
+		return model.WolaiSaveNoteResponse{}, apperr.Wrap(apperr.CodeUnavailable, "写入 Wolai 文献笔记内容失败", err)
+	}
+	pageURL := lookupWolaiBlockURL(client, pageID)
+
 	return model.WolaiSaveNoteResponse{
-		Success:       true,
-		Message:       "文献笔记已保存到 Wolai",
-		TargetBlockID: settings.ParentBlockID,
+		Success:        true,
+		Message:        "文献笔记已保存到 Wolai",
+		TargetBlockID:  pageID,
+		TargetBlockURL: pageURL,
 	}, nil
 }
 
@@ -132,14 +226,21 @@ func (s *LibraryService) SaveFigureNoteToWolai(figureID int64, notesText string)
 		return model.WolaiSaveNoteResponse{}, err
 	}
 
-	if err := client.CreateBlocks(settings.ParentBlockID, buildFigureNoteWolaiBlocks(figure, content)); err != nil {
-		return model.WolaiSaveNoteResponse{}, apperr.Wrap(apperr.CodeUnavailable, "保存图片笔记到 Wolai 失败", err)
+	pageID, err := createWolaiNotePage(client, settings.ParentBlockID, buildFigureNoteWolaiPageTitle(figure))
+	if err != nil {
+		return model.WolaiSaveNoteResponse{}, apperr.Wrap(apperr.CodeUnavailable, "创建 Wolai 图片笔记页面失败", err)
 	}
 
+	if _, err := client.CreateBlocks(pageID, buildFigureNoteWolaiBlocks(figure, content)); err != nil {
+		return model.WolaiSaveNoteResponse{}, apperr.Wrap(apperr.CodeUnavailable, "写入 Wolai 图片笔记内容失败", err)
+	}
+	pageURL := lookupWolaiBlockURL(client, pageID)
+
 	return model.WolaiSaveNoteResponse{
-		Success:       true,
-		Message:       "图片笔记已保存到 Wolai",
-		TargetBlockID: settings.ParentBlockID,
+		Success:        true,
+		Message:        "图片笔记已保存到 Wolai",
+		TargetBlockID:  pageID,
+		TargetBlockURL: pageURL,
 	}, nil
 }
 
@@ -193,9 +294,44 @@ func validateWolaiSettings(settings model.WolaiSettings) error {
 	return nil
 }
 
+func createWolaiNotePage(client wolaiClient, parentID, title string) (string, error) {
+	created, err := client.CreateBlocks(parentID, []map[string]any{{
+		"type":    "page",
+		"content": title,
+	}})
+	if err != nil {
+		return "", err
+	}
+	if len(created) == 0 || strings.TrimSpace(created[0].ID) == "" {
+		return "", fmt.Errorf("wolai create blocks response missing page id")
+	}
+	return strings.TrimSpace(created[0].ID), nil
+}
+
+func buildWolaiTestImage() ([]byte, error) {
+	const size = 96
+
+	img := image.NewRGBA(image.Rect(0, 0, size, size))
+	fill := color.RGBA{R: 34, G: 139, B: 230, A: 255}
+	for y := 0; y < size; y++ {
+		for x := 0; x < size; x++ {
+			img.Set(x, y, fill)
+		}
+	}
+
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, img); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+func buildPaperNoteWolaiPageTitle(paper *model.Paper) string {
+	return fmt.Sprintf("文献笔记｜%s", buildWolaiNoteSubject(paper.Title, paper.OriginalFilename, "未命名文献"))
+}
+
 func buildPaperNoteWolaiBlocks(paper *model.Paper, notesText string) []map[string]any {
 	sections := []string{
-		fmt.Sprintf("文献笔记｜%s", strings.TrimSpace(firstNonEmpty(paper.Title, paper.OriginalFilename, "未命名文献"))),
 		strings.Join([]string{
 			"导出时间：" + time.Now().Format("2006-01-02 15:04:05"),
 			"原始文件：" + firstNonEmpty(strings.TrimSpace(paper.OriginalFilename), "未记录"),
@@ -212,9 +348,12 @@ func buildPaperNoteWolaiBlocks(paper *model.Paper, notesText string) []map[strin
 	return buildWolaiTextBlocks(sections)
 }
 
+func buildFigureNoteWolaiPageTitle(figure *model.FigureListItem) string {
+	return fmt.Sprintf("图片笔记｜%s", buildWolaiNoteSubject(figure.PaperTitle, figure.Filename, "未命名图片"))
+}
+
 func buildFigureNoteWolaiBlocks(figure *model.FigureListItem, notesText string) []map[string]any {
 	sections := []string{
-		fmt.Sprintf("图片笔记｜%s", strings.TrimSpace(firstNonEmpty(figure.PaperTitle, figure.Filename, "未命名图片"))),
 		strings.Join([]string{
 			"导出时间：" + time.Now().Format("2006-01-02 15:04:05"),
 			"来源文献：" + firstNonEmpty(strings.TrimSpace(figure.PaperTitle), "未记录"),
@@ -348,4 +487,122 @@ func buildFigureLocation(figure *model.FigureListItem) string {
 		return fmt.Sprintf("%s · %s · 来自 %s", page, label, parent)
 	}
 	return fmt.Sprintf("%s · %s", page, label)
+}
+
+func buildWolaiNoteSubject(primary, fallback, defaultValue string) string {
+	if normalized := normalizeWolaiInlineTitle(primary); normalized != "" {
+		return normalized
+	}
+
+	fallback = strings.TrimSpace(fallback)
+	if fallback == "" {
+		return defaultValue
+	}
+
+	if ext := filepath.Ext(fallback); ext != "" {
+		fallback = strings.TrimSuffix(fallback, ext)
+	}
+	fallback = strings.NewReplacer("-", " ", "_", " ").Replace(fallback)
+	if normalized := normalizeWolaiInlineTitle(fallback); normalized != "" {
+		return normalized
+	}
+	return defaultValue
+}
+
+func normalizeWolaiInlineTitle(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	return strings.Join(strings.Fields(value), " ")
+}
+
+func extractWolaiSpaceID(block map[string]any) string {
+	return findWolaiSpaceID(block)
+}
+
+func findWolaiSpaceID(node any) string {
+	switch value := node.(type) {
+	case map[string]any:
+		if spaceID := strings.TrimSpace(stringValue(value["space_id"])); spaceID != "" {
+			return spaceID
+		}
+		if spaceID := strings.TrimSpace(stringValue(value["spaceId"])); spaceID != "" {
+			return spaceID
+		}
+		if nested, ok := value["space"].(map[string]any); ok {
+			if spaceID := strings.TrimSpace(stringValue(nested["id"])); spaceID != "" {
+				return spaceID
+			}
+		}
+		for _, child := range value {
+			if spaceID := findWolaiSpaceID(child); spaceID != "" {
+				return spaceID
+			}
+		}
+	case []any:
+		for _, child := range value {
+			if spaceID := findWolaiSpaceID(child); spaceID != "" {
+				return spaceID
+			}
+		}
+	}
+	return ""
+}
+
+func stringValue(value any) string {
+	if text, ok := value.(string); ok {
+		return text
+	}
+	return ""
+}
+
+func lookupWolaiBlockURL(client wolaiClient, blockID string) string {
+	block, err := client.GetBlock(blockID)
+	if err != nil {
+		return ""
+	}
+	return extractWolaiBlockURL(block)
+}
+
+func extractWolaiBlockURL(block map[string]any) string {
+	return findWolaiBlockURL(block)
+}
+
+func findWolaiBlockURL(node any) string {
+	switch value := node.(type) {
+	case map[string]any:
+		for _, key := range []string{"url", "link", "href", "page_url", "pageUrl"} {
+			if link := normalizeWolaiLink(stringValue(value[key])); link != "" {
+				return link
+			}
+		}
+		for _, child := range value {
+			if link := findWolaiBlockURL(child); link != "" {
+				return link
+			}
+		}
+	case []any:
+		for _, child := range value {
+			if link := findWolaiBlockURL(child); link != "" {
+				return link
+			}
+		}
+	}
+	return ""
+}
+
+func normalizeWolaiLink(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	parsed, err := url.Parse(value)
+	if err != nil || !parsed.IsAbs() {
+		return ""
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return ""
+	}
+	return value
 }

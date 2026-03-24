@@ -26,6 +26,7 @@ import (
 	"github.com/xuzhougeng/citebox/internal/model"
 	"github.com/xuzhougeng/citebox/internal/repository"
 	"github.com/xuzhougeng/citebox/internal/weixin"
+	wolaiapi "github.com/xuzhougeng/citebox/internal/wolai"
 )
 
 func newTestService(t *testing.T) (*LibraryService, *repository.LibraryRepository, *config.Config) {
@@ -132,8 +133,11 @@ func useWeixinBindingTestServer(t *testing.T, svc *LibraryService, handler http.
 }
 
 type stubWolaiClient struct {
-	getBlockFunc     func(id string) (map[string]any, error)
-	createBlocksFunc func(parentID string, blocks any) error
+	getBlockFunc            func(id string) (map[string]any, error)
+	createBlocksFunc        func(parentID string, blocks any) ([]wolaiapi.CreatedBlock, error)
+	createUploadSessionFunc func(input wolaiapi.UploadSessionRequest) (*wolaiapi.UploadSession, error)
+	uploadFileFunc          func(session wolaiapi.UploadSession, filename, contentType string, file io.Reader) error
+	updateBlockFileFunc     func(blockID, fileID string) error
 }
 
 func (c *stubWolaiClient) GetBlock(id string) (map[string]any, error) {
@@ -143,9 +147,30 @@ func (c *stubWolaiClient) GetBlock(id string) (map[string]any, error) {
 	return map[string]any{"id": id}, nil
 }
 
-func (c *stubWolaiClient) CreateBlocks(parentID string, blocks any) error {
+func (c *stubWolaiClient) CreateBlocks(parentID string, blocks any) ([]wolaiapi.CreatedBlock, error) {
 	if c.createBlocksFunc != nil {
 		return c.createBlocksFunc(parentID, blocks)
+	}
+	return nil, nil
+}
+
+func (c *stubWolaiClient) CreateUploadSession(input wolaiapi.UploadSessionRequest) (*wolaiapi.UploadSession, error) {
+	if c.createUploadSessionFunc != nil {
+		return c.createUploadSessionFunc(input)
+	}
+	return &wolaiapi.UploadSession{}, nil
+}
+
+func (c *stubWolaiClient) UploadFile(session wolaiapi.UploadSession, filename, contentType string, file io.Reader) error {
+	if c.uploadFileFunc != nil {
+		return c.uploadFileFunc(session, filename, contentType, file)
+	}
+	return nil
+}
+
+func (c *stubWolaiClient) UpdateBlockFile(blockID, fileID string) error {
+	if c.updateBlockFileFunc != nil {
+		return c.updateBlockFileFunc(blockID, fileID)
 	}
 	return nil
 }
@@ -390,18 +415,24 @@ func TestSavePaperNoteToWolaiBuildsStructuredBlocks(t *testing.T) {
 		t.Fatalf("UpdateWolaiSettings() error = %v", err)
 	}
 
-	var savedParentID string
-	var savedBlocks []map[string]any
+	type createCall struct {
+		parentID string
+		blocks   []map[string]any
+	}
+
+	var calls []createCall
 	svc.wolaiClientFactory = func(settings model.WolaiSettings) (wolaiClient, error) {
 		return &stubWolaiClient{
-			createBlocksFunc: func(parentID string, blocks any) error {
-				savedParentID = parentID
+			createBlocksFunc: func(parentID string, blocks any) ([]wolaiapi.CreatedBlock, error) {
 				typed, ok := blocks.([]map[string]any)
 				if !ok {
 					t.Fatalf("blocks type = %T, want []map[string]any", blocks)
 				}
-				savedBlocks = typed
-				return nil
+				calls = append(calls, createCall{parentID: parentID, blocks: typed})
+				if len(calls) == 1 {
+					return []wolaiapi.CreatedBlock{{ID: "paper-note-page", Type: "page"}}, nil
+				}
+				return []wolaiapi.CreatedBlock{{ID: "paper-note-body"}}, nil
 			},
 		}, nil
 	}
@@ -410,23 +441,41 @@ func TestSavePaperNoteToWolaiBuildsStructuredBlocks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SavePaperNoteToWolai() error = %v", err)
 	}
-	if !result.Success || result.TargetBlockID != "paper-root" {
-		t.Fatalf("SavePaperNoteToWolai() result = %+v, want success on paper-root", result)
+	if !result.Success || result.TargetBlockID != "paper-note-page" {
+		t.Fatalf("SavePaperNoteToWolai() result = %+v, want success on paper-note-page", result)
 	}
-	if savedParentID != "paper-root" {
-		t.Fatalf("CreateBlocks() parent_id = %q, want %q", savedParentID, "paper-root")
+	if len(calls) != 2 {
+		t.Fatalf("CreateBlocks() calls = %d, want 2", len(calls))
 	}
-	if len(savedBlocks) < 3 {
-		t.Fatalf("CreateBlocks() blocks = %#v, want at least 3 blocks", savedBlocks)
+	if calls[0].parentID != "paper-root" {
+		t.Fatalf("page CreateBlocks() parent_id = %q, want %q", calls[0].parentID, "paper-root")
+	}
+	if len(calls[0].blocks) != 1 || calls[0].blocks[0]["type"] != "page" || calls[0].blocks[0]["content"] != "文献笔记｜Atlas Study" {
+		t.Fatalf("page CreateBlocks() blocks = %#v, want single page block", calls[0].blocks)
+	}
+	if calls[1].parentID != "paper-note-page" {
+		t.Fatalf("body CreateBlocks() parent_id = %q, want %q", calls[1].parentID, "paper-note-page")
+	}
+	if len(calls[1].blocks) < 2 {
+		t.Fatalf("body CreateBlocks() blocks = %#v, want at least 2 blocks", calls[1].blocks)
 	}
 
-	joined := make([]string, 0, len(savedBlocks))
-	for _, block := range savedBlocks {
+	joined := make([]string, 0, len(calls[1].blocks))
+	for _, block := range calls[1].blocks {
 		joined = append(joined, block["content"].(string))
 	}
 	text := strings.Join(joined, "\n")
-	if !strings.Contains(text, "文献笔记｜Atlas Study") {
-		t.Fatalf("saved text = %q, want paper title heading", text)
+	if strings.Contains(text, "文献笔记｜Atlas Study") {
+		t.Fatalf("saved text = %q, want page title stored only in page block", text)
+	}
+	if !strings.Contains(text, "原始文件：atlas-study.pdf") {
+		t.Fatalf("saved text = %q, want original filename included", text)
+	}
+	if !strings.Contains(text, "当前分组：未分组") {
+		t.Fatalf("saved text = %q, want default group included", text)
+	}
+	if !strings.Contains(text, "文献标签：Atlas") {
+		t.Fatalf("saved text = %q, want tag metadata included", text)
 	}
 	if !strings.Contains(text, "Atlas abstract") {
 		t.Fatalf("saved text = %q, want abstract included", text)
@@ -447,16 +496,24 @@ func TestSaveFigureNoteToWolaiUsesFigureMetadata(t *testing.T) {
 		t.Fatalf("UpdateWolaiSettings() error = %v", err)
 	}
 
-	var savedBlocks []map[string]any
+	type createCall struct {
+		parentID string
+		blocks   []map[string]any
+	}
+
+	var calls []createCall
 	svc.wolaiClientFactory = func(settings model.WolaiSettings) (wolaiClient, error) {
 		return &stubWolaiClient{
-			createBlocksFunc: func(parentID string, blocks any) error {
+			createBlocksFunc: func(parentID string, blocks any) ([]wolaiapi.CreatedBlock, error) {
 				typed, ok := blocks.([]map[string]any)
 				if !ok {
 					t.Fatalf("blocks type = %T, want []map[string]any", blocks)
 				}
-				savedBlocks = typed
-				return nil
+				calls = append(calls, createCall{parentID: parentID, blocks: typed})
+				if len(calls) == 1 {
+					return []wolaiapi.CreatedBlock{{ID: "figure-note-page", Type: "page"}}, nil
+				}
+				return []wolaiapi.CreatedBlock{{ID: "figure-note-body"}}, nil
 			},
 		}, nil
 	}
@@ -465,17 +522,32 @@ func TestSaveFigureNoteToWolaiUsesFigureMetadata(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SaveFigureNoteToWolai() error = %v", err)
 	}
-	if !result.Success || result.TargetBlockID != "figure-root" {
-		t.Fatalf("SaveFigureNoteToWolai() result = %+v, want success on figure-root", result)
+	if !result.Success || result.TargetBlockID != "figure-note-page" {
+		t.Fatalf("SaveFigureNoteToWolai() result = %+v, want success on figure-note-page", result)
+	}
+	if len(calls) != 2 {
+		t.Fatalf("CreateBlocks() calls = %d, want 2", len(calls))
+	}
+	if calls[0].parentID != "figure-root" {
+		t.Fatalf("page CreateBlocks() parent_id = %q, want %q", calls[0].parentID, "figure-root")
+	}
+	if len(calls[0].blocks) != 1 || calls[0].blocks[0]["type"] != "page" || calls[0].blocks[0]["content"] != "图片笔记｜Atlas Study" {
+		t.Fatalf("page CreateBlocks() blocks = %#v, want single page block", calls[0].blocks)
+	}
+	if calls[1].parentID != "figure-note-page" {
+		t.Fatalf("body CreateBlocks() parent_id = %q, want %q", calls[1].parentID, "figure-note-page")
 	}
 
-	joined := make([]string, 0, len(savedBlocks))
-	for _, block := range savedBlocks {
+	joined := make([]string, 0, len(calls[1].blocks))
+	for _, block := range calls[1].blocks {
 		joined = append(joined, block["content"].(string))
 	}
 	text := strings.Join(joined, "\n")
-	if !strings.Contains(text, "图片笔记｜Atlas Study") {
-		t.Fatalf("saved text = %q, want figure title heading", text)
+	if strings.Contains(text, "图片笔记｜Atlas Study") {
+		t.Fatalf("saved text = %q, want page title stored only in page block", text)
+	}
+	if !strings.Contains(text, "来源文献：Atlas Study") {
+		t.Fatalf("saved text = %q, want paper title metadata", text)
 	}
 	if !strings.Contains(text, "第 1 页") || !strings.Contains(text, "Fig 1") {
 		t.Fatalf("saved text = %q, want figure location metadata", text)
@@ -485,6 +557,125 @@ func TestSaveFigureNoteToWolaiUsesFigureMetadata(t *testing.T) {
 	}
 	if !strings.Contains(text, "观察到信号增强") {
 		t.Fatalf("saved text = %q, want note body included", text)
+	}
+}
+
+func TestInsertWolaiTestPageCreatesChildPageAndUploadsImage(t *testing.T) {
+	svc, _, _ := newTestService(t)
+
+	type createCall struct {
+		parentID string
+		blocks   []map[string]any
+	}
+
+	var calls []createCall
+	var uploadSessionInput wolaiapi.UploadSessionRequest
+	var uploadedFilename string
+	var uploadedContentType string
+	var uploadedBytes []byte
+	var updatedImageBlockID string
+	var updatedFileID string
+
+	svc.wolaiClientFactory = func(settings model.WolaiSettings) (wolaiClient, error) {
+		return &stubWolaiClient{
+			getBlockFunc: func(id string) (map[string]any, error) {
+				if id != "test-page-1" {
+					return map[string]any{"id": id}, nil
+				}
+				return map[string]any{
+					"id":       id,
+					"space_id": "space-1",
+					"url":      "https://www.wolai.com/workspace/test-page-1",
+				}, nil
+			},
+			createBlocksFunc: func(parentID string, blocks any) ([]wolaiapi.CreatedBlock, error) {
+				typed, ok := blocks.([]map[string]any)
+				if !ok {
+					t.Fatalf("blocks type = %T, want []map[string]any", blocks)
+				}
+				calls = append(calls, createCall{parentID: parentID, blocks: typed})
+
+				switch len(calls) {
+				case 1:
+					return []wolaiapi.CreatedBlock{{ID: "test-page-1", Type: "page"}}, nil
+				case 2:
+					return []wolaiapi.CreatedBlock{{ID: "text-block-1", Type: "text"}}, nil
+				case 3:
+					return []wolaiapi.CreatedBlock{{ID: "image-block-1", Type: "image"}}, nil
+				default:
+					t.Fatalf("unexpected CreateBlocks() call #%d", len(calls))
+					return nil, nil
+				}
+			},
+			createUploadSessionFunc: func(input wolaiapi.UploadSessionRequest) (*wolaiapi.UploadSession, error) {
+				uploadSessionInput = input
+				return &wolaiapi.UploadSession{
+					FileID:  "file-1",
+					FileURL: "static/file-1/wolai-test.png",
+					PolicyData: wolaiapi.UploadPolicy{
+						URL:      "https://upload.example.test",
+						FormData: map[string]string{"policy": "value"},
+					},
+				}, nil
+			},
+			uploadFileFunc: func(session wolaiapi.UploadSession, filename, contentType string, file io.Reader) error {
+				uploadedFilename = filename
+				uploadedContentType = contentType
+				data, err := io.ReadAll(file)
+				if err != nil {
+					return err
+				}
+				uploadedBytes = data
+				return nil
+			},
+			updateBlockFileFunc: func(blockID, fileID string) error {
+				updatedImageBlockID = blockID
+				updatedFileID = fileID
+				return nil
+			},
+		}, nil
+	}
+
+	result, err := svc.InsertWolaiTestPage(model.WolaiSettings{
+		Token:         "wolai-token",
+		ParentBlockID: "root-page",
+	})
+	if err != nil {
+		t.Fatalf("InsertWolaiTestPage() error = %v", err)
+	}
+
+	if !result.Success || result.TargetBlockID != "test-page-1" {
+		t.Fatalf("InsertWolaiTestPage() result = %+v, want success on test-page-1", result)
+	}
+	if result.TargetBlockURL != "https://www.wolai.com/workspace/test-page-1" {
+		t.Fatalf("InsertWolaiTestPage() target_block_url = %q, want Wolai page URL", result.TargetBlockURL)
+	}
+	if len(calls) != 3 {
+		t.Fatalf("CreateBlocks() calls = %d, want 3", len(calls))
+	}
+	if calls[0].parentID != "root-page" || len(calls[0].blocks) != 1 || calls[0].blocks[0]["type"] != "page" || calls[0].blocks[0]["content"] != "Test Page" {
+		t.Fatalf("page CreateBlocks() = %#v", calls[0])
+	}
+	if calls[1].parentID != "test-page-1" || calls[1].blocks[0]["content"] != "Test works" {
+		t.Fatalf("text CreateBlocks() = %#v", calls[1])
+	}
+	if calls[2].parentID != "test-page-1" || len(calls[2].blocks) != 1 || calls[2].blocks[0]["type"] != "image" {
+		t.Fatalf("image CreateBlocks() = %#v", calls[2])
+	}
+	if uploadSessionInput.SpaceID != "space-1" || uploadSessionInput.BlockID != "image-block-1" || uploadSessionInput.Type != "image" {
+		t.Fatalf("CreateUploadSession() input = %#v", uploadSessionInput)
+	}
+	if uploadSessionInput.FileName != "wolai-test.png" || uploadSessionInput.OSSPath != "static" || uploadSessionInput.FileSize <= 0 {
+		t.Fatalf("CreateUploadSession() input = %#v", uploadSessionInput)
+	}
+	if uploadedFilename != "wolai-test.png" || uploadedContentType != "image/png" {
+		t.Fatalf("UploadFile() = (%q, %q), want wolai-test.png/image/png", uploadedFilename, uploadedContentType)
+	}
+	if len(uploadedBytes) == 0 || !bytes.HasPrefix(uploadedBytes, []byte{0x89, 'P', 'N', 'G'}) {
+		t.Fatalf("UploadFile() payload is not png: %x", uploadedBytes)
+	}
+	if updatedImageBlockID != "image-block-1" || updatedFileID != "file-1" {
+		t.Fatalf("UpdateBlockFile() = (%q, %q), want image-block-1/file-1", updatedImageBlockID, updatedFileID)
 	}
 }
 

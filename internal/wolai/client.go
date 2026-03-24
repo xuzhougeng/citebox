@@ -6,23 +6,28 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
+	"net/textproto"
 	"net/url"
 	"strings"
 	"time"
 )
 
 const DefaultBaseURL = "https://openapi.wolai.com"
+const DefaultAPIBaseURL = "https://api.wolai.com"
 
 type Config struct {
-	Token   string
-	BaseURL string
-	Timeout time.Duration
+	Token      string
+	BaseURL    string
+	APIBaseURL string
+	Timeout    time.Duration
 }
 
 type Client struct {
 	httpClient *http.Client
 	baseURL    string
+	apiBaseURL string
 	token      string
 }
 
@@ -30,6 +35,36 @@ type apiEnvelope struct {
 	Data    json.RawMessage `json:"data"`
 	Message string          `json:"message"`
 	Error   string          `json:"error"`
+}
+
+type UploadSessionRequest struct {
+	SpaceID  string `json:"spaceId"`
+	FileSize int64  `json:"fileSize"`
+	BlockID  string `json:"blockId,omitempty"`
+	Type     string `json:"type"`
+	FileName string `json:"fileName"`
+	OSSPath  string `json:"OSSPath,omitempty"`
+}
+
+type UploadSession struct {
+	FileID     string       `json:"fileId"`
+	FileURL    string       `json:"fileUrl"`
+	PolicyData UploadPolicy `json:"policyData"`
+}
+
+type UploadPolicy struct {
+	URL      string            `json:"url"`
+	Bucket   string            `json:"bucket"`
+	FormData map[string]string `json:"formData"`
+}
+
+type CreatedBlock struct {
+	ID   string `json:"id"`
+	Type string `json:"type,omitempty"`
+}
+
+type createBlocksResponse struct {
+	Blocks []CreatedBlock `json:"blocks"`
 }
 
 func NewClient(cfg Config) (*Client, error) {
@@ -51,6 +86,7 @@ func NewClient(cfg Config) (*Client, error) {
 	return &Client{
 		httpClient: &http.Client{Timeout: timeout},
 		baseURL:    baseURL,
+		apiBaseURL: normalizeAPIBaseURL(cfg.APIBaseURL, baseURL),
 		token:      token,
 	}, nil
 }
@@ -63,17 +99,134 @@ func (c *Client) GetBlock(id string) (map[string]any, error) {
 	return data, nil
 }
 
-func (c *Client) CreateBlocks(parentID string, blocks any) error {
+func (c *Client) CreateBlocks(parentID string, blocks any) ([]CreatedBlock, error) {
 	payload := map[string]any{
 		"parent_id": strings.TrimSpace(parentID),
 		"blocks":    blocks,
 	}
-	_, err := c.doEnvelope(http.MethodPost, "/v1/blocks", payload)
+	var data createBlocksResponse
+	if err := c.doJSON(http.MethodPost, "/v1/blocks", payload, &data); err != nil {
+		return nil, err
+	}
+	return data.Blocks, nil
+}
+
+func (c *Client) CreateUploadSession(input UploadSessionRequest) (*UploadSession, error) {
+	input.SpaceID = strings.TrimSpace(input.SpaceID)
+	input.BlockID = strings.TrimSpace(input.BlockID)
+	input.Type = strings.TrimSpace(input.Type)
+	input.FileName = strings.TrimSpace(input.FileName)
+	input.OSSPath = strings.TrimSpace(input.OSSPath)
+
+	if input.SpaceID == "" {
+		return nil, errors.New("missing Wolai space ID")
+	}
+	if input.FileSize <= 0 {
+		return nil, errors.New("missing Wolai file size")
+	}
+	if input.Type == "" {
+		return nil, errors.New("missing Wolai file type")
+	}
+	if input.FileName == "" {
+		return nil, errors.New("missing Wolai file name")
+	}
+
+	var session UploadSession
+	if err := c.doJSONWithBase(c.apiBaseURL, http.MethodPost, "/v1/file/getSignedPostUrl", input, &session); err != nil {
+		return nil, err
+	}
+	return &session, nil
+}
+
+func (c *Client) UploadFile(session UploadSession, filename, contentType string, file io.Reader) error {
+	if strings.TrimSpace(session.PolicyData.URL) == "" {
+		return errors.New("missing Wolai upload URL")
+	}
+	if strings.TrimSpace(session.FileURL) == "" {
+		return errors.New("missing Wolai file URL")
+	}
+	if file == nil {
+		return errors.New("missing upload file reader")
+	}
+
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+
+	for key, value := range session.PolicyData.FormData {
+		if strings.TrimSpace(key) == "" {
+			continue
+		}
+		if err := writer.WriteField(key, value); err != nil {
+			return fmt.Errorf("write Wolai upload form field %q: %w", key, err)
+		}
+	}
+	if err := writer.WriteField("key", session.FileURL); err != nil {
+		return fmt.Errorf("write Wolai upload key: %w", err)
+	}
+	if err := writer.WriteField("success_action_status", "200"); err != nil {
+		return fmt.Errorf("write Wolai upload success status: %w", err)
+	}
+
+	part, err := createMultipartFilePart(writer, filename, contentType)
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(part, file); err != nil {
+		return fmt.Errorf("copy upload file payload: %w", err)
+	}
+	if err := writer.Close(); err != nil {
+		return fmt.Errorf("close Wolai upload body: %w", err)
+	}
+
+	req, err := http.NewRequest(http.MethodPost, session.PolicyData.URL, &body)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
+		text := strings.TrimSpace(string(data))
+		if text == "" {
+			text = http.StatusText(resp.StatusCode)
+		}
+		return fmt.Errorf("wolai upload error (%d): %s", resp.StatusCode, text)
+	}
+	return nil
+}
+
+func (c *Client) UpdateBlockFile(blockID, fileID string) error {
+	blockID = strings.TrimSpace(blockID)
+	fileID = strings.TrimSpace(fileID)
+	if blockID == "" {
+		return errors.New("missing Wolai block ID")
+	}
+	if fileID == "" {
+		return errors.New("missing Wolai file ID")
+	}
+
+	payload := map[string]any{
+		"file_id": fileID,
+	}
+	_, err := c.doEnvelope(http.MethodPatch, "/v1/blocks/"+url.PathEscape(blockID), payload)
 	return err
 }
 
 func (c *Client) doJSON(method, path string, payload any, out any) error {
-	env, err := c.doEnvelope(method, path, payload)
+	return c.doJSONWithBase(c.baseURL, method, path, payload, out)
+}
+
+func (c *Client) doJSONWithBase(baseURL, method, path string, payload any, out any) error {
+	env, err := c.doEnvelopeWithBase(baseURL, method, path, payload)
 	if err != nil {
 		return err
 	}
@@ -90,6 +243,10 @@ func (c *Client) doJSON(method, path string, payload any, out any) error {
 }
 
 func (c *Client) doEnvelope(method, path string, payload any) (apiEnvelope, error) {
+	return c.doEnvelopeWithBase(c.baseURL, method, path, payload)
+}
+
+func (c *Client) doEnvelopeWithBase(baseURL, method, path string, payload any) (apiEnvelope, error) {
 	var body io.Reader
 	if payload != nil {
 		data, err := json.Marshal(payload)
@@ -99,7 +256,7 @@ func (c *Client) doEnvelope(method, path string, payload any) (apiEnvelope, erro
 		body = bytes.NewReader(data)
 	}
 
-	req, err := http.NewRequest(method, c.baseURL+path, body)
+	req, err := http.NewRequest(method, strings.TrimRight(baseURL, "/")+path, body)
 	if err != nil {
 		return apiEnvelope{}, err
 	}
@@ -145,6 +302,46 @@ func decodeAPIError(status int, body []byte) error {
 		text = http.StatusText(status)
 	}
 	return fmt.Errorf("wolai api error (%d): %s", status, text)
+}
+
+func normalizeAPIBaseURL(apiBaseURL, openAPIBaseURL string) string {
+	apiBaseURL = strings.TrimRight(strings.TrimSpace(apiBaseURL), "/")
+	if apiBaseURL != "" {
+		return apiBaseURL
+	}
+	if openAPIBaseURL == "" || openAPIBaseURL == DefaultBaseURL {
+		return DefaultAPIBaseURL
+	}
+
+	parsed, err := url.Parse(openAPIBaseURL)
+	if err != nil {
+		return openAPIBaseURL
+	}
+	if strings.HasPrefix(parsed.Host, "openapi.") {
+		parsed.Host = "api." + strings.TrimPrefix(parsed.Host, "openapi.")
+		return strings.TrimRight(parsed.String(), "/")
+	}
+	return openAPIBaseURL
+}
+
+func createMultipartFilePart(writer *multipart.Writer, filename, contentType string) (io.Writer, error) {
+	filename = strings.TrimSpace(filename)
+	if filename == "" {
+		filename = "upload.bin"
+	}
+	contentType = strings.TrimSpace(contentType)
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+
+	header := make(textproto.MIMEHeader)
+	header.Set("Content-Disposition", fmt.Sprintf(`form-data; name="file"; filename=%q`, filename))
+	header.Set("Content-Type", contentType)
+	part, err := writer.CreatePart(header)
+	if err != nil {
+		return nil, fmt.Errorf("create Wolai upload file part: %w", err)
+	}
+	return part, nil
 }
 
 func firstNonEmpty(values ...string) string {

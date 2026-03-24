@@ -12,7 +12,8 @@ type WolaiTestResult struct {
 }
 
 type WolaiSaveNoteResponse struct {
-	Success       bool   `json:"success"`
-	Message       string `json:"message"`
-	TargetBlockID string `json:"target_block_id"`
+	Success        bool   `json:"success"`
+	Message        string `json:"message"`
+	TargetBlockID  string `json:"target_block_id"`
+	TargetBlockURL string `json:"target_block_url,omitempty"`
 }

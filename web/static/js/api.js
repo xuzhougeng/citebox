@@ -475,6 +475,16 @@ const API = {
         });
     },
 
+    insertWolaiTestPage(data) {
+        return requestJSON(`${API_BASE}/settings/wolai/test-page`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        });
+    },
+
     getWeixinBridgeSettings() {
         return requestJSON(`${API_BASE}/settings/weixin-bridge`);
     },
