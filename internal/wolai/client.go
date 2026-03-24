@@ -390,6 +390,9 @@ func extractBlockIDFromURL(rawURL string) string {
 	if err != nil {
 		return ""
 	}
+	if fragment := strings.TrimSpace(parsed.Fragment); fragment != "" {
+		return fragment
+	}
 	path := strings.Trim(parsed.Path, "/")
 	if path == "" {
 		return ""

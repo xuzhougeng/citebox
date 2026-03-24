@@ -153,6 +153,38 @@ func TestCreateBlocksDecodesObjectPayload(t *testing.T) {
 	}
 }
 
+func TestCreateBlocksUsesFragmentAsBlockID(t *testing.T) {
+	client, err := NewClient(Config{
+		Token:   "wolai-token",
+		BaseURL: "https://mock.wolai.test",
+		Timeout: time.Second,
+	})
+	if err != nil {
+		t.Fatalf("NewClient() error = %v", err)
+	}
+
+	client.httpClient = &http.Client{
+		Timeout: time.Second,
+		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			return jsonResponse(http.StatusOK, map[string]any{
+				"data": []string{
+					"https://www.wolai.com/page-1#image-block-1",
+				},
+			}), nil
+		}),
+	}
+
+	blocks, err := client.CreateBlocks("page-1", []map[string]any{{
+		"type": "image",
+	}})
+	if err != nil {
+		t.Fatalf("CreateBlocks() error = %v", err)
+	}
+	if len(blocks) != 1 || blocks[0].ID != "image-block-1" {
+		t.Fatalf("CreateBlocks() blocks = %#v, want fragment-derived image block id", blocks)
+	}
+}
+
 func TestCreateUploadSessionUsesAPIBaseURL(t *testing.T) {
 	client, err := NewClient(Config{
 		Token:      "wolai-token",

@@ -1,12 +1,8 @@
 package service
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"image"
-	"image/color"
-	"image/png"
 	"io"
 	"net/url"
 	"path/filepath"
@@ -19,8 +15,9 @@ import (
 )
 
 const (
-	wolaiSettingsKey      = "wolai_settings"
-	wolaiTextBlockMaxSize = 1600
+	wolaiSettingsKey       = "wolai_settings"
+	wolaiTextBlockMaxSize  = 1600
+	wolaiBlackImageDataURL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgYGD4DwABBAEAX+XDSwAAAABJRU5ErkJggg=="
 )
 
 type wolaiClient interface {
@@ -114,16 +111,6 @@ func (s *LibraryService) InsertWolaiTestPage(input model.WolaiSettings) (model.W
 		pageURL = lookupWolaiBlockURL(client, pageID)
 	}
 
-	pageMeta, err := client.GetBlock(pageID)
-	if err != nil {
-		return model.WolaiSaveNoteResponse{}, apperr.Wrap(apperr.CodeUnavailable, "读取 Wolai 测试页面信息失败", err)
-	}
-
-	spaceID := resolveWolaiUploadSpaceID(pageMeta, settings.ParentBlockID)
-	if spaceID == "" {
-		return model.WolaiSaveNoteResponse{}, apperr.New(apperr.CodeUnavailable, "无法从 Wolai 页面响应中解析上传所需页面 ID")
-	}
-
 	if _, err := client.CreateBlocks(pageID, []map[string]any{{
 		"type":           "text",
 		"content":        "Test works",
@@ -132,43 +119,16 @@ func (s *LibraryService) InsertWolaiTestPage(input model.WolaiSettings) (model.W
 		return model.WolaiSaveNoteResponse{}, apperr.Wrap(apperr.CodeUnavailable, "写入 Wolai 测试文本失败", err)
 	}
 
-	imageBlocks, err := client.CreateBlocks(pageID, []map[string]any{{
+	if _, err := client.CreateBlocks(pageID, []map[string]any{{
 		"type": "image",
-	}})
-	if err != nil {
-		return model.WolaiSaveNoteResponse{}, apperr.Wrap(apperr.CodeUnavailable, "创建 Wolai 测试图片块失败", err)
-	}
-	if len(imageBlocks) == 0 || strings.TrimSpace(imageBlocks[0].ID) == "" {
-		return model.WolaiSaveNoteResponse{}, apperr.New(apperr.CodeUnavailable, "Wolai 测试图片块创建成功但未返回块 ID")
-	}
-
-	imageBytes, err := buildWolaiTestImage()
-	if err != nil {
-		return model.WolaiSaveNoteResponse{}, apperr.Wrap(apperr.CodeInternal, "生成 Wolai 测试图片失败", err)
-	}
-
-	session, err := client.CreateUploadSession(wolaiapi.UploadSessionRequest{
-		SpaceID:  spaceID,
-		FileSize: int64(len(imageBytes)),
-		BlockID:  strings.TrimSpace(imageBlocks[0].ID),
-		Type:     "image",
-		FileName: "wolai-test.png",
-		OSSPath:  "static",
-	})
-	if err != nil {
-		return model.WolaiSaveNoteResponse{}, apperr.Wrap(apperr.CodeUnavailable, "创建 Wolai 测试图片上传会话失败", err)
-	}
-
-	if err := client.UploadFile(*session, "wolai-test.png", "image/png", bytes.NewReader(imageBytes)); err != nil {
-		return model.WolaiSaveNoteResponse{}, apperr.Wrap(apperr.CodeUnavailable, "上传 Wolai 测试图片失败", err)
-	}
-	if err := client.UpdateBlockFile(strings.TrimSpace(imageBlocks[0].ID), strings.TrimSpace(session.FileID)); err != nil {
-		return model.WolaiSaveNoteResponse{}, apperr.Wrap(apperr.CodeUnavailable, "回填 Wolai 测试图片失败", err)
+		"link": wolaiBlackImageDataURL,
+	}}); err != nil {
+		return model.WolaiSaveNoteResponse{}, apperr.Wrap(apperr.CodeUnavailable, "插入 Wolai 测试图片失败", err)
 	}
 
 	return model.WolaiSaveNoteResponse{
 		Success:        true,
-		Message:        "Wolai 测试页面已创建，并写入测试文本与纯色图片",
+		Message:        "Wolai 测试页面已创建，并写入测试文本与纯黑图片",
 		TargetBlockID:  pageID,
 		TargetBlockURL: pageURL,
 	}, nil
@@ -320,24 +280,6 @@ func createWolaiNotePage(client wolaiClient, parentID, title string) (wolaiapi.C
 	created[0].ID = strings.TrimSpace(created[0].ID)
 	created[0].URL = strings.TrimSpace(created[0].URL)
 	return created[0], nil
-}
-
-func buildWolaiTestImage() ([]byte, error) {
-	const size = 96
-
-	img := image.NewRGBA(image.Rect(0, 0, size, size))
-	fill := color.RGBA{R: 34, G: 139, B: 230, A: 255}
-	for y := 0; y < size; y++ {
-		for x := 0; x < size; x++ {
-			img.Set(x, y, fill)
-		}
-	}
-
-	var buf bytes.Buffer
-	if err := png.Encode(&buf, img); err != nil {
-		return nil, err
-	}
-	return buf.Bytes(), nil
 }
 
 func buildPaperNoteWolaiPageTitle(paper *model.Paper) string {
@@ -534,23 +476,6 @@ func normalizeWolaiInlineTitle(value string) string {
 func stringValue(value any) string {
 	if text, ok := value.(string); ok {
 		return text
-	}
-	return ""
-}
-
-func resolveWolaiUploadSpaceID(block map[string]any, fallback string) string {
-	for _, candidate := range []string{
-		stringValue(block["page_id"]),
-		stringValue(block["pageId"]),
-		stringValue(block["parent_id"]),
-		stringValue(block["parentId"]),
-		stringValue(block["space_id"]),
-		stringValue(block["spaceId"]),
-		fallback,
-	} {
-		if candidate = strings.TrimSpace(candidate); candidate != "" {
-			return candidate
-		}
 	}
 	return ""
 }

@@ -560,7 +560,7 @@ func TestSaveFigureNoteToWolaiUsesFigureMetadata(t *testing.T) {
 	}
 }
 
-func TestInsertWolaiTestPageCreatesChildPageAndUploadsImage(t *testing.T) {
+func TestInsertWolaiTestPageCreatesChildPageAndInsertsBlackImage(t *testing.T) {
 	svc, _, _ := newTestService(t)
 
 	type createCall struct {
@@ -569,25 +569,9 @@ func TestInsertWolaiTestPageCreatesChildPageAndUploadsImage(t *testing.T) {
 	}
 
 	var calls []createCall
-	var uploadSessionInput wolaiapi.UploadSessionRequest
-	var uploadedFilename string
-	var uploadedContentType string
-	var uploadedBytes []byte
-	var updatedImageBlockID string
-	var updatedFileID string
 
 	svc.wolaiClientFactory = func(settings model.WolaiSettings) (wolaiClient, error) {
 		return &stubWolaiClient{
-			getBlockFunc: func(id string) (map[string]any, error) {
-				if id != "test-page-1" {
-					return map[string]any{"id": id}, nil
-				}
-				return map[string]any{
-					"id":      id,
-					"page_id": "page-root-1",
-					"url":     "https://www.wolai.com/workspace/test-page-1",
-				}, nil
-			},
 			createBlocksFunc: func(parentID string, blocks any) ([]wolaiapi.CreatedBlock, error) {
 				typed, ok := blocks.([]map[string]any)
 				if !ok {
@@ -606,32 +590,6 @@ func TestInsertWolaiTestPageCreatesChildPageAndUploadsImage(t *testing.T) {
 					t.Fatalf("unexpected CreateBlocks() call #%d", len(calls))
 					return nil, nil
 				}
-			},
-			createUploadSessionFunc: func(input wolaiapi.UploadSessionRequest) (*wolaiapi.UploadSession, error) {
-				uploadSessionInput = input
-				return &wolaiapi.UploadSession{
-					FileID:  "file-1",
-					FileURL: "static/file-1/wolai-test.png",
-					PolicyData: wolaiapi.UploadPolicy{
-						URL:      "https://upload.example.test",
-						FormData: map[string]string{"policy": "value"},
-					},
-				}, nil
-			},
-			uploadFileFunc: func(session wolaiapi.UploadSession, filename, contentType string, file io.Reader) error {
-				uploadedFilename = filename
-				uploadedContentType = contentType
-				data, err := io.ReadAll(file)
-				if err != nil {
-					return err
-				}
-				uploadedBytes = data
-				return nil
-			},
-			updateBlockFileFunc: func(blockID, fileID string) error {
-				updatedImageBlockID = blockID
-				updatedFileID = fileID
-				return nil
 			},
 		}, nil
 	}
@@ -662,20 +620,8 @@ func TestInsertWolaiTestPageCreatesChildPageAndUploadsImage(t *testing.T) {
 	if calls[2].parentID != "test-page-1" || len(calls[2].blocks) != 1 || calls[2].blocks[0]["type"] != "image" {
 		t.Fatalf("image CreateBlocks() = %#v", calls[2])
 	}
-	if uploadSessionInput.SpaceID != "page-root-1" || uploadSessionInput.BlockID != "image-block-1" || uploadSessionInput.Type != "image" {
-		t.Fatalf("CreateUploadSession() input = %#v", uploadSessionInput)
-	}
-	if uploadSessionInput.FileName != "wolai-test.png" || uploadSessionInput.OSSPath != "static" || uploadSessionInput.FileSize <= 0 {
-		t.Fatalf("CreateUploadSession() input = %#v", uploadSessionInput)
-	}
-	if uploadedFilename != "wolai-test.png" || uploadedContentType != "image/png" {
-		t.Fatalf("UploadFile() = (%q, %q), want wolai-test.png/image/png", uploadedFilename, uploadedContentType)
-	}
-	if len(uploadedBytes) == 0 || !bytes.HasPrefix(uploadedBytes, []byte{0x89, 'P', 'N', 'G'}) {
-		t.Fatalf("UploadFile() payload is not png: %x", uploadedBytes)
-	}
-	if updatedImageBlockID != "image-block-1" || updatedFileID != "file-1" {
-		t.Fatalf("UpdateBlockFile() = (%q, %q), want image-block-1/file-1", updatedImageBlockID, updatedFileID)
+	if calls[2].blocks[0]["link"] != wolaiBlackImageDataURL {
+		t.Fatalf("image CreateBlocks() link = %#v, want black PNG data URL", calls[2].blocks[0])
 	}
 }
 

@@ -747,7 +747,7 @@ const SettingsPage = {
             button.textContent = '插入中...';
         }
 
-        this.setWolaiStatus('正在创建 Wolai 测试页面，并上传纯色测试图片...', 'saving');
+        this.setWolaiStatus('正在创建 Wolai 测试页面，并插入纯黑测试图片...', 'saving');
 
         try {
             const result = await API.insertWolaiTestPage(this.wolaiSettingsPayload());
