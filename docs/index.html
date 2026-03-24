@@ -1,0 +1,1295 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CiteBox — 学术文献管理，重新定义</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=Noto+Serif+SC:wght@400;600;700&family=DM+Sans:ital,wght@0,400;0,500;0,700;1,400&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --ink: #1a1a2e;
+      --parchment: #f5f0e8;
+      --gold: #c9a84c;
+      --gold-light: #e8d59a;
+      --deep-blue: #16213e;
+      --accent-blue: #0f3460;
+      --warm-gray: #8a8578;
+      --light-gray: #e8e3da;
+      --cream: #faf7f0;
+      --highlight: #e94560;
+      --shadow-soft: rgba(26, 26, 46, 0.08);
+      --shadow-medium: rgba(26, 26, 46, 0.15);
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+      font-size: 16px;
+    }
+
+    body {
+      font-family: 'DM Sans', 'Noto Serif SC', sans-serif;
+      background: var(--parchment);
+      color: var(--ink);
+      overflow-x: hidden;
+      line-height: 1.7;
+    }
+
+    /* ─── Grain overlay ─── */
+    body::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 9999;
+      opacity: 0.03;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    }
+
+    /* ─── Navigation ─── */
+    nav {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      padding: 1.2rem 3rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(245, 240, 232, 0.85);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--light-gray);
+      transition: all 0.4s ease;
+    }
+
+    nav.scrolled {
+      padding: 0.8rem 3rem;
+      box-shadow: 0 2px 30px var(--shadow-soft);
+    }
+
+    .nav-logo {
+      font-family: 'Cormorant Garamond', 'Noto Serif SC', serif;
+      font-size: 1.6rem;
+      font-weight: 700;
+      color: var(--deep-blue);
+      text-decoration: none;
+      letter-spacing: -0.02em;
+    }
+
+    .nav-logo span {
+      color: var(--gold);
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 2.5rem;
+      align-items: center;
+    }
+
+    .nav-links a {
+      text-decoration: none;
+      color: var(--warm-gray);
+      font-size: 0.88rem;
+      font-weight: 500;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      transition: color 0.3s;
+    }
+
+    .nav-links a:hover {
+      color: var(--ink);
+    }
+
+    .nav-cta {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.6rem 1.5rem;
+      background: var(--deep-blue);
+      color: var(--parchment) !important;
+      border-radius: 4px;
+      font-size: 0.82rem !important;
+      letter-spacing: 0.08em;
+      transition: background 0.3s, transform 0.2s !important;
+    }
+
+    .nav-cta:hover {
+      background: var(--accent-blue);
+      transform: translateY(-1px);
+    }
+
+    /* ─── Hero ─── */
+    .hero {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      position: relative;
+      padding: 8rem 3rem 4rem;
+      overflow: hidden;
+    }
+
+    .hero-bg {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+    }
+
+    .hero-bg::before {
+      content: '';
+      position: absolute;
+      top: -20%;
+      right: -10%;
+      width: 70vw;
+      height: 70vw;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(201, 168, 76, 0.08) 0%, transparent 70%);
+      animation: heroGlow 8s ease-in-out infinite alternate;
+    }
+
+    .hero-bg::after {
+      content: '';
+      position: absolute;
+      bottom: -30%;
+      left: -20%;
+      width: 60vw;
+      height: 60vw;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(15, 52, 96, 0.05) 0%, transparent 70%);
+      animation: heroGlow 10s ease-in-out infinite alternate-reverse;
+    }
+
+    @keyframes heroGlow {
+      from { transform: scale(1) translate(0, 0); }
+      to { transform: scale(1.1) translate(2%, -2%); }
+    }
+
+    /* Floating papers */
+    .floating-papers {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+    }
+
+    .floating-paper {
+      position: absolute;
+      width: 120px;
+      height: 160px;
+      background: rgba(255, 255, 255, 0.5);
+      border: 1px solid var(--light-gray);
+      border-radius: 2px;
+      box-shadow: 0 4px 20px var(--shadow-soft);
+    }
+
+    .floating-paper::before {
+      content: '';
+      position: absolute;
+      top: 15px;
+      left: 12px;
+      right: 12px;
+      height: 4px;
+      background: var(--light-gray);
+      border-radius: 2px;
+    }
+
+    .floating-paper::after {
+      content: '';
+      position: absolute;
+      top: 28px;
+      left: 12px;
+      right: 20px;
+      bottom: 15px;
+      background: repeating-linear-gradient(
+        transparent,
+        transparent 8px,
+        var(--light-gray) 8px,
+        var(--light-gray) 9px
+      );
+      opacity: 0.5;
+    }
+
+    .fp-1 {
+      top: 15%;
+      right: 18%;
+      transform: rotate(-8deg);
+      animation: floatPaper 12s ease-in-out infinite;
+      animation-delay: 0s;
+    }
+
+    .fp-2 {
+      top: 35%;
+      right: 8%;
+      transform: rotate(5deg);
+      animation: floatPaper 15s ease-in-out infinite;
+      animation-delay: -3s;
+      opacity: 0.7;
+      width: 100px;
+      height: 130px;
+    }
+
+    .fp-3 {
+      bottom: 20%;
+      right: 25%;
+      transform: rotate(12deg);
+      animation: floatPaper 18s ease-in-out infinite;
+      animation-delay: -7s;
+      opacity: 0.5;
+      width: 90px;
+      height: 120px;
+    }
+
+    .fp-4 {
+      top: 60%;
+      right: 12%;
+      transform: rotate(-3deg);
+      animation: floatPaper 14s ease-in-out infinite;
+      animation-delay: -5s;
+      opacity: 0.4;
+    }
+
+    @keyframes floatPaper {
+      0%, 100% { transform: translateY(0) rotate(var(--rot, -8deg)); }
+      50% { transform: translateY(-20px) rotate(calc(var(--rot, -8deg) + 3deg)); }
+    }
+
+    .fp-1 { --rot: -8deg; }
+    .fp-2 { --rot: 5deg; }
+    .fp-3 { --rot: 12deg; }
+    .fp-4 { --rot: -3deg; }
+
+    .hero-content {
+      position: relative;
+      z-index: 2;
+      max-width: 680px;
+    }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.4rem 1rem;
+      background: rgba(201, 168, 76, 0.12);
+      border: 1px solid rgba(201, 168, 76, 0.25);
+      border-radius: 100px;
+      font-size: 0.78rem;
+      font-weight: 500;
+      color: var(--gold);
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      margin-bottom: 2rem;
+      animation: fadeSlideUp 0.8s ease-out;
+    }
+
+    .hero-badge::before {
+      content: '';
+      width: 6px;
+      height: 6px;
+      background: var(--gold);
+      border-radius: 50%;
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    .hero h1 {
+      font-family: 'Cormorant Garamond', 'Noto Serif SC', serif;
+      font-size: clamp(3rem, 6vw, 5rem);
+      font-weight: 700;
+      line-height: 1.1;
+      color: var(--deep-blue);
+      margin-bottom: 1.5rem;
+      animation: fadeSlideUp 0.8s ease-out 0.15s both;
+    }
+
+    .hero h1 em {
+      font-style: italic;
+      color: var(--gold);
+      position: relative;
+    }
+
+    .hero h1 em::after {
+      content: '';
+      position: absolute;
+      bottom: 0.05em;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: var(--gold-light);
+      border-radius: 2px;
+    }
+
+    .hero-desc {
+      font-size: 1.15rem;
+      color: var(--warm-gray);
+      line-height: 1.8;
+      max-width: 540px;
+      margin-bottom: 2.5rem;
+      animation: fadeSlideUp 0.8s ease-out 0.3s both;
+    }
+
+    .hero-actions {
+      display: flex;
+      gap: 1rem;
+      align-items: center;
+      flex-wrap: wrap;
+      animation: fadeSlideUp 0.8s ease-out 0.45s both;
+    }
+
+    .btn-primary {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.6rem;
+      padding: 1rem 2rem;
+      background: var(--deep-blue);
+      color: var(--parchment);
+      text-decoration: none;
+      font-size: 0.9rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      border-radius: 6px;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 15px rgba(22, 33, 62, 0.25);
+    }
+
+    .btn-primary:hover {
+      background: var(--accent-blue);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 25px rgba(22, 33, 62, 0.3);
+    }
+
+    .btn-primary svg {
+      width: 18px;
+      height: 18px;
+      transition: transform 0.3s;
+    }
+
+    .btn-primary:hover svg {
+      transform: translateX(3px);
+    }
+
+    .btn-secondary {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 1rem 1.8rem;
+      background: transparent;
+      color: var(--ink);
+      text-decoration: none;
+      font-size: 0.9rem;
+      font-weight: 500;
+      letter-spacing: 0.03em;
+      border: 1.5px solid var(--light-gray);
+      border-radius: 6px;
+      transition: all 0.3s ease;
+    }
+
+    .btn-secondary:hover {
+      border-color: var(--gold);
+      color: var(--gold);
+      background: rgba(201, 168, 76, 0.05);
+    }
+
+    @keyframes fadeSlideUp {
+      from {
+        opacity: 0;
+        transform: translateY(24px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    /* ─── Section base ─── */
+    section {
+      padding: 7rem 3rem;
+    }
+
+    .section-label {
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--gold);
+      margin-bottom: 1rem;
+    }
+
+    .section-title {
+      font-family: 'Cormorant Garamond', 'Noto Serif SC', serif;
+      font-size: clamp(2rem, 4vw, 3rem);
+      font-weight: 700;
+      color: var(--deep-blue);
+      line-height: 1.2;
+      margin-bottom: 1rem;
+    }
+
+    .section-subtitle {
+      font-size: 1.05rem;
+      color: var(--warm-gray);
+      max-width: 540px;
+      line-height: 1.7;
+    }
+
+    /* ─── Features ─── */
+    .features {
+      background: var(--cream);
+      position: relative;
+    }
+
+    .features::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 1px;
+      height: 80px;
+      background: linear-gradient(to bottom, var(--light-gray), transparent);
+    }
+
+    .features-header {
+      text-align: center;
+      margin-bottom: 5rem;
+    }
+
+    .features-header .section-subtitle {
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 2rem;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    .feature-card {
+      padding: 2.5rem 2rem;
+      background: var(--parchment);
+      border: 1px solid var(--light-gray);
+      border-radius: 8px;
+      transition: all 0.4s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .feature-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: var(--gold);
+      transform: scaleX(0);
+      transform-origin: left;
+      transition: transform 0.4s ease;
+    }
+
+    .feature-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 12px 40px var(--shadow-medium);
+      border-color: transparent;
+    }
+
+    .feature-card:hover::before {
+      transform: scaleX(1);
+    }
+
+    .feature-icon {
+      width: 48px;
+      height: 48px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(201, 168, 76, 0.1);
+      border-radius: 10px;
+      margin-bottom: 1.5rem;
+      color: var(--gold);
+      transition: all 0.3s;
+    }
+
+    .feature-card:hover .feature-icon {
+      background: var(--gold);
+      color: white;
+      transform: scale(1.05);
+    }
+
+    .feature-icon svg {
+      width: 22px;
+      height: 22px;
+    }
+
+    .feature-card h3 {
+      font-family: 'Cormorant Garamond', 'Noto Serif SC', serif;
+      font-size: 1.35rem;
+      font-weight: 700;
+      color: var(--deep-blue);
+      margin-bottom: 0.75rem;
+    }
+
+    .feature-card p {
+      font-size: 0.92rem;
+      color: var(--warm-gray);
+      line-height: 1.7;
+    }
+
+    /* ─── Workflow showcase ─── */
+    .workflow {
+      background: var(--deep-blue);
+      color: var(--parchment);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .workflow::before {
+      content: '';
+      position: absolute;
+      top: -50%;
+      right: -20%;
+      width: 60vw;
+      height: 60vw;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(201, 168, 76, 0.06) 0%, transparent 70%);
+    }
+
+    .workflow .section-subtitle {
+      color: rgba(245, 240, 232, 0.6);
+    }
+
+    .workflow-header {
+      text-align: center;
+      margin-bottom: 5rem;
+      position: relative;
+      z-index: 2;
+    }
+
+    .workflow-header .section-title {
+      color: var(--parchment);
+    }
+
+    .workflow-header .section-subtitle {
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .workflow-steps {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 0;
+      max-width: 1000px;
+      margin: 0 auto;
+      position: relative;
+      z-index: 2;
+    }
+
+    .workflow-step {
+      text-align: center;
+      padding: 2rem 1.5rem;
+      position: relative;
+    }
+
+    .workflow-step::after {
+      content: '';
+      position: absolute;
+      top: 2.8rem;
+      right: 0;
+      width: 50%;
+      height: 1px;
+      background: rgba(201, 168, 76, 0.3);
+    }
+
+    .workflow-step:last-child::after {
+      display: none;
+    }
+
+    .workflow-step::before {
+      content: '';
+      position: absolute;
+      top: 2.8rem;
+      left: 0;
+      width: 50%;
+      height: 1px;
+      background: rgba(201, 168, 76, 0.3);
+    }
+
+    .workflow-step:first-child::before {
+      display: none;
+    }
+
+    .step-number {
+      width: 40px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(201, 168, 76, 0.15);
+      border: 1.5px solid var(--gold);
+      border-radius: 50%;
+      margin: 0 auto 1.5rem;
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--gold);
+      position: relative;
+      z-index: 2;
+    }
+
+    .workflow-step h4 {
+      font-family: 'Cormorant Garamond', 'Noto Serif SC', serif;
+      font-size: 1.2rem;
+      font-weight: 700;
+      margin-bottom: 0.6rem;
+      color: var(--parchment);
+    }
+
+    .workflow-step p {
+      font-size: 0.85rem;
+      color: rgba(245, 240, 232, 0.55);
+      line-height: 1.6;
+    }
+
+    /* ─── Highlight section ─── */
+    .highlights {
+      background: var(--parchment);
+    }
+
+    .highlight-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4rem;
+      align-items: center;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    .highlight-row + .highlight-row {
+      margin-top: 6rem;
+    }
+
+    .highlight-row:nth-child(even) {
+      direction: rtl;
+    }
+
+    .highlight-row:nth-child(even) > * {
+      direction: ltr;
+    }
+
+    .highlight-visual {
+      aspect-ratio: 4/3;
+      border-radius: 12px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .highlight-visual.ai-visual {
+      background: linear-gradient(135deg, #16213e 0%, #0f3460 50%, #1a1a3e 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .ai-orb {
+      width: 140px;
+      height: 140px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 40% 40%, var(--gold-light), var(--gold), #8a6914);
+      box-shadow: 0 0 60px rgba(201, 168, 76, 0.3), 0 0 120px rgba(201, 168, 76, 0.15);
+      animation: orbFloat 6s ease-in-out infinite;
+      position: relative;
+    }
+
+    .ai-orb::before {
+      content: '';
+      position: absolute;
+      inset: -20px;
+      border: 1px solid rgba(201, 168, 76, 0.2);
+      border-radius: 50%;
+      animation: orbRing 8s linear infinite;
+    }
+
+    .ai-orb::after {
+      content: '';
+      position: absolute;
+      inset: -45px;
+      border: 1px solid rgba(201, 168, 76, 0.1);
+      border-radius: 50%;
+      animation: orbRing 12s linear infinite reverse;
+    }
+
+    @keyframes orbFloat {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-15px); }
+    }
+
+    @keyframes orbRing {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    .highlight-visual.palette-visual {
+      background: var(--cream);
+      border: 1px solid var(--light-gray);
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 0;
+      padding: 0;
+    }
+
+    .palette-swatch {
+      transition: transform 0.3s;
+    }
+
+    .palette-swatch:hover {
+      transform: scaleY(1.05);
+      z-index: 2;
+    }
+
+    .highlight-text h3 {
+      font-family: 'Cormorant Garamond', 'Noto Serif SC', serif;
+      font-size: 1.8rem;
+      font-weight: 700;
+      color: var(--deep-blue);
+      margin-bottom: 1rem;
+    }
+
+    .highlight-text p {
+      font-size: 0.95rem;
+      color: var(--warm-gray);
+      line-height: 1.8;
+      margin-bottom: 1.5rem;
+    }
+
+    .highlight-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+
+    .highlight-tag {
+      padding: 0.3rem 0.8rem;
+      background: rgba(201, 168, 76, 0.1);
+      border: 1px solid rgba(201, 168, 76, 0.2);
+      border-radius: 100px;
+      font-size: 0.78rem;
+      color: var(--gold);
+      font-weight: 500;
+    }
+
+    /* ─── CTA / Download ─── */
+    .download {
+      background: var(--cream);
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+      padding: 8rem 3rem;
+    }
+
+    .download::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 400px;
+      height: 400px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(201, 168, 76, 0.08) 0%, transparent 70%);
+    }
+
+    .download-content {
+      position: relative;
+      z-index: 2;
+    }
+
+    .download .section-title {
+      margin-bottom: 1rem;
+    }
+
+    .download .section-subtitle {
+      margin: 0 auto 3rem;
+      text-align: center;
+    }
+
+    .download-cards {
+      display: flex;
+      justify-content: center;
+      gap: 1.5rem;
+      flex-wrap: wrap;
+      margin-bottom: 3rem;
+    }
+
+    .download-card {
+      padding: 2rem 2.5rem;
+      background: var(--parchment);
+      border: 1px solid var(--light-gray);
+      border-radius: 10px;
+      text-decoration: none;
+      color: var(--ink);
+      transition: all 0.4s ease;
+      min-width: 200px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .download-card::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: var(--gold);
+      transform: scaleX(0);
+      transition: transform 0.4s ease;
+    }
+
+    .download-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 12px 40px var(--shadow-medium);
+      border-color: var(--gold-light);
+    }
+
+    .download-card:hover::after {
+      transform: scaleX(1);
+    }
+
+    .download-card svg {
+      width: 36px;
+      height: 36px;
+      color: var(--warm-gray);
+      margin-bottom: 1rem;
+      transition: color 0.3s;
+    }
+
+    .download-card:hover svg {
+      color: var(--gold);
+    }
+
+    .download-card h4 {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 1.2rem;
+      font-weight: 700;
+      color: var(--deep-blue);
+      margin-bottom: 0.3rem;
+    }
+
+    .download-card span {
+      font-size: 0.8rem;
+      color: var(--warm-gray);
+    }
+
+    .download-note {
+      font-size: 0.82rem;
+      color: var(--warm-gray);
+    }
+
+    .download-note a {
+      color: var(--gold);
+      text-decoration: none;
+      border-bottom: 1px solid transparent;
+      transition: border-color 0.3s;
+    }
+
+    .download-note a:hover {
+      border-bottom-color: var(--gold);
+    }
+
+    /* ─── Footer ─── */
+    footer {
+      background: var(--deep-blue);
+      color: rgba(245, 240, 232, 0.5);
+      padding: 3rem;
+      text-align: center;
+    }
+
+    .footer-logo {
+      font-family: 'Cormorant Garamond', 'Noto Serif SC', serif;
+      font-size: 1.3rem;
+      font-weight: 700;
+      color: var(--parchment);
+      margin-bottom: 0.5rem;
+    }
+
+    .footer-logo span {
+      color: var(--gold);
+    }
+
+    footer p {
+      font-size: 0.82rem;
+      line-height: 1.6;
+    }
+
+    footer a {
+      color: var(--gold);
+      text-decoration: none;
+      transition: opacity 0.3s;
+    }
+
+    footer a:hover {
+      opacity: 0.8;
+    }
+
+    .footer-links {
+      display: flex;
+      justify-content: center;
+      gap: 2rem;
+      margin-top: 1.5rem;
+    }
+
+    .footer-links a {
+      font-size: 0.8rem;
+      color: rgba(245, 240, 232, 0.4);
+      text-decoration: none;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      transition: color 0.3s;
+    }
+
+    .footer-links a:hover {
+      color: var(--gold);
+    }
+
+    /* ─── Scroll animations ─── */
+    .reveal {
+      opacity: 0;
+      transform: translateY(30px);
+      transition: opacity 0.7s ease, transform 0.7s ease;
+    }
+
+    .reveal.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .reveal-delay-1 { transition-delay: 0.1s; }
+    .reveal-delay-2 { transition-delay: 0.2s; }
+    .reveal-delay-3 { transition-delay: 0.3s; }
+    .reveal-delay-4 { transition-delay: 0.35s; }
+    .reveal-delay-5 { transition-delay: 0.4s; }
+    .reveal-delay-6 { transition-delay: 0.45s; }
+
+    /* ─── Responsive ─── */
+    @media (max-width: 900px) {
+      nav {
+        padding: 1rem 1.5rem;
+      }
+
+      .nav-links {
+        gap: 1.2rem;
+      }
+
+      section {
+        padding: 4rem 1.5rem;
+      }
+
+      .features-grid {
+        grid-template-columns: 1fr;
+        gap: 1.2rem;
+      }
+
+      .workflow-steps {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 1.5rem;
+      }
+
+      .workflow-step::before,
+      .workflow-step::after {
+        display: none;
+      }
+
+      .highlight-row,
+      .highlight-row:nth-child(even) {
+        grid-template-columns: 1fr;
+        gap: 2rem;
+        direction: ltr;
+      }
+
+      .floating-papers {
+        display: none;
+      }
+    }
+
+    @media (max-width: 600px) {
+      .hero h1 {
+        font-size: 2.4rem;
+      }
+
+      .nav-links a:not(.nav-cta) {
+        display: none;
+      }
+
+      .workflow-steps {
+        grid-template-columns: 1fr;
+      }
+
+      .download-cards {
+        flex-direction: column;
+        align-items: center;
+      }
+
+      .download {
+        padding: 5rem 1.5rem;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Navigation -->
+  <nav id="navbar">
+    <a href="#" class="nav-logo">Cite<span>Box</span></a>
+    <div class="nav-links">
+      <a href="#features">功能</a>
+      <a href="#workflow">工作流</a>
+      <a href="#download" class="nav-cta">
+        下载
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      </a>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <section class="hero">
+    <div class="hero-bg">
+      <div class="floating-papers">
+        <div class="floating-paper fp-1"></div>
+        <div class="floating-paper fp-2"></div>
+        <div class="floating-paper fp-3"></div>
+        <div class="floating-paper fp-4"></div>
+      </div>
+    </div>
+    <div class="hero-content">
+      <div class="hero-badge">开源 &middot; 免费 &middot; 跨平台</div>
+      <h1>你的学术文献，<br>值得一个<em>更好</em>的归处</h1>
+      <p class="hero-desc">
+        CiteBox 是一款面向研究者的文献管理工具。上传 PDF，自动解析图表与元数据，借助 AI 伴读深入理解每一篇论文。从阅读到引用，一站式完成。
+      </p>
+      <div class="hero-actions">
+        <a href="https://github.com/xuzhougeng/citebox/releases" class="btn-primary" target="_blank">
+          下载 CiteBox
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+        </a>
+        <a href="#features" class="btn-secondary">了解更多</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Features -->
+  <section class="features" id="features">
+    <div class="features-header">
+      <div class="section-label reveal">核心功能</div>
+      <h2 class="section-title reveal reveal-delay-1">为学术研究而生的每一处细节</h2>
+      <p class="section-subtitle reveal reveal-delay-2">不只是存储论文——CiteBox 让你与文献建立更深层的对话</p>
+    </div>
+    <div class="features-grid">
+      <!-- Card 1 -->
+      <div class="feature-card reveal reveal-delay-1">
+        <div class="feature-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+        </div>
+        <h3>智能 PDF 解析</h3>
+        <p>上传论文，自动提取标题、摘要、正文与图表。全文索引让你再也不会遗忘任何一个关键信息。</p>
+      </div>
+      <!-- Card 2 -->
+      <div class="feature-card reveal reveal-delay-2">
+        <div class="feature-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+        </div>
+        <h3>图表管理与子图标注</h3>
+        <p>自动提取论文中的每一张图表，支持子图标注、图注编辑和独立标签分类。建立你的学术图库。</p>
+      </div>
+      <!-- Card 3 -->
+      <div class="feature-card reveal reveal-delay-3">
+        <div class="feature-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+        </div>
+        <h3>AI 伴读助手</h3>
+        <p>与 AI 聊论文——提问、翻译、解读图表。支持 OpenAI 等多种模型，让每篇论文都成为一场深度对话。</p>
+      </div>
+      <!-- Card 4 -->
+      <div class="feature-card reveal reveal-delay-4">
+        <div class="feature-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+        </div>
+        <h3>灵活的组织方式</h3>
+        <p>用分组和标签自由组织文献。彩色标签、嵌套分组，以你最习惯的方式管理每一篇论文。</p>
+      </div>
+      <!-- Card 5 -->
+      <div class="feature-card reveal reveal-delay-5">
+        <div class="feature-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/><line x1="4.93" y1="4.93" x2="9.17" y2="9.17"/><line x1="14.83" y1="14.83" x2="19.07" y2="19.07"/><line x1="14.83" y1="9.17" x2="19.07" y2="4.93"/><line x1="14.83" y1="9.17" x2="10.59" y2="13.41"/><line x1="4.93" y1="19.07" x2="9.17" y2="14.83"/></svg>
+        </div>
+        <h3>色彩提取</h3>
+        <p>从论文图表中提取配色方案，保存到你的色板库。科研绘图时直接引用，保持视觉一致性。</p>
+      </div>
+      <!-- Card 6 -->
+      <div class="feature-card reveal reveal-delay-6">
+        <div class="feature-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+        </div>
+        <h3>桌面原生体验</h3>
+        <p>支持 Windows、macOS、Linux 三大平台。本地部署，数据完全掌控在你自己手中。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Workflow -->
+  <section class="workflow" id="workflow">
+    <div class="workflow-header">
+      <div class="section-label reveal">工作流</div>
+      <h2 class="section-title reveal reveal-delay-1">从 PDF 到洞见，只需四步</h2>
+      <p class="section-subtitle reveal reveal-delay-2">简单而强大的流程，让你专注于研究本身</p>
+    </div>
+    <div class="workflow-steps">
+      <div class="workflow-step reveal reveal-delay-1">
+        <div class="step-number">1</div>
+        <h4>上传 PDF</h4>
+        <p>拖放或选择论文文件，CiteBox 自动开始处理</p>
+      </div>
+      <div class="workflow-step reveal reveal-delay-2">
+        <div class="step-number">2</div>
+        <h4>自动解析</h4>
+        <p>提取全文、元数据，识别并裁剪出所有图表</p>
+      </div>
+      <div class="workflow-step reveal reveal-delay-3">
+        <div class="step-number">3</div>
+        <h4>组织 & 标注</h4>
+        <p>使用分组、标签和笔记系统整理你的文献库</p>
+      </div>
+      <div class="workflow-step reveal reveal-delay-4">
+        <div class="step-number">4</div>
+        <h4>AI 深度阅读</h4>
+        <p>与 AI 对话，获得论文深层理解与关键洞见</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Highlights -->
+  <section class="highlights" id="highlights">
+    <div class="highlight-row reveal">
+      <div class="highlight-visual ai-visual">
+        <div class="ai-orb"></div>
+      </div>
+      <div class="highlight-text">
+        <h3>AI 不只是工具，<br>而是你的研究伙伴</h3>
+        <p>
+          CiteBox 的 AI 伴读功能不仅支持论文问答，还能解读图表、翻译段落、生成标签建议。 支持 OpenAI 及兼容 API，你可以接入自己偏好的大语言模型。
+        </p>
+        <div class="highlight-tags">
+          <span class="highlight-tag">论文问答</span>
+          <span class="highlight-tag">图表解读</span>
+          <span class="highlight-tag">段落翻译</span>
+          <span class="highlight-tag">标签建议</span>
+          <span class="highlight-tag">流式输出</span>
+        </div>
+      </div>
+    </div>
+    <div class="highlight-row reveal">
+      <div class="highlight-visual palette-visual">
+        <div class="palette-swatch" style="background: #264653;"></div>
+        <div class="palette-swatch" style="background: #2a9d8f;"></div>
+        <div class="palette-swatch" style="background: #e9c46a;"></div>
+        <div class="palette-swatch" style="background: #f4a261;"></div>
+        <div class="palette-swatch" style="background: #e76f51;"></div>
+      </div>
+      <div class="highlight-text">
+        <h3>从论文中提取灵感配色</h3>
+        <p>
+          看到论文中令人惊艳的图表配色？一键提取并保存到色板库。 在你自己的科研绘图中直接引用，让图表风格保持专业一致。 每个色板都追溯到源论文与原始图表。
+        </p>
+        <div class="highlight-tags">
+          <span class="highlight-tag">一键提取</span>
+          <span class="highlight-tag">色板库</span>
+          <span class="highlight-tag">溯源管理</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Download -->
+  <section class="download" id="download">
+    <div class="download-content">
+      <div class="section-label reveal">立即下载</div>
+      <h2 class="section-title reveal reveal-delay-1">开始你的文献管理新体验</h2>
+      <p class="section-subtitle reveal reveal-delay-2">CiteBox 开源免费，支持所有主流操作系统</p>
+      <div class="download-cards reveal reveal-delay-3">
+        <a href="https://github.com/xuzhougeng/citebox/releases" class="download-card" target="_blank">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M12 17v4M8 21h8"/><path d="M7.5 8l2.5 2.5L12.5 8"/><path d="M14 10.5l2.5-2.5"/></svg>
+          <h4>Windows</h4>
+          <span>.exe 安装包</span>
+        </a>
+        <a href="https://github.com/xuzhougeng/citebox/releases" class="download-card" target="_blank">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/><path d="M12 6v6l4.5 2.5"/></svg>
+          <h4>macOS</h4>
+          <span>.dmg 安装包</span>
+        </a>
+        <a href="https://github.com/xuzhougeng/citebox/releases" class="download-card" target="_blank">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
+          <h4>Linux</h4>
+          <span>AppImage / .deb</span>
+        </a>
+      </div>
+      <p class="download-note reveal reveal-delay-4">
+        前往 <a href="https://github.com/xuzhougeng/citebox/releases" target="_blank">GitHub Releases</a> 查看所有版本与更新日志
+      </p>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <div class="footer-logo">Cite<span>Box</span></div>
+    <p>开源学术文献管理工具 &middot; 本地部署 &middot; 数据自主</p>
+    <div class="footer-links">
+      <a href="https://github.com/xuzhougeng/citebox" target="_blank">GitHub</a>
+      <a href="https://github.com/xuzhougeng/citebox/releases" target="_blank">下载</a>
+      <a href="https://github.com/xuzhougeng/citebox/issues" target="_blank">反馈</a>
+    </div>
+  </footer>
+
+  <script>
+    // ─── Navbar scroll effect ───
+    const navbar = document.getElementById('navbar');
+    window.addEventListener('scroll', () => {
+      navbar.classList.toggle('scrolled', window.scrollY > 50);
+    });
+
+    // ─── Scroll reveal ───
+    const reveals = document.querySelectorAll('.reveal');
+    const revealObserver = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('visible');
+          revealObserver.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.15, rootMargin: '0px 0px -40px 0px' });
+
+    reveals.forEach(el => revealObserver.observe(el));
+
+    // ─── Smooth scroll for anchor links ───
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+      anchor.addEventListener('click', function (e) {
+        e.preventDefault();
+        const target = document.querySelector(this.getAttribute('href'));
+        if (target) {
+          target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      });
+    });
+  </script>
+</body>
+</html>
