@@ -23,6 +23,11 @@ const (
 )
 
 var wolaiMarkdownImagePattern = regexp.MustCompile(`!\[([^\]]*)\]\(([^)\s]+)\)`)
+var wolaiMarkdownHeadingPattern = regexp.MustCompile(`^(#{1,6})\s+(.+)$`)
+var wolaiMarkdownOrderedListPattern = regexp.MustCompile(`^\s*\d+\.\s+(.+)$`)
+var wolaiMarkdownBulletListPattern = regexp.MustCompile(`^\s*[-+*]\s+(.+)$`)
+var wolaiMarkdownBlockquotePattern = regexp.MustCompile(`^\s*>\s?(.*)$`)
+var wolaiMarkdownFencePattern = regexp.MustCompile("^```\\s*([^`]*)$")
 
 // TODO: Wire note image upload through these methods once Wolai image export is implemented.
 type wolaiClient interface {
@@ -306,21 +311,27 @@ func buildPaperNoteWolaiPageTitle(paper *model.Paper) string {
 
 func buildPaperNoteWolaiBlocks(paper *model.Paper, notesText string) ([]map[string]any, bool) {
 	notesText, hasPendingImages := rewriteWolaiMarkdownImages(notesText)
-	sections := []string{
+	blocks := []map[string]any{
+		buildWolaiHeadingBlock("导出信息", 2),
+	}
+	blocks = append(blocks, buildWolaiTextBlocks([]string{
 		strings.Join([]string{
 			"导出时间：" + time.Now().Format("2006-01-02 15:04:05"),
 			"原始文件：" + firstNonEmpty(strings.TrimSpace(paper.OriginalFilename), "未记录"),
 			"当前分组：" + firstNonEmpty(strings.TrimSpace(paper.GroupName), "未分组"),
 			"文献标签：" + firstNonEmpty(joinTagNames(paper.Tags), "无标签"),
 		}, "\n"),
-	}
+	})...)
 
 	if abstract := strings.TrimSpace(paper.AbstractText); abstract != "" {
-		sections = append(sections, "摘要：\n"+abstract)
+		blocks = append(blocks, buildWolaiHeadingBlock("摘要", 2))
+		blocks = append(blocks, buildWolaiMarkdownBlocks(abstract)...)
 	}
-	sections = append(sections, "文献笔记：\n"+strings.TrimSpace(notesText))
 
-	return buildWolaiTextBlocks(sections), hasPendingImages
+	blocks = append(blocks, buildWolaiHeadingBlock("文献笔记", 2))
+	blocks = append(blocks, buildWolaiMarkdownBlocks(strings.TrimSpace(notesText))...)
+
+	return blocks, hasPendingImages
 }
 
 func buildFigureNoteWolaiPageTitle(figure *model.FigureListItem) string {
@@ -329,7 +340,10 @@ func buildFigureNoteWolaiPageTitle(figure *model.FigureListItem) string {
 
 func buildFigureNoteWolaiBlocks(figure *model.FigureListItem, notesText string) ([]map[string]any, bool) {
 	notesText, hasPendingImages := rewriteWolaiMarkdownImages(notesText)
-	sections := []string{
+	blocks := []map[string]any{
+		buildWolaiHeadingBlock("导出信息", 2),
+	}
+	blocks = append(blocks, buildWolaiTextBlocks([]string{
 		strings.Join([]string{
 			"导出时间：" + time.Now().Format("2006-01-02 15:04:05"),
 			"来源文献：" + firstNonEmpty(strings.TrimSpace(figure.PaperTitle), "未记录"),
@@ -337,14 +351,17 @@ func buildFigureNoteWolaiBlocks(figure *model.FigureListItem, notesText string) 
 			"来源分组：" + firstNonEmpty(strings.TrimSpace(figure.GroupName), "未分组"),
 			"图片标签：" + firstNonEmpty(joinTagNames(figure.Tags), "无标签"),
 		}, "\n"),
-	}
+	})...)
 
 	if caption := strings.TrimSpace(figure.Caption); caption != "" {
-		sections = append(sections, "图片说明：\n"+caption)
+		blocks = append(blocks, buildWolaiHeadingBlock("图片说明", 2))
+		blocks = append(blocks, buildWolaiMarkdownBlocks(caption)...)
 	}
-	sections = append(sections, "图片笔记：\n"+strings.TrimSpace(notesText))
 
-	return buildWolaiTextBlocks(sections), hasPendingImages
+	blocks = append(blocks, buildWolaiHeadingBlock("图片笔记", 2))
+	blocks = append(blocks, buildWolaiMarkdownBlocks(strings.TrimSpace(notesText))...)
+
+	return blocks, hasPendingImages
 }
 
 func rewriteWolaiMarkdownImages(notesText string) (string, bool) {
@@ -383,6 +400,228 @@ func buildWolaiTextBlocks(sections []string) []map[string]any {
 		}
 	}
 	return blocks
+}
+
+func buildWolaiHeadingBlock(content string, level int) map[string]any {
+	level = maxWolaiHeadingLevel(level)
+	return map[string]any{
+		"type":    "heading",
+		"content": strings.TrimSpace(content),
+		"level":   level,
+	}
+}
+
+func buildWolaiMarkdownBlocks(content string) []map[string]any {
+	normalized := strings.TrimSpace(strings.ReplaceAll(content, "\r\n", "\n"))
+	if normalized == "" {
+		return nil
+	}
+
+	lines := strings.Split(normalized, "\n")
+	blocks := make([]map[string]any, 0, len(lines))
+
+	for i := 0; i < len(lines); {
+		trimmed := strings.TrimSpace(lines[i])
+		if trimmed == "" {
+			i++
+			continue
+		}
+
+		if match := wolaiMarkdownFencePattern.FindStringSubmatch(trimmed); len(match) == 2 {
+			language := strings.TrimSpace(match[1])
+			i++
+			codeLines := make([]string, 0, 8)
+			for i < len(lines) && !wolaiMarkdownFencePattern.MatchString(strings.TrimSpace(lines[i])) {
+				codeLines = append(codeLines, strings.TrimRight(lines[i], "\r"))
+				i++
+			}
+			if i < len(lines) {
+				i++
+			}
+			blocks = append(blocks, buildWolaiCodeBlocks(strings.Join(codeLines, "\n"), language)...)
+			continue
+		}
+
+		if isWolaiMathFence(trimmed) {
+			i++
+			equationLines := make([]string, 0, 4)
+			for i < len(lines) && !isWolaiMathFence(strings.TrimSpace(lines[i])) {
+				equationLines = append(equationLines, strings.TrimSpace(lines[i]))
+				i++
+			}
+			if i < len(lines) {
+				i++
+			}
+			equation := strings.TrimSpace(strings.Join(equationLines, "\n"))
+			if equation != "" {
+				blocks = append(blocks, map[string]any{
+					"type":    "block_equation",
+					"content": equation,
+				})
+			}
+			continue
+		}
+
+		if isWolaiMarkdownDivider(trimmed) {
+			blocks = append(blocks, map[string]any{"type": "divider"})
+			i++
+			continue
+		}
+
+		if match := wolaiMarkdownHeadingPattern.FindStringSubmatch(trimmed); len(match) == 3 {
+			blocks = append(blocks, buildWolaiHeadingBlock(match[2], len(match[1])))
+			i++
+			continue
+		}
+
+		if wolaiMarkdownBlockquotePattern.MatchString(trimmed) {
+			quoteLines := make([]string, 0, 4)
+			for i < len(lines) {
+				current := strings.TrimSpace(lines[i])
+				match := wolaiMarkdownBlockquotePattern.FindStringSubmatch(current)
+				if len(match) != 2 {
+					break
+				}
+				quoteLines = append(quoteLines, strings.TrimSpace(match[1]))
+				i++
+			}
+			blocks = append(blocks, buildWolaiQuoteBlocks(strings.Join(quoteLines, "\n"))...)
+			continue
+		}
+
+		if wolaiMarkdownOrderedListPattern.MatchString(trimmed) {
+			for i < len(lines) {
+				match := wolaiMarkdownOrderedListPattern.FindStringSubmatch(strings.TrimSpace(lines[i]))
+				if len(match) != 2 {
+					break
+				}
+				blocks = append(blocks, map[string]any{
+					"type":    "enum_list",
+					"content": strings.TrimSpace(match[1]),
+				})
+				i++
+			}
+			continue
+		}
+
+		if wolaiMarkdownBulletListPattern.MatchString(trimmed) {
+			for i < len(lines) {
+				match := wolaiMarkdownBulletListPattern.FindStringSubmatch(strings.TrimSpace(lines[i]))
+				if len(match) != 2 {
+					break
+				}
+				blocks = append(blocks, map[string]any{
+					"type":    "bull_list",
+					"content": strings.TrimSpace(match[1]),
+				})
+				i++
+			}
+			continue
+		}
+
+		paragraphLines := make([]string, 0, 4)
+		for i < len(lines) {
+			current := strings.TrimSpace(lines[i])
+			if current == "" {
+				break
+			}
+			if isWolaiMarkdownSpecialLine(current) {
+				break
+			}
+			paragraphLines = append(paragraphLines, strings.TrimRight(lines[i], "\r"))
+			i++
+		}
+		blocks = append(blocks, buildWolaiTextBlocks([]string{strings.Join(paragraphLines, "\n")})...)
+	}
+
+	if len(blocks) == 0 {
+		return buildWolaiTextBlocks([]string{normalized})
+	}
+	return blocks
+}
+
+func buildWolaiQuoteBlocks(content string) []map[string]any {
+	content = strings.TrimSpace(content)
+	if content == "" {
+		return nil
+	}
+
+	chunks := splitWolaiText(content, wolaiTextBlockMaxSize)
+	blocks := make([]map[string]any, 0, len(chunks))
+	for _, chunk := range chunks {
+		blocks = append(blocks, map[string]any{
+			"type":    "quote",
+			"content": chunk,
+		})
+	}
+	return blocks
+}
+
+func buildWolaiCodeBlocks(content, language string) []map[string]any {
+	content = strings.TrimSpace(content)
+	if content == "" {
+		return nil
+	}
+
+	language = strings.TrimSpace(language)
+	if language == "" {
+		language = "plain text"
+	}
+
+	chunks := splitWolaiCodeContent(content, wolaiTextBlockMaxSize)
+	blocks := make([]map[string]any, 0, len(chunks))
+	for _, chunk := range chunks {
+		blocks = append(blocks, map[string]any{
+			"type":     "code",
+			"content":  chunk,
+			"language": language,
+		})
+	}
+	return blocks
+}
+
+func isWolaiMarkdownSpecialLine(line string) bool {
+	return wolaiMarkdownFencePattern.MatchString(line) ||
+		isWolaiMathFence(line) ||
+		isWolaiMarkdownDivider(line) ||
+		wolaiMarkdownHeadingPattern.MatchString(line) ||
+		wolaiMarkdownBlockquotePattern.MatchString(line) ||
+		wolaiMarkdownOrderedListPattern.MatchString(line) ||
+		wolaiMarkdownBulletListPattern.MatchString(line)
+}
+
+func isWolaiMathFence(line string) bool {
+	return strings.TrimSpace(line) == "$$"
+}
+
+func isWolaiMarkdownDivider(line string) bool {
+	compact := strings.ReplaceAll(strings.TrimSpace(line), " ", "")
+	if len(compact) < 3 {
+		return false
+	}
+
+	first := compact[0]
+	if first != '-' && first != '*' && first != '_' {
+		return false
+	}
+
+	for i := 1; i < len(compact); i++ {
+		if compact[i] != first {
+			return false
+		}
+	}
+	return true
+}
+
+func maxWolaiHeadingLevel(level int) int {
+	switch {
+	case level <= 1:
+		return 1
+	case level >= 3:
+		return 3
+	default:
+		return level
+	}
 }
 
 func splitWolaiText(content string, maxRunes int) []string {
@@ -454,6 +693,55 @@ func splitWolaiLongParagraph(paragraph string, maxRunes int) []string {
 			end = len(runes)
 		}
 		parts = append(parts, strings.TrimSpace(string(runes[start:end])))
+	}
+	return parts
+}
+
+func splitWolaiCodeContent(content string, maxRunes int) []string {
+	normalized := strings.TrimSpace(strings.ReplaceAll(content, "\r\n", "\n"))
+	if normalized == "" {
+		return nil
+	}
+	if maxRunes <= 0 || runeCount(normalized) <= maxRunes {
+		return []string{normalized}
+	}
+
+	lines := strings.Split(normalized, "\n")
+	parts := make([]string, 0, len(lines))
+	current := ""
+
+	flush := func() {
+		if strings.TrimSpace(current) == "" {
+			current = ""
+			return
+		}
+		parts = append(parts, strings.TrimRight(current, "\n"))
+		current = ""
+	}
+
+	for _, line := range lines {
+		candidate := line
+		if current != "" {
+			candidate = current + "\n" + line
+		}
+		if runeCount(candidate) > maxRunes && current != "" {
+			flush()
+			candidate = line
+		}
+		if runeCount(candidate) > maxRunes {
+			for _, chunk := range splitWolaiLongParagraph(line, maxRunes) {
+				if chunk != "" {
+					parts = append(parts, chunk)
+				}
+			}
+			continue
+		}
+		current = candidate
+	}
+
+	flush()
+	if len(parts) == 0 {
+		return []string{normalized}
 	}
 	return parts
 }

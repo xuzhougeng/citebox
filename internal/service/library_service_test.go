@@ -18,6 +18,7 @@ import (
 	"net/textproto"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -99,6 +100,27 @@ func createTestPaper(t *testing.T, repo *repository.LibraryRepository) *model.Pa
 
 type testMultipartFile struct {
 	*bytes.Reader
+}
+
+func wolaiBlockTypes(blocks []map[string]any) []string {
+	types := make([]string, 0, len(blocks))
+	for _, block := range blocks {
+		if blockType, ok := block["type"].(string); ok {
+			types = append(types, blockType)
+		}
+	}
+	return types
+}
+
+func wolaiBlockContents(blocks []map[string]any) []string {
+	contents := make([]string, 0, len(blocks))
+	for _, block := range blocks {
+		content, ok := block["content"].(string)
+		if ok && strings.TrimSpace(content) != "" {
+			contents = append(contents, content)
+		}
+	}
+	return contents
 }
 
 func (f *testMultipartFile) Close() error {
@@ -461,11 +483,8 @@ func TestSavePaperNoteToWolaiBuildsStructuredBlocks(t *testing.T) {
 		t.Fatalf("body CreateBlocks() blocks = %#v, want at least 2 blocks", calls[1].blocks)
 	}
 
-	joined := make([]string, 0, len(calls[1].blocks))
-	for _, block := range calls[1].blocks {
-		joined = append(joined, block["content"].(string))
-	}
-	text := strings.Join(joined, "\n")
+	text := strings.Join(wolaiBlockContents(calls[1].blocks), "\n")
+	types := wolaiBlockTypes(calls[1].blocks)
 	if strings.Contains(text, "文献笔记｜Atlas Study") {
 		t.Fatalf("saved text = %q, want page title stored only in page block", text)
 	}
@@ -480,6 +499,22 @@ func TestSavePaperNoteToWolaiBuildsStructuredBlocks(t *testing.T) {
 	}
 	if !strings.Contains(text, "Atlas abstract") {
 		t.Fatalf("saved text = %q, want abstract included", text)
+	}
+	if !containsString(types, "heading") {
+		t.Fatalf("body block types = %#v, want heading blocks for section styles", types)
+	}
+	if strings.Contains(text, "## 结论") {
+		t.Fatalf("saved text = %q, want markdown heading converted to Wolai heading block", text)
+	}
+	foundConclusionHeading := false
+	for _, block := range calls[1].blocks {
+		if block["type"] == "heading" && block["content"] == "结论" {
+			foundConclusionHeading = true
+			break
+		}
+	}
+	if !foundConclusionHeading {
+		t.Fatalf("body CreateBlocks() blocks = %#v, want markdown heading converted", calls[1].blocks)
 	}
 	if !strings.Contains(text, "这个结果支持免疫重编程") {
 		t.Fatalf("saved text = %q, want note body included", text)
@@ -539,11 +574,7 @@ func TestSaveFigureNoteToWolaiUsesFigureMetadata(t *testing.T) {
 		t.Fatalf("body CreateBlocks() parent_id = %q, want %q", calls[1].parentID, "figure-note-page")
 	}
 
-	joined := make([]string, 0, len(calls[1].blocks))
-	for _, block := range calls[1].blocks {
-		joined = append(joined, block["content"].(string))
-	}
-	text := strings.Join(joined, "\n")
+	text := strings.Join(wolaiBlockContents(calls[1].blocks), "\n")
 	if strings.Contains(text, "图片笔记｜Atlas Study") {
 		t.Fatalf("saved text = %q, want page title stored only in page block", text)
 	}
@@ -558,6 +589,62 @@ func TestSaveFigureNoteToWolaiUsesFigureMetadata(t *testing.T) {
 	}
 	if !strings.Contains(text, "观察到信号增强") {
 		t.Fatalf("saved text = %q, want note body included", text)
+	}
+}
+
+func TestBuildWolaiMarkdownBlocksUsesBlockStyles(t *testing.T) {
+	blocks := buildWolaiMarkdownBlocks(strings.Join([]string{
+		"# 一级标题",
+		"",
+		"- 无序项",
+		"- [x] 带勾选标记",
+		"",
+		"1. 第一项",
+		"2. 第二项",
+		"",
+		"> 引用说明",
+		"> 第二行",
+		"",
+		"```go",
+		"fmt.Println(\"hi\")",
+		"```",
+		"",
+		"---",
+		"",
+		"普通段落",
+	}, "\n"))
+
+	if got := wolaiBlockTypes(blocks); !reflect.DeepEqual(got, []string{
+		"heading",
+		"bull_list",
+		"bull_list",
+		"enum_list",
+		"enum_list",
+		"quote",
+		"code",
+		"divider",
+		"text",
+	}) {
+		t.Fatalf("buildWolaiMarkdownBlocks() types = %#v", got)
+	}
+
+	if blocks[0]["content"] != "一级标题" || blocks[0]["level"] != 1 {
+		t.Fatalf("heading block = %#v, want level 1 heading", blocks[0])
+	}
+	if blocks[1]["content"] != "无序项" {
+		t.Fatalf("bullet block = %#v, want stripped bullet marker", blocks[1])
+	}
+	if blocks[2]["content"] != "[x] 带勾选标记" {
+		t.Fatalf("bullet block = %#v, want checklist text preserved", blocks[2])
+	}
+	if blocks[5]["content"] != "引用说明\n第二行" {
+		t.Fatalf("quote block = %#v, want merged quote lines", blocks[5])
+	}
+	if blocks[6]["language"] != "go" || blocks[6]["content"] != "fmt.Println(\"hi\")" {
+		t.Fatalf("code block = %#v, want code language and content", blocks[6])
+	}
+	if blocks[8]["content"] != "普通段落" {
+		t.Fatalf("text block = %#v, want plain paragraph", blocks[8])
 	}
 }
 
@@ -600,11 +687,7 @@ func TestSavePaperNoteToWolaiReplacesMarkdownImagesWithTODO(t *testing.T) {
 		t.Fatalf("CreateBlocks() calls = %d, want 2", len(blocksByCall))
 	}
 
-	joined := make([]string, 0, len(blocksByCall[1]))
-	for _, block := range blocksByCall[1] {
-		joined = append(joined, block["content"].(string))
-	}
-	text := strings.Join(joined, "\n")
+	text := strings.Join(wolaiBlockContents(blocksByCall[1]), "\n")
 	if strings.Contains(text, fmt.Sprintf("figure://%d", paper.Figures[0].ID)) {
 		t.Fatalf("saved text = %q, want markdown image source removed", text)
 	}
@@ -652,11 +735,7 @@ func TestSaveFigureNoteToWolaiReplacesMarkdownImagesWithTODO(t *testing.T) {
 		t.Fatalf("CreateBlocks() calls = %d, want 2", len(blocksByCall))
 	}
 
-	joined := make([]string, 0, len(blocksByCall[1]))
-	for _, block := range blocksByCall[1] {
-		joined = append(joined, block["content"].(string))
-	}
-	text := strings.Join(joined, "\n")
+	text := strings.Join(wolaiBlockContents(blocksByCall[1]), "\n")
 	if strings.Contains(text, "https://example.com/figure.png") {
 		t.Fatalf("saved text = %q, want external image source removed", text)
 	}
