@@ -30,6 +30,8 @@
     "shared.desktop_close.title": "关闭 CiteBox",
     "shared.desktop_close.message": "选择关闭窗口时的操作。",
     "shared.desktop_close.hint": "你可以将 CiteBox 最小化到托盘，稍后从托盘图标重新打开。",
+    "shared.desktop_close.remember": "记住这次选择",
+    "shared.desktop_close.remember_hint": "之后关闭窗口时直接执行，不再重复询问。",
     "shared.desktop_close.cancel": "取消",
     "shared.desktop_close.exit": "直接退出",
     "shared.desktop_close.minimize": "最小化到托盘",

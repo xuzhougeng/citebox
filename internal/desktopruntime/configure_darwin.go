@@ -517,7 +517,7 @@ import (
 	"github.com/xuzhougeng/citebox/internal/desktopicon"
 )
 
-func Configure(w webview.WebView, appName string, iconAssets desktopicon.Assets) error {
+func Configure(w webview.WebView, appName string, iconAssets desktopicon.Assets, closePreferenceStore ClosePreferenceStore) error {
 	if err := bindExternalOpener(w); err != nil {
 		return err
 	}
@@ -548,7 +548,7 @@ func Configure(w webview.WebView, appName string, iconAssets desktopicon.Assets)
 		return minimizeToTray(w.Window())
 	}, func() error {
 		return exitDesktopApp(w.Window())
-	}); err != nil {
+	}, closePreferenceStore); err != nil {
 		return err
 	}
 

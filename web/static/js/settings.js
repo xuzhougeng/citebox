@@ -73,6 +73,10 @@ const SettingsPage = {
         this.wolaiResultLink = document.getElementById('wolaiResultLink');
         this.testWolaiButton = document.getElementById('testWolaiButton');
         this.testWolaiInsertButton = document.getElementById('testWolaiInsertButton');
+        this.desktopCloseSettingsSection = document.getElementById('desktopCloseSettingsSection');
+        this.desktopCloseActionSelect = document.getElementById('desktopCloseActionSelect');
+        this.desktopCloseSummary = document.getElementById('desktopCloseSummary');
+        this.desktopCloseStatus = document.getElementById('desktopCloseStatus');
         this.versionSummary = document.getElementById('versionSummary');
         this.checkVersionButton = document.getElementById('checkVersionButton');
         this.versionReleaseLink = document.getElementById('versionReleaseLink');
@@ -192,6 +196,9 @@ const SettingsPage = {
         this.testWolaiInsertButton?.addEventListener('click', async () => {
             await this.insertWolaiTestPage();
         });
+        this.desktopCloseActionSelect?.addEventListener('change', async () => {
+            await this.saveDesktopCloseSettings();
+        });
         this.checkVersionButton.addEventListener('click', async () => {
             await this.loadVersionStatus(true);
         });
@@ -281,11 +288,16 @@ const SettingsPage = {
     },
 
     async bootstrap() {
+        if (this.desktopCloseSettingsSection) {
+            this.desktopCloseSettingsSection.classList.toggle('hidden', !this.supportsDesktopCloseSettings());
+        }
+
         try {
             await Promise.all([
                 this.loadAISettings(),
                 this.loadExtractorSettings(),
                 this.loadWolaiSettings(),
+                this.loadDesktopCloseSettings(),
                 this.loadVersionStatus(),
                 this.loadAuthSettings()
             ]);
@@ -410,6 +422,41 @@ const SettingsPage = {
 
     setAIModelEditorStatus(message, tone = '') {
         this.setInlineStatus(this.aiModelEditorStatus, message, tone);
+    },
+
+    supportsDesktopCloseSettings() {
+        return Boolean(window.__CITEBOX_DESKTOP__)
+            && typeof window.citeboxDesktopMinimizeToTray === 'function'
+            && typeof window.citeboxDesktopExitApp === 'function';
+    },
+
+    normalizeDesktopCloseAction(value) {
+        const normalized = String(value || '').trim().toLowerCase();
+        return normalized === 'minimize' || normalized === 'exit' ? normalized : 'ask';
+    },
+
+    setDesktopCloseStatus(message, tone = '') {
+        this.setInlineStatus(this.desktopCloseStatus, message, tone);
+    },
+
+    desktopCloseActionLabel(action) {
+        const normalized = this.normalizeDesktopCloseAction(action);
+        const labels = {
+            ask: t('settings.desktop_close.option_ask', '每次询问'),
+            minimize: t('settings.desktop_close.option_minimize', '最小化到托盘'),
+            exit: t('settings.desktop_close.option_exit', '直接退出')
+        };
+        return labels[normalized] || labels.ask;
+    },
+
+    desktopCloseActionEffect(action) {
+        const normalized = this.normalizeDesktopCloseAction(action);
+        const effects = {
+            ask: t('settings.desktop_close.effect_ask', '关闭窗口时每次都先询问。'),
+            minimize: t('settings.desktop_close.effect_minimize', '关闭窗口时会直接最小化到托盘，不再重复询问。'),
+            exit: t('settings.desktop_close.effect_exit', '关闭窗口时会直接退出桌面应用，不再重复询问。')
+        };
+        return effects[normalized] || effects.ask;
     },
 
     scheduleAIModelAutosave(options = {}) {
@@ -709,6 +756,49 @@ const SettingsPage = {
         }
     },
 
+    async loadDesktopCloseSettings() {
+        if (!this.supportsDesktopCloseSettings()) {
+            return;
+        }
+
+        const settings = await API.getDesktopCloseSettings();
+        const action = this.normalizeDesktopCloseAction(settings?.action);
+        this.desktopCloseCurrentAction = action;
+        if (this.desktopCloseActionSelect) {
+            this.desktopCloseActionSelect.value = action;
+        }
+        this.renderDesktopCloseSummary(action);
+        this.setDesktopCloseStatus(t('settings.desktop_close.status_hint', '修改后立即生效，也会同步影响关闭弹窗里的“记住这次选择”。'));
+    },
+
+    async saveDesktopCloseSettings() {
+        if (!this.supportsDesktopCloseSettings() || !this.desktopCloseActionSelect) {
+            return;
+        }
+
+        const action = this.normalizeDesktopCloseAction(this.desktopCloseActionSelect.value);
+        const previousAction = this.normalizeDesktopCloseAction(this.desktopCloseCurrentAction);
+        const select = this.desktopCloseActionSelect;
+        select.disabled = true;
+        this.setDesktopCloseStatus(t('settings.desktop_close.saving', '正在保存关闭窗口行为...'), 'saving');
+
+        try {
+            const response = await API.updateDesktopCloseSettings({ action });
+            const savedAction = this.normalizeDesktopCloseAction(response?.settings?.action);
+            this.desktopCloseCurrentAction = savedAction;
+            select.value = savedAction;
+            this.renderDesktopCloseSummary(savedAction);
+            this.setDesktopCloseStatus(t('settings.desktop_close.saved', '关闭窗口行为已更新。'), 'success');
+            Utils.showToast(t('settings.desktop_close.saved_toast', '关闭窗口行为已更新'));
+        } catch (error) {
+            select.value = previousAction;
+            this.setDesktopCloseStatus(error.message, 'error');
+            Utils.showToast(error.message, 'error');
+        } finally {
+            select.disabled = false;
+        }
+    },
+
     async saveExtractorSettings() {
         this.syncExtractorProfileFormState();
         const extractorProfile = this.extractorProfileSelect?.value || 'pdffigx_v1';
@@ -981,6 +1071,28 @@ const SettingsPage = {
 
     setWolaiStatus(message, tone = '') {
         this.setInlineStatus(this.wolaiStatus, message, tone);
+    },
+
+    renderDesktopCloseSummary(action) {
+        if (!this.desktopCloseSummary) return;
+
+        const normalized = this.normalizeDesktopCloseAction(action);
+        this.desktopCloseSummary.innerHTML = `
+            <div>
+                <span>${t('settings.desktop_close.current_label', '当前模式')}</span>
+                <strong>${Utils.escapeHTML(this.desktopCloseActionLabel(normalized))}</strong>
+            </div>
+            <div>
+                <span>${t('settings.desktop_close.effect_label', '实际行为')}</span>
+                <strong>${Utils.escapeHTML(this.desktopCloseActionLabel(normalized))}</strong>
+                <p>${Utils.escapeHTML(this.desktopCloseActionEffect(normalized))}</p>
+            </div>
+            <div>
+                <span>${t('settings.desktop_close.scope_label', '作用范围')}</span>
+                <strong>${t('settings.desktop_close.scope_value', '桌面端关闭弹窗')}</strong>
+                <p>${t('settings.desktop_close.status_hint', '修改后立即生效，也会同步影响关闭弹窗里的“记住这次选择”。')}</p>
+            </div>
+        `;
     },
 
     renderWolaiResultLink(url) {

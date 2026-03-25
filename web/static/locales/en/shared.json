@@ -30,6 +30,8 @@
     "shared.desktop_close.title": "Close CiteBox",
     "shared.desktop_close.message": "Choose what to do when closing the window.",
     "shared.desktop_close.hint": "Keep CiteBox running in the tray so you can reopen it later.",
+    "shared.desktop_close.remember": "Remember this choice",
+    "shared.desktop_close.remember_hint": "Use this action directly next time instead of asking again.",
     "shared.desktop_close.cancel": "Cancel",
     "shared.desktop_close.exit": "Exit",
     "shared.desktop_close.minimize": "Minimize to tray",

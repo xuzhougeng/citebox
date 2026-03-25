@@ -516,6 +516,20 @@ const API = {
         });
     },
 
+    getDesktopCloseSettings() {
+        return requestJSON(`${API_BASE}/settings/desktop-close`);
+    },
+
+    updateDesktopCloseSettings(data) {
+        return requestJSON(`${API_BASE}/settings/desktop-close`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        });
+    },
+
     getWeixinBridgeSettings() {
         return requestJSON(`${API_BASE}/settings/weixin-bridge`);
     },

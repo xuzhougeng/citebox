@@ -27,6 +27,7 @@
     - 包括 `/api/ai/detect-figure-regions`
   - 版本检查：`/api/settings/version`
   - 提取器设置：`/api/settings/extractor`
+  - 桌面端关闭行为设置：`/api/settings/desktop-close`
   - Wolai 设置：`/api/settings/wolai`
   - Wolai 笔记导出：`/api/wolai/...`
   - 数据库备份导入导出：`/api/database/...`
@@ -924,6 +925,52 @@ AI 流式阅读通过：
 - `extractor_profile`：`manual`、`pdffigx_v1` 或 `open_source_vision`
 - `pdf_text_source`：兼容旧字段保留，但当前由后端按 `extractor_profile` 自动归一化；`manual` / `open_source_vision` 固定为 `pdfjs`，`pdffigx_v1` 固定为 `extractor`
 - 其余字段与提取接口地址、鉴权和超时设置相同
+
+#### `GET /api/settings/desktop-close`
+
+用途：
+
+- 获取桌面端关闭窗口行为设置
+
+返回示例：
+
+```json
+{
+  "action": "ask"
+}
+```
+
+字段说明：
+
+- `action` 可能是：
+  - `ask`：每次关闭窗口都弹出确认
+  - `minimize`：关闭窗口时直接最小化到托盘
+  - `exit`：关闭窗口时直接退出桌面应用
+
+#### `PUT /api/settings/desktop-close`
+
+用途：
+
+- 更新桌面端关闭窗口行为设置
+
+请求体示例：
+
+```json
+{
+  "action": "minimize"
+}
+```
+
+返回示例：
+
+```json
+{
+  "success": true,
+  "settings": {
+    "action": "minimize"
+  }
+}
+```
 
 #### `GET /api/settings/wolai`
 

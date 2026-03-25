@@ -70,6 +70,27 @@
                 </div>
             </details>
 
+            <details id="desktopCloseSettingsSection" class="manager-card settings-collapsible hidden">
+                <summary class="settings-collapsible-toggle">
+                    <h2 data-i18n="settings.desktop_close.title">关闭窗口行为</h2>
+                    <p data-i18n="settings.desktop_close.desc">仅影响桌面端：选择每次询问、直接最小化到托盘或直接退出。</p>
+                </summary>
+                <div class="manager-form">
+                    <div class="form-grid">
+                        <label class="field">
+                            <span data-i18n="settings.desktop_close.mode_label">关闭窗口时</span>
+                            <select id="desktopCloseActionSelect" class="form-input">
+                                <option value="ask" data-i18n="settings.desktop_close.option_ask">每次询问</option>
+                                <option value="minimize" data-i18n="settings.desktop_close.option_minimize">最小化到托盘</option>
+                                <option value="exit" data-i18n="settings.desktop_close.option_exit">直接退出</option>
+                            </select>
+                        </label>
+                    </div>
+                    <div id="desktopCloseSummary" class="settings-summary-box"></div>
+                    <p id="desktopCloseStatus" class="settings-inline-status" data-i18n="settings.desktop_close.status_hint">修改后立即生效，也会同步影响关闭弹窗里的“记住这次选择”。</p>
+                </div>
+            </details>
+
             <details class="manager-card settings-collapsible">
                 <summary class="settings-collapsible-toggle">
                     <h2 data-i18n="settings.ai.model_title">模型配置</h2>

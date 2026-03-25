@@ -17,6 +17,7 @@ import (
 	"github.com/xuzhougeng/citebox/internal/desktopinstance"
 	"github.com/xuzhougeng/citebox/internal/desktopruntime"
 	"github.com/xuzhougeng/citebox/internal/logging"
+	"github.com/xuzhougeng/citebox/internal/model"
 )
 
 const (
@@ -112,7 +113,22 @@ func main() {
 
 	w.SetTitle(desktopAppName)
 	w.SetSize(windowWidth, windowHeight, webview.HintNone)
-	if err := desktopruntime.Configure(w, desktopAppName, iconAssets); err != nil {
+	if err := desktopruntime.Configure(w, desktopAppName, iconAssets, desktopruntime.ClosePreferenceStore{
+		Get: func() (string, error) {
+			settings, err := server.GetDesktopCloseSettings()
+			if err != nil {
+				return model.DesktopCloseActionAsk, err
+			}
+			return settings.Action, nil
+		},
+		Set: func(action string) (string, error) {
+			settings, err := server.UpdateDesktopCloseSettings(model.DesktopCloseSettings{Action: action})
+			if err != nil {
+				return model.DesktopCloseActionAsk, err
+			}
+			return settings.Action, nil
+		},
+	}); err != nil {
 		logger.Warn("failed to configure desktop runtime integrations", "error", err)
 	}
 	instanceManager.SetActivateHandler(func() {

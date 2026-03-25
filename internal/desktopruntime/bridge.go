@@ -80,29 +80,63 @@ const desktopBridgeScript = `(function() {
         window.location.assign(url.href);
     };
 
-    const openExternal = (value) => {
-        const url = resolveURL(value);
-        if (!url || typeof window.citeboxDesktopOpenExternal !== 'function') {
-            return;
-        }
-        void window.citeboxDesktopOpenExternal(url.href).catch(() => {});
-    };
+	const openExternal = (value) => {
+		const url = resolveURL(value);
+		if (!url || typeof window.citeboxDesktopOpenExternal !== 'function') {
+			return;
+		}
+		void window.citeboxDesktopOpenExternal(url.href).catch(() => {});
+	};
 
-    const prefersChinese = () => String(document.documentElement.lang || '').toLowerCase().startsWith('zh');
-    const desktopTranslate = (key, zh, en) => {
+	const prefersChinese = () => String(document.documentElement.lang || '').toLowerCase().startsWith('zh');
+	const desktopTranslate = (key, zh, en) => {
         if (typeof window.t === 'function') {
             return window.t(key, prefersChinese() ? zh : en);
         }
         return prefersChinese() ? zh : en;
-    };
+	};
 
-    const closePromptStyleId = 'citeboxDesktopClosePromptStyle';
-    const closePromptOverlayId = 'citeboxDesktopClosePrompt';
+	const closePromptStyleId = 'citeboxDesktopClosePromptStyle';
+	const closePromptOverlayId = 'citeboxDesktopClosePrompt';
+	const normalizeCloseAction = (value) => {
+		const normalized = String(value || '').trim().toLowerCase();
+		return normalized === 'minimize' || normalized === 'exit' ? normalized : 'ask';
+	};
+	const readStoredCloseAction = async () => {
+		if (typeof window.citeboxDesktopGetClosePreference !== 'function') {
+			return 'ask';
+		}
+		try {
+			return normalizeCloseAction(await window.citeboxDesktopGetClosePreference());
+		} catch (error) {
+			return 'ask';
+		}
+	};
+	const writeStoredCloseAction = async (value) => {
+		const normalized = normalizeCloseAction(value);
+		if (typeof window.citeboxDesktopSetClosePreference !== 'function') {
+			return normalized;
+		}
+		try {
+			return normalizeCloseAction(await window.citeboxDesktopSetClosePreference(normalized));
+		} catch (error) {
+			return 'ask';
+		}
+	};
+	const closeActionFunctionName = (action) => {
+		if (action === 'minimize') {
+			return 'citeboxDesktopMinimizeToTray';
+		}
+		if (action === 'exit') {
+			return 'citeboxDesktopExitApp';
+		}
+		return '';
+	};
 
-    const ensureClosePromptStyles = () => {
-        if (document.getElementById(closePromptStyleId)) {
-            return;
-        }
+	const ensureClosePromptStyles = () => {
+		if (document.getElementById(closePromptStyleId)) {
+			return;
+		}
 
         const style = document.createElement('style');
         style.id = closePromptStyleId;
@@ -179,13 +213,42 @@ const desktopBridgeScript = `(function() {
             '    padding: 0.9rem 1rem;',
             '    border-radius: 1rem;',
             '    background: rgba(var(--ink-rgb, 31, 41, 55), 0.05);',
-            '    border: 1px solid rgba(var(--ink-rgb, 31, 41, 55), 0.08);',
-            '}',
-            '.citebox-desktop-close-error {',
-            '    color: var(--error, #c9544d);',
-            '    font-size: 0.92rem;',
-            '    min-height: 1.4rem;',
-            '}',
+			'    border: 1px solid rgba(var(--ink-rgb, 31, 41, 55), 0.08);',
+			'}',
+			'.citebox-desktop-close-preference {',
+			'    display: grid;',
+			'    grid-template-columns: auto 1fr;',
+			'    align-items: start;',
+			'    gap: 0.75rem;',
+			'    padding: 0.9rem 1rem;',
+			'    border-radius: 1rem;',
+			'    background: rgba(var(--accent-rgb, 193, 127, 89), 0.08);',
+			'    border: 1px solid rgba(var(--accent-rgb, 193, 127, 89), 0.1);',
+			'}',
+			'.citebox-desktop-close-checkbox {',
+			'    width: 1rem;',
+			'    height: 1rem;',
+			'    margin: 0.18rem 0 0;',
+			'    accent-color: var(--accent, #c17f59);',
+			'}',
+			'.citebox-desktop-close-preference-text {',
+			'    display: grid;',
+			'    gap: 0.18rem;',
+			'}',
+			'.citebox-desktop-close-preference-text strong {',
+			'    font-size: 0.95rem;',
+			'    line-height: 1.4;',
+			'}',
+			'.citebox-desktop-close-preference-text span {',
+			'    color: var(--muted, #6b7280);',
+			'    font-size: 0.88rem;',
+			'    line-height: 1.5;',
+			'}',
+			'.citebox-desktop-close-error {',
+			'    color: var(--error, #c9544d);',
+			'    font-size: 0.92rem;',
+			'    min-height: 1.4rem;',
+			'}',
             '.citebox-desktop-close-actions {',
             '    display: flex;',
             '    justify-content: flex-end;',
@@ -245,64 +308,87 @@ const desktopBridgeScript = `(function() {
     };
 
     const createClosePromptCopy = () => ({
-        badge: desktopTranslate('shared.desktop_close.badge', '桌面端', 'Desktop'),
-        title: desktopTranslate('shared.desktop_close.title', '关闭 CiteBox', 'Close CiteBox'),
-        message: desktopTranslate('shared.desktop_close.message', '选择关闭窗口时的操作。', 'Choose what to do when closing the window.'),
-        hint: desktopTranslate('shared.desktop_close.hint', '你可以将 CiteBox 最小化到托盘，稍后从托盘图标重新打开。', 'Keep CiteBox running in the tray so you can reopen it later.'),
-        cancel: desktopTranslate('shared.desktop_close.cancel', '取消', 'Cancel'),
-        exit: desktopTranslate('shared.desktop_close.exit', '直接退出', 'Exit'),
-        minimize: desktopTranslate('shared.desktop_close.minimize', '最小化到托盘', 'Minimize to tray'),
-        actionFailed: desktopTranslate('shared.desktop_close.action_failed', '操作未完成，请重试。', 'The requested action could not be completed.')
-    });
+		badge: desktopTranslate('shared.desktop_close.badge', '桌面端', 'Desktop'),
+		title: desktopTranslate('shared.desktop_close.title', '关闭 CiteBox', 'Close CiteBox'),
+		message: desktopTranslate('shared.desktop_close.message', '选择关闭窗口时的操作。', 'Choose what to do when closing the window.'),
+		hint: desktopTranslate('shared.desktop_close.hint', '你可以将 CiteBox 最小化到托盘，稍后从托盘图标重新打开。', 'Keep CiteBox running in the tray so you can reopen it later.'),
+		remember: desktopTranslate('shared.desktop_close.remember', '记住这次选择', 'Remember this choice'),
+		rememberHint: desktopTranslate('shared.desktop_close.remember_hint', '之后关闭窗口时直接执行，不再重复询问。', 'Use this action directly next time instead of asking again.'),
+		cancel: desktopTranslate('shared.desktop_close.cancel', '取消', 'Cancel'),
+		exit: desktopTranslate('shared.desktop_close.exit', '直接退出', 'Exit'),
+		minimize: desktopTranslate('shared.desktop_close.minimize', '最小化到托盘', 'Minimize to tray'),
+		actionFailed: desktopTranslate('shared.desktop_close.action_failed', '操作未完成，请重试。', 'The requested action could not be completed.')
+	});
 
-    window.__citeboxDesktopOpenClosePrompt = () => {
+    window.__citeboxDesktopOpenClosePrompt = async () => {
         if (!document.body) {
             window.addEventListener('DOMContentLoaded', () => {
                 window.__citeboxDesktopOpenClosePrompt();
             }, { once: true });
             return;
-        }
+		}
 
-        ensureClosePromptStyles();
+		ensureClosePromptStyles();
 
-        const existing = document.getElementById(closePromptOverlayId);
+		const existing = document.getElementById(closePromptOverlayId);
         if (existing) {
             const preferredButton = existing.querySelector('[data-close-action="minimize"]');
             if (preferredButton && typeof preferredButton.focus === 'function') {
                 preferredButton.focus();
             }
             return;
-        }
+		}
 
-        const copy = createClosePromptCopy();
-        const overlay = document.createElement('div');
-        overlay.id = closePromptOverlayId;
-        overlay.className = 'citebox-desktop-close-overlay';
-        overlay.innerHTML = [
-            '<div class="citebox-desktop-close-card" role="dialog" aria-modal="true" aria-labelledby="citeboxDesktopCloseTitle">',
+		const copy = createClosePromptCopy();
+		const rememberedAction = await readStoredCloseAction();
+		if (rememberedAction !== 'ask') {
+			const actionName = closeActionFunctionName(rememberedAction);
+			if (actionName && typeof window[actionName] === 'function') {
+				void Promise.resolve(window[actionName]()).catch(async () => {
+					await writeStoredCloseAction('ask');
+					window.__citeboxDesktopOpenClosePrompt();
+				});
+				return;
+			}
+			await writeStoredCloseAction('ask');
+		}
+
+		const overlay = document.createElement('div');
+		overlay.id = closePromptOverlayId;
+		overlay.className = 'citebox-desktop-close-overlay';
+		overlay.innerHTML = [
+			'<div class="citebox-desktop-close-card" role="dialog" aria-modal="true" aria-labelledby="citeboxDesktopCloseTitle">',
             '<div class="citebox-desktop-close-badge">' + copy.badge + '</div>',
             '<div class="citebox-desktop-close-head">',
-            '<h3 id="citeboxDesktopCloseTitle">' + copy.title + '</h3>',
-            '<p>' + copy.message + '</p>',
-            '</div>',
-            '<p class="citebox-desktop-close-note">' + copy.hint + '</p>',
-            '<p class="citebox-desktop-close-error" data-close-error hidden></p>',
-            '<div class="citebox-desktop-close-actions">',
-            '<button type="button" class="citebox-desktop-close-button subtle" data-close-action="cancel">' + copy.cancel + '</button>',
-            '<button type="button" class="citebox-desktop-close-button danger" data-close-action="exit">' + copy.exit + '</button>',
-            '<button type="button" class="citebox-desktop-close-button primary" data-close-action="minimize">' + copy.minimize + '</button>',
+			'<h3 id="citeboxDesktopCloseTitle">' + copy.title + '</h3>',
+			'<p>' + copy.message + '</p>',
+			'</div>',
+			'<p class="citebox-desktop-close-note">' + copy.hint + '</p>',
+			'<label class="citebox-desktop-close-preference">',
+			'<input class="citebox-desktop-close-checkbox" type="checkbox" data-close-remember>',
+			'<span class="citebox-desktop-close-preference-text"><strong>' + copy.remember + '</strong><span>' + copy.rememberHint + '</span></span>',
+			'</label>',
+			'<p class="citebox-desktop-close-error" data-close-error hidden></p>',
+			'<div class="citebox-desktop-close-actions">',
+			'<button type="button" class="citebox-desktop-close-button subtle" data-close-action="cancel">' + copy.cancel + '</button>',
+			'<button type="button" class="citebox-desktop-close-button danger" data-close-action="exit">' + copy.exit + '</button>',
+			'<button type="button" class="citebox-desktop-close-button primary" data-close-action="minimize">' + copy.minimize + '</button>',
             '</div>',
             '</div>'
-        ].join('');
+		].join('');
 
-        const errorMessage = overlay.querySelector('[data-close-error]');
-        const actionButtons = Array.from(overlay.querySelectorAll('[data-close-action]'));
+		const errorMessage = overlay.querySelector('[data-close-error]');
+		const rememberToggle = overlay.querySelector('[data-close-remember]');
+		const actionButtons = Array.from(overlay.querySelectorAll('[data-close-action]'));
 
-        const setBusy = (busy) => {
-            actionButtons.forEach((button) => {
-                button.disabled = busy;
-            });
-        };
+		const setBusy = (busy) => {
+			actionButtons.forEach((button) => {
+				button.disabled = busy;
+			});
+			if (rememberToggle) {
+				rememberToggle.disabled = busy;
+			}
+		};
 
         const showError = (message) => {
             if (!errorMessage) {
@@ -331,26 +417,33 @@ const desktopBridgeScript = `(function() {
                 return;
             }
 
-            const actionName = action === 'minimize'
-                ? 'citeboxDesktopMinimizeToTray'
-                : 'citeboxDesktopExitApp';
+			const actionName = action === 'minimize'
+				? 'citeboxDesktopMinimizeToTray'
+				: 'citeboxDesktopExitApp';
+			const shouldRemember = Boolean(rememberToggle?.checked);
 
-            if (typeof window[actionName] !== 'function') {
-                showError(copy.actionFailed);
-                return;
-            }
+			if (typeof window[actionName] !== 'function') {
+				showError(copy.actionFailed);
+				return;
+			}
 
-            setBusy(true);
-            showError('');
+			setBusy(true);
+			showError('');
+			if (shouldRemember) {
+				await writeStoredCloseAction(action);
+			}
 
-            try {
-                await window[actionName]();
-                closePrompt();
-            } catch (error) {
-                setBusy(false);
-                showError(error && error.message ? error.message : copy.actionFailed);
-            }
-        };
+			try {
+				await window[actionName]();
+				closePrompt();
+			} catch (error) {
+				if (shouldRemember) {
+					await writeStoredCloseAction('ask');
+				}
+				setBusy(false);
+				showError(error && error.message ? error.message : copy.actionFailed);
+			}
+		};
 
         const onKeydown = (event) => {
             if (event.key === 'Escape') {

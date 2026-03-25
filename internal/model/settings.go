@@ -13,6 +13,25 @@ type ExtractorSettings struct {
 	EffectiveJobsURL      string `json:"effective_jobs_url"`
 }
 
+const (
+	DesktopCloseActionAsk      = "ask"
+	DesktopCloseActionMinimize = "minimize"
+	DesktopCloseActionExit     = "exit"
+)
+
+type DesktopCloseSettings struct {
+	Action string `json:"action"`
+}
+
+func NormalizeDesktopCloseAction(action string) string {
+	switch action {
+	case DesktopCloseActionMinimize, DesktopCloseActionExit:
+		return action
+	default:
+		return DesktopCloseActionAsk
+	}
+}
+
 type WeixinBridgeSettings struct {
 	Enabled bool `json:"enabled"`
 }

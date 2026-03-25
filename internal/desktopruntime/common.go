@@ -9,6 +9,11 @@ import (
 
 var desktopClosePromptWindows sync.Map
 
+type ClosePreferenceStore struct {
+	Get func() (string, error)
+	Set func(string) (string, error)
+}
+
 func bindExternalOpener(w webview.WebView) error {
 	if err := w.Bind("citeboxDesktopOpenExternal", func(url string) error {
 		return openExternal(url)
@@ -18,7 +23,7 @@ func bindExternalOpener(w webview.WebView) error {
 	return nil
 }
 
-func bindClosePromptActions(w webview.WebView, minimize func() error, exit func() error) error {
+func bindClosePromptActions(w webview.WebView, minimize func() error, exit func() error, store ClosePreferenceStore) error {
 	desktopClosePromptWindows.Store(uintptr(w.Window()), w)
 
 	if err := w.Bind("citeboxDesktopMinimizeToTray", func() error {
@@ -31,6 +36,24 @@ func bindClosePromptActions(w webview.WebView, minimize func() error, exit func(
 		return exit()
 	}); err != nil {
 		return fmt.Errorf("bind desktop app exit: %w", err)
+	}
+
+	if err := w.Bind("citeboxDesktopGetClosePreference", func() (string, error) {
+		if store.Get == nil {
+			return "ask", nil
+		}
+		return store.Get()
+	}); err != nil {
+		return fmt.Errorf("bind desktop close preference getter: %w", err)
+	}
+
+	if err := w.Bind("citeboxDesktopSetClosePreference", func(action string) (string, error) {
+		if store.Set == nil {
+			return action, nil
+		}
+		return store.Set(action)
+	}); err != nil {
+		return fmt.Errorf("bind desktop close preference setter: %w", err)
 	}
 
 	return nil

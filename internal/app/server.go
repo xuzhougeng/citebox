@@ -17,6 +17,7 @@ import (
 	"github.com/xuzhougeng/citebox/internal/handler"
 	"github.com/xuzhougeng/citebox/internal/logging"
 	"github.com/xuzhougeng/citebox/internal/middleware"
+	"github.com/xuzhougeng/citebox/internal/model"
 	"github.com/xuzhougeng/citebox/internal/repository"
 	"github.com/xuzhougeng/citebox/internal/service"
 )
@@ -31,6 +32,7 @@ type Server struct {
 	cfg          *config.Config
 	logger       *slog.Logger
 	repo         *repository.LibraryRepository
+	librarySvc   *service.LibraryService
 	httpServer   *http.Server
 	bridgeCancel context.CancelFunc
 	bridgeDone   chan struct{}
@@ -89,6 +91,7 @@ func NewServer(opts Options) (*Server, error) {
 		cfg:        cfg,
 		logger:     logger,
 		repo:       repo,
+		librarySvc: librarySvc,
 		httpServer: httpServer,
 	}
 
@@ -526,6 +529,17 @@ func buildHandler(
 		}
 	})
 
+	mux.HandleFunc("/api/settings/desktop-close", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			settingsHandler.GetDesktopCloseSettings(w, r)
+		case http.MethodPut:
+			settingsHandler.UpdateDesktopCloseSettings(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
 	mux.HandleFunc("/api/settings/weixin-bridge", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
@@ -715,4 +729,19 @@ func validateWebRoot(webRoot string) error {
 		return fmt.Errorf("web root is not a file-backed asset directory: %s", indexPath)
 	}
 	return nil
+}
+
+func (s *Server) GetDesktopCloseSettings() (*model.DesktopCloseSettings, error) {
+	if s == nil || s.librarySvc == nil {
+		return &model.DesktopCloseSettings{Action: model.DesktopCloseActionAsk}, nil
+	}
+	return s.librarySvc.GetDesktopCloseSettings()
+}
+
+func (s *Server) UpdateDesktopCloseSettings(input model.DesktopCloseSettings) (*model.DesktopCloseSettings, error) {
+	if s == nil || s.librarySvc == nil {
+		settings := &model.DesktopCloseSettings{Action: model.NormalizeDesktopCloseAction(input.Action)}
+		return settings, nil
+	}
+	return s.librarySvc.UpdateDesktopCloseSettings(input)
 }

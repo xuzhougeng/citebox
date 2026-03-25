@@ -9,7 +9,7 @@ import (
 	"github.com/xuzhougeng/citebox/internal/desktopicon"
 )
 
-func Configure(w webview.WebView, _ string, _ desktopicon.Assets) error {
+func Configure(w webview.WebView, _ string, _ desktopicon.Assets, _ ClosePreferenceStore) error {
 	if err := bindExternalOpener(w); err != nil {
 		return err
 	}

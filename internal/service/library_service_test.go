@@ -400,6 +400,62 @@ func TestUpdateWeixinBridgeSettingsPersistsAndAppearsInAuthSettings(t *testing.T
 	}
 }
 
+func TestGetDesktopCloseSettingsDefaultsToAsk(t *testing.T) {
+	svc, _, _ := newTestService(t)
+
+	settings, err := svc.GetDesktopCloseSettings()
+	if err != nil {
+		t.Fatalf("GetDesktopCloseSettings() error = %v", err)
+	}
+	if settings.Action != model.DesktopCloseActionAsk {
+		t.Fatalf("GetDesktopCloseSettings() action = %q, want %q", settings.Action, model.DesktopCloseActionAsk)
+	}
+}
+
+func TestUpdateDesktopCloseSettingsPersistsAndCanReset(t *testing.T) {
+	svc, repo, _ := newTestService(t)
+
+	updated, err := svc.UpdateDesktopCloseSettings(model.DesktopCloseSettings{Action: model.DesktopCloseActionMinimize})
+	if err != nil {
+		t.Fatalf("UpdateDesktopCloseSettings(minimize) error = %v", err)
+	}
+	if updated.Action != model.DesktopCloseActionMinimize {
+		t.Fatalf("UpdateDesktopCloseSettings(minimize) action = %q, want %q", updated.Action, model.DesktopCloseActionMinimize)
+	}
+
+	reloaded, err := svc.GetDesktopCloseSettings()
+	if err != nil {
+		t.Fatalf("GetDesktopCloseSettings() reload error = %v", err)
+	}
+	if reloaded.Action != model.DesktopCloseActionMinimize {
+		t.Fatalf("GetDesktopCloseSettings() reload action = %q, want %q", reloaded.Action, model.DesktopCloseActionMinimize)
+	}
+
+	raw, err := repo.GetAppSetting(desktopCloseSettingsKey)
+	if err != nil {
+		t.Fatalf("GetAppSetting(%q) error = %v", desktopCloseSettingsKey, err)
+	}
+	if !strings.Contains(raw, `"action":"minimize"`) {
+		t.Fatalf("saved desktop close settings = %q, want minimize persisted", raw)
+	}
+
+	reset, err := svc.UpdateDesktopCloseSettings(model.DesktopCloseSettings{Action: model.DesktopCloseActionAsk})
+	if err != nil {
+		t.Fatalf("UpdateDesktopCloseSettings(ask) error = %v", err)
+	}
+	if reset.Action != model.DesktopCloseActionAsk {
+		t.Fatalf("UpdateDesktopCloseSettings(ask) action = %q, want %q", reset.Action, model.DesktopCloseActionAsk)
+	}
+
+	raw, err = repo.GetAppSetting(desktopCloseSettingsKey)
+	if err != nil {
+		t.Fatalf("GetAppSetting(%q) after reset error = %v", desktopCloseSettingsKey, err)
+	}
+	if raw != "" {
+		t.Fatalf("GetAppSetting(%q) after reset = %q, want empty", desktopCloseSettingsKey, raw)
+	}
+}
+
 func TestWolaiSettingsPersistAndTestBlockAccess(t *testing.T) {
 	svc, repo, _ := newTestService(t)
 

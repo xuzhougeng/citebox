@@ -79,6 +79,35 @@ func (h *SettingsHandler) UpdateWolaiSettings(w http.ResponseWriter, r *http.Req
 	})
 }
 
+func (h *SettingsHandler) GetDesktopCloseSettings(w http.ResponseWriter, r *http.Request) {
+	settings, err := h.libraryService.GetDesktopCloseSettings()
+	if err != nil {
+		sendError(w, err)
+		return
+	}
+
+	sendJSON(w, http.StatusOK, settings)
+}
+
+func (h *SettingsHandler) UpdateDesktopCloseSettings(w http.ResponseWriter, r *http.Request) {
+	var req model.DesktopCloseSettings
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		sendError(w, apperr.New(apperr.CodeInvalidArgument, "请求体格式错误"))
+		return
+	}
+
+	settings, err := h.libraryService.UpdateDesktopCloseSettings(req)
+	if err != nil {
+		sendError(w, err)
+		return
+	}
+
+	sendJSON(w, http.StatusOK, map[string]interface{}{
+		"success":  true,
+		"settings": settings,
+	})
+}
+
 func (h *SettingsHandler) TestWolaiSettings(w http.ResponseWriter, r *http.Request) {
 	var req model.WolaiSettings
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
