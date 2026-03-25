@@ -1057,7 +1057,7 @@ func (s *AIService) ReadPaperStream(ctx context.Context, input model.AIReadReque
 		return apperr.New(apperr.CodeInvalidArgument, "当前只有自由提问和图片解读支持流式输出")
 	}
 	mode := aiProviderMode(prepared.settings)
-	if err := onEvent(model.AIReadStreamEvent{
+	metaEvent := model.AIReadStreamEvent{
 		Type: "meta",
 		Result: &model.AIReadResponse{
 			Success:         true,
@@ -1069,13 +1069,22 @@ func (s *AIService) ReadPaperStream(ctx context.Context, input model.AIReadReque
 			Question:        prepared.question,
 			IncludedFigures: prepared.includedFigures,
 		},
-	}); err != nil {
-		return err
+	}
+	metaSent := false
+	sendMeta := func() error {
+		if metaSent {
+			return nil
+		}
+		metaSent = true
+		return onEvent(metaEvent)
 	}
 
 	rawText, err := s.callProviderStream(ctx, prepared, func(delta string) error {
 		if delta == "" {
 			return nil
+		}
+		if err := sendMeta(); err != nil {
+			return err
 		}
 		return onEvent(model.AIReadStreamEvent{
 			Type:  "delta",
@@ -1086,6 +1095,9 @@ func (s *AIService) ReadPaperStream(ctx context.Context, input model.AIReadReque
 		if errors.Is(err, context.Canceled) {
 			return err
 		}
+		return err
+	}
+	if err := sendMeta(); err != nil {
 		return err
 	}
 

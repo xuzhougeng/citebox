@@ -424,6 +424,16 @@ const API = {
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let buffer = '';
+        const emitEvent = (raw, sourceLabel) => {
+            let parsed;
+            try {
+                parsed = JSON.parse(raw);
+            } catch (e) {
+                console.warn(`SSE JSON parse error (${sourceLabel}):`, e, 'payload:', raw);
+                return;
+            }
+            options.onEvent?.(parsed);
+        };
 
         while (true) {
             const { done, value } = await reader.read();
@@ -435,11 +445,7 @@ const API = {
                 const line = buffer.slice(0, newlineIndex).trim();
                 buffer = buffer.slice(newlineIndex + 1);
                 if (line) {
-                    try {
-                        options.onEvent?.(JSON.parse(line));
-                    } catch (e) {
-                        console.warn('SSE JSON parse error:', e, 'line:', line);
-                    }
+                    emitEvent(line, 'line');
                 }
                 newlineIndex = buffer.indexOf('\n');
             }
@@ -447,11 +453,7 @@ const API = {
 
         const tail = (buffer + decoder.decode()).trim();
         if (tail) {
-            try {
-                options.onEvent?.(JSON.parse(tail));
-            } catch (e) {
-                console.warn('SSE JSON parse error:', e, 'tail:', tail);
-            }
+            emitEvent(tail, 'tail');
         }
     },
 

@@ -834,6 +834,57 @@ func TestReadPaperStreamSupportsPaperQA(t *testing.T) {
 	}
 }
 
+func TestReadPaperStreamDoesNotEmitMetaWhenProviderFailsBeforeStreaming(t *testing.T) {
+	_, repo, cfg := newTestService(t)
+	aiSvc := NewAIService(repo, cfg, nil)
+	paper := createTestPaper(t, repo)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusTooManyRequests)
+		_, _ = fmt.Fprint(w, `{"error":{"message":"insufficient_quota"}}`)
+	}))
+	defer server.Close()
+
+	if _, err := aiSvc.UpdateSettings(model.AISettings{
+		Models: []model.AIModelConfig{
+			{
+				ID:              "qa",
+				Name:            "QA",
+				Provider:        model.AIProviderOpenAI,
+				APIKey:          "test-key",
+				BaseURL:         server.URL,
+				Model:           "gpt-test",
+				MaxOutputTokens: 1200,
+			},
+		},
+		SceneModels: model.AISceneModelSelection{
+			DefaultModelID: "qa",
+			QAModelID:      "qa",
+		},
+		SystemPrompt: "system",
+		QAPrompt:     "qa",
+	}); err != nil {
+		t.Fatalf("UpdateSettings() error = %v", err)
+	}
+
+	var events []model.AIReadStreamEvent
+	err := aiSvc.ReadPaperStream(context.Background(), model.AIReadRequest{
+		PaperID:  paper.ID,
+		Action:   model.AIActionPaperQA,
+		Question: "请总结这篇文献。",
+	}, func(event model.AIReadStreamEvent) error {
+		events = append(events, event)
+		return nil
+	})
+	if !apperr.IsCode(err, apperr.CodeUnavailable) {
+		t.Fatalf("ReadPaperStream() code = %q, want %q", apperr.CodeOf(err), apperr.CodeUnavailable)
+	}
+	if len(events) != 0 {
+		t.Fatalf("event count = %d, want 0 before upstream stream starts", len(events))
+	}
+}
+
 func TestPrepareReadUsesSceneModelMaxOutputTokens(t *testing.T) {
 	svc, repo, _ := newTestService(t)
 	aiSvc := NewAIService(repo, svc.config, nil)
