@@ -156,27 +156,31 @@ function mergeFigureCollectionWithPaper(figures = [], paper) {
         }
 
         const updatedFigure = figuresByID.get(Number(figure.id));
+        if (!updatedFigure) {
+            return figure;
+        }
+
         return {
             ...figure,
             paper_title: paper.title,
             group_id: paper.group_id,
             group_name: paper.group_name || '',
-            filename: updatedFigure?.filename || figure.filename,
-            image_url: updatedFigure?.image_url || figure.image_url,
-            tags: updatedFigure?.tags || [],
-            caption: updatedFigure?.caption ?? figure.caption,
-            page_number: updatedFigure?.page_number ?? figure.page_number,
-            figure_index: updatedFigure?.figure_index ?? figure.figure_index,
-            parent_figure_id: updatedFigure?.parent_figure_id ?? figure.parent_figure_id ?? null,
-            subfigure_label: updatedFigure?.subfigure_label ?? figure.subfigure_label ?? '',
-            display_label: updatedFigure?.display_label ?? figure.display_label ?? '',
-            parent_display_label: updatedFigure?.parent_display_label ?? figure.parent_display_label ?? '',
-            source: updatedFigure?.source || figure.source,
-            notes_text: updatedFigure?.notes_text ?? figure.notes_text ?? '',
-            palette_id: updatedFigure?.palette_id ?? figure.palette_id ?? null,
-            palette_name: updatedFigure?.palette_name ?? figure.palette_name ?? '',
-            palette_colors: updatedFigure?.palette_colors ?? figure.palette_colors ?? [],
-            palette_count: updatedFigure?.palette_count ?? figure.palette_count ?? 0
+            filename: updatedFigure.filename || figure.filename,
+            image_url: updatedFigure.image_url || figure.image_url,
+            tags: updatedFigure.tags || [],
+            caption: updatedFigure.caption ?? '',
+            page_number: updatedFigure.page_number ?? figure.page_number,
+            figure_index: updatedFigure.figure_index ?? figure.figure_index,
+            parent_figure_id: updatedFigure.parent_figure_id ?? null,
+            subfigure_label: updatedFigure.subfigure_label ?? '',
+            display_label: updatedFigure.display_label ?? '',
+            parent_display_label: updatedFigure.parent_display_label ?? '',
+            source: updatedFigure.source || figure.source,
+            notes_text: updatedFigure.notes_text ?? '',
+            palette_id: updatedFigure.palette_id ?? null,
+            palette_name: updatedFigure.palette_name ?? '',
+            palette_colors: updatedFigure.palette_colors || [],
+            palette_count: updatedFigure.palette_count ?? 0
         };
     });
 }
@@ -414,16 +418,39 @@ const PalettesPage = {
             await this.load(1);
         });
 
+        this.grid.addEventListener('input', (event) => {
+            const input = event.target.closest('[data-palette-caption-input]');
+            if (!input) return;
+
+            this.updateCaptionActionState(input.closest('[data-palette-id]'));
+        });
+
+        this.grid.addEventListener('keydown', async (event) => {
+            const input = event.target.closest('[data-palette-caption-input]');
+            if (!input || event.key !== 'Enter' || (!event.metaKey && !event.ctrlKey)) return;
+
+            event.preventDefault();
+            const card = input.closest('[data-palette-id]');
+            const palette = this.paletteByID(Number(card?.dataset.paletteId || 0));
+            if (!card || !palette) return;
+
+            await this.savePaletteCaption(card, palette);
+        });
+
         this.grid.addEventListener('click', async (event) => {
             const action = event.target.closest('[data-action]');
             const card = event.target.closest('[data-palette-id]');
             if (!action || !card) return;
 
             const paletteID = Number(card.dataset.paletteId || 0);
-            const paperID = Number(card.dataset.paperId || 0);
+            const palette = this.paletteByID(paletteID);
             const figureLabel = card.dataset.figureLabel || '当前子图';
             const colors = String(card.dataset.paletteColors || '').split(',').map((item) => item.trim()).filter(Boolean);
 
+            if (action.dataset.action === 'save-caption' && palette) {
+                await this.savePaletteCaption(card, palette);
+                return;
+            }
             if (action.dataset.action === 'copy-hex') {
                 await this.copyText(colors.join(', '), `${figureLabel} HEX 已复制`);
                 return;
@@ -433,8 +460,8 @@ const PalettesPage = {
                 await this.copyText(cssText, `${figureLabel} CSS 变量已复制`);
                 return;
             }
-            if (action.dataset.action === 'paper' && paperID) {
-                await PaperViewer.open(paperID, async () => await this.load(this.state.page));
+            if (action.dataset.action === 'source-figure' && palette) {
+                await this.openSourceFigure(palette);
                 return;
             }
             if (action.dataset.action === 'delete' && paletteID) {
@@ -489,11 +516,157 @@ const PalettesPage = {
         return API.listPalettes(this.buildPaletteParams(page));
     },
 
+    paletteByID(id) {
+        return (this.palettes || []).find((item) => Number(item.id) === Number(id)) || null;
+    },
+
+    normalizedCaption(value) {
+        return String(value || '').trim();
+    },
+
+    paletteCaptionInput(card) {
+        return card?.querySelector('[data-palette-caption-input]') || null;
+    },
+
+    paletteCaptionSaveButton(card) {
+        return card?.querySelector('[data-action="save-caption"]') || null;
+    },
+
+    updateCaptionActionState(card) {
+        if (!card) return;
+
+        const button = this.paletteCaptionSaveButton(card);
+        const input = this.paletteCaptionInput(card);
+        if (!button || !input) return;
+
+        const palette = this.paletteByID(Number(card.dataset.paletteId || 0));
+        const currentCaption = this.normalizedCaption(palette?.figure_caption);
+        const draftCaption = this.normalizedCaption(input.value);
+        const saving = button.dataset.saving === 'true';
+
+        button.disabled = saving || draftCaption === currentCaption;
+        button.textContent = saving ? '保存中...' : '保存说明';
+    },
+
+    savedCaptionFromPayload(payload, figureID, fallback = '') {
+        const figure = (payload?.paper?.figures || []).find((item) => Number(item.id) === Number(figureID));
+        return this.normalizedCaption(figure?.caption ?? fallback);
+    },
+
+    syncPaletteCaption(figureID, caption) {
+        (this.palettes || []).forEach((palette) => {
+            if (Number(palette.figure_id) === Number(figureID)) {
+                palette.figure_caption = caption;
+            }
+        });
+
+        this.grid.querySelectorAll(`[data-palette-id][data-figure-id="${figureID}"]`).forEach((card) => {
+            const input = this.paletteCaptionInput(card);
+            if (input) {
+                input.value = caption;
+            }
+            this.updateCaptionActionState(card);
+        });
+    },
+
+    async savePaletteCaption(card, palette) {
+        const figureID = Number(palette?.figure_id || card?.dataset.figureId || 0);
+        const input = this.paletteCaptionInput(card);
+        const button = this.paletteCaptionSaveButton(card);
+        if (!figureID || !input || !button) return;
+        if (button.dataset.saving === 'true') return;
+
+        const draftCaption = this.normalizedCaption(input.value);
+        const currentCaption = this.normalizedCaption(palette?.figure_caption);
+        if (draftCaption === currentCaption) {
+            this.updateCaptionActionState(card);
+            return;
+        }
+
+        try {
+            button.dataset.saving = 'true';
+            this.updateCaptionActionState(card);
+
+            const payload = await API.updateFigure(figureID, {
+                caption: draftCaption
+            });
+            const savedCaption = this.savedCaptionFromPayload(payload, figureID, draftCaption);
+            this.syncPaletteCaption(figureID, savedCaption);
+            Utils.showToast('子图说明已保存');
+        } catch (error) {
+            Utils.showToast(error.message, 'error');
+        } finally {
+            button.dataset.saving = 'false';
+            this.updateCaptionActionState(card);
+        }
+    },
+
+    sourceFigureID(palette) {
+        return Number(palette?.parent_figure_id || palette?.figure_id || 0);
+    },
+
+    sourceFigureLabel(palette) {
+        const label = String(palette?.parent_display_label || palette?.figure_display_label || '').trim();
+        return label || '来源主图';
+    },
+
+    sourceFigureSummary(palette) {
+        const label = this.sourceFigureLabel(palette);
+        const pageNumber = Number(palette?.page_number || 0);
+        return pageNumber > 0 ? `第 ${pageNumber} 页 · ${label}` : label;
+    },
+
+    paletteViewerFigures(paper) {
+        return (paper?.figures || [])
+            .filter((figure) => !figure.parent_figure_id)
+            .map((figure) => ({
+                ...figure,
+                paper_id: paper.id,
+                paper_title: paper.title,
+                group_id: paper.group_id,
+                group_name: paper.group_name || '',
+                tags: figure.tags || []
+            }));
+    },
+
+    async openSourceFigure(palette) {
+        const paperID = Number(palette?.paper_id || 0);
+        if (!paperID) {
+            Utils.showToast('当前配色缺少来源文献信息', 'error');
+            return;
+        }
+
+        const paper = await API.getPaper(paperID);
+        const figures = this.paletteViewerFigures(paper);
+        if (!figures.length) {
+            Utils.showToast('当前文献还没有可打开的主图', 'error');
+            return;
+        }
+
+        const targetFigureID = this.sourceFigureID(palette);
+        const index = Math.max(0, figures.findIndex((figure) => Number(figure.id) === targetFigureID));
+
+        await FigureViewer.open({
+            figures,
+            index,
+            page: 1,
+            totalPages: 1,
+            onOpenPaper: async () => {
+                FigureViewer.close();
+                await PaperViewer.open(paperID, async () => await this.load(this.state.page));
+            },
+            onMetaChanged: async () => {
+                await this.load(this.state.page);
+            }
+        });
+    },
+
     renderPaletteCard(palette) {
         const figureLabel = palette.figure_display_label || '子图';
         const parentLabel = palette.parent_display_label ? ` · 来自 ${palette.parent_display_label}` : '';
         const groupLabel = palette.group_name || '未分组';
-        const caption = String(palette.figure_caption || '').trim();
+        const caption = this.normalizedCaption(palette.figure_caption);
+        const sourceFigureSummary = this.sourceFigureSummary(palette);
         return `
             <article class="palette-card" data-palette-id="${palette.id}" data-paper-id="${palette.paper_id}" data-figure-id="${palette.figure_id}" data-figure-label="${Utils.escapeHTML(figureLabel)}" data-palette-colors="${Utils.escapeHTML((palette.colors || []).join(','))}">
                 <div class="palette-card-media">
@@ -512,14 +685,28 @@ const PalettesPage = {
                         </div>
                         <span class="palette-card-date">${Utils.formatDate(palette.updated_at || palette.created_at)}</span>
                     </div>
-                    <p class="palette-card-paper" data-action="paper" role="button" tabindex="0">${Utils.escapeHTML(palette.paper_title)}</p>
-                    ${caption ? `<p class="palette-card-caption">${Utils.escapeHTML(caption)}</p>` : '<p class="palette-card-caption is-empty">这个子图还没有单独说明。</p>'}
+                    <p class="palette-card-paper" data-action="source-figure" role="button" tabindex="0">${Utils.escapeHTML(sourceFigureSummary)}</p>
+                    <p class="palette-card-paper-meta">${Utils.escapeHTML(palette.paper_title)}</p>
+                    <div class="palette-card-caption-editor">
+                        <label class="palette-card-caption-label" for="paletteCaptionInput${palette.id}">子图说明</label>
+                        <textarea
+                            id="paletteCaptionInput${palette.id}"
+                            class="form-textarea palette-card-caption-input"
+                            rows="4"
+                            placeholder="这个子图还没有单独说明。"
+                            data-palette-caption-input
+                        >${Utils.escapeHTML(caption)}</textarea>
+                        <div class="palette-card-caption-actions">
+                            <span class="palette-card-caption-hint">说明会参与检索；按 Ctrl/Cmd + Enter 可快速保存。</span>
+                            <button class="btn btn-outline btn-small" type="button" data-action="save-caption" disabled>保存说明</button>
+                        </div>
+                    </div>
                     <div class="palette-card-swatches">${BrowserUI.renderPaletteSwatches(palette.colors || [])}</div>
                     <p class="palette-card-values">${BrowserUI.renderPaletteValues(palette.colors || [])}</p>
                     <div class="palette-card-actions">
                         <button class="btn btn-outline btn-small" type="button" data-action="copy-hex">复制 HEX</button>
                         <button class="btn btn-outline btn-small" type="button" data-action="copy-css">复制 CSS</button>
-                        <button class="btn btn-outline btn-small" type="button" data-action="paper">来源文献</button>
+                        <button class="btn btn-outline btn-small" type="button" data-action="source-figure">来源主图</button>
 
                         <button class="btn btn-outline btn-small danger" type="button" data-action="delete">删除配色</button>
                     </div>
