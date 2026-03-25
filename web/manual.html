@@ -35,7 +35,7 @@
                 <p class="eyebrow">Manual Extraction</p>
                 <h1 id="manualPageTitle">上传后人工框选提取图片</h1>
                 <p id="manualPageSubtitle" class="hero-text">
-                    当自动解析不可用、解析失败，或者仍有漏图时，可以直接在 PDF 页图上框选目标区域，并把截图结果录入图库。
+                    当自动解析不可用、解析失败或仍有遗漏时，可以直接在 PDF 页面上框选需要的图片区域。
                 </p>
             </div>
             <div class="hero-actions">
@@ -51,7 +51,7 @@
                     <p class="eyebrow">Full Text Extraction</p>
                     <h2>PDF 全文提取</h2>
                     <p id="manualFullTextStatus" class="manual-fulltext-status">
-                        当前还没有保存 PDF 全文。可直接从浏览器中的 PDF 提取并写回文献，供后续问答使用。
+                        当前还没有保存全文。点击右侧按钮即可提取并保存，供 AI 伴读和检索使用。
                     </p>
                 </div>
                 <button id="manualExtractTextBtn" class="btn btn-outline" type="button">提取全文并保存</button>
@@ -97,8 +97,8 @@
 
             <aside class="manager-card manual-sidebar">
                 <div class="manager-head">
-                    <h2>图片待录入</h2>
-                    <p>可跨页累积多个框选。提交后会把裁剪结果追加到当前文献，不覆盖已有图片。</p>
+                    <h2>待提交的框选</h2>
+                    <p>可跨页框选多张图片。提交后会追加到当前文献，不会覆盖已有图片。</p>
                 </div>
 
                 <div id="manualExtractionNotice" class="notice info hidden"></div>

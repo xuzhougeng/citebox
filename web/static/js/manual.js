@@ -204,7 +204,7 @@ const ManualPage = {
             ? ((status === 'queued' || status === 'running' || status === 'failed' || status === 'cancelled')
                 ? `自动解析状态：${Utils.statusLabel(status)}。${paper.extractor_message}`
                 : paper.extractor_message)
-            : 'PDF 预览和裁图现在直接在浏览器里完成，提交后会把结果追加到当前文献。';
+            : '在页面上框选图片区域，提交后会追加到当前文献。';
 
         this.openPDFLink.href = paper.pdf_url ? Utils.resourceViewerURL('pdf', paper.pdf_url) : '/';
         this.backLibraryLink.href = `/library?paper_id=${encodeURIComponent(paper.id)}`;
@@ -565,7 +565,7 @@ const ManualPage = {
             return;
         }
 
-        this.fullTextStatus.textContent = '当前还没有保存 PDF 全文。可直接从浏览器中的 PDF 提取并写回文献，供后续问答使用。';
+        this.fullTextStatus.textContent = '当前还没有保存全文。点击右侧按钮即可提取并保存，供 AI 伴读和检索使用。';
     },
 
     async buildSelectionImageData(selection) {

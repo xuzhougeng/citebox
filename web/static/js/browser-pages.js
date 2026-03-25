@@ -1751,7 +1751,7 @@ const NotesPage = {
         this.renderPageControls();
         this.grid.innerHTML = papers.length
             ? papers.map((paper) => this.renderPaperNoteRow(paper)).join('')
-            : '<div class="empty-state"><h3>还没有可管理的文献笔记</h3><p>先在 AI伴读或文献详情里沉淀文献笔记，再回到这里统一整理。</p></div>';
+            : '<div class="empty-state"><h3>还没有文献笔记</h3><p>先在 AI 伴读或文献详情里写笔记，再回到这里统一查看。</p></div>';
         BrowserUI.renderPagination(this.pagination, this.state.page, this.state.totalPages);
     },
 

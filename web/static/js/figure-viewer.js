@@ -1678,7 +1678,7 @@ const FigureViewer = {
                     </div>
                     <div class="figure-subfigure-summary is-compact">
                         <p>当前查看的是 <strong>${Utils.escapeHTML(figure.display_label || '')}</strong>，来源于 <strong>${Utils.escapeHTML(figure.parent_display_label || '')}</strong>。</p>
-                        <p>子图不会进入独立图片库或独立笔记流，这里只保留预览和配色操作。</p>
+                        <p>子图不会出现在图片库和笔记页，这里只用于预览和管理配色。</p>
                     </div>
                     <div class="figure-subfigure-card-list is-single">
                         ${this.renderSubfigurePaletteCard(figure, { standalone: true })}

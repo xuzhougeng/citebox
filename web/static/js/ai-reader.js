@@ -143,17 +143,17 @@ const AIReaderPage = {
             <article class="settings-summary-card">
                 <span>AI 状态</span>
                 <strong>${aiReady ? '已配置' : '未配置'}</strong>
-                <p>${aiReady ? '当前问答模型已提供 API Key，可直接发起阅读请求。' : '请先到配置页为问答场景配置可用模型和 API Key。'}</p>
+                <p>${aiReady ? 'AI 问答已就绪，可以开始提问。' : '请先到配置页设置问答模型和 API Key。'}</p>
             </article>
             <article class="settings-summary-card">
                 <span>PDF 提取器</span>
                 <strong>${extractorReady ? '已配置' : '未配置'}</strong>
-                <p>${Utils.escapeHTML(extractorSettings.effective_extractor_url || '尚未配置提取接口，上传后无法自动解析 PDF。')}</p>
+                <p>${Utils.escapeHTML(extractorSettings.effective_extractor_url || '未配置 PDF 解析服务，上传后需手工标注。')}</p>
             </article>
             <article class="settings-summary-card action">
                 <span>配置入口</span>
                 <strong><a href="/settings">前往配置页</a></strong>
-                <p>统一维护 AI 与 PDF 提取服务参数。</p>
+                <p>在配置页统一设置 AI 模型和 PDF 解析服务。</p>
             </article>
         `;
     },
@@ -321,7 +321,7 @@ const AIReaderPage = {
             return;
         }
         if (!this.resolveModelForAction('paper_qa').api_key) {
-            Utils.showToast('请先到配置页为问答场景配置可用模型', 'error');
+            Utils.showToast('请先到配置页设置问答模型', 'error');
             return;
         }
         if (this.currentConversation().length >= 5) {

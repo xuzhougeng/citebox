@@ -402,7 +402,7 @@ const NoteViewer = {
 
                     <div class="note-lightbox-tip">
                         <span>整理建议</span>
-                        <p>先把可检索的关键词和 AI 解读写进笔记，再决定是否回到大图页补标签。</p>
+                        <p>建议先把关键词和 AI 解读记到笔记里，之后再考虑是否补充标签。</p>
                     </div>
                 </aside>
             </div>

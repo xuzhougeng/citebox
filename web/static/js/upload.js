@@ -149,15 +149,15 @@ const UploadPage = {
 
         if (this.extractionModeHint) {
             if (this.usesBuiltInLLMExtraction(this.extractorSettings) && this.extractorReady) {
-                this.extractionModeHint.textContent = '默认使用自动标注；上传后后台会用内置 AI 解析图片坐标，浏览器仍会尝试用 pdf.js 自动保存全文。';
+                this.extractionModeHint.textContent = '默认使用自动标注；上传后后台会用内置 AI 解析图片坐标，全文也会自动保存。';
             } else if (this.usesBuiltInLLMExtraction(this.extractorSettings)) {
-                this.extractionModeHint.textContent = '当前已选择内置 AI 坐标提取，但图片场景模型或 API Key 还没配好，只能使用手工标注；上传后会默认用浏览器 pdf.js 保存全文。';
+                this.extractionModeHint.textContent = '当前已选择内置 AI 坐标提取，但图片场景模型或 API Key 还没配好，只能使用手工标注；上传后会自动保存全文。';
             } else if (this.extractorReady && this.usesBrowserPDFText(this.extractorSettings)) {
-                this.extractionModeHint.textContent = '默认使用自动标注；图片由后台提取，全文会在上传后由浏览器用 pdf.js 自动保存。';
+                this.extractionModeHint.textContent = '默认自动标注，系统会自动提取图片并保存全文。';
             } else if (this.extractorReady) {
-                this.extractionModeHint.textContent = '默认使用自动标注；如需自行框选图片，也可以直接切到手工标注，手工模式下会自动用 pdf.js 保存全文。';
+                this.extractionModeHint.textContent = '默认使用自动标注；也可以切到手工标注自行框选图片。';
             } else {
-                this.extractionModeHint.textContent = '当前未配置自动解析服务，只能使用手工标注；上传后会默认用浏览器 pdf.js 提取并保存全文。';
+                this.extractionModeHint.textContent = '尚未配置自动解析，仅支持手工标注。上传后会自动保存全文。';
             }
         }
     },
@@ -426,7 +426,7 @@ const UploadPage = {
             return paper;
         }
 
-        this.setPDFTextSyncState(paper.id, 'running', '浏览器正在用 pdf.js 提取全文，完成后会自动写回当前文献。');
+        this.setPDFTextSyncState(paper.id, 'running', '正在提取全文，完成后会自动保存到当前文献。');
 
         try {
             const pdfText = await this.extractFullTextFromFile(file);
@@ -439,13 +439,13 @@ const UploadPage = {
             });
 
             this.currentPaper = payload.paper;
-            this.setPDFTextSyncState(paper.id, 'success', `已通过浏览器 pdf.js 保存全文（${pdfText.length.toLocaleString()} 字）。`);
+            this.setPDFTextSyncState(paper.id, 'success', `已保存全文（${pdfText.length.toLocaleString()} 字）。`);
             this.renderResult(payload.paper);
             Utils.showToast(`已保存全文（${pdfText.length.toLocaleString()} 字）`);
             return payload.paper;
         } catch (error) {
-            this.setPDFTextSyncState(paper.id, 'error', error.message || '浏览器端 PDF 全文提取失败');
-            Utils.showToast(error.message || '浏览器端 PDF 全文提取失败', 'error');
+            this.setPDFTextSyncState(paper.id, 'error', error.message || '全文提取失败');
+            Utils.showToast(error.message || '全文提取失败', 'error');
             return paper;
         }
     },

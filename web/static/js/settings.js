@@ -162,7 +162,7 @@ const SettingsPage = {
         ].forEach((element) => {
             element?.addEventListener('input', () => {
                 if (this.isHydratingAISettings) return;
-                this.setAIPromptSaveStatus('Prompt 已修改，点击“保存 Prompt 配置”后生效。', 'saving');
+                this.setAIPromptSaveStatus('提示词已修改，点击”保存 Prompt 配置”后生效。', 'saving');
             });
         });
         this.extractorSettingsForm.addEventListener('submit', async (event) => {
@@ -198,7 +198,7 @@ const SettingsPage = {
         });
         this.logoutButton.addEventListener('click', () => this.logout());
         this.weixinBridgeEnabledInput?.addEventListener('change', () => {
-            this.setWeixinBridgeSaveStatus('桥接配置已修改，点击“保存微信桥接配置”后生效。', 'saving');
+            this.setWeixinBridgeSaveStatus('配置已修改，点击”保存微信桥接配置”后生效。', 'saving');
         });
         this.saveWeixinBridgeButton?.addEventListener('click', async () => {
             await this.saveWeixinBridgeSettings();
@@ -296,7 +296,7 @@ const SettingsPage = {
             overwriteRolePrompts: true
         });
         this.setAIModelAutosaveStatus('模型配置修改后会自动保存。');
-        this.setAIPromptSaveStatus('Prompt 修改后需要单独点击保存。');
+        this.setAIPromptSaveStatus('提示词修改后需点击保存。');
     },
 
     applyAISettings(settings = {}, options = {}) {
@@ -802,10 +802,10 @@ const SettingsPage = {
             };
             this.renderAuthSettings(this.authSettings);
             this.setWeixinBridgeSaveStatus(
-                response.settings?.enabled ? '微信 IM 桥接已启用。' : '微信 IM 桥接已关闭。',
+                response.settings?.enabled ? '微信消息通知已开启。' : '微信消息通知已关闭。',
                 'success'
             );
-            Utils.showToast(response.settings?.enabled ? '微信 IM 桥接已启用' : '微信 IM 桥接已关闭');
+            Utils.showToast(response.settings?.enabled ? '微信消息通知已开启' : '微信消息通知已关闭');
         } catch (error) {
             this.setWeixinBridgeSaveStatus(`保存失败：${error.message}`, 'error');
             Utils.showToast(error.message, 'error');
@@ -836,7 +836,7 @@ const SettingsPage = {
                 <strong>${Utils.escapeHTML(tokenConfigured ? '已配置' : '未配置')}</strong>
             </div>
             <div>
-                <span>目标块 ID</span>
+                <span>目标页面</span>
                 <strong>${Utils.escapeHTML(parentBlockID || '未填写')}</strong>
             </div>
             <div>
@@ -844,8 +844,8 @@ const SettingsPage = {
                 <strong>${Utils.escapeHTML(baseURL)}</strong>
             </div>
             <div>
-                <span>导出行为</span>
-                <strong>新建块页面后写入内容</strong>
+                <span>导出方式</span>
+                <strong>新建页面并写入内容</strong>
             </div>
         `;
     },
@@ -857,7 +857,7 @@ const SettingsPage = {
         }
         if (!this.weixinBridgeSaveStatus?.textContent) {
             this.setWeixinBridgeSaveStatus(
-                enabled ? '微信 IM 桥接当前已启用。' : '微信 IM 桥接当前已关闭。',
+                enabled ? '微信消息通知当前已开启。' : '微信消息通知当前已关闭。',
                 enabled ? 'success' : ''
             );
         }
@@ -868,9 +868,9 @@ const SettingsPage = {
 
         const isBound = Boolean(binding.bound);
         const bridgeEnabled = Boolean(this.authSettings?.weixin_bridge?.enabled);
-        const title = bridgeEnabled ? '微信 IM 已启用' : '微信 IM 已关闭';
+        const title = bridgeEnabled ? '微信已启用' : '微信已关闭';
         const detail = [
-            bridgeEnabled ? '桥接状态：后台会轮询微信消息并尝试自动回复。' : '桥接状态：当前不会接收或回复微信消息。',
+            bridgeEnabled ? '开启状态：会自动接收和回复微信消息。' : '关闭状态：不会收发微信消息。',
             isBound
                 ? `绑定账号：${Utils.escapeHTML(binding.account_id || '微信账号')}`
                 : '当前未绑定微信，可先保存桥接开关，再扫码完成绑定。',
