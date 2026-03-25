@@ -1,0 +1,17 @@
+{
+    "_title": "Login - CiteBox",
+    "login.username": "Username",
+    "login.password": "Password",
+    "login.username_placeholder": "Enter username",
+    "login.password_placeholder": "Enter password",
+    "login.submit": "Sign In",
+    "login.logging_in": "Signing in...",
+    "login.err_empty": "Please enter username and password",
+    "login.err_credentials": "Invalid username or password",
+    "login.err_failed": "Login failed, please try again later",
+    "login.error_default": "Invalid username or password",
+    "login.hint_text": "Use the default credentials for first login. You can change the password on the <strong>Settings</strong> page after logging in.",
+    "login.default_creds_label": "Default credentials",
+    "login.default_creds_value": "citebox / citebox123",
+    "login.footer_text": "CiteBox \u00a9 2024 \u00b7 Collect. Cite. Create."
+}

@@ -1,0 +1,17 @@
+{
+    "_title": "登录 - CiteBox",
+    "login.username": "用户名",
+    "login.password": "密码",
+    "login.username_placeholder": "请输入用户名",
+    "login.password_placeholder": "请输入密码",
+    "login.submit": "安全登录",
+    "login.logging_in": "登录中...",
+    "login.err_empty": "请输入用户名和密码",
+    "login.err_credentials": "用户名或密码错误",
+    "login.err_failed": "登录失败，请稍后重试",
+    "login.error_default": "用户名或密码错误",
+    "login.hint_text": "首次登录请使用默认账号密码，登录后可在<strong>配置</strong>页面修改密码",
+    "login.default_creds_label": "默认账号 / 密码",
+    "login.default_creds_value": "citebox / citebox123",
+    "login.footer_text": "CiteBox \u00a9 2024 \u00b7 Collect. Cite. Create."
+}
