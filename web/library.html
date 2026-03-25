@@ -13,18 +13,18 @@
         <div class="navbar-content">
             <a href="/" class="logo">CiteBox</a>
             <ul class="nav-links">
-                <li><a href="/">总览</a></li>
-                <li><a href="/library" class="active">文献库</a></li>
-                <li><a href="/figures">图片库</a></li>
-                <li><a href="/palettes">配色库</a></li>
-                <li><a href="/groups">分组</a></li>
-                <li><a href="/tags">标签</a></li>
-                <li><a href="/notes">笔记</a></li>
-                <li><a href="/ai">AI伴读</a></li>
-                <li><a href="/settings">配置</a></li>
+                <li><a href="/" data-i18n="nav.overview">总览</a></li>
+                <li><a href="/library" class="active" data-i18n="nav.library">文献库</a></li>
+                <li><a href="/figures" data-i18n="nav.figures">图片库</a></li>
+                <li><a href="/palettes" data-i18n="nav.palettes">配色库</a></li>
+                <li><a href="/groups" data-i18n="nav.groups">分组</a></li>
+                <li><a href="/tags" data-i18n="nav.tags">标签</a></li>
+                <li><a href="/notes" data-i18n="nav.notes">笔记</a></li>
+                <li><a href="/ai" data-i18n="nav.ai">AI伴读</a></li>
+                <li><a href="/settings" data-i18n="nav.settings">配置</a></li>
             </ul>
             <div class="nav-actions">
-                <a href="/upload" class="nav-cta">上传 PDF</a>
+                <a href="/upload" class="nav-cta" data-i18n="nav.upload_pdf">上传 PDF</a>
             </div>
         </div>
     </nav>
@@ -32,16 +32,16 @@
     <main class="page-shell">
         <section class="hero compact">
             <div>
-                <p class="eyebrow">Library</p>
-                <h1>浏览和管理你的文献</h1>
-                <p class="hero-text">
+                <p class="eyebrow" data-i18n="library.hero_eyebrow">Library</p>
+                <h1 data-i18n="library.hero_title">浏览和管理你的文献</h1>
+                <p class="hero-text" data-i18n="library.hero_text">
                     筛选和浏览已入库的文献，点击查看详情、编辑标签或管理图片。
                 </p>
                 <p class="hero-inline-links">
-                    <span>辅助入口：</span>
-                    <a href="/guide">查看功能说明</a>
+                    <span data-i18n="library.hero_aux_links">辅助入口：</span>
+                    <a href="/guide" data-i18n="library.hero_link_guide">查看功能说明</a>
                     <span aria-hidden="true">/</span>
-                    <a href="/">返回总览</a>
+                    <a href="/" data-i18n="library.hero_link_overview">返回总览</a>
                 </p>
             </div>
         </section>
@@ -49,51 +49,51 @@
         <section class="filters-card">
             <div class="filters-card-head">
                 <div>
-                    <h2>筛选文献</h2>
-                    <p>按关键词、分组、标签和状态快速定位目标文献。</p>
+                    <h2 data-i18n="library.filter_title">筛选文献</h2>
+                    <p data-i18n="library.filter_desc">按关键词、分组、标签和状态快速定位目标文献。</p>
                 </div>
-                <a class="btn btn-primary" href="/upload">上传新文献</a>
+                <a class="btn btn-primary" href="/upload" data-i18n="library.btn_upload">上传新文献</a>
             </div>
             <div class="filters-grid">
                 <label class="field">
-                    <span>关键词</span>
-                    <input id="keywordInput" class="form-input" type="text" placeholder="标题、摘要或正文内容">
+                    <span data-i18n="library.filter_keyword">关键词</span>
+                    <input id="keywordInput" class="form-input" type="text" data-i18n-placeholder="library.filter_keyword_placeholder" placeholder="标题、摘要或正文内容">
                 </label>
                 <label class="field">
-                    <span>检索范围</span>
+                    <span data-i18n="library.filter_scope">检索范围</span>
                     <select id="keywordScopeFilter" class="form-input">
-                        <option value="full_text">全文</option>
-                        <option value="title_abstract">标题 + 摘要</option>
+                        <option value="full_text" data-i18n="library.scope_full_text">全文</option>
+                        <option value="title_abstract" data-i18n="library.scope_title_abstract">标题 + 摘要</option>
                     </select>
                 </label>
                 <label class="field">
-                    <span>分组</span>
+                    <span data-i18n="library.filter_group">分组</span>
                     <select id="groupFilter" class="form-input">
-                        <option value="">全部分组</option>
+                        <option value="" data-i18n="library.filter_all_groups">全部分组</option>
                     </select>
                 </label>
                 <label class="field">
-                    <span>文献标签</span>
+                    <span data-i18n="library.filter_tag">文献标签</span>
                     <select id="tagFilter" class="form-input">
-                        <option value="">全部文献标签</option>
+                        <option value="" data-i18n="library.filter_all_tags">全部文献标签</option>
                     </select>
                 </label>
                 <label class="field">
-                    <span>解析状态</span>
+                    <span data-i18n="library.filter_status">解析状态</span>
                     <select id="statusFilter" class="form-input">
-                        <option value="">全部状态</option>
-                        <option value="queued">等待解析</option>
-                        <option value="running">解析中</option>
-                        <option value="completed">已完成</option>
-                        <option value="failed">解析失败</option>
-                        <option value="cancelled">已取消</option>
+                        <option value="" data-i18n="library.filter_all_status">全部状态</option>
+                        <option value="queued" data-i18n="status.queued">等待解析</option>
+                        <option value="running" data-i18n="status.running">解析中</option>
+                        <option value="completed" data-i18n="status.completed">已完成</option>
+                        <option value="failed" data-i18n="status.failed">解析失败</option>
+                        <option value="cancelled" data-i18n="status.cancelled">已取消</option>
                     </select>
                 </label>
                 <label class="field">
-                    <span>排序方式</span>
+                    <span data-i18n="library.filter_sort">排序方式</span>
                     <select id="sortFilter" class="form-input">
-                        <option value="created_at">按文献创建时间</option>
-                        <option value="updated_at">按文献更新时间</option>
+                        <option value="created_at" data-i18n="library.sort_created">按文献创建时间</option>
+                        <option value="updated_at" data-i18n="library.sort_updated">按文献更新时间</option>
                     </select>
                 </label>
             </div>
@@ -108,12 +108,13 @@
 
     <div id="paperModal" class="modal-shell hidden">
         <div class="modal-dialog">
-            <button id="closePaperModal" class="modal-close" type="button" aria-label="关闭">×</button>
+            <button id="closePaperModal" class="modal-close" type="button" data-i18n-aria-label="btn.close" aria-label="关闭">×</button>
             <div id="paperModalBody"></div>
         </div>
     </div>
 
     <script src="/static/js/theme.js"></script>
+    <script src="/static/js/i18n.js"></script>
     <script src="/static/js/utils.js"></script>
     <script src="/static/js/api.js"></script>
     <script src="/static/js/paper-viewer.js"></script>
