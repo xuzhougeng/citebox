@@ -1,3 +1,4 @@
+if (typeof window.t !== 'function') window.t = function(k,f){return f||k};
 // 工具函数模块
 const Utils = {
     modalRestoreParam: 'restore_modal',
@@ -16,7 +17,7 @@ const Utils = {
 
     formatDate(dateString) {
         const date = new Date(dateString);
-        return date.toLocaleDateString('zh-CN', {
+        return date.toLocaleDateString((typeof CiteBoxI18n !== 'undefined' ? CiteBoxI18n.get() : 'zh-CN'), {
             year: 'numeric',
             month: '2-digit',
             day: '2-digit',
@@ -407,7 +408,7 @@ const Utils = {
                 const commaIndex = result.indexOf(',');
                 resolve(commaIndex >= 0 ? result.slice(commaIndex + 1) : result);
             };
-            reader.onerror = () => reject(reader.error || new Error('读取文件失败'));
+            reader.onerror = () => reject(reader.error || new Error(t('shared.utils.file_read_error', '读取文件失败')));
             reader.readAsDataURL(blob);
         });
     },
@@ -446,7 +447,7 @@ const Utils = {
         };
     },
 
-    confirm(message, title = '确认') {
+    confirm(message, title = t('shared.utils.confirm_title', '确认')) {
         return new Promise((resolve) => {
             const overlay = document.createElement('div');
             overlay.className = 'dialog-overlay';
@@ -459,8 +460,8 @@ const Utils = {
                         <p>${message}</p>
                     </div>
                     <div class="dialog-footer">
-                        <button class="btn btn-outline dialog-cancel">取消</button>
-                        <button class="btn btn-danger dialog-confirm">确定</button>
+                        <button class="btn btn-outline dialog-cancel">${t('shared.utils.cancel', '取消')}</button>
+                        <button class="btn btn-danger dialog-confirm">${t('shared.utils.ok', '确定')}</button>
                     </div>
                 </div>
             `;
@@ -483,11 +484,11 @@ const Utils = {
 
     confirmTypedAction(options = {}) {
         const {
-            title = '危险操作确认',
+            title = t('shared.utils.dangerous_action_title', '危险操作确认'),
             message = '',
             keyword = 'CLEAR',
-            confirmLabel = '确认继续',
-            hint = `请输入 ${keyword} 继续`,
+            confirmLabel = t('shared.utils.confirm_continue', '确认继续'),
+            hint = t('shared.utils.typed_action_hint', '请输入 {keyword} 继续').replace('{keyword}', keyword),
             badge = 'Danger Zone'
         } = options;
 
@@ -506,7 +507,7 @@ const Utils = {
                     <div class="dialog-body dialog-danger-body">
                         <p class="dialog-danger-message">${Utils.escapeHTML(message)}</p>
                         <div class="dialog-danger-instruction">
-                            <span>确认口令</span>
+                            <span>${t('shared.utils.confirm_keyword_label', '确认口令')}</span>
                             <strong>${Utils.escapeHTML(normalizedKeyword)}</strong>
                         </div>
                         <label class="dialog-danger-field">
@@ -515,7 +516,7 @@ const Utils = {
                         </label>
                     </div>
                     <div class="dialog-footer">
-                        <button class="btn btn-outline dialog-cancel">取消</button>
+                        <button class="btn btn-outline dialog-cancel">${t('shared.utils.cancel', '取消')}</button>
                         <button class="btn btn-outline danger dialog-confirm" type="button" disabled>${Utils.escapeHTML(confirmLabel)}</button>
                     </div>
                 </div>
@@ -563,7 +564,7 @@ const Utils = {
         });
     },
 
-    alert(message, title = '提示') {
+    alert(message, title = t('shared.utils.alert_title', '提示')) {
         return new Promise((resolve) => {
             const overlay = document.createElement('div');
             overlay.className = 'dialog-overlay';
@@ -576,7 +577,7 @@ const Utils = {
                         <p>${message}</p>
                     </div>
                     <div class="dialog-footer">
-                        <button class="btn btn-primary dialog-ok">确定</button>
+                        <button class="btn btn-primary dialog-ok">${t('shared.utils.ok', '确定')}</button>
                     </div>
                 </div>
             `;
@@ -597,9 +598,9 @@ const Utils = {
 
     promptFields(options = {}) {
         const {
-            title = '编辑',
+            title = t('shared.utils.edit_title', '编辑'),
             description = '',
-            confirmLabel = '保存',
+            confirmLabel = t('shared.utils.save_label', '保存'),
             fields = []
         } = options;
 
@@ -641,7 +642,7 @@ const Utils = {
                             }).join('')}
                         </div>
                         <div class="dialog-footer">
-                            <button class="btn btn-outline dialog-cancel" type="button">取消</button>
+                            <button class="btn btn-outline dialog-cancel" type="button">${t('shared.utils.cancel', '取消')}</button>
                             <button class="btn btn-primary dialog-confirm" type="submit">${Utils.escapeHTML(confirmLabel)}</button>
                         </div>
                     </form>
@@ -708,7 +709,7 @@ const Utils = {
     renderMarkdown(value = '', options = {}) {
         const source = String(value || '').replace(/\r\n?/g, '\n').trim();
         if (!source) {
-            return '<div class="markdown-empty">暂无笔记内容</div>';
+            return '<div class="markdown-empty">' + t('shared.utils.no_notes_content', '暂无笔记内容') + '</div>';
         }
 
         const placeholders = [];
@@ -1059,7 +1060,7 @@ const Utils = {
         const [, altText = '', src = ''] = match;
         const figureHTML = Utils.renderMarkdownImageFigure(altText, src, options);
         if (!figureHTML) {
-            const fallback = altText || '图片不可用';
+            const fallback = altText || t('shared.utils.image_unavailable', '图片不可用');
             return `<p class="markdown-paragraph">${fallback}</p>`;
         }
 
@@ -1280,14 +1281,14 @@ const Utils = {
         }).join('');
 
         container.innerHTML = `
-            <button class="pagination-nav" type="button" data-page="${current - 1}" ${current <= 1 ? 'disabled' : ''}>上一页</button>
+            <button class="pagination-nav" type="button" data-page="${current - 1}" ${current <= 1 ? 'disabled' : ''}>${t('shared.utils.prev_page', '上一页')}</button>
             ${pageButtons}
-            <button class="pagination-nav" type="button" data-page="${current + 1}" ${current >= total ? 'disabled' : ''}>下一页</button>
-            <span class="pagination-meta">第 ${current} / ${total} 页</span>
+            <button class="pagination-nav" type="button" data-page="${current + 1}" ${current >= total ? 'disabled' : ''}>${t('shared.utils.next_page', '下一页')}</button>
+            <span class="pagination-meta">${t('shared.utils.page_meta', '第 {current} / {total} 页').replace('{current}', current).replace('{total}', total)}</span>
             <form class="pagination-jump" data-pagination-jump-form>
-                <label class="pagination-jump-label" for="${jumpInputId}">跳至</label>
+                <label class="pagination-jump-label" for="${jumpInputId}">${t('shared.utils.jump_to', '跳至')}</label>
                 <input id="${jumpInputId}" class="form-input pagination-jump-input" type="number" min="1" max="${total}" step="1" value="${current}" inputmode="numeric" data-pagination-input>
-                <button class="pagination-jump-button" type="submit" data-pagination-jump>跳转</button>
+                <button class="pagination-jump-button" type="submit" data-pagination-jump>${t('shared.utils.jump', '跳转')}</button>
             </form>
         `;
     },
@@ -1303,7 +1304,7 @@ const Utils = {
 
             if (targetPage === null) {
                 if (totalPages > 0) {
-                    Utils.showToast(`请输入 1 - ${totalPages} 的页码`, 'error');
+                    Utils.showToast(t('shared.utils.page_validation', '请输入 1 - {total} 的页码').replace('{total}', totalPages), 'error');
                 }
                 if (input) {
                     input.focus();
@@ -1496,7 +1497,7 @@ const Utils = {
                 data-tag-autocomplete-suggestion="${this.escapeHTML(tag.name)}"
             >
                 <span>${this.escapeHTML(tag.name)}</span>
-                ${Number(tag[countKey] || 0) > 0 ? `<small>已用 ${Number(tag[countKey])} 次</small>` : ''}
+                ${Number(tag[countKey] || 0) > 0 ? `<small>${t('shared.utils.used_n_times', '已用 {count} 次').replace('{count}', Number(tag[countKey]))}</small>` : ''}
             </button>
         `).join('');
     },
@@ -1641,12 +1642,12 @@ const Utils = {
     },
 
     statusLabel(status = '') {
-        if (status === 'queued') return '等待解析';
-        if (status === 'running') return '解析中';
-        if (status === 'manual_pending') return '待手动标注';
-        if (status === 'completed') return '已完成';
-        if (status === 'failed') return '解析失败';
-        if (status === 'cancelled') return '已取消';
-        return status || '未知状态';
+        if (status === 'queued') return t('shared.utils.status_queued', '等待解析');
+        if (status === 'running') return t('shared.utils.status_running', '解析中');
+        if (status === 'manual_pending') return t('shared.utils.status_manual_pending', '待手动标注');
+        if (status === 'completed') return t('shared.utils.status_completed', '已完成');
+        if (status === 'failed') return t('shared.utils.status_failed', '解析失败');
+        if (status === 'cancelled') return t('shared.utils.status_cancelled', '已取消');
+        return status || t('shared.utils.status_unknown', '未知状态');
     }
 };

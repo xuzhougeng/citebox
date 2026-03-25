@@ -1,3 +1,4 @@
+if (typeof window.t !== 'function') window.t = function(k,f){return f||k};
 const NoteViewer = {
     init() {
         this.modal = document.getElementById('noteModal');
@@ -9,7 +10,7 @@ const NoteViewer = {
             shell.className = 'modal-shell hidden';
             shell.innerHTML = `
                 <div class="modal-dialog figure-modal-dialog note-modal-dialog">
-                    <button id="closeNoteModal" class="modal-close" type="button" aria-label="关闭">×</button>
+                    <button id="closeNoteModal" class="modal-close" type="button" aria-label="${t('shared.paper.close', '关闭')}">×</button>
                     <div id="noteModalBody"></div>
                 </div>
             `;
@@ -223,24 +224,24 @@ const NoteViewer = {
     },
 
     async saveNotesFromInput() {
-        await this.updateCurrentFigureNotes(this.currentFigureNotesDraft(), '图片笔记已保存');
+        await this.updateCurrentFigureNotes(this.currentFigureNotesDraft(), t('shared.note.notes_saved', '图片笔记已保存'));
     },
 
     async saveNotesToWolai(button) {
         if (!this.currentFigure) return;
 
         const actionButton = button instanceof HTMLElement ? button : null;
-        const originalLabel = actionButton?.textContent || '保存到 Wolai';
+        const originalLabel = actionButton?.textContent || t('shared.note.save_to_wolai', '保存到 Wolai');
         if (actionButton) {
             actionButton.disabled = true;
-            actionButton.textContent = '保存中...';
+            actionButton.textContent = t('shared.note.saving', '保存中...');
         }
 
         try {
             const result = await API.saveFigureNoteToWolai(this.currentFigure.id, {
                 notes_text: this.currentFigureNotesDraft()
             });
-            Utils.showToast(result.message || '图片笔记已保存到 Wolai');
+            Utils.showToast(result.message || t('shared.note.notes_saved_to_wolai', '图片笔记已保存到 Wolai'));
         } catch (error) {
             Utils.showToast(error.message, 'error');
         } finally {
@@ -311,7 +312,7 @@ const NoteViewer = {
     render() {
         this.currentFigure = this.figures?.[this.index];
         if (!this.currentFigure) {
-            this.body.innerHTML = '<div class="empty-state"><h3>没有可展示的笔记</h3></div>';
+            this.body.innerHTML = `<div class="empty-state"><h3>${t('shared.note.no_notes_to_show', '没有可展示的笔记')}</h3></div>`;
             return;
         }
 
@@ -326,10 +327,10 @@ const NoteViewer = {
             <div class="note-lightbox">
                 <section class="note-lightbox-main">
                     <div class="figure-lightbox-toolbar">
-                        <div class="figure-lightbox-counter">第 ${this.index + 1} / ${total} 张 · 第 ${this.page} / ${this.totalPages} 页</div>
+                        <div class="figure-lightbox-counter">${t('shared.note.counter', '第 {current} / {total} 张 · 第 {page} / {totalPages} 页').replace('{current}', this.index + 1).replace('{total}', total).replace('{page}', this.page).replace('{totalPages}', this.totalPages)}</div>
                         <div class="figure-lightbox-nav">
-                            <button class="btn btn-outline" type="button" data-note-action="prev" ${!canPrev || this.loadingPage ? 'disabled' : ''}>上一条</button>
-                            <button class="btn btn-outline" type="button" data-note-action="next" ${!canNext || this.loadingPage ? 'disabled' : ''}>下一条</button>
+                            <button class="btn btn-outline" type="button" data-note-action="prev" ${!canPrev || this.loadingPage ? 'disabled' : ''}>${t('shared.note.prev', '上一条')}</button>
+                            <button class="btn btn-outline" type="button" data-note-action="next" ${!canNext || this.loadingPage ? 'disabled' : ''}>${t('shared.note.next', '下一条')}</button>
                         </div>
                     </div>
 
@@ -339,44 +340,44 @@ const NoteViewer = {
                                 <div>
                                     <p class="eyebrow">Figure Notes</p>
                                     <h2>${Utils.escapeHTML(figure.paper_title)}</h2>
-                                    <p class="note-lightbox-subtitle">第 ${figure.page_number || '-'} 页 · ${Utils.escapeHTML(figure.display_label || `Fig ${figure.figure_index || '-'}`)}${figure.parent_figure_id ? ` · 来自 ${Utils.escapeHTML(figure.parent_display_label || `Fig ${figure.figure_index || '-'}`)}` : ''}${figure.source === 'manual' ? ' · 人工提取' : ''}</p>
+                                    <p class="note-lightbox-subtitle">${t('shared.figure.page_n', '第 {page} 页').replace('{page}', figure.page_number || '-')} · ${Utils.escapeHTML(figure.display_label || `Fig ${figure.figure_index || '-'}`)}${figure.parent_figure_id ? ` · ${t('shared.note.from_parent', '来自')} ${Utils.escapeHTML(figure.parent_display_label || `Fig ${figure.figure_index || '-'}`)}` : ''}${figure.source === 'manual' ? ` · ${t('shared.note.manual_extraction', '人工提取')}` : ''}</p>
                                 </div>
                                 <div class="note-lightbox-mode-switch">
-                                    <button class="btn ${isPreviewMode ? 'btn-outline' : 'btn-primary'}" type="button" data-note-action="set-mode" data-note-mode="write">编辑</button>
-                                    <button class="btn ${isPreviewMode ? 'btn-primary' : 'btn-outline'}" type="button" data-note-action="set-mode" data-note-mode="preview">Markdown 预览</button>
+                                    <button class="btn ${isPreviewMode ? 'btn-outline' : 'btn-primary'}" type="button" data-note-action="set-mode" data-note-mode="write">${t('shared.note.write_mode', '编辑')}</button>
+                                    <button class="btn ${isPreviewMode ? 'btn-primary' : 'btn-outline'}" type="button" data-note-action="set-mode" data-note-mode="preview">${t('shared.note.markdown_preview', 'Markdown 预览')}</button>
                                 </div>
                             </div>
                         </div>
 
                         <div class="note-lightbox-meta-grid">
                             <div class="note-lightbox-meta-item">
-                                <span>图片标签</span>
+                                <span>${t('shared.note.figure_tags', '图片标签')}</span>
                                 <div class="figure-preview-tags ${figure.tags?.length ? '' : 'is-empty'}">
-                                    ${figure.tags?.length ? BrowserUI.renderTagChips(figure.tags || []) : '<span class="figure-preview-empty">无标签</span>'}
+                                    ${figure.tags?.length ? BrowserUI.renderTagChips(figure.tags || []) : `<span class="figure-preview-empty">${t('shared.note.no_tags', '无标签')}</span>`}
                                 </div>
                             </div>
                             <div class="note-lightbox-meta-item">
-                                <span>来源分组</span>
-                                <strong>${Utils.escapeHTML(figure.group_name || '未分组')}</strong>
+                                <span>${t('shared.note.source_group', '来源分组')}</span>
+                                <strong>${Utils.escapeHTML(figure.group_name || t('shared.note.ungrouped', '未分组'))}</strong>
                             </div>
                         </div>
 
                         ${isPreviewMode ? `
                             <section class="note-lightbox-render-panel">
-                                <span class="note-lightbox-panel-label">Markdown 预览</span>
+                                <span class="note-lightbox-panel-label">${t('shared.note.markdown_preview', 'Markdown 预览')}</span>
                                 <div class="markdown-preview">${Utils.renderMarkdown(noteText)}</div>
                             </section>
                         ` : `
                             <label class="field note-lightbox-field">
-                                <span>图片笔记</span>
-                                <textarea id="noteViewerInput" class="form-textarea note-lightbox-textarea" rows="16" placeholder="记录这张图的观察、AI 解读摘要、方法要点或后续检索关键词">${Utils.escapeHTML(noteText)}</textarea>
+                                <span>${t('shared.note.figure_notes', '图片笔记')}</span>
+                                <textarea id="noteViewerInput" class="form-textarea note-lightbox-textarea" rows="16" placeholder="${t('shared.note.figure_notes_placeholder', '记录这张图的观察、AI 解读摘要、方法要点或后续检索关键词')}">${Utils.escapeHTML(noteText)}</textarea>
                             </label>
                         `}
                         <div class="figure-notes-actions">
-                            <span class="muted">${isPreviewMode ? '预览基于当前草稿渲染；切回编辑可继续修改。' : '支持多行内容，按 Ctrl/Cmd + Enter 可快速保存。'}</span>
+                            <span class="muted">${isPreviewMode ? t('shared.note.preview_hint', '预览基于当前草稿渲染；切回编辑可继续修改。') : t('shared.note.save_hint', '支持多行内容，按 Ctrl/Cmd + Enter 可快速保存。')}</span>
                             <div style="display:flex;gap:0.6rem;flex-wrap:wrap">
-                                <button class="btn btn-outline" type="button" data-note-action="save-wolai">保存到 Wolai</button>
-                                <button class="btn btn-primary" type="button" data-note-action="save-notes">保存笔记</button>
+                                <button class="btn btn-outline" type="button" data-note-action="save-wolai">${t('shared.note.save_to_wolai', '保存到 Wolai')}</button>
+                                <button class="btn btn-primary" type="button" data-note-action="save-notes">${t('shared.note.save_notes', '保存笔记')}</button>
                             </div>
                         </div>
                     </div>
@@ -395,14 +396,14 @@ const NoteViewer = {
                     </div>
 
                     <div class="note-lightbox-actions">
-                        <button class="btn btn-outline" type="button" data-note-action="open-preview">查看大图</button>
-                        <button class="btn btn-outline" type="button" data-note-action="open-paper">查看文献</button>
-                        <a class="btn btn-outline" href="${Utils.resourceViewerURL('image', figure.image_url)}">原图</a>
+                        <button class="btn btn-outline" type="button" data-note-action="open-preview">${t('shared.note.view_large', '查看大图')}</button>
+                        <button class="btn btn-outline" type="button" data-note-action="open-paper">${t('shared.note.view_paper', '查看文献')}</button>
+                        <a class="btn btn-outline" href="${Utils.resourceViewerURL('image', figure.image_url)}">${t('shared.note.original_image', '原图')}</a>
                     </div>
 
                     <div class="note-lightbox-tip">
-                        <span>整理建议</span>
-                        <p>建议先把关键词和 AI 解读记到笔记里，之后再考虑是否补充标签。</p>
+                        <span>${t('shared.note.tip_title', '整理建议')}</span>
+                        <p>${t('shared.note.tip_content', '建议先把关键词和 AI 解读记到笔记里，之后再考虑是否补充标签。')}</p>
                     </div>
                 </aside>
             </div>

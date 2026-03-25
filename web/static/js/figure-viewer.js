@@ -1,3 +1,4 @@
+if (typeof window.t !== 'function') window.t = function(k,f){return f||k};
 const FigureViewer = {
     init() {
         this.modal = document.getElementById('figureModal');
@@ -9,7 +10,7 @@ const FigureViewer = {
             shell.className = 'modal-shell hidden';
             shell.innerHTML = `
                 <div class="modal-dialog figure-modal-dialog">
-                    <button id="closeFigureModal" class="modal-close" type="button" aria-label="关闭">×</button>
+                    <button id="closeFigureModal" class="modal-close" type="button" aria-label="${t('shared.paper.close', '关闭')}">×</button>
                     <div id="figureModalBody"></div>
                 </div>
             `;
@@ -531,7 +532,7 @@ const FigureViewer = {
 
     toggleSubfigureCropMode() {
         if (!this.canExtractSubfigures()) {
-            Utils.showToast('当前只支持从一级大图提取子图', 'info');
+            Utils.showToast(t('shared.figure.extract_subfigure_only_from_parent', '当前只支持从一级大图提取子图'), 'info');
             return;
         }
 
@@ -692,7 +693,7 @@ const FigureViewer = {
                 class="figure-crop-box ${selection.draft ? 'is-draft' : ''}"
                 style="left:${selection.x * 100}%;top:${selection.y * 100}%;width:${selection.width * 100}%;height:${selection.height * 100}%"
             >
-                <span>${selection.draft ? '拖拽中' : index + 1}</span>
+                <span>${selection.draft ? t('shared.figure.dragging', '拖拽中') : index + 1}</span>
             </div>
         `).join('');
     },
@@ -718,7 +719,7 @@ const FigureViewer = {
     async submitSubfigureSelections() {
         if (!this.currentFigure || !this.isCropModeEnabled() || this.cropState.submitting) return;
         if (!(this.cropState.selections || []).length) {
-            Utils.showToast('请先框选至少一个子图区域', 'error');
+            Utils.showToast(t('shared.figure.select_at_least_one', '请先框选至少一个子图区域'), 'error');
             return;
         }
 
@@ -753,11 +754,11 @@ const FigureViewer = {
             this.resetSubfigureWorkspaceSelections();
             this.render();
             if (generation.failedCount) {
-                Utils.showToast(`已提取 ${payload.added_count || 0} 张子图，${generation.generatedCount || 0} 张已生成配色`, 'info');
+                Utils.showToast(t('shared.figure.subfigures_partial_palette', '已提取 {count} 张子图，{generated} 张已生成配色').replace('{count}', payload.added_count || 0).replace('{generated}', generation.generatedCount || 0), 'info');
             } else if (generation.generatedCount) {
-                Utils.showToast(`已提取 ${payload.added_count || 0} 张子图，并生成 ${generation.generatedCount} 组配色`);
+                Utils.showToast(t('shared.figure.subfigures_full_palette', '已提取 {count} 张子图，并生成 {generated} 组配色').replace('{count}', payload.added_count || 0).replace('{generated}', generation.generatedCount));
             } else {
-                Utils.showToast(`已提取 ${payload.added_count || 0} 张子图`);
+                Utils.showToast(t('shared.figure.subfigures_extracted', '已提取 {count} 张子图').replace('{count}', payload.added_count || 0));
             }
             if (typeof this.onMetaChanged === 'function') {
                 await this.onMetaChanged(latestPaper);
@@ -795,7 +796,7 @@ const FigureViewer = {
         if (label) {
             return label;
         }
-        return `区域 ${index + 1}`;
+        return t('shared.figure.region_n', '区域 {index}').replace('{index}', index + 1);
     },
 
     findFigureInCurrentPaper(figureID) {
@@ -1105,7 +1106,7 @@ const FigureViewer = {
                     if (this.aiRequestState !== requestState) return;
 
                     if (event.type === 'error') {
-                        throw new Error(event.error || '流式解读失败');
+                        throw new Error(event.error || t('shared.api.stream_error', '流式解读失败'));
                     }
                     if (event.type === 'meta' && event.result) {
                         requestState.provider = event.result.provider || '';
@@ -1258,7 +1259,7 @@ const FigureViewer = {
                 data-figure-tag-suggestion="${Utils.escapeHTML(tag.name)}"
             >
                 <span>${Utils.escapeHTML(tag.name)}</span>
-                ${Number(tag.figure_count || 0) > 0 ? `<small>已用 ${Number(tag.figure_count)} 次</small>` : ''}
+                ${Number(tag.figure_count || 0) > 0 ? `<small>${t('shared.utils.used_n_times', '已用 {count} 次').replace('{count}', Number(tag.figure_count))}</small>` : ''}
             </button>
         `).join('');
     },
@@ -1299,7 +1300,7 @@ const FigureViewer = {
                     data-figure-meta-action="${action}"
                     data-tag-name="${Utils.escapeHTML(tagName)}"
                     aria-pressed="${applied ? 'true' : 'false'}"
-                    title="${applied ? `再次点击取消 ${Utils.escapeHTML(tagName)}` : `点击添加 ${Utils.escapeHTML(tagName)}`}"
+                    title="${applied ? `${t('shared.figure.click_to_remove', '再次点击取消')} ${Utils.escapeHTML(tagName)}` : `${t('shared.figure.click_to_add', '点击添加')} ${Utils.escapeHTML(tagName)}`}"
                 >${Utils.escapeHTML(tagName)}</button>
             `;
         }).join('');
@@ -1362,12 +1363,12 @@ const FigureViewer = {
         const draftTags = this.currentFigureTagNames();
         const existing = new Set(draftTags.map((tag) => tag.toLowerCase()));
         if (existing.has(normalized.toLowerCase())) {
-            Utils.showToast('这个标签已经存在', 'info');
+            Utils.showToast(t('shared.figure.tag_already_exists', '这个标签已经存在'), 'info');
             return false;
         }
 
         draftTags.push(normalized);
-        return this.updateCurrentFigureTags(draftTags, `已添加标签：${normalized}`);
+        return this.updateCurrentFigureTags(draftTags, t('shared.figure.tag_added', '已添加标签：{name}').replace('{name}', normalized));
     },
 
     async addTagFromInput() {
@@ -1404,7 +1405,7 @@ const FigureViewer = {
         if (!normalized) return;
 
         const draftTags = this.currentFigureTagNames().filter((tag) => tag.toLowerCase() !== normalized.toLowerCase());
-        await this.updateCurrentFigureTags(draftTags, `已移除标签：${normalized}`);
+        await this.updateCurrentFigureTags(draftTags, t('shared.figure.tag_removed', '已移除标签：{name}').replace('{name}', normalized));
     },
 
     async toggleTag(tagName) {
@@ -1447,19 +1448,19 @@ const FigureViewer = {
     },
 
     async saveCaptionFromInput() {
-        await this.updateCurrentFigureCaption(this.currentFigureCaptionDraft(), '图片说明已保存');
+        await this.updateCurrentFigureCaption(this.currentFigureCaptionDraft(), t('shared.figure.caption_saved', '图片说明已保存'));
     },
 
     async translateCaptionFromInput() {
         const caption = this.currentFigureCaptionDraft();
         if (typeof DesktopTranslate === 'undefined' || typeof DesktopTranslate.translateText !== 'function') {
-            Utils.showToast('翻译功能暂不可用', 'error');
+            Utils.showToast(t('shared.figure.translate_unavailable', '翻译功能暂不可用'), 'error');
             return;
         }
 
         await DesktopTranslate.translateText(caption, {
-            title: 'Caption 翻译',
-            emptyMessage: '当前没有可翻译的图片说明'
+            title: t('shared.figure.caption_translate_title', 'Caption 翻译'),
+            emptyMessage: t('shared.figure.caption_translate_empty', '当前没有可翻译的图片说明')
         });
     },
 
@@ -1485,7 +1486,7 @@ const FigureViewer = {
     },
 
     async saveNotesFromInput() {
-        await this.updateCurrentFigureNotes(this.currentFigureNotesDraft(), '图片笔记已保存');
+        await this.updateCurrentFigureNotes(this.currentFigureNotesDraft(), t('shared.figure.notes_saved', '图片笔记已保存'));
     },
 
     async updateCurrentFigureNotes(notesText, successMessage) {
@@ -1521,7 +1522,7 @@ const FigureViewer = {
         const { compact = false } = options;
         const list = Array.isArray(colors) ? colors.filter((color) => String(color || '').trim()) : [];
         if (!list.length) {
-            return '<span class="figure-preview-empty">还没有保存配色</span>';
+            return `<span class="figure-preview-empty">${t('shared.figure.no_palette_saved', '还没有保存配色')}</span>`;
         }
 
         return `
@@ -1538,22 +1539,22 @@ const FigureViewer = {
 
     renderFigureLocation(figure) {
         const label = figure.display_label || (figure.subfigure_label ? `Fig ${figure.figure_index || '-'}${figure.subfigure_label}` : `Fig ${figure.figure_index || '-'}`);
-        const source = figure.source === 'manual' ? ' · 人工提取' : '';
-        const parent = figure.parent_figure_id ? ` · 来自 ${figure.parent_display_label || `Fig ${figure.figure_index || '-'}`}` : '';
-        return `第 ${figure.page_number || '-'} 页 · ${Utils.escapeHTML(label)}${parent}${source}`;
+        const source = figure.source === 'manual' ? ` · ${t('shared.figure.manual_extraction', '人工提取')}` : '';
+        const parent = figure.parent_figure_id ? ` · ${t('shared.figure.from_parent', '来自')} ${figure.parent_display_label || `Fig ${figure.figure_index || '-'}`}` : '';
+        return `${t('shared.figure.page_n', '第 {page} 页').replace('{page}', figure.page_number || '-')} · ${Utils.escapeHTML(label)}${parent}${source}`;
     },
 
     renderSubfigureSelectionList() {
         const selections = this.cropState?.selections || [];
         if (!selections.length) {
-            return '<div class="figure-subfigure-empty"><p>左侧拖拽后，新的截取结果会出现在这里。</p></div>';
+            return `<div class="figure-subfigure-empty"><p>${t('shared.figure.drag_hint', '左侧拖拽后，新的截取结果会出现在这里。')}</p></div>`;
         }
 
         return selections.map((selection, index) => `
             <article class="figure-subfigure-selection">
                 <div class="figure-subfigure-selection-head">
                     <strong>${Utils.escapeHTML(this.subfigureSelectionTitle(selection, index))}</strong>
-                    <button class="btn btn-outline btn-small" type="button" data-subfigure-action="remove-selection" data-selection-id="${selection.id}">删除</button>
+                    <button class="btn btn-outline btn-small" type="button" data-subfigure-action="remove-selection" data-selection-id="${selection.id}">${t("shared.figure.delete", "删除")}</button>
                 </div>
                 <div class="figure-subfigure-selection-meta">
                     <span>x ${(selection.x * 100).toFixed(1)}%</span>
@@ -1562,23 +1563,23 @@ const FigureViewer = {
                     <span>h ${(selection.height * 100).toFixed(1)}%</span>
                 </div>
                 <label class="field">
-                    <span>名称 / Label</span>
+                    <span>${t("shared.figure.label_field", "名称 / Label")}</span>
                     <input
                         class="form-input"
                         type="text"
                         maxlength="12"
-                        placeholder="只支持 a-z；留空自动补 a / b / c"
+                        placeholder="${t('shared.figure.label_placeholder', '只支持 a-z；留空自动补 a / b / c')}"
                         data-subfigure-field="label"
                         data-selection-id="${selection.id}"
                         value="${Utils.escapeHTML(this.normalizeSubfigureLabelInput(selection.label || ''))}"
                     >
                 </label>
                 <label class="field">
-                    <span>Caption / 备注</span>
+                    <span>${t("shared.figure.caption_field", "Caption / 备注")}</span>
                     <textarea
                         class="form-textarea figure-subfigure-caption"
                         rows="2"
-                        placeholder="可选，保存后作为子图说明"
+                        placeholder="${t('shared.figure.caption_optional', '可选，保存后作为子图说明')}"
                         data-subfigure-field="caption"
                         data-selection-id="${selection.id}"
                     >${Utils.escapeHTML(selection.caption || '')}</textarea>
@@ -1595,25 +1596,25 @@ const FigureViewer = {
         const hasPalette = this.figureHasPalette(figure);
         const failure = this.paletteFailureMessage(figure.id);
         const caption = String(figure.caption || '').trim();
-        const overlayButtonLabel = loading ? '提取中...' : (failure ? '重新提取配色' : '提取配色');
+        const overlayButtonLabel = loading ? t('shared.figure.extracting', '提取中...') : (failure ? t('shared.figure.re_extract_palette', '重新提取配色') : t('shared.figure.extract_palette', '提取配色'));
         const paletteStatus = loading
-            ? '配色提取中'
-            : (hasPalette ? (figure.palette_name || '已保存配色') : (failure ? '提取失败' : '待提取配色'));
+            ? t('shared.figure.palette_extracting', '配色提取中')
+            : (hasPalette ? (figure.palette_name || t('shared.figure.palette_saved', '已保存配色')) : (failure ? t('shared.figure.palette_failed', '提取失败') : t('shared.figure.palette_pending', '待提取配色')));
         const paletteHint = loading
-            ? '正在自动提取这张子图的主色。'
+            ? t('shared.figure.palette_extracting_hint', '正在自动提取这张子图的主色。')
             : (hasPalette
-                ? `这组颜色已经绑定到 ${figure.display_label || '当前子图'}。`
-                : (failure ? '点击图片上的按钮重新提取配色。' : '点击图片上的按钮即可提取配色。'));
+                ? t('shared.figure.palette_bound_hint', '这组颜色已经绑定到 {label}。').replace('{label}', figure.display_label || t('shared.figure.subfigure_label', '子图'))
+                : (failure ? t('shared.figure.palette_retry_hint', '点击图片上的按钮重新提取配色。') : t('shared.figure.palette_click_hint', '点击图片上的按钮即可提取配色。')));
         const actions = [];
         if (hasPalette) {
             actions.push(`
                 <button class="btn btn-outline btn-small" type="button" data-subfigure-action="copy-palette" data-figure-id="${figure.id}">
-                    复制配色
+                    ${t("shared.figure.copy_palette", "复制配色")}
                 </button>
             `);
             actions.push(`
                 <button class="btn btn-outline btn-small danger" type="button" data-subfigure-action="delete-palette" data-figure-id="${figure.id}">
-                    删除配色
+                    ${t("shared.figure.delete_palette", "删除配色")}
                 </button>
             `);
         }
@@ -1637,22 +1638,22 @@ const FigureViewer = {
                         >${Utils.escapeHTML(overlayButtonLabel)}</button>
                     `}
                     <div class="figure-subfigure-card-badges">
-                        <span class="figure-badge figure-badge-strong">${Utils.escapeHTML(figure.display_label || '子图')}</span>
-                        ${figure.parent_display_label ? `<span class="figure-badge">来自 ${Utils.escapeHTML(figure.parent_display_label)}</span>` : ''}
-                        ${hasPalette ? '<span class="figure-badge figure-badge-accent">已绑定配色</span>' : '<span class="figure-badge">未提取配色</span>'}
+                        <span class="figure-badge figure-badge-strong">${Utils.escapeHTML(figure.display_label || t('shared.figure.subfigure_label', '子图'))}</span>
+                        ${figure.parent_display_label ? `<span class="figure-badge">${t('shared.figure.from_parent', '来自')} ${Utils.escapeHTML(figure.parent_display_label)}</span>` : ''}
+                        ${hasPalette ? `<span class="figure-badge figure-badge-accent">${t('shared.figure.palette_bound', '已绑定配色')}</span>` : `<span class="figure-badge">${t('shared.figure.palette_not_extracted', '未提取配色')}</span>`}
                     </div>
                 </div>
                 <div class="figure-subfigure-card-body">
                     <div class="figure-subfigure-card-head">
-                        <strong>${Utils.escapeHTML(figure.display_label || '子图')}</strong>
+                        <strong>${Utils.escapeHTML(figure.display_label || t('shared.figure.subfigure_label', '子图'))}</strong>
                         <span>${Utils.escapeHTML(paletteStatus)}</span>
                     </div>
                     <div class="figure-subfigure-card-palette">
-                        <span class="figure-subfigure-card-palette-label">提取颜色</span>
+                        <span class="figure-subfigure-card-palette-label">${t("shared.figure.extracted_colors", "提取颜色")}</span>
                         ${this.renderPaletteSwatches(figure.palette_colors || [], { compact: true })}
                     </div>
                     <p class="figure-subfigure-card-hint">${Utils.escapeHTML(paletteHint)}</p>
-                    <p class="figure-subfigure-card-caption ${caption ? '' : 'is-empty'}">${Utils.escapeHTML(caption || '这个子图还没有单独说明。')}</p>
+                    <p class="figure-subfigure-card-caption ${caption ? '' : 'is-empty'}">${Utils.escapeHTML(caption || t('shared.figure.no_caption_yet', '这个子图还没有单独说明。'))}</p>
                     <div class="figure-subfigure-card-actions">
                         ${actions.join('')}
                     </div>
@@ -1672,26 +1673,26 @@ const FigureViewer = {
                     <div class="figure-lightbox-ai-head">
                         <div>
                             <p class="eyebrow">Subfigure</p>
-                            <h3>子图配色</h3>
+                            <h3>${t("shared.figure.subfigure_palette", "子图配色")}</h3>
                         </div>
-                        <span class="figure-subfigure-count">仅保留配色相关信息</span>
+                        <span class="figure-subfigure-count">${t("shared.figure.only_palette_info", "仅保留配色相关信息")}</span>
                     </div>
                     <div class="figure-subfigure-summary is-compact">
-                        <p>当前查看的是 <strong>${Utils.escapeHTML(figure.display_label || '')}</strong>，来源于 <strong>${Utils.escapeHTML(figure.parent_display_label || '')}</strong>。</p>
-                        <p>子图不会出现在图片库和笔记页，这里只用于预览和管理配色。</p>
+                        <p>${t('shared.figure.current_viewing', '当前查看的是 {label}，来源于 {parent}。').replace('{label}', `<strong>${Utils.escapeHTML(figure.display_label || '')}</strong>`).replace('{parent}', `<strong>${Utils.escapeHTML(figure.parent_display_label || '')}</strong>`)}</p>
+                        <p>${t('shared.figure.subfigure_not_in_library', '子图不会出现在图片库和笔记页，这里只用于预览和管理配色。')}</p>
                     </div>
                     <div class="figure-subfigure-card-list is-single">
                         ${this.renderSubfigurePaletteCard(figure, { standalone: true })}
                     </div>
                     <div class="figure-subfigure-actions">
-                        <button class="btn btn-outline" type="button" data-figure-action="open-paper">查看来源文献</button>
-                        <a class="btn btn-outline" href="/palettes">查看配色库</a>
+                        <button class="btn btn-outline" type="button" data-figure-action="open-paper">${t("shared.figure.view_source_paper", "查看来源文献")}</button>
+                        <a class="btn btn-outline" href="/palettes">${t('shared.figure.view_palette_library', '查看配色库')}</a>
                     </div>
                 </section>
             `;
         }
 
-        const countLabel = loading ? '加载中...' : `${subfigures.length} 张`;
+        const countLabel = loading ? t('shared.figure.loading', '加载中...') : `${subfigures.length} ${t('shared.paper.n_figures', '张')}`;
         if (!workspaceOpen) {
             const countBadge = loading ? '...' : String(subfigures.length);
             return `
@@ -1700,13 +1701,13 @@ const FigureViewer = {
                         class="figure-subfigure-entry-trigger"
                         type="button"
                         data-figure-action="toggle-subfigure-crop"
-                        aria-label="打开子图提取或查看，当前已有 ${Utils.escapeHTML(countLabel)}"
+                        aria-label="${t('shared.figure.subfigure_entry_title', '打开子图提取或查看')}"
                     >
                         <div class="figure-subfigure-entry">
                             <div class="figure-subfigure-entry-copy">
-                                <p class="eyebrow">子图</p>
-                                <strong>子图提取或查看</strong>
-                                <span>点击后进入工作台，查看已有子图或继续提取新的区域。</span>
+                                <p class="eyebrow">${t("shared.figure.subfigure_label", "子图")}</p>
+                                <strong>${t("shared.figure.subfigure_entry_title", "子图提取或查看")}</strong>
+                                <span>${t("shared.figure.subfigure_entry_hint", "点击后进入工作台，查看已有子图或继续提取新的区域。")}</span>
                             </div>
                             <span class="figure-subfigure-entry-count">${Utils.escapeHTML(countBadge)}</span>
                         </div>
@@ -1720,26 +1721,26 @@ const FigureViewer = {
                 <div class="figure-lightbox-ai-head">
                     <div>
                         <p class="eyebrow">Subfigure</p>
-                        <h3>子图提取工作台</h3>
+                        <h3>${t("shared.figure.subfigure_workspace_title", "子图提取工作台")}</h3>
                     </div>
-                    <span class="figure-subfigure-count">已有 ${countLabel}</span>
+                    <span class="figure-subfigure-count">${t('shared.figure.n_loaded', '已有 {count}').replace('{count}', countLabel)}</span>
                 </div>
                 <div class="figure-subfigure-summary">
-                    <p>左侧直接拖拽框选子图区域，右侧集中查看待保存结果和已有子图。</p>
-                    <p>命名只支持 <strong>a-z</strong>；如果你输入大写，保存时会自动转成小写。留空则按 ${Utils.escapeHTML(figure.display_label || `Fig ${figure.figure_index || '-'}`)}a / b / c ... 自动补位。</p>
+                    <p>${t("shared.figure.subfigure_workspace_summary", "左侧直接拖拽框选子图区域，右侧集中查看待保存结果和已有子图。")}</p>
+                    <p>${t('shared.figure.subfigure_label_hint', '命名只支持 a-z；留空则按 {label}a / b / c ... 自动补位。').replace('{label}', Utils.escapeHTML(figure.display_label || `Fig ${figure.figure_index || '-'}`))}</p>
                 </div>
                 <div class="figure-subfigure-workspace-block">
                     <div class="figure-subfigure-workspace-head">
-                        <strong>当前截取结果</strong>
-                        <span>${(this.cropState.selections || []).length} 个待保存区域</span>
+                        <strong>${t("shared.figure.current_selections", "当前截取结果")}</strong>
+                        <span>${(this.cropState.selections || []).length} ${t("shared.figure.n_pending_regions", "个待保存区域")}</span>
                     </div>
                     <div class="figure-subfigure-editor">
                         <div class="figure-subfigure-editor-head">
-                            <p>左侧当前大图保持可操作状态；每框出一个区域，右侧都会累积一条待保存结果。</p>
+                            <p>${t("shared.figure.selection_editor_hint", "左侧当前大图保持可操作状态；每框出一个区域，右侧都会累积一条待保存结果。")}</p>
                             <div class="figure-subfigure-editor-actions">
-                                <button class="btn btn-outline btn-small" type="button" data-figure-action="clear-subfigure-selections" ${(this.cropState.selections || []).length ? '' : 'disabled'}>清空</button>
-                                <button class="btn btn-outline btn-small" type="button" data-figure-action="cancel-subfigure-crop" ${this.cropState.submitting ? 'disabled' : ''}>关闭工作台</button>
-                                <button class="btn btn-primary btn-small" type="button" data-figure-action="save-subfigures" ${(this.cropState.selections || []).length && !this.cropState.submitting ? '' : 'disabled'}>${this.cropState.submitting ? '保存中...' : '保存子图'}</button>
+                                <button class="btn btn-outline btn-small" type="button" data-figure-action="clear-subfigure-selections" ${(this.cropState.selections || []).length ? '' : 'disabled'}>${t('shared.figure.clear', '清空')}</button>
+                                <button class="btn btn-outline btn-small" type="button" data-figure-action="cancel-subfigure-crop" ${this.cropState.submitting ? 'disabled' : ''}>${t('shared.figure.close_workspace', '关闭工作台')}</button>
+                                <button class="btn btn-primary btn-small" type="button" data-figure-action="save-subfigures" ${(this.cropState.selections || []).length && !this.cropState.submitting ? '' : 'disabled'}>${this.cropState.submitting ? t('shared.figure.saving', '保存中...') : t('shared.figure.save_subfigures', '保存子图')}</button>
                             </div>
                         </div>
                         <div class="figure-subfigure-selection-list">${this.renderSubfigureSelectionList()}</div>
@@ -1747,12 +1748,12 @@ const FigureViewer = {
                 </div>
                 <div class="figure-subfigure-workspace-block">
                     <div class="figure-subfigure-workspace-head">
-                        <strong>已保存子图</strong>
+                        <strong>${t("shared.figure.saved_subfigures", "已保存子图")}</strong>
                         <span>${countLabel}</span>
                     </div>
                     ${subfigures.length
                         ? `<div class="figure-subfigure-card-list is-scrollable">${subfigures.map((item) => this.renderSubfigurePaletteCard(item)).join('')}</div>`
-                        : '<div class="figure-subfigure-empty"><p>当前还没有提取过子图。</p></div>'}
+                        : `<div class="figure-subfigure-empty"><p>${t('shared.figure.no_subfigures_yet', '当前还没有提取过子图。')}</p></div>`}
                 </div>
             </section>
         `;
@@ -1762,32 +1763,32 @@ const FigureViewer = {
         const figure = this.findFigureInCurrentPaper(figureID);
         const colors = Array.isArray(figure?.palette_colors) ? figure.palette_colors.filter(Boolean) : [];
         if (!colors.length) {
-            Utils.showToast('当前子图还没有保存配色', 'error');
+            Utils.showToast(t('shared.figure.no_palette_to_copy', '当前子图还没有保存配色'), 'error');
             return;
         }
 
         try {
             await navigator.clipboard.writeText(colors.join(', '));
-            Utils.showToast(`${figure.display_label || '子图'} 配色已复制`);
+            Utils.showToast(t('shared.figure.palette_copied', '{label} 配色已复制').replace('{label}', figure.display_label || t('shared.figure.subfigure_label', '子图')));
         } catch (error) {
-            Utils.showToast('复制失败', 'error');
+            Utils.showToast(t('shared.figure.copy_failed', '复制失败'), 'error');
         }
     },
 
     async deletePaletteForFigure(figureID) {
         const figure = this.findFigureInCurrentPaper(figureID);
         if (!figure?.palette_id) {
-            Utils.showToast('当前子图还没有可删除的配色', 'error');
+            Utils.showToast(t('shared.figure.no_palette_to_delete', '当前子图还没有可删除的配色'), 'error');
             return;
         }
 
-        const confirmed = await Utils.confirm(`删除后只会移除 ${figure.display_label || '当前子图'} 的配色，不会删除子图本身。`);
+        const confirmed = await Utils.confirm(t('shared.figure.confirm_delete_palette', '删除后只会移除 {label} 的配色，不会删除子图本身。').replace('{label}', figure.display_label || t('shared.figure.subfigure_label', '子图')));
         if (!confirmed) return;
 
         try {
             await API.deletePalette(figure.palette_id);
             const paper = await this.refreshPaperDetail(figure.paper_id);
-            Utils.showToast('子图配色已删除');
+            Utils.showToast(t('shared.figure.palette_deleted', '子图配色已删除'));
             this.render();
             if (paper && typeof this.onMetaChanged === 'function') {
                 await this.onMetaChanged(paper);
@@ -1800,15 +1801,15 @@ const FigureViewer = {
     async deleteSubfigure(figureID) {
         const figure = this.findFigureInCurrentPaper(figureID);
         if (!figure) {
-            Utils.showToast('当前子图不存在或已被删除', 'error');
+            Utils.showToast(t('shared.figure.subfigure_not_found', '当前子图不存在或已被删除'), 'error');
             return;
         }
         if (!figure.parent_figure_id) {
-            Utils.showToast('这里只支持删除子图', 'error');
+            Utils.showToast(t('shared.figure.only_delete_subfigure', '这里只支持删除子图'), 'error');
             return;
         }
 
-        const confirmed = await Utils.confirm(`删除后会移除 ${figure.display_label || '当前子图'} 以及它绑定的配色。`);
+        const confirmed = await Utils.confirm(t('shared.figure.confirm_delete_subfigure', '删除后会移除 {label} 以及它绑定的配色。').replace('{label}', figure.display_label || t('shared.figure.subfigure_label', '子图')));
         if (!confirmed) return;
 
         try {
@@ -1819,7 +1820,7 @@ const FigureViewer = {
                 this.syncPaperMetadata(payload.paper);
             }
 
-            Utils.showToast('子图已删除');
+            Utils.showToast(t('shared.figure.subfigure_deleted', '子图已删除'));
             if (payload.paper && typeof this.onMetaChanged === 'function') {
                 await this.onMetaChanged(payload.paper);
             }
@@ -1840,7 +1841,7 @@ const FigureViewer = {
             const image = new Image();
             image.decoding = 'async';
             image.onload = () => resolve(image);
-            image.onerror = () => reject(new Error('子图图片加载失败，暂时无法提取配色'));
+            image.onerror = () => reject(new Error(t('shared.figure.image_load_error', '子图图片加载失败，暂时无法提取配色')));
             image.src = imageURL;
         });
     },
@@ -1935,7 +1936,7 @@ const FigureViewer = {
 
         const fallback = this.collectPaletteCandidates(imageData.data, { includeNeutral: true, limit: 6 });
         if (!fallback.length) {
-            throw new Error('这张子图里没有提取到有效配色');
+            throw new Error(t('shared.figure.no_valid_colors', '这张子图里没有提取到有效配色'));
         }
         return fallback;
     },
@@ -1953,13 +1954,13 @@ const FigureViewer = {
         const figure = this.findFigureInCurrentPaper(figureID);
         if (!figure) {
             if (!silentError) {
-                Utils.showToast('没有找到对应的子图', 'error');
+                Utils.showToast(t('shared.figure.subfigure_not_found_silent', '没有找到对应的子图'), 'error');
             }
             return null;
         }
         if (!figure.parent_figure_id) {
             if (!silentError) {
-                Utils.showToast('当前只支持对子图提取配色', 'error');
+                Utils.showToast(t('shared.figure.only_subfigure_palette', '当前只支持对子图提取配色'), 'error');
             }
             return null;
         }
@@ -1977,14 +1978,14 @@ const FigureViewer = {
             this.syncPaperMetadata(payload.paper);
             this.setPaletteFailure(figureID, '');
             if (!silentSuccess) {
-                Utils.showToast(`${figure.display_label || '子图'} 配色已保存`);
+                Utils.showToast(t('shared.figure.palette_save_success', '{label} 配色已保存').replace('{label}', figure.display_label || t('shared.figure.subfigure_label', '子图')));
             }
             if (!deferMetaChanged && typeof this.onMetaChanged === 'function') {
                 await this.onMetaChanged(payload.paper);
             }
             return payload;
         } catch (error) {
-            this.setPaletteFailure(figureID, error.message || '配色提取失败');
+            this.setPaletteFailure(figureID, error.message || t('shared.figure.palette_extract_failed', '配色提取失败'));
             this.paletteRequestState.autoQueuedFigureIDs.delete(Number(figureID || 0));
             if (!silentError) {
                 Utils.showToast(error.message, 'error');
@@ -2042,7 +2043,7 @@ const FigureViewer = {
 
     async downloadCurrentImage() {
         if (!this.currentFigure?.image_url) {
-            Utils.showToast('当前图片无法下载', 'error');
+            Utils.showToast(t('shared.figure.image_download_failed', '当前图片无法下载'), 'error');
             return;
         }
 
@@ -2052,30 +2053,30 @@ const FigureViewer = {
                 credentials: 'same-origin'
             });
             if (!response.ok) {
-                throw new Error(`图片下载失败 (${response.status})`);
+                throw new Error(t('shared.figure.image_download_error', '图片下载失败') + ` (${response.status})`);
             }
 
             const saved = await Utils.saveBlobDownload(await response.blob(), filename);
             if (saved) {
-                Utils.showToast('图片已保存');
+                Utils.showToast(t('shared.figure.image_saved', '图片已保存'));
             }
         } catch (error) {
-            Utils.showToast(error.message || '图片下载失败', 'error');
+            Utils.showToast(error.message || t('shared.figure.image_download_error', '图片下载失败'), 'error');
         }
     },
 
     async copyAIResult(kind) {
         const text = this.copyTextForCurrentResult(kind);
         if (!text) {
-            Utils.showToast('当前没有可复制的内容', 'error');
+            Utils.showToast(t('shared.figure.no_content_to_copy', '当前没有可复制的内容'), 'error');
             return;
         }
 
         try {
             await navigator.clipboard.writeText(text);
-            Utils.showToast('已复制');
+            Utils.showToast(t('shared.figure.copied', '已复制'));
         } catch (error) {
-            Utils.showToast('复制失败', 'error');
+            Utils.showToast(t('shared.figure.copy_failed', '复制失败'), 'error');
         }
     },
 
@@ -2091,7 +2092,7 @@ const FigureViewer = {
 
     aiNoteWriteDisabledReason(kind) {
         if (!this.isCurrentAINoteWriteDisabled(kind)) return '';
-        return '图片解读输出中，完成后才能写入笔记';
+        return t('shared.figure.ai_note_disabled', '图片解读输出中，完成后才能写入笔记');
     },
 
     renderAIHeadActions(options = {}) {
@@ -2104,11 +2105,11 @@ const FigureViewer = {
         const buttons = [];
 
         if (copyKind) {
-            buttons.push(`<button class="btn btn-outline btn-small" type="button" data-figure-ai-copy="${Utils.escapeHTML(copyKind)}">复制</button>`);
+            buttons.push(`<button class="btn btn-outline btn-small" type="button" data-figure-ai-copy="${Utils.escapeHTML(copyKind)}">${t('shared.translate.copy', '复制')}</button>`);
         }
         if (noteKind) {
             const titleAttr = noteTitle ? ` title="${Utils.escapeHTML(noteTitle)}"` : '';
-            buttons.push(`<button class="btn btn-outline btn-small" type="button" data-figure-ai-note="${Utils.escapeHTML(noteKind)}" ${disableNote ? 'disabled' : ''}${titleAttr}>写入笔记</button>`);
+            buttons.push(`<button class="btn btn-outline btn-small" type="button" data-figure-ai-note="${Utils.escapeHTML(noteKind)}" ${disableNote ? 'disabled' : ''}${titleAttr}>${t('shared.figure.write_to_notes', '写入笔记')}</button>`);
         }
 
         if (!buttons.length) return '';
@@ -2124,19 +2125,19 @@ const FigureViewer = {
 
         const text = this.copyTextForCurrentResult(kind);
         if (!text) {
-            Utils.showToast('当前没有可写入笔记的内容', 'error');
+            Utils.showToast(t('shared.figure.no_content_to_write', '当前没有可写入笔记的内容'), 'error');
             return;
         }
 
         const normalized = text.trim();
         if (!normalized) {
-            Utils.showToast('当前没有可写入笔记的内容', 'error');
+            Utils.showToast(t('shared.figure.no_content_to_write', '当前没有可写入笔记的内容'), 'error');
             return;
         }
 
         const currentNotes = this.currentFigureNotesDraft().trim();
         const nextNotes = currentNotes ? `${currentNotes}\n\n${normalized}` : normalized;
-        await this.updateCurrentFigureNotes(nextNotes, 'AI 内容已写入图片笔记');
+        await this.updateCurrentFigureNotes(nextNotes, t('shared.figure.ai_content_written', 'AI 内容已写入图片笔记'));
     },
 
     copyTextForCurrentResult(kind) {
@@ -2203,9 +2204,9 @@ const FigureViewer = {
             return `
                 <div class="figure-ai-result loading">
                     <div class="figure-ai-head">
-                        <p class="figure-ai-status">${Utils.escapeHTML(activeLabel)}准备中</p>
+                        <p class="figure-ai-status">${Utils.escapeHTML(activeLabel)}${t('shared.figure.ai_preparing', '准备中')}</p>
                     </div>
-                    <div class="figure-ai-answer">正在结合全文、摘要、标签和图片生成结果。</div>
+                    <div class="figure-ai-answer">${t('shared.figure.ai_generating', '正在结合全文、摘要、标签和图片生成结果。')}</div>
                 </div>
             `;
         }
@@ -2214,7 +2215,7 @@ const FigureViewer = {
             return `
                 <div class="figure-ai-result loading">
                     <div class="figure-ai-head">
-                        <p class="figure-ai-status">${Utils.escapeHTML(activeLabel)}进行中</p>
+                        <p class="figure-ai-status">${Utils.escapeHTML(activeLabel)}${t('shared.figure.ai_in_progress', '进行中')}</p>
                         ${requestState.answer
                             ? this.renderAIHeadActions({
                                 copyKind: 'answer',
@@ -2224,7 +2225,7 @@ const FigureViewer = {
                             })
                             : ''}
                     </div>
-                    <div class="figure-ai-answer">${Utils.escapeHTML(requestState.answer || '正在结合全文、摘要、标签和图片生成结果。')}</div>
+                    <div class="figure-ai-answer">${Utils.escapeHTML(requestState.answer || t('shared.figure.ai_generating', '正在结合全文、摘要、标签和图片生成结果。'))}</div>
                     <div class="figure-ai-stream-actions">
                         <button class="btn btn-outline" type="button" data-figure-ai-stop>Stop</button>
                     </div>
@@ -2236,8 +2237,8 @@ const FigureViewer = {
             return `
                 <div class="figure-ai-result error">
                     <div class="figure-ai-head">
-                        <p class="figure-ai-status">${Utils.escapeHTML(activeLabel)}失败</p>
-                        ${requestState.error ? '<button class="btn btn-outline btn-small" type="button" data-figure-ai-copy="answer">复制</button>' : ''}
+                        <p class="figure-ai-status">${Utils.escapeHTML(activeLabel)}${t('shared.figure.ai_failed', '失败')}</p>
+                        ${requestState.error ? `<button class="btn btn-outline btn-small" type="button" data-figure-ai-copy="answer">${t('shared.translate.copy', '复制')}</button>` : ''}
                     </div>
                     <div class="figure-ai-answer">${Utils.escapeHTML(requestState.error)}</div>
                 </div>
@@ -2248,7 +2249,7 @@ const FigureViewer = {
             return `
                 <div class="figure-ai-result">
                     <div class="figure-ai-head">
-                        <p class="figure-ai-status">${Utils.escapeHTML(activeLabel)}已停止</p>
+                        <p class="figure-ai-status">${Utils.escapeHTML(activeLabel)}${t('shared.figure.ai_stopped', '已停止')}</p>
                         ${requestState.answer
                             ? this.renderAIHeadActions({
                                 copyKind: 'answer',
@@ -2256,7 +2257,7 @@ const FigureViewer = {
                             })
                             : ''}
                     </div>
-                    <div class="figure-ai-answer">${Utils.escapeHTML(requestState.answer || '这次解读已被手动停止。')}</div>
+                    <div class="figure-ai-answer">${Utils.escapeHTML(requestState.answer || t('shared.figure.ai_stopped_hint', '这次解读已被手动停止。'))}</div>
                 </div>
             `;
         }
@@ -2265,8 +2266,8 @@ const FigureViewer = {
         if (!result) {
             return `
                 <div class="figure-ai-result empty">
-                    <p class="figure-ai-status">选择一个快捷动作</p>
-                    <div class="figure-ai-answer">这里会显示图片解读或 Tag 建议的返回结果。</div>
+                    <p class="figure-ai-status">${t("shared.figure.ai_select_action", "选择一个快捷动作")}</p>
+                    <div class="figure-ai-answer">${t("shared.figure.ai_result_hint", "这里会显示图片解读或 Tag 建议的返回结果。")}</div>
                 </div>
             `;
         }
@@ -2293,7 +2294,7 @@ const FigureViewer = {
         return `
             <div class="figure-ai-result ${isWaiting ? 'loading' : ''}">
                 <div class="figure-ai-head">
-                    <p class="figure-ai-status">${Utils.escapeHTML(this.aiActionLabel(result.action))} · ${Utils.escapeHTML(result.provider)} · ${Utils.escapeHTML(result.model)} · ${Utils.escapeHTML(result.mode)}${isWaiting ? ' · 加载中' : ''}</p>
+                    <p class="figure-ai-status">${Utils.escapeHTML(this.aiActionLabel(result.action))} · ${Utils.escapeHTML(result.provider)} · ${Utils.escapeHTML(result.model)} · ${Utils.escapeHTML(result.mode)}${isWaiting ? ` · ${t('shared.figure.ai_loading_suffix', '加载中')}` : ''}</p>
                     ${result.answer
                         ? this.renderAIHeadActions({
                             copyKind: 'answer',
@@ -2303,10 +2304,10 @@ const FigureViewer = {
                         })
                         : ''}
                 </div>
-                <div class="figure-ai-answer">${Utils.escapeHTML(result.answer || '模型没有返回文本结果。')}</div>
+                <div class="figure-ai-answer">${Utils.escapeHTML(result.answer || t('shared.figure.ai_no_result', '模型没有返回文本结果。'))}</div>
                 ${(result.suggested_tags || []).length ? `
                     <div class="figure-ai-supplement">
-                        <span>Tag 建议</span>
+                        <span>Tag ${t('shared.figure.tag_suggestion', '建议')}</span>
                         <div class="figure-ai-tag-list">${tags}</div>
                     </div>
                 ` : ''}
@@ -2316,24 +2317,24 @@ const FigureViewer = {
 
     aiActionLabel(action) {
         const labels = {
-            figure_interpretation: '图片解读',
-            tag_suggestion: 'Tag 建议'
+            figure_interpretation: t('shared.figure.figure_interpretation', '图片解读'),
+            tag_suggestion: t('shared.figure.tag_suggestion', 'Tag 建议')
         };
-        return labels[action] || 'AI 结果';
+        return labels[action] || t('shared.figure.ai_result', 'AI 结果');
     },
 
     renderAIActionButtons() {
         const aiLoading = Boolean(this.aiRequestState?.loading) || this.isCropModeEnabled();
         return `
-            <button class="btn btn-outline ${this.activeAIAction() === 'figure_interpretation' ? 'active' : ''}" type="button" data-figure-ai-action="figure_interpretation" ${aiLoading ? 'disabled' : ''}>图片解读</button>
-            <button class="btn btn-outline ${this.activeAIAction() === 'tag_suggestion' ? 'active' : ''}" type="button" data-figure-ai-action="tag_suggestion" ${aiLoading ? 'disabled' : ''}>Tag 建议</button>
+            <button class="btn btn-outline ${this.activeAIAction() === 'figure_interpretation' ? 'active' : ''}" type="button" data-figure-ai-action="figure_interpretation" ${aiLoading ? 'disabled' : ''}>${t('shared.figure.figure_interpretation', '图片解读')}</button>
+            <button class="btn btn-outline ${this.activeAIAction() === 'tag_suggestion' ? 'active' : ''}" type="button" data-figure-ai-action="tag_suggestion" ${aiLoading ? 'disabled' : ''}>${t('shared.figure.tag_suggestion', 'Tag 建议')}</button>
         `;
     },
 
     render() {
         this.currentFigure = this.figures?.[this.index];
         if (!this.currentFigure) {
-            this.body.innerHTML = '<div class="empty-state"><h3>没有可展示的图片</h3></div>';
+            this.body.innerHTML = '<div class="empty-state"><h3>${t("shared.figure.no_figures_to_show", "没有可展示的图片")}</h3></div>';
             return;
         }
 
@@ -2350,8 +2351,8 @@ const FigureViewer = {
         const captionDraft = this.captionDraft ?? (figure.caption || '');
         const notePreview = String(figure.notes_text || '').replace(/\s+/g, ' ').trim();
         const mediaHint = subfigureWorkspaceOpen
-            ? '左侧拖拽框选，右侧集中保存子图结果'
-            : (figure.parent_figure_id ? '当前是子图预览，右侧仅保留配色相关内容' : '滚轮缩放，按住左键或中键拖动');
+            ? t('shared.figure.media_hint_crop', '左侧拖拽框选，右侧集中保存子图结果')
+            : (figure.parent_figure_id ? t('shared.figure.media_hint_subfigure', '当前是子图预览，右侧仅保留配色相关内容') : t('shared.figure.media_hint_default', '滚轮缩放，按住左键或中键拖动'));
         const editableTags = (figure.tags || []).map((tag) => `
             <button class="figure-editable-tag" type="button" data-figure-meta-action="remove-tag" data-tag-name="${Utils.escapeHTML(typeof tag === 'string' ? tag : tag.name || '')}" aria-label="移除标签 ${Utils.escapeHTML(typeof tag === 'string' ? tag : tag.name || '')}">
                 <span>${Utils.escapeHTML(typeof tag === 'string' ? tag : tag.name || '')}</span>
@@ -2362,12 +2363,12 @@ const FigureViewer = {
             <div class="figure-lightbox ${subfigureWorkspaceOpen ? 'is-subfigure-workspace' : ''}">
                 <section class="figure-lightbox-media-panel">
                     <div class="figure-lightbox-toolbar">
-                        <div class="figure-lightbox-counter">第 ${this.index + 1} / ${total} 张 · 第 ${this.page} / ${this.totalPages} 页</div>
+                        <div class="figure-lightbox-counter">${t('shared.figure.counter', '第 {current} / {total} 张 · 第 {page} / {totalPages} 页').replace('{current}', this.index + 1).replace('{total}', total).replace('{page}', this.page).replace('{totalPages}', this.totalPages)}</div>
                         <div class="figure-lightbox-nav">
                             <span class="figure-lightbox-hint">${Utils.escapeHTML(mediaHint)}</span>
-                            <button class="btn btn-outline" type="button" data-figure-action="reset-view">复原视图</button>
-                            <button class="btn btn-outline" type="button" data-figure-action="prev" ${!canPrev || this.loadingPage || aiLoading || cropModeActive ? 'disabled' : ''}>上一张</button>
-                            <button class="btn btn-outline" type="button" data-figure-action="next" ${!canNext || this.loadingPage || aiLoading || cropModeActive ? 'disabled' : ''}>下一张</button>
+                            <button class="btn btn-outline" type="button" data-figure-action="reset-view">${t("shared.figure.reset_view", "复原视图")}</button>
+                            <button class="btn btn-outline" type="button" data-figure-action="prev" ${!canPrev || this.loadingPage || aiLoading || cropModeActive ? 'disabled' : ''}>${t('shared.figure.prev', '上一张')}</button>
+                            <button class="btn btn-outline" type="button" data-figure-action="next" ${!canNext || this.loadingPage || aiLoading || cropModeActive ? 'disabled' : ''}>${t('shared.figure.next', '下一张')}</button>
                         </div>
                     </div>
                     <div class="figure-lightbox-media" data-figure-viewport>
@@ -2379,14 +2380,14 @@ const FigureViewer = {
                     ${minimalFigureWorkspace ? '' : `
                         <div class="figure-lightbox-caption figure-lightbox-caption-editor">
                             <label class="field">
-                                <span>图片说明（Caption）</span>
-                                <textarea id="figureCaptionInput" class="form-textarea figure-caption-input" rows="4" placeholder="解析 caption 有误时，可在这里直接修正。">${Utils.escapeHTML(captionDraft)}</textarea>
+                                <span>${t("shared.figure.caption_label", "图片说明（Caption）")}</span>
+                                <textarea id="figureCaptionInput" class="form-textarea figure-caption-input" rows="4" placeholder="${t('shared.figure.caption_placeholder', '解析 caption 有误时，可在这里直接修正。')}">${Utils.escapeHTML(captionDraft)}</textarea>
                             </label>
                             <div class="figure-notes-actions figure-caption-actions">
-                                <span class="muted">caption 会参与检索；按 Ctrl/Cmd + Enter 可快速保存。</span>
+                                <span class="muted">${t('shared.figure.caption_hint', 'caption 会参与检索；按 Ctrl/Cmd + Enter 可快速保存。')}</span>
                                 <div class="figure-caption-action-group">
-                                    <button class="btn btn-outline btn-small" type="button" data-figure-meta-action="translate-caption">翻译说明</button>
-                                    <button class="btn btn-outline btn-small" type="button" data-figure-meta-action="save-caption">保存说明</button>
+                                    <button class="btn btn-outline btn-small" type="button" data-figure-meta-action="translate-caption">${t("shared.figure.translate_caption", "翻译说明")}</button>
+                                    <button class="btn btn-outline btn-small" type="button" data-figure-meta-action="save-caption">${t("shared.figure.save_caption", "保存说明")}</button>
                                 </div>
                             </div>
                         </div>
@@ -2404,28 +2405,28 @@ const FigureViewer = {
                     ${minimalFigureWorkspace ? '' : `
                         <div class="figure-lightbox-meta">
                             <div class="figure-lightbox-meta-item">
-                                <span>来源文献</span>
+                                <span>${t("shared.figure.source_paper", "来源文献")}</span>
                                 <strong>${Utils.escapeHTML(figure.paper_title)}</strong>
                             </div>
                             <div class="figure-lightbox-meta-item">
-                                <span>定位</span>
+                                <span>${t("shared.figure.location", "定位")}</span>
                                 <strong>${this.renderFigureLocation(figure)}</strong>
                             </div>
                             <div class="figure-lightbox-meta-item figure-lightbox-meta-item-editable">
-                                <span>标签</span>
+                                <span>${t("shared.figure.tags_label", "标签")}</span>
                                 <div class="figure-tag-editor">
                                     <div class="figure-tag-editor-list ${figure.tags?.length ? '' : 'is-empty'}">
-                                        ${figure.tags?.length ? editableTags : '<span class="figure-tag-empty">暂无标签</span>'}
+                                        ${figure.tags?.length ? editableTags : `<span class="figure-tag-empty">${t('shared.figure.no_tags', '暂无标签')}</span>`}
                                     </div>
                                     <div class="figure-tag-add">
                                         <div class="figure-tag-add-input">
-                                            <input id="figurePaperTagInput" class="form-input" type="text" placeholder="添加标签" value="${Utils.escapeHTML(this.tagInputDraft || '')}" autocomplete="off" spellcheck="false">
+                                            <input id="figurePaperTagInput" class="form-input" type="text" placeholder="${t('shared.figure.add_tag_placeholder', '添加标签')}" value="${Utils.escapeHTML(this.tagInputDraft || '')}" autocomplete="off" spellcheck="false">
                                             <div class="figure-tag-autocomplete hidden" data-figure-tag-suggestions></div>
                                         </div>
                                         <button class="btn btn-outline btn-small" type="button" data-figure-meta-action="add-tag" aria-label="添加标签">+</button>
                                     </div>
                                     <div class="figure-tag-presets">
-                                        <span class="figure-tag-presets-label">快捷标签</span>
+                                        <span class="figure-tag-presets-label">${t("shared.figure.quick_tags", "快捷标签")}</span>
                                         <div class="figure-tag-presets-list">
                                             ${this.renderPresetTagButtons()}
                                         </div>
@@ -2433,29 +2434,29 @@ const FigureViewer = {
                                 </div>
                             </div>
                             <div class="figure-lightbox-meta-item figure-lightbox-meta-item-editable">
-                                <span>图片笔记</span>
+                                <span>${t("shared.figure.figure_notes_label", "图片笔记")}</span>
                                 <button class="figure-note-inline-trigger ${notePreview ? '' : 'is-empty'}" type="button" data-figure-meta-action="open-notes" aria-label="打开图片笔记编辑器">
-                                    <span class="figure-note-inline-text">${Utils.escapeHTML(notePreview || '还没有图片笔记，点击后在独立笔记面板中编辑。')}</span>
-                                    <span class="figure-note-inline-action">打开笔记</span>
+                                    <span class="figure-note-inline-text">${Utils.escapeHTML(notePreview || t('shared.figure.figure_notes_empty_trigger', '还没有图片笔记，点击后在独立笔记面板中编辑。'))}</span>
+                                    <span class="figure-note-inline-action">${t("shared.figure.open_notes", "打开笔记")}</span>
                                 </button>
                             </div>
                         </div>
 
                         <div class="figure-lightbox-actions">
-                            <button class="btn btn-primary" type="button" data-figure-action="open-paper">查看来源文献</button>
-                            <a class="btn btn-outline" href="${Utils.resourceViewerURL('image', figure.image_url)}">打开原图</a>
+                            <button class="btn btn-primary" type="button" data-figure-action="open-paper">${t("shared.figure.view_source_paper", "查看来源文献")}</button>
+                            <a class="btn btn-outline" href="${Utils.resourceViewerURL('image', figure.image_url)}">${t('shared.figure.open_original', '打开原图')}</a>
                             ${canUseDesktopSave
-                                ? '<button class="btn btn-outline" type="button" data-figure-action="download-image">下载图片</button>'
-                                : `<a class="btn btn-outline" href="${figure.image_url}" download="${Utils.escapeHTML(figure.filename || 'figure.png')}">下载图片</a>`}
+                                ? `<button class="btn btn-outline" type="button" data-figure-action="download-image">${t('shared.figure.download_image', '下载图片')}</button>`
+                                : `<a class="btn btn-outline" href="${figure.image_url}" download="${Utils.escapeHTML(figure.filename || 'figure.png')}">${t('shared.figure.download_image', '下载图片')}</a>`}
                         </div>
 
                         <section class="figure-lightbox-ai">
                             <div class="figure-lightbox-ai-head">
                                 <div>
                                     <p class="eyebrow">AI Shortcut</p>
-                                    <h3>快速辅助阅读</h3>
+                                    <h3>${t("shared.figure.ai_quick_assist", "快速辅助阅读")}</h3>
                                 </div>
-                                <a class="btn btn-outline" href="/ai?paper_id=${figure.paper_id}">自由提问</a>
+                                <a class="btn btn-outline" href="/ai?paper_id=${figure.paper_id}">${t('shared.figure.free_ask', '自由提问')}</a>
                             </div>
                             <div class="figure-lightbox-ai-actions" data-figure-ai-actions>${this.renderAIActionButtons()}</div>
                             <div data-figure-ai-panel>${this.renderAIResultPanel()}</div>

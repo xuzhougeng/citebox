@@ -1,3 +1,4 @@
+if (typeof window.t !== 'function') window.t = function(k,f){return f||k};
 const CiteBoxTheme = {
     STORAGE_KEY: 'citebox_theme',
     THEMES: ['warm', 'light', 'dark'],
@@ -48,8 +49,8 @@ const CiteBoxTheme = {
             var dot = document.createElement('button');
             dot.className = 'theme-dot' + (theme === current ? ' active' : '');
             dot.dataset.theme = theme;
-            dot.title = self.LABELS[theme];
-            dot.setAttribute('aria-label', self.LABELS[theme]);
+            dot.title = t('shared.theme.' + theme, self.LABELS[theme]);
+            dot.setAttribute('aria-label', t('shared.theme.' + theme, self.LABELS[theme]));
             dot.style.setProperty('--dot-bg', self.DOTS[theme].bg);
             dot.style.setProperty('--dot-accent', self.DOTS[theme].accent);
             dot.addEventListener('click', function() { self.apply(theme); });
