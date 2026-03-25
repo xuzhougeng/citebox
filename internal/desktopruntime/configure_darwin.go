@@ -6,6 +6,7 @@ package desktopruntime
 #cgo CFLAGS: -x objective-c
 #cgo LDFLAGS: -framework Cocoa
 #import <Cocoa/Cocoa.h>
+#import <objc/runtime.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -97,6 +98,131 @@ static void citebox_focus_window(void *windowPtr) {
 		}
 	}
 }
+
+@interface CiteBoxStatusController : NSObject {
+@public
+	NSWindow *_window;
+	id _originalDelegate;
+	NSStatusItem *_statusItem;
+	NSMenu *_menu;
+	NSString *_appName;
+	NSString *_iconPath;
+}
+- (instancetype)initWithWindow:(NSWindow *)window appName:(NSString *)appName iconPath:(NSString *)iconPath;
+- (void)openWindow:(id)sender;
+- (void)quitApp:(id)sender;
+- (void)statusItemClicked:(id)sender;
+@end
+
+@implementation CiteBoxStatusController
+
+- (instancetype)initWithWindow:(NSWindow *)window appName:(NSString *)appName iconPath:(NSString *)iconPath {
+	self = [super init];
+	if (self == nil) {
+		return nil;
+	}
+
+	_window = window;
+	_originalDelegate = [window delegate];
+	_appName = [appName copy];
+	_iconPath = [iconPath copy];
+	return self;
+}
+
+- (BOOL)respondsToSelector:(SEL)selector {
+	return [super respondsToSelector:selector] || [_originalDelegate respondsToSelector:selector];
+}
+
+- (id)forwardingTargetForSelector:(SEL)selector {
+	if ([_originalDelegate respondsToSelector:selector]) {
+		return _originalDelegate;
+	}
+	return [super forwardingTargetForSelector:selector];
+}
+
+- (void)ensureStatusItem {
+	if (_statusItem != nil) {
+		return;
+	}
+
+	BOOL hasIcon = _iconPath != nil && [_iconPath length] > 0;
+	CGFloat itemLength = hasIcon ? NSSquareStatusItemLength : NSVariableStatusItemLength;
+	_statusItem = [[NSStatusBar systemStatusBar] statusItemWithLength:itemLength];
+	NSStatusBarButton *button = [_statusItem button];
+	if (button == nil) {
+		return;
+	}
+
+	if (hasIcon) {
+		NSImage *icon = [[NSImage alloc] initWithContentsOfFile:_iconPath];
+		if (icon != nil) {
+			[icon setTemplate:NO];
+			[button setImage:icon];
+		} else {
+			[button setTitle:_appName ?: @"CiteBox"];
+		}
+	} else {
+		[button setTitle:_appName ?: @"CiteBox"];
+	}
+
+	_menu = [[NSMenu alloc] initWithTitle:_appName ?: @"CiteBox"];
+
+	NSMenuItem *openItem = [[[NSMenuItem alloc]
+		initWithTitle:[NSString stringWithFormat:@"Open %@", _appName ?: @"CiteBox"]
+		       action:@selector(openWindow:)
+		keyEquivalent:@""] autorelease];
+	[openItem setTarget:self];
+	[_menu addItem:openItem];
+
+	[_menu addItem:[NSMenuItem separatorItem]];
+
+	NSMenuItem *quitItem = [[[NSMenuItem alloc]
+		initWithTitle:[NSString stringWithFormat:@"Quit %@", _appName ?: @"CiteBox"]
+		       action:@selector(quitApp:)
+		keyEquivalent:@""] autorelease];
+	[quitItem setTarget:self];
+	[_menu addItem:quitItem];
+
+	[button setTarget:self];
+	[button setAction:@selector(statusItemClicked:)];
+	[button sendActionOn:NSEventMaskLeftMouseUp | NSEventMaskRightMouseUp];
+}
+
+- (void)removeStatusItem {
+	if (_statusItem == nil) {
+		return;
+	}
+	[[NSStatusBar systemStatusBar] removeStatusItem:_statusItem];
+	_statusItem = nil;
+	_menu = nil;
+}
+
+- (void)openWindow:(id)sender {
+	[self removeStatusItem];
+	citebox_focus_window(_window);
+}
+
+- (void)quitApp:(id)sender {
+	[self removeStatusItem];
+	[[NSApplication sharedApplication] terminate:nil];
+}
+
+- (void)statusItemClicked:(id)sender {
+	NSEvent *event = [NSApp currentEvent];
+	if (event != nil && [event type] == NSEventTypeRightMouseUp) {
+		[_statusItem popUpStatusItemMenu:_menu];
+		return;
+	}
+	[self openWindow:sender];
+}
+
+- (BOOL)windowShouldClose:(id)sender {
+	[self ensureStatusItem];
+	[(NSWindow *)sender orderOut:nil];
+	return NO;
+}
+
+@end
 
 static const char *citebox_open_external(const char *urlCString) {
 	@autoreleasepool {
@@ -215,6 +341,33 @@ static const char *citebox_write_clipboard_text(const char *textCString) {
 		return NULL;
 	}
 }
+
+static const void *citebox_status_controller_key = &citebox_status_controller_key;
+
+static const char *citebox_install_status_item(void *windowPtr, const char *appNameCString, const char *iconPathCString) {
+	@autoreleasepool {
+		NSWindow *window = (NSWindow *)windowPtr;
+		if (window == nil) {
+			return "missing window";
+		}
+
+		CiteBoxStatusController *controller = objc_getAssociatedObject(window, citebox_status_controller_key);
+		if (controller != nil) {
+			return NULL;
+		}
+
+		NSString *appName = appNameCString != NULL ? [NSString stringWithUTF8String:appNameCString] : @"CiteBox";
+		NSString *iconPath = nil;
+		if (iconPathCString != NULL && iconPathCString[0] != '\0') {
+			iconPath = [NSString stringWithUTF8String:iconPathCString];
+		}
+
+		controller = [[[CiteBoxStatusController alloc] initWithWindow:window appName:appName iconPath:iconPath] autorelease];
+		objc_setAssociatedObject(window, citebox_status_controller_key, controller, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+		[window setDelegate:controller];
+		return NULL;
+	}
+}
 */
 import "C"
 
@@ -224,13 +377,12 @@ import (
 	"unsafe"
 
 	webview "github.com/webview/webview_go"
+	"github.com/xuzhougeng/citebox/internal/desktopicon"
 )
 
-func Configure(w webview.WebView, appName string) error {
-	if err := w.Bind("citeboxDesktopOpenExternal", func(url string) error {
-		return openExternal(url)
-	}); err != nil {
-		return fmt.Errorf("bind external opener: %w", err)
+func Configure(w webview.WebView, appName string, iconAssets desktopicon.Assets) error {
+	if err := bindExternalOpener(w); err != nil {
+		return err
 	}
 	if err := w.Bind("citeboxDesktopReadClipboardText", func() (string, error) {
 		return readClipboardText()
@@ -258,8 +410,13 @@ func Configure(w webview.WebView, appName string) error {
 
 	cAppName := C.CString(appName)
 	defer C.free(unsafe.Pointer(cAppName))
+	cIconPath := C.CString(iconAssets.PNGPath)
+	defer C.free(unsafe.Pointer(cIconPath))
 
 	C.citebox_install_app_menu(cAppName)
+	if errMessage := C.citebox_install_status_item(w.Window(), cAppName, cIconPath); errMessage != nil {
+		return fmt.Errorf("install macOS status item integration: %s", C.GoString(errMessage))
+	}
 	C.citebox_focus_window(w.Window())
 	return nil
 }

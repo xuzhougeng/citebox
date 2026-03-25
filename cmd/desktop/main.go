@@ -90,7 +90,7 @@ func main() {
 
 	w.SetTitle(desktopAppName)
 	w.SetSize(windowWidth, windowHeight, webview.HintNone)
-	if err := desktopruntime.Configure(w, desktopAppName); err != nil {
+	if err := desktopruntime.Configure(w, desktopAppName, iconAssets); err != nil {
 		logger.Warn("failed to configure desktop runtime integrations", "error", err)
 	}
 	w.Navigate(baseURL)

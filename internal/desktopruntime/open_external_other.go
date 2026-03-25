@@ -6,19 +6,7 @@ import (
 	"fmt"
 	"os/exec"
 	"runtime"
-
-	webview "github.com/webview/webview_go"
 )
-
-func Configure(w webview.WebView, _ string) error {
-	if err := w.Bind("citeboxDesktopOpenExternal", func(url string) error {
-		return openExternal(url)
-	}); err != nil {
-		return fmt.Errorf("bind external opener: %w", err)
-	}
-
-	return initDesktopBridge(w)
-}
 
 func openExternal(url string) error {
 	command, args, err := externalOpenCommand(url)
