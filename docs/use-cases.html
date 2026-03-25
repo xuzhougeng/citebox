@@ -917,6 +917,335 @@
       color: var(--gold);
     }
 
+    /* ─── AI Reading theme ─── */
+    .case-header-visual.ai-theme {
+      background: linear-gradient(135deg, #4f46e5 0%, #6d28d9 50%, #7c3aed 100%);
+    }
+
+    .case-badge.ai-badge {
+      background: rgba(79, 70, 229, 0.1);
+      border-color: rgba(79, 70, 229, 0.2);
+      color: #4f46e5;
+    }
+
+    .ai-mockup {
+      position: relative;
+      z-index: 2;
+      width: 100%;
+      max-width: 300px;
+    }
+
+    .ai-reader-window {
+      background: rgba(255, 255, 255, 0.95);
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+    }
+
+    .ai-reader-left {
+      padding: 1rem;
+      border-right: 1px solid #eee;
+      font-size: 0.6rem;
+      color: #666;
+      line-height: 1.6;
+    }
+
+    .ai-reader-left .paper-title-mock {
+      font-weight: 700;
+      color: #333;
+      font-size: 0.68rem;
+      margin-bottom: 0.5rem;
+      line-height: 1.4;
+    }
+
+    .ai-reader-left .text-line {
+      height: 4px;
+      background: #e5e5e5;
+      border-radius: 2px;
+      margin-bottom: 4px;
+    }
+
+    .ai-reader-left .text-line:nth-child(even) { width: 85%; }
+    .ai-reader-left .text-line:nth-child(3) { width: 70%; }
+    .ai-reader-left .text-line:nth-child(5) { width: 60%; }
+
+    .ai-reader-right {
+      padding: 0.8rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+      background: #fafafa;
+    }
+
+    .ai-reader-right .ai-label {
+      font-size: 0.55rem;
+      font-weight: 700;
+      color: #4f46e5;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      margin-bottom: 0.2rem;
+    }
+
+    .ai-chat-bubble {
+      padding: 0.35rem 0.5rem;
+      border-radius: 6px;
+      font-size: 0.6rem;
+      line-height: 1.5;
+      animation: msgAppear 0.4s ease-out both;
+    }
+
+    .ai-chat-bubble.question {
+      align-self: flex-end;
+      background: #4f46e5;
+      color: white;
+      max-width: 90%;
+    }
+
+    .ai-chat-bubble.answer {
+      align-self: flex-start;
+      background: white;
+      color: #333;
+      border: 1px solid #e5e5e5;
+      max-width: 95%;
+    }
+
+    .ai-chat-bubble:nth-child(2) { animation-delay: 0.3s; }
+    .ai-chat-bubble:nth-child(3) { animation-delay: 0.7s; }
+    .ai-chat-bubble:nth-child(4) { animation-delay: 1.1s; }
+
+    /* ─── Figure Library theme ─── */
+    .case-header-visual.figure-theme {
+      background: linear-gradient(135deg, #d97706 0%, #e67e22 50%, #ea580c 100%);
+    }
+
+    .case-badge.figure-badge {
+      background: rgba(217, 119, 6, 0.1);
+      border-color: rgba(217, 119, 6, 0.2);
+      color: #d97706;
+    }
+
+    .figure-grid-mockup {
+      position: relative;
+      z-index: 2;
+      width: 100%;
+      max-width: 280px;
+    }
+
+    .figure-grid-window {
+      background: rgba(255, 255, 255, 0.95);
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+      padding: 0.8rem;
+    }
+
+    .figure-grid-titlebar {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 0.8rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid #eee;
+    }
+
+    .figure-grid-titlebar .search-mock {
+      flex: 1;
+      height: 24px;
+      background: #f5f5f5;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      padding: 0 0.5rem;
+      font-size: 0.58rem;
+      color: #999;
+      gap: 0.3rem;
+    }
+
+    .figure-grid-titlebar .search-mock svg {
+      width: 10px;
+      height: 10px;
+      opacity: 0.4;
+    }
+
+    .figure-thumbnails {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.5rem;
+    }
+
+    .figure-thumb {
+      border-radius: 6px;
+      overflow: hidden;
+      border: 1px solid #eee;
+      transition: transform 0.2s;
+      animation: msgAppear 0.4s ease-out both;
+    }
+
+    .figure-thumb:nth-child(1) { animation-delay: 0.2s; }
+    .figure-thumb:nth-child(2) { animation-delay: 0.4s; }
+    .figure-thumb:nth-child(3) { animation-delay: 0.6s; }
+    .figure-thumb:nth-child(4) { animation-delay: 0.8s; }
+
+    .figure-thumb-img {
+      height: 60px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.55rem;
+      font-weight: 600;
+      color: white;
+    }
+
+    .figure-thumb:nth-child(1) .figure-thumb-img { background: linear-gradient(135deg, #667eea, #764ba2); }
+    .figure-thumb:nth-child(2) .figure-thumb-img { background: linear-gradient(135deg, #f093fb, #f5576c); }
+    .figure-thumb:nth-child(3) .figure-thumb-img { background: linear-gradient(135deg, #4facfe, #00f2fe); }
+    .figure-thumb:nth-child(4) .figure-thumb-img { background: linear-gradient(135deg, #43e97b, #38f9d7); }
+
+    .figure-thumb-info {
+      padding: 0.3rem 0.4rem;
+      background: white;
+    }
+
+    .figure-thumb-label {
+      font-size: 0.58rem;
+      font-weight: 600;
+      color: #333;
+    }
+
+    .figure-thumb-tags {
+      display: flex;
+      gap: 0.2rem;
+      margin-top: 0.15rem;
+    }
+
+    .figure-thumb-tag {
+      font-size: 0.45rem;
+      padding: 0.05rem 0.3rem;
+      border-radius: 3px;
+      background: #f0f0f0;
+      color: #888;
+    }
+
+    .figure-thumb-tag.color-tag {
+      width: 10px;
+      height: 10px;
+      padding: 0;
+      border-radius: 50%;
+      background: #e74c3c;
+    }
+
+    .figure-thumb-tag.color-tag:nth-child(2) { background: #3498db; }
+    .figure-thumb-tag.color-tag:nth-child(3) { background: #2ecc71; }
+
+    /* ─── AI demo (desktop-style) ─── */
+    .ai-demo {
+      max-width: 760px;
+      margin: 0 auto 3.5rem;
+    }
+
+    .ai-demo h3 {
+      font-family: 'Cormorant Garamond', 'Noto Serif SC', serif;
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--deep-blue);
+      margin-bottom: 0.6rem;
+    }
+
+    .ai-demo > p {
+      font-size: 0.9rem;
+      color: var(--warm-gray);
+      line-height: 1.7;
+      margin-bottom: 2rem;
+    }
+
+    .ai-conversation {
+      background: #f8f8fa;
+      border: 1px solid #e8e8ee;
+      border-radius: 12px;
+      padding: 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .ai-conv-msg {
+      max-width: 80%;
+      padding: 0.8rem 1rem;
+      border-radius: 10px;
+      font-size: 0.85rem;
+      line-height: 1.7;
+    }
+
+    .ai-conv-msg.user-msg {
+      align-self: flex-end;
+      background: #4f46e5;
+      color: white;
+      border-bottom-right-radius: 3px;
+    }
+
+    .ai-conv-msg.ai-msg {
+      align-self: flex-start;
+      background: white;
+      color: #333;
+      border: 1px solid #e8e8ee;
+      border-bottom-left-radius: 3px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    }
+
+    .ai-conv-msg.ai-msg pre {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.78rem;
+      white-space: pre-wrap;
+      margin: 0;
+      line-height: 1.7;
+    }
+
+    .ai-conv-divider {
+      text-align: center;
+      font-size: 0.72rem;
+      color: #999;
+      padding: 0.2rem 0;
+    }
+
+    .ai-conv-action {
+      align-self: center;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.3rem 0.8rem;
+      background: rgba(79, 70, 229, 0.08);
+      border: 1px solid rgba(79, 70, 229, 0.15);
+      border-radius: 100px;
+      font-size: 0.72rem;
+      color: #4f46e5;
+      font-weight: 500;
+    }
+
+    /* ─── Feature summary theme variants ─── */
+    .feature-summary.ai-summary::before {
+      background: linear-gradient(90deg, #4f46e5, #7c3aed, #4f46e5);
+    }
+
+    .feature-summary.ai-summary .summary-num {
+      color: #4f46e5;
+    }
+
+    .feature-summary.figure-summary::before {
+      background: linear-gradient(90deg, #d97706, #ea580c, #d97706);
+    }
+
+    .feature-summary.figure-summary .summary-num {
+      color: #d97706;
+    }
+
+    /* cmd-card theme variants */
+    .cmd-card.ai-card:hover { border-color: rgba(79, 70, 229, 0.3); }
+    .cmd-card.ai-card .cmd-card-icon { background: rgba(79, 70, 229, 0.1); color: #4f46e5; }
+    .cmd-card.figure-card:hover { border-color: rgba(217, 119, 6, 0.3); }
+    .cmd-card.figure-card .cmd-card-icon { background: rgba(217, 119, 6, 0.1); color: #d97706; }
+
     /* ─── Scroll animations ─── */
     .reveal {
       opacity: 0;
@@ -1208,6 +1537,344 @@
     </div>
   </div>
 
+  <!-- Case: AI-Assisted Deep Reading -->
+  <div class="case-section">
+    <div class="case-card reveal">
+      <div class="case-header">
+        <div class="case-header-visual ai-theme">
+          <div class="ai-mockup">
+            <div class="ai-reader-window">
+              <div class="ai-reader-left">
+                <div class="paper-title-mock">Spatial transcriptomics reveals cell-type...</div>
+                <div class="text-line"></div>
+                <div class="text-line"></div>
+                <div class="text-line"></div>
+                <div class="text-line"></div>
+                <div class="text-line"></div>
+                <div class="text-line"></div>
+                <div class="text-line"></div>
+              </div>
+              <div class="ai-reader-right">
+                <div class="ai-label">AI Companion</div>
+                <div class="ai-chat-bubble question" data-i18n="case2.chat.q">这篇用了什么方法？</div>
+                <div class="ai-chat-bubble answer" data-i18n="case2.chat.a">本文采用 10x Visium 空间转录组技术，结合单细胞 RNA-seq 进行...</div>
+                <div class="ai-chat-bubble question" data-i18n="case2.chat.q2">解读 Fig.2a</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="case-header-text">
+          <div class="case-badge ai-badge">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a4 4 0 0 1 4 4v1a4 4 0 0 1-8 0V6a4 4 0 0 1 4-4z"/><path d="M16 14h.01"/><path d="M8 14h.01"/><path d="M12 17v1"/><rect x="4" y="10" width="16" height="10" rx="4"/></svg>
+            AI Companion
+          </div>
+          <h2 data-i18n="case2.title" data-i18n-html="true">AI 辅助论文精读</h2>
+          <p data-i18n="case2.desc">打开一篇复杂论文，AI 阅读伴侣帮你逐段拆解：对全文提问、解读图表含义、翻译生僻术语、切换不同专业视角——把「硬啃论文」变成「对话式阅读」。</p>
+        </div>
+      </div>
+
+      <div class="case-body">
+        <!-- Scenario -->
+        <div class="scenario reveal">
+          <h3 data-i18n="case2.scenario.title">使用场景</h3>
+          <p data-i18n="case2.scenario.desc">你需要精读一篇跨学科论文——空间转录组 + 深度学习的结合。方法部分涉及不熟悉的算法，结果部分有大量复合图表。以前你可能花一整天查资料、翻术语，现在打开 CiteBox 的 AI 阅读伴侣，直接对论文提问，AI 基于全文内容生成回答；遇到看不懂的图，让 AI 逐步解读；碰到生僻的英文术语，选中即翻译。读完一篇论文的时间，从一天缩短到两小时。</p>
+        </div>
+
+        <!-- AI Capabilities -->
+        <div class="commands-section reveal">
+          <h3 data-i18n="case2.cap.title">AI 能力</h3>
+          <p data-i18n="case2.cap.desc">CiteBox 的 AI 阅读伴侣不只是聊天机器人——它读过你正在看的论文全文，理解上下文，给出精准回答。</p>
+
+          <div class="cmd-grid">
+            <div class="cmd-card ai-card">
+              <div class="cmd-card-header">
+                <div class="cmd-card-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+                </div>
+                <h4 data-i18n="case2.cap.qa.title">论文问答</h4>
+              </div>
+              <p data-i18n="case2.cap.qa.desc">基于论文全文的多轮对话，AI 理解上下文，回答关于方法、结论、数据的任何问题。</p>
+            </div>
+
+            <div class="cmd-card ai-card">
+              <div class="cmd-card-header">
+                <div class="cmd-card-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                </div>
+                <h4 data-i18n="case2.cap.interpret.title">图表解读</h4>
+              </div>
+              <p data-i18n="case2.cap.interpret.desc">选中任意图表，AI 结合论文内容与视觉信息，解读图表含义、标注关键发现。</p>
+            </div>
+
+            <div class="cmd-card ai-card">
+              <div class="cmd-card-header">
+                <div class="cmd-card-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7V4h16v3"/><path d="M9 20h6"/><path d="M12 4v16"/></svg>
+                </div>
+                <h4 data-i18n="case2.cap.translate.title">即时翻译</h4>
+              </div>
+              <p data-i18n="case2.cap.translate.desc">遇到生僻术语或长难句，选中文本即可翻译，支持中英双向，保留学术语境。</p>
+            </div>
+
+            <div class="cmd-card ai-card">
+              <div class="cmd-card-header">
+                <div class="cmd-card-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                </div>
+                <h4 data-i18n="case2.cap.role.title">角色切换</h4>
+              </div>
+              <p data-i18n="case2.cap.role.desc">预设或自定义 AI 角色——「入门解说员」「方法论专家」「统计审稿人」——用最适合你的视角解读论文。</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- AI Demo conversation -->
+        <div class="ai-demo reveal">
+          <h3 data-i18n="case2.demo.title">对话示例</h3>
+          <p data-i18n="case2.demo.desc">以下是一个典型的 AI 阅读场景：打开论文 → 提问方法 → 解读图表 → 追问细节。</p>
+
+          <div class="ai-conversation">
+            <div class="ai-conv-action" data-i18n="case2.demo.open">打开论文「Spatial transcriptomics reveals...」</div>
+
+            <div class="ai-conv-msg user-msg" data-i18n="case2.demo.q1">这篇文章用了什么实验技术和分析方法？</div>
+            <div class="ai-conv-msg ai-msg" data-i18n="case2.demo.a1" data-i18n-html="true"><pre>根据论文 Methods 部分：
+
+1. 实验技术：10x Visium 空间转录组平台，对人脑皮层冷冻切片进行空间基因表达捕获
+2. 配套数据：同一组织的单细胞 RNA-seq（snRNA-seq）作为参考图谱
+3. 分析方法：
+   - 使用 Cell2location 进行空间反卷积
+   - UMAP 降维 + Leiden 聚类
+   - Moran's I 统计量检测空间自相关基因
+4. 验证：RNAscope 原位杂交验证关键标志基因的空间表达</pre></div>
+
+            <div class="ai-conv-divider" data-i18n="case2.demo.div1">—— 切换到图表解读 ——</div>
+
+            <div class="ai-conv-msg user-msg" data-i18n="case2.demo.q2">解读 Fig.2a，这张 UMAP 图说明了什么？</div>
+            <div class="ai-conv-msg ai-msg" data-i18n="case2.demo.a2" data-i18n-html="true"><pre>Fig.2a 是对 snRNA-seq 数据的 UMAP 降维可视化：
+
+- 共鉴定出 15 个细胞簇，用不同颜色标注
+- 兴奋性神经元（Ex）和抑制性神经元（In）各自形成独立的大簇
+- 非神经元细胞（星形胶质细胞、少突胶质细胞、小胶质细胞）在 UMAP 空间中明显分离
+- 关键发现：Ex-L2/3 和 Ex-L5/6 亚群分别对应皮层不同层次，说明转录组差异反映了空间位置信息
+
+这张图为后续的空间反卷积分析奠定了细胞类型注释基础。</pre></div>
+
+            <div class="ai-conv-msg user-msg" data-i18n="case2.demo.q3">Cell2location 和 RCTD 比有什么优势？</div>
+            <div class="ai-conv-msg ai-msg" data-i18n="case2.demo.a3" data-i18n-html="true"><pre>论文在 Supplementary Discussion 中提到了这一点：
+
+Cell2location 相比 RCTD 的主要优势：
+1. 采用贝叶斯框架，能估计每个 spot 中多种细胞类型的绝对丰度（而非仅比例）
+2. 对低丰度细胞类型的检测灵敏度更高
+3. 内置正则化机制，在高噪声区域表现更稳健
+
+不过作者也指出，两种方法在主要细胞类型的空间分布上结论一致，差异主要体现在稀有细胞类型上。</pre></div>
+          </div>
+        </div>
+
+        <!-- Feature summary -->
+        <div class="feature-summary ai-summary reveal">
+          <h3 data-i18n="case2.summary.title">AI 阅读伴侣一览</h3>
+          <div class="summary-grid">
+            <div class="summary-item">
+              <div class="summary-num" data-i18n="case2.summary.n1">Stream</div>
+              <div class="summary-label" data-i18n="case2.summary.l1">流式输出，实时响应</div>
+            </div>
+            <div class="summary-item">
+              <div class="summary-num" data-i18n="case2.summary.n2">Multi</div>
+              <div class="summary-label" data-i18n="case2.summary.l2">多轮对话，上下文连贯</div>
+            </div>
+            <div class="summary-item">
+              <div class="summary-num" data-i18n="case2.summary.n3">N+</div>
+              <div class="summary-label" data-i18n="case2.summary.l3">支持多模型 / 多角色</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Case: Figure Library -->
+  <div class="case-section">
+    <div class="case-card reveal">
+      <div class="case-header">
+        <div class="case-header-visual figure-theme">
+          <div class="figure-grid-mockup">
+            <div class="figure-grid-window">
+              <div class="figure-grid-titlebar">
+                <div class="search-mock">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                  <span data-i18n="case3.mock.search">heatmap...</span>
+                </div>
+              </div>
+              <div class="figure-thumbnails">
+                <div class="figure-thumb">
+                  <div class="figure-thumb-img">UMAP</div>
+                  <div class="figure-thumb-info">
+                    <div class="figure-thumb-label">Fig.2a</div>
+                    <div class="figure-thumb-tags">
+                      <span class="figure-thumb-tag">scRNA</span>
+                      <span class="figure-thumb-tag">cluster</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="figure-thumb">
+                  <div class="figure-thumb-img">Heatmap</div>
+                  <div class="figure-thumb-info">
+                    <div class="figure-thumb-label">Fig.4c</div>
+                    <div class="figure-thumb-tags">
+                      <span class="figure-thumb-tag">DE</span>
+                      <span class="figure-thumb-tag">expr</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="figure-thumb">
+                  <div class="figure-thumb-img">Violin</div>
+                  <div class="figure-thumb-info">
+                    <div class="figure-thumb-label">Fig.3b</div>
+                    <div class="figure-thumb-tags">
+                      <span class="figure-thumb-tag color-tag"></span>
+                      <span class="figure-thumb-tag color-tag"></span>
+                      <span class="figure-thumb-tag color-tag"></span>
+                    </div>
+                  </div>
+                </div>
+                <div class="figure-thumb">
+                  <div class="figure-thumb-img">Spatial</div>
+                  <div class="figure-thumb-info">
+                    <div class="figure-thumb-label">Fig.5a</div>
+                    <div class="figure-thumb-tags">
+                      <span class="figure-thumb-tag">spatial</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="case-header-text">
+          <div class="case-badge figure-badge">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+            Figure Library
+          </div>
+          <h2 data-i18n="case3.title" data-i18n-html="true">图表素材库：从论文到汇报</h2>
+          <p data-i18n="case3.desc">从 30+ 篇论文中自动提取所有图表，按关键词搜索、按标签筛选、拆分复合子图、提取配色方案——把散落在 PDF 里的图表变成随时可用的可视化素材库。</p>
+        </div>
+      </div>
+
+      <div class="case-body">
+        <!-- Scenario -->
+        <div class="scenario reveal">
+          <h3 data-i18n="case3.scenario.title">使用场景</h3>
+          <p data-i18n="case3.scenario.desc">你正在准备开题报告，需要从几十篇文献中挑选代表性的实验结果图。以前你一篇篇打开 PDF 截图，命名混乱，找图全靠记忆。现在把文献批量导入 CiteBox，图表自动提取入库。想找「UMAP 图」？搜一下就出来。某张图里有 6 个 panel 只需要其中两个？子图拆分帮你搞定。做 PPT 配色想和论文统一？直接从图表提取配色方案。</p>
+        </div>
+
+        <!-- Workflow steps -->
+        <div class="setup-steps reveal">
+          <h3 data-i18n="case3.workflow.title">工作流程</h3>
+
+          <div class="step">
+            <div class="step-num">1</div>
+            <div class="step-content">
+              <h4 data-i18n="case3.workflow.s1.title">批量上传，自动提取</h4>
+              <p data-i18n="case3.workflow.s1.desc">将文献 PDF 批量上传到 CiteBox，系统自动解析全文并提取所有图表。支持手工标注模式和 LLM 视觉模型自动检测两种方式。</p>
+            </div>
+          </div>
+
+          <div class="step">
+            <div class="step-num">2</div>
+            <div class="step-content">
+              <h4 data-i18n="case3.workflow.s2.title">搜索与筛选</h4>
+              <p data-i18n="case3.workflow.s2.desc">在图表库中按关键词搜索（支持图表标题、注释、笔记的全文检索），或按分组、标签快速筛选，精确定位目标图表。</p>
+            </div>
+          </div>
+
+          <div class="step">
+            <div class="step-num">3</div>
+            <div class="step-content">
+              <h4 data-i18n="case3.workflow.s3.title">子图拆分</h4>
+              <p data-i18n="case3.workflow.s3.desc">论文中常见的复合图（如 Fig.2 包含 a/b/c/d 四个子图），CiteBox 支持手动框选拆分为独立子图，每个子图可单独搜索、标注、导出。</p>
+            </div>
+          </div>
+
+          <div class="step">
+            <div class="step-num">4</div>
+            <div class="step-content">
+              <h4 data-i18n="case3.workflow.s4.title">提取配色，统一风格</h4>
+              <p data-i18n="case3.workflow.s4.desc">选中任意图表，一键提取主要颜色生成配色方案。做 PPT、画图时直接复用论文配色，保持视觉风格一致。配色方案保存在配色库中，随时调用。</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Feature capabilities -->
+        <div class="commands-section reveal">
+          <h3 data-i18n="case3.cap.title">核心功能</h3>
+          <p data-i18n="case3.cap.desc">CiteBox 的图表库不只是截图收藏夹——它理解图表的结构，让你像管理代码一样管理科研图表。</p>
+
+          <div class="cmd-grid">
+            <div class="cmd-card figure-card">
+              <div class="cmd-card-header">
+                <div class="cmd-card-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                </div>
+                <h4 data-i18n="case3.cap.search.title">全文检索</h4>
+              </div>
+              <p data-i18n="case3.cap.search.desc">基于 FTS5 trigram 的全文搜索，覆盖图表标题、描述和笔记，中英文混合搜索无压力。</p>
+            </div>
+
+            <div class="cmd-card figure-card">
+              <div class="cmd-card-header">
+                <div class="cmd-card-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+                </div>
+                <h4 data-i18n="case3.cap.tag.title">标签筛选</h4>
+              </div>
+              <p data-i18n="case3.cap.tag.desc">为图表打上自定义彩色标签（如「UMAP」「热图」「流式」），按标签快速分类筛选。</p>
+            </div>
+
+            <div class="cmd-card figure-card">
+              <div class="cmd-card-header">
+                <div class="cmd-card-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2"/><line x1="12" y1="2" x2="12" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/></svg>
+                </div>
+                <h4 data-i18n="case3.cap.subfig.title">子图管理</h4>
+              </div>
+              <p data-i18n="case3.cap.subfig.desc">将复合图拆分为 a/b/c/d 等子图，层级关系清晰。子图按需裁剪，不额外占用存储空间。</p>
+            </div>
+
+            <div class="cmd-card figure-card">
+              <div class="cmd-card-header">
+                <div class="cmd-card-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="13.5" cy="6.5" r="2.5"/><circle cx="6" cy="12" r="3"/><circle cx="17" cy="15.5" r="2.5"/></svg>
+                </div>
+                <h4 data-i18n="case3.cap.palette.title">配色提取</h4>
+              </div>
+              <p data-i18n="case3.cap.palette.desc">从任意图表中提取主要颜色，生成可复用的配色方案，保存到配色库统一管理。</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Feature summary -->
+        <div class="feature-summary figure-summary reveal">
+          <h3 data-i18n="case3.summary.title">图表库一览</h3>
+          <div class="summary-grid">
+            <div class="summary-item">
+              <div class="summary-num">FTS5</div>
+              <div class="summary-label" data-i18n="case3.summary.l1">Trigram 全文搜索引擎</div>
+            </div>
+            <div class="summary-item">
+              <div class="summary-num">a–f</div>
+              <div class="summary-label" data-i18n="case3.summary.l2">子图拆分与层级管理</div>
+            </div>
+            <div class="summary-item">
+              <div class="summary-num">HEX</div>
+              <div class="summary-label" data-i18n="case3.summary.l3">配色提取与配色库</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Back link -->
   <div class="back-section">
     <a href="index.html" class="btn-back">
@@ -1285,6 +1952,72 @@
         'summary.l2': '自然语言智能路由',
         'summary.n3': '0',
         'summary.l3': '配置成本（扫码即用）',
+        // Case 2: AI Reading
+        'case2.title': 'AI 辅助论文精读',
+        'case2.desc': '打开一篇复杂论文，AI 阅读伴侣帮你逐段拆解：对全文提问、解读图表含义、翻译生僻术语、切换不同专业视角——把「硬啃论文」变成「对话式阅读」。',
+        'case2.chat.q': '这篇用了什么方法？',
+        'case2.chat.a': '本文采用 10x Visium 空间转录组技术，结合单细胞 RNA-seq 进行...',
+        'case2.chat.q2': '解读 Fig.2a',
+        'case2.scenario.title': '使用场景',
+        'case2.scenario.desc': '你需要精读一篇跨学科论文——空间转录组 + 深度学习的结合。方法部分涉及不熟悉的算法，结果部分有大量复合图表。以前你可能花一整天查资料、翻术语，现在打开 CiteBox 的 AI 阅读伴侣，直接对论文提问，AI 基于全文内容生成回答；遇到看不懂的图，让 AI 逐步解读；碰到生僻的英文术语，选中即翻译。读完一篇论文的时间，从一天缩短到两小时。',
+        'case2.cap.title': 'AI 能力',
+        'case2.cap.desc': 'CiteBox 的 AI 阅读伴侣不只是聊天机器人——它读过你正在看的论文全文，理解上下文，给出精准回答。',
+        'case2.cap.qa.title': '论文问答',
+        'case2.cap.qa.desc': '基于论文全文的多轮对话，AI 理解上下文，回答关于方法、结论、数据的任何问题。',
+        'case2.cap.interpret.title': '图表解读',
+        'case2.cap.interpret.desc': '选中任意图表，AI 结合论文内容与视觉信息，解读图表含义、标注关键发现。',
+        'case2.cap.translate.title': '即时翻译',
+        'case2.cap.translate.desc': '遇到生僻术语或长难句，选中文本即可翻译，支持中英双向，保留学术语境。',
+        'case2.cap.role.title': '角色切换',
+        'case2.cap.role.desc': '预设或自定义 AI 角色——「入门解说员」「方法论专家」「统计审稿人」——用最适合你的视角解读论文。',
+        'case2.demo.title': '对话示例',
+        'case2.demo.desc': '以下是一个典型的 AI 阅读场景：打开论文 → 提问方法 → 解读图表 → 追问细节。',
+        'case2.demo.open': '打开论文「Spatial transcriptomics reveals...」',
+        'case2.demo.q1': '这篇文章用了什么实验技术和分析方法？',
+        'case2.demo.a1': '<pre>根据论文 Methods 部分：\n\n1. 实验技术：10x Visium 空间转录组平台，对人脑皮层冷冻切片进行空间基因表达捕获\n2. 配套数据：同一组织的单细胞 RNA-seq（snRNA-seq）作为参考图谱\n3. 分析方法：\n   - 使用 Cell2location 进行空间反卷积\n   - UMAP 降维 + Leiden 聚类\n   - Moran\'s I 统计量检测空间自相关基因\n4. 验证：RNAscope 原位杂交验证关键标志基因的空间表达</pre>',
+        'case2.demo.div1': '—— 切换到图表解读 ——',
+        'case2.demo.q2': '解读 Fig.2a，这张 UMAP 图说明了什么？',
+        'case2.demo.a2': '<pre>Fig.2a 是对 snRNA-seq 数据的 UMAP 降维可视化：\n\n- 共鉴定出 15 个细胞簇，用不同颜色标注\n- 兴奋性神经元（Ex）和抑制性神经元（In）各自形成独立的大簇\n- 非神经元细胞（星形胶质细胞、少突胶质细胞、小胶质细胞）在 UMAP 空间中明显分离\n- 关键发现：Ex-L2/3 和 Ex-L5/6 亚群分别对应皮层不同层次，说明转录组差异反映了空间位置信息\n\n这张图为后续的空间反卷积分析奠定了细胞类型注释基础。</pre>',
+        'case2.demo.q3': 'Cell2location 和 RCTD 比有什么优势？',
+        'case2.demo.a3': '<pre>论文在 Supplementary Discussion 中提到了这一点：\n\nCell2location 相比 RCTD 的主要优势：\n1. 采用贝叶斯框架，能估计每个 spot 中多种细胞类型的绝对丰度（而非仅比例）\n2. 对低丰度细胞类型的检测灵敏度更高\n3. 内置正则化机制，在高噪声区域表现更稳健\n\n不过作者也指出，两种方法在主要细胞类型的空间分布上结论一致，差异主要体现在稀有细胞类型上。</pre>',
+        'case2.summary.title': 'AI 阅读伴侣一览',
+        'case2.summary.n1': 'Stream',
+        'case2.summary.l1': '流式输出，实时响应',
+        'case2.summary.n2': 'Multi',
+        'case2.summary.l2': '多轮对话，上下文连贯',
+        'case2.summary.n3': 'N+',
+        'case2.summary.l3': '支持多模型 / 多角色',
+
+        // Case 3: Figure Library
+        'case3.title': '图表素材库：从论文到汇报',
+        'case3.desc': '从 30+ 篇论文中自动提取所有图表，按关键词搜索、按标签筛选、拆分复合子图、提取配色方案——把散落在 PDF 里的图表变成随时可用的可视化素材库。',
+        'case3.mock.search': 'heatmap...',
+        'case3.scenario.title': '使用场景',
+        'case3.scenario.desc': '你正在准备开题报告，需要从几十篇文献中挑选代表性的实验结果图。以前你一篇篇打开 PDF 截图，命名混乱，找图全靠记忆。现在把文献批量导入 CiteBox，图表自动提取入库。想找「UMAP 图」？搜一下就出来。某张图里有 6 个 panel 只需要其中两个？子图拆分帮你搞定。做 PPT 配色想和论文统一？直接从图表提取配色方案。',
+        'case3.workflow.title': '工作流程',
+        'case3.workflow.s1.title': '批量上传，自动提取',
+        'case3.workflow.s1.desc': '将文献 PDF 批量上传到 CiteBox，系统自动解析全文并提取所有图表。支持手工标注模式和 LLM 视觉模型自动检测两种方式。',
+        'case3.workflow.s2.title': '搜索与筛选',
+        'case3.workflow.s2.desc': '在图表库中按关键词搜索（支持图表标题、注释、笔记的全文检索），或按分组、标签快速筛选，精确定位目标图表。',
+        'case3.workflow.s3.title': '子图拆分',
+        'case3.workflow.s3.desc': '论文中常见的复合图（如 Fig.2 包含 a/b/c/d 四个子图），CiteBox 支持手动框选拆分为独立子图，每个子图可单独搜索、标注、导出。',
+        'case3.workflow.s4.title': '提取配色，统一风格',
+        'case3.workflow.s4.desc': '选中任意图表，一键提取主要颜色生成配色方案。做 PPT、画图时直接复用论文配色，保持视觉风格一致。配色方案保存在配色库中，随时调用。',
+        'case3.cap.title': '核心功能',
+        'case3.cap.desc': 'CiteBox 的图表库不只是截图收藏夹——它理解图表的结构，让你像管理代码一样管理科研图表。',
+        'case3.cap.search.title': '全文检索',
+        'case3.cap.search.desc': '基于 FTS5 trigram 的全文搜索，覆盖图表标题、描述和笔记，中英文混合搜索无压力。',
+        'case3.cap.tag.title': '标签筛选',
+        'case3.cap.tag.desc': '为图表打上自定义彩色标签（如「UMAP」「热图」「流式」），按标签快速分类筛选。',
+        'case3.cap.subfig.title': '子图管理',
+        'case3.cap.subfig.desc': '将复合图拆分为 a/b/c/d 等子图，层级关系清晰。子图按需裁剪，不额外占用存储空间。',
+        'case3.cap.palette.title': '配色提取',
+        'case3.cap.palette.desc': '从任意图表中提取主要颜色，生成可复用的配色方案，保存到配色库统一管理。',
+        'case3.summary.title': '图表库一览',
+        'case3.summary.l1': 'Trigram 全文搜索引擎',
+        'case3.summary.l2': '子图拆分与层级管理',
+        'case3.summary.l3': '配色提取与配色库',
+
         'back.cta': '返回首页',
         'footer.desc': '开源学术文献管理工具 · 本地部署 · 数据自主',
         'footer.download': '下载',
@@ -1347,6 +2080,72 @@
         'summary.l2': 'Natural language routing',
         'summary.n3': '0',
         'summary.l3': 'Config cost (scan & go)',
+        // Case 2: AI Reading
+        'case2.title': 'AI-Assisted Deep Reading',
+        'case2.desc': 'Open a complex paper and let the AI companion guide you through it: ask questions about the full text, interpret figures, translate unfamiliar terms, switch expert perspectives — turn "struggling through papers" into "conversational reading".',
+        'case2.chat.q': 'What methods were used?',
+        'case2.chat.a': 'This paper uses 10x Visium spatial transcriptomics combined with snRNA-seq to...',
+        'case2.chat.q2': 'Interpret Fig.2a',
+        'case2.scenario.title': 'The Scenario',
+        'case2.scenario.desc': 'You need to read an interdisciplinary paper combining spatial transcriptomics and deep learning. The methods section involves unfamiliar algorithms, and the results are full of complex composite figures. Previously, you might spend an entire day looking up references and terms. Now, open CiteBox\'s AI reading companion and ask questions directly — AI generates answers based on the full text. Can\'t understand a figure? Let AI interpret it step by step. Encounter an obscure term? Select and translate instantly. Reading time drops from a full day to two hours.',
+        'case2.cap.title': 'AI Capabilities',
+        'case2.cap.desc': 'CiteBox\'s AI companion isn\'t just a chatbot — it has read the entire paper you\'re viewing, understands context, and gives precise answers.',
+        'case2.cap.qa.title': 'Paper Q&A',
+        'case2.cap.qa.desc': 'Multi-turn conversation grounded in the full paper text. AI understands context and answers questions about methods, conclusions, and data.',
+        'case2.cap.interpret.title': 'Figure Interpretation',
+        'case2.cap.interpret.desc': 'Select any figure and AI combines paper content with visual information to explain its meaning and highlight key findings.',
+        'case2.cap.translate.title': 'Instant Translation',
+        'case2.cap.translate.desc': 'Encounter unfamiliar terms or complex sentences? Select text to translate instantly, with bidirectional support and academic context preserved.',
+        'case2.cap.role.title': 'Role Switching',
+        'case2.cap.role.desc': 'Preset or custom AI roles — "Beginner Guide", "Methods Expert", "Statistics Reviewer" — read papers from the perspective that suits you best.',
+        'case2.demo.title': 'Conversation Example',
+        'case2.demo.desc': 'A typical AI reading session: open paper → ask about methods → interpret figures → dig deeper.',
+        'case2.demo.open': 'Opened paper "Spatial transcriptomics reveals..."',
+        'case2.demo.q1': 'What experimental techniques and analysis methods does this paper use?',
+        'case2.demo.a1': '<pre>Based on the Methods section:\n\n1. Experimental: 10x Visium spatial transcriptomics platform, capturing spatial gene expression from frozen human cortex sections\n2. Paired data: snRNA-seq from the same tissue as reference atlas\n3. Analysis:\n   - Cell2location for spatial deconvolution\n   - UMAP + Leiden clustering\n   - Moran\'s I for spatially autocorrelated genes\n4. Validation: RNAscope in situ hybridization for key marker genes</pre>',
+        'case2.demo.div1': '— switching to figure interpretation —',
+        'case2.demo.q2': 'Interpret Fig.2a — what does this UMAP plot show?',
+        'case2.demo.a2': '<pre>Fig.2a is a UMAP visualization of the snRNA-seq data:\n\n- 15 cell clusters identified, shown in distinct colors\n- Excitatory (Ex) and inhibitory (In) neurons form separate major clusters\n- Non-neuronal cells (astrocytes, oligodendrocytes, microglia) clearly separated in UMAP space\n- Key finding: Ex-L2/3 and Ex-L5/6 subclusters correspond to different cortical layers, showing transcriptomic differences reflect spatial positions\n\nThis figure provides the cell type annotation basis for downstream spatial deconvolution.</pre>',
+        'case2.demo.q3': 'What advantages does Cell2location have over RCTD?',
+        'case2.demo.a3': '<pre>The paper addresses this in the Supplementary Discussion:\n\nCell2location advantages over RCTD:\n1. Bayesian framework estimates absolute abundance (not just proportions) of multiple cell types per spot\n2. Higher sensitivity for detecting low-abundance cell types\n3. Built-in regularization for robustness in high-noise regions\n\nHowever, the authors note both methods agree on major cell type spatial distributions — differences mainly appear for rare cell types.</pre>',
+        'case2.summary.title': 'AI Companion at a Glance',
+        'case2.summary.n1': 'Stream',
+        'case2.summary.l1': 'Streaming output, real-time',
+        'case2.summary.n2': 'Multi',
+        'case2.summary.l2': 'Multi-turn, context-aware',
+        'case2.summary.n3': 'N+',
+        'case2.summary.l3': 'Multi-model / multi-persona',
+
+        // Case 3: Figure Library
+        'case3.title': 'Figure Library: From Papers to Presentations',
+        'case3.desc': 'Auto-extract figures from 30+ papers, search by keyword, filter by tag, split composite sub-figures, extract color palettes — turn scattered PDF figures into a ready-to-use visual asset library.',
+        'case3.mock.search': 'heatmap...',
+        'case3.scenario.title': 'The Scenario',
+        'case3.scenario.desc': 'You\'re preparing a thesis proposal and need representative figures from dozens of papers. Before, you\'d open each PDF, screenshot manually, end up with messy file names, and rely on memory to find things. Now, batch-import papers into CiteBox and figures are auto-extracted. Looking for "UMAP plots"? Just search. A figure has 6 panels but you only need two? Sub-figure splitting handles it. Want your PPT colors to match the paper? Extract the color palette directly from figures.',
+        'case3.workflow.title': 'Workflow',
+        'case3.workflow.s1.title': 'Batch Upload & Auto-Extract',
+        'case3.workflow.s1.desc': 'Batch-upload PDF papers to CiteBox. The system auto-parses full text and extracts all figures. Supports both manual annotation mode and LLM vision model auto-detection.',
+        'case3.workflow.s2.title': 'Search & Filter',
+        'case3.workflow.s2.desc': 'Search the figure library by keyword (full-text search covers captions, annotations, and notes), or quickly filter by group and tag to pinpoint target figures.',
+        'case3.workflow.s3.title': 'Sub-Figure Splitting',
+        'case3.workflow.s3.desc': 'Composite figures (e.g., Fig.2 with panels a/b/c/d) can be manually split into independent sub-figures. Each sub-figure can be individually searched, annotated, and exported.',
+        'case3.workflow.s4.title': 'Extract Colors, Unify Style',
+        'case3.workflow.s4.desc': 'Select any figure to extract its dominant colors into a palette. Reuse paper colors in your PPT or plots for visual consistency. Palettes are saved to the palette library for instant reuse.',
+        'case3.cap.title': 'Core Features',
+        'case3.cap.desc': 'CiteBox\'s figure library isn\'t just a screenshot folder — it understands figure structure, letting you manage research figures like code.',
+        'case3.cap.search.title': 'Full-Text Search',
+        'case3.cap.search.desc': 'FTS5 trigram-based search covering figure titles, captions, and notes. Handles mixed Chinese/English queries effortlessly.',
+        'case3.cap.tag.title': 'Tag Filtering',
+        'case3.cap.tag.desc': 'Add custom color-coded tags (e.g., "UMAP", "heatmap", "flow cytometry") and filter figures by tag instantly.',
+        'case3.cap.subfig.title': 'Sub-Figure Management',
+        'case3.cap.subfig.desc': 'Split composite figures into a/b/c/d panels with clear hierarchy. Sub-figures are dynamically cropped on display — no extra storage needed.',
+        'case3.cap.palette.title': 'Color Extraction',
+        'case3.cap.palette.desc': 'Extract dominant colors from any figure to create reusable palettes, saved to a centralized palette library.',
+        'case3.summary.title': 'Figure Library at a Glance',
+        'case3.summary.l1': 'Trigram full-text search engine',
+        'case3.summary.l2': 'Sub-figure splitting & hierarchy',
+        'case3.summary.l3': 'Color extraction & palette library',
+
         'back.cta': 'Back to Home',
         'footer.desc': 'Open-source academic literature manager · Self-hosted · Data ownership',
         'footer.download': 'Download',
