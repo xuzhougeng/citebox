@@ -110,10 +110,13 @@ static void citebox_focus_window(void *windowPtr) {
 	BOOL _showingMenu;
 }
 - (instancetype)initWithWindow:(NSWindow *)window appName:(NSString *)appName iconPath:(NSString *)iconPath;
+- (BOOL)ensureStatusItem;
 - (void)openWindow:(id)sender;
 - (void)quitApp:(id)sender;
 - (void)statusItemClicked:(id)sender;
 - (void)showStatusItemMenu;
+- (void)showTrayUnavailableAlert;
+- (NSModalResponse)promptCloseAction;
 @end
 
 @implementation CiteBoxStatusController
@@ -142,9 +145,9 @@ static void citebox_focus_window(void *windowPtr) {
 	return [super forwardingTargetForSelector:selector];
 }
 
-- (void)ensureStatusItem {
+- (BOOL)ensureStatusItem {
 	if (_statusItem != nil) {
-		return;
+		return YES;
 	}
 
 	BOOL hasIcon = _iconPath != nil && [_iconPath length] > 0;
@@ -152,7 +155,8 @@ static void citebox_focus_window(void *windowPtr) {
 	_statusItem = [[NSStatusBar systemStatusBar] statusItemWithLength:itemLength];
 	NSStatusBarButton *button = [_statusItem button];
 	if (button == nil) {
-		return;
+		[self removeStatusItem];
+		return NO;
 	}
 
 	if (hasIcon) {
@@ -189,6 +193,7 @@ static void citebox_focus_window(void *windowPtr) {
 	[button setTarget:self];
 	[button setAction:@selector(statusItemClicked:)];
 	[button sendActionOn:NSEventMaskLeftMouseUp | NSEventMaskRightMouseUp];
+	return YES;
 }
 
 - (void)removeStatusItem {
@@ -209,6 +214,26 @@ static void citebox_focus_window(void *windowPtr) {
 - (void)quitApp:(id)sender {
 	[self removeStatusItem];
 	[[NSApplication sharedApplication] terminate:nil];
+}
+
+- (void)showTrayUnavailableAlert {
+	NSAlert *alert = [[[NSAlert alloc] init] autorelease];
+	[alert setAlertStyle:NSAlertStyleWarning];
+	[alert setMessageText:@"无法最小化到托盘"];
+	[alert setInformativeText:@"当前无法创建状态栏图标，窗口将保持打开。"];
+	[alert addButtonWithTitle:@"确定"];
+	[alert runModal];
+}
+
+- (NSModalResponse)promptCloseAction {
+	NSAlert *alert = [[[NSAlert alloc] init] autorelease];
+	[alert setAlertStyle:NSAlertStyleInformational];
+	[alert setMessageText:@"关闭 CiteBox"];
+	[alert setInformativeText:@"选择关闭窗口时的操作。"];
+	[alert addButtonWithTitle:@"最小化到托盘"];
+	[alert addButtonWithTitle:@"退出"];
+	[alert addButtonWithTitle:@"取消"];
+	return [alert runModal];
 }
 
 - (void)showStatusItemMenu {
@@ -259,8 +284,19 @@ static void citebox_focus_window(void *windowPtr) {
 }
 
 - (BOOL)windowShouldClose:(NSWindow *)sender {
-	[self ensureStatusItem];
-	[sender orderOut:nil];
+	NSModalResponse response = [self promptCloseAction];
+	if (response == NSAlertFirstButtonReturn) {
+		if ([self ensureStatusItem]) {
+			[sender orderOut:nil];
+		} else {
+			[self showTrayUnavailableAlert];
+		}
+		return NO;
+	}
+	if (response == NSAlertSecondButtonReturn) {
+		[self quitApp:nil];
+		return NO;
+	}
 	return NO;
 }
 

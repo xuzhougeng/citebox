@@ -84,6 +84,16 @@ static void citebox_show_tray_menu(HWND hwnd) {
 	PostMessageW(hwnd, WM_NULL, 0, 0);
 }
 
+static int citebox_confirm_close_action(HWND hwnd) {
+	const wchar_t *title = L"关闭 CiteBox";
+	const wchar_t *message = L"选择“是”最小化到托盘，选择“否”直接退出，选择“取消”保持窗口打开。";
+	return MessageBoxW(hwnd, message, title, MB_YESNOCANCEL | MB_ICONQUESTION | MB_DEFBUTTON1);
+}
+
+static void citebox_show_tray_unavailable(HWND hwnd) {
+	MessageBoxW(hwnd, L"当前无法创建托盘图标，窗口将保持打开。", L"无法最小化到托盘", MB_OK | MB_ICONWARNING);
+}
+
 static BOOL citebox_ensure_tray_icon(HWND hwnd) {
 	if (citebox_tray_visible) {
 		return TRUE;
@@ -102,11 +112,21 @@ static BOOL citebox_ensure_tray_icon(HWND hwnd) {
 static LRESULT CALLBACK citebox_window_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 	switch (msg) {
 	case WM_CLOSE:
-		if (citebox_ensure_tray_icon(hwnd)) {
-			ShowWindow(hwnd, SW_HIDE);
+		switch (citebox_confirm_close_action(hwnd)) {
+		case IDYES:
+			if (citebox_ensure_tray_icon(hwnd)) {
+				ShowWindow(hwnd, SW_HIDE);
+			} else {
+				citebox_show_tray_unavailable(hwnd);
+			}
+			return 0;
+		case IDNO:
+			citebox_cleanup_tray();
+			DestroyWindow(hwnd);
+			return 0;
+		default:
 			return 0;
 		}
-		break;
 	case WM_COMMAND:
 		switch (LOWORD(wp)) {
 		case CITEBOX_TRAY_OPEN_COMMAND:
