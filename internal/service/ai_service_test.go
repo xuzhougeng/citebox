@@ -1008,6 +1008,82 @@ func TestPrepareReadFigureInterpretationUsesRequestedFigureOnly(t *testing.T) {
 	}
 }
 
+func TestDetectFigureRegionsUsesFigureSceneModel(t *testing.T) {
+	_, repo, cfg := newTestService(t)
+	aiSvc := NewAIService(repo, cfg, nil)
+
+	paper, err := repo.CreatePaper(repository.PaperUpsertInput{
+		Title:            "Region Detection",
+		OriginalFilename: "region-detection.pdf",
+		StoredPDFName:    "region-detection.pdf",
+		FileSize:         256,
+		ContentType:      "application/pdf",
+		ExtractionStatus: "completed",
+	})
+	if err != nil {
+		t.Fatalf("CreatePaper() error = %v", err)
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/responses" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("ReadAll() error = %v", err)
+		}
+		bodyText := string(body)
+		if !strings.Contains(bodyText, "Composite figures with subpanels A/B/C/D should usually be returned as one larger figure box") {
+			t.Fatalf("request body missing composite-figure instruction: %s", bodyText)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"output_text":"{\"figures\":[{\"bbox\":[100,120,700,820],\"confidence\":0.93}]}"}`))
+	}))
+	defer server.Close()
+
+	if _, err := aiSvc.UpdateSettings(model.AISettings{
+		Models: []model.AIModelConfig{
+			{
+				ID:              "figure",
+				Name:            "Figure",
+				Provider:        model.AIProviderOpenAI,
+				APIKey:          "test-key",
+				BaseURL:         server.URL,
+				Model:           "gpt-figure",
+				MaxOutputTokens: 900,
+			},
+		},
+		SceneModels: model.AISceneModelSelection{
+			DefaultModelID: "figure",
+			FigureModelID:  "figure",
+		},
+		SystemPrompt: "system",
+		FigurePrompt: "figure",
+	}); err != nil {
+		t.Fatalf("UpdateSettings() error = %v", err)
+	}
+
+	result, err := aiSvc.DetectFigureRegions(context.Background(), model.AIFigureRegionDetectRequest{
+		PaperID:    paper.ID,
+		PageNumber: 2,
+		PageWidth:  1200,
+		PageHeight: 1800,
+		ImageData:  "data:image/png;base64," + base64.StdEncoding.EncodeToString(testFigurePNGBytes(t, 640, 960)),
+	})
+	if err != nil {
+		t.Fatalf("DetectFigureRegions() error = %v", err)
+	}
+	if !result.Success || result.Model != "gpt-figure" || result.Provider != model.AIProviderOpenAI {
+		t.Fatalf("DetectFigureRegions() = %+v, want figure scene model metadata", result)
+	}
+	if len(result.Regions) != 1 {
+		t.Fatalf("DetectFigureRegions() regions = %+v, want 1 item", result.Regions)
+	}
+	if result.Regions[0].X <= 0 || result.Regions[0].Width <= 0 || result.Regions[0].Height <= 0 {
+		t.Fatalf("DetectFigureRegions() region = %+v, want normalized bbox", result.Regions[0])
+	}
+}
+
 func TestLoadFigureInputsCompressesOversizedFigure(t *testing.T) {
 	_, repo, cfg := newTestService(t)
 	aiSvc := NewAIService(repo, cfg, nil)

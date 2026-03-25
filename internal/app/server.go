@@ -459,6 +459,15 @@ func buildHandler(
 		}
 	})
 
+	mux.HandleFunc("/api/ai/detect-figure-regions", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPost:
+			aiHandler.DetectFigureRegions(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
 	mux.HandleFunc("/api/ai/read/stream", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodPost:

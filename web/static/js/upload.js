@@ -4,7 +4,22 @@ const UploadPage = {
     activePaperId: null,
     pollInFlight: false,
     lastStatus: '',
+    currentPaper: null,
     extractorReady: false,
+    extractorSettings: null,
+    aiSettings: null,
+    lastUploadedFile: null,
+    pdfjsLib: null,
+    figureSyncState: {
+        paperId: 0,
+        status: 'idle',
+        message: ''
+    },
+    pdfTextSyncState: {
+        paperId: 0,
+        status: 'idle',
+        message: ''
+    },
 
     async init() {
         this.form = document.getElementById('paperUploadForm');
@@ -105,13 +120,24 @@ const UploadPage = {
     },
 
     async loadExtractionModeOptions() {
+        let extractorSettings = {
+            extractor_profile: 'pdffigx_v1',
+            pdf_text_source: 'extractor'
+        };
         try {
-            const settings = await API.getExtractorSettings();
-            this.extractorReady = Boolean(settings.effective_extractor_url);
+            extractorSettings = await API.getExtractorSettings();
         } catch (error) {
-            this.extractorReady = false;
             Utils.showToast('加载自动解析配置失败，当前仅允许手工标注', 'error');
         }
+        this.extractorSettings = extractorSettings;
+
+        try {
+            this.aiSettings = await API.getAISettings();
+        } catch (error) {
+            this.aiSettings = null;
+        }
+
+        this.extractorReady = this.isAutoExtractionReady(this.extractorSettings, this.aiSettings);
 
         if (!this.extractionModeSelect) return;
 
@@ -122,9 +148,17 @@ const UploadPage = {
         this.extractionModeSelect.value = this.extractorReady ? 'auto' : 'manual';
 
         if (this.extractionModeHint) {
-            this.extractionModeHint.textContent = this.extractorReady
-                ? '默认使用自动标注；如需自行框选图片，也可以直接切到手工标注。'
-                : '当前未配置自动解析服务，只能使用手工标注。';
+            if (this.usesBuiltInLLMExtraction(this.extractorSettings) && this.extractorReady) {
+                this.extractionModeHint.textContent = '默认使用自动标注；上传后当前页面会用内置 AI 识别图片坐标，并由浏览器 pdf.js 自动保存全文。';
+            } else if (this.usesBuiltInLLMExtraction(this.extractorSettings)) {
+                this.extractionModeHint.textContent = '当前已选择内置 AI 坐标提取，但图片场景模型或 API Key 还没配好，只能使用手工标注；上传后会默认用浏览器 pdf.js 保存全文。';
+            } else if (this.extractorReady && this.usesBrowserPDFText(this.extractorSettings)) {
+                this.extractionModeHint.textContent = '默认使用自动标注；图片由后台提取，全文会在上传后由浏览器用 pdf.js 自动保存。';
+            } else if (this.extractorReady) {
+                this.extractionModeHint.textContent = '默认使用自动标注；如需自行框选图片，也可以直接切到手工标注，手工模式下会自动用 pdf.js 保存全文。';
+            } else {
+                this.extractionModeHint.textContent = '当前未配置自动解析服务，只能使用手工标注；上传后会默认用浏览器 pdf.js 提取并保存全文。';
+            }
         }
     },
 
@@ -154,12 +188,15 @@ const UploadPage = {
             return;
         }
 
+        const sourceFile = this.file;
+        const extractorSettings = { ...(this.extractorSettings || {}) };
+        const extractionMode = this.extractionModeSelect?.value || 'manual';
         const formData = new FormData();
-        formData.append('pdf', this.file);
+        formData.append('pdf', sourceFile);
         formData.append('title', this.titleInput.value.trim());
         formData.append('tags', this.tagsInput.value.trim());
         if (this.extractionModeSelect?.value) {
-            formData.append('extraction_mode', this.extractionModeSelect.value);
+            formData.append('extraction_mode', extractionMode);
         }
         if (this.groupSelect.value) {
             formData.append('group_id', this.groupSelect.value);
@@ -171,17 +208,20 @@ const UploadPage = {
         try {
             const payload = await API.uploadPaper(formData);
             const paper = payload.paper;
+            this.lastUploadedFile = sourceFile;
             this.tagAutocomplete?.mergeTags(paper?.tags || Utils.splitTags(this.tagsInput.value.trim()));
 
             this.renderResult(paper);
             this.startPolling(paper);
+            void this.runPostUploadEnrichment(paper, sourceFile, extractorSettings, extractionMode);
 
-            Utils.showToast(
-                Utils.isProcessingStatus(paper.extraction_status)
-                    ? '文献已入库，后台开始解析'
-                    : '文献已入库',
-                Utils.statusTone(paper.extraction_status)
-            );
+            let toastMessage = '文献已入库';
+            if (this.shouldRunBuiltInLLMExtraction(extractorSettings, extractionMode)) {
+                toastMessage = '文献已入库，当前页面开始用 AI 识别图片坐标';
+            } else if (Utils.isProcessingStatus(paper.extraction_status)) {
+                toastMessage = '文献已入库，后台开始解析';
+            }
+            Utils.showToast(toastMessage, Utils.statusTone(paper.extraction_status));
 
             this.form.reset();
             this.file = null;
@@ -269,7 +309,399 @@ const UploadPage = {
         }
     },
 
+    usesBuiltInLLMExtraction(settings) {
+        return String(settings?.extractor_profile || '').trim() === 'open_source_vision';
+    },
+
+    usesBrowserPDFText(settings) {
+        return String(settings?.pdf_text_source || '').trim() === 'pdfjs';
+    },
+
+    resolveAIModelConfig(aiSettings, preferredModelId) {
+        const models = Array.isArray(aiSettings?.models) ? aiSettings.models : [];
+        if (preferredModelId) {
+            const matched = models.find((item) => String(item?.id || '').trim() === String(preferredModelId).trim());
+            if (matched) {
+                return matched;
+            }
+        }
+        return models[0] || null;
+    },
+
+    resolveFigureDetectionModel(aiSettings) {
+        const sceneModels = aiSettings?.scene_models || {};
+        return this.resolveAIModelConfig(
+            aiSettings,
+            sceneModels.figure_model_id || sceneModels.default_model_id || ''
+        );
+    },
+
+    isBuiltInLLMReady(settings, aiSettings) {
+        if (!this.usesBuiltInLLMExtraction(settings)) {
+            return false;
+        }
+        const modelConfig = this.resolveFigureDetectionModel(aiSettings);
+        return Boolean(
+            modelConfig &&
+            String(modelConfig.api_key || '').trim() &&
+            String(modelConfig.model || '').trim() &&
+            String(modelConfig.provider || '').trim()
+        );
+    },
+
+    isAutoExtractionReady(settings, aiSettings) {
+        if (this.usesBuiltInLLMExtraction(settings)) {
+            return this.isBuiltInLLMReady(settings, aiSettings);
+        }
+        return Boolean(settings?.effective_extractor_url);
+    },
+
+    shouldRunBuiltInLLMExtraction(settings, extractionMode) {
+        return String(extractionMode || '').trim() === 'auto' && this.isBuiltInLLMReady(settings, this.aiSettings);
+    },
+
+    shouldAutoExtractPDFText(settings, extractionMode) {
+        return this.usesBrowserPDFText(settings) || String(extractionMode || '').trim() === 'manual';
+    },
+
+    setFigureSyncState(paperId, status, message) {
+        this.figureSyncState = {
+            paperId: Number(paperId || 0),
+            status: String(status || 'idle'),
+            message: String(message || '')
+        };
+        if (this.currentPaper && Number(this.currentPaper.id) === Number(this.figureSyncState.paperId)) {
+            this.renderResult(this.currentPaper);
+        }
+    },
+
+    setPDFTextSyncState(paperId, status, message) {
+        this.pdfTextSyncState = {
+            paperId: Number(paperId || 0),
+            status: String(status || 'idle'),
+            message: String(message || '')
+        };
+        if (this.currentPaper && Number(this.currentPaper.id) === Number(this.pdfTextSyncState.paperId)) {
+            this.renderResult(this.currentPaper);
+        }
+    },
+
+    renderPDFTextSyncNotice(paper) {
+        const state = this.pdfTextSyncState || {};
+        if (!paper?.id || Number(state.paperId) !== Number(paper.id) || !state.message || state.status === 'idle') {
+            return '';
+        }
+
+        let tone = 'info';
+        if (state.status === 'success') {
+            tone = 'success';
+        } else if (state.status === 'error') {
+            tone = 'error';
+        }
+        return `<p class="notice ${tone}">${Utils.escapeHTML(state.message)}</p>`;
+    },
+
+    renderFigureSyncNotice(paper) {
+        const state = this.figureSyncState || {};
+        if (!paper?.id || Number(state.paperId) !== Number(paper.id) || !state.message || state.status === 'idle') {
+            return '';
+        }
+
+        let tone = 'info';
+        if (state.status === 'success') {
+            tone = 'success';
+        } else if (state.status === 'error') {
+            tone = 'error';
+        }
+        return `<p class="notice ${tone}">${Utils.escapeHTML(state.message)}</p>`;
+    },
+
+    async runPostUploadEnrichment(paper, file, settings, extractionMode) {
+        let currentPaper = paper;
+
+        if (this.shouldRunBuiltInLLMExtraction(settings, extractionMode)) {
+            currentPaper = await this.maybeDetectAndSaveFiguresWithLLM(currentPaper, file);
+        }
+
+        return this.maybeExtractAndSavePDFText(currentPaper, file, settings, extractionMode);
+    },
+
+    async maybeExtractAndSavePDFText(paper, file, settings, extractionMode) {
+        if (!paper?.id || !file || !this.shouldAutoExtractPDFText(settings, extractionMode)) {
+            return paper;
+        }
+        if (paper.pdf_text) {
+            return paper;
+        }
+
+        this.setPDFTextSyncState(paper.id, 'running', '浏览器正在用 pdf.js 提取全文，完成后会自动写回当前文献。');
+
+        try {
+            const pdfText = await this.extractFullTextFromFile(file);
+            if (!pdfText) {
+                throw new Error('没有从当前 PDF 中提取到可用全文');
+            }
+
+            const payload = await API.updatePaperPDFText(paper.id, {
+                pdf_text: pdfText
+            });
+
+            this.currentPaper = payload.paper;
+            this.setPDFTextSyncState(paper.id, 'success', `已通过浏览器 pdf.js 保存全文（${pdfText.length.toLocaleString()} 字）。`);
+            this.renderResult(payload.paper);
+            Utils.showToast(`已保存全文（${pdfText.length.toLocaleString()} 字）`);
+            return payload.paper;
+        } catch (error) {
+            this.setPDFTextSyncState(paper.id, 'error', error.message || '浏览器端 PDF 全文提取失败');
+            Utils.showToast(error.message || '浏览器端 PDF 全文提取失败', 'error');
+            return paper;
+        }
+    },
+
+    async maybeDetectAndSaveFiguresWithLLM(paper, file) {
+        if (!paper?.id || !file) {
+            return paper;
+        }
+
+        this.setFigureSyncState(paper.id, 'running', '浏览器正在逐页渲染 PDF，并调用内置 AI 识别图片坐标。');
+
+        const pdfjsLib = await this.ensurePDFJSReady();
+        const objectURL = URL.createObjectURL(file);
+        let detectedCount = 0;
+        let currentPaper = paper;
+
+        try {
+            const loadingTask = pdfjsLib.getDocument({
+                url: objectURL,
+                cMapUrl: '/static/vendor/pdfjs/cmaps/',
+                cMapPacked: true,
+                standardFontDataUrl: '/static/vendor/pdfjs/standard_fonts/',
+                wasmUrl: '/static/vendor/pdfjs/wasm/'
+            });
+            const pdfDocument = await loadingTask.promise;
+
+            for (let pageNumber = 1; pageNumber <= (pdfDocument.numPages || 0); pageNumber += 1) {
+                this.setFigureSyncState(
+                    paper.id,
+                    'running',
+                    `内置 AI 正在识别第 ${pageNumber} / ${pdfDocument.numPages} 页的图片坐标。`
+                );
+
+                const page = await pdfDocument.getPage(pageNumber);
+                const renderedPage = await this.renderPDFPageForDetection(page);
+                const detection = await API.detectAIFigureRegions({
+                    paper_id: paper.id,
+                    page_number: pageNumber,
+                    page_width: renderedPage.canvas.width,
+                    page_height: renderedPage.canvas.height,
+                    image_data: renderedPage.canvas.toDataURL('image/jpeg', 0.92)
+                });
+
+                const regions = Array.isArray(detection?.regions) ? detection.regions : [];
+                if (!regions.length) {
+                    continue;
+                }
+
+                const manualRegions = [];
+                for (const region of regions) {
+                    const imageData = this.buildRegionImageData(renderedPage.canvas, region);
+                    if (!imageData) {
+                        continue;
+                    }
+                    manualRegions.push({
+                        page_number: pageNumber,
+                        x: region.x,
+                        y: region.y,
+                        width: region.width,
+                        height: region.height,
+                        source: 'llm',
+                        image_data: imageData,
+                        caption: ''
+                    });
+                }
+
+                if (!manualRegions.length) {
+                    continue;
+                }
+
+                const payload = await API.manualExtractFigures(paper.id, {
+                    regions: manualRegions
+                });
+                detectedCount += Number(payload?.added_count || manualRegions.length);
+                currentPaper = payload.paper || currentPaper;
+                this.currentPaper = currentPaper;
+                this.renderResult(currentPaper);
+            }
+
+            if (detectedCount > 0) {
+                this.setFigureSyncState(paper.id, 'success', `内置 AI 已自动录入 ${detectedCount} 张图片。`);
+                Utils.showToast(`AI 已自动录入 ${detectedCount} 张图片`);
+            } else {
+                this.setFigureSyncState(paper.id, 'success', '内置 AI 已完成坐标识别，但没有找到可保存的主图；你仍可继续手工标注。');
+            }
+            return currentPaper;
+        } catch (error) {
+            this.setFigureSyncState(paper.id, 'error', error.message || '内置 AI 图片坐标提取失败');
+            Utils.showToast(error.message || '内置 AI 图片坐标提取失败', 'error');
+            return currentPaper;
+        } finally {
+            URL.revokeObjectURL(objectURL);
+        }
+    },
+
+    async renderPDFPageForDetection(page) {
+        const baseViewport = page.getViewport({ scale: 1 });
+        const targetMaxDimension = 1680;
+        const baseMaxDimension = Math.max(baseViewport.width, baseViewport.height, 1);
+        const scale = Math.min(2.4, Math.max(1.35, targetMaxDimension / baseMaxDimension));
+        const viewport = page.getViewport({ scale });
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(viewport.width));
+        canvas.height = Math.max(1, Math.round(viewport.height));
+
+        const context = canvas.getContext('2d', { alpha: false });
+        context.fillStyle = '#ffffff';
+        context.fillRect(0, 0, canvas.width, canvas.height);
+
+        await page.render({
+            canvasContext: context,
+            viewport
+        }).promise;
+
+        return { canvas, viewport };
+    },
+
+    buildRegionImageData(canvas, region) {
+        const left = Math.max(0, Math.floor(Number(region?.x || 0) * canvas.width));
+        const top = Math.max(0, Math.floor(Number(region?.y || 0) * canvas.height));
+        const right = Math.min(canvas.width, Math.ceil((Number(region?.x || 0) + Number(region?.width || 0)) * canvas.width));
+        const bottom = Math.min(canvas.height, Math.ceil((Number(region?.y || 0) + Number(region?.height || 0)) * canvas.height));
+        const width = right - left;
+        const height = bottom - top;
+
+        if (width < 2 || height < 2) {
+            return '';
+        }
+
+        const cropCanvas = document.createElement('canvas');
+        cropCanvas.width = width;
+        cropCanvas.height = height;
+        const context = cropCanvas.getContext('2d', { alpha: false });
+        context.fillStyle = '#ffffff';
+        context.fillRect(0, 0, width, height);
+        context.drawImage(canvas, left, top, width, height, 0, 0, width, height);
+        return cropCanvas.toDataURL('image/png');
+    },
+
+    async ensurePDFJSReady() {
+        if (this.pdfjsLib) {
+            return this.pdfjsLib;
+        }
+
+        const pdfjsLib = await import('/static/vendor/pdfjs/legacy/build/pdf.min.mjs');
+        pdfjsLib.GlobalWorkerOptions.workerSrc = '/static/vendor/pdfjs/legacy/build/pdf.worker.min.mjs';
+        this.pdfjsLib = pdfjsLib;
+        return pdfjsLib;
+    },
+
+    async extractFullTextFromFile(file) {
+        const pdfjsLib = await this.ensurePDFJSReady();
+        const objectURL = URL.createObjectURL(file);
+
+        try {
+            const loadingTask = pdfjsLib.getDocument({
+                url: objectURL,
+                cMapUrl: '/static/vendor/pdfjs/cmaps/',
+                cMapPacked: true,
+                standardFontDataUrl: '/static/vendor/pdfjs/standard_fonts/',
+                wasmUrl: '/static/vendor/pdfjs/wasm/'
+            });
+            const pdfDocument = await loadingTask.promise;
+            const pages = [];
+
+            for (let pageNumber = 1; pageNumber <= (pdfDocument.numPages || 0); pageNumber += 1) {
+                const page = await pdfDocument.getPage(pageNumber);
+                const textContent = await page.getTextContent();
+                const pageText = this.extractPageText(textContent);
+                if (pageText) {
+                    pages.push(pageText);
+                }
+            }
+
+            return pages.join('\n\n').trim();
+        } finally {
+            URL.revokeObjectURL(objectURL);
+        }
+    },
+
+    extractPageText(textContent) {
+        const items = Array.isArray(textContent?.items) ? textContent.items : [];
+        const lines = [];
+        let currentLine = '';
+        let previousItem = null;
+
+        const flushLine = () => {
+            const normalized = currentLine.trimEnd();
+            if (normalized) {
+                lines.push(normalized);
+            }
+            currentLine = '';
+        };
+
+        items.forEach((item) => {
+            const text = String(item?.str || '').replace(/\u00a0/g, ' ');
+            const x = Number(item?.transform?.[4] || 0);
+            const y = Number(item?.transform?.[5] || 0);
+            const width = Number(item?.width || 0);
+
+            if (!text) {
+                if (item?.hasEOL) {
+                    flushLine();
+                    previousItem = null;
+                }
+                return;
+            }
+
+            if (previousItem && Math.abs(y - previousItem.y) > 2) {
+                flushLine();
+                previousItem = null;
+            }
+
+            if (previousItem && this.shouldInsertSpaceBetween(previousItem, { text, x })) {
+                currentLine += ' ';
+            }
+
+            currentLine += text;
+
+            if (item?.hasEOL) {
+                flushLine();
+                previousItem = null;
+                return;
+            }
+
+            previousItem = { text, x, y, width };
+        });
+
+        flushLine();
+        return lines.join('\n').trim();
+    },
+
+    shouldInsertSpaceBetween(previousItem, currentItem) {
+        if (!previousItem || !currentItem) return false;
+        if (!previousItem.text || !currentItem.text) return false;
+        if (/\s$/.test(previousItem.text) || /^\s/.test(currentItem.text)) return false;
+        if (/^[,.;:!?%)\]}]/.test(currentItem.text)) return false;
+        if (/[([{]$/.test(previousItem.text)) return false;
+        if (this.isCJKBoundary(previousItem.text, currentItem.text)) return false;
+        return currentItem.x - (previousItem.x + previousItem.width) > 1;
+    },
+
+    isCJKBoundary(previousText, currentText) {
+        return /[\u3400-\u9fff]$/.test(previousText) && /^[\u3400-\u9fff]/.test(currentText);
+    },
+
     renderResult(paper) {
+        this.currentPaper = paper;
         const figures = (paper.figures || []).filter((figure) => !figure.parent_figure_id);
         const statusTone = Utils.statusTone(paper.extraction_status);
         const tags = (paper.tags || [])
@@ -335,10 +767,13 @@ const UploadPage = {
                 <span>分组：${Utils.escapeHTML(paper.group_name || '未分组')}</span>
                 <span>标签：${tags || '无'}</span>
                 <span>提取图片：${figures.length} 张</span>
+                <span>全文：${paper.pdf_text ? `${paper.pdf_text.length.toLocaleString()} 字` : '未保存'}</span>
                 <span>PDF：${Utils.escapeHTML(paper.original_filename || '')}</span>
             </div>
 
             ${paper.extractor_message ? `<p class="notice ${statusTone}">${Utils.escapeHTML(paper.extractor_message)}</p>` : ''}
+            ${this.renderFigureSyncNotice(paper)}
+            ${this.renderPDFTextSyncNotice(paper)}
 
             <div class="result-actions">
                 <a class="btn btn-primary" href="/library">查看文献库</a>

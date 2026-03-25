@@ -47,6 +47,8 @@ const SettingsPage = {
         this.deleteAIModelButton = document.getElementById('deleteAIModelButton');
 
         this.extractorSettingsForm = document.getElementById('extractorSettingsForm');
+        this.extractorProfileSelect = document.getElementById('extractorProfileSelect');
+        this.extractorPDFTextSourceSelect = document.getElementById('extractorPDFTextSourceSelect');
         this.extractorURLInput = document.getElementById('extractorURLInput');
         this.extractorTokenInput = document.getElementById('extractorTokenInput');
         this.extractorFileFieldInput = document.getElementById('extractorFileFieldInput');
@@ -166,6 +168,9 @@ const SettingsPage = {
         this.extractorSettingsForm.addEventListener('submit', async (event) => {
             event.preventDefault();
             await this.saveExtractorSettings();
+        });
+        this.extractorProfileSelect?.addEventListener('change', () => {
+            this.syncExtractorProfileFormState();
         });
         this.wolaiSettingsForm?.addEventListener('submit', async (event) => {
             event.preventDefault();
@@ -631,12 +636,19 @@ const SettingsPage = {
         const settings = await API.getExtractorSettings();
         const extractorURLValue = this.extractorAddressValue(settings.extractor_url || '');
 
+        if (this.extractorProfileSelect) {
+            this.extractorProfileSelect.value = settings.extractor_profile || 'pdffigx_v1';
+        }
+        if (this.extractorPDFTextSourceSelect) {
+            this.extractorPDFTextSourceSelect.value = settings.pdf_text_source || 'extractor';
+        }
         this.extractorURLInput.value = extractorURLValue;
         this.extractorTokenInput.value = settings.extractor_token || '';
         this.extractorFileFieldInput.value = settings.extractor_file_field || 'file';
         this.extractorTimeoutInput.value = settings.timeout_seconds ?? 300;
         this.extractorPollIntervalInput.value = settings.poll_interval_seconds ?? 2;
 
+        this.syncExtractorProfileFormState();
         this.renderExtractorSummary(settings);
     },
 
@@ -684,7 +696,10 @@ const SettingsPage = {
     },
 
     async saveExtractorSettings() {
+        this.syncExtractorProfileFormState();
         const payload = {
+            extractor_profile: this.extractorProfileSelect?.value || 'pdffigx_v1',
+            pdf_text_source: this.extractorPDFTextSourceSelect?.value || 'extractor',
             extractor_url: this.extractorURLInput.value.trim(),
             extractor_jobs_url: '',
             extractor_token: this.extractorTokenInput.value.trim(),
@@ -694,6 +709,7 @@ const SettingsPage = {
         };
 
         const response = await API.updateExtractorSettings(payload);
+        this.syncExtractorProfileFormState();
         this.renderExtractorSummary(response.settings);
         Utils.showToast('PDF 提取服务配置已保存');
     },
@@ -1330,16 +1346,71 @@ const SettingsPage = {
     },
 
     renderExtractorSummary(settings) {
-        const extractURL = settings.effective_extractor_url || '未配置';
-        const jobsURL = settings.effective_jobs_url || '未配置';
-        const tokenLabel = settings.extractor_token ? '已配置' : '未配置';
+        const usesBuiltIn = String(settings?.extractor_profile || '').trim() === 'open_source_vision';
+        const extractURL = usesBuiltIn
+            ? '内置 AI 坐标提取，不使用外部提取接口'
+            : (settings.effective_extractor_url || '未配置');
+        const jobsURL = usesBuiltIn
+            ? '不适用'
+            : (settings.effective_jobs_url || '未配置');
+        const tokenLabel = usesBuiltIn
+            ? '不适用'
+            : (settings.extractor_token ? '已配置' : '未配置');
+        const fileFieldLabel = usesBuiltIn
+            ? '不适用'
+            : (settings.extractor_file_field || 'file');
 
         this.extractorSummary.innerHTML = `
+            <div><span>提取方案</span><strong>${Utils.escapeHTML(this.extractorProfileLabel(settings.extractor_profile))}</strong></div>
+            <div><span>全文来源</span><strong>${Utils.escapeHTML(this.extractorPDFTextSourceLabel(settings.pdf_text_source))}</strong></div>
             <div><span>生效的提取接口</span><strong class="settings-url-value">${Utils.escapeHTML(extractURL)}</strong></div>
             <div><span>生效的任务接口</span><strong class="settings-url-value">${Utils.escapeHTML(jobsURL)}</strong></div>
-            <div><span>上传字段名</span><strong>${Utils.escapeHTML(settings.extractor_file_field || 'file')}</strong></div>
+            <div><span>上传字段名</span><strong>${Utils.escapeHTML(fileFieldLabel)}</strong></div>
             <div><span>鉴权 Token</span><strong>${Utils.escapeHTML(tokenLabel)}</strong></div>
         `;
+    },
+
+    extractorProfileLabel(value) {
+        switch (String(value || '').trim()) {
+            case 'open_source_vision':
+                return '内置 LLM 坐标提取';
+            case 'pdffigx_v1':
+            default:
+                return '标准 pdffigx';
+        }
+    },
+
+    extractorPDFTextSourceLabel(value) {
+        switch (String(value || '').trim()) {
+            case 'pdfjs':
+                return '浏览器 pdf.js';
+            case 'extractor':
+            default:
+                return '解析服务返回';
+        }
+    },
+
+    syncExtractorProfileFormState() {
+        const usesBuiltIn = String(this.extractorProfileSelect?.value || '').trim() === 'open_source_vision';
+
+        if (usesBuiltIn && this.extractorPDFTextSourceSelect) {
+            this.extractorPDFTextSourceSelect.value = 'pdfjs';
+        }
+        if (this.extractorPDFTextSourceSelect) {
+            this.extractorPDFTextSourceSelect.disabled = usesBuiltIn;
+        }
+
+        [
+            this.extractorURLInput,
+            this.extractorTokenInput,
+            this.extractorFileFieldInput,
+            this.extractorTimeoutInput,
+            this.extractorPollIntervalInput
+        ].forEach((element) => {
+            if (element) {
+                element.disabled = usesBuiltIn;
+            }
+        });
     },
 
     extractorAddressValue(rawURL) {

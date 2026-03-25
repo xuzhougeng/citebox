@@ -93,6 +93,8 @@ go run ./cmd/desktop
 | `STORAGE_DIR` | `./data/library` | 文献 PDF 与提取图片存储根目录 |
 | `DATABASE_PATH` | `./data/library.db` | SQLite 数据库路径 |
 | `MAX_UPLOAD_SIZE` | `262144000` | 单个 PDF 最大体积，默认 250MB |
+| `PDF_EXTRACTOR_PROFILE` | `pdffigx_v1` | PDF 提取方案默认类型；可选 `pdffigx_v1` 或 `open_source_vision`（内置 LLM 坐标提取） |
+| `PDF_EXTRACTOR_PDF_TEXT_SOURCE` | `extractor` | PDF 全文默认来源；`pdffigx_v1` 可选 `extractor` 或 `pdfjs`，`open_source_vision` 会固定使用 `pdfjs` |
 | `PDF_EXTRACTOR_URL` | 空 | PDF 解析后端 base URL 或完整提取接口地址 |
 | `PDF_EXTRACTOR_JOBS_URL` | 空 | 可选；仅在异步任务地址和 base URL 不一致时才需要单独覆盖 |
 | `PDF_EXTRACTOR_TOKEN` | 空 | 解析后端 Bearer Token |
@@ -144,9 +146,19 @@ export PDF_EXTRACTOR_URL=http://127.0.0.1:8000/api/v1/extract
 无论同步还是异步，CiteBox 都会优先按 `pdffigx v1` 契约请求：
 
 - `image_mode=base64`
-- `include_pdf_text=true`
 - `include_boxes=true`
 - `persist_artifacts=false`
+
+`pdffigx_v1` 模式下，全文来源会按设置页中的“全文来源”切换：
+
+- `extractor`：请求里会带 `include_pdf_text=true`
+- `pdfjs`：请求里会带 `include_pdf_text=false`，全文改由浏览器端 `pdf.js` 提取并通过 `/api/papers/{id}/pdf-text` 保存
+
+推荐用法：
+
+- 标准 `pdffigx` 部署：保持“全文来源 = 解析服务返回”
+- `open_source_vision`：浏览器用 `pdf.js` 渲染 PDF 页面，后端调用 CiteBox 已配置的多模态模型返回图片坐标，再通过手工提取接口自动入库
+- 只走手工标注时：上传完成后也会默认使用浏览器 `pdf.js` 提取全文并保存，即便没有配置自动解析模型
 
 当前后端期望解析服务返回 JSON，至少兼容下面这类结构:
 
@@ -182,7 +194,7 @@ export PDF_EXTRACTOR_URL=http://127.0.0.1:8000/api/v1/extract
 - `box` 替代 `bbox`
 - `base64` 替代 `data`
 
-如果没有配置解析后端，文献仍会入库，但状态会快速转为 `failed`，不会有提取图片。
+如果没有配置解析后端，上传页会自动切到“手工标注”；文献仍会入库，并默认尝试用浏览器 `pdf.js` 保存全文，但不会自动生成提取图片。
 
 ## 微信 IM
 

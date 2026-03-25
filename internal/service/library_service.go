@@ -39,11 +39,17 @@ type LibraryService struct {
 }
 
 const (
-	extractorSettingsKey = "extractor_settings"
-	runtimePasswordKey   = "runtime_admin_password"
-	manualPendingStatus  = "manual_pending"
-	extractionModeAuto   = "auto"
-	extractionModeManual = "manual"
+	extractorSettingsKey             = "extractor_settings"
+	runtimePasswordKey               = "runtime_admin_password"
+	manualPendingStatus              = "manual_pending"
+	extractionModeAuto               = "auto"
+	extractionModeManual             = "manual"
+	extractorProfilePDFFigXV1        = "pdffigx_v1"
+	extractorProfileOpenSourceVision = "open_source_vision"
+	pdfTextSourceExtractor           = "extractor"
+	pdfTextSourcePDFJS               = "pdfjs"
+	manualFigureSourceManual         = "manual"
+	manualFigureSourceLLM            = "llm"
 )
 
 type LibraryServiceOption func(*LibraryService)
@@ -375,11 +381,18 @@ func (s *LibraryService) UploadPaper(file multipart.File, header *multipart.File
 	}
 
 	tagInputs := s.normalizeTagInputs(params.Tags, model.TagScopePaper)
+	extractorSettings, err := s.GetExtractorSettings()
+	if err != nil {
+		os.Remove(pdfPath)
+		return nil, err
+	}
+
 	autoExtractionConfigured, err := s.autoExtractionConfigured()
 	if err != nil {
 		os.Remove(pdfPath)
 		return nil, err
 	}
+	usesBuiltInLLMExtraction := usesBuiltInLLMCoordinateExtraction(*extractorSettings)
 
 	extractionMode := normalizeExtractionMode(params.ExtractionMode)
 	if extractionMode == "" {
@@ -399,8 +412,13 @@ func (s *LibraryService) UploadPaper(file multipart.File, header *multipart.File
 			os.Remove(pdfPath)
 			return nil, apperr.New(apperr.CodeFailedPrecondition, "未配置自动解析服务，请改用手工标注")
 		}
-		extractionStatus = "queued"
-		extractorMessage = "文献已入库，等待后台解析"
+		if usesBuiltInLLMExtraction {
+			extractionStatus = "completed"
+			extractorMessage = builtInLLMWorkflowMessage()
+		} else {
+			extractionStatus = "queued"
+			extractorMessage = "文献已入库，等待后台解析"
+		}
 	case extractionModeManual:
 	default:
 		os.Remove(pdfPath)
@@ -444,7 +462,7 @@ func (s *LibraryService) UploadPaper(file multipart.File, header *multipart.File
 		return nil, err
 	}
 
-	if extractionMode == extractionModeAuto {
+	if extractionMode == extractionModeAuto && !usesBuiltInLLMExtraction {
 		go s.runPaperExtraction(paper.ID, pdfPath, header.Filename)
 	}
 
@@ -855,11 +873,14 @@ func (s *LibraryService) ReextractPaper(id int64) (*model.Paper, error) {
 		return nil, apperr.New(apperr.CodeNotFound, "paper not found")
 	}
 
-	autoExtractionConfigured, err := s.autoExtractionConfigured()
+	settings, err := s.GetExtractorSettings()
 	if err != nil {
 		return nil, err
 	}
-	if !autoExtractionConfigured {
+	if usesBuiltInLLMCoordinateExtraction(*settings) {
+		return nil, apperr.New(apperr.CodeFailedPrecondition, "当前提取方案使用浏览器内置 AI 坐标提取，请重新上传或进入人工提取页处理")
+	}
+	if strings.TrimSpace(settings.EffectiveExtractorURL) == "" {
 		return nil, apperr.New(apperr.CodeFailedPrecondition, "未配置自动解析服务，请直接使用人工处理")
 	}
 
@@ -977,8 +998,9 @@ func (s *LibraryService) ManualExtractFigures(id int64, params ManualExtractPara
 			return nil, 0, apperr.New(apperr.CodeInvalidArgument, "人工提取结果不是有效图片")
 		}
 
+		source := region.Source
 		ext := extensionForFigure(contentType, "manual.png")
-		storedName := fmt.Sprintf("figure_%d_manual_%d%s", time.Now().UnixNano(), idx+1, ext)
+		storedName := fmt.Sprintf("figure_%d_%s_%d%s", time.Now().UnixNano(), source, idx+1, ext)
 		targetPath := filepath.Join(s.config.FiguresDir(), storedName)
 		if err := os.WriteFile(targetPath, binary, 0o644); err != nil {
 			removeFiles(newPaths)
@@ -993,7 +1015,7 @@ func (s *LibraryService) ManualExtractFigures(id int64, params ManualExtractPara
 			"height":      region.Height,
 			"unit":        "normalized",
 			"page_number": region.PageNumber,
-			"source":      "manual",
+			"source":      source,
 		})
 		if err != nil {
 			removeFiles(newPaths)
@@ -1013,13 +1035,13 @@ func (s *LibraryService) ManualExtractFigures(id int64, params ManualExtractPara
 
 		items = append(items, repository.FigureUpsertInput{
 			Filename:       storedName,
-			OriginalName:   fmt.Sprintf("%s_p%d_manual_%d%s", strings.TrimSuffix(paper.OriginalFilename, filepath.Ext(paper.OriginalFilename)), region.PageNumber, idx+1, ext),
+			OriginalName:   fmt.Sprintf("%s_p%d_%s_%d%s", strings.TrimSuffix(paper.OriginalFilename, filepath.Ext(paper.OriginalFilename)), region.PageNumber, source, idx+1, ext),
 			ContentType:    contentType,
 			PageNumber:     region.PageNumber,
 			FigureIndex:    figureIndex,
 			ParentFigureID: nil,
 			SubfigureLabel: "",
-			Source:         "manual",
+			Source:         source,
 			Caption:        caption,
 			BBoxJSON:       string(bboxJSON),
 		})
@@ -1148,6 +1170,8 @@ func (s *LibraryService) UpdateExtractorSettings(input model.ExtractorSettings) 
 
 func (s *LibraryService) defaultExtractorSettings() model.ExtractorSettings {
 	settings := model.ExtractorSettings{
+		ExtractorProfile:    normalizeExtractorProfile(s.config.ExtractorProfile),
+		PDFTextSource:       normalizePDFTextSource(s.config.ExtractorPDFTextSource, normalizeExtractorProfile(s.config.ExtractorProfile)),
 		ExtractorURL:        strings.TrimSpace(s.config.ExtractorURL),
 		ExtractorJobsURL:    "",
 		ExtractorToken:      strings.TrimSpace(s.config.ExtractorToken),
@@ -1168,6 +1192,9 @@ func (s *LibraryService) defaultExtractorSettings() model.ExtractorSettings {
 func (s *LibraryService) normalizeExtractorSettings(input model.ExtractorSettings) (model.ExtractorSettings, error) {
 	defaults := s.defaultExtractorSettings()
 	settings := input
+
+	settings.ExtractorProfile = normalizeExtractorProfile(firstNonEmpty(strings.TrimSpace(settings.ExtractorProfile), defaults.ExtractorProfile))
+	settings.PDFTextSource = normalizePDFTextSource(firstNonEmpty(strings.TrimSpace(settings.PDFTextSource), defaults.PDFTextSource), settings.ExtractorProfile)
 
 	if strings.TrimSpace(settings.ExtractorFileField) == "" {
 		settings.ExtractorFileField = firstNonEmpty(defaults.ExtractorFileField, "file")
@@ -1301,7 +1328,7 @@ func (s *LibraryService) processPaperExtractionSync(settings model.ExtractorSett
 		return err
 	}
 
-	return s.persistExtractionResult(paperID, "", result)
+	return s.persistExtractionResult(paperID, "", settings, result)
 }
 
 func (s *LibraryService) processPaperExtractionJob(settings model.ExtractorSettings, paperID int64, jobsURL, pdfPath, originalFilename string) error {
@@ -1327,7 +1354,7 @@ func (s *LibraryService) processPaperExtractionJob(settings model.ExtractorSetti
 		if err != nil {
 			return err
 		}
-		return s.persistExtractionResult(paperID, finalStatus.JobID, result)
+		return s.persistExtractionResult(paperID, finalStatus.JobID, settings, result)
 	case "failed":
 		return nil
 	case "cancelled":
@@ -1365,7 +1392,7 @@ func (s *LibraryService) processPaperExtractionJobWithExistingJob(settings model
 	if err != nil {
 		return err
 	}
-	return s.persistExtractionResult(paperID, finalStatus.JobID, result)
+	return s.persistExtractionResult(paperID, finalStatus.JobID, settings, result)
 }
 
 func (s *LibraryService) pollExtractJob(settings model.ExtractorSettings, paperID int64, initial *extractorJobStatusResponse) (*extractorJobStatusResponse, error) {
@@ -1431,9 +1458,14 @@ func (s *LibraryService) pollExtractJob(settings model.ExtractorSettings, paperI
 	}
 }
 
-func (s *LibraryService) persistExtractionResult(paperID int64, jobID string, result *extractionResult) error {
+func (s *LibraryService) persistExtractionResult(paperID int64, jobID string, settings model.ExtractorSettings, result *extractionResult) error {
 	if result == nil {
 		return apperr.New(apperr.CodeUnavailable, "解析结果为空")
+	}
+
+	pdfText, err := s.resolvePDFTextForPersistence(paperID, settings, result.PDFText)
+	if err != nil {
+		return err
 	}
 
 	figures, figurePaths, err := s.materializeFigures(result.Figures)
@@ -1444,7 +1476,7 @@ func (s *LibraryService) persistExtractionResult(paperID int64, jobID string, re
 	s.repoMu.RLock()
 	err = s.repo.ApplyPaperExtractionResult(
 		paperID,
-		result.PDFText,
+		pdfText,
 		strings.TrimSpace(string(result.Boxes)),
 		"completed",
 		"",
@@ -1458,6 +1490,26 @@ func (s *LibraryService) persistExtractionResult(paperID int64, jobID string, re
 	}
 
 	return nil
+}
+
+func (s *LibraryService) resolvePDFTextForPersistence(paperID int64, settings model.ExtractorSettings, incoming string) (string, error) {
+	if normalizePDFTextSource(settings.PDFTextSource, settings.ExtractorProfile) != pdfTextSourcePDFJS {
+		return incoming, nil
+	}
+	if strings.TrimSpace(incoming) != "" {
+		return incoming, nil
+	}
+
+	s.repoMu.RLock()
+	paper, err := s.repo.GetPaperDetail(paperID)
+	s.repoMu.RUnlock()
+	if err != nil {
+		return "", err
+	}
+	if paper == nil {
+		return "", nil
+	}
+	return paper.PDFText, nil
 }
 
 func (s *LibraryService) markPaperExtractionFailed(paperID int64, jobID string, err error) {
@@ -1603,7 +1655,7 @@ func (s *LibraryService) buildExtractorUploadBody(settings model.ExtractorSettin
 		value string
 	}{
 		{name: "image_mode", value: "base64"},
-		{name: "include_pdf_text", value: "true"},
+		{name: "include_pdf_text", value: boolString(shouldRequestPDFTextFromExtractor(settings))},
 		{name: "include_boxes", value: "true"},
 		{name: "persist_artifacts", value: "false"},
 	} {
@@ -1707,6 +1759,43 @@ func parseExtractionResult(respBody []byte) (*extractionResult, error) {
 		Boxes:   payload.Boxes,
 		Figures: figures,
 	}, nil
+}
+
+func normalizeExtractorProfile(value string) string {
+	switch strings.TrimSpace(value) {
+	case extractorProfileOpenSourceVision:
+		return extractorProfileOpenSourceVision
+	case extractorProfilePDFFigXV1:
+		return extractorProfilePDFFigXV1
+	default:
+		return extractorProfilePDFFigXV1
+	}
+}
+
+func normalizePDFTextSource(value, profile string) string {
+	if normalizeExtractorProfile(profile) == extractorProfileOpenSourceVision {
+		return pdfTextSourcePDFJS
+	}
+
+	switch strings.TrimSpace(value) {
+	case pdfTextSourceExtractor:
+		return pdfTextSourceExtractor
+	case pdfTextSourcePDFJS:
+		return pdfTextSourcePDFJS
+	default:
+		return pdfTextSourceExtractor
+	}
+}
+
+func shouldRequestPDFTextFromExtractor(settings model.ExtractorSettings) bool {
+	return normalizePDFTextSource(settings.PDFTextSource, settings.ExtractorProfile) != pdfTextSourcePDFJS
+}
+
+func boolString(value bool) string {
+	if value {
+		return "true"
+	}
+	return "false"
 }
 
 func (s *LibraryService) materializeFigures(figures []extractedFigure) ([]repository.FigureUpsertInput, []string, error) {
@@ -1824,7 +1913,39 @@ func (s *LibraryService) autoExtractionConfigured() (bool, error) {
 	if err != nil {
 		return false, err
 	}
+	if usesBuiltInLLMCoordinateExtraction(*settings) {
+		return s.builtInLLMCoordinateExtractionConfigured()
+	}
 	return strings.TrimSpace(settings.EffectiveExtractorURL) != "", nil
+}
+
+func (s *LibraryService) builtInLLMCoordinateExtractionConfigured() (bool, error) {
+	raw, err := s.repo.GetAppSetting(aiSettingsKey)
+	if err != nil {
+		return false, err
+	}
+
+	settings := model.DefaultAISettings()
+	if strings.TrimSpace(raw) != "" {
+		if err := json.Unmarshal([]byte(raw), &settings); err != nil {
+			return false, apperr.Wrap(apperr.CodeInternal, "解析 AI 设置失败", err)
+		}
+	}
+
+	normalized, err := normalizeAISettings(settings)
+	if err != nil {
+		return false, err
+	}
+	modelConfig, err := resolveModelForAction(normalized, model.AIActionFigureInterpretation)
+	if err != nil {
+		return false, err
+	}
+
+	return strings.TrimSpace(modelConfig.APIKey) != "" && strings.TrimSpace(modelConfig.Model) != "", nil
+}
+
+func usesBuiltInLLMCoordinateExtraction(settings model.ExtractorSettings) bool {
+	return normalizeExtractorProfile(settings.ExtractorProfile) == extractorProfileOpenSourceVision
 }
 
 func maxFigureIndex(figures []model.Figure) int {
@@ -1838,6 +1959,7 @@ func maxFigureIndex(figures []model.Figure) int {
 }
 
 func normalizeManualRegion(region model.ManualExtractionRegion) (model.ManualExtractionRegion, error) {
+	region.Source = normalizeManualFigureSource(region.Source)
 	region.Caption = strings.TrimSpace(region.Caption)
 	region.ImageData = strings.TrimSpace(region.ImageData)
 	if region.PageNumber < 1 {
@@ -1856,6 +1978,15 @@ func normalizeManualRegion(region model.ManualExtractionRegion) (model.ManualExt
 		return model.ManualExtractionRegion{}, apperr.New(apperr.CodeInvalidArgument, "缺少人工提取图片数据")
 	}
 	return region, nil
+}
+
+func normalizeManualFigureSource(value string) string {
+	switch strings.TrimSpace(value) {
+	case manualFigureSourceLLM:
+		return manualFigureSourceLLM
+	default:
+		return manualFigureSourceManual
+	}
 }
 
 func normalizeSubfigureRegion(region model.SubfigureExtractionRegion) (model.SubfigureExtractionRegion, error) {
@@ -2100,6 +2231,10 @@ func manualWorkflowMessage(autoUnavailable bool) string {
 		return "未配置自动解析服务，文献已入库，可随时进入手工标注补录图片"
 	}
 	return "已跳过自动解析，文献已入库，可随时进入手工标注补录图片"
+}
+
+func builtInLLMWorkflowMessage() string {
+	return "文献已入库，当前页面会继续用内置 AI 识别图片坐标，并用 pdf.js 保存全文"
 }
 
 func extractorErrorMessage(body []byte) string {

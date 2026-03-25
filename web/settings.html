@@ -444,11 +444,25 @@ User Prompt:
 
             <details class="manager-card settings-collapsible" open>
                 <summary class="settings-collapsible-toggle">
-                    <h2>PDF 提取服务配置</h2>
-                    <p>配置 PDF 提取服务的连接信息，用于上传时自动解析文献。</p>
+                    <h2>PDF 提取配置</h2>
+                    <p>选择自动提图方案。可接外部 pdffigx，也可直接用内置多模态模型识别图片坐标。</p>
                 </summary>
                 <form id="extractorSettingsForm" class="manager-form">
                     <div class="form-grid">
+                        <label class="field">
+                            <span>提取方案</span>
+                            <select id="extractorProfileSelect" class="form-input">
+                                <option value="pdffigx_v1">标准 pdffigx</option>
+                                <option value="open_source_vision">内置 LLM 坐标提取</option>
+                            </select>
+                        </label>
+                        <label class="field">
+                            <span>全文来源</span>
+                            <select id="extractorPDFTextSourceSelect" class="form-input">
+                                <option value="extractor">由解析服务返回</option>
+                                <option value="pdfjs">由浏览器 pdf.js 提取</option>
+                            </select>
+                        </label>
                         <label class="field field-span-2">
                             <span>提取服务地址</span>
                             <input id="extractorURLInput" class="form-input" type="text" placeholder="例如：http://127.0.0.1:8000">
@@ -471,7 +485,7 @@ User Prompt:
                         </label>
                     </div>
 
-                    <p class="muted">填写 `http://127.0.0.1:8000` 这样的服务根地址即可；系统会自动补全 ` /api/v1/extract `，并始终从同一根地址推导 ` /api/v1/jobs `。</p>
+                    <p class="muted">如果选择标准 pdffigx，只需要填写 `http://127.0.0.1:8000` 这样的服务根地址，系统会自动补全 `/api/v1/extract` 和 `/api/v1/jobs`。如果选择“内置 LLM 坐标提取”，则不再使用外部提取服务地址，图片坐标会由 CiteBox 的多模态模型直接识别。</p>
 
                     <div id="extractorSummary" class="settings-summary-box"></div>
 

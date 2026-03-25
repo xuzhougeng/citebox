@@ -35,7 +35,7 @@
                 <p class="eyebrow">文献上传</p>
                 <h1>上传 PDF，生成新的文献条目</h1>
                 <p class="hero-text">
-                    上传 PDF 后，系统会自动解析并提取正文与图片。你也可以在需要时手动框选提取。
+                    上传 PDF 后，可以走外部 pdffigx，或直接用内置 LLM 识别图片坐标；手工标注模式下也会默认用浏览器 pdf.js 保存全文。
                 </p>
             </div>
         </section>
@@ -80,7 +80,7 @@
                         <option value="auto">自动标注</option>
                         <option value="manual">手工标注</option>
                     </select>
-                    <span id="extractionModeHint" class="muted">默认使用自动标注，也可以直接进入手工标注流程。</span>
+                    <span id="extractionModeHint" class="muted">默认使用自动标注，也可以直接进入手工标注流程；手工模式下会自动用 pdf.js 保存全文。</span>
                 </label>
 
                 <div class="submit-row">

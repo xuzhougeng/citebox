@@ -388,6 +388,16 @@ const API = {
         });
     },
 
+    detectAIFigureRegions(data) {
+        return requestJSON(`${API_BASE}/ai/detect-figure-regions`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        });
+    },
+
     exportAIReadMarkdown(data) {
         return requestBlob(`${API_BASE}/ai/read/export`, {
             method: 'POST',

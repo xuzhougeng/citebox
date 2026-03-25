@@ -111,6 +111,31 @@ type AITranslateRequest struct {
 	Text string `json:"text"`
 }
 
+type AIFigureRegionDetectRequest struct {
+	PaperID    int64   `json:"paper_id"`
+	PageNumber int     `json:"page_number"`
+	PageWidth  float64 `json:"page_width"`
+	PageHeight float64 `json:"page_height"`
+	ImageData  string  `json:"image_data"`
+}
+
+type AIFigureRegion struct {
+	X          float64 `json:"x"`
+	Y          float64 `json:"y"`
+	Width      float64 `json:"width"`
+	Height     float64 `json:"height"`
+	Confidence float64 `json:"confidence,omitempty"`
+}
+
+type AIFigureRegionDetectResponse struct {
+	Success    bool             `json:"success"`
+	Provider   AIProvider       `json:"provider"`
+	Model      string           `json:"model"`
+	PageNumber int              `json:"page_number"`
+	Regions    []AIFigureRegion `json:"regions"`
+	RawText    string           `json:"raw_text,omitempty"`
+}
+
 type AIConversationTurn struct {
 	Question string `json:"question"`
 	Answer   string `json:"answer"`

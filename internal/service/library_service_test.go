@@ -1142,8 +1142,16 @@ func TestExtractorSettingsDefaultsAndPersistence(t *testing.T) {
 	if defaults.ExtractorFileField != "file" || defaults.TimeoutSeconds != cfg.ExtractorTimeoutSeconds {
 		t.Fatalf("GetExtractorSettings() defaults = %+v, want config defaults", defaults)
 	}
+	if defaults.ExtractorProfile != extractorProfilePDFFigXV1 {
+		t.Fatalf("GetExtractorSettings() extractor_profile = %q, want %q", defaults.ExtractorProfile, extractorProfilePDFFigXV1)
+	}
+	if defaults.PDFTextSource != pdfTextSourceExtractor {
+		t.Fatalf("GetExtractorSettings() pdf_text_source = %q, want %q", defaults.PDFTextSource, pdfTextSourceExtractor)
+	}
 
 	updated, err := svc.UpdateExtractorSettings(model.ExtractorSettings{
+		ExtractorProfile:    extractorProfileOpenSourceVision,
+		PDFTextSource:       pdfTextSourcePDFJS,
 		ExtractorURL:        "http://127.0.0.1:9000/api/v1/extract",
 		ExtractorToken:      "secret",
 		ExtractorFileField:  "upload",
@@ -1156,8 +1164,26 @@ func TestExtractorSettingsDefaultsAndPersistence(t *testing.T) {
 	if updated.EffectiveExtractorURL == "" || updated.EffectiveJobsURL == "" || updated.ExtractorFileField != "upload" {
 		t.Fatalf("UpdateExtractorSettings() = %+v, want normalized effective values", updated)
 	}
+	if updated.ExtractorProfile != extractorProfileOpenSourceVision || updated.PDFTextSource != pdfTextSourcePDFJS {
+		t.Fatalf("UpdateExtractorSettings() profile/text_source = (%q,%q), want (%q,%q)", updated.ExtractorProfile, updated.PDFTextSource, extractorProfileOpenSourceVision, pdfTextSourcePDFJS)
+	}
 	if updated.ExtractorJobsURL != "" {
 		t.Fatalf("UpdateExtractorSettings() extractor_jobs_url = %q, want empty", updated.ExtractorJobsURL)
+	}
+}
+
+func TestBuiltInLLMExtractorForcesPDFJSTextSource(t *testing.T) {
+	svc, _, _ := newTestService(t)
+
+	updated, err := svc.UpdateExtractorSettings(model.ExtractorSettings{
+		ExtractorProfile: extractorProfileOpenSourceVision,
+		PDFTextSource:    pdfTextSourceExtractor,
+	})
+	if err != nil {
+		t.Fatalf("UpdateExtractorSettings() error = %v", err)
+	}
+	if updated.PDFTextSource != pdfTextSourcePDFJS {
+		t.Fatalf("UpdateExtractorSettings() pdf_text_source = %q, want %q", updated.PDFTextSource, pdfTextSourcePDFJS)
 	}
 }
 
@@ -1181,6 +1207,34 @@ func TestBuildExtractorUploadBodyUsesRuntimeFileField(t *testing.T) {
 
 	if !bytes.Contains(body.Bytes(), []byte(`name="upload"`)) {
 		t.Fatalf("buildExtractorUploadBody() body missing configured file field: %s", body.String())
+	}
+	if !bytes.Contains(body.Bytes(), []byte("name=\"include_pdf_text\"")) || !bytes.Contains(body.Bytes(), []byte("\r\n\r\ntrue")) {
+		t.Fatalf("buildExtractorUploadBody() body missing include_pdf_text=true: %s", body.String())
+	}
+}
+
+func TestBuildExtractorUploadBodyDisablesPDFTextWhenUsingPDFJS(t *testing.T) {
+	svc, _, cfg := newTestService(t)
+
+	pdfPath := filepath.Join(cfg.PapersDir(), "sample-pdfjs.pdf")
+	if err := os.MkdirAll(filepath.Dir(pdfPath), 0o755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	if err := os.WriteFile(pdfPath, []byte("%PDF-1.4 test"), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	body, _, err := svc.buildExtractorUploadBody(model.ExtractorSettings{
+		ExtractorProfile:   extractorProfileOpenSourceVision,
+		PDFTextSource:      pdfTextSourcePDFJS,
+		ExtractorFileField: "upload",
+	}, pdfPath, "sample-pdfjs.pdf")
+	if err != nil {
+		t.Fatalf("buildExtractorUploadBody() error = %v", err)
+	}
+
+	if !bytes.Contains(body.Bytes(), []byte("name=\"include_pdf_text\"")) || !bytes.Contains(body.Bytes(), []byte("\r\n\r\nfalse")) {
+		t.Fatalf("buildExtractorUploadBody() body missing include_pdf_text=false: %s", body.String())
 	}
 }
 
@@ -1268,6 +1322,62 @@ func TestUploadPaperWithManualModeSkipsConfiguredExtractor(t *testing.T) {
 	}
 	if !strings.Contains(paper.ExtractorMessage, "手工标注") {
 		t.Fatalf("UploadPaper() extractor_message = %q, want manual hint", paper.ExtractorMessage)
+	}
+}
+
+func TestUploadPaperWithBuiltInLLMAutoModeUsesCompletedState(t *testing.T) {
+	svc, repo, cfg := newTestService(t)
+	aiSvc := NewAIService(repo, cfg, nil)
+
+	if _, err := svc.UpdateExtractorSettings(model.ExtractorSettings{
+		ExtractorProfile: extractorProfileOpenSourceVision,
+	}); err != nil {
+		t.Fatalf("UpdateExtractorSettings() error = %v", err)
+	}
+	if _, err := aiSvc.UpdateSettings(model.AISettings{
+		Models: []model.AIModelConfig{
+			{
+				ID:              "figure",
+				Name:            "Figure",
+				Provider:        model.AIProviderOpenAI,
+				APIKey:          "test-key",
+				BaseURL:         "https://api.openai.com",
+				Model:           "gpt-test",
+				MaxOutputTokens: 1200,
+			},
+		},
+		SceneModels: model.AISceneModelSelection{
+			DefaultModelID: "figure",
+			FigureModelID:  "figure",
+		},
+		SystemPrompt: "system",
+		FigurePrompt: "figure",
+	}); err != nil {
+		t.Fatalf("UpdateSettings() error = %v", err)
+	}
+
+	content := []byte("%PDF-1.4 built-in llm test")
+	file := &testMultipartFile{Reader: bytes.NewReader(content)}
+	header := &multipart.FileHeader{
+		Filename: "llm-auto.pdf",
+		Size:     int64(len(content)),
+		Header: textproto.MIMEHeader{
+			"Content-Type": []string{"application/pdf"},
+		},
+	}
+
+	paper, err := svc.UploadPaper(file, header, UploadPaperParams{
+		Title:          "Built-in LLM Auto",
+		ExtractionMode: "auto",
+	})
+	if err != nil {
+		t.Fatalf("UploadPaper() error = %v", err)
+	}
+	if paper.ExtractionStatus != "completed" {
+		t.Fatalf("UploadPaper() status = %q, want %q", paper.ExtractionStatus, "completed")
+	}
+	if !strings.Contains(paper.ExtractorMessage, "内置 AI") {
+		t.Fatalf("UploadPaper() extractor_message = %q, want built-in LLM hint", paper.ExtractorMessage)
 	}
 }
 

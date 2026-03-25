@@ -18,6 +18,8 @@ type Config struct {
 	AdminUsername           string
 	AdminPassword           string
 	AllowedTypes            []string
+	ExtractorProfile        string
+	ExtractorPDFTextSource  string
 	ExtractorURL            string
 	ExtractorJobsURL        string
 	ExtractorToken          string
@@ -38,6 +40,8 @@ func Load() *Config {
 		AdminUsername:           getEnv("ADMIN_USERNAME", "citebox"),
 		AdminPassword:           getEnv("ADMIN_PASSWORD", "citebox123"),
 		AllowedTypes:            []string{"application/pdf"},
+		ExtractorProfile:        getEnv("PDF_EXTRACTOR_PROFILE", "pdffigx_v1"),
+		ExtractorPDFTextSource:  getEnv("PDF_EXTRACTOR_PDF_TEXT_SOURCE", "extractor"),
 		ExtractorURL:            getEnv("PDF_EXTRACTOR_URL", ""),
 		ExtractorJobsURL:        getEnv("PDF_EXTRACTOR_JOBS_URL", ""),
 		ExtractorToken:          getEnv("PDF_EXTRACTOR_TOKEN", ""),

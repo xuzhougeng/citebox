@@ -1,6 +1,8 @@
 package model
 
 type ExtractorSettings struct {
+	ExtractorProfile      string `json:"extractor_profile"`
+	PDFTextSource         string `json:"pdf_text_source"`
 	ExtractorURL          string `json:"extractor_url"`
 	ExtractorJobsURL      string `json:"extractor_jobs_url"`
 	ExtractorToken        string `json:"extractor_token"`

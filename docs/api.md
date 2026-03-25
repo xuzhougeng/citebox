@@ -24,6 +24,7 @@
   - AI：`/api/ai/...`
     - 包括 `/api/ai/prompt-presets`
     - 包括 `/api/ai/translate`
+    - 包括 `/api/ai/detect-figure-regions`
   - 版本检查：`/api/settings/version`
   - 提取器设置：`/api/settings/extractor`
   - Wolai 设置：`/api/settings/wolai`
@@ -164,6 +165,11 @@ AI 流式阅读通过：
 | `tags` | 逗号分隔标签 |
 | `extraction_mode` | 可选，`auto` 或 `manual`；`manual` 表示跳过自动解析，但文献仍会直接入库 |
 
+说明：
+
+- Web 上传页在 `manual` 模式下会默认调用浏览器 `pdf.js` 提取全文，并通过 `POST /api/papers/{id}/pdf-text` 保存
+- 即便当前没有配置自动解析模型，只要能上传到手工流程，仍会走这条浏览器端全文提取链路
+
 #### `PUT /api/papers/{id}`
 
 用途：
@@ -244,15 +250,22 @@ AI 流式阅读通过：
 {
   "regions": [
     {
-      "page": 1,
-      "x": 10,
-      "y": 20,
-      "width": 100,
-      "height": 120
+      "page_number": 1,
+      "x": 0.12,
+      "y": 0.2,
+      "width": 0.46,
+      "height": 0.28,
+      "source": "manual",
+      "image_data": "data:image/png;base64,..."
     }
   ]
 }
 ```
+
+说明：
+
+- `source` 可选，默认是 `manual`
+- 上传页的内置 LLM 自动提图会把 `source` 设成 `llm`
 
 #### `GET /api/papers/{id}/manual-preview?page={n}`
 
@@ -753,6 +766,46 @@ AI 流式阅读通过：
 }
 ```
 
+#### `POST /api/ai/detect-figure-regions`
+
+用途：
+
+- 上传页的内置 LLM 自动提图会调用这个接口
+- 前端先用 `pdf.js` 渲染单页，再把页面图像发给后端
+- 后端调用当前“图片场景”多模态模型，返回归一化后的主图坐标
+
+请求体示例：
+
+```json
+{
+  "paper_id": 123,
+  "page_number": 4,
+  "page_width": 1280,
+  "page_height": 1810,
+  "image_data": "data:image/jpeg;base64,..."
+}
+```
+
+返回体示例：
+
+```json
+{
+  "success": true,
+  "provider": "openai",
+  "model": "gpt-4.1-mini",
+  "page_number": 4,
+  "regions": [
+    {
+      "x": 0.11,
+      "y": 0.17,
+      "width": 0.62,
+      "height": 0.51,
+      "confidence": 0.93
+    }
+  ]
+}
+```
+
 #### `POST /api/ai/read/stream`
 
 用途：
@@ -848,6 +901,8 @@ AI 流式阅读通过：
 
 返回字段包括：
 
+- `extractor_profile`
+- `pdf_text_source`
 - `extractor_url`
 - `extractor_jobs_url`
 - `extractor_token`
@@ -862,6 +917,12 @@ AI 流式阅读通过：
 用途：
 
 - 保存提取器配置
+
+常用字段：
+
+- `extractor_profile`：`pdffigx_v1` 或 `open_source_vision`
+- `pdf_text_source`：`pdffigx_v1` 模式下可选 `extractor` 或 `pdfjs`；`open_source_vision` 会固定归一化成 `pdfjs`
+- 其余字段与提取接口地址、鉴权和超时设置相同
 
 #### `GET /api/settings/wolai`
 
