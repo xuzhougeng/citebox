@@ -13,29 +13,29 @@
         <div class="navbar-content">
             <a href="/" class="logo">CiteBox</a>
             <ul class="nav-links">
-                <li><a href="/">总览</a></li>
-                <li><a href="/library">文献库</a></li>
-                <li><a href="/figures">图片库</a></li>
-                <li><a href="/palettes">配色库</a></li>
-                <li><a href="/groups">分组</a></li>
-                <li><a href="/tags">标签</a></li>
-                <li><a href="/notes">笔记</a></li>
-                <li><a href="/ai">AI伴读</a></li>
-                <li><a href="/settings">配置</a></li>
+                <li><a href="/" data-i18n="nav.overview">总览</a></li>
+                <li><a href="/library" data-i18n="nav.library">文献库</a></li>
+                <li><a href="/figures" data-i18n="nav.figures">图片库</a></li>
+                <li><a href="/palettes" data-i18n="nav.palettes">配色库</a></li>
+                <li><a href="/groups" data-i18n="nav.groups">分组</a></li>
+                <li><a href="/tags" data-i18n="nav.tags">标签</a></li>
+                <li><a href="/notes" data-i18n="nav.notes">笔记</a></li>
+                <li><a href="/ai" data-i18n="nav.ai">AI伴读</a></li>
+                <li><a href="/settings" data-i18n="nav.settings">配置</a></li>
             </ul>
             <div class="nav-actions">
-                <a href="/upload" class="nav-cta active">上传 PDF</a>
+                <a href="/upload" class="nav-cta active" data-i18n="nav.upload_pdf">上传 PDF</a>
             </div>
         </div>
     </nav>
 
     <main class="page-shell narrow">
-        <section class="hero compact">
+        <section class=”hero compact”>
             <div>
-                <p class="eyebrow">文献上传</p>
-                <h1>上传 PDF，生成新的文献条目</h1>
-                <p class="hero-text">
-                    上传后的处理方式由“PDF 提取配置”决定。手工方案只保存全文；内置 LLM 和标准 pdffigx 会继续自动提图。
+                <p class=”eyebrow” data-i18n=”upload.eyebrow”>文献上传</p>
+                <h1 data-i18n=”upload.hero_title”>上传 PDF，生成新的文献条目</h1>
+                <p class=”hero-text” data-i18n=”upload.hero_text”>
+                    上传后的处理方式由”PDF 提取配置”决定。手工方案只保存全文；内置 LLM 和标准 pdffigx 会继续自动提图。
                 </p>
             </div>
         </section>
@@ -45,47 +45,47 @@
                 <input id="pdfInput" type="file" accept="application/pdf,.pdf" hidden>
 
                 <div id="dropArea" class="drop-zone" tabindex="0">
-                    <p class="drop-title">拖拽 PDF 到这里</p>
-                    <p class="drop-subtitle">或点击选择一篇文献</p>
+                    <p class="drop-title" data-i18n="upload.drop_title">拖拽 PDF 到这里</p>
+                    <p class="drop-subtitle" data-i18n="upload.drop_subtitle">或点击选择一篇文献</p>
                 </div>
 
                 <div id="selectedFile" class="selected-file empty">
-                    <span>尚未选择 PDF</span>
+                    <span data-i18n="upload.no_file_selected">尚未选择 PDF</span>
                 </div>
 
                 <div class="form-grid">
                     <label class="field">
-                        <span>标题</span>
-                        <input id="titleInput" class="form-input" type="text" placeholder="默认使用文件名生成标题">
+                        <span data-i18n="upload.label_title">标题</span>
+                        <input id="titleInput" class="form-input" type="text" data-i18n-placeholder="upload.placeholder_title" placeholder="默认使用文件名生成标题">
                     </label>
                     <label class="field">
-                        <span>分组</span>
+                        <span data-i18n="upload.label_group">分组</span>
                         <select id="groupSelect" class="form-input">
-                            <option value="">暂不分组</option>
+                            <option value="" data-i18n="upload.no_group">暂不分组</option>
                         </select>
                     </label>
                 </div>
 
                 <label class="field">
-                    <span>标签</span>
+                    <span data-i18n="upload.label_tags">标签</span>
                     <div class="tag-autocomplete-field">
-                        <input id="tagsInput" class="form-input" type="text" placeholder="多个标签用逗号分隔，例如：review, stem-cell, atlasing" autocomplete="off" spellcheck="false">
+                        <input id="tagsInput" class="form-input" type="text" data-i18n-placeholder="upload.placeholder_tags" placeholder="多个标签用逗号分隔，例如：review, stem-cell, atlasing" autocomplete="off" spellcheck="false">
                         <div id="tagsInputSuggestions" class="tag-autocomplete-panel hidden"></div>
                     </div>
                 </label>
 
                 <label class="field">
-                    <span>上传处理方式</span>
+                    <span data-i18n="upload.label_extraction_mode">上传处理方式</span>
                     <select id="extractionModeSelect" class="form-input">
-                        <option value="auto">自动标注</option>
-                        <option value="manual">手工标注</option>
+                        <option value="auto" data-i18n="upload.mode_auto">自动标注</option>
+                        <option value="manual" data-i18n="upload.mode_manual">手工标注</option>
                     </select>
-                    <span id="extractionModeHint" class="muted">默认使用自动标注；也可以切到手工标注自行框选图片。</span>
+                    <span id="extractionModeHint" class="muted" data-i18n="upload.mode_hint_default">默认使用自动标注；也可以切到手工标注自行框选图片。</span>
                 </label>
 
                 <div class="submit-row">
-                    <button id="submitUploadBtn" class="btn btn-primary" type="submit">上传文献</button>
-                    <a class="btn btn-outline" href="/library">返回文献库</a>
+                    <button id="submitUploadBtn" class="btn btn-primary" type="submit" data-i18n="upload.btn_upload">上传文献</button>
+                    <a class="btn btn-outline" href="/library" data-i18n="upload.btn_back_library">返回文献库</a>
                 </div>
             </form>
         </section>
@@ -94,6 +94,7 @@
     </main>
 
     <script src="/static/js/theme.js"></script>
+    <script src="/static/js/i18n.js"></script>
     <script src="/static/js/utils.js"></script>
     <script src="/static/js/api.js"></script>
     <script src="/static/js/browser-pages.js"></script>

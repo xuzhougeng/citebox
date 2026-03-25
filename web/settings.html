@@ -13,18 +13,18 @@
         <div class="navbar-content">
             <a href="/" class="logo">CiteBox</a>
             <ul class="nav-links">
-                <li><a href="/">总览</a></li>
-                <li><a href="/library">文献库</a></li>
-                <li><a href="/figures">图片库</a></li>
-                <li><a href="/palettes">配色库</a></li>
-                <li><a href="/groups">分组</a></li>
-                <li><a href="/tags">标签</a></li>
-                <li><a href="/notes">笔记</a></li>
-                <li><a href="/ai">AI伴读</a></li>
-                <li><a href="/settings" class="active">配置</a></li>
+                <li><a href="/" data-i18n="nav.overview">总览</a></li>
+                <li><a href="/library" data-i18n="nav.library">文献库</a></li>
+                <li><a href="/figures" data-i18n="nav.figures">图片库</a></li>
+                <li><a href="/palettes" data-i18n="nav.palettes">配色库</a></li>
+                <li><a href="/groups" data-i18n="nav.groups">分组</a></li>
+                <li><a href="/tags" data-i18n="nav.tags">标签</a></li>
+                <li><a href="/notes" data-i18n="nav.notes">笔记</a></li>
+                <li><a href="/ai" data-i18n="nav.ai">AI伴读</a></li>
+                <li><a href="/settings" class="active" data-i18n="nav.settings">配置</a></li>
             </ul>
             <div class="nav-actions">
-                <a href="/upload" class="nav-cta">上传 PDF</a>
+                <a href="/upload" class="nav-cta" data-i18n="nav.upload_pdf">上传 PDF</a>
             </div>
         </div>
     </nav>
@@ -32,9 +32,9 @@
     <main class="page-shell">
         <section class="hero compact">
             <div>
-                <p class="eyebrow">Settings</p>
-                <h1>设置 AI 模型、提示词与 PDF 解析服务</h1>
-                <p class="hero-text">
+                <p class="eyebrow" data-i18n="settings.eyebrow">Settings</p>
+                <h1 data-i18n="settings.hero_title">设置 AI 模型、提示词与 PDF 解析服务</h1>
+                <p class="hero-text" data-i18n="settings.hero_text">
                     模型设置会自动保存，提示词需要手动保存——各自独立，互不影响。
                 </p>
             </div>
@@ -43,68 +43,68 @@
         <section class="section-stack">
             <details class="manager-card settings-collapsible" open>
                 <summary class="settings-collapsible-toggle">
-                    <h2>版本信息</h2>
-                    <p>检查是否有新版本可用。</p>
+                    <h2 data-i18n="settings.version.title">版本信息</h2>
+                    <p data-i18n="settings.version.desc">检查是否有新版本可用。</p>
                 </summary>
                 <div class="submit-row">
-                    <a id="versionReleaseLink" class="btn btn-outline hidden" href="#" target="_blank" rel="noreferrer">查看 Release</a>
-                    <button id="checkVersionButton" class="btn btn-primary" type="button">检查更新</button>
+                    <a id="versionReleaseLink" class="btn btn-outline hidden" href="#" target="_blank" rel="noreferrer" data-i18n="settings.version.view_release">查看 Release</a>
+                    <button id="checkVersionButton" class="btn btn-primary" type="button" data-i18n="settings.version.check_update">检查更新</button>
                 </div>
                 <div id="versionSummary" class="settings-summary-box">
                     <div>
-                        <span>当前版本</span>
-                        <strong>载入中...</strong>
+                        <span data-i18n="settings.version.current">当前版本</span>
+                        <strong data-i18n="msg.loading">载入中...</strong>
                     </div>
                     <div>
-                        <span>检查结果</span>
-                        <strong>正在查询最新版本</strong>
+                        <span data-i18n="settings.version.check_result">检查结果</span>
+                        <strong data-i18n="settings.version.checking">正在查询最新版本</strong>
                     </div>
                     <div>
-                        <span>最新正式版本</span>
-                        <strong>载入中...</strong>
+                        <span data-i18n="settings.version.latest">最新正式版本</span>
+                        <strong data-i18n="msg.loading">载入中...</strong>
                     </div>
                     <div>
-                        <span>最近检查</span>
-                        <strong>载入中...</strong>
+                        <span data-i18n="settings.version.last_check">最近检查</span>
+                        <strong data-i18n="msg.loading">载入中...</strong>
                     </div>
                 </div>
             </details>
 
             <details class="manager-card settings-collapsible">
                 <summary class="settings-collapsible-toggle">
-                    <h2>模型配置</h2>
-                    <p>添加或编辑 AI 模型。修改会自动保存。</p>
+                    <h2 data-i18n="settings.ai.model_title">模型配置</h2>
+                    <p data-i18n="settings.ai.model_desc">添加或编辑 AI 模型。修改会自动保存。</p>
                 </summary>
                 <div class="manager-form">
                     <div id="aiModelList" class="manager-list"></div>
                     <div class="submit-row">
-                        <button id="addAIModelButton" class="btn btn-outline" type="button">添加模型</button>
+                        <button id="addAIModelButton" class="btn btn-outline" type="button" data-i18n="settings.ai.add_model">添加模型</button>
                     </div>
-                    <p id="aiModelAutosaveStatus" class="settings-inline-status">模型配置修改后会自动保存。</p>
+                    <p id="aiModelAutosaveStatus" class="settings-inline-status" data-i18n="settings.ai.autosave_hint">模型配置修改后会自动保存。</p>
                 </div>
             </details>
 
             <details class="manager-card settings-collapsible">
                 <summary class="settings-collapsible-toggle">
-                    <h2>场景绑定</h2>
-                    <p>为阅读和整理场景指定默认模型，并调整通用设置。修改会自动保存。</p>
+                    <h2 data-i18n="settings.ai.scene_title">场景绑定</h2>
+                    <p data-i18n="settings.ai.scene_desc">为阅读和整理场景指定默认模型，并调整通用设置。修改会自动保存。</p>
                 </summary>
                 <div class="manager-form">
                     <div class="form-grid">
                         <label class="field">
-                            <span>默认模型</span>
+                            <span data-i18n="settings.ai.default_model">默认模型</span>
                             <select id="aiDefaultModelSelect" class="form-input"></select>
                         </label>
                         <label class="field">
-                            <span>通用问答模型</span>
+                            <span data-i18n="settings.ai.qa_model">通用问答模型</span>
                             <select id="aiQAModelSelect" class="form-input"></select>
                         </label>
                         <label class="field">
-                            <span>Tag 建议模型</span>
+                            <span data-i18n="settings.ai.tag_model">Tag 建议模型</span>
                             <select id="aiTagModelSelect" class="form-input"></select>
                         </label>
                         <label class="field">
-                            <span>分组建议模型</span>
+                            <span data-i18n="settings.ai.group_model">分组建议模型</span>
                             <select id="aiGroupModelSelect" class="form-input"></select>
                         </label>
                         <label class="field">
@@ -112,8 +112,8 @@
                             <input id="aiTemperatureInput" class="form-input" type="number" min="0" max="2" step="0.1">
                         </label>
                         <label class="field">
-                            <span>图像数量上限</span>
-                            <input id="aiMaxFiguresInput" class="form-input" type="number" min="0" step="1" placeholder="0 表示全部">
+                            <span data-i18n="settings.ai.max_figures">图像数量上限</span>
+                            <input id="aiMaxFiguresInput" class="form-input" type="number" min="0" step="1" data-i18n-placeholder="settings.ai.max_figures_hint" placeholder="0 表示全部">
                         </label>
                     </div>
                 </div>
@@ -121,22 +121,22 @@
 
             <details class="manager-card settings-collapsible">
                 <summary class="settings-collapsible-toggle">
-                    <h2>翻译设置</h2>
-                    <p>设置划词翻译的语言和模型。修改会自动保存。</p>
+                    <h2 data-i18n="settings.ai.translate_title">翻译设置</h2>
+                    <p data-i18n="settings.ai.translate_desc">设置划词翻译的语言和模型。修改会自动保存。</p>
                 </summary>
                 <div class="manager-form">
                     <div class="form-grid">
                         <label class="field">
-                            <span>划词翻译模型</span>
+                            <span data-i18n="settings.ai.translate_model">划词翻译模型</span>
                             <select id="aiTranslateModelSelect" class="form-input"></select>
                         </label>
                         <label class="field">
-                            <span>主要语言</span>
-                            <input id="aiTranslationPrimaryLanguageInput" class="form-input" type="text" placeholder="例如：中文">
+                            <span data-i18n="settings.ai.primary_language">主要语言</span>
+                            <input id="aiTranslationPrimaryLanguageInput" class="form-input" type="text" data-i18n-placeholder="settings.ai.primary_language_hint" placeholder="例如：中文">
                         </label>
                         <label class="field">
-                            <span>目标语言</span>
-                            <input id="aiTranslationTargetLanguageInput" class="form-input" type="text" placeholder="例如：英文">
+                            <span data-i18n="settings.ai.target_language">目标语言</span>
+                            <input id="aiTranslationTargetLanguageInput" class="form-input" type="text" data-i18n-placeholder="settings.ai.target_language_hint" placeholder="例如：英文">
                         </label>
                     </div>
                 </div>
@@ -144,8 +144,8 @@
 
             <details class="manager-card settings-collapsible">
                 <summary class="settings-collapsible-toggle">
-                    <h2>Prompt 设置</h2>
-                    <p>编辑各场景的提示词和可复用的角色提示词。修改后需点击保存。</p>
+                    <h2 data-i18n="settings.ai.prompt_title">Prompt 设置</h2>
+                    <p data-i18n="settings.ai.prompt_desc">编辑各场景的提示词和可复用的角色提示词。修改后需点击保存。</p>
                 </summary>
                 <form id="aiSettingsForm" class="manager-form">
                     <div class="settings-subsection-body">
@@ -153,37 +153,37 @@
                     <section class="prompt-preset-panel">
                         <div class="prompt-preset-head">
                             <div>
-                                <h4>角色 Prompt</h4>
-                                <p>这里保存的是可复用的角色设定，保存后可在 AI 伴读聊天框中通过 <code>@角色名</code> 直接调用。</p>
+                                <h4 data-i18n="settings.ai.role_prompt">角色 Prompt</h4>
+                                <p data-i18n-html="settings.ai.role_prompt_desc">这里保存的是可复用的角色设定，保存后可在 AI 伴读聊天框中通过 <code>@角色名</code> 直接调用。</p>
                             </div>
-                            <button id="addAIRolePromptButton" class="btn btn-outline" type="button">新增角色 Prompt</button>
+                            <button id="addAIRolePromptButton" class="btn btn-outline" type="button" data-i18n="settings.ai.add_role_prompt">新增角色 Prompt</button>
                         </div>
                         <div id="aiRolePromptList" class="prompt-preset-list">
-                            <div class="prompt-preset-empty">还没有保存角色 Prompt。新增一个角色后，就可以在 AI 伴读聊天框中通过 <code>@角色名</code> 直接调用。</div>
+                            <div class="prompt-preset-empty" data-i18n-html="settings.ai.role_prompt_empty">还没有保存角色 Prompt。新增一个角色后，就可以在 AI 伴读聊天框中通过 <code>@角色名</code> 直接调用。</div>
                         </div>
                     </section>
 
                     <label class="field prompt-field">
                         <span class="field-label-row">
-                            <span class="field-label-text">System Prompt</span>
-                            <span class="field-help" tabindex="0" role="note" title="对所有 AI 对话生效的通用角色设定。不需要在这里重复写具体任务或输出格式。" data-help="对所有 AI 对话生效的通用角色设定。不需要在这里重复写具体任务或输出格式。">?</span>
+                            <span class="field-label-text" data-i18n="settings.ai.system_prompt_label">System Prompt</span>
+                            <span class="field-help" tabindex="0" role="note" title="对所有 AI 对话生效的通用角色设定。不需要在这里重复写具体任务或输出格式。" data-i18n-title="settings.ai.system_prompt_help" data-help="对所有 AI 对话生效的通用角色设定。不需要在这里重复写具体任务或输出格式。">?</span>
                         </span>
-                        <textarea id="aiSystemPromptInput" class="form-textarea" rows="4" placeholder="全局角色设定，例如：优先引用原文证据；证据不足时明确说明不确定"></textarea>
+                        <textarea id="aiSystemPromptInput" class="form-textarea" rows="4" data-i18n-placeholder="settings.ai.system_prompt_placeholder" placeholder="全局角色设定，例如：优先引用原文证据；证据不足时明确说明不确定"></textarea>
                         <details class="prompt-template-details">
-                            <summary>查看实际模板</summary>
-                            <p class="prompt-template-note">这部分会单独作为 <code>systemPrompt</code> 发送，不会被包进下面的 <code>userPrompt</code> 模板。</p>
+                            <summary data-i18n="settings.ai.view_template">查看实际模板</summary>
+                            <p class="prompt-template-note" data-i18n-html="settings.ai.system_prompt_note">这部分会单独作为 <code>systemPrompt</code> 发送，不会被包进下面的 <code>userPrompt</code> 模板。</p>
                             <pre class="prompt-template-pre">System Prompt:
 {这里填写的 System Prompt}</pre>
                         </details>
                     </label>
                     <label class="field prompt-field">
                         <span class="field-label-row">
-                            <span class="field-label-text">通用问答 Prompt</span>
-                            <span class="field-help" tabindex="0" role="note" title="面向 AI伴读页的单篇文献问答。系统会自动附带全文、摘要、笔记、图片摘要和历史对话。" data-help="面向 AI伴读页的单篇文献问答。系统会自动附带全文、摘要、笔记、图片摘要和历史对话。">?</span>
+                            <span class="field-label-text" data-i18n="settings.ai.qa_prompt_label">通用问答 Prompt</span>
+                            <span class="field-help" tabindex="0" role="note" title="面向 AI伴读页的单篇文献问答。系统会自动附带全文、摘要、笔记、图片摘要和历史对话。" data-i18n-title="settings.ai.qa_prompt_help" data-help="面向 AI伴读页的单篇文献问答。系统会自动附带全文、摘要、笔记、图片摘要和历史对话。">?</span>
                         </span>
-                        <textarea id="aiQAPromptInput" class="form-textarea" rows="4" placeholder="用于单篇文献问答的补充要求，例如：优先回答结论、证据链和局限"></textarea>
+                        <textarea id="aiQAPromptInput" class="form-textarea" rows="4" data-i18n-placeholder="settings.ai.qa_prompt_placeholder" placeholder="用于单篇文献问答的补充要求，例如：优先回答结论、证据链和局限"></textarea>
                         <details class="prompt-template-details">
-                            <summary>查看实际模板</summary>
+                            <summary data-i18n="settings.ai.view_template">查看实际模板</summary>
                             <pre class="prompt-template-pre">System Prompt:
 {System Prompt}
 
@@ -234,12 +234,12 @@ User Prompt:
                     </label>
                     <label class="field prompt-field">
                         <span class="field-label-row">
-                            <span class="field-label-text">当前图片解读 Prompt</span>
-                            <span class="field-help" tabindex="0" role="note" title="仅针对当前查看的单张图片。这里写解读重点和判断标准；图片信息、全文和输出格式会自动附带。" data-help="仅针对当前查看的单张图片。这里写解读重点和判断标准；图片信息、全文和输出格式会自动附带。">?</span>
+                            <span class="field-label-text" data-i18n="settings.ai.figure_prompt_label">当前图片解读 Prompt</span>
+                            <span class="field-help" tabindex="0" role="note" title="仅针对当前查看的单张图片。这里写解读重点和判断标准；图片信息、全文和输出格式会自动附带。" data-i18n-title="settings.ai.figure_prompt_help" data-help="仅针对当前查看的单张图片。这里写解读重点和判断标准；图片信息、全文和输出格式会自动附带。">?</span>
                         </span>
-                        <textarea id="aiFigurePromptInput" class="form-textarea" rows="4" placeholder="用于当前单张图片的主要任务要求，例如：优先说明图中设计、对照关系、结论和局限"></textarea>
+                        <textarea id="aiFigurePromptInput" class="form-textarea" rows="4" data-i18n-placeholder="settings.ai.figure_prompt_placeholder" placeholder="用于当前单张图片的主要任务要求，例如：优先说明图中设计、对照关系、结论和局限"></textarea>
                         <details class="prompt-template-details">
-                            <summary>查看实际模板</summary>
+                            <summary data-i18n="settings.ai.view_template">查看实际模板</summary>
                             <pre class="prompt-template-pre">System Prompt:
 {System Prompt}
 
@@ -287,12 +287,12 @@ User Prompt:
                     </label>
                     <label class="field prompt-field">
                         <span class="field-label-row">
-                            <span class="field-label-text">图片标签建议 Prompt</span>
-                            <span class="field-help" tabindex="0" role="note" title="只作用于当前正在查看的单张图片，生成的是图片标签。这里主要写标签选择标准和偏好；当前图片信息、现有图片标签库和 JSON 输出要求会自动附带。" data-help="只作用于当前正在查看的单张图片，生成的是图片标签。这里主要写标签选择标准和偏好；当前图片信息、现有图片标签库和 JSON 输出要求会自动附带。">?</span>
+                            <span class="field-label-text" data-i18n="settings.ai.tag_prompt_label">图片标签建议 Prompt</span>
+                            <span class="field-help" tabindex="0" role="note" title="只作用于当前正在查看的单张图片，生成的是图片标签。这里主要写标签选择标准和偏好；当前图片信息、现有图片标签库和 JSON 输出要求会自动附带。" data-i18n-title="settings.ai.tag_prompt_help" data-help="只作用于当前正在查看的单张图片，生成的是图片标签。这里主要写标签选择标准和偏好；当前图片信息、现有图片标签库和 JSON 输出要求会自动附带。">?</span>
                         </span>
-                        <textarea id="aiTagPromptInput" class="form-textarea" rows="4" placeholder="用于当前单张图片的主要任务要求，例如：优先输出可检索的图片内容标签，避免过泛词"></textarea>
+                        <textarea id="aiTagPromptInput" class="form-textarea" rows="4" data-i18n-placeholder="settings.ai.tag_prompt_placeholder" placeholder="用于当前单张图片的主要任务要求，例如：优先输出可检索的图片内容标签，避免过泛词"></textarea>
                         <details class="prompt-template-details">
-                            <summary>查看实际模板</summary>
+                            <summary data-i18n="settings.ai.view_template">查看实际模板</summary>
                             <pre class="prompt-template-pre">System Prompt:
 {System Prompt}
 
@@ -341,12 +341,12 @@ User Prompt:
                     </label>
                     <label class="field prompt-field">
                         <span class="field-label-row">
-                            <span class="field-label-text">分组建议 Prompt</span>
-                            <span class="field-help" tabindex="0" role="note" title="用于整篇文献的分组判断。系统会自动附带当前分组、分组库、摘要、备注和全文。" data-help="用于整篇文献的分组判断。系统会自动附带当前分组、分组库、摘要、备注和全文。">?</span>
+                            <span class="field-label-text" data-i18n="settings.ai.group_prompt_label">分组建议 Prompt</span>
+                            <span class="field-help" tabindex="0" role="note" title="用于整篇文献的分组判断。系统会自动附带当前分组、分组库、摘要、备注和全文。" data-i18n-title="settings.ai.group_prompt_help" data-help="用于整篇文献的分组判断。系统会自动附带当前分组、分组库、摘要、备注和全文。">?</span>
                         </span>
-                        <textarea id="aiGroupPromptInput" class="form-textarea" rows="4" placeholder="用于整篇文献分组判断的补充要求，例如：优先复用已有分组，必要时再提新分组"></textarea>
+                        <textarea id="aiGroupPromptInput" class="form-textarea" rows="4" data-i18n-placeholder="settings.ai.group_prompt_placeholder" placeholder="用于整篇文献分组判断的补充要求，例如：优先复用已有分组，必要时再提新分组"></textarea>
                         <details class="prompt-template-details">
-                            <summary>查看实际模板</summary>
+                            <summary data-i18n="settings.ai.view_template">查看实际模板</summary>
                             <pre class="prompt-template-pre">System Prompt:
 {System Prompt}
 
@@ -395,12 +395,12 @@ User Prompt:
                     </label>
                     <label class="field prompt-field">
                         <span class="field-label-row">
-                            <span class="field-label-text">划词翻译 Prompt</span>
-                            <span class="field-help" tabindex="0" role="note" title="用于桌面端划词翻译。系统会自动判断翻译方向，并附带原文和目标语言。" data-help="用于桌面端划词翻译。系统会自动判断翻译方向，并附带原文和目标语言。">?</span>
+                            <span class="field-label-text" data-i18n="settings.ai.translate_prompt_label">划词翻译 Prompt</span>
+                            <span class="field-help" tabindex="0" role="note" title="用于桌面端划词翻译。系统会自动判断翻译方向，并附带原文和目标语言。" data-i18n-title="settings.ai.translate_prompt_help" data-help="用于桌面端划词翻译。系统会自动判断翻译方向，并附带原文和目标语言。">?</span>
                         </span>
-                        <textarea id="aiTranslatePromptInput" class="form-textarea" rows="4" placeholder="例如：只返回译文正文，保留换行、术语、缩写和数字单位"></textarea>
+                        <textarea id="aiTranslatePromptInput" class="form-textarea" rows="4" data-i18n-placeholder="settings.ai.translate_prompt_placeholder" placeholder="例如：只返回译文正文，保留换行、术语、缩写和数字单位"></textarea>
                         <details class="prompt-template-details">
-                            <summary>查看实际模板</summary>
+                            <summary data-i18n="settings.ai.view_template">查看实际模板</summary>
                             <pre class="prompt-template-pre">System Prompt:
 {System Prompt}
 
@@ -427,80 +427,80 @@ User Prompt:
                     </div>
 
                     <div class="submit-row">
-                        <button id="restoreAIPromptsButton" class="btn btn-outline" type="button">恢复推荐 Prompt</button>
-                        <button id="saveAIPromptsButton" class="btn btn-primary" type="button">保存 Prompt 配置</button>
+                        <button id="restoreAIPromptsButton" class="btn btn-outline" type="button" data-i18n="settings.ai.restore_prompts">恢复推荐 Prompt</button>
+                        <button id="saveAIPromptsButton" class="btn btn-primary" type="button" data-i18n="settings.ai.save_prompts">保存 Prompt 配置</button>
                     </div>
-                    <p id="aiPromptSaveStatus" class="settings-inline-status">提示词修改后需点击保存。</p>
+                    <p id="aiPromptSaveStatus" class="settings-inline-status" data-i18n="settings.ai.prompt_save_hint">提示词修改后需点击保存。</p>
                 </form>
             </details>
 
             <details class="manager-card settings-collapsible" open>
                 <summary class="settings-collapsible-toggle">
-                    <h2>PDF 提取配置</h2>
-                    <p>选择当前 PDF 提取方案。可切换为手工、内置 LLM 坐标提取，或标准 pdffigx。</p>
+                    <h2 data-i18n="settings.extractor.title">PDF 提取配置</h2>
+                    <p data-i18n="settings.extractor.desc">选择当前 PDF 提取方案。可切换为手工、内置 LLM 坐标提取，或标准 pdffigx。</p>
                 </summary>
                 <form id="extractorSettingsForm" class="manager-form">
                     <div class="form-grid">
                         <label class="field">
-                            <span>提取方案</span>
+                            <span data-i18n="settings.extractor.profile">提取方案</span>
                             <select id="extractorProfileSelect" class="form-input">
-                                <option value="manual">手工</option>
-                                <option value="pdffigx_v1">标准 pdffigx</option>
-                                <option value="open_source_vision">内置 LLM 坐标提取</option>
+                                <option value="manual" data-i18n="settings.extractor.profile_manual">手工</option>
+                                <option value="pdffigx_v1" data-i18n="settings.extractor.profile_pdffigx">标准 pdffigx</option>
+                                <option value="open_source_vision" data-i18n="settings.extractor.profile_builtin">内置 LLM 坐标提取</option>
                             </select>
                         </label>
                         <label id="extractorFigureModelField" class="field field-span-2 hidden">
-                            <span>坐标提取模型</span>
+                            <span data-i18n="settings.extractor.figure_model">坐标提取模型</span>
                             <select id="aiFigureModelSelect" class="form-input"></select>
                         </label>
                         <label id="extractorURLField" class="field field-span-2">
-                            <span>提取服务地址</span>
+                            <span data-i18n="settings.extractor.service_url">提取服务地址</span>
                             <input id="extractorURLInput" class="form-input" type="text" placeholder="例如：http://127.0.0.1:8000">
                         </label>
                         <label id="extractorTokenField" class="field field-span-2">
-                            <span>鉴权 Token</span>
-                            <input id="extractorTokenInput" class="form-input" type="password" autocomplete="off" placeholder="可选">
+                            <span data-i18n="settings.extractor.auth_token">鉴权 Token</span>
+                            <input id="extractorTokenInput" class="form-input" type="password" autocomplete="off" data-i18n-placeholder="settings.extractor.auth_token_hint" placeholder="可选">
                         </label>
                         <label id="extractorFileFieldField" class="field">
-                            <span>上传字段名</span>
+                            <span data-i18n="settings.extractor.file_field">上传字段名</span>
                             <input id="extractorFileFieldInput" class="form-input" type="text" placeholder="默认 file">
                         </label>
                         <label id="extractorTimeoutField" class="field">
-                            <span>请求超时（秒）</span>
+                            <span data-i18n="settings.extractor.timeout">请求超时（秒）</span>
                             <input id="extractorTimeoutInput" class="form-input" type="number" min="1" step="1">
                         </label>
                         <label id="extractorPollIntervalField" class="field">
-                            <span>轮询间隔（秒）</span>
+                            <span data-i18n="settings.extractor.poll_interval">轮询间隔（秒）</span>
                             <input id="extractorPollIntervalInput" class="form-input" type="number" min="1" step="1">
                         </label>
                     </div>
 
-                    <p id="extractorPDFFigXHint" class="muted">如果选择标准 pdffigx，只需要填写 `http://127.0.0.1:8000` 这样的服务根地址，系统会自动补全 `/api/v1/extract` 和 `/api/v1/jobs`。</p>
-                    <p id="extractorManualHint" class="muted hidden">当前使用手工方案，不会自动提取图片；前端上传和微信上传都会自动保存 PDF 全文，后续可再进入手工标注补录图片。</p>
-                    <p id="extractorBuiltInHint" class="muted hidden">当前使用内置 LLM 坐标提取，不需要配置 pdffigx 地址、鉴权或轮询参数。图片坐标会由这里选择的多模态模型直接识别；全文默认走浏览器 pdf.js，并保留服务端兜底。</p>
+                    <p id="extractorPDFFigXHint" class="muted" data-i18n="settings.extractor.pdffigx_hint">如果选择标准 pdffigx，只需要填写 `http://127.0.0.1:8000` 这样的服务根地址，系统会自动补全 `/api/v1/extract` 和 `/api/v1/jobs`。</p>
+                    <p id="extractorManualHint" class="muted hidden" data-i18n="settings.extractor.manual_hint">当前使用手工方案，不会自动提取图片；前端上传和微信上传都会自动保存 PDF 全文，后续可再进入手工标注补录图片。</p>
+                    <p id="extractorBuiltInHint" class="muted hidden" data-i18n="settings.extractor.builtin_hint">当前使用内置 LLM 坐标提取，不需要配置 pdffigx 地址、鉴权或轮询参数。图片坐标会由这里选择的多模态模型直接识别；全文默认走浏览器 pdf.js，并保留服务端兜底。</p>
 
                     <div id="extractorSummary" class="settings-summary-box"></div>
 
                     <div class="submit-row">
-                        <button class="btn btn-primary" type="submit">保存提取服务配置</button>
+                        <button class="btn btn-primary" type="submit" data-i18n="settings.extractor.save_btn">保存提取服务配置</button>
                     </div>
                 </form>
             </details>
 
             <details class="manager-card settings-collapsible" open>
                 <summary class="settings-collapsible-toggle">
-                    <h2>微信配置</h2>
-                    <p>设置微信消息桥接、绑定状态，以及消息意图识别所使用的模型。</p>
+                    <h2 data-i18n="settings.weixin.title">微信配置</h2>
+                    <p data-i18n="settings.weixin.desc">设置微信消息桥接、绑定状态，以及消息意图识别所使用的模型。</p>
                 </summary>
                 <div class="manager-form weixin-settings-layout">
                     <div class="weixin-overview-panel">
                         <div class="weixin-overview-copy">
                             <span class="weixin-overview-eyebrow">WeChat Bridge</span>
-                            <h3>通过微信接收消息、上传文献，并触发自动解析</h3>
-                            <p>开启桥接后，可以直接从微信上传 PDF、发起问答或交互命令。IM 意图识别模型修改后会自动保存。</p>
+                            <h3 data-i18n="settings.weixin.overview_heading">通过微信接收消息、上传文献，并触发自动解析</h3>
+                            <p data-i18n="settings.weixin.overview_text">开启桥接后，可以直接从微信上传 PDF、发起问答或交互命令。IM 意图识别模型修改后会自动保存。</p>
                         </div>
                         <label class="field weixin-model-field">
-                            <span>IM 意图识别模型</span>
+                            <span data-i18n="settings.weixin.im_model">IM 意图识别模型</span>
                             <select id="aiIMIntentModelSelect" class="form-input"></select>
                         </label>
                         <div id="weixinBindingSummary" class="weixin-binding-summary"></div>
@@ -509,44 +509,44 @@ User Prompt:
                         <section class="weixin-control-card weixin-bridge-card">
                             <div class="weixin-card-head">
                                 <div>
-                                    <h3>消息桥接</h3>
-                                    <p>控制是否自动接收和回复微信消息。保存后才会真正切换桥接状态。</p>
+                                    <h3 data-i18n="settings.weixin.bridge_title">消息桥接</h3>
+                                    <p data-i18n="settings.weixin.bridge_desc">控制是否自动接收和回复微信消息。保存后才会真正切换桥接状态。</p>
                                 </div>
                             </div>
                             <label class="field checkbox-field weixin-bridge-toggle">
                                 <input id="weixinBridgeEnabledInput" type="checkbox">
-                                <span>
+                                <span data-i18n-html="settings.weixin.bridge_checkbox">
                                     <strong>启用微信消息通知</strong><br>
                                     开启后可通过微信接收和回复消息；关闭后不再收发微信消息。
                                 </span>
                             </label>
-                            <p id="weixinBridgeSaveStatus" class="settings-inline-status">修改后点击保存桥接配置。</p>
+                            <p id="weixinBridgeSaveStatus" class="settings-inline-status" data-i18n="settings.weixin.bridge_save_hint">修改后点击保存桥接配置。</p>
                             <div class="weixin-action-row">
-                                <button id="saveWeixinBridgeButton" class="btn btn-secondary" type="button">保存微信桥接配置</button>
+                                <button id="saveWeixinBridgeButton" class="btn btn-secondary" type="button" data-i18n="settings.weixin.save_bridge">保存微信桥接配置</button>
                             </div>
                         </section>
                         <section class="weixin-control-card weixin-binding-card">
                             <div class="weixin-card-head">
                                 <div>
-                                    <h3>账号绑定</h3>
-                                    <p>扫码绑定后，可直接通过微信上传文献、发送消息，并触发自动解析流程。</p>
+                                    <h3 data-i18n="settings.weixin.binding_title">账号绑定</h3>
+                                    <p data-i18n="settings.weixin.binding_desc">扫码绑定后，可直接通过微信上传文献、发送消息，并触发自动解析流程。</p>
                                 </div>
                             </div>
-                            <p id="weixinBindingStatus" class="settings-inline-status">点击“开始绑定”生成二维码。</p>
-                            <div class="weixin-action-row">
-                                <button id="startWeixinBindingButton" class="btn btn-secondary" type="button">开始绑定</button>
-                                <button id="unbindWeixinButton" class="btn btn-danger hidden" type="button">解除绑定</button>
+                            <p id=”weixinBindingStatus” class=”settings-inline-status” data-i18n=”settings.weixin.binding_status_hint”>点击”开始绑定”生成二维码。</p>
+                            <div class=”weixin-action-row”>
+                                <button id=”startWeixinBindingButton” class=”btn btn-secondary” type=”button” data-i18n=”settings.weixin.start_binding”>开始绑定</button>
+                                <button id=”unbindWeixinButton” class=”btn btn-danger hidden” type=”button” data-i18n=”settings.weixin.unbind”>解除绑定</button>
                             </div>
-                            <div id="weixinQRCodePlaceholder" class="weixin-qr-placeholder">
-                                <strong>二维码未生成</strong>
-                                <p>点击“开始绑定”后，这里会显示可扫码的二维码。已绑定账号时，也可以用它重新绑定。</p>
+                            <div id=”weixinQRCodePlaceholder” class=”weixin-qr-placeholder”>
+                                <strong data-i18n=”settings.weixin.qr_not_generated”>二维码未生成</strong>
+                                <p data-i18n=”settings.weixin.qr_placeholder_text”>点击”开始绑定”后，这里会显示可扫码的二维码。已绑定账号时，也可以用它重新绑定。</p>
                             </div>
-                            <div id="weixinQRCodePanel" class="weixin-qr-panel hidden">
-                                <img id="weixinQRCodeImage" class="weixin-qr-image" alt="微信绑定二维码">
-                                <p class="muted">请使用微信扫码。二维码过期后可重新生成。</p>
-                                <p class="weixin-qr-fallback">
-                                    二维码内容：
-                                    <a id="weixinQRCodeLink" href="#" target="_blank" rel="noreferrer">打开原始链接</a>
+                            <div id=”weixinQRCodePanel” class=”weixin-qr-panel hidden”>
+                                <img id=”weixinQRCodeImage” class=”weixin-qr-image” alt=”微信绑定二维码”>
+                                <p class=”muted” data-i18n=”settings.weixin.qr_scan_hint”>请使用微信扫码。二维码过期后可重新生成。</p>
+                                <p class=”weixin-qr-fallback”>
+                                    <span data-i18n=”settings.weixin.qr_content_label”>二维码内容：</span>
+                                    <a id=”weixinQRCodeLink” href=”#” target=”_blank” rel=”noreferrer” data-i18n=”settings.weixin.qr_open_link”>打开原始链接</a>
                                 </p>
                             </div>
                         </section>
@@ -556,86 +556,86 @@ User Prompt:
 
             <details class="manager-card settings-collapsible" open>
                 <summary class="settings-collapsible-toggle">
-                    <h2>Wolai 配置</h2>
-                    <p>配置 Wolai 授权信息和目标页面，将笔记同步到 Wolai。</p>
+                    <h2 data-i18n="settings.wolai.title">Wolai 配置</h2>
+                    <p data-i18n="settings.wolai.desc">配置 Wolai 授权信息和目标页面，将笔记同步到 Wolai。</p>
                 </summary>
                 <form id="wolaiSettingsForm" class="manager-form">
                     <div class="form-grid">
                         <label class="field field-span-2">
                             <span>Wolai Token</span>
-                            <input id="wolaiTokenInput" class="form-input" type="password" autocomplete="off" placeholder="粘贴可直接调用 OpenAPI 的 token">
+                            <input id="wolaiTokenInput" class="form-input" type="password" autocomplete="off" data-i18n-placeholder="settings.wolai.token_placeholder" placeholder="粘贴可直接调用 OpenAPI 的 token">
                         </label>
                         <label class="field field-span-2">
-                            <span>目标页面 ID</span>
-                            <input id="wolaiParentBlockIDInput" class="form-input" type="text" placeholder="笔记会保存为这个页面下的子页面">
+                            <span data-i18n="settings.wolai.parent_block">目标页面 ID</span>
+                            <input id="wolaiParentBlockIDInput" class="form-input" type="text" data-i18n-placeholder="settings.wolai.parent_block_placeholder" placeholder="笔记会保存为这个页面下的子页面">
                         </label>
                         <label class="field field-span-2">
-                            <span>OpenAPI 地址</span>
+                            <span data-i18n="settings.wolai.base_url">OpenAPI 地址</span>
                             <input id="wolaiBaseURLInput" class="form-input" type="text" placeholder="默认 https://openapi.wolai.com">
                         </label>
                     </div>
 
-                    <p class="muted">“测试 Token”会校验访问权限；“插入测试页面”会创建 `Test Page`、写入 `Test works` 和一条图片导出 TODO 说明；“保存到 Wolai”会把当前笔记草稿保存为新的块页面，不会替代本地保存，但笔记中的图片当前只会写入 TODO 占位。</p>
+                    <p class=”muted” data-i18n=”settings.wolai.usage_hint”>”测试 Token”会校验访问权限；”插入测试页面”会创建 `Test Page`、写入 `Test works` 和一条图片导出 TODO 说明；”保存到 Wolai”会把当前笔记草稿保存为新的块页面，不会替代本地保存，但笔记中的图片当前只会写入 TODO 占位。</p>
 
                     <div id="wolaiSummary" class="settings-summary-box"></div>
-                    <p id="wolaiStatus" class="settings-inline-status">修改后可先测试，再保存配置。</p>
+                    <p id="wolaiStatus" class="settings-inline-status" data-i18n="settings.wolai.status_hint">修改后可先测试，再保存配置。</p>
                     <p id="wolaiResultLink" class="settings-inline-status"></p>
 
                     <div class="submit-row">
-                        <button id="testWolaiButton" class="btn btn-outline" type="button">测试 Token</button>
-                        <button id="testWolaiInsertButton" class="btn btn-outline" type="button">插入测试页面</button>
-                        <button class="btn btn-primary" type="submit">保存 Wolai 配置</button>
+                        <button id="testWolaiButton" class="btn btn-outline" type="button" data-i18n="settings.wolai.test_token">测试 Token</button>
+                        <button id="testWolaiInsertButton" class="btn btn-outline" type="button" data-i18n="settings.wolai.test_insert">插入测试页面</button>
+                        <button class="btn btn-primary" type="submit" data-i18n="settings.wolai.save_btn">保存 Wolai 配置</button>
                     </div>
                 </form>
             </details>
 
             <details class="manager-card settings-collapsible" open>
                 <summary class="settings-collapsible-toggle">
-                    <h2>账号管理</h2>
-                    <p>修改密码或退出登录。</p>
+                    <h2 data-i18n="settings.password.account_title">账号管理</h2>
+                    <p data-i18n="settings.password.account_desc">修改密码或退出登录。</p>
                 </summary>
                 <div class="db-actions-grid">
                     <div class="db-action-item">
-                        <h3>修改密码</h3>
-                        <p>更改管理员账号的登录密码</p>
+                        <h3 data-i18n="settings.password.change_title">修改密码</h3>
+                        <p data-i18n="settings.password.change_desc">更改管理员账号的登录密码</p>
                         <form id="changePasswordForm" class="settings-action-form">
-                            <input id="currentPassword" class="form-input" type="password" placeholder="当前密码" required>
-                            <input id="newPassword" class="form-input" type="password" placeholder="新密码（至少6位）" required minlength="6">
-                            <input id="confirmPassword" class="form-input" type="password" placeholder="确认新密码" required minlength="6">
-                            <button id="changePasswordButton" class="btn btn-secondary" type="submit">修改密码</button>
+                            <input id="currentPassword" class="form-input" type="password" data-i18n-placeholder="settings.password.current" placeholder="当前密码" required>
+                            <input id="newPassword" class="form-input" type="password" data-i18n-placeholder="settings.password.new" placeholder="新密码（至少6位）" required minlength="6">
+                            <input id="confirmPassword" class="form-input" type="password" data-i18n-placeholder="settings.password.confirm" placeholder="确认新密码" required minlength="6">
+                            <button id="changePasswordButton" class="btn btn-secondary" type="submit" data-i18n="settings.password.change_btn">修改密码</button>
                         </form>
                     </div>
                     <div class="db-action-item">
-                        <h3>登出</h3>
-                        <p>退出当前登录会话</p>
-                        <button id="logoutButton" class="btn btn-outline" type="button">安全登出</button>
+                        <h3 data-i18n="settings.password.logout_title">登出</h3>
+                        <p data-i18n="settings.password.logout_desc">退出当前登录会话</p>
+                        <button id="logoutButton" class="btn btn-outline" type="button" data-i18n="settings.password.logout_btn">安全登出</button>
                     </div>
                 </div>
             </details>
 
             <details class="manager-card danger-zone-card settings-collapsible" open>
                 <summary class="settings-collapsible-toggle">
-                    <h2>数据库管理</h2>
-                    <p>导出、导入或清空数据库。导入会覆盖现有数据，请谨慎操作。</p>
+                    <h2 data-i18n="settings.db.title">数据库管理</h2>
+                    <p data-i18n="settings.db.desc">导出、导入或清空数据库。导入会覆盖现有数据，请谨慎操作。</p>
                 </summary>
                 <div class="db-actions-grid">
                     <div class="db-action-item">
-                        <h3>导出数据库</h3>
-                        <p>下载当前数据库的完整备份</p>
-                        <button id="exportDbButton" class="btn btn-secondary" type="button">导出数据库</button>
+                        <h3 data-i18n="settings.db.export_title">导出数据库</h3>
+                        <p data-i18n="settings.db.export_desc">下载当前数据库的完整备份</p>
+                        <button id="exportDbButton" class="btn btn-secondary" type="button" data-i18n="settings.db.export_btn">导出数据库</button>
                     </div>
                     <div class="db-action-item">
-                        <h3>导入数据库</h3>
-                        <p>从备份文件恢复数据库，将覆盖现有数据</p>
+                        <h3 data-i18n="settings.db.import_title">导入数据库</h3>
+                        <p data-i18n="settings.db.import_desc">从备份文件恢复数据库，将覆盖现有数据</p>
                         <form id="importDbForm" class="settings-action-form">
                             <input id="importDbFile" class="form-input" type="file" accept=".db,.sqlite,.sqlite3">
-                            <button id="importDbButton" class="btn btn-secondary" type="submit">导入数据库</button>
+                            <button id="importDbButton" class="btn btn-secondary" type="submit" data-i18n="settings.db.import_btn">导入数据库</button>
                         </form>
                     </div>
                     <div class="db-action-item danger">
-                        <h3>清空数据库</h3>
-                        <p>清空所有文献、图片、分组和标签。此操作不可恢复。</p>
-                        <button id="purgeDbButton" class="btn btn-outline danger" type="button">清空数据库</button>
+                        <h3 data-i18n="settings.db.purge_title">清空数据库</h3>
+                        <p data-i18n="settings.db.purge_desc">清空所有文献、图片、分组和标签。此操作不可恢复。</p>
+                        <button id="purgeDbButton" class="btn btn-outline danger" type="button" data-i18n="settings.db.purge_btn">清空数据库</button>
                     </div>
                 </div>
             </details>
@@ -644,22 +644,22 @@ User Prompt:
 
     <div id="aiModelModal" class="modal-shell hidden">
         <div class="modal-dialog ai-model-modal-dialog">
-            <button id="closeAIModelModal" class="modal-close" type="button" aria-label="关闭">×</button>
+            <button id="closeAIModelModal" class="modal-close" type="button" data-i18n-aria-label="btn.close" aria-label="关闭">×</button>
             <div class="detail-head">
                 <div>
                     <p class="eyebrow">AI Model</p>
-                    <h2 id="aiModelModalTitle">新增模型</h2>
+                    <h2 id="aiModelModalTitle" data-i18n="settings.ai.new_model">新增模型</h2>
                 </div>
             </div>
 
             <form id="aiModelEditorForm" class="detail-form">
                 <div class="form-grid">
                     <label class="field">
-                        <span>模型名称</span>
+                        <span data-i18n="settings.ai.model_name">模型名称</span>
                         <input id="aiModelNameInput" class="form-input" type="text" placeholder="例如：OpenAI 快速问答">
                     </label>
                     <label class="field">
-                        <span>提供商</span>
+                        <span data-i18n="settings.ai.model_provider">提供商</span>
                         <select id="aiModelProviderInput" class="form-input">
                             <option value="openai">OpenAI</option>
                             <option value="anthropic">Anthropic</option>
@@ -667,7 +667,7 @@ User Prompt:
                         </select>
                     </label>
                     <label class="field">
-                        <span>模型名</span>
+                        <span data-i18n="settings.ai.model_id">模型名</span>
                         <input id="aiModelIdentifierInput" class="form-input" type="text" placeholder="例如：gpt-4.1-mini">
                     </label>
                     <label class="field">
@@ -676,7 +676,7 @@ User Prompt:
                     </label>
                     <label class="field field-span-2">
                         <span>Base URL</span>
-                        <input id="aiModelBaseURLInput" class="form-input" type="text" placeholder="默认使用官方地址；兼容网关时填自定义地址">
+                        <input id="aiModelBaseURLInput" class="form-input" type="text" data-i18n-placeholder="settings.ai.base_url_placeholder" placeholder="默认使用官方地址；兼容网关时填自定义地址">
                     </label>
                     <label class="field field-span-2">
                         <span>API Key</span>
@@ -684,23 +684,24 @@ User Prompt:
                     </label>
                     <label class="field checkbox-field field-span-2">
                         <input id="aiModelLegacyModeInput" type="checkbox">
-                        <span>使用传统 OpenAI 接口模式（Chat Completions），以兼容其他 OpenAI 风格网关</span>
+                        <span data-i18n="settings.ai.legacy_mode">使用传统 OpenAI 接口模式（Chat Completions），以兼容其他 OpenAI 风格网关</span>
                     </label>
                 </div>
 
                 <div id="aiModelProviderNote" class="ai-provider-note"></div>
-                <p id="aiModelCheckStatus" class="muted ai-model-check-status">尚未检查</p>
-                <p id="aiModelEditorStatus" class="settings-inline-status">修改后会自动保存。</p>
+                <p id="aiModelCheckStatus" class="muted ai-model-check-status" data-i18n="settings.ai.not_checked">尚未检查</p>
+                <p id="aiModelEditorStatus" class="settings-inline-status" data-i18n="settings.ai.editor_autosave_hint">修改后会自动保存。</p>
 
                 <div class="detail-actions ai-model-editor-actions">
-                    <button id="checkAIModelButton" class="btn btn-outline" type="button">检查模型</button>
-                    <button id="deleteAIModelButton" class="btn btn-outline danger" type="button">删除模型</button>
+                    <button id="checkAIModelButton" class="btn btn-outline" type="button" data-i18n="settings.ai.check_model">检查模型</button>
+                    <button id="deleteAIModelButton" class="btn btn-outline danger" type="button" data-i18n="settings.ai.delete_model">删除模型</button>
                 </div>
             </form>
         </div>
     </div>
 
     <script src="/static/js/theme.js"></script>
+    <script src="/static/js/i18n.js"></script>
     <script src="/static/js/utils.js"></script>
     <script src="/static/js/api.js"></script>
     <script src="/static/js/settings.js"></script>

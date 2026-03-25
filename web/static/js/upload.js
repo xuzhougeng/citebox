@@ -22,6 +22,7 @@ const UploadPage = {
     },
 
     async init() {
+        if (typeof t !== 'function') { window.t = function(k, f) { return f || k; }; }
         this.form = document.getElementById('paperUploadForm');
         if (!this.form) return;
 
@@ -107,7 +108,7 @@ const UploadPage = {
         try {
             const payload = await API.listGroups();
             const groups = payload.groups || [];
-            this.groupSelect.innerHTML = '<option value="">暂不分组</option>';
+            this.groupSelect.innerHTML = `<option value="">${t('upload.no_group', '暂不分组')}</option>`;
             groups.forEach((group) => {
                 this.groupSelect.insertAdjacentHTML(
                     'beforeend',
@@ -127,7 +128,7 @@ const UploadPage = {
         try {
             extractorSettings = await API.getExtractorSettings();
         } catch (error) {
-            Utils.showToast('加载自动解析配置失败，当前仅允许手工标注', 'error');
+            Utils.showToast(t('upload.err_load_extractor', '加载自动解析配置失败，当前仅允许手工标注'), 'error');
         }
         this.extractorSettings = extractorSettings;
 
@@ -143,13 +144,13 @@ const UploadPage = {
         if (!this.extractionModeSelect) return;
 
         if (usesManualProfile) {
-            this.extractionModeSelect.innerHTML = '<option value="manual">手工</option>';
+            this.extractionModeSelect.innerHTML = `<option value="manual">${t('upload.mode_manual', '手工')}</option>`;
             this.extractionModeSelect.value = 'manual';
             this.extractionModeSelect.disabled = true;
         } else {
             this.extractionModeSelect.innerHTML = `
-                <option value="auto" ${this.extractorReady ? '' : 'disabled'}>自动标注</option>
-                <option value="manual">手工标注</option>
+                <option value="auto" ${this.extractorReady ? '' : 'disabled'}>${t('upload.mode_auto', '自动标注')}</option>
+                <option value="manual">${t('upload.mode_manual', '手工标注')}</option>
             `;
             this.extractionModeSelect.value = this.extractorReady ? 'auto' : 'manual';
             this.extractionModeSelect.disabled = false;
@@ -157,17 +158,17 @@ const UploadPage = {
 
         if (this.extractionModeHint) {
             if (usesManualProfile) {
-                this.extractionModeHint.textContent = '当前 PDF 提取方案为手工：上传后不会自动提图，但会自动提取并保存全文；微信上传也同样如此。';
+                this.extractionModeHint.textContent = t('upload.mode_hint_manual_profile', '当前 PDF 提取方案为手工：上传后不会自动提图，但会自动提取并保存全文；微信上传也同样如此。');
             } else if (this.usesBuiltInLLMExtraction(this.extractorSettings) && this.extractorReady) {
-                this.extractionModeHint.textContent = '默认使用自动标注；上传后后台会用内置 AI 解析图片坐标，全文也会自动保存。';
+                this.extractionModeHint.textContent = t('upload.mode_hint_builtin_ready', '默认使用自动标注；上传后后台会用内置 AI 解析图片坐标，全文也会自动保存。');
             } else if (this.usesBuiltInLLMExtraction(this.extractorSettings)) {
-                this.extractionModeHint.textContent = '当前已选择内置 AI 坐标提取，但图片场景模型或 API Key 还没配好，只能使用手工标注；上传后会自动保存全文。';
+                this.extractionModeHint.textContent = t('upload.mode_hint_builtin_not_ready', '当前已选择内置 AI 坐标提取，但图片场景模型或 API Key 还没配好，只能使用手工标注；上传后会自动保存全文。');
             } else if (this.extractorReady && this.usesBrowserPDFText(this.extractorSettings)) {
-                this.extractionModeHint.textContent = '默认自动标注，系统会自动提取图片并保存全文。';
+                this.extractionModeHint.textContent = t('upload.mode_hint_browser_text', '默认自动标注，系统会自动提取图片并保存全文。');
             } else if (this.extractorReady) {
-                this.extractionModeHint.textContent = '默认使用自动标注；也可以切到手工标注自行框选图片。';
+                this.extractionModeHint.textContent = t('upload.mode_hint_default', '默认使用自动标注；也可以切到手工标注自行框选图片。');
             } else {
-                this.extractionModeHint.textContent = '尚未配置自动解析，仅支持手工标注。上传后会自动保存全文。';
+                this.extractionModeHint.textContent = t('upload.mode_hint_not_configured', '尚未配置自动解析，仅支持手工标注。上传后会自动保存全文。');
             }
         }
     },
@@ -176,7 +177,7 @@ const UploadPage = {
         if (!file) return;
         const isPDF = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
         if (!isPDF) {
-            Utils.showToast('请选择 PDF 文件', 'error');
+            Utils.showToast(t('upload.err_not_pdf', '请选择 PDF 文件'), 'error');
             return;
         }
 
@@ -194,7 +195,7 @@ const UploadPage = {
 
     async submit() {
         if (!this.file) {
-            Utils.showToast('请先选择 PDF', 'error');
+            Utils.showToast(t('upload.err_no_file', '请先选择 PDF'), 'error');
             return;
         }
 
@@ -213,7 +214,7 @@ const UploadPage = {
         }
 
         this.submitButton.disabled = true;
-        this.submitButton.textContent = '上传中...';
+        this.submitButton.textContent = t('upload.btn_uploading', '上传中...');
 
         try {
             const payload = await API.uploadPaper(formData);
@@ -225,16 +226,16 @@ const UploadPage = {
             this.startPolling(paper);
             void this.runPostUploadEnrichment(paper, sourceFile, extractorSettings, extractionMode);
 
-            let toastMessage = '文献已入库';
+            let toastMessage = t('upload.toast_uploaded', '文献已入库');
             if (Utils.isProcessingStatus(paper.extraction_status)) {
-                toastMessage = '文献已入库，后台开始解析';
+                toastMessage = t('upload.toast_uploaded_processing', '文献已入库，后台开始解析');
             }
             Utils.showToast(toastMessage, Utils.statusTone(paper.extraction_status));
 
             this.form.reset();
             this.file = null;
             this.selectedFile.classList.add('empty');
-            this.selectedFile.innerHTML = '<span>尚未选择 PDF</span>';
+            this.selectedFile.innerHTML = `<span>${t('upload.no_file_selected', '尚未选择 PDF')}</span>`;
             this.tagAutocomplete?.refresh?.();
             await Promise.all([
                 this.loadGroups(),
@@ -250,7 +251,7 @@ const UploadPage = {
             Utils.showToast(error.message, 'error');
         } finally {
             this.submitButton.disabled = false;
-            this.submitButton.textContent = '上传文献';
+            this.submitButton.textContent = t('upload.btn_upload', '上传文献');
         }
     },
 
@@ -292,7 +293,7 @@ const UploadPage = {
                 this.stopPolling();
                 if (Utils.isProcessingStatus(previousStatus)) {
                     const tone = Utils.statusTone(this.lastStatus);
-                    const message = this.lastStatus === 'completed' ? '文献解析完成' : '文献解析已结束';
+                    const message = this.lastStatus === 'completed' ? t('upload.toast_parse_done', '文献解析完成') : t('upload.toast_parse_ended', '文献解析已结束');
                     Utils.showToast(message, tone);
                 }
             }
@@ -311,7 +312,7 @@ const UploadPage = {
             const paper = payload.paper;
             this.renderResult(paper);
             this.startPolling(paper);
-            Utils.showToast('文献已重新提交解析', 'info');
+            Utils.showToast(t('upload.toast_reextract', '文献已重新提交解析'), 'info');
         } catch (error) {
             Utils.showToast(error.message, 'error');
         }
@@ -443,12 +444,12 @@ const UploadPage = {
             return paper;
         }
 
-        this.setPDFTextSyncState(paper.id, 'running', '正在提取全文，完成后会自动保存到当前文献。');
+        this.setPDFTextSyncState(paper.id, 'running', t('upload.sync_extracting_text', '正在提取全文，完成后会自动保存到当前文献。'));
 
         try {
             const pdfText = await this.extractFullTextFromFile(file);
             if (!pdfText) {
-                throw new Error('没有从当前 PDF 中提取到可用全文');
+                throw new Error(t('upload.sync_no_text', '没有从当前 PDF 中提取到可用全文'));
             }
 
             const payload = await API.updatePaperPDFText(paper.id, {
@@ -456,13 +457,13 @@ const UploadPage = {
             });
 
             this.currentPaper = payload.paper;
-            this.setPDFTextSyncState(paper.id, 'success', `已保存全文（${pdfText.length.toLocaleString()} 字）。`);
+            this.setPDFTextSyncState(paper.id, 'success', t('upload.sync_text_saved', '已保存全文（{0} 字）。').replace('{0}', pdfText.length.toLocaleString()));
             this.renderResult(payload.paper);
-            Utils.showToast(`已保存全文（${pdfText.length.toLocaleString()} 字）`);
+            Utils.showToast(t('upload.sync_text_toast', '已保存全文（{0} 字）').replace('{0}', pdfText.length.toLocaleString()));
             return payload.paper;
         } catch (error) {
-            this.setPDFTextSyncState(paper.id, 'error', error.message || '全文提取失败');
-            Utils.showToast(error.message || '全文提取失败', 'error');
+            this.setPDFTextSyncState(paper.id, 'error', error.message || t('upload.sync_text_failed', '全文提取失败'));
+            Utils.showToast(error.message || t('upload.sync_text_failed', '全文提取失败'), 'error');
             return paper;
         }
     },
@@ -472,7 +473,7 @@ const UploadPage = {
             return paper;
         }
 
-        this.setFigureSyncState(paper.id, 'running', '浏览器正在逐页渲染 PDF，并调用内置 AI 识别图片坐标。');
+        this.setFigureSyncState(paper.id, 'running', t('upload.sync_figure_rendering', '浏览器正在逐页渲染 PDF，并调用内置 AI 识别图片坐标。'));
 
         const pdfjsLib = await this.ensurePDFJSReady();
         const objectURL = URL.createObjectURL(file);
@@ -493,7 +494,7 @@ const UploadPage = {
                 this.setFigureSyncState(
                     paper.id,
                     'running',
-                    `内置 AI 正在识别第 ${pageNumber} / ${pdfDocument.numPages} 页的图片坐标。`
+                    t('upload.sync_figure_page', '内置 AI 正在识别第 {0} / {1} 页的图片坐标。').replace('{0}', pageNumber).replace('{1}', pdfDocument.numPages)
                 );
 
                 const page = await pdfDocument.getPage(pageNumber);
@@ -543,15 +544,15 @@ const UploadPage = {
             }
 
             if (detectedCount > 0) {
-                this.setFigureSyncState(paper.id, 'success', `内置 AI 已自动录入 ${detectedCount} 张图片。`);
-                Utils.showToast(`AI 已自动录入 ${detectedCount} 张图片`);
+                this.setFigureSyncState(paper.id, 'success', t('upload.sync_figure_done', '内置 AI 已自动录入 {0} 张图片。').replace('{0}', detectedCount));
+                Utils.showToast(t('upload.sync_figure_toast', 'AI 已自动录入 {0} 张图片').replace('{0}', detectedCount));
             } else {
-                this.setFigureSyncState(paper.id, 'success', '内置 AI 已完成坐标识别，但没有找到可保存的主图；你仍可继续手工标注。');
+                this.setFigureSyncState(paper.id, 'success', t('upload.sync_figure_none', '内置 AI 已完成坐标识别，但没有找到可保存的主图；你仍可继续手工标注。'));
             }
             return currentPaper;
         } catch (error) {
-            this.setFigureSyncState(paper.id, 'error', error.message || '内置 AI 图片坐标提取失败');
-            Utils.showToast(error.message || '内置 AI 图片坐标提取失败', 'error');
+            this.setFigureSyncState(paper.id, 'error', error.message || t('upload.sync_figure_error', '内置 AI 图片坐标提取失败'));
+            Utils.showToast(error.message || t('upload.sync_figure_error', '内置 AI 图片坐标提取失败'), 'error');
             return currentPaper;
         } finally {
             URL.revokeObjectURL(objectURL);
@@ -725,8 +726,8 @@ const UploadPage = {
                         <figure class="figure-card">
                             <img src="${figure.image_url}" alt="${Utils.escapeHTML(figure.original_name || paper.title)}">
                             <figcaption>
-                                <strong>第 ${figure.page_number || '-'} 页${figure.source === 'manual' ? ' · 人工提取' : ''}</strong>
-                                <span>${Utils.escapeHTML(figure.caption || figure.original_name || '未命名图片')}</span>
+                                <strong>${t('upload.result_page', '第 {0} 页').replace('{0}', figure.page_number || '-')}${figure.source === 'manual' ? t('upload.result_manual_source', ' · 人工提取') : ''}</strong>
+                                <span>${Utils.escapeHTML(figure.caption || figure.original_name || t('upload.result_unnamed_figure', '未命名图片'))}</span>
                             </figcaption>
                         </figure>
                     `).join('')}
@@ -735,29 +736,29 @@ const UploadPage = {
         } else if (Utils.isProcessingStatus(paper.extraction_status)) {
             figureContent = `
                 <div class="empty-state">
-                    <h3>后台正在解析这篇文献</h3>
-                    <p>PDF 原文、框选结果和提取图片会在解析完成后自动出现在这里。</p>
+                    <h3>${t('upload.result_processing_title', '后台正在解析这篇文献')}</h3>
+                    <p>${t('upload.result_processing_text', 'PDF 原文、框选结果和提取图片会在解析完成后自动出现在这里。')}</p>
                 </div>
             `;
         } else if (paper.extraction_status === 'failed' || paper.extraction_status === 'cancelled') {
             figureContent = `
                 <div class="empty-state">
-                    <h3>没有生成可展示的图片</h3>
-                    <p>这篇文献的后台解析没有成功完成，可以先回到文献库查看错误信息。</p>
+                    <h3>${t('upload.result_failed_title', '没有生成可展示的图片')}</h3>
+                    <p>${t('upload.result_failed_text', '这篇文献的后台解析没有成功完成，可以先回到文献库查看错误信息。')}</p>
                 </div>
             `;
         } else if (paper.extraction_status === 'completed' && !paper.pdf_text && !figures.length) {
             figureContent = `
                 <div class="empty-state">
-                    <h3>文献已入库，可按需补录图片</h3>
-                    <p>${Utils.escapeHTML(paper.extractor_message || '你可以随时打开人工框选提取页，把需要的图片录入到当前文献。')}</p>
+                    <h3>${t('upload.result_completed_no_fig_title', '文献已入库，可按需补录图片')}</h3>
+                    <p>${Utils.escapeHTML(paper.extractor_message || t('upload.result_completed_no_fig_text', '你可以随时打开人工框选提取页，把需要的图片录入到当前文献。'))}</p>
                 </div>
             `;
         } else {
             figureContent = `
                 <div class="empty-state">
-                    <h3>暂时没有可展示的图片</h3>
-                    <p>上传结果已经保存，但当前还没有提取图片。</p>
+                    <h3>${t('upload.result_empty_title', '暂时没有可展示的图片')}</h3>
+                    <p>${t('upload.result_empty_text', '上传结果已经保存，但当前还没有提取图片。')}</p>
                 </div>
             `;
         }
@@ -766,18 +767,18 @@ const UploadPage = {
         this.resultCard.innerHTML = `
             <div class="result-head">
                 <div>
-                    <p class="eyebrow">上传结果</p>
+                    <p class="eyebrow">${t('upload.result_eyebrow', '上传结果')}</p>
                     <h2>${Utils.escapeHTML(paper.title)}</h2>
                 </div>
                 <span class="status-pill ${statusTone}">${Utils.escapeHTML(Utils.statusLabel(paper.extraction_status))}</span>
             </div>
 
             <div class="result-meta">
-                <span>分组：${Utils.escapeHTML(paper.group_name || '未分组')}</span>
-                <span>标签：${tags || '无'}</span>
-                <span>提取图片：${figures.length} 张</span>
-                <span>全文：${paper.pdf_text ? `${paper.pdf_text.length.toLocaleString()} 字` : '未保存'}</span>
-                <span>PDF：${Utils.escapeHTML(paper.original_filename || '')}</span>
+                <span>${t('upload.result_group', '分组：')}${Utils.escapeHTML(paper.group_name || t('upload.result_no_group', '未分组'))}</span>
+                <span>${t('upload.result_tags', '标签：')}${tags || t('upload.result_no_tags', '无')}</span>
+                <span>${t('upload.result_figures', '提取图片：')}${figures.length}${t('upload.result_figures_unit', ' 张')}</span>
+                <span>${t('upload.result_fulltext', '全文：')}${paper.pdf_text ? `${paper.pdf_text.length.toLocaleString()}${t('upload.result_fulltext_chars', ' 字')}` : t('upload.result_fulltext_none', '未保存')}</span>
+                <span>${t('upload.result_pdf', 'PDF：')}${Utils.escapeHTML(paper.original_filename || '')}</span>
             </div>
 
             ${paper.extractor_message ? `<p class="notice ${statusTone}">${Utils.escapeHTML(paper.extractor_message)}</p>` : ''}
@@ -785,10 +786,10 @@ const UploadPage = {
             ${this.renderPDFTextSyncNotice(paper)}
 
             <div class="result-actions">
-                <a class="btn btn-primary" href="/library">查看文献库</a>
-                <a class="btn btn-outline" href="${Utils.resourceViewerURL('pdf', paper.pdf_url)}">打开 PDF</a>
-                <a class="btn btn-outline" href="/manual?paper_id=${paper.id}">人工框选提取</a>
-                ${(paper.extraction_status === 'failed' || paper.extraction_status === 'cancelled') ? '<button class="btn btn-outline" type="button" data-action="reextract">重新解析</button>' : ''}
+                <a class="btn btn-primary" href="/library">${t('upload.result_view_library', '查看文献库')}</a>
+                <a class="btn btn-outline" href="${Utils.resourceViewerURL('pdf', paper.pdf_url)}">${t('upload.result_open_pdf', '打开 PDF')}</a>
+                <a class="btn btn-outline" href="/manual?paper_id=${paper.id}">${t('upload.result_manual_extract', '人工框选提取')}</a>
+                ${(paper.extraction_status === 'failed' || paper.extraction_status === 'cancelled') ? `<button class="btn btn-outline" type="button" data-action="reextract">${t('upload.result_reextract', '重新解析')}</button>` : ''}
             </div>
 
             ${figureContent}
