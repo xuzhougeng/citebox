@@ -2,6 +2,7 @@ const SettingsPage = {
     init() {
         if (this.initialized) return;
         this.initialized = true;
+        if (typeof t !== 'function') { window.t = function(k, f) { return f || k; }; }
 
         this.aiSettingsForm = document.getElementById('aiSettingsForm');
         this.aiModelList = document.getElementById('aiModelList');
@@ -171,7 +172,7 @@ const SettingsPage = {
         ].forEach((element) => {
             element?.addEventListener('input', () => {
                 if (this.isHydratingAISettings) return;
-                this.setAIPromptSaveStatus('提示词已修改，点击”保存 Prompt 配置”后生效。', 'saving');
+                this.setAIPromptSaveStatus(t('settings.ai.prompt_modified', '提示词已修改，点击”保存 Prompt 配置”后生效。'), 'saving');
             });
         });
         this.extractorSettingsForm.addEventListener('submit', async (event) => {
@@ -207,7 +208,7 @@ const SettingsPage = {
         });
         this.logoutButton.addEventListener('click', () => this.logout());
         this.weixinBridgeEnabledInput?.addEventListener('change', () => {
-            this.setWeixinBridgeSaveStatus('配置已修改，点击”保存微信桥接配置”后生效。', 'saving');
+            this.setWeixinBridgeSaveStatus(t('settings.weixin.bridge_modified', '配置已修改，点击”保存微信桥接配置”后生效。'), 'saving');
         });
         this.saveWeixinBridgeButton?.addEventListener('click', async () => {
             await this.saveWeixinBridgeSettings();
@@ -304,8 +305,8 @@ const SettingsPage = {
             overwritePromptInputs: true,
             overwriteRolePrompts: true
         });
-        this.setAIModelAutosaveStatus('模型配置修改后会自动保存。');
-        this.setAIPromptSaveStatus('提示词修改后需点击保存。');
+        this.setAIModelAutosaveStatus(t('settings.ai.autosave_hint', '模型配置修改后会自动保存。'));
+        this.setAIPromptSaveStatus(t('settings.ai.prompt_save_hint', '提示词修改后需点击保存。'));
     },
 
     applyAISettings(settings = {}, options = {}) {
@@ -416,8 +417,8 @@ const SettingsPage = {
 
         const { immediate = false } = options;
         window.clearTimeout(this.aiModelAutosaveTimer);
-        this.setAIModelAutosaveStatus(immediate ? '模型配置保存中...' : '检测到修改，正在准备自动保存...', 'saving');
-        this.setAIModelEditorStatus('当前模型修改后会自动保存。', 'saving');
+        this.setAIModelAutosaveStatus(immediate ? t('settings.ai.model_config_saving', '模型配置保存中...') : t('settings.ai.model_config_preparing', '检测到修改，正在准备自动保存...'), 'saving');
+        this.setAIModelEditorStatus(t('settings.ai.model_editor_saving', '当前模型修改后会自动保存。'), 'saving');
 
         if (immediate) {
             void this.persistAIModelSettings();
@@ -442,8 +443,8 @@ const SettingsPage = {
         const { successMessage = '' } = options;
         const requestID = (this.aiModelAutosaveRequestID || 0) + 1;
         this.aiModelAutosaveRequestID = requestID;
-        this.setAIModelAutosaveStatus('模型配置保存中...', 'saving');
-        this.setAIModelEditorStatus('模型配置保存中...', 'saving');
+        this.setAIModelAutosaveStatus(t('settings.ai.model_config_saving', '模型配置保存中...'), 'saving');
+        this.setAIModelEditorStatus(t('settings.ai.model_config_saving', '模型配置保存中...'), 'saving');
 
         try {
             const response = await API.updateAIModelSettings(this.buildAIModelSettingsPayload());
@@ -452,15 +453,15 @@ const SettingsPage = {
                 overwritePromptInputs: false,
                 overwriteRolePrompts: false
             });
-            this.setAIModelAutosaveStatus('模型配置已自动保存。', 'success');
-            this.setAIModelEditorStatus('模型配置已自动保存。', 'success');
+            this.setAIModelAutosaveStatus(t('settings.ai.model_config_saved', '模型配置已自动保存。'), 'success');
+            this.setAIModelEditorStatus(t('settings.ai.model_editor_saved', '模型配置已自动保存。'), 'success');
             if (successMessage) {
                 Utils.showToast(successMessage);
             }
         } catch (error) {
             if (requestID !== this.aiModelAutosaveRequestID) return;
-            this.setAIModelAutosaveStatus(`自动保存失败：${error.message}`, 'error');
-            this.setAIModelEditorStatus(`自动保存失败：${error.message}`, 'error');
+            this.setAIModelAutosaveStatus(t('settings.ai.model_config_save_failed', '自动保存失败：{0}').replace('{0}', error.message), 'error');
+            this.setAIModelEditorStatus(t('settings.ai.model_config_save_failed', '自动保存失败：{0}').replace('{0}', error.message), 'error');
             Utils.showToast(error.message, 'error');
         }
     },
@@ -470,7 +471,7 @@ const SettingsPage = {
         const originalLabel = button?.textContent || '';
         if (button) {
             button.disabled = true;
-            button.textContent = '保存中...';
+            button.textContent = t('settings.ai.saving_btn', '保存中...');
         }
 
         try {
@@ -479,15 +480,15 @@ const SettingsPage = {
                 overwritePromptInputs: true,
                 overwriteRolePrompts: false
             });
-            this.setAIPromptSaveStatus('Prompt 配置已保存。', 'success');
-            Utils.showToast('Prompt 配置已保存');
+            this.setAIPromptSaveStatus(t('settings.ai.prompt_saved', 'Prompt 配置已保存。'), 'success');
+            Utils.showToast(t('settings.ai.prompt_saved_toast', 'Prompt 配置已保存'));
         } catch (error) {
-            this.setAIPromptSaveStatus(`保存失败：${error.message}`, 'error');
+            this.setAIPromptSaveStatus(t('settings.ai.prompt_save_failed', '保存失败：{0}').replace('{0}', error.message), 'error');
             Utils.showToast(error.message, 'error');
         } finally {
             if (button) {
                 button.disabled = false;
-                button.textContent = originalLabel || '保存 Prompt 配置';
+                button.textContent = originalLabel || t('settings.ai.save_prompts', '保存 Prompt 配置');
             }
         }
     },
@@ -497,20 +498,20 @@ const SettingsPage = {
         const originalLabel = button?.textContent || '';
         if (button) {
             button.disabled = true;
-            button.textContent = '载入中...';
+            button.textContent = t('settings.ai.loading_btn', '载入中...');
         }
 
         try {
             const defaults = await API.getDefaultAISettings();
             this.applyPromptSettingsToInputs(defaults || {});
-            this.setAIPromptSaveStatus('已恢复推荐 Prompt，点击“保存 Prompt 配置”后生效。', 'saving');
-            Utils.showToast('已恢复推荐 Prompt，记得点击“保存 Prompt 配置”');
+            this.setAIPromptSaveStatus(t('settings.ai.restore_done', '已恢复推荐 Prompt，点击”保存 Prompt 配置”后生效。'), 'saving');
+            Utils.showToast(t('settings.ai.restore_done_toast', '已恢复推荐 Prompt，记得点击”保存 Prompt 配置”'));
         } catch (error) {
             Utils.showToast(error.message, 'error');
         } finally {
             if (button) {
                 button.disabled = false;
-                button.textContent = originalLabel || '恢复推荐 Prompt';
+                button.textContent = originalLabel || t('settings.ai.restore_prompts', '恢复推荐 Prompt');
             }
         }
     },
@@ -537,7 +538,7 @@ const SettingsPage = {
 
         const rolePrompts = Array.isArray(this.rolePromptDraft) ? this.rolePromptDraft : [];
         if (!rolePrompts.length) {
-            this.rolePromptList.innerHTML = '<div class="prompt-preset-empty">还没有保存角色 Prompt。新增一个角色后，就可以在 AI 伴读聊天框里通过 <code>@角色名</code> 直接调用。</div>';
+            this.rolePromptList.innerHTML = `<div class="prompt-preset-empty">${t('settings.ai.role_prompt_empty', '还没有保存角色 Prompt。新增一个角色后，就可以在 AI 伴读聊天框里通过 <code>@角色名</code> 直接调用。')}</div>`;
             return;
         }
 
@@ -546,19 +547,19 @@ const SettingsPage = {
                 <article class="prompt-preset-card">
                     <div class="prompt-preset-card-head">
                         <div>
-                            <strong>${Utils.escapeHTML(rolePrompt.name || '未命名角色')}</strong>
-                            <span>聊天时输入 ${Utils.escapeHTML(`@${rolePrompt.name || '角色名'}`)} 即可调用</span>
+                            <strong>${Utils.escapeHTML(rolePrompt.name || t('settings.ai.role_prompt_unnamed', '未命名角色'))}</strong>
+                            <span>${t('settings.ai.role_prompt_call_hint', '聊天时输入 {0} 即可调用').replace('{0}', Utils.escapeHTML(`@${rolePrompt.name || t('settings.ai.role_editor_name_label', '角色名')}`))}</span>
                         </div>
                     </div>
                     <div class="prompt-preset-preview">
                         <div class="prompt-preset-preview-item">
-                            <span>角色 Prompt</span>
-                            <p>${Utils.escapeHTML(this.rolePromptExcerpt(rolePrompt.prompt, '未填写角色 Prompt'))}</p>
+                            <span>${t('settings.ai.role_prompt_label', '角色 Prompt')}</span>
+                            <p>${Utils.escapeHTML(this.rolePromptExcerpt(rolePrompt.prompt, t('settings.ai.role_prompt_not_filled', '未填写角色 Prompt')))}</p>
                         </div>
                     </div>
                     <div class="prompt-preset-card-actions">
-                        <button class="btn btn-outline btn-small" type="button" data-role-prompt-action="edit" data-role-prompt-index="${index}">编辑</button>
-                        <button class="btn btn-outline btn-small danger" type="button" data-role-prompt-action="delete" data-role-prompt-index="${index}">删除</button>
+                        <button class="btn btn-outline btn-small" type="button" data-role-prompt-action="edit" data-role-prompt-index="${index}">${t('btn.edit', '编辑')}</button>
+                        <button class="btn btn-outline btn-small danger" type="button" data-role-prompt-action="delete" data-role-prompt-index="${index}">${t('btn.delete', '删除')}</button>
                     </div>
                 </article>
             `;
@@ -568,23 +569,23 @@ const SettingsPage = {
     async openAIRolePromptEditor(index = -1) {
         const current = index >= 0 ? this.rolePromptDraft?.[index] : null;
         const values = await Utils.promptFields({
-            title: current ? `编辑角色 Prompt · ${current.name}` : '新建角色 Prompt',
-            description: '角色 Prompt 只保存角色信息。保存后可在 AI 伴读聊天框中输入 @角色名 直接调用。',
-            confirmLabel: current ? '保存角色' : '创建角色',
+            title: current ? t('settings.ai.role_editor_title_edit', '编辑角色 Prompt · {0}').replace('{0}', current.name) : t('settings.ai.role_editor_title_new', '新建角色 Prompt'),
+            description: t('settings.ai.role_editor_desc', '角色 Prompt 只保存角色信息。保存后可在 AI 伴读聊天框中输入 @角色名 直接调用。'),
+            confirmLabel: current ? t('settings.ai.role_editor_confirm_edit', '保存角色') : t('settings.ai.role_editor_confirm_new', '创建角色'),
             fields: [
                 {
                     name: 'name',
-                    label: '角色名称',
-                    placeholder: '例如：严格证据模式',
+                    label: t('settings.ai.role_editor_name_label', '角色名称'),
+                    placeholder: t('settings.ai.role_editor_name_placeholder', '例如：严格证据模式'),
                     value: current?.name || '',
                     required: true
                 },
                 {
                     name: 'prompt',
-                    label: '角色 Prompt',
+                    label: t('settings.ai.role_editor_prompt_label', '角色 Prompt'),
                     type: 'textarea',
                     rows: 8,
-                    placeholder: '例如：你是一名严格的论文审稿人，优先指出证据链、方法缺口和结论边界。',
+                    placeholder: t('settings.ai.role_editor_prompt_placeholder', '例如：你是一名严格的论文审稿人，优先指出证据链、方法缺口和结论边界。'),
                     value: current?.prompt || '',
                     required: true
                 }
@@ -600,16 +601,16 @@ const SettingsPage = {
         const existingIndex = this.findAIRolePromptIndexByName(roleName);
         const editingCurrent = index >= 0;
         let nextRolePrompts = [...(this.rolePromptDraft || [])];
-        let successMessage = editingCurrent ? `已更新角色：${roleName}` : `已保存角色：${roleName}`;
+        let successMessage = editingCurrent ? t('settings.ai.role_updated', '已更新角色：{0}').replace('{0}', roleName) : t('settings.ai.role_saved', '已保存角色：{0}').replace('{0}', roleName);
 
         if (existingIndex >= 0 && existingIndex !== index) {
-            const confirmed = await Utils.confirm(`已存在同名角色“${Utils.escapeHTML(roleName)}”，是否覆盖？`, '覆盖角色 Prompt');
+            const confirmed = await Utils.confirm(t('settings.ai.role_overwrite_confirm', '已存在同名角色”{0}”，是否覆盖？').replace('{0}', Utils.escapeHTML(roleName)), t('settings.ai.role_overwrite_title', '覆盖角色 Prompt'));
             if (!confirmed) return;
             nextRolePrompts.splice(existingIndex, 1, nextRolePrompt);
             if (editingCurrent && index >= 0 && index > existingIndex) {
                 nextRolePrompts.splice(index, 1);
             }
-            successMessage = `已更新角色：${roleName}`;
+            successMessage = t('settings.ai.role_updated', '已更新角色：{0}').replace('{0}', roleName);
         } else if (editingCurrent && index >= 0) {
             nextRolePrompts.splice(index, 1, nextRolePrompt);
         } else {
@@ -623,11 +624,11 @@ const SettingsPage = {
         const rolePrompt = this.rolePromptDraft?.[index];
         if (!rolePrompt) return;
 
-        const confirmed = await Utils.confirm(`确定要删除角色“${Utils.escapeHTML(rolePrompt.name)}”吗？`, '删除角色 Prompt');
+        const confirmed = await Utils.confirm(t('settings.ai.role_delete_confirm', '确定要删除角色”{0}”吗？').replace('{0}', Utils.escapeHTML(rolePrompt.name)), t('settings.ai.role_delete_title', '删除角色 Prompt'));
         if (!confirmed) return;
 
         const nextRolePrompts = this.rolePromptDraft.filter((_, itemIndex) => itemIndex !== index);
-        await this.persistAIRolePrompts(nextRolePrompts, `已删除角色：${rolePrompt.name}`);
+        await this.persistAIRolePrompts(nextRolePrompts, t('settings.ai.role_deleted', '已删除角色：{0}').replace('{0}', rolePrompt.name));
     },
 
     findAIRolePromptIndexByName(name) {
@@ -688,7 +689,7 @@ const SettingsPage = {
         const originalLabel = button?.textContent || '';
         if (button) {
             button.disabled = true;
-            button.textContent = forceRefresh ? '检查中...' : '载入中...';
+            button.textContent = forceRefresh ? t('settings.version.checking_btn', '检查中...') : t('settings.version.loading_btn', '载入中...');
         }
 
         try {
@@ -696,14 +697,14 @@ const SettingsPage = {
             this.renderVersionSummary(status);
             if (forceRefresh) {
                 const toastMessage = status.has_update
-                    ? `发现新版本 ${status.latest_version || ''}`.trim()
-                    : (status.message || '版本检查已完成');
+                    ? t('settings.version.new_version_found', '发现新版本 {0}').replace('{0}', status.latest_version || '').trim()
+                    : (status.message || t('settings.version.check_done', '版本检查已完成'));
                 Utils.showToast(toastMessage);
             }
         } finally {
             if (button) {
                 button.disabled = false;
-                button.textContent = originalLabel || '检查更新';
+                button.textContent = originalLabel || t('settings.version.check_update', '检查更新');
             }
         }
     },
@@ -726,7 +727,7 @@ const SettingsPage = {
         this.extractorSettings = response.settings || payload;
         this.syncExtractorProfileFormState();
         this.renderExtractorSummary(response.settings);
-        Utils.showToast('PDF 提取服务配置已保存');
+        Utils.showToast(t('settings.extractor.saved_toast', 'PDF 提取服务配置已保存'));
     },
 
     wolaiSettingsPayload() {
@@ -741,26 +742,26 @@ const SettingsPage = {
         const payload = this.wolaiSettingsPayload();
         const response = await API.updateWolaiSettings(payload);
         this.renderWolaiSummary(response.settings || payload);
-        this.setWolaiStatus('Wolai 配置已保存。', 'success');
+        this.setWolaiStatus(t('settings.wolai.saved', 'Wolai 配置已保存。'), 'success');
         this.renderWolaiResultLink('');
-        Utils.showToast('Wolai 配置已保存');
+        Utils.showToast(t('settings.wolai.saved_toast', 'Wolai 配置已保存'));
     },
 
     async testWolaiSettings() {
         const button = this.testWolaiButton;
-        const originalLabel = button?.textContent || '测试 Token';
+        const originalLabel = button?.textContent || t('settings.wolai.test_token', '测试 Token');
         if (button) {
             button.disabled = true;
-            button.textContent = '测试中...';
+            button.textContent = t('settings.wolai.testing_btn', '测试中...');
         }
 
-        this.setWolaiStatus('正在校验 Wolai token 与目标块访问权限...', 'saving');
+        this.setWolaiStatus(t('settings.wolai.testing_status', '正在校验 Wolai token 与目标块访问权限...'), 'saving');
         this.renderWolaiResultLink('');
 
         try {
             const result = await API.testWolaiSettings(this.wolaiSettingsPayload());
-            this.setWolaiStatus(result.message || 'Wolai token 可用', 'success');
-            Utils.showToast(result.message || 'Wolai token 可用');
+            this.setWolaiStatus(result.message || t('settings.wolai.token_ok', 'Wolai token 可用'), 'success');
+            Utils.showToast(result.message || t('settings.wolai.token_ok', 'Wolai token 可用'));
         } catch (error) {
             this.setWolaiStatus(error.message, 'error');
             Utils.showToast(error.message, 'error');
@@ -774,19 +775,19 @@ const SettingsPage = {
 
     async insertWolaiTestPage() {
         const button = this.testWolaiInsertButton;
-        const originalLabel = button?.textContent || '插入测试页面';
+        const originalLabel = button?.textContent || t('settings.wolai.test_insert', '插入测试页面');
         if (button) {
             button.disabled = true;
-            button.textContent = '插入中...';
+            button.textContent = t('settings.wolai.inserting_btn', '插入中...');
         }
 
-        this.setWolaiStatus('正在创建 Wolai 测试页面，并写入图片导出 TODO 说明...', 'saving');
+        this.setWolaiStatus(t('settings.wolai.inserting_status', '正在创建 Wolai 测试页面，并写入图片导出 TODO 说明...'), 'saving');
 
         try {
             const result = await API.insertWolaiTestPage(this.wolaiSettingsPayload());
-            this.setWolaiStatus(result.message || 'Wolai 测试页面已创建', 'success');
+            this.setWolaiStatus(result.message || t('settings.wolai.insert_ok', 'Wolai 测试页面已创建'), 'success');
             this.renderWolaiResultLink(result.target_block_url || '');
-            Utils.showToast(result.message || 'Wolai 测试页面已创建');
+            Utils.showToast(result.message || t('settings.wolai.insert_ok', 'Wolai 测试页面已创建'));
         } catch (error) {
             this.setWolaiStatus(error.message, 'error');
             this.renderWolaiResultLink('');
@@ -801,10 +802,10 @@ const SettingsPage = {
 
     async saveWeixinBridgeSettings() {
         const button = this.saveWeixinBridgeButton;
-        const originalLabel = button?.textContent || '保存微信桥接配置';
+        const originalLabel = button?.textContent || t('settings.weixin.save_bridge', '保存微信桥接配置');
         if (button) {
             button.disabled = true;
-            button.textContent = '保存中...';
+            button.textContent = t('settings.weixin.saving_btn', '保存中...');
         }
 
         try {
@@ -817,12 +818,12 @@ const SettingsPage = {
             };
             this.renderAuthSettings(this.authSettings);
             this.setWeixinBridgeSaveStatus(
-                response.settings?.enabled ? '微信消息通知已开启。' : '微信消息通知已关闭。',
+                response.settings?.enabled ? t('settings.weixin.bridge_enabled', '微信消息通知已开启。') : t('settings.weixin.bridge_disabled', '微信消息通知已关闭。'),
                 'success'
             );
-            Utils.showToast(response.settings?.enabled ? '微信消息通知已开启' : '微信消息通知已关闭');
+            Utils.showToast(response.settings?.enabled ? t('settings.weixin.bridge_enabled_toast', '微信消息通知已开启') : t('settings.weixin.bridge_disabled_toast', '微信消息通知已关闭'));
         } catch (error) {
-            this.setWeixinBridgeSaveStatus(`保存失败：${error.message}`, 'error');
+            this.setWeixinBridgeSaveStatus(t('settings.weixin.bridge_save_failed', '保存失败：{0}').replace('{0}', error.message), 'error');
             Utils.showToast(error.message, 'error');
         } finally {
             if (button) {
@@ -847,20 +848,20 @@ const SettingsPage = {
 
         this.wolaiSummary.innerHTML = `
             <div>
-                <span>Token</span>
-                <strong>${Utils.escapeHTML(tokenConfigured ? '已配置' : '未配置')}</strong>
+                <span>${t('settings.wolai.summary_token', 'Token')}</span>
+                <strong>${Utils.escapeHTML(tokenConfigured ? t('settings.extractor.configured', '已配置') : t('settings.extractor.not_configured', '未配置'))}</strong>
             </div>
             <div>
-                <span>目标页面</span>
-                <strong>${Utils.escapeHTML(parentBlockID || '未填写')}</strong>
+                <span>${t('settings.wolai.summary_target', '目标页面')}</span>
+                <strong>${Utils.escapeHTML(parentBlockID || t('settings.wolai.summary_target_none', '未填写'))}</strong>
             </div>
             <div>
-                <span>OpenAPI</span>
+                <span>${t('settings.wolai.summary_api', 'OpenAPI')}</span>
                 <strong>${Utils.escapeHTML(baseURL)}</strong>
             </div>
             <div>
-                <span>导出方式</span>
-                <strong>新建页面并写入内容</strong>
+                <span>${t('settings.wolai.summary_export', '导出方式')}</span>
+                <strong>${t('settings.wolai.summary_export_method', '新建页面并写入内容')}</strong>
             </div>
         `;
     },
@@ -872,7 +873,7 @@ const SettingsPage = {
         }
         if (!this.weixinBridgeSaveStatus?.textContent) {
             this.setWeixinBridgeSaveStatus(
-                enabled ? '微信消息通知当前已开启。' : '微信消息通知当前已关闭。',
+                enabled ? t('settings.weixin.bridge_enabled_current', '微信消息通知当前已开启。') : t('settings.weixin.bridge_disabled_current', '微信消息通知当前已关闭。'),
                 enabled ? 'success' : ''
             );
         }
@@ -889,30 +890,30 @@ const SettingsPage = {
         const accountFull = String(binding.account_id || '').trim();
         const userIDFull = String(binding.user_id || '').trim();
         const endpointFull = String(binding.base_url || '').trim();
-        const bridgeStateLabel = bridgeEnabled ? '桥接已开启' : '桥接已关闭';
-        const bindingStateLabel = isBound ? '微信已绑定' : '尚未绑定';
+        const bridgeStateLabel = bridgeEnabled ? t('settings.weixin.summary_bridge_on', '桥接已开启') : t('settings.weixin.summary_bridge_off', '桥接已关闭');
+        const bindingStateLabel = isBound ? t('settings.weixin.summary_bound', '微信已绑定') : t('settings.weixin.summary_not_bound', '尚未绑定');
         const overviewTitle = bridgeEnabled && isBound
-            ? '微信入口已就绪'
-            : (bridgeEnabled ? '等待扫码绑定账号' : '桥接当前未启用');
+            ? t('settings.weixin.summary_ready', '微信入口已就绪')
+            : (bridgeEnabled ? t('settings.weixin.summary_wait_scan', '等待扫码绑定账号') : t('settings.weixin.summary_bridge_inactive', '桥接当前未启用'));
         const accountLabel = isBound
-            ? this.compactDisplayText(accountFull || '微信账号', 10, 9)
-            : '未绑定';
+            ? this.compactDisplayText(accountFull || t('settings.weixin.summary_account_label', '微信账号'), 10, 9)
+            : t('settings.weixin.summary_not_bound_account', '未绑定');
         const boundAtLabel = isBound && binding.bound_at
             ? Utils.formatDate(binding.bound_at)
-            : '未绑定';
+            : t('settings.weixin.summary_not_bound_account', '未绑定');
         const endpointLabel = endpointFull
             ? this.compactURLLabel(endpointFull)
-            : '使用当前桥接配置';
+            : t('settings.weixin.summary_endpoint_default', '使用当前桥接配置');
         const userIDLabel = userIDFull
             ? this.compactDisplayText(userIDFull, 10, 8)
-            : '未返回';
-        let detail = '当前未绑定微信账号，可先保存桥接开关，再生成二维码完成绑定。';
+            : t('settings.weixin.summary_user_id_none', '未返回');
+        let detail = t('settings.weixin.detail_not_bound', '当前未绑定微信账号，可先保存桥接开关，再生成二维码完成绑定。');
         if (bridgeEnabled && isBound) {
-            detail = '桥接和账号绑定都已就绪，可以直接通过微信上传 PDF、发送消息并触发自动解析。';
+            detail = t('settings.weixin.detail_ready', '桥接和账号绑定都已就绪，可以直接通过微信上传 PDF、发送消息并触发自动解析。');
         } else if (bridgeEnabled && !isBound) {
-            detail = '桥接已开启，但还没有绑定账号。生成二维码后扫码即可开始使用。';
+            detail = t('settings.weixin.detail_no_binding', '桥接已开启，但还没有绑定账号。生成二维码后扫码即可开始使用。');
         } else if (!bridgeEnabled && isBound) {
-            detail = '账号已绑定，但桥接处于关闭状态，当前不会接收或回复微信消息。';
+            detail = t('settings.weixin.detail_bridge_off', '账号已绑定，但桥接处于关闭状态，当前不会接收或回复微信消息。');
         }
 
         this.weixinBindingSummary.innerHTML = `
@@ -925,15 +926,15 @@ const SettingsPage = {
                 <p>${Utils.escapeHTML(detail)}</p>
             </section>
             <div class="weixin-summary-meta">
-                ${this.renderWeixinSummaryItem('绑定账号', accountLabel, accountFull || '未绑定')}
-                ${this.renderWeixinSummaryItem('绑定时间', boundAtLabel)}
-                ${this.renderWeixinSummaryItem('接入域名', endpointLabel, endpointFull || '使用当前桥接配置')}
-                ${this.renderWeixinSummaryItem('用户 ID', userIDLabel, userIDFull || '未返回')}
+                ${this.renderWeixinSummaryItem(t('settings.weixin.summary_account_label', '绑定账号'), accountLabel, accountFull || t('settings.weixin.summary_not_bound_account', '未绑定'))}
+                ${this.renderWeixinSummaryItem(t('settings.weixin.summary_bound_at', '绑定时间'), boundAtLabel)}
+                ${this.renderWeixinSummaryItem(t('settings.weixin.summary_endpoint', '接入域名'), endpointLabel, endpointFull || t('settings.weixin.summary_endpoint_default', '使用当前桥接配置'))}
+                ${this.renderWeixinSummaryItem(t('settings.weixin.summary_user_id', '用户 ID'), userIDLabel, userIDFull || t('settings.weixin.summary_user_id_none', '未返回'))}
             </div>
         `;
 
         if (this.startWeixinBindingButton) {
-            this.startWeixinBindingButton.textContent = isBound ? '重新绑定' : '开始绑定';
+            this.startWeixinBindingButton.textContent = isBound ? t('settings.weixin.rebind', '重新绑定') : t('settings.weixin.start_binding', '开始绑定');
         }
         if (this.unbindWeixinButton) {
             this.unbindWeixinButton.classList.toggle('hidden', !isBound);
@@ -991,7 +992,7 @@ const SettingsPage = {
             return;
         }
 
-        this.wolaiResultLink.innerHTML = `最新测试页面：<a href="${Utils.escapeHTML(normalizedURL)}" target="_blank" rel="noreferrer">${Utils.escapeHTML(normalizedURL)}</a>`;
+        this.wolaiResultLink.innerHTML = `${t('settings.wolai.result_link_label', '最新测试页面：')}<a href="${Utils.escapeHTML(normalizedURL)}" target="_blank" rel="noreferrer">${Utils.escapeHTML(normalizedURL)}</a>`;
         this.wolaiResultLink.classList.remove('is-success', 'is-error', 'is-saving');
     },
 
@@ -1001,10 +1002,10 @@ const SettingsPage = {
 
     async startWeixinBinding() {
         const button = this.startWeixinBindingButton;
-        const originalLabel = button?.textContent || '开始绑定';
+        const originalLabel = button?.textContent || t('settings.weixin.start_binding', '开始绑定');
         if (button) {
             button.disabled = true;
-            button.textContent = '生成二维码中...';
+            button.textContent = t('settings.weixin.qr_generating', '生成二维码中...');
         }
 
         this.stopWeixinBindingPolling();
@@ -1018,30 +1019,30 @@ const SettingsPage = {
             }
             if (this.weixinQRCodeLink) {
                 this.weixinQRCodeLink.href = result.qrcode_content || '#';
-                this.weixinQRCodeLink.textContent = result.qrcode_content || '二维码内容不可用';
+                this.weixinQRCodeLink.textContent = result.qrcode_content || t('settings.weixin.qr_content_unavailable', '二维码内容不可用');
             }
             this.setWeixinQRCodeVisible(true);
-            this.setWeixinBindingStatus(result.message || '请使用微信扫码完成绑定', 'saving');
+            this.setWeixinBindingStatus(result.message || t('settings.weixin.binding_wait', '请使用微信扫码完成绑定'), 'saving');
 
             if (!this.pendingWeixinQRCode) {
-                throw new Error('二维码会话为空，无法跟踪绑定状态');
+                throw new Error(t('settings.weixin.qr_session_empty', '二维码会话为空，无法跟踪绑定状态'));
             }
 
             this.scheduleWeixinBindingPoll(1200);
-            Utils.showToast('微信二维码已生成');
+            Utils.showToast(t('settings.weixin.qr_generated_toast', '微信二维码已生成'));
         } catch (error) {
             this.setWeixinBindingStatus(error.message, 'error');
             Utils.showToast(error.message, 'error');
         } finally {
             if (button) {
                 button.disabled = false;
-                button.textContent = this.authSettings?.weixin_binding?.bound ? '重新绑定' : (originalLabel || '开始绑定');
+                button.textContent = this.authSettings?.weixin_binding?.bound ? t('settings.weixin.rebind', '重新绑定') : (originalLabel || t('settings.weixin.start_binding', '开始绑定'));
             }
         }
     },
 
     async unbindWeixin() {
-        if (!confirm('确定要解除微信绑定吗？解除后将停止接收微信消息。')) return;
+        if (!confirm(t('settings.weixin.unbind_confirm', '确定要解除微信绑定吗？解除后将停止接收微信消息。'))) return;
         try {
             await API.unbindWeixin();
             if (this.authSettings) {
@@ -1051,7 +1052,7 @@ const SettingsPage = {
             this.pendingWeixinQRCode = '';
             this.setWeixinQRCodeVisible(false);
             this.setWeixinBindingStatus('');
-            Utils.showToast('微信绑定已解除');
+            Utils.showToast(t('settings.weixin.unbound_toast', '微信绑定已解除'));
         } catch (error) {
             Utils.showToast(error.message, 'error');
         }
@@ -1075,7 +1076,7 @@ const SettingsPage = {
         try {
             const result = await API.getWeixinBindingStatus(this.pendingWeixinQRCode);
             const status = result.status || 'wait';
-            const message = result.message || '等待微信扫码';
+            const message = result.message || t('settings.weixin.binding_wait', '等待微信扫码');
 
             if (status === 'confirmed') {
                 this.stopWeixinBindingPolling();
@@ -1087,7 +1088,7 @@ const SettingsPage = {
                 this.renderAuthSettings(this.authSettings);
                 this.setWeixinQRCodeVisible(false);
                 this.setWeixinBindingStatus(message, 'success');
-                Utils.showToast(message || '微信绑定成功');
+                Utils.showToast(message || t('settings.weixin.binding_success_toast', '微信绑定成功'));
                 return;
             }
 
@@ -1100,7 +1101,7 @@ const SettingsPage = {
             }
 
             this.setWeixinBindingStatus(
-                status === 'scaned' ? (message || '二维码已扫描，请在微信中确认登录') : message,
+                status === 'scaned' ? (message || t('settings.weixin.binding_scanned', '二维码已扫描，请在微信中确认登录')) : message,
                 'saving'
             );
             this.scheduleWeixinBindingPoll(status === 'scaned' ? 900 : 1500);
@@ -1115,36 +1116,36 @@ const SettingsPage = {
         const badge = this.versionStatusBadge(status.status, status.message);
         const currentVersion = status.current_version || 'dev';
         const currentDetail = status.build_time
-            ? `构建时间：${Utils.escapeHTML(Utils.formatDate(status.build_time))}`
-            : '构建时间未注入';
-        const latestVersion = status.latest_version || '暂未获取';
+            ? t('settings.version.build_time', '构建时间：{0}').replace('{0}', Utils.escapeHTML(Utils.formatDate(status.build_time)))
+            : t('settings.version.build_time_none', '构建时间未注入');
+        const latestVersion = status.latest_version || t('settings.version.not_fetched', '暂未获取');
         const latestDetail = status.published_at
-            ? `发布时间：${Utils.escapeHTML(Utils.formatDate(status.published_at))}`
-            : '尚无发布时间信息';
+            ? t('settings.version.publish_time', '发布时间：{0}').replace('{0}', Utils.escapeHTML(Utils.formatDate(status.published_at)))
+            : t('settings.version.publish_time_none', '尚无发布时间信息');
         const checkedAt = status.checked_at
             ? Utils.formatDate(status.checked_at)
-            : '尚未完成检查';
+            : t('settings.version.not_checked', '尚未完成检查');
 
         this.versionSummary.innerHTML = `
             <div>
-                <span>当前版本</span>
+                <span>${t('settings.version.current', '当前版本')}</span>
                 <strong>${Utils.escapeHTML(currentVersion)}</strong>
                 <p>${currentDetail}</p>
             </div>
             <div>
-                <span>检查结果</span>
+                <span>${t('settings.version.check_result', '检查结果')}</span>
                 <strong>${badge}</strong>
-                <p>${Utils.escapeHTML(status.message || '尚未检查最新版本')}</p>
+                <p>${Utils.escapeHTML(status.message || t('settings.version.no_check_message', '尚未检查最新版本'))}</p>
             </div>
             <div>
-                <span>最新正式版本</span>
+                <span>${t('settings.version.latest', '最新正式版本')}</span>
                 <strong>${Utils.escapeHTML(latestVersion)}</strong>
                 <p>${latestDetail}</p>
             </div>
             <div>
-                <span>最近检查</span>
+                <span>${t('settings.version.last_check', '最近检查')}</span>
                 <strong>${Utils.escapeHTML(checkedAt)}</strong>
-                <p>${status.latest_release_url ? `下载页面：<a href="${Utils.escapeHTML(status.latest_release_url)}" target="_blank" rel="noreferrer">${Utils.escapeHTML(status.latest_release_url)}</a>` : '暂无可用的 Release 链接'}</p>
+                <p>${status.latest_release_url ? `${t('settings.version.download_page', '下载页面：')}<a href="${Utils.escapeHTML(status.latest_release_url)}" target="_blank" rel="noreferrer">${Utils.escapeHTML(status.latest_release_url)}</a>` : t('settings.version.no_release_link', '暂无可用的 Release 链接')}</p>
             </div>
         `;
 
@@ -1159,10 +1160,10 @@ const SettingsPage = {
 
     versionStatusBadge(status, message) {
         const badges = {
-            latest: { label: '已是最新', tone: 'tone-success' },
-            update_available: { label: '发现更新', tone: 'tone-error' },
-            ahead: { label: '当前更高', tone: 'tone-info' },
-            unknown: { label: '无法判断', tone: 'tone-info' }
+            latest: { label: t('settings.version.badge_latest', '已是最新'), tone: 'tone-success' },
+            update_available: { label: t('settings.version.badge_update', '发现更新'), tone: 'tone-error' },
+            ahead: { label: t('settings.version.badge_ahead', '当前更高'), tone: 'tone-info' },
+            unknown: { label: t('settings.version.badge_unknown', '无法判断'), tone: 'tone-info' }
         };
         const badge = badges[status] || badges.unknown;
         return `<span class="status-badge ${badge.tone}" title="${Utils.escapeHTML(message || badge.label)}">${Utils.escapeHTML(badge.label)}</span>`;
@@ -1170,9 +1171,9 @@ const SettingsPage = {
 
     providerNoteText(provider) {
         const notes = {
-            openai: 'OpenAI 默认使用 Responses API。勾选传统模式后会切到 Chat Completions，以兼容多数 OpenAI 风格网关。',
-            anthropic: 'Anthropic 使用原生 Messages API，请填写兼容的 Base URL 和模型名。',
-            gemini: 'Gemini 使用 generateContent 接口，API Key 会通过 query 参数发送。'
+            openai: t('settings.ai.provider_note_openai', 'OpenAI 默认使用 Responses API。勾选传统模式后会切到 Chat Completions，以兼容多数 OpenAI 风格网关。'),
+            anthropic: t('settings.ai.provider_note_anthropic', 'Anthropic 使用原生 Messages API，请填写兼容的 Base URL 和模型名。'),
+            gemini: t('settings.ai.provider_note_gemini', 'Gemini 使用 generateContent 接口，API Key 会通过 query 参数发送。')
         };
         return notes[provider] || '';
     },
@@ -1194,7 +1195,7 @@ const SettingsPage = {
 
     renderAIModels() {
         if (!this.aiModelDraft.length) {
-            this.aiModelList.innerHTML = '<p class="muted">还没有模型，先新增一个。</p>';
+            this.aiModelList.innerHTML = `<p class="muted">${t('settings.ai.no_models', '还没有模型，先新增一个。')}</p>`;
             return;
         }
 
@@ -1207,12 +1208,12 @@ const SettingsPage = {
     },
 
     aiModelButtonTitle(model) {
-        return model.name || model.model || '未命名模型';
+        return model.name || model.model || t('settings.ai.unnamed_model', '未命名模型');
     },
 
     aiModelButtonMeta(model) {
         const provider = model.provider || 'openai';
-        const modelName = model.model || '未填写模型名';
+        const modelName = model.model || t('settings.ai.unnamed_model_id', '未填写模型名');
         return `${provider} / ${modelName}`;
     },
 
@@ -1227,9 +1228,9 @@ const SettingsPage = {
             overwritePromptInputs: false,
             overwriteRolePrompts: false
         });
-        this.setAIModelAutosaveStatus('已新增模型。', 'success');
+        this.setAIModelAutosaveStatus(t('settings.ai.model_added', '已新增模型。'), 'success');
         this.openAIModelEditor(nextModel.id);
-        Utils.showToast('已新增模型');
+        Utils.showToast(t('settings.ai.model_added_toast', '已新增模型'));
     },
 
     openAIModelEditor(target) {
@@ -1243,7 +1244,7 @@ const SettingsPage = {
 
         this.editingAIModelID = model.id;
         this.isHydratingAIModelEditor = true;
-        this.aiModelModalTitle.textContent = `编辑模型 · ${this.aiModelButtonTitle(model)}`;
+        this.aiModelModalTitle.textContent = t('settings.ai.edit_model', '编辑模型 · {0}').replace('{0}', this.aiModelButtonTitle(model));
         this.aiModelNameInput.value = model.name || '';
         this.aiModelProviderInput.value = model.provider || 'openai';
         this.aiModelIdentifierInput.value = model.model || '';
@@ -1251,10 +1252,10 @@ const SettingsPage = {
         this.aiModelBaseURLInput.value = model.base_url || '';
         this.aiModelAPIKeyInput.value = model.api_key || '';
         this.aiModelLegacyModeInput.checked = Boolean(model.openai_legacy_mode);
-        this.aiModelCheckStatus.textContent = model.check_status || '尚未检查';
+        this.aiModelCheckStatus.textContent = model.check_status || t('settings.ai.not_checked', '尚未检查');
         this.deleteAIModelButton.disabled = this.aiModelDraft.length <= 1;
         this.updateAIModelModalUI();
-        this.setAIModelEditorStatus('修改后自动保存。');
+        this.setAIModelEditorStatus(t('settings.ai.model_editor_autosave', '修改后自动保存。'));
         this.aiModelModal.classList.remove('hidden');
         document.body.classList.add('modal-open');
         this.isHydratingAIModelEditor = false;
@@ -1308,7 +1309,7 @@ const SettingsPage = {
 
     async deleteAIModel(modelID) {
         if (this.aiModelDraft.length <= 1) {
-            Utils.showToast('至少需要保留一个 AI 模型', 'error');
+            Utils.showToast(t('settings.ai.model_keep_one', '至少需要保留一个 AI 模型'), 'error');
             return;
         }
         const nextModels = this.aiModelDraft.filter((item) => item.id !== modelID);
@@ -1320,14 +1321,14 @@ const SettingsPage = {
             overwritePromptInputs: false,
             overwriteRolePrompts: false
         });
-        this.setAIModelAutosaveStatus('模型已删除。', 'success');
-        Utils.showToast('模型已删除');
+        this.setAIModelAutosaveStatus(t('settings.ai.model_deleted', '模型已删除。'), 'success');
+        Utils.showToast(t('settings.ai.model_deleted_toast', '模型已删除'));
     },
 
     async deleteCurrentAIModel() {
         if (!this.editingAIModelID) return;
         if (this.aiModelDraft.length <= 1) {
-            Utils.showToast('至少需要保留一个 AI 模型', 'error');
+            Utils.showToast(t('settings.ai.model_keep_one', '至少需要保留一个 AI 模型'), 'error');
             return;
         }
 
@@ -1348,7 +1349,7 @@ const SettingsPage = {
             translate_model_id: selection.translate_model_id || this.translateModelSelect?.value || ''
         };
         const options = this.aiModelDraft.map((item) => {
-            const label = `${item.name || '未命名模型'} · ${item.provider || 'openai'} / ${item.model || '未填写模型名'}`;
+            const label = `${item.name || t('settings.ai.unnamed_model', '未命名模型')} · ${item.provider || 'openai'} / ${item.model || t('settings.ai.unnamed_model_id', '未填写模型名')}`;
             return `<option value="${Utils.escapeHTML(item.id)}">${Utils.escapeHTML(label)}</option>`;
         }).join('');
 
@@ -1395,7 +1396,7 @@ const SettingsPage = {
             return emptyLabel;
         }
 
-        return `${matchedModel.name || '未命名模型'} · ${matchedModel.provider || 'openai'} / ${matchedModel.model || '未填写模型名'}`;
+        return `${matchedModel.name || t('settings.ai.unnamed_model', '未命名模型')} · ${matchedModel.provider || 'openai'} / ${matchedModel.model || t('settings.ai.unnamed_model_id', '未填写模型名')}`;
     },
 
     getAIPayloadModels(models = this.aiModelDraft) {
@@ -1414,7 +1415,7 @@ const SettingsPage = {
     async checkActiveAIModel() {
         const originalLabel = this.checkAIModelButton.textContent;
         this.checkAIModelButton.disabled = true;
-        this.checkAIModelButton.textContent = '检查中...';
+        this.checkAIModelButton.textContent = t('settings.ai.check_btn_checking', '检查中...');
 
         try {
             const model = this.readAIModelFromModal();
@@ -1430,11 +1431,11 @@ const SettingsPage = {
             });
             const statusText = `${result.message} · ${result.provider} / ${result.model} / ${result.mode}`;
             this.aiModelCheckStatus.textContent = statusText;
-            this.setAIModelEditorStatus('模型检查通过。', 'success');
-            Utils.showToast('模型检查通过');
+            this.setAIModelEditorStatus(t('settings.ai.check_passed', '模型检查通过。'), 'success');
+            Utils.showToast(t('settings.ai.check_passed_toast', '模型检查通过'));
         } catch (error) {
-            this.aiModelCheckStatus.textContent = `检查失败：${error.message}`;
-            this.setAIModelEditorStatus(`模型检查失败：${error.message}`, 'error');
+            this.aiModelCheckStatus.textContent = t('settings.ai.check_failed', '检查失败：{0}').replace('{0}', error.message);
+            this.setAIModelEditorStatus(t('settings.ai.check_failed_status', '模型检查失败：{0}').replace('{0}', error.message), 'error');
             Utils.showToast(error.message, 'error');
         } finally {
             this.checkAIModelButton.disabled = false;
@@ -1448,10 +1449,10 @@ const SettingsPage = {
         const usesManual = profile === 'manual';
         if (usesManual) {
             this.extractorSummary.innerHTML = `
-                <div><span>提取方案</span><strong>${Utils.escapeHTML(this.extractorProfileLabel(settings.extractor_profile))}</strong></div>
-                <div><span>图片提取</span><strong>关闭，仅保留手工标注</strong></div>
-                <div><span>全文处理</span><strong>上传后自动提取并保存 PDF 全文</strong></div>
-                <div><span>外部提取服务</span><strong>已隐藏，不使用</strong></div>
+                <div><span>${t('settings.extractor.summary_profile', '提取方案')}</span><strong>${Utils.escapeHTML(this.extractorProfileLabel(settings.extractor_profile))}</strong></div>
+                <div><span>${t('settings.extractor.summary_figure_extract', '图片提取')}</span><strong>${t('settings.extractor.summary_figure_off', '关闭，仅保留手工标注')}</strong></div>
+                <div><span>${t('settings.extractor.summary_fulltext', '全文处理')}</span><strong>${t('settings.extractor.summary_fulltext_auto', '上传后自动提取并保存 PDF 全文')}</strong></div>
+                <div><span>${t('settings.extractor.summary_external', '外部提取服务')}</span><strong>${t('settings.extractor.summary_external_hidden', '已隐藏，不使用')}</strong></div>
             `;
             return;
         }
@@ -1459,46 +1460,46 @@ const SettingsPage = {
             const figureModelLabel = this.aiModelDisplayLabel(
                 this.figureModelSelect?.value,
                 this.defaultModelSelect?.value,
-                '载入中...'
+                t('settings.version.loading_btn', '载入中...')
             );
             this.extractorSummary.innerHTML = `
-                <div><span>提取方案</span><strong>${Utils.escapeHTML(this.extractorProfileLabel(settings.extractor_profile))}</strong></div>
-                <div><span>全文来源</span><strong>${Utils.escapeHTML(this.extractorPDFTextSourceLabel(settings.pdf_text_source))}</strong></div>
-                <div><span>坐标提取模型</span><strong>${Utils.escapeHTML(figureModelLabel)}</strong></div>
-                <div><span>外部提取服务</span><strong>已隐藏，不使用</strong></div>
+                <div><span>${t('settings.extractor.summary_profile', '提取方案')}</span><strong>${Utils.escapeHTML(this.extractorProfileLabel(settings.extractor_profile))}</strong></div>
+                <div><span>${t('settings.extractor.summary_text_source', '全文来源')}</span><strong>${Utils.escapeHTML(this.extractorPDFTextSourceLabel(settings.pdf_text_source))}</strong></div>
+                <div><span>${t('settings.extractor.summary_coord_model', '坐标提取模型')}</span><strong>${Utils.escapeHTML(figureModelLabel)}</strong></div>
+                <div><span>${t('settings.extractor.summary_external', '外部提取服务')}</span><strong>${t('settings.extractor.summary_external_hidden', '已隐藏，不使用')}</strong></div>
             `;
             return;
         }
 
         this.extractorSummary.innerHTML = `
-            <div><span>提取方案</span><strong>${Utils.escapeHTML(this.extractorProfileLabel(settings.extractor_profile))}</strong></div>
-            <div><span>全文来源</span><strong>${Utils.escapeHTML(this.extractorPDFTextSourceLabel(settings.pdf_text_source))}</strong></div>
-            <div><span>生效的提取接口</span><strong class="settings-url-value">${Utils.escapeHTML(settings.effective_extractor_url || '未配置')}</strong></div>
-            <div><span>生效的任务接口</span><strong class="settings-url-value">${Utils.escapeHTML(settings.effective_jobs_url || '未配置')}</strong></div>
-            <div><span>上传字段名</span><strong>${Utils.escapeHTML(settings.extractor_file_field || 'file')}</strong></div>
-            <div><span>鉴权 Token</span><strong>${Utils.escapeHTML(settings.extractor_token ? '已配置' : '未配置')}</strong></div>
+            <div><span>${t('settings.extractor.summary_profile', '提取方案')}</span><strong>${Utils.escapeHTML(this.extractorProfileLabel(settings.extractor_profile))}</strong></div>
+            <div><span>${t('settings.extractor.summary_text_source', '全文来源')}</span><strong>${Utils.escapeHTML(this.extractorPDFTextSourceLabel(settings.pdf_text_source))}</strong></div>
+            <div><span>${t('settings.extractor.summary_effective_extract', '生效的提取接口')}</span><strong class="settings-url-value">${Utils.escapeHTML(settings.effective_extractor_url || t('settings.extractor.not_configured', '未配置'))}</strong></div>
+            <div><span>${t('settings.extractor.summary_effective_jobs', '生效的任务接口')}</span><strong class="settings-url-value">${Utils.escapeHTML(settings.effective_jobs_url || t('settings.extractor.not_configured', '未配置'))}</strong></div>
+            <div><span>${t('settings.extractor.summary_file_field', '上传字段名')}</span><strong>${Utils.escapeHTML(settings.extractor_file_field || 'file')}</strong></div>
+            <div><span>${t('settings.extractor.summary_token', '鉴权 Token')}</span><strong>${Utils.escapeHTML(settings.extractor_token ? t('settings.extractor.configured', '已配置') : t('settings.extractor.not_configured', '未配置'))}</strong></div>
         `;
     },
 
     extractorProfileLabel(value) {
         switch (String(value || '').trim()) {
             case 'manual':
-                return '手工';
+                return t('settings.extractor.profile_manual', '手工');
             case 'open_source_vision':
-                return '内置 LLM 坐标提取';
+                return t('settings.extractor.profile_builtin', '内置 LLM 坐标提取');
             case 'pdffigx_v1':
             default:
-                return '标准 pdffigx';
+                return t('settings.extractor.profile_pdffigx', '标准 pdffigx');
         }
     },
 
     extractorPDFTextSourceLabel(value) {
         switch (String(value || '').trim()) {
             case 'pdfjs':
-                return '浏览器 pdf.js';
+                return t('settings.extractor.text_source_pdfjs', '浏览器 pdf.js');
             case 'extractor':
             default:
-                return '解析服务返回';
+                return t('settings.extractor.text_source_extractor', '解析服务返回');
         }
     },
 
@@ -1565,27 +1566,27 @@ const SettingsPage = {
             const result = await requestBlob('/api/database/export');
             const saved = await Utils.saveBlobDownload(result.blob, result.filename || fallbackName);
             if (saved) {
-                Utils.showToast('数据库导出完成');
+                Utils.showToast(t('settings.db.export_done', '数据库导出完成'));
             }
         } catch (error) {
-            Utils.showToast(error.message || '数据库导出失败', 'error');
+            Utils.showToast(error.message || t('settings.db.export_failed', '数据库导出失败'), 'error');
         }
     },
 
     async importDatabase() {
         const file = this.importDbFile.files[0];
         if (!file) {
-            Utils.showToast('请选择要导入的数据库文件', 'error');
+            Utils.showToast(t('settings.db.import_no_file', '请选择要导入的数据库文件'), 'error');
             return;
         }
 
         const confirmed = await Utils.confirmTypedAction({
-            title: '覆盖导入数据库',
+            title: t('settings.db.import_confirm_title', '覆盖导入数据库'),
             badge: 'Import Override',
-            message: '导入数据库会用备份文件覆盖当前所有文献、图片、分组和标签。确认后将立即开始恢复。',
+            message: t('settings.db.import_confirm_message', '导入数据库会用备份文件覆盖当前所有文献、图片、分组和标签。确认后将立即开始恢复。'),
             keyword: 'IMPORT',
-            hint: '请输入 IMPORT 继续导入',
-            confirmLabel: '开始导入'
+            hint: t('settings.db.import_confirm_hint', '请输入 IMPORT 继续导入'),
+            confirmLabel: t('settings.db.import_confirm_label', '开始导入')
         });
         if (!confirmed) return;
 
@@ -1593,7 +1594,7 @@ const SettingsPage = {
             const formData = new FormData();
             formData.append('database', file);
             await API.importDatabase(formData);
-            Utils.showToast('数据库导入成功，页面将刷新');
+            Utils.showToast(t('settings.db.import_done', '数据库导入成功，页面将刷新'));
             setTimeout(() => window.location.reload(), 1500);
         } catch (error) {
             Utils.showToast(error.message, 'error');
@@ -1602,18 +1603,18 @@ const SettingsPage = {
 
     async purgeDatabase() {
         const confirmed = await Utils.confirmTypedAction({
-            title: '清空数据库',
+            title: t('settings.db.purge_confirm_title', '清空数据库'),
             badge: 'Danger Zone',
-            message: '这会删除所有文献、提取图片、分组和标签，并且不可恢复。该操作只适合在你明确要重置整个库时使用。',
+            message: t('settings.db.purge_confirm_message', '这会删除所有文献、提取图片、分组和标签，并且不可恢复。该操作只适合在你明确要重置整个库时使用。'),
             keyword: 'CLEAR',
-            hint: '请输入 CLEAR 继续清空数据库',
-            confirmLabel: '确认清空'
+            hint: t('settings.db.purge_confirm_hint', '请输入 CLEAR 继续清空数据库'),
+            confirmLabel: t('settings.db.purge_confirm_label', '确认清空')
         });
         if (!confirmed) return;
 
         try {
             await API.purgeLibrary();
-            Utils.showToast('数据库已清空');
+            Utils.showToast(t('settings.db.purge_done', '数据库已清空'));
         } catch (error) {
             Utils.showToast(error.message, 'error');
         }
@@ -1625,17 +1626,17 @@ const SettingsPage = {
         const confirmPassword = this.confirmPasswordInput.value.trim();
 
         if (!currentPassword || !newPassword || !confirmPassword) {
-            Utils.showToast('请填写所有密码字段', 'error');
+            Utils.showToast(t('settings.password.empty_fields', '请填写所有密码字段'), 'error');
             return;
         }
 
         if (newPassword.length < 6) {
-            Utils.showToast('新密码长度不能少于 6 位', 'error');
+            Utils.showToast(t('settings.password.too_short', '新密码长度不能少于 6 位'), 'error');
             return;
         }
 
         if (newPassword !== confirmPassword) {
-            Utils.showToast('两次输入的新密码不一致', 'error');
+            Utils.showToast(t('settings.password.mismatch', '两次输入的新密码不一致'), 'error');
             return;
         }
 
@@ -1644,7 +1645,7 @@ const SettingsPage = {
                 current_password: currentPassword,
                 new_password: newPassword
             });
-            Utils.showToast('密码修改成功，请使用新密码重新登录');
+            Utils.showToast(t('settings.password.changed_toast', '密码修改成功，请使用新密码重新登录'));
             // 清空表单
             this.currentPasswordInput.value = '';
             this.newPasswordInput.value = '';
@@ -1659,7 +1660,7 @@ const SettingsPage = {
     },
 
     async logout() {
-        const confirmed = await Utils.confirm('确定要登出吗？');
+        const confirmed = await Utils.confirm(t('settings.password.logout_confirm', '确定要登出吗？'));
         if (!confirmed) return;
 
         try {
@@ -1675,7 +1676,7 @@ const SettingsPage = {
         localStorage.removeItem('citebox_username');
         localStorage.removeItem('citebox_password');
 
-        Utils.showToast('已登出');
+        Utils.showToast(t('settings.password.logout_toast', '已登出'));
         setTimeout(() => {
             window.location.href = '/login';
         }, 1000);
