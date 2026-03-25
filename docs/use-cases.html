@@ -1,0 +1,1421 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CiteBox — 使用案例</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=Noto+Serif+SC:wght@400;600;700&family=DM+Sans:ital,wght@0,400;0,500;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --ink: #1a1a2e;
+      --parchment: #f5f0e8;
+      --gold: #c9a84c;
+      --gold-light: #e8d59a;
+      --deep-blue: #16213e;
+      --accent-blue: #0f3460;
+      --warm-gray: #8a8578;
+      --light-gray: #e8e3da;
+      --cream: #faf7f0;
+      --highlight: #e94560;
+      --wechat-green: #07c160;
+      --wechat-green-light: rgba(7, 193, 96, 0.1);
+      --shadow-soft: rgba(26, 26, 46, 0.08);
+      --shadow-medium: rgba(26, 26, 46, 0.15);
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+      font-size: 16px;
+    }
+
+    body {
+      font-family: 'DM Sans', 'Noto Serif SC', sans-serif;
+      background: var(--parchment);
+      color: var(--ink);
+      overflow-x: hidden;
+      line-height: 1.7;
+    }
+
+    /* Grain overlay */
+    body::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 9999;
+      opacity: 0.03;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    }
+
+    /* ─── Navigation ─── */
+    nav {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      padding: 1.2rem 3rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(245, 240, 232, 0.85);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--light-gray);
+      transition: all 0.4s ease;
+    }
+
+    nav.scrolled {
+      padding: 0.8rem 3rem;
+      box-shadow: 0 2px 30px var(--shadow-soft);
+    }
+
+    .nav-logo {
+      font-family: 'Cormorant Garamond', 'Noto Serif SC', serif;
+      font-size: 1.6rem;
+      font-weight: 700;
+      color: var(--deep-blue);
+      text-decoration: none;
+      letter-spacing: -0.02em;
+    }
+
+    .nav-logo span {
+      color: var(--gold);
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 2.5rem;
+      align-items: center;
+    }
+
+    .nav-links a {
+      text-decoration: none;
+      color: var(--warm-gray);
+      font-size: 0.88rem;
+      font-weight: 500;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      transition: color 0.3s;
+    }
+
+    .nav-links a:hover {
+      color: var(--ink);
+    }
+
+    .nav-cta {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.6rem 1.5rem;
+      background: var(--deep-blue);
+      color: var(--parchment) !important;
+      border-radius: 4px;
+      font-size: 0.82rem !important;
+      letter-spacing: 0.08em;
+      transition: background 0.3s, transform 0.2s !important;
+    }
+
+    .nav-cta:hover {
+      background: var(--accent-blue);
+      transform: translateY(-1px);
+    }
+
+    /* ─── Language toggle ─── */
+    .lang-toggle {
+      display: inline-flex;
+      align-items: center;
+      background: rgba(201, 168, 76, 0.1);
+      border: 1px solid rgba(201, 168, 76, 0.25);
+      border-radius: 100px;
+      padding: 0.2rem;
+      cursor: pointer;
+      gap: 0;
+      margin-left: -0.5rem;
+    }
+
+    .lang-btn {
+      padding: 0.25rem 0.7rem;
+      border-radius: 100px;
+      border: none;
+      background: transparent;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      color: var(--warm-gray);
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .lang-btn.active {
+      background: var(--gold);
+      color: white;
+      box-shadow: 0 2px 8px rgba(201, 168, 76, 0.3);
+    }
+
+    .lang-btn:hover:not(.active) {
+      color: var(--ink);
+    }
+
+    /* ─── Page hero ─── */
+    .page-hero {
+      padding: 10rem 3rem 5rem;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .page-hero::before {
+      content: '';
+      position: absolute;
+      top: -20%;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 80vw;
+      height: 80vw;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(201, 168, 76, 0.06) 0%, transparent 70%);
+    }
+
+    .page-hero-content {
+      position: relative;
+      z-index: 2;
+      max-width: 700px;
+      margin: 0 auto;
+    }
+
+    .page-hero .section-label {
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--gold);
+      margin-bottom: 1rem;
+    }
+
+    .page-hero h1 {
+      font-family: 'Cormorant Garamond', 'Noto Serif SC', serif;
+      font-size: clamp(2.5rem, 5vw, 4rem);
+      font-weight: 700;
+      line-height: 1.15;
+      color: var(--deep-blue);
+      margin-bottom: 1.2rem;
+    }
+
+    .page-hero h1 em {
+      font-style: italic;
+      color: var(--gold);
+      position: relative;
+    }
+
+    .page-hero h1 em::after {
+      content: '';
+      position: absolute;
+      bottom: 0.05em;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: var(--gold-light);
+      border-radius: 2px;
+    }
+
+    .page-hero p {
+      font-size: 1.1rem;
+      color: var(--warm-gray);
+      line-height: 1.8;
+    }
+
+    .breadcrumb {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 2rem;
+      font-size: 0.82rem;
+      color: var(--warm-gray);
+    }
+
+    .breadcrumb a {
+      color: var(--gold);
+      text-decoration: none;
+      transition: color 0.3s;
+    }
+
+    .breadcrumb a:hover {
+      color: var(--deep-blue);
+    }
+
+    .breadcrumb svg {
+      width: 14px;
+      height: 14px;
+      opacity: 0.4;
+    }
+
+    /* ─── Case card ─── */
+    .case-section {
+      padding: 0 3rem 7rem;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    .case-card {
+      background: var(--cream);
+      border: 1px solid var(--light-gray);
+      border-radius: 16px;
+      overflow: hidden;
+      transition: box-shadow 0.4s;
+    }
+
+    .case-card:hover {
+      box-shadow: 0 12px 50px var(--shadow-soft);
+    }
+
+    .case-header {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0;
+      min-height: 340px;
+    }
+
+    .case-header-visual {
+      background: linear-gradient(135deg, #07c160 0%, #06ad56 50%, #059a4c 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      overflow: hidden;
+      padding: 3rem;
+    }
+
+    .case-header-visual::before {
+      content: '';
+      position: absolute;
+      top: -30%;
+      right: -30%;
+      width: 60%;
+      height: 60%;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    .case-header-visual::after {
+      content: '';
+      position: absolute;
+      bottom: -20%;
+      left: -20%;
+      width: 50%;
+      height: 50%;
+      border-radius: 50%;
+      background: rgba(0, 0, 0, 0.06);
+    }
+
+    .chat-mockup {
+      position: relative;
+      z-index: 2;
+      width: 100%;
+      max-width: 280px;
+    }
+
+    .chat-window {
+      background: rgba(255, 255, 255, 0.95);
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+    }
+
+    .chat-titlebar {
+      background: #ededed;
+      padding: 0.6rem 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      border-bottom: 1px solid #ddd;
+    }
+
+    .chat-avatar {
+      width: 28px;
+      height: 28px;
+      border-radius: 4px;
+      background: var(--wechat-green);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 0.65rem;
+      font-weight: 700;
+    }
+
+    .chat-name {
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: #333;
+    }
+
+    .chat-messages {
+      padding: 1rem 0.8rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.6rem;
+      min-height: 180px;
+    }
+
+    .chat-msg {
+      max-width: 85%;
+      padding: 0.5rem 0.7rem;
+      border-radius: 6px;
+      font-size: 0.7rem;
+      line-height: 1.5;
+      animation: msgAppear 0.4s ease-out both;
+    }
+
+    .chat-msg.sent {
+      align-self: flex-end;
+      background: #95ec69;
+      color: #333;
+    }
+
+    .chat-msg.received {
+      align-self: flex-start;
+      background: white;
+      color: #333;
+      border: 1px solid #eee;
+    }
+
+    .chat-msg.file-msg {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: white;
+      border: 1px solid #eee;
+      align-self: flex-end;
+    }
+
+    .file-icon {
+      width: 28px;
+      height: 32px;
+      background: #e74c3c;
+      border-radius: 3px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 0.5rem;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    .file-info {
+      font-size: 0.65rem;
+      line-height: 1.4;
+    }
+
+    .file-name {
+      color: #333;
+      font-weight: 500;
+    }
+
+    .file-size {
+      color: #999;
+    }
+
+    @keyframes msgAppear {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .chat-msg:nth-child(1) { animation-delay: 0.2s; }
+    .chat-msg:nth-child(2) { animation-delay: 0.6s; }
+    .chat-msg:nth-child(3) { animation-delay: 1.0s; }
+    .chat-msg:nth-child(4) { animation-delay: 1.4s; }
+
+    .case-header-text {
+      padding: 3rem;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    .case-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.3rem 0.8rem;
+      background: var(--wechat-green-light);
+      border: 1px solid rgba(7, 193, 96, 0.2);
+      border-radius: 100px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: var(--wechat-green);
+      letter-spacing: 0.03em;
+      margin-bottom: 1.5rem;
+      width: fit-content;
+    }
+
+    .case-badge svg {
+      width: 14px;
+      height: 14px;
+    }
+
+    .case-header-text h2 {
+      font-family: 'Cormorant Garamond', 'Noto Serif SC', serif;
+      font-size: 2rem;
+      font-weight: 700;
+      color: var(--deep-blue);
+      line-height: 1.2;
+      margin-bottom: 1rem;
+    }
+
+    .case-header-text > p {
+      font-size: 0.95rem;
+      color: var(--warm-gray);
+      line-height: 1.8;
+    }
+
+    /* ─── Case body ─── */
+    .case-body {
+      padding: 3rem;
+      border-top: 1px solid var(--light-gray);
+    }
+
+    /* ─── Scenario description ─── */
+    .scenario {
+      max-width: 760px;
+      margin: 0 auto 3.5rem;
+    }
+
+    .scenario h3 {
+      font-family: 'Cormorant Garamond', 'Noto Serif SC', serif;
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--deep-blue);
+      margin-bottom: 0.8rem;
+    }
+
+    .scenario p {
+      font-size: 0.95rem;
+      color: var(--warm-gray);
+      line-height: 1.8;
+    }
+
+    /* ─── Setup steps ─── */
+    .setup-steps {
+      max-width: 760px;
+      margin: 0 auto 3.5rem;
+    }
+
+    .setup-steps h3 {
+      font-family: 'Cormorant Garamond', 'Noto Serif SC', serif;
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--deep-blue);
+      margin-bottom: 2rem;
+    }
+
+    .step {
+      display: grid;
+      grid-template-columns: 48px 1fr;
+      gap: 1.2rem;
+      margin-bottom: 2rem;
+      position: relative;
+    }
+
+    .step:not(:last-child)::after {
+      content: '';
+      position: absolute;
+      top: 48px;
+      left: 23px;
+      width: 2px;
+      bottom: -2rem;
+      background: linear-gradient(to bottom, var(--gold-light), transparent);
+    }
+
+    .step-num {
+      width: 48px;
+      height: 48px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(201, 168, 76, 0.1);
+      border: 1.5px solid var(--gold);
+      border-radius: 50%;
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 1.2rem;
+      font-weight: 700;
+      color: var(--gold);
+      flex-shrink: 0;
+    }
+
+    .step-content h4 {
+      font-family: 'Cormorant Garamond', 'Noto Serif SC', serif;
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: var(--deep-blue);
+      margin-bottom: 0.4rem;
+      padding-top: 0.2rem;
+    }
+
+    .step-content p {
+      font-size: 0.9rem;
+      color: var(--warm-gray);
+      line-height: 1.7;
+    }
+
+    .step-content .step-note {
+      margin-top: 0.6rem;
+      padding: 0.6rem 1rem;
+      background: rgba(201, 168, 76, 0.06);
+      border-left: 3px solid var(--gold-light);
+      border-radius: 0 6px 6px 0;
+      font-size: 0.82rem;
+      color: var(--warm-gray);
+      line-height: 1.6;
+    }
+
+    /* ─── Commands showcase ─── */
+    .commands-section {
+      max-width: 760px;
+      margin: 0 auto 3.5rem;
+    }
+
+    .commands-section h3 {
+      font-family: 'Cormorant Garamond', 'Noto Serif SC', serif;
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--deep-blue);
+      margin-bottom: 0.6rem;
+    }
+
+    .commands-section > p {
+      font-size: 0.9rem;
+      color: var(--warm-gray);
+      line-height: 1.7;
+      margin-bottom: 2rem;
+    }
+
+    .cmd-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+    }
+
+    .cmd-card {
+      padding: 1.5rem;
+      background: var(--parchment);
+      border: 1px solid var(--light-gray);
+      border-radius: 10px;
+      transition: all 0.3s ease;
+    }
+
+    .cmd-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px var(--shadow-soft);
+      border-color: var(--gold-light);
+    }
+
+    .cmd-card-header {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      margin-bottom: 0.8rem;
+    }
+
+    .cmd-card-icon {
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(201, 168, 76, 0.1);
+      border-radius: 8px;
+      color: var(--gold);
+      flex-shrink: 0;
+    }
+
+    .cmd-card-icon svg {
+      width: 16px;
+      height: 16px;
+    }
+
+    .cmd-card h4 {
+      font-family: 'Cormorant Garamond', 'Noto Serif SC', serif;
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: var(--deep-blue);
+    }
+
+    .cmd-card p {
+      font-size: 0.82rem;
+      color: var(--warm-gray);
+      line-height: 1.6;
+      margin-bottom: 0.8rem;
+    }
+
+    .cmd-example {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      padding: 0.4rem 0.7rem;
+      background: var(--deep-blue);
+      color: var(--gold-light);
+      border-radius: 5px;
+      display: inline-block;
+    }
+
+    /* ─── Chat demo ─── */
+    .chat-demo {
+      max-width: 760px;
+      margin: 0 auto 3.5rem;
+    }
+
+    .chat-demo h3 {
+      font-family: 'Cormorant Garamond', 'Noto Serif SC', serif;
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--deep-blue);
+      margin-bottom: 0.6rem;
+    }
+
+    .chat-demo > p {
+      font-size: 0.9rem;
+      color: var(--warm-gray);
+      line-height: 1.7;
+      margin-bottom: 2rem;
+    }
+
+    .demo-conversation {
+      background: #ededed;
+      border-radius: 12px;
+      padding: 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.8rem;
+    }
+
+    .demo-msg {
+      max-width: 75%;
+      padding: 0.65rem 0.9rem;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      line-height: 1.6;
+    }
+
+    .demo-msg.user {
+      align-self: flex-end;
+      background: #95ec69;
+      color: #333;
+    }
+
+    .demo-msg.bot {
+      align-self: flex-start;
+      background: white;
+      color: #333;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+    }
+
+    .demo-msg.bot pre {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.78rem;
+      white-space: pre-wrap;
+      margin: 0;
+      line-height: 1.7;
+    }
+
+    .demo-divider {
+      text-align: center;
+      font-size: 0.72rem;
+      color: #999;
+      padding: 0.3rem 0;
+    }
+
+    .demo-file {
+      align-self: flex-end;
+      display: flex;
+      align-items: center;
+      gap: 0.7rem;
+      padding: 0.65rem 0.9rem;
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+    }
+
+    .demo-file-icon {
+      width: 32px;
+      height: 38px;
+      background: #e74c3c;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 0.6rem;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    .demo-file-info .file-name {
+      font-size: 0.82rem;
+      color: #333;
+      font-weight: 500;
+    }
+
+    .demo-file-info .file-size {
+      font-size: 0.72rem;
+      color: #999;
+    }
+
+    /* ─── Feature summary ─── */
+    .feature-summary {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 2.5rem;
+      background: var(--parchment);
+      border: 1px solid var(--light-gray);
+      border-radius: 12px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .feature-summary::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, var(--wechat-green), var(--gold), var(--wechat-green));
+    }
+
+    .feature-summary h3 {
+      font-family: 'Cormorant Garamond', 'Noto Serif SC', serif;
+      font-size: 1.3rem;
+      font-weight: 700;
+      color: var(--deep-blue);
+      margin-bottom: 1.2rem;
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1.5rem;
+    }
+
+    .summary-item {
+      text-align: center;
+    }
+
+    .summary-num {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 2.2rem;
+      font-weight: 700;
+      color: var(--gold);
+      line-height: 1;
+      margin-bottom: 0.3rem;
+    }
+
+    .summary-label {
+      font-size: 0.82rem;
+      color: var(--warm-gray);
+    }
+
+    /* ─── Back link ─── */
+    .back-section {
+      padding: 0 3rem 5rem;
+      text-align: center;
+    }
+
+    .btn-back {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.6rem;
+      padding: 1rem 2rem;
+      background: var(--deep-blue);
+      color: var(--parchment);
+      text-decoration: none;
+      font-size: 0.9rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      border-radius: 6px;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 15px rgba(22, 33, 62, 0.25);
+    }
+
+    .btn-back:hover {
+      background: var(--accent-blue);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 25px rgba(22, 33, 62, 0.3);
+    }
+
+    .btn-back svg {
+      width: 18px;
+      height: 18px;
+      transition: transform 0.3s;
+    }
+
+    .btn-back:hover svg {
+      transform: translateX(-3px);
+    }
+
+    /* ─── Footer ─── */
+    footer {
+      background: var(--deep-blue);
+      color: rgba(245, 240, 232, 0.5);
+      padding: 3rem;
+      text-align: center;
+    }
+
+    .footer-logo {
+      font-family: 'Cormorant Garamond', 'Noto Serif SC', serif;
+      font-size: 1.3rem;
+      font-weight: 700;
+      color: var(--parchment);
+      margin-bottom: 0.5rem;
+    }
+
+    .footer-logo span {
+      color: var(--gold);
+    }
+
+    footer p {
+      font-size: 0.82rem;
+      line-height: 1.6;
+    }
+
+    footer a {
+      color: var(--gold);
+      text-decoration: none;
+      transition: opacity 0.3s;
+    }
+
+    footer a:hover {
+      opacity: 0.8;
+    }
+
+    .footer-links {
+      display: flex;
+      justify-content: center;
+      gap: 2rem;
+      margin-top: 1.5rem;
+    }
+
+    .footer-links a {
+      font-size: 0.8rem;
+      color: rgba(245, 240, 232, 0.4);
+      text-decoration: none;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      transition: color 0.3s;
+    }
+
+    .footer-links a:hover {
+      color: var(--gold);
+    }
+
+    /* ─── Scroll animations ─── */
+    .reveal {
+      opacity: 0;
+      transform: translateY(30px);
+      transition: opacity 0.7s ease, transform 0.7s ease;
+    }
+
+    .reveal.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .reveal-delay-1 { transition-delay: 0.1s; }
+    .reveal-delay-2 { transition-delay: 0.2s; }
+    .reveal-delay-3 { transition-delay: 0.3s; }
+    .reveal-delay-4 { transition-delay: 0.35s; }
+
+    /* ─── Responsive ─── */
+    @media (max-width: 900px) {
+      nav { padding: 1rem 1.5rem; }
+      .nav-links { gap: 1.2rem; }
+      .page-hero { padding: 8rem 1.5rem 3rem; }
+      .case-section { padding: 0 1.5rem 4rem; }
+      .case-header { grid-template-columns: 1fr; }
+      .case-header-visual { min-height: 260px; }
+      .case-body { padding: 2rem 1.5rem; }
+      .cmd-grid { grid-template-columns: 1fr; }
+      .summary-grid { grid-template-columns: 1fr; gap: 1rem; }
+      .back-section { padding: 0 1.5rem 4rem; }
+    }
+
+    @media (max-width: 600px) {
+      .nav-links a:not(.nav-cta):not(.lang-toggle) { display: none; }
+      .nav-links .lang-toggle { order: -1; }
+      .page-hero h1 { font-size: 2rem; }
+      .case-header-text { padding: 2rem 1.5rem; }
+      .demo-msg { max-width: 90%; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Navigation -->
+  <nav id="navbar">
+    <a href="index.html" class="nav-logo">Cite<span>Box</span></a>
+    <div class="nav-links">
+      <a href="index.html" data-i18n="nav.home">首页</a>
+      <a href="index.html#features" data-i18n="nav.features">功能</a>
+      <div class="lang-toggle" id="langToggle">
+        <button class="lang-btn active" data-lang="zh">中</button>
+        <button class="lang-btn" data-lang="en">EN</button>
+      </div>
+      <a href="index.html#download" class="nav-cta" data-i18n="nav.download">下载</a>
+    </div>
+  </nav>
+
+  <!-- Page hero -->
+  <section class="page-hero">
+    <div class="page-hero-content">
+      <div class="breadcrumb">
+        <a href="index.html" data-i18n="breadcrumb.home">首页</a>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+        <span data-i18n="breadcrumb.cases">使用案例</span>
+      </div>
+      <div class="section-label" data-i18n="page.label">USE CASES</div>
+      <h1 data-i18n="page.title" data-i18n-html="true">看看别人如何用 CiteBox<br>提升<em>研究效率</em></h1>
+      <p data-i18n="page.desc">真实场景，真实用法。从日常科研工作中发现 CiteBox 的更多可能。</p>
+    </div>
+  </section>
+
+  <!-- Case: WeChat ClawBot -->
+  <div class="case-section">
+    <div class="case-card reveal">
+      <div class="case-header">
+        <div class="case-header-visual">
+          <div class="chat-mockup">
+            <div class="chat-window">
+              <div class="chat-titlebar">
+                <div class="chat-avatar">CB</div>
+                <div class="chat-name">CiteBox Bot</div>
+              </div>
+              <div class="chat-messages">
+                <div class="chat-msg file-msg">
+                  <div class="file-icon">PDF</div>
+                  <div class="file-info">
+                    <div class="file-name">scRNA-seq_analysis.pdf</div>
+                    <div class="file-size">2.4 MB</div>
+                  </div>
+                </div>
+                <div class="chat-msg received" data-i18n="chat.imported">已导入论文「Single-cell RNA-seq reveals...」，共提取 8 张图表。</div>
+                <div class="chat-msg sent" data-i18n="chat.search">找一张 UMAP 图</div>
+                <div class="chat-msg received" data-i18n="chat.result">找到 2 张相关图表：<br>1. Fig.2a UMAP clustering<br>2. Fig.3b Cell type UMAP</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="case-header-text">
+          <div class="case-badge" data-i18n="case.badge">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+            WeChat ClawBot
+          </div>
+          <h2 data-i18n="case.title" data-i18n-html="true">微信里的文献管理助手</h2>
+          <p data-i18n="case.desc">通过微信 ClawBot 企业机器人，直接在手机上转发 PDF 论文，CiteBox 自动导入、解析图表、提取元数据。随时随地用聊天指令检索文献、浏览图表、向 AI 提问——把碎片时间变成高效阅读时间。</p>
+        </div>
+      </div>
+
+      <div class="case-body">
+        <!-- Scenario -->
+        <div class="scenario reveal">
+          <h3 data-i18n="scenario.title">使用场景</h3>
+          <p data-i18n="scenario.desc">你正在地铁上刷到一篇有趣的论文 PDF，或者同事在微信群里分享了一篇新文献。打开电脑太麻烦？直接把 PDF 转发给 CiteBox 的微信机器人，论文就会自动入库。等你到了实验室，打开 CiteBox 桌面端，文献已经整理好，图表也都提取完毕——随时开始深度阅读。</p>
+        </div>
+
+        <!-- Setup steps -->
+        <div class="setup-steps reveal">
+          <h3 data-i18n="setup.title">配置步骤</h3>
+
+          <div class="step">
+            <div class="step-num">1</div>
+            <div class="step-content">
+              <h4 data-i18n="setup.s1.title">部署 CiteBox 服务</h4>
+              <p data-i18n="setup.s1.desc">在你的服务器或本地电脑上启动 CiteBox 后端服务。确保服务可以访问外网，以便与微信 iLink Bot API 通信。</p>
+            </div>
+          </div>
+
+          <div class="step">
+            <div class="step-num">2</div>
+            <div class="step-content">
+              <h4 data-i18n="setup.s2.title">配置 PDF 提取方案</h4>
+              <p data-i18n="setup.s2.desc">在设置页面的「PDF 提取配置」中选择提取方案。默认的「手工」方案仅提取 PDF 全文，不会自动识别图表。推荐选择「内置 LLM 坐标提取」，并在「图片场景」模型中配置视觉模型，即可实现图表的自动检测与裁剪。</p>
+              <div class="step-note" data-i18n="setup.s2.note">推荐使用 Qwen/Qwen3-VL-32B-Instruct 作为视觉模型，该模型对论文图表的坐标提取效果较好。配置后，通过微信发送的 PDF 也会自动使用该方案提取图表。</div>
+            </div>
+          </div>
+
+          <div class="step">
+            <div class="step-num">3</div>
+            <div class="step-content">
+              <h4 data-i18n="setup.s3.title">绑定微信账号</h4>
+              <p data-i18n="setup.s3.desc">在 CiteBox 设置页面点击「绑定微信」，系统生成 iLink Bot 登录二维码。用微信扫码授权后，机器人自动绑定到你的 CiteBox 实例。</p>
+              <div class="step-note" data-i18n="setup.s3.note">CiteBox 使用微信 iLink Bot 企业机器人协议，绑定后你会在微信中看到一个名为 ClawBot 的联系人。</div>
+            </div>
+          </div>
+
+          <div class="step">
+            <div class="step-num">4</div>
+            <div class="step-content">
+              <h4 data-i18n="setup.s4.title">启用消息桥接</h4>
+              <p data-i18n="setup.s4.desc">在设置中开启「微信桥接」开关。CiteBox 会以后台轮询的方式持续监听微信消息，收到 PDF 文件时自动触发导入流程。</p>
+            </div>
+          </div>
+
+          <div class="step">
+            <div class="step-num">5</div>
+            <div class="step-content">
+              <h4 data-i18n="setup.s5.title">开始使用</h4>
+              <p data-i18n="setup.s5.desc">在微信中找到 ClawBot 联系人，直接发送 PDF 文件或文字指令。论文自动入库，图表自动提取，一切在后台完成。</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Commands -->
+        <div class="commands-section reveal">
+          <h3 data-i18n="cmd.title">聊天指令</h3>
+          <p data-i18n="cmd.desc">在微信中向 ClawBot 发送以下指令，即可远程操作你的文献库。也可以直接发送自然语言，AI 会自动理解你的意图并执行对应操作。</p>
+
+          <div class="cmd-grid">
+            <div class="cmd-card">
+              <div class="cmd-card-header">
+                <div class="cmd-card-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                </div>
+                <h4 data-i18n="cmd.search.title">搜索文献</h4>
+              </div>
+              <p data-i18n="cmd.search.desc">搜索论文或图表，支持中英文关键词，AI 智能匹配最相关的结果。</p>
+              <code class="cmd-example">/search 单细胞转录组</code>
+            </div>
+
+            <div class="cmd-card">
+              <div class="cmd-card-header">
+                <div class="cmd-card-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                </div>
+                <h4 data-i18n="cmd.figure.title">浏览图表</h4>
+              </div>
+              <p data-i18n="cmd.figure.desc">查看当前论文的所有图表，选择特定图表可查看高清预览图。</p>
+              <code class="cmd-example">/figures</code>
+            </div>
+
+            <div class="cmd-card">
+              <div class="cmd-card-header">
+                <div class="cmd-card-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+                </div>
+                <h4 data-i18n="cmd.ask.title">AI 问答</h4>
+              </div>
+              <p data-i18n="cmd.ask.desc">对当前论文提出问题，AI 基于论文全文生成回答，支持多轮对话。</p>
+              <code class="cmd-example">/ask 这篇文章用了什么分析方法？</code>
+            </div>
+
+            <div class="cmd-card">
+              <div class="cmd-card-header">
+                <div class="cmd-card-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+                </div>
+                <h4 data-i18n="cmd.more.title">更多指令</h4>
+              </div>
+              <p data-i18n="cmd.more.desc">查看最近导入的论文、为图表添加笔记、AI 解读图表、重置上下文等。</p>
+              <code class="cmd-example">/help</code>
+            </div>
+          </div>
+        </div>
+
+        <!-- Chat demo -->
+        <div class="chat-demo reveal">
+          <h3 data-i18n="demo.title">对话示例</h3>
+          <p data-i18n="demo.desc">以下是一个典型的使用场景：从转发 PDF 到检索图表、AI 问答的完整流程。</p>
+
+          <div class="demo-conversation">
+            <div class="demo-file">
+              <div class="demo-file-icon">PDF</div>
+              <div class="demo-file-info">
+                <div class="file-name">spatial_transcriptomics_2024.pdf</div>
+                <div class="file-size">3.1 MB</div>
+              </div>
+            </div>
+
+            <div class="demo-msg bot" data-i18n="demo.m1" data-i18n-html="true">
+              <pre>已导入论文「Spatial transcriptomics reveals cell-type organization in human brain」
+
+标题：Spatial transcriptomics reveals...
+期刊：Nature Neuroscience
+年份：2024
+图表：共提取 12 张
+
+发送 /figures 查看所有图表</pre>
+            </div>
+
+            <div class="demo-divider" data-i18n="demo.div1">—— 稍后 ——</div>
+
+            <div class="demo-msg user" data-i18n="demo.m2">有没有热图？</div>
+
+            <div class="demo-msg bot" data-i18n="demo.m3" data-i18n-html="true">
+              <pre>找到 3 张相关图表：
+
+1. Fig.4a 基因表达热图
+2. Fig.5c 细胞类型标志物热图
+3. Fig.S3  差异表达热图
+
+发送 /figure 1 查看详情</pre>
+            </div>
+
+            <div class="demo-msg user">/figure 1</div>
+
+            <div class="demo-msg bot" data-i18n="demo.m4" data-i18n-html="true"><pre>Fig.4a — Gene expression heatmap across spatial domains
+[图片预览]
+
+发送 /interpret 让 AI 解读此图</pre></div>
+
+            <div class="demo-msg user" data-i18n="demo.m5">/ask 这篇文章的主要发现是什么？</div>
+
+            <div class="demo-msg bot" data-i18n="demo.m6" data-i18n-html="true"><pre>根据论文内容，主要发现包括：
+
+1. 利用空间转录组技术揭示了人脑皮层中细胞类型的空间分布规律
+2. 发现了特定细胞亚群在不同脑区的富集模式
+3. 鉴定出若干新的空间特异性标志基因
+4. 构建了高分辨率的人脑细胞类型空间图谱</pre></div>
+          </div>
+        </div>
+
+        <!-- Feature summary -->
+        <div class="feature-summary reveal">
+          <h3 data-i18n="summary.title">微信桥接一览</h3>
+          <div class="summary-grid">
+            <div class="summary-item">
+              <div class="summary-num" data-i18n="summary.n1">12+</div>
+              <div class="summary-label" data-i18n="summary.l1">支持的聊天指令</div>
+            </div>
+            <div class="summary-item">
+              <div class="summary-num" data-i18n="summary.n2">AI</div>
+              <div class="summary-label" data-i18n="summary.l2">自然语言智能路由</div>
+            </div>
+            <div class="summary-item">
+              <div class="summary-num" data-i18n="summary.n3">0</div>
+              <div class="summary-label" data-i18n="summary.l3">配置成本（扫码即用）</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Back link -->
+  <div class="back-section">
+    <a href="index.html" class="btn-back">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+      <span data-i18n="back.cta">返回首页</span>
+    </a>
+  </div>
+
+  <!-- Footer -->
+  <footer>
+    <div class="footer-logo">Cite<span>Box</span></div>
+    <p data-i18n="footer.desc">开源学术文献管理工具 · 本地部署 · 数据自主</p>
+    <div class="footer-links">
+      <a href="https://github.com/xuzhougeng/citebox" target="_blank">GitHub</a>
+      <a href="https://github.com/xuzhougeng/citebox/releases" target="_blank" data-i18n="footer.download">下载</a>
+      <a href="https://github.com/xuzhougeng/citebox/issues" target="_blank" data-i18n="footer.feedback">反馈</a>
+    </div>
+  </footer>
+
+  <script>
+    // ─── i18n translations ───
+    const i18n = {
+      zh: {
+        'nav.home': '首页',
+        'nav.features': '功能',
+        'nav.download': '下载',
+        'breadcrumb.home': '首页',
+        'breadcrumb.cases': '使用案例',
+        'page.label': '使用案例',
+        'page.title': '看看别人如何用 CiteBox<br>提升<em>研究效率</em>',
+        'page.desc': '真实场景，真实用法。从日常科研工作中发现 CiteBox 的更多可能。',
+        'case.badge': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg> WeChat ClawBot',
+        'case.title': '微信里的文献管理助手',
+        'case.desc': '通过微信 ClawBot 企业机器人，直接在手机上转发 PDF 论文，CiteBox 自动导入、解析图表、提取元数据。随时随地用聊天指令检索文献、浏览图表、向 AI 提问——把碎片时间变成高效阅读时间。',
+        'chat.imported': '已导入论文「Single-cell RNA-seq reveals...」，共提取 8 张图表。',
+        'chat.search': '找一张 UMAP 图',
+        'chat.result': '找到 2 张相关图表：<br>1. Fig.2a UMAP clustering<br>2. Fig.3b Cell type UMAP',
+        'scenario.title': '使用场景',
+        'scenario.desc': '你正在地铁上刷到一篇有趣的论文 PDF，或者同事在微信群里分享了一篇新文献。打开电脑太麻烦？直接把 PDF 转发给 CiteBox 的微信机器人，论文就会自动入库。等你到了实验室，打开 CiteBox 桌面端，文献已经整理好，图表也都提取完毕——随时开始深度阅读。',
+        'setup.title': '配置步骤',
+        'setup.s1.title': '部署 CiteBox 服务',
+        'setup.s1.desc': '在你的服务器或本地电脑上启动 CiteBox 后端服务。确保服务可以访问外网，以便与微信 iLink Bot API 通信。',
+        'setup.s2.title': '配置 PDF 提取方案',
+        'setup.s2.desc': '在设置页面的「PDF 提取配置」中选择提取方案。默认的「手工」方案仅提取 PDF 全文，不会自动识别图表。推荐选择「内置 LLM 坐标提取」，并在「图片场景」模型中配置视觉模型，即可实现图表的自动检测与裁剪。',
+        'setup.s2.note': '推荐使用 Qwen/Qwen3-VL-32B-Instruct 作为视觉模型，该模型对论文图表的坐标提取效果较好。配置后，通过微信发送的 PDF 也会自动使用该方案提取图表。',
+        'setup.s3.title': '绑定微信账号',
+        'setup.s3.desc': '在 CiteBox 设置页面点击「绑定微信」，系统生成 iLink Bot 登录二维码。用微信扫码授权后，机器人自动绑定到你的 CiteBox 实例。',
+        'setup.s3.note': 'CiteBox 使用微信 iLink Bot 企业机器人协议，绑定后你会在微信中看到一个名为 ClawBot 的联系人。',
+        'setup.s4.title': '启用消息桥接',
+        'setup.s4.desc': '在设置中开启「微信桥接」开关。CiteBox 会以后台轮询的方式持续监听微信消息，收到 PDF 文件时自动触发导入流程。',
+        'setup.s5.title': '开始使用',
+        'setup.s5.desc': '在微信中找到 ClawBot 联系人，直接发送 PDF 文件或文字指令。论文自动入库，图表自动提取，一切在后台完成。',
+        'cmd.title': '聊天指令',
+        'cmd.desc': '在微信中向 ClawBot 发送以下指令，即可远程操作你的文献库。也可以直接发送自然语言，AI 会自动理解你的意图并执行对应操作。',
+        'cmd.search.title': '搜索文献',
+        'cmd.search.desc': '搜索论文或图表，支持中英文关键词，AI 智能匹配最相关的结果。',
+        'cmd.figure.title': '浏览图表',
+        'cmd.figure.desc': '查看当前论文的所有图表，选择特定图表可查看高清预览图。',
+        'cmd.ask.title': 'AI 问答',
+        'cmd.ask.desc': '对当前论文提出问题，AI 基于论文全文生成回答，支持多轮对话。',
+        'cmd.more.title': '更多指令',
+        'cmd.more.desc': '查看最近导入的论文、为图表添加笔记、AI 解读图表、重置上下文等。',
+        'demo.title': '对话示例',
+        'demo.desc': '以下是一个典型的使用场景：从转发 PDF 到检索图表、AI 问答的完整流程。',
+        'demo.m1': '<pre>已导入论文「Spatial transcriptomics reveals cell-type organization in human brain」\n\n标题：Spatial transcriptomics reveals...\n期刊：Nature Neuroscience\n年份：2024\n图表：共提取 12 张\n\n发送 /figures 查看所有图表</pre>',
+        'demo.m2': '有没有热图？',
+        'demo.m3': '<pre>找到 3 张相关图表：\n\n1. Fig.4a 基因表达热图\n2. Fig.5c 细胞类型标志物热图\n3. Fig.S3  差异表达热图\n\n发送 /figure 1 查看详情</pre>',
+        'demo.m4': '<pre>Fig.4a — Gene expression heatmap across spatial domains\n[图片预览]\n\n发送 /interpret 让 AI 解读此图</pre>',
+        'demo.m5': '/ask 这篇文章的主要发现是什么？',
+        'demo.m6': '<pre>根据论文内容，主要发现包括：\n\n1. 利用空间转录组技术揭示了人脑皮层中细胞类型的空间分布规律\n2. 发现了特定细胞亚群在不同脑区的富集模式\n3. 鉴定出若干新的空间特异性标志基因\n4. 构建了高分辨率的人脑细胞类型空间图谱</pre>',
+        'demo.div1': '—— 稍后 ——',
+        'summary.title': '微信桥接一览',
+        'summary.n1': '12+',
+        'summary.l1': '支持的聊天指令',
+        'summary.n2': 'AI',
+        'summary.l2': '自然语言智能路由',
+        'summary.n3': '0',
+        'summary.l3': '配置成本（扫码即用）',
+        'back.cta': '返回首页',
+        'footer.desc': '开源学术文献管理工具 · 本地部署 · 数据自主',
+        'footer.download': '下载',
+        'footer.feedback': '反馈',
+        '_title': 'CiteBox — 使用案例',
+        '_lang': 'zh-CN',
+      },
+      en: {
+        'nav.home': 'Home',
+        'nav.features': 'Features',
+        'nav.download': 'Download',
+        'breadcrumb.home': 'Home',
+        'breadcrumb.cases': 'Use Cases',
+        'page.label': 'USE CASES',
+        'page.title': 'See how others use CiteBox<br>to boost <em>research productivity</em>',
+        'page.desc': 'Real scenarios, real workflows. Discover what CiteBox can do for your daily research.',
+        'case.badge': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg> WeChat ClawBot',
+        'case.title': 'Your Literature Assistant in WeChat',
+        'case.desc': 'Forward PDF papers directly from your phone via WeChat ClawBot. CiteBox auto-imports, parses figures, and extracts metadata. Search your library, browse figures, and ask AI questions anytime — turn idle moments into productive reading time.',
+        'chat.imported': 'Imported "Single-cell RNA-seq reveals..." with 8 figures extracted.',
+        'chat.search': 'Find a UMAP plot',
+        'chat.result': 'Found 2 matching figures:<br>1. Fig.2a UMAP clustering<br>2. Fig.3b Cell type UMAP',
+        'scenario.title': 'The Scenario',
+        'scenario.desc': 'You\'re on the subway and spot an interesting PDF paper, or a colleague shares a new paper in a WeChat group. Too much trouble to open your laptop? Just forward the PDF to CiteBox\'s WeChat bot — the paper is auto-imported. When you arrive at the lab and open CiteBox desktop, everything is organized and figures are already extracted — ready for deep reading.',
+        'setup.title': 'Setup Guide',
+        'setup.s1.title': 'Deploy CiteBox Service',
+        'setup.s1.desc': 'Launch the CiteBox backend on your server or local machine. Ensure it has internet access to communicate with the WeChat iLink Bot API.',
+        'setup.s2.title': 'Configure PDF Extraction',
+        'setup.s2.desc': 'In the "PDF Extraction" settings, choose an extraction profile. The default "Manual" profile only extracts full text without automatic figure detection. We recommend selecting "Built-in LLM Coordinate Extraction" and configuring a vision model under "Figure Model" for automatic figure detection and cropping.',
+        'setup.s2.note': 'We recommend Qwen/Qwen3-VL-32B-Instruct as the vision model — it performs well at extracting figure coordinates from papers. Once configured, PDFs sent via WeChat will also use this profile for figure extraction.',
+        'setup.s3.title': 'Bind Your WeChat Account',
+        'setup.s3.desc': 'Click "Bind WeChat" in CiteBox settings. The system generates an iLink Bot login QR code. Scan with WeChat to authorize, and the bot is automatically linked to your CiteBox instance.',
+        'setup.s3.note': 'CiteBox uses the WeChat iLink Bot enterprise protocol. After binding, you\'ll see a contact named ClawBot in your WeChat.',
+        'setup.s4.title': 'Enable Message Bridge',
+        'setup.s4.desc': 'Toggle on "WeChat Bridge" in settings. CiteBox continuously polls for WeChat messages in the background and auto-triggers import when PDF files are received.',
+        'setup.s5.title': 'Start Using',
+        'setup.s5.desc': 'Find the ClawBot contact in WeChat and send PDF files or text commands. Papers are auto-imported, figures auto-extracted — all seamlessly in the background.',
+        'cmd.title': 'Chat Commands',
+        'cmd.desc': 'Send these commands to ClawBot in WeChat to remotely operate your library. You can also send natural language — AI automatically understands your intent and executes the right action.',
+        'cmd.search.title': 'Search Library',
+        'cmd.search.desc': 'Search papers or figures with Chinese/English keywords. AI intelligently matches the most relevant results.',
+        'cmd.figure.title': 'Browse Figures',
+        'cmd.figure.desc': 'View all figures of the current paper. Select a specific figure to see its high-res preview.',
+        'cmd.ask.title': 'AI Q&A',
+        'cmd.ask.desc': 'Ask questions about the current paper. AI generates answers based on the full text, supporting multi-turn conversations.',
+        'cmd.more.title': 'More Commands',
+        'cmd.more.desc': 'View recent papers, add notes to figures, AI figure interpretation, reset context, and more.',
+        'demo.title': 'Conversation Example',
+        'demo.desc': 'Here\'s a typical workflow: from forwarding a PDF to searching figures and AI Q&A.',
+        'demo.m1': '<pre>Imported "Spatial transcriptomics reveals cell-type organization in human brain"\n\nTitle: Spatial transcriptomics reveals...\nJournal: Nature Neuroscience\nYear: 2024\nFigures: 12 extracted\n\nSend /figures to view all figures</pre>',
+        'demo.m2': 'Any heatmaps?',
+        'demo.m3': '<pre>Found 3 matching figures:\n\n1. Fig.4a Gene expression heatmap\n2. Fig.5c Cell type marker heatmap\n3. Fig.S3  DE heatmap\n\nSend /figure 1 for details</pre>',
+        'demo.m4': '<pre>Fig.4a — Gene expression heatmap across spatial domains\n[Image preview]\n\nSend /interpret for AI analysis</pre>',
+        'demo.m5': '/ask What are the main findings?',
+        'demo.m6': '<pre>Based on the paper, the main findings include:\n\n1. Spatial transcriptomics reveals cell-type spatial organization in human cortex\n2. Identified specific cell subpopulation enrichment patterns across brain regions\n3. Discovered novel spatially-specific marker genes\n4. Constructed a high-resolution spatial cell-type atlas of the human brain</pre>',
+        'demo.div1': '— a moment later —',
+        'summary.title': 'WeChat Bridge at a Glance',
+        'summary.n1': '12+',
+        'summary.l1': 'Chat commands supported',
+        'summary.n2': 'AI',
+        'summary.l2': 'Natural language routing',
+        'summary.n3': '0',
+        'summary.l3': 'Config cost (scan & go)',
+        'back.cta': 'Back to Home',
+        'footer.desc': 'Open-source academic literature manager · Self-hosted · Data ownership',
+        'footer.download': 'Download',
+        'footer.feedback': 'Feedback',
+        '_title': 'CiteBox — Use Cases',
+        '_lang': 'en',
+      }
+    };
+
+    let currentLang = 'zh';
+
+    function setLang(lang) {
+      currentLang = lang;
+      const dict = i18n[lang];
+
+      document.querySelectorAll('[data-i18n]').forEach(el => {
+        const key = el.getAttribute('data-i18n');
+        if (dict[key] !== undefined) {
+          if (el.hasAttribute('data-i18n-html')) {
+            el.innerHTML = dict[key];
+          } else {
+            el.textContent = dict[key];
+          }
+        }
+      });
+
+      document.title = dict['_title'];
+      document.documentElement.lang = dict['_lang'];
+
+      document.querySelectorAll('.lang-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.lang === lang);
+      });
+
+      try { localStorage.setItem('citebox-lang', lang); } catch(e) {}
+    }
+
+    // Language toggle
+    document.getElementById('langToggle').addEventListener('click', (e) => {
+      const btn = e.target.closest('.lang-btn');
+      if (!btn || btn.classList.contains('active')) return;
+      setLang(btn.dataset.lang);
+    });
+
+    // Restore saved preference
+    try {
+      const saved = localStorage.getItem('citebox-lang');
+      if (saved && i18n[saved]) setLang(saved);
+    } catch(e) {}
+
+    // Navbar scroll effect
+    const navbar = document.getElementById('navbar');
+    window.addEventListener('scroll', () => {
+      navbar.classList.toggle('scrolled', window.scrollY > 50);
+    });
+
+    // Scroll reveal
+    const reveals = document.querySelectorAll('.reveal');
+    const revealObserver = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('visible');
+          revealObserver.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.15, rootMargin: '0px 0px -40px 0px' });
+
+    reveals.forEach(el => revealObserver.observe(el));
+  </script>
+</body>
+</html>
