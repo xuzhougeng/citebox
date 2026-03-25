@@ -14,6 +14,7 @@ import (
 	"github.com/xuzhougeng/citebox/internal/config"
 	"github.com/xuzhougeng/citebox/internal/desktopapp"
 	"github.com/xuzhougeng/citebox/internal/desktopicon"
+	"github.com/xuzhougeng/citebox/internal/desktopinstance"
 	"github.com/xuzhougeng/citebox/internal/desktopruntime"
 	"github.com/xuzhougeng/citebox/internal/logging"
 )
@@ -33,6 +34,27 @@ func main() {
 		logger.Error("failed to resolve desktop data directory", "error", err)
 		os.Exit(1)
 	}
+
+	instanceManager, err := desktopinstance.Acquire(desktopAppName)
+	if err != nil {
+		var alreadyRunningErr *desktopinstance.AlreadyRunningError
+		if errors.As(err, &alreadyRunningErr) {
+			if alreadyRunningErr.SignalErr != nil {
+				logger.Warn("desktop instance already running but activation request failed", "error", alreadyRunningErr.SignalErr)
+			} else {
+				logger.Info("desktop instance already running; requested existing window activation")
+			}
+			os.Exit(0)
+		}
+
+		logger.Error("failed to initialize desktop single-instance guard", "error", err)
+		os.Exit(1)
+	}
+	defer func() {
+		if err := instanceManager.Close(); err != nil {
+			logger.Warn("failed to close desktop single-instance guard", "error", err)
+		}
+	}()
 
 	webRoot, err := desktopapp.ResolveWebRoot()
 	if err != nil {
@@ -93,8 +115,19 @@ func main() {
 	if err := desktopruntime.Configure(w, desktopAppName, iconAssets); err != nil {
 		logger.Warn("failed to configure desktop runtime integrations", "error", err)
 	}
+	instanceManager.SetActivateHandler(func() {
+		w.Dispatch(func() {
+			if err := desktopruntime.ActivateWindow(w.Window()); err != nil {
+				logger.Warn("failed to activate existing desktop window", "error", err)
+			}
+		})
+	})
 	w.Navigate(baseURL)
 	w.Run()
+
+	if err := instanceManager.Close(); err != nil {
+		logger.Warn("failed to close desktop single-instance guard", "error", err)
+	}
 
 	if err := server.Close(); err != nil {
 		logger.Warn("failed to close desktop server", "error", err)

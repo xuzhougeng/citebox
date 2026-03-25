@@ -117,6 +117,14 @@ static void citebox_exit_app(HWND hwnd) {
 	}
 }
 
+static const char *citebox_activate_window(HWND hwnd) {
+	if (hwnd == NULL) {
+		return "missing window handle";
+	}
+	citebox_restore_window(hwnd);
+	return NULL;
+}
+
 static BOOL citebox_ensure_tray_icon(HWND hwnd) {
 	if (citebox_tray_visible) {
 		return TRUE;
@@ -304,5 +312,12 @@ func minimizeToTray(window unsafe.Pointer) error {
 
 func exitDesktopApp(window unsafe.Pointer) error {
 	C.citebox_exit_app((C.HWND)(window))
+	return nil
+}
+
+func ActivateWindow(window unsafe.Pointer) error {
+	if errMessage := C.citebox_activate_window((C.HWND)(window)); errMessage != nil {
+		return fmt.Errorf("activate window: %s", C.GoString(errMessage))
+	}
 	return nil
 }

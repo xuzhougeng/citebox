@@ -36,10 +36,20 @@ static void citebox_install_close_confirm(GtkWindow *window, const char *app_nam
 	}
 	g_signal_connect(G_OBJECT(window), "delete-event", G_CALLBACK(citebox_confirm_close), NULL);
 }
+
+static void citebox_activate_window(GtkWindow *window) {
+	if (window == NULL) {
+		return;
+	}
+	gtk_window_deiconify(window);
+	gtk_window_present(window);
+}
 */
 import "C"
 
 import (
+	"unsafe"
+
 	webview "github.com/webview/webview_go"
 	"github.com/xuzhougeng/citebox/internal/desktopicon"
 )
@@ -53,5 +63,10 @@ func Configure(w webview.WebView, _ string, _ desktopicon.Assets) error {
 	}
 
 	C.citebox_install_close_confirm((*C.GtkWindow)(w.Window()), nil)
+	return nil
+}
+
+func ActivateWindow(window unsafe.Pointer) error {
+	C.citebox_activate_window((*C.GtkWindow)(window))
 	return nil
 }

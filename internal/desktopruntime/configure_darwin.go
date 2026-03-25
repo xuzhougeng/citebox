@@ -487,6 +487,24 @@ static void citebox_exit_desktop_app(void *windowPtr) {
 		[[NSApplication sharedApplication] terminate:nil];
 	}
 }
+
+static const char *citebox_activate_window(void *windowPtr) {
+	@autoreleasepool {
+		NSWindow *window = (NSWindow *)windowPtr;
+		if (window == nil) {
+			return "missing window";
+		}
+
+		CiteBoxStatusController *controller = citebox_status_controller_for_window(window);
+		if (controller != nil) {
+			[controller openWindow:nil];
+			return NULL;
+		}
+
+		citebox_focus_window(window);
+		return NULL;
+	}
+}
 */
 import "C"
 
@@ -556,6 +574,13 @@ func minimizeToTray(window unsafe.Pointer) error {
 
 func exitDesktopApp(window unsafe.Pointer) error {
 	C.citebox_exit_desktop_app(window)
+	return nil
+}
+
+func ActivateWindow(window unsafe.Pointer) error {
+	if errMessage := C.citebox_activate_window(window); errMessage != nil {
+		return fmt.Errorf("activate window: %s", C.GoString(errMessage))
+	}
 	return nil
 }
 
