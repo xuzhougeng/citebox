@@ -1,0 +1,58 @@
+{
+    "_title": "Overview - CiteBox",
+
+    "index.hero_title": "Your Research at a Glance",
+    "index.hero_text": "Track paper processing progress, figure extraction status, and recent updates to stay on top of your workflow.",
+    "index.next_step": "Next: ",
+    "index.go_library": "Go to Library",
+    "index.go_guide": "View Guide",
+
+    "index.status_heading": "Processing Overview",
+    "index.status_desc": "Total papers, completion rate, and pending items at a glance.",
+
+    "index.recent_heading": "Recently Updated Papers",
+    "index.recent_desc": "Papers with recent activity. Click to view details.",
+    "index.view_all_papers": "View All Papers",
+
+    "index.quick_heading": "Quick Actions",
+    "index.quick_desc": "Jump directly to the workspace that matches your current task.",
+    "index.shortcut_upload_desc": "Add new papers to your library.",
+    "index.shortcut_figures_desc": "Browse figures, tags, and figure notes across papers.",
+    "index.shortcut_notes_desc": "Review paper notes, figure notes, and AI interpretations in one place.",
+    "index.shortcut_ai_desc": "Ask questions and organize insights around text and figures.",
+
+    "index.guide_heading": "Guide",
+    "index.guide_desc": "Learn about each module and the recommended workflow.",
+    "index.guide_teaser": "First time here? The guide page will help you get started quickly.",
+    "index.open_guide": "Open Guide",
+
+    "index.stat_total_papers": "Total Papers",
+    "index.stat_completed": "Completed",
+    "index.stat_processing": "Processing",
+    "index.stat_failed": "Failed",
+    "index.stat_total_figures": "Total Figures",
+    "index.stat_noted_figures": "Noted Figures",
+
+    "index.empty_title": "No papers yet",
+    "index.empty_desc": "Upload a PDF to get started. Recently updated papers will appear here.",
+    "index.upload_paper": "Upload Paper",
+
+    "index.click_to_view": "Click to view details",
+    "index.ungrouped": "Ungrouped",
+    "index.figures_unit": "figures",
+    "index.view_detail": "View Details",
+    "index.manual_annotate": "Manual Annotate",
+    "index.reextract": "Re-extract",
+    "index.reextract_submitted": "Paper resubmitted for extraction",
+
+    "hotkey.shortcut_hint": " (Hotkey {key})",
+
+    "update.badge": "Update Available",
+    "update.new_version_detected": "New version detected: {version}",
+    "update.current_version": "Current version",
+    "update.published_at": "Published: ",
+    "update.new_version_available": "A new release is available",
+    "update.version_message": "Current version is <strong>{current}</strong>. We recommend updating to <strong>{latest}</strong>.",
+    "update.later": "Later",
+    "update.now": "Update Now"
+}

@@ -1,3 +1,4 @@
+if (typeof window.t !== 'function') window.t = function(k,f){return f||k};
 const DashboardPage = {
     state: {
         recentPapers: [],
@@ -97,27 +98,27 @@ const DashboardPage = {
         const stats = this.state.stats;
         this.summaryStrip.innerHTML = `
             <div class="stat-card">
-                <span>文献总数</span>
+                <span>${t('index.stat_total_papers', '文献总数')}</span>
                 <strong>${stats.totalPapers}</strong>
             </div>
             <div class="stat-card">
-                <span>已完成</span>
+                <span>${t('index.stat_completed', '已完成')}</span>
                 <strong>${stats.completedPapers}</strong>
             </div>
             <div class="stat-card">
-                <span>处理中</span>
+                <span>${t('index.stat_processing', '处理中')}</span>
                 <strong>${stats.processingPapers}</strong>
             </div>
             <div class="stat-card">
-                <span>解析异常</span>
+                <span>${t('index.stat_failed', '解析异常')}</span>
                 <strong>${stats.failedPapers}</strong>
             </div>
             <div class="stat-card">
-                <span>图片总数</span>
+                <span>${t('index.stat_total_figures', '图片总数')}</span>
                 <strong>${stats.totalFigures}</strong>
             </div>
             <div class="stat-card">
-                <span>已写笔记图片</span>
+                <span>${t('index.stat_noted_figures', '已写笔记图片')}</span>
                 <strong>${stats.notedFigures}</strong>
             </div>
         `;
@@ -129,9 +130,9 @@ const DashboardPage = {
         if (!this.state.recentPapers.length) {
             this.recentPaperList.innerHTML = `
                 <div class="empty-state">
-                    <h3>还没有文献</h3>
-                    <p>先上传 PDF，系统会在这里展示最近更新的文献。</p>
-                    <a class="btn btn-primary" href="/upload">上传文献</a>
+                    <h3>${t('index.empty_title', '还没有文献')}</h3>
+                    <p>${t('index.empty_desc', '先上传 PDF，系统会在这里展示最近更新的文献。')}</p>
+                    <a class="btn btn-primary" href="/upload">${t('index.upload_paper', '上传文献')}</a>
                 </div>
             `;
             return;
@@ -143,21 +144,21 @@ const DashboardPage = {
             return `
                 <article class="recent-paper-row" data-paper-id="${paper.id}">
                     <div class="recent-paper-main">
-                        <div class="recent-paper-head" data-action="open" role="button" title="点击查看详情">
+                        <div class="recent-paper-head" data-action="open" role="button" title="${t('index.click_to_view', '点击查看详情')}">
                             <span class="status-pill ${statusClass}">${Utils.escapeHTML(Utils.statusLabel(paper.extraction_status))}</span>
                             <h3>${Utils.escapeHTML(paper.title)}</h3>
                         </div>
                         <div class="recent-paper-meta">
-                            <span>${Utils.escapeHTML(paper.group_name || '未分组')}</span>
-                            <span>${paper.figure_count || 0} 张图片</span>
+                            <span>${Utils.escapeHTML(paper.group_name || t('index.ungrouped', '未分组'))}</span>
+                            <span>${paper.figure_count || 0} ${t('index.figures_unit', '张图片')}</span>
                             <span>${Utils.formatDate(paper.updated_at || paper.created_at)}</span>
                         </div>
                         ${paper.extractor_message ? `<p class="notice ${statusClass} recent-paper-notice">${Utils.escapeHTML(paper.extractor_message)}</p>` : ''}
                     </div>
                     <div class="card-actions recent-paper-actions">
-                        <button class="btn btn-primary" type="button" data-action="open">查看详情</button>
-                        <a class="btn btn-outline" href="/manual?paper_id=${paper.id}">手动标注</a>
-                        ${(paper.extraction_status === 'failed' || paper.extraction_status === 'cancelled') ? '<button class="btn btn-outline" type="button" data-action="reextract">重新解析</button>' : ''}
+                        <button class="btn btn-primary" type="button" data-action="open">${t('index.view_detail', '查看详情')}</button>
+                        <a class="btn btn-outline" href="/manual?paper_id=${paper.id}">${t('index.manual_annotate', '手动标注')}</a>
+                        ${(paper.extraction_status === 'failed' || paper.extraction_status === 'cancelled') ? `<button class="btn btn-outline" type="button" data-action="reextract">${t('index.reextract', '重新解析')}</button>` : ''}
                     </div>
                 </article>
             `;
@@ -187,7 +188,7 @@ const DashboardPage = {
     async reextractPaper(id) {
         try {
             await API.reextractPaper(id);
-            Utils.showToast('文献已重新提交解析', 'info');
+            Utils.showToast(t('index.reextract_submitted', '文献已重新提交解析'), 'info');
             await this.loadData();
         } catch (error) {
             Utils.showToast(error.message, 'error');

@@ -13,18 +13,18 @@
         <div class="navbar-content">
             <a href="/" class="logo">CiteBox</a>
             <ul class="nav-links">
-                <li><a href="/" class="active">总览</a></li>
-                <li><a href="/library">文献库</a></li>
-                <li><a href="/figures">图片库</a></li>
-                <li><a href="/palettes">配色库</a></li>
-                <li><a href="/groups">分组</a></li>
-                <li><a href="/tags">标签</a></li>
-                <li><a href="/notes">笔记</a></li>
-                <li><a href="/ai">AI伴读</a></li>
-                <li><a href="/settings">配置</a></li>
+                <li><a href="/" class="active" data-i18n="nav.overview">总览</a></li>
+                <li><a href="/library" data-i18n="nav.library">文献库</a></li>
+                <li><a href="/figures" data-i18n="nav.figures">图片库</a></li>
+                <li><a href="/palettes" data-i18n="nav.palettes">配色库</a></li>
+                <li><a href="/groups" data-i18n="nav.groups">分组</a></li>
+                <li><a href="/tags" data-i18n="nav.tags">标签</a></li>
+                <li><a href="/notes" data-i18n="nav.notes">笔记</a></li>
+                <li><a href="/ai" data-i18n="nav.ai">AI伴读</a></li>
+                <li><a href="/settings" data-i18n="nav.settings">配置</a></li>
             </ul>
             <div class="nav-actions">
-                <a href="/upload" class="nav-cta">上传 PDF</a>
+                <a href="/upload" class="nav-cta" data-i18n="nav.upload_pdf">上传 PDF</a>
             </div>
         </div>
     </nav>
@@ -33,15 +33,15 @@
         <section class="hero">
             <div>
                 <p class="eyebrow">Research Dashboard</p>
-                <h1>一目了然掌握文献进度</h1>
-                <p class="hero-text">
+                <h1 data-i18n="index.hero_title">一目了然掌握文献进度</h1>
+                <p class="hero-text" data-i18n="index.hero_text">
                     查看文献处理进度、图片提取情况和最近更新，快速了解当前工作状态。
                 </p>
                 <p class="hero-inline-links">
-                    <span>下一步：</span>
-                    <a href="/library">进入文献库</a>
+                    <span data-i18n="index.next_step">下一步：</span>
+                    <a href="/library" data-i18n="index.go_library">进入文献库</a>
                     <span aria-hidden="true">/</span>
-                    <a href="/guide">查看功能说明</a>
+                    <a href="/guide" data-i18n="index.go_guide">查看功能说明</a>
                 </p>
             </div>
         </section>
@@ -50,8 +50,8 @@
             <div class="filters-card-head">
                 <div>
                     <p class="eyebrow">Status</p>
-                    <h2>当前处理概况</h2>
-                    <p>文献总量、解析完成度和待处理项一览。</p>
+                    <h2 data-i18n="index.status_heading">当前处理概况</h2>
+                    <p data-i18n="index.status_desc">文献总量、解析完成度和待处理项一览。</p>
                 </div>
             </div>
             <div id="dashboardSummaryStrip" class="summary-strip"></div>
@@ -63,10 +63,10 @@
                     <div class="filters-card-head">
                         <div>
                             <p class="eyebrow">Recent</p>
-                            <h2>最近更新的文献</h2>
-                            <p>最近有更新的文献，点击可查看详情。</p>
+                            <h2 data-i18n="index.recent_heading">最近更新的文献</h2>
+                            <p data-i18n="index.recent_desc">最近有更新的文献，点击可查看详情。</p>
                         </div>
-                        <a class="btn btn-secondary" href="/library">查看全部文献</a>
+                        <a class="btn btn-secondary" href="/library" data-i18n="index.view_all_papers">查看全部文献</a>
                     </div>
                     <div id="dashboardRecentPaperList" class="recent-paper-list"></div>
                 </section>
@@ -75,43 +75,43 @@
             <aside class="overview-side">
                 <section class="manager-card quick-actions-card">
                     <div class="manager-head">
-                        <h2>快捷入口</h2>
-                        <p>按你的当前任务，直接进入对应工作区。</p>
+                        <h2 data-i18n="index.quick_heading">快捷入口</h2>
+                        <p data-i18n="index.quick_desc">按你的当前任务，直接进入对应工作区。</p>
                     </div>
                     <div class="quick-link-stack">
                         <a class="shortcut-card compact" href="/upload">
                             <span class="eyebrow">Ingest</span>
-                            <h2>上传 PDF</h2>
-                            <p>添加新文献到你的库中。</p>
+                            <h2 data-i18n="nav.upload_pdf">上传 PDF</h2>
+                            <p data-i18n="index.shortcut_upload_desc">添加新文献到你的库中。</p>
                         </a>
                         <a class="shortcut-card compact" href="/figures">
                             <span class="eyebrow">Browse</span>
-                            <h2>图片库</h2>
-                            <p>跨文献浏览图片、标签和图片笔记。</p>
+                            <h2 data-i18n="nav.figures">图片库</h2>
+                            <p data-i18n="index.shortcut_figures_desc">跨文献浏览图片、标签和图片笔记。</p>
                         </a>
                         <a class="shortcut-card compact" href="/notes">
                             <span class="eyebrow">Notes</span>
-                            <h2>笔记</h2>
-                            <p>集中回看文献笔记、图片笔记和 AI 解读结果。</p>
+                            <h2 data-i18n="nav.notes">笔记</h2>
+                            <p data-i18n="index.shortcut_notes_desc">集中回看文献笔记、图片笔记和 AI 解读结果。</p>
                         </a>
                         <a class="shortcut-card compact" href="/ai">
                             <span class="eyebrow">Assist</span>
-                            <h2>AI伴读</h2>
-                            <p>围绕正文和图片继续提问与整理。</p>
+                            <h2 data-i18n="nav.ai">AI伴读</h2>
+                            <p data-i18n="index.shortcut_ai_desc">围绕正文和图片继续提问与整理。</p>
                         </a>
                     </div>
                 </section>
 
                 <section class="manager-card guide-teaser-card">
                     <div class="manager-head">
-                        <h2>功能说明</h2>
-                        <p>了解各模块的功能与推荐使用顺序。</p>
+                        <h2 data-i18n="index.guide_heading">功能说明</h2>
+                        <p data-i18n="index.guide_desc">了解各模块的功能与推荐使用顺序。</p>
                     </div>
-                    <p class="guide-teaser-text">
+                    <p class="guide-teaser-text" data-i18n="index.guide_teaser">
                         初次使用？功能说明页可以帮你快速上手整个系统。
                     </p>
                     <div class="card-actions">
-                        <a class="btn btn-primary" href="/guide">打开功能说明</a>
+                        <a class="btn btn-primary" href="/guide" data-i18n="index.open_guide">打开功能说明</a>
                     </div>
                 </section>
             </aside>
@@ -120,12 +120,13 @@
 
     <div id="paperModal" class="modal-shell hidden">
         <div class="modal-dialog">
-            <button id="closePaperModal" class="modal-close" type="button" aria-label="关闭">×</button>
+            <button id="closePaperModal" class="modal-close" type="button" data-i18n-aria-label="btn.close" aria-label="关闭">×</button>
             <div id="paperModalBody"></div>
         </div>
     </div>
 
     <script src="/static/js/theme.js"></script>
+    <script src="/static/js/i18n.js"></script>
     <script src="/static/js/utils.js"></script>
     <script src="/static/js/api.js"></script>
     <script src="/static/js/paper-viewer.js"></script>
