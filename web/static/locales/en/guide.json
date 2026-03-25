@@ -1,0 +1,33 @@
+{
+    "_title": "Guide - CiteBox",
+
+    "guide.hero_title": "Features & User Guide",
+    "guide.hero_text": "Learn about each module and the recommended workflow to get started quickly.",
+    "guide.hero_inline_links": "<span>Continue browsing:</span><a href=\"/library\">Go to Library</a><span aria-hidden=\"true\">/</span><a href=\"/\">Back to Overview</a>",
+
+    "guide.workflow_title": "Recommended Workflow",
+
+    "guide.step_1_title": "Upload PDF",
+    "guide.step_1_desc": "Upload a PDF and the system will automatically parse and extract figures.",
+    "guide.step_2_title": "Browse Library",
+    "guide.step_2_desc": "Filter and browse papers, click into details to view full text and figures.",
+    "guide.step_3_title": "Explore Figures",
+    "guide.step_3_desc": "Browse figures from all papers, add tags or write notes for each figure.",
+    "guide.step_4_title": "Take Notes",
+    "guide.step_4_desc": "Write down your reading insights for easy searching and review later.",
+    "guide.step_5_title": "AI Reader",
+    "guide.step_5_desc": "Ask AI questions about the full text and figures to deepen understanding.",
+
+    "guide.feature_overview_title": "Overview",
+    "guide.feature_overview_desc": "Shows total papers, parsing progress, accumulated figures and notes, and recently updated papers.",
+    "guide.feature_library_title": "Library",
+    "guide.feature_library_desc": "Filter and browse papers, click into details to view full text and figures.",
+    "guide.feature_figures_title": "Figures",
+    "guide.feature_figures_desc": "Organize tags and notes by figure, managing knowledge from a visual perspective.",
+    "guide.feature_notes_title": "Notes",
+    "guide.feature_notes_desc": "View paper notes and figure notes in one place, with searchable descriptions and AI analysis results.",
+    "guide.feature_tags_groups_title": "Groups & Tags",
+    "guide.feature_tags_groups_desc": "Groups categorize items (e.g. by project), tags provide multi-dimensional labels (e.g. by method); paper tags and figure tags are independent.",
+    "guide.feature_ai_title": "AI Reader",
+    "guide.feature_ai_desc": "Feed full text and figures to AI to summarize, explain, and record key points."
+}

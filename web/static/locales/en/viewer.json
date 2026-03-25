@@ -1,0 +1,25 @@
+{
+    "_title": "Viewer - CiteBox",
+
+    "viewer.btn_back": "Back",
+    "viewer.kind_label": "File Viewer",
+    "viewer.loading": "Loading...",
+    "viewer.image_hint": "Scroll to zoom, hold left or middle button to drag",
+    "viewer.reset_view": "Reset View",
+
+    "viewer.err_title_failed": "View Failed - CiteBox",
+    "viewer.err_kind_label": "File Viewer",
+    "viewer.err_cannot_open": "Cannot open resource",
+    "viewer.err_cannot_open_title": "Cannot open this resource",
+    "viewer.err_invalid_resource": "The resource URL is invalid or unsupported.",
+    "viewer.err_missing_src": "Missing resource URL.",
+    "viewer.err_cross_origin": "Only resources from this CiteBox instance are supported.",
+    "viewer.err_image_only": "Only original images from the figure library are supported.",
+    "viewer.err_pdf_only": "Only paper PDF resources are supported.",
+    "viewer.err_unsupported_kind": "Unsupported resource type.",
+
+    "viewer.label_image": "Image Viewer",
+    "viewer.label_image_default": "Image",
+    "viewer.label_pdf": "PDF Viewer",
+    "viewer.label_pdf_default": "PDF Document"
+}

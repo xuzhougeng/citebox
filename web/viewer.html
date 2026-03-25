@@ -171,14 +171,14 @@
 <body class="viewer-page">
     <div class="viewer-shell">
         <header class="viewer-toolbar">
-            <button id="viewerCloseButton" class="btn btn-outline" type="button">返回</button>
+            <button id="viewerCloseButton" class="btn btn-outline" type="button" data-i18n="viewer.btn_back">返回</button>
             <div class="viewer-meta">
-                <span id="viewerKindLabel">文件查看</span>
-                <strong id="viewerTitle">正在加载...</strong>
+                <span id="viewerKindLabel" data-i18n="viewer.kind_label">文件查看</span>
+                <strong id="viewerTitle" data-i18n="viewer.loading">正在加载...</strong>
             </div>
             <div id="viewerToolbarActions" class="viewer-toolbar-actions" hidden>
-                <span id="viewerImageHint" class="viewer-image-hint">滚轮缩放，按住左键或中键拖动</span>
-                <button id="viewerResetButton" class="btn btn-outline" type="button" disabled>复原视图</button>
+                <span id="viewerImageHint" class="viewer-image-hint" data-i18n="viewer.image_hint">滚轮缩放，按住左键或中键拖动</span>
+                <button id="viewerResetButton" class="btn btn-outline" type="button" disabled data-i18n="viewer.reset_view">复原视图</button>
             </div>
         </header>
         <main id="viewerStage" class="viewer-stage" aria-live="polite"></main>
@@ -186,5 +186,6 @@
 
     <script src="/static/js/viewer.js"></script>
     <script src="/static/js/theme.js"></script>
+    <script src="/static/js/i18n.js"></script>
 </body>
 </html>
