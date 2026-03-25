@@ -1,7 +1,7 @@
 const BrowserUI = {
     renderTagChips(tags = []) {
         if (!tags.length) {
-            return '<span class="muted">无标签</span>';
+            return `<span class="muted">${Utils.escapeHTML(t('figures.label_no_tags', '无标签'))}</span>`;
         }
         return tags.map((tag) => `<span class="chip" style="--chip-color:${tag.color}">${Utils.escapeHTML(tag.name)}</span>`).join('');
     },
@@ -10,7 +10,7 @@ const BrowserUI = {
         const { compact = false } = options;
         const list = Array.isArray(colors) ? colors.filter((color) => String(color || '').trim()) : [];
         if (!list.length) {
-            return '<span class="figure-preview-empty">暂无配色</span>';
+            return `<span class="figure-preview-empty">${Utils.escapeHTML(t('palettes.label_no_palette', '暂无配色'))}</span>`;
         }
         return `
             <div class="palette-swatch-list ${compact ? 'is-compact' : ''}">
@@ -26,7 +26,7 @@ const BrowserUI = {
 
     renderPaletteValues(colors = []) {
         const list = Array.isArray(colors) ? colors.filter((color) => String(color || '').trim()) : [];
-        return list.length ? Utils.escapeHTML(list.join(' · ')) : '暂无配色';
+        return list.length ? Utils.escapeHTML(list.join(' · ')) : t('palettes.label_no_palette', '暂无配色');
     },
 
     renderPaperCard(paper) {
@@ -41,20 +41,20 @@ const BrowserUI = {
                         <h3>${Utils.escapeHTML(paper.title)}</h3>
                     </div>
                     <div class="paper-list-meta">
-                        <span class="paper-list-meta-item paper-list-meta-file" data-action="open" role="button" title="点击查看详情">
-                            <span class="paper-list-meta-label">文件</span>
+                        <span class="paper-list-meta-item paper-list-meta-file" data-action="open" role="button" title="${Utils.escapeHTML(t('figures.meta_click_detail', '点击查看详情'))}">
+                            <span class="paper-list-meta-label">${Utils.escapeHTML(t('figures.meta_file', '文件'))}</span>
                             <span class="paper-list-meta-value">${Utils.escapeHTML(paper.original_filename)}</span>
                         </span>
                         <span class="paper-list-meta-item">
-                            <span class="paper-list-meta-label">分组</span>
-                            <span class="paper-list-meta-value">${Utils.escapeHTML(paper.group_name || '未分组')}</span>
+                            <span class="paper-list-meta-label">${Utils.escapeHTML(t('figures.meta_group', '分组'))}</span>
+                            <span class="paper-list-meta-value">${Utils.escapeHTML(paper.group_name || t('figures.meta_no_group', '未分组'))}</span>
                         </span>
                         <span class="paper-list-meta-item">
-                            <span class="paper-list-meta-label">图片</span>
+                            <span class="paper-list-meta-label">${Utils.escapeHTML(t('figures.meta_figures', '图片'))}</span>
                             <span class="paper-list-meta-value">${paper.figure_count || 0}</span>
                         </span>
                         <span class="paper-list-meta-item">
-                            <span class="paper-list-meta-label">更新</span>
+                            <span class="paper-list-meta-label">${Utils.escapeHTML(t('figures.meta_updated', '更新'))}</span>
                             <span class="paper-list-meta-value">${Utils.formatDate(paper.updated_at || paper.created_at)}</span>
                         </span>
                     </div>
@@ -68,16 +68,17 @@ const BrowserUI = {
         `;
     },
 
-    renderFigureNotePreview(noteText = '', emptyText = '还没有笔记，可把 AI 解读或人工观察先记在这里。', options = {}) {
+    renderFigureNotePreview(noteText = '', emptyText = '', options = {}) {
         const { interactive = false } = options;
+        const resolvedEmptyText = emptyText || t('figures.note_empty_text', '还没有笔记，可把 AI 解读或人工观察先记在这里。');
         const interactiveClass = interactive ? ' figure-preview-note-action' : '';
         const interactiveAttrs = interactive ? ' data-action="note" role="button" tabindex="0"' : '';
         const normalized = String(noteText || '').replace(/\s+/g, ' ').trim();
         if (!normalized) {
             return `
                 <div class="figure-preview-note is-empty${interactiveClass}"${interactiveAttrs}>
-                    <span class="figure-preview-note-label">图片笔记</span>
-                    <p class="figure-preview-note-text">${Utils.escapeHTML(emptyText)}</p>
+                    <span class="figure-preview-note-label">${Utils.escapeHTML(t('figures.label_figure_note', '图片笔记'))}</span>
+                    <p class="figure-preview-note-text">${Utils.escapeHTML(resolvedEmptyText)}</p>
                 </div>
             `;
         }
@@ -85,7 +86,7 @@ const BrowserUI = {
         const excerpt = normalized.length > 120 ? `${normalized.slice(0, 120)}...` : normalized;
         return `
             <div class="figure-preview-note${interactiveClass}"${interactiveAttrs}>
-                <span class="figure-preview-note-label">图片笔记</span>
+                <span class="figure-preview-note-label">${Utils.escapeHTML(t('figures.label_figure_note', '图片笔记'))}</span>
                 <p class="figure-preview-note-text">${Utils.escapeHTML(excerpt)}</p>
             </div>
         `;
@@ -96,12 +97,12 @@ const BrowserUI = {
             mediaAction = 'preview',
             primaryAction = 'note',
             showNotesPreview = false,
-            emptyNotesText = '还没有笔记，可把 AI 解读或人工观察先记在这里。'
+            emptyNotesText = ''
         } = options;
 
         const hasNotes = Boolean(String(figure.notes_text || '').trim());
         const hasPalette = Number(figure.palette_count || 0) > 0 || (figure.palette_colors || []).length > 0;
-        const mediaLabel = mediaAction === 'note' ? '查看笔记' : '查看大图';
+        const mediaLabel = mediaAction === 'note' ? t('figures.label_view_notes', '查看笔记') : t('figures.label_view_large', '查看大图');
         const figureLabel = figure.display_label || `Fig ${figure.figure_index || '-'}`;
         const notePreview = showNotesPreview
             ? BrowserUI.renderFigureNotePreview(figure.notes_text, emptyNotesText, { interactive: true })
@@ -111,27 +112,27 @@ const BrowserUI = {
             <article class="figure-preview-card" data-paper-id="${figure.paper_id}" data-figure-index="${index}">
                 <div class="figure-preview-stage">
                     <button class="figure-preview-media" type="button" data-action="${mediaAction}" aria-label="${mediaLabel}">
-                        <img src="${figure.image_url}" alt="${Utils.escapeHTML(figure.paper_title || '提取图片')}">
+                        <img src="${figure.image_url}" alt="${Utils.escapeHTML(figure.paper_title || t('figures.label_extracted_image', '提取图片'))}">
                     </button>
                     <div class="figure-preview-badges">
-                        <span class="figure-badge figure-badge-strong">第 ${figure.page_number || '-'} 页</span>
+                        <span class="figure-badge figure-badge-strong">${Utils.escapeHTML(t('figures.badge_page', '第 {page} 页').replace('{page}', figure.page_number || '-'))}</span>
                         <span class="figure-badge">${Utils.escapeHTML(figureLabel)}</span>
-                        ${hasNotes ? '<span class="figure-badge figure-badge-accent">有笔记</span>' : ''}
-                        ${hasPalette ? '<span class="figure-badge figure-badge-accent">有配色</span>' : ''}
-                        ${figure.parent_figure_id ? '<span class="figure-badge">子图</span>' : ''}
-                        ${figure.source === 'manual' ? '<span class="figure-badge">人工提取</span>' : ''}
+                        ${hasNotes ? `<span class="figure-badge figure-badge-accent">${Utils.escapeHTML(t('figures.badge_has_notes', '有笔记'))}</span>` : ''}
+                        ${hasPalette ? `<span class="figure-badge figure-badge-accent">${Utils.escapeHTML(t('figures.badge_has_palette', '有配色'))}</span>` : ''}
+                        ${figure.parent_figure_id ? `<span class="figure-badge">${Utils.escapeHTML(t('figures.badge_subfigure', '子图'))}</span>` : ''}
+                        ${figure.source === 'manual' ? `<span class="figure-badge">${Utils.escapeHTML(t('figures.badge_manual', '人工提取'))}</span>` : ''}
                     </div>
                 </div>
                 <div class="figure-preview-body">
                     <div class="figure-preview-head">
-                        <span class="figure-preview-label">来源文献</span>
+                        <span class="figure-preview-label">${Utils.escapeHTML(t('figures.label_source_paper', '来源文献'))}</span>
                         <div class="figure-preview-title-row">
                             <strong class="figure-preview-title figure-preview-title-action" data-action="paper" role="button" tabindex="0">${Utils.escapeHTML(figure.paper_title)}</strong>
-                            <a class="figure-preview-origin-link" href="${Utils.resourceViewerURL('image', figure.image_url)}">原图</a>
+                            <a class="figure-preview-origin-link" href="${Utils.resourceViewerURL('image', figure.image_url)}">${Utils.escapeHTML(t('figures.label_original', '原图'))}</a>
                         </div>
                     </div>
                     <div class="figure-preview-tags ${figure.tags?.length ? '' : 'is-empty'}">
-                        ${figure.tags?.length ? BrowserUI.renderTagChips(figure.tags || []) : '<span class="figure-preview-empty">无标签</span>'}
+                        ${figure.tags?.length ? BrowserUI.renderTagChips(figure.tags || []) : `<span class="figure-preview-empty">${Utils.escapeHTML(t('figures.label_no_tags', '无标签'))}</span>`}
                     </div>
                     ${notePreview}
                 </div>
@@ -312,7 +313,7 @@ const FiguresPage = {
     async loadGroups() {
         const payload = await API.listGroups();
         const selected = String(this.state.filters.group_id || '');
-        this.groupFilter.innerHTML = '<option value="">全部分组</option>' + (payload.groups || []).map((group) => `
+        this.groupFilter.innerHTML = `<option value="">${Utils.escapeHTML(t('figures.filter_all_groups', '全部分组'))}</option>` + (payload.groups || []).map((group) => `
             <option value="${group.id}" ${String(group.id) === selected ? 'selected' : ''}>${Utils.escapeHTML(group.name)}</option>
         `).join('');
     },
@@ -320,7 +321,7 @@ const FiguresPage = {
     async loadTags() {
         const payload = await API.listTags({ scope: 'figure' });
         const selected = String(this.state.filters.tag_id || '');
-        this.tagFilter.innerHTML = '<option value="">全部图片标签</option>' + (payload.tags || []).map((tag) => `
+        this.tagFilter.innerHTML = `<option value="">${Utils.escapeHTML(t('figures.filter_all_tags', '全部图片标签'))}</option>` + (payload.tags || []).map((tag) => `
             <option value="${tag.id}" ${String(tag.id) === selected ? 'selected' : ''}>${Utils.escapeHTML(tag.name)}</option>
         `).join('');
     },
@@ -347,15 +348,15 @@ const FiguresPage = {
         this.figures = figures;
         this.state.totalPages = totalPages;
         this.summaryStrip.innerHTML = `
-            <div class="stat-card"><span>筛选结果</span><strong>${payload.total || 0}</strong></div>
-            <div class="stat-card"><span>当前页图片</span><strong>${figures.length}</strong></div>
-            <div class="stat-card"><span>来源分组筛选</span><strong>${Utils.escapeHTML(this.groupFilter.selectedOptions[0]?.textContent || '全部分组')}</strong></div>
-            <div class="stat-card"><span>图片标签筛选</span><strong>${Utils.escapeHTML(this.tagFilter.selectedOptions[0]?.textContent || '全部图片标签')}</strong></div>
+            <div class="stat-card"><span>${Utils.escapeHTML(t('figures.stat_results', '筛选结果'))}</span><strong>${payload.total || 0}</strong></div>
+            <div class="stat-card"><span>${Utils.escapeHTML(t('figures.stat_current_page', '当前页图片'))}</span><strong>${figures.length}</strong></div>
+            <div class="stat-card"><span>${Utils.escapeHTML(t('figures.stat_group_filter', '来源分组筛选'))}</span><strong>${Utils.escapeHTML(this.groupFilter.selectedOptions[0]?.textContent || t('figures.filter_all_groups', '全部分组'))}</strong></div>
+            <div class="stat-card"><span>${Utils.escapeHTML(t('figures.stat_tag_filter', '图片标签筛选'))}</span><strong>${Utils.escapeHTML(this.tagFilter.selectedOptions[0]?.textContent || t('figures.filter_all_tags', '全部图片标签'))}</strong></div>
         `;
         this.pageControls.innerHTML = this.state.totalPages > 1 ? `
-            <button class="btn btn-outline" type="button" data-page-step="-1" ${this.state.page <= 1 ? 'disabled' : ''}>上一页</button>
-            <span class="figure-page-indicator">第 ${this.state.page} / ${this.state.totalPages} 页</span>
-            <button class="btn btn-outline" type="button" data-page-step="1" ${this.state.page >= this.state.totalPages ? 'disabled' : ''}>下一页</button>
+            <button class="btn btn-outline" type="button" data-page-step="-1" ${this.state.page <= 1 ? 'disabled' : ''}>${Utils.escapeHTML(t('figures.btn_prev_page', '上一页'))}</button>
+            <span class="figure-page-indicator">${Utils.escapeHTML(t('figures.page_indicator', '第 {current} / {total} 页').replace('{current}', this.state.page).replace('{total}', this.state.totalPages))}</span>
+            <button class="btn btn-outline" type="button" data-page-step="1" ${this.state.page >= this.state.totalPages ? 'disabled' : ''}>${Utils.escapeHTML(t('figures.btn_next_page', '下一页'))}</button>
         ` : '';
         this.grid.innerHTML = figures.length
             ? figures.map((figure, index) => BrowserUI.renderFigureCard(figure, index, {
@@ -363,7 +364,7 @@ const FiguresPage = {
                 primaryAction: 'note',
                 showNotesPreview: true
             })).join('')
-            : '<div class="empty-state"><h3>没有可展示的图片</h3><p>先上传文献，或者调整筛选条件。</p></div>';
+            : `<div class="empty-state"><h3>${Utils.escapeHTML(t('figures.empty_title', '没有可展示的图片'))}</h3><p>${Utils.escapeHTML(t('figures.empty_text', '先上传文献，或者调整筛选条件。'))}</p></div>`;
         BrowserUI.renderPagination(this.pagination, this.state.page, this.state.totalPages);
     },
 
@@ -444,7 +445,7 @@ const PalettesPage = {
 
             const paletteID = Number(card.dataset.paletteId || 0);
             const palette = this.paletteByID(paletteID);
-            const figureLabel = card.dataset.figureLabel || '当前子图';
+            const figureLabel = card.dataset.figureLabel || t('palettes.label_subfigure', '当前子图');
             const colors = String(card.dataset.paletteColors || '').split(',').map((item) => item.trim()).filter(Boolean);
 
             if (action.dataset.action === 'save-caption' && palette) {
@@ -452,12 +453,12 @@ const PalettesPage = {
                 return;
             }
             if (action.dataset.action === 'copy-hex') {
-                await this.copyText(colors.join(', '), `${figureLabel} HEX 已复制`);
+                await this.copyText(colors.join(', '), t('palettes.msg_hex_copied', '{label} HEX 已复制').replace('{label}', figureLabel));
                 return;
             }
             if (action.dataset.action === 'copy-css') {
                 const cssText = colors.map((color, index) => `--palette-${index + 1}: ${color};`).join('\n');
-                await this.copyText(cssText, `${figureLabel} CSS 变量已复制`);
+                await this.copyText(cssText, t('palettes.msg_css_copied', '{label} CSS 变量已复制').replace('{label}', figureLabel));
                 return;
             }
             if (action.dataset.action === 'source-figure' && palette) {
@@ -485,7 +486,7 @@ const PalettesPage = {
     async loadGroups() {
         const payload = await API.listGroups();
         const selected = String(this.state.filters.group_id || '');
-        this.groupFilter.innerHTML = '<option value="">全部分组</option>' + (payload.groups || []).map((group) => `
+        this.groupFilter.innerHTML = `<option value="">${Utils.escapeHTML(t('palettes.filter_all_groups', '全部分组'))}</option>` + (payload.groups || []).map((group) => `
             <option value="${group.id}" ${String(group.id) === selected ? 'selected' : ''}>${Utils.escapeHTML(group.name)}</option>
         `).join('');
     },
@@ -503,12 +504,12 @@ const PalettesPage = {
     currentSortLabel() {
         switch (this.state.filters.sort_by) {
         case 'created_at':
-            return '按配色创建时间';
+            return t('palettes.sort_created_at', '按配色创建时间');
         case 'paper_created_at_figure_index':
-            return '按文献创建时间，文献内按 Fig 顺序';
+            return t('palettes.sort_paper_created_at', '按文献创建时间，文献内按 Fig 顺序');
         case 'updated_at':
         default:
-            return '按配色更新时间';
+            return t('palettes.sort_updated_at', '按配色更新时间');
         }
     },
 
@@ -545,7 +546,7 @@ const PalettesPage = {
         const saving = button.dataset.saving === 'true';
 
         button.disabled = saving || draftCaption === currentCaption;
-        button.textContent = saving ? '保存中...' : '保存说明';
+        button.textContent = saving ? t('palettes.btn_saving_caption', '保存中...') : t('palettes.btn_save_caption', '保存说明');
     },
 
     savedCaptionFromPayload(payload, figureID, fallback = '') {
@@ -592,7 +593,7 @@ const PalettesPage = {
             });
             const savedCaption = this.savedCaptionFromPayload(payload, figureID, draftCaption);
             this.syncPaletteCaption(figureID, savedCaption);
-            Utils.showToast('子图说明已保存');
+            Utils.showToast(t('palettes.msg_caption_saved', '子图说明已保存'));
         } catch (error) {
             Utils.showToast(error.message, 'error');
         } finally {
@@ -607,13 +608,13 @@ const PalettesPage = {
 
     sourceFigureLabel(palette) {
         const label = String(palette?.parent_display_label || palette?.figure_display_label || '').trim();
-        return label || '来源主图';
+        return label || t('palettes.label_source_main_figure', '来源主图');
     },
 
     sourceFigureSummary(palette) {
         const label = this.sourceFigureLabel(palette);
         const pageNumber = Number(palette?.page_number || 0);
-        return pageNumber > 0 ? `第 ${pageNumber} 页 · ${label}` : label;
+        return pageNumber > 0 ? t('palettes.label_page_source', '第 {page} 页 · {label}').replace('{page}', pageNumber).replace('{label}', label) : label;
     },
 
     paletteViewerFigures(paper) {
@@ -632,14 +633,14 @@ const PalettesPage = {
     async openSourceFigure(palette) {
         const paperID = Number(palette?.paper_id || 0);
         if (!paperID) {
-            Utils.showToast('当前配色缺少来源文献信息', 'error');
+            Utils.showToast(t('palettes.msg_no_source', '当前配色缺少来源文献信息'), 'error');
             return;
         }
 
         const paper = await API.getPaper(paperID);
         const figures = this.paletteViewerFigures(paper);
         if (!figures.length) {
-            Utils.showToast('当前文献还没有可打开的主图', 'error');
+            Utils.showToast(t('palettes.msg_no_main_figure', '当前文献还没有可打开的主图'), 'error');
             return;
         }
 
@@ -662,9 +663,9 @@ const PalettesPage = {
     },
 
     renderPaletteCard(palette) {
-        const figureLabel = palette.figure_display_label || '子图';
-        const parentLabel = palette.parent_display_label ? ` · 来自 ${palette.parent_display_label}` : '';
-        const groupLabel = palette.group_name || '未分组';
+        const figureLabel = palette.figure_display_label || t('palettes.label_subfigure', '子图');
+        const parentLabel = palette.parent_display_label ? ` · ${t('palettes.label_from_parent', '来自 {label}').replace('{label}', palette.parent_display_label)}` : '';
+        const groupLabel = palette.group_name || t('palettes.label_no_group', '未分组');
         const caption = this.normalizedCaption(palette.figure_caption);
         const sourceFigureSummary = this.sourceFigureSummary(palette);
         return `
@@ -673,7 +674,7 @@ const PalettesPage = {
                     <img src="${palette.image_url}" alt="${Utils.escapeHTML(`${palette.paper_title} ${figureLabel}`)}">
                     <div class="palette-card-badges">
                         <span class="figure-badge figure-badge-strong">${Utils.escapeHTML(figureLabel)}</span>
-                        <span class="figure-badge">第 ${palette.page_number || '-'} 页</span>
+                        <span class="figure-badge">${Utils.escapeHTML(t('palettes.badge_page', '第 {page} 页').replace('{page}', palette.page_number || '-'))}</span>
                         <span class="figure-badge">${Utils.escapeHTML(groupLabel)}</span>
                     </div>
                 </div>
@@ -681,34 +682,34 @@ const PalettesPage = {
                     <div class="palette-card-head">
                         <div>
                             <p class="palette-card-kicker">${Utils.escapeHTML(figureLabel)}${Utils.escapeHTML(parentLabel)}</p>
-                            <h3>${Utils.escapeHTML(palette.name || `${figureLabel} 配色`)}</h3>
+                            <h3>${Utils.escapeHTML(palette.name || `${figureLabel} ${t('palettes.label_palette_suffix', '配色')}`)}</h3>
                         </div>
                         <span class="palette-card-date">${Utils.formatDate(palette.updated_at || palette.created_at)}</span>
                     </div>
                     <p class="palette-card-paper" data-action="source-figure" role="button" tabindex="0">${Utils.escapeHTML(sourceFigureSummary)}</p>
                     <p class="palette-card-paper-meta">${Utils.escapeHTML(palette.paper_title)}</p>
                     <div class="palette-card-caption-editor">
-                        <label class="palette-card-caption-label" for="paletteCaptionInput${palette.id}">子图说明</label>
+                        <label class="palette-card-caption-label" for="paletteCaptionInput${palette.id}">${Utils.escapeHTML(t('palettes.label_caption', '子图说明'))}</label>
                         <textarea
                             id="paletteCaptionInput${palette.id}"
                             class="form-textarea palette-card-caption-input"
                             rows="4"
-                            placeholder="这个子图还没有单独说明。"
+                            placeholder="${Utils.escapeHTML(t('palettes.caption_placeholder', '这个子图还没有单独说明。'))}"
                             data-palette-caption-input
                         >${Utils.escapeHTML(caption)}</textarea>
                         <div class="palette-card-caption-actions">
-                            <span class="palette-card-caption-hint">说明会参与检索；按 Ctrl/Cmd + Enter 可快速保存。</span>
-                            <button class="btn btn-outline btn-small" type="button" data-action="save-caption" disabled>保存说明</button>
+                            <span class="palette-card-caption-hint">${Utils.escapeHTML(t('palettes.caption_hint', '说明会参与检索；按 Ctrl/Cmd + Enter 可快速保存。'))}</span>
+                            <button class="btn btn-outline btn-small" type="button" data-action="save-caption" disabled>${Utils.escapeHTML(t('palettes.btn_save_caption', '保存说明'))}</button>
                         </div>
                     </div>
                     <div class="palette-card-swatches">${BrowserUI.renderPaletteSwatches(palette.colors || [])}</div>
                     <p class="palette-card-values">${BrowserUI.renderPaletteValues(palette.colors || [])}</p>
                     <div class="palette-card-actions">
-                        <button class="btn btn-outline btn-small" type="button" data-action="copy-hex">复制 HEX</button>
-                        <button class="btn btn-outline btn-small" type="button" data-action="copy-css">复制 CSS</button>
-                        <button class="btn btn-outline btn-small" type="button" data-action="source-figure">来源主图</button>
+                        <button class="btn btn-outline btn-small" type="button" data-action="copy-hex">${Utils.escapeHTML(t('palettes.btn_copy_hex', '复制 HEX'))}</button>
+                        <button class="btn btn-outline btn-small" type="button" data-action="copy-css">${Utils.escapeHTML(t('palettes.btn_copy_css', '复制 CSS'))}</button>
+                        <button class="btn btn-outline btn-small" type="button" data-action="source-figure">${Utils.escapeHTML(t('palettes.btn_source_figure', '来源主图'))}</button>
 
-                        <button class="btn btn-outline btn-small danger" type="button" data-action="delete">删除配色</button>
+                        <button class="btn btn-outline btn-small danger" type="button" data-action="delete">${Utils.escapeHTML(t('palettes.btn_delete', '删除配色'))}</button>
                     </div>
                 </div>
             </article>
@@ -722,19 +723,19 @@ const PalettesPage = {
         this.palettes = palettes;
         this.state.totalPages = totalPages;
         this.summaryStrip.innerHTML = `
-            <div class="stat-card"><span>已保存配色</span><strong>${payload.total || 0}</strong></div>
-            <div class="stat-card"><span>当前页</span><strong>${palettes.length}</strong></div>
-            <div class="stat-card"><span>来源分组</span><strong>${Utils.escapeHTML(this.groupFilter.selectedOptions[0]?.textContent || '全部分组')}</strong></div>
-            <div class="stat-card"><span>排序方式</span><strong>${Utils.escapeHTML(this.currentSortLabel())}</strong></div>
+            <div class="stat-card"><span>${Utils.escapeHTML(t('palettes.stat_saved', '已保存配色'))}</span><strong>${payload.total || 0}</strong></div>
+            <div class="stat-card"><span>${Utils.escapeHTML(t('palettes.stat_current_page', '当前页'))}</span><strong>${palettes.length}</strong></div>
+            <div class="stat-card"><span>${Utils.escapeHTML(t('palettes.stat_group', '来源分组'))}</span><strong>${Utils.escapeHTML(this.groupFilter.selectedOptions[0]?.textContent || t('palettes.filter_all_groups', '全部分组'))}</strong></div>
+            <div class="stat-card"><span>${Utils.escapeHTML(t('palettes.stat_sort', '排序方式'))}</span><strong>${Utils.escapeHTML(this.currentSortLabel())}</strong></div>
         `;
         this.pageControls.innerHTML = this.state.totalPages > 1 ? `
-            <button class="btn btn-outline" type="button" data-page-step="-1" ${this.state.page <= 1 ? 'disabled' : ''}>上一页</button>
-            <span class="figure-page-indicator">第 ${this.state.page} / ${this.state.totalPages} 页</span>
-            <button class="btn btn-outline" type="button" data-page-step="1" ${this.state.page >= this.state.totalPages ? 'disabled' : ''}>下一页</button>
+            <button class="btn btn-outline" type="button" data-page-step="-1" ${this.state.page <= 1 ? 'disabled' : ''}>${Utils.escapeHTML(t('palettes.btn_prev_page', '上一页'))}</button>
+            <span class="figure-page-indicator">${Utils.escapeHTML(t('palettes.page_indicator', '第 {current} / {total} 页').replace('{current}', this.state.page).replace('{total}', this.state.totalPages))}</span>
+            <button class="btn btn-outline" type="button" data-page-step="1" ${this.state.page >= this.state.totalPages ? 'disabled' : ''}>${Utils.escapeHTML(t('palettes.btn_next_page', '下一页'))}</button>
         ` : '';
         this.grid.innerHTML = palettes.length
             ? palettes.map((palette) => this.renderPaletteCard(palette)).join('')
-            : '<div class="empty-state"><h3>还没有保存任何配色</h3><p>先提取子图，系统会自动生成配色并出现在这里。</p></div>';
+            : `<div class="empty-state"><h3>${Utils.escapeHTML(t('palettes.empty_title', '还没有保存任何配色'))}</h3><p>${Utils.escapeHTML(t('palettes.empty_text', '先提取子图，系统会自动生成配色并出现在这里。'))}</p></div>`;
         BrowserUI.renderPagination(this.pagination, this.state.page, this.state.totalPages);
     },
 
@@ -749,25 +750,25 @@ const PalettesPage = {
 
     async copyText(text, successMessage) {
         if (!String(text || '').trim()) {
-            Utils.showToast('当前没有可复制的配色', 'error');
+            Utils.showToast(t('palettes.msg_no_colors', '当前没有可复制的配色'), 'error');
             return;
         }
 
         try {
             await navigator.clipboard.writeText(text);
-            Utils.showToast(successMessage || '已复制');
+            Utils.showToast(successMessage || t('msg.copy_success', '已复制'));
         } catch (error) {
-            Utils.showToast('复制失败', 'error');
+            Utils.showToast(t('palettes.msg_copy_failed', '复制失败'), 'error');
         }
     },
 
     async deletePalette(id) {
-        const confirmed = await Utils.confirm('删除后只会移除这组绑定配色，不会删除原子图。');
+        const confirmed = await Utils.confirm(t('palettes.confirm_delete', '删除后只会移除这组绑定配色，不会删除原子图。'));
         if (!confirmed) return;
 
         try {
             await API.deletePalette(id);
-            Utils.showToast('配色已删除');
+            Utils.showToast(t('palettes.msg_deleted', '配色已删除'));
             await this.load(this.state.page);
         } catch (error) {
             Utils.showToast(error.message, 'error');
@@ -821,7 +822,7 @@ const GroupsPage = {
                     description: this.descriptionInput.value.trim()
                 });
                 this.form.reset();
-                Utils.showToast('分组已创建');
+                Utils.showToast(t('groups.msg_created', '分组已创建'));
                 await this.reload();
             } catch (error) {
                 Utils.showToast(error.message, 'error');
@@ -883,7 +884,7 @@ const GroupsPage = {
     renderGroupCards() {
         const allCard = `
             <article class="entity-card ${this.state.selectedGroupId ? '' : 'active'}" data-group-id="">
-                <div><h3>全部文献</h3><p>查看所有分组下的文献</p></div>
+                <div><h3>${Utils.escapeHTML(t('groups.all_papers', '全部文献'))}</h3><p>${Utils.escapeHTML(t('groups.all_papers_desc', '查看所有分组下的文献'))}</p></div>
                 <strong>${this.state.totalPaperCount}</strong>
             </article>
         `;
@@ -891,18 +892,18 @@ const GroupsPage = {
             <article class="entity-card ${String(group.id) === String(this.state.selectedGroupId) ? 'active' : ''}" data-group-id="${group.id}">
                 <div>
                     <h3>${Utils.escapeHTML(group.name)}</h3>
-                    <p>${Utils.escapeHTML(group.description || '无说明')}</p>
+                    <p>${Utils.escapeHTML(group.description || t('groups.no_desc', '无说明'))}</p>
                 </div>
                 <div class="entity-card-actions">
                     <strong>${group.paper_count}</strong>
-                    <button class="ghost-btn" type="button" data-action="edit-group">改名</button>
-                    <button class="ghost-btn danger" type="button" data-action="delete-group">删除</button>
+                    <button class="ghost-btn" type="button" data-action="edit-group">${Utils.escapeHTML(t('groups.btn_rename', '改名'))}</button>
+                    <button class="ghost-btn danger" type="button" data-action="delete-group">${Utils.escapeHTML(t('groups.btn_delete', '删除'))}</button>
                 </div>
             </article>
         `).join('');
 
         const current = this.groups.find((group) => String(group.id) === String(this.state.selectedGroupId));
-        this.headline.textContent = current ? `分组「${current.name}」中的文献` : '全部文献';
+        this.headline.textContent = current ? t('groups.headline_group', '分组「{name}」中的文献').replace('{name}', current.name) : t('groups.headline_all', '全部文献');
     },
 
     async loadPapers() {
@@ -915,7 +916,7 @@ const GroupsPage = {
             const totalPages = payload.total_pages || 0;
             this.state.page = totalPages ? Math.min(this.state.page, totalPages) : 1;
             const papers = payload.papers || [];
-            this.paperList.innerHTML = papers.length ? papers.map(BrowserUI.renderPaperCard).join('') : '<div class="empty-state"><h3>这个分组下还没有文献</h3></div>';
+            this.paperList.innerHTML = papers.length ? papers.map(BrowserUI.renderPaperCard).join('') : `<div class="empty-state"><h3>${Utils.escapeHTML(t('groups.empty_papers', '这个分组下还没有文献'))}</h3></div>`;
             BrowserUI.renderPagination(this.pagination, this.state.page, totalPages);
         } catch (error) {
             Utils.showToast(error.message, 'error');
@@ -926,12 +927,12 @@ const GroupsPage = {
         const group = this.groups.find((item) => item.id === id);
         if (!group) return;
         const values = await Utils.promptFields({
-            title: '修改分组',
-            description: '更新分组名称和说明，便于后续筛选和归类。',
-            confirmLabel: '保存分组',
+            title: t('groups.edit_title', '修改分组'),
+            description: t('groups.edit_desc', '更新分组名称和说明，便于后续筛选和归类。'),
+            confirmLabel: t('groups.edit_confirm', '保存分组'),
             fields: [
-                { name: 'name', label: '分组名称', value: group.name || '', required: true, placeholder: '例如：单细胞图谱' },
-                { name: 'description', label: '分组说明', value: group.description || '', placeholder: '一句话说明这个分组的用途' }
+                { name: 'name', label: t('groups.edit_name_label', '分组名称'), value: group.name || '', required: true, placeholder: t('groups.edit_name_placeholder', '例如：单细胞图谱') },
+                { name: 'description', label: t('groups.edit_desc_label', '分组说明'), value: group.description || '', placeholder: t('groups.edit_desc_placeholder', '一句话说明这个分组的用途') }
             ]
         });
         if (!values) return;
@@ -940,7 +941,7 @@ const GroupsPage = {
                 name: values.name.trim(),
                 description: values.description.trim()
             });
-            Utils.showToast('分组已更新');
+            Utils.showToast(t('groups.msg_updated', '分组已更新'));
             await this.reload();
         } catch (error) {
             Utils.showToast(error.message, 'error');
@@ -948,11 +949,11 @@ const GroupsPage = {
     },
 
     async deleteGroup(id) {
-        const confirmed = await Utils.confirm('删除分组后，文献仍会保留，只是不再属于该分组。');
+        const confirmed = await Utils.confirm(t('groups.confirm_delete', '删除分组后，文献仍会保留，只是不再属于该分组。'));
         if (!confirmed) return;
         try {
             await API.deleteGroup(id);
-            Utils.showToast('分组已删除');
+            Utils.showToast(t('groups.msg_deleted', '分组已删除'));
             await this.reload();
         } catch (error) {
             Utils.showToast(error.message, 'error');
@@ -964,14 +965,14 @@ const TagsPage = {
     defaultTagColor: '#A45C40',
     colorStorageKey: 'citebox_tag_page_color',
     colorPresets: [
-        { value: '#A45C40', label: '陶土棕' },
-        { value: '#C97A40', label: '琥珀橙' },
-        { value: '#D4A017', label: '金黄' },
-        { value: '#6E9F5B', label: '橄榄绿' },
-        { value: '#2F7D6B', label: '青绿' },
-        { value: '#416788', label: '钢蓝' },
-        { value: '#5B5F97', label: '靛蓝' },
-        { value: '#A05C7B', label: '莓果紫' }
+        { value: '#A45C40', label: '陶土棕', key: 'tags.color_preset_terracotta' },
+        { value: '#C97A40', label: '琥珀橙', key: 'tags.color_preset_amber' },
+        { value: '#D4A017', label: '金黄', key: 'tags.color_preset_golden' },
+        { value: '#6E9F5B', label: '橄榄绿', key: 'tags.color_preset_olive' },
+        { value: '#2F7D6B', label: '青绿', key: 'tags.color_preset_teal' },
+        { value: '#416788', label: '钢蓝', key: 'tags.color_preset_steel' },
+        { value: '#5B5F97', label: '靛蓝', key: 'tags.color_preset_indigo' },
+        { value: '#A05C7B', label: '莓果紫', key: 'tags.color_preset_berry' }
     ],
     state: { scope: 'paper', selectedTagId: '', page: 1, totalPaperCount: 0, totalFigureCount: 0 },
 
@@ -1007,8 +1008,8 @@ const TagsPage = {
             this.contextMenu.id = 'tagContextMenu';
             this.contextMenu.className = 'tag-context-menu hidden';
             this.contextMenu.innerHTML = `
-                <button type="button" data-tag-menu-action="edit">改名</button>
-                <button type="button" class="danger" data-tag-menu-action="delete">删除</button>
+                <button type="button" data-tag-menu-action="edit">${Utils.escapeHTML(t('tags.ctx_rename', '改名'))}</button>
+                <button type="button" class="danger" data-tag-menu-action="delete">${Utils.escapeHTML(t('tags.ctx_delete', '删除'))}</button>
             `;
             document.body.appendChild(this.contextMenu);
         }
@@ -1048,7 +1049,7 @@ const TagsPage = {
                 this.nameInput.value = '';
                 this.setTagColor(color);
                 this.nameInput.focus();
-                Utils.showToast('标签已创建');
+                Utils.showToast(t('tags.msg_created', '标签已创建'));
                 await this.reload();
             } catch (error) {
                 Utils.showToast(error.message, 'error');
@@ -1186,12 +1187,12 @@ const TagsPage = {
 
     renderTagCreator() {
         const isPaperScope = this.state.scope === 'paper';
-        this.creatorTitle.textContent = isPaperScope ? '新建文献标签' : '新建图片标签';
+        this.creatorTitle.textContent = isPaperScope ? t('tags.create_paper_title', '新建文献标签') : t('tags.create_figure_title', '新建图片标签');
         this.creatorHint.textContent = isPaperScope
-            ? '给文献补充主题、方法或阅读状态等检索维度。'
-            : '给图片补充内容、实验类型或局部特征等检索维度。';
-        this.nameInput.placeholder = isPaperScope ? '例如：review' : '例如：细胞分裂';
-        this.submitButton.textContent = isPaperScope ? '创建文献标签' : '创建图片标签';
+            ? t('tags.create_paper_hint', '给文献补充主题、方法或阅读状态等检索维度。')
+            : t('tags.create_figure_hint', '给图片补充内容、实验类型或局部特征等检索维度。');
+        this.nameInput.placeholder = isPaperScope ? t('tags.field_name_paper_placeholder', '例如：review') : t('tags.field_name_figure_placeholder', '例如：细胞分裂');
+        this.submitButton.textContent = isPaperScope ? t('tags.btn_create_paper', '创建文献标签') : t('tags.btn_create_figure', '创建图片标签');
         this.renderColorPresets();
         this.renderTagPresets();
     },
@@ -1216,9 +1217,9 @@ const TagsPage = {
             const key = normalized.toLowerCase();
             const isExisting = existing.has(key);
             const isActive = key && key === selectedName;
-            let helper = '点击创建';
+            let helper = t('tags.preset_click_create', '点击创建');
             if (isExisting) {
-                helper = isActive ? '当前已选中' : '点击筛选';
+                helper = isActive ? t('tags.preset_active', '当前已选中') : t('tags.preset_click_filter', '点击筛选');
             }
             return `
                 <button
@@ -1267,17 +1268,19 @@ const TagsPage = {
     renderColorPresets() {
         if (!this.colorPresetList) return;
         const currentColor = this.currentTagColor();
-        this.colorPresetList.innerHTML = this.colorPresets.map((preset) => `
+        this.colorPresetList.innerHTML = this.colorPresets.map((preset) => {
+            const presetLabel = preset.key ? t(preset.key, preset.label) : preset.label;
+            return `
             <button
                 class="tag-color-preset ${preset.value === currentColor ? 'active' : ''}"
                 type="button"
                 data-tag-color="${preset.value}"
-                aria-label="${preset.label}"
+                aria-label="${Utils.escapeHTML(presetLabel)}"
                 aria-pressed="${preset.value === currentColor ? 'true' : 'false'}"
-                title="${preset.label}"
+                title="${Utils.escapeHTML(presetLabel)}"
                 style="--tag-preset-color:${preset.value}"
             ></button>
-        `).join('');
+        `}).join('');
     },
 
     syncColorPresetSelection(color = this.currentTagColor()) {
@@ -1313,7 +1316,7 @@ const TagsPage = {
             const created = (this.tags || []).find((tag) => String(tag.name || '').trim().toLowerCase() === normalized.toLowerCase());
             this.state.selectedTagId = created ? String(created.id) : '';
             this.state.page = 1;
-            Utils.showToast(`已创建图片标签：${normalized}`);
+            Utils.showToast(t('tags.msg_figure_tag_created', '已创建图片标签：{name}').replace('{name}', normalized));
             this.renderTagCreator();
             this.renderTagCards();
             await this.loadResults();
@@ -1333,8 +1336,8 @@ const TagsPage = {
 
     renderScopeSwitch() {
         this.scopeSwitch.innerHTML = `
-            <button class="btn ${this.state.scope === 'paper' ? 'btn-primary' : 'btn-outline'}" type="button" data-tag-scope="paper">文献标签</button>
-            <button class="btn ${this.state.scope === 'figure' ? 'btn-primary' : 'btn-outline'}" type="button" data-tag-scope="figure">图片标签</button>
+            <button class="btn ${this.state.scope === 'paper' ? 'btn-primary' : 'btn-outline'}" type="button" data-tag-scope="paper">${Utils.escapeHTML(t('tags.scope_paper', '文献标签'))}</button>
+            <button class="btn ${this.state.scope === 'figure' ? 'btn-primary' : 'btn-outline'}" type="button" data-tag-scope="figure">${Utils.escapeHTML(t('tags.scope_figure', '图片标签'))}</button>
         `;
     },
 
@@ -1342,17 +1345,17 @@ const TagsPage = {
         const isPaperScope = this.state.scope === 'paper';
         const totalCount = isPaperScope ? this.state.totalPaperCount : this.state.totalFigureCount;
         const allCard = `
-            <article class="entity-card tag-entity-card ${this.state.selectedTagId ? '' : 'active'}" data-tag-id="" title="点击查看全部">
+            <article class="entity-card tag-entity-card ${this.state.selectedTagId ? '' : 'active'}" data-tag-id="" title="${Utils.escapeHTML(t('tags.tag_card_all_hint', '点击查看全部'))}">
                 <div class="tag-entity-main">
                     <div class="tag-entity-chip tag-entity-chip-global">
-                        <span class="tag-entity-label">${isPaperScope ? '全部文献' : '全部图片'}</span>
+                        <span class="tag-entity-label">${isPaperScope ? Utils.escapeHTML(t('tags.all_papers', '全部文献')) : Utils.escapeHTML(t('tags.all_figures', '全部图片'))}</span>
                         <span class="tag-card-count">${totalCount}</span>
                     </div>
                 </div>
             </article>
         `;
         this.grid.innerHTML = allCard + this.tags.map((tag) => `
-            <article class="entity-card tag-entity-card ${String(tag.id) === String(this.state.selectedTagId) ? 'active' : ''}" data-tag-id="${tag.id}" title="点击筛选，右键可改名或删除">
+            <article class="entity-card tag-entity-card ${String(tag.id) === String(this.state.selectedTagId) ? 'active' : ''}" data-tag-id="${tag.id}" title="${Utils.escapeHTML(t('tags.tag_card_hint', '点击筛选，右键可改名或删除'))}">
                 <div class="tag-entity-main">
                     <div class="tag-entity-chip">
                         <span class="tag-dot" style="background:${tag.color}"></span>
@@ -1365,11 +1368,11 @@ const TagsPage = {
 
         const current = this.tags.find((tag) => String(tag.id) === String(this.state.selectedTagId));
         this.headline.textContent = current
-            ? `标签「${current.name}」下的${isPaperScope ? '文献' : '图片'}`
-            : `全部${isPaperScope ? '文献标签' : '图片标签'}下的${isPaperScope ? '文献' : '图片'}`;
+            ? t(isPaperScope ? 'tags.headline_tag_papers' : 'tags.headline_tag_figures', isPaperScope ? '标签「{name}」下的文献' : '标签「{name}」下的图片').replace('{name}', current.name)
+            : t(isPaperScope ? 'tags.headline_all_paper_tags' : 'tags.headline_all_figure_tags', isPaperScope ? '全部文献标签下的文献' : '全部图片标签下的图片');
         this.scopeHint.textContent = isPaperScope
-            ? '这里展示带有当前标签的文献列表。'
-            : '这里展示带有当前标签的图片列表。';
+            ? t('tags.scope_hint_paper', '这里展示带有当前标签的文献列表。')
+            : t('tags.scope_hint_figure', '这里展示带有当前标签的图片列表。');
     },
 
     showContextMenu(id, clientX, clientY) {
@@ -1415,7 +1418,7 @@ const TagsPage = {
             this.state.page = totalPages ? Math.min(this.state.page, totalPages) : 1;
             const papers = payload.papers || [];
             this.resultList.className = 'paper-grid paper-list-mode';
-            this.resultList.innerHTML = papers.length ? papers.map(BrowserUI.renderPaperCard).join('') : '<div class="empty-state"><h3>这个标签下还没有文献</h3></div>';
+            this.resultList.innerHTML = papers.length ? papers.map(BrowserUI.renderPaperCard).join('') : `<div class="empty-state"><h3>${Utils.escapeHTML(t('tags.empty_papers', '这个标签下还没有文献'))}</h3></div>`;
             BrowserUI.renderPagination(this.pagination, this.state.page, totalPages);
             this.figures = [];
             this.totalPages = totalPages;
@@ -1445,7 +1448,7 @@ const TagsPage = {
                 primaryAction: 'note',
                 showNotesPreview: true
             })).join('')
-            : '<div class="empty-state"><h3>这个标签下还没有图片</h3></div>';
+            : `<div class="empty-state"><h3>${Utils.escapeHTML(t('tags.empty_figures', '这个标签下还没有图片'))}</h3></div>`;
         BrowserUI.renderPagination(this.pagination, this.state.page, this.totalPages);
     },
 
@@ -1462,12 +1465,12 @@ const TagsPage = {
         const tag = this.tags.find((item) => item.id === id);
         if (!tag) return;
         const values = await Utils.promptFields({
-            title: '编辑标签',
-            description: '可以同时调整标签名称和颜色。',
-            confirmLabel: '保存标签',
+            title: t('tags.edit_title', '编辑标签'),
+            description: t('tags.edit_desc', '可以同时调整标签名称和颜色。'),
+            confirmLabel: t('tags.edit_confirm', '保存标签'),
             fields: [
-                { name: 'name', label: '标签名称', value: tag.name || '', required: true, placeholder: '例如：review' },
-                { name: 'color', label: '标签颜色', type: 'color', value: this.normalizeTagColor(tag.color || this.defaultTagColor), required: true }
+                { name: 'name', label: t('tags.edit_name_label', '标签名称'), value: tag.name || '', required: true, placeholder: t('tags.edit_name_placeholder', '例如：review') },
+                { name: 'color', label: t('tags.edit_color_label', '标签颜色'), type: 'color', value: this.normalizeTagColor(tag.color || this.defaultTagColor), required: true }
             ]
         });
         if (!values) return;
@@ -1476,7 +1479,7 @@ const TagsPage = {
                 name: values.name.trim(),
                 color: this.normalizeTagColor(values.color)
             });
-            Utils.showToast('标签已更新');
+            Utils.showToast(t('tags.msg_updated', '标签已更新'));
             await this.reload();
         } catch (error) {
             Utils.showToast(error.message, 'error');
@@ -1484,11 +1487,11 @@ const TagsPage = {
     },
 
     async deleteTag(id) {
-        const confirmed = await Utils.confirm('删除标签后，相关关联也会一并移除。');
+        const confirmed = await Utils.confirm(t('tags.confirm_delete', '删除标签后，相关关联也会一并移除。'));
         if (!confirmed) return;
         try {
             await API.deleteTag(id);
-            Utils.showToast('标签已删除');
+            Utils.showToast(t('tags.msg_deleted', '标签已删除'));
             await this.reload();
         } catch (error) {
             Utils.showToast(error.message, 'error');
@@ -1623,11 +1626,11 @@ const NotesPage = {
 
     syncModeUI() {
         const isPaperMode = this.state.mode === 'paper';
-        this.keywordInput.placeholder = isPaperMode ? '文献标题、摘要、文献笔记、标签' : '文献标题、图片说明、图片标签、图片笔记';
+        this.keywordInput.placeholder = isPaperMode ? t('notes.filter_keyword_paper_placeholder', '文献标题、摘要、文献笔记、标签') : t('notes.filter_keyword_figure_placeholder', '文献标题、图片说明、图片标签、图片笔记');
         this.filterDescription.textContent = isPaperMode
-            ? '这里只显示已经写过文献笔记的条目，你可以继续编辑、回看内容或跳转到来源文献。'
-            : '这里只显示已经写过图片笔记的条目，你可以继续编辑、回看大图或跳转到来源文献。';
-        this.tagFilterLabel.textContent = isPaperMode ? '文献标签' : '图片标签';
+            ? t('notes.filter_desc_paper', '这里只显示已经写过文献笔记的条目，你可以继续编辑、回看内容或跳转到来源文献。')
+            : t('notes.filter_desc_figure', '这里只显示已经写过图片笔记的条目，你可以继续编辑、回看大图或跳转到来源文献。');
+        this.tagFilterLabel.textContent = isPaperMode ? t('notes.filter_tag_paper', '文献标签') : t('notes.filter_tag_figure', '图片标签');
         this.syncSortFilter();
 
         Array.from(this.typeSwitch.querySelectorAll('[data-notes-mode]')).forEach((button) => {
@@ -1649,14 +1652,14 @@ const NotesPage = {
     sortOptions() {
         if (this.state.mode === 'figure') {
             return [
-                { value: 'updated_at', label: '按图片笔记更新时间' },
-                { value: 'paper_created_at_figure_index', label: '按文献创建时间，文献内按 Fig 顺序' },
-                { value: 'created_at', label: '按图片创建时间' }
+                { value: 'updated_at', label: t('notes.sort_updated_at_figure', '按图片笔记更新时间') },
+                { value: 'paper_created_at_figure_index', label: t('notes.sort_paper_created_at', '按文献创建时间，文献内按 Fig 顺序') },
+                { value: 'created_at', label: t('notes.sort_figure_created_at', '按图片创建时间') }
             ];
         }
         return [
-            { value: 'created_at', label: '按文献创建时间' },
-            { value: 'updated_at', label: '按文献更新时间' }
+            { value: 'created_at', label: t('notes.sort_created_at', '按文献创建时间') },
+            { value: 'updated_at', label: t('notes.sort_updated_at_paper', '按文献更新时间') }
         ];
     },
 
@@ -1680,7 +1683,7 @@ const NotesPage = {
     async loadGroups() {
         const payload = await API.listGroups();
         const selected = String(this.state.filters.group_id || '');
-        this.groupFilter.innerHTML = '<option value="">全部分组</option>' + (payload.groups || []).map((group) => `
+        this.groupFilter.innerHTML = `<option value="">${Utils.escapeHTML(t('notes.filter_all_groups', '全部分组'))}</option>` + (payload.groups || []).map((group) => `
             <option value="${group.id}" ${String(group.id) === selected ? 'selected' : ''}>${Utils.escapeHTML(group.name)}</option>
         `).join('');
     },
@@ -1689,7 +1692,7 @@ const NotesPage = {
         const scope = this.currentTagScope();
         const payload = await API.listTags({ scope });
         const selected = String(this.state.filters.tag_id || '');
-        const label = scope === 'paper' ? '全部文献标签' : '全部图片标签';
+        const label = scope === 'paper' ? t('notes.filter_all_paper_tags', '全部文献标签') : t('notes.filter_all_figure_tags', '全部图片标签');
         this.tagFilter.innerHTML = `<option value="">${label}</option>` + (payload.tags || []).map((tag) => `
             <option value="${tag.id}" ${String(tag.id) === selected ? 'selected' : ''}>${Utils.escapeHTML(tag.name)}</option>
         `).join('');
@@ -1729,9 +1732,9 @@ const NotesPage = {
 
     renderPageControls() {
         this.pageControls.innerHTML = this.state.totalPages > 1 ? `
-            <button class="btn btn-outline" type="button" data-page-step="-1" ${this.state.page <= 1 ? 'disabled' : ''}>上一页</button>
-            <span class="figure-page-indicator">第 ${this.state.page} / ${this.state.totalPages} 页</span>
-            <button class="btn btn-outline" type="button" data-page-step="1" ${this.state.page >= this.state.totalPages ? 'disabled' : ''}>下一页</button>
+            <button class="btn btn-outline" type="button" data-page-step="-1" ${this.state.page <= 1 ? 'disabled' : ''}>${Utils.escapeHTML(t('notes.btn_prev_page', '上一页'))}</button>
+            <span class="figure-page-indicator">${Utils.escapeHTML(t('notes.page_indicator', '第 {current} / {total} 页').replace('{current}', this.state.page).replace('{total}', this.state.totalPages))}</span>
+            <button class="btn btn-outline" type="button" data-page-step="1" ${this.state.page >= this.state.totalPages ? 'disabled' : ''}>${Utils.escapeHTML(t('notes.btn_next_page', '下一页'))}</button>
         ` : '';
     },
 
@@ -1742,16 +1745,16 @@ const NotesPage = {
         this.papers = papers;
         this.state.totalPages = totalPages;
         this.summaryStrip.innerHTML = `
-            <div class="stat-card"><span>带笔记文献</span><strong>${payload.total || 0}</strong></div>
-            <div class="stat-card"><span>当前页</span><strong>${papers.length}</strong></div>
-            <div class="stat-card"><span>来源分组</span><strong>${Utils.escapeHTML(this.groupFilter.selectedOptions[0]?.textContent || '全部分组')}</strong></div>
-            <div class="stat-card"><span>文献标签</span><strong>${Utils.escapeHTML(this.tagFilter.selectedOptions[0]?.textContent || '全部文献标签')}</strong></div>
-            <div class="stat-card"><span>排序方式</span><strong>${Utils.escapeHTML(this.currentSortLabel())}</strong></div>
+            <div class="stat-card"><span>${Utils.escapeHTML(t('notes.stat_papers_with_notes', '带笔记文献'))}</span><strong>${payload.total || 0}</strong></div>
+            <div class="stat-card"><span>${Utils.escapeHTML(t('notes.stat_current_page', '当前页'))}</span><strong>${papers.length}</strong></div>
+            <div class="stat-card"><span>${Utils.escapeHTML(t('notes.stat_group', '来源分组'))}</span><strong>${Utils.escapeHTML(this.groupFilter.selectedOptions[0]?.textContent || t('notes.filter_all_groups', '全部分组'))}</strong></div>
+            <div class="stat-card"><span>${Utils.escapeHTML(t('notes.stat_paper_tag', '文献标签'))}</span><strong>${Utils.escapeHTML(this.tagFilter.selectedOptions[0]?.textContent || t('notes.filter_all_paper_tags', '全部文献标签'))}</strong></div>
+            <div class="stat-card"><span>${Utils.escapeHTML(t('notes.stat_sort', '排序方式'))}</span><strong>${Utils.escapeHTML(this.currentSortLabel())}</strong></div>
         `;
         this.renderPageControls();
         this.grid.innerHTML = papers.length
             ? papers.map((paper) => this.renderPaperNoteRow(paper)).join('')
-            : '<div class="empty-state"><h3>还没有文献笔记</h3><p>先在 AI 伴读或文献详情里写笔记，再回到这里统一查看。</p></div>';
+            : `<div class="empty-state"><h3>${Utils.escapeHTML(t('notes.empty_paper_title', '还没有文献笔记'))}</h3><p>${Utils.escapeHTML(t('notes.empty_paper_text', '先在 AI 伴读或文献详情里写笔记，再回到这里统一查看。'))}</p></div>`;
         BrowserUI.renderPagination(this.pagination, this.state.page, this.state.totalPages);
     },
 
@@ -1765,15 +1768,15 @@ const NotesPage = {
                 <div class="note-row-body">
                     <div class="note-row-head">
                         <span class="note-row-source" data-action="paper" role="button">${Utils.escapeHTML(paper.title)}</span>
-                        <span class="note-row-page">${Utils.escapeHTML(paper.group_name || '未分组')} · 图片 ${paper.figure_count || 0}</span>
+                        <span class="note-row-page">${Utils.escapeHTML(paper.group_name || t('notes.meta_no_group', '未分组'))} · ${Utils.escapeHTML(t('notes.meta_figures', '图片'))} ${paper.figure_count || 0}</span>
                     </div>
-                    <div class="note-row-text" data-action="note" role="button">${Utils.escapeHTML(preview) || '<span class="muted">空笔记</span>'}</div>
+                    <div class="note-row-text" data-action="note" role="button">${Utils.escapeHTML(preview) || `<span class="muted">${Utils.escapeHTML(t('notes.label_empty_note', '空笔记'))}</span>`}</div>
                     <div class="note-row-foot">
                         <div class="note-row-tags">${tags}</div>
                         <div class="note-row-actions">
-                            <button class="btn btn-small btn-primary" type="button" data-action="note">编辑笔记</button>
-                            <button class="btn btn-small btn-outline" type="button" data-action="paper">文献详情</button>
-                            <button class="btn btn-small btn-outline" type="button" data-action="ai">AI伴读</button>
+                            <button class="btn btn-small btn-primary" type="button" data-action="note">${Utils.escapeHTML(t('notes.btn_edit_note', '编辑笔记'))}</button>
+                            <button class="btn btn-small btn-outline" type="button" data-action="paper">${Utils.escapeHTML(t('notes.btn_paper_detail', '文献详情'))}</button>
+                            <button class="btn btn-small btn-outline" type="button" data-action="ai">${Utils.escapeHTML(t('notes.btn_ai_reader', 'AI伴读'))}</button>
                         </div>
                     </div>
                 </div>
@@ -1788,16 +1791,16 @@ const NotesPage = {
         this.figures = figures;
         this.state.totalPages = totalPages;
         this.summaryStrip.innerHTML = `
-            <div class="stat-card"><span>带笔记图片</span><strong>${payload.total || 0}</strong></div>
-            <div class="stat-card"><span>当前页</span><strong>${figures.length}</strong></div>
-            <div class="stat-card"><span>来源分组</span><strong>${Utils.escapeHTML(this.groupFilter.selectedOptions[0]?.textContent || '全部分组')}</strong></div>
-            <div class="stat-card"><span>图片标签</span><strong>${Utils.escapeHTML(this.tagFilter.selectedOptions[0]?.textContent || '全部图片标签')}</strong></div>
-            <div class="stat-card"><span>排序方式</span><strong>${Utils.escapeHTML(this.currentSortLabel())}</strong></div>
+            <div class="stat-card"><span>${Utils.escapeHTML(t('notes.stat_figures_with_notes', '带笔记图片'))}</span><strong>${payload.total || 0}</strong></div>
+            <div class="stat-card"><span>${Utils.escapeHTML(t('notes.stat_current_page', '当前页'))}</span><strong>${figures.length}</strong></div>
+            <div class="stat-card"><span>${Utils.escapeHTML(t('notes.stat_group', '来源分组'))}</span><strong>${Utils.escapeHTML(this.groupFilter.selectedOptions[0]?.textContent || t('notes.filter_all_groups', '全部分组'))}</strong></div>
+            <div class="stat-card"><span>${Utils.escapeHTML(t('notes.stat_figure_tag', '图片标签'))}</span><strong>${Utils.escapeHTML(this.tagFilter.selectedOptions[0]?.textContent || t('notes.filter_all_figure_tags', '全部图片标签'))}</strong></div>
+            <div class="stat-card"><span>${Utils.escapeHTML(t('notes.stat_sort', '排序方式'))}</span><strong>${Utils.escapeHTML(this.currentSortLabel())}</strong></div>
         `;
         this.renderPageControls();
         this.grid.innerHTML = figures.length
             ? figures.map((figure, index) => this.renderFigureNoteRow(figure, index)).join('')
-            : '<div class="empty-state"><h3>还没有可管理的图片笔记</h3><p>先在图片库里为图片补充笔记，再回到这里统一整理。</p></div>';
+            : `<div class="empty-state"><h3>${Utils.escapeHTML(t('notes.empty_figure_title', '还没有可管理的图片笔记'))}</h3><p>${Utils.escapeHTML(t('notes.empty_figure_text', '先在图片库里为图片补充笔记，再回到这里统一整理。'))}</p></div>`;
         BrowserUI.renderPagination(this.pagination, this.state.page, this.state.totalPages);
     },
 
@@ -1810,22 +1813,22 @@ const NotesPage = {
         return `
             <article class="note-row" data-note-kind="figure" data-paper-id="${figure.paper_id}" data-figure-index="${index}">
                 <div class="note-row-thumb">
-                    <button class="note-row-img" type="button" data-action="preview" aria-label="查看大图">
+                    <button class="note-row-img" type="button" data-action="preview" aria-label="${Utils.escapeHTML(t('notes.label_view_large', '查看大图'))}">
                         <img src="${figure.image_url}" alt="${Utils.escapeHTML(figure.paper_title || '')}">
                     </button>
                 </div>
                 <div class="note-row-body">
                     <div class="note-row-head">
                         <span class="note-row-source" data-action="paper" role="button">${Utils.escapeHTML(figure.paper_title)}</span>
-                        <span class="note-row-page">第 ${figure.page_number || '-'} 页 · ${Utils.escapeHTML(figureLabel)}</span>
+                        <span class="note-row-page">${Utils.escapeHTML(t('notes.label_page', '第 {page} 页').replace('{page}', figure.page_number || '-'))} · ${Utils.escapeHTML(figureLabel)}</span>
                     </div>
-                    <div class="note-row-text" data-action="note" role="button">${Utils.escapeHTML(preview) || '<span class="muted">空笔记</span>'}</div>
+                    <div class="note-row-text" data-action="note" role="button">${Utils.escapeHTML(preview) || `<span class="muted">${Utils.escapeHTML(t('notes.label_empty_note', '空笔记'))}</span>`}</div>
                     <div class="note-row-foot">
                         <div class="note-row-tags">${tags}</div>
                         <div class="note-row-actions">
-                            <button class="btn btn-small btn-primary" type="button" data-action="note">编辑笔记</button>
-                            <button class="btn btn-small btn-outline" type="button" data-action="preview">大图</button>
-                            <button class="btn btn-small btn-outline" type="button" data-action="paper">文献</button>
+                            <button class="btn btn-small btn-primary" type="button" data-action="note">${Utils.escapeHTML(t('notes.btn_edit_note', '编辑笔记'))}</button>
+                            <button class="btn btn-small btn-outline" type="button" data-action="preview">${Utils.escapeHTML(t('notes.btn_view_large', '大图'))}</button>
+                            <button class="btn btn-small btn-outline" type="button" data-action="paper">${Utils.escapeHTML(t('notes.btn_paper', '文献'))}</button>
                         </div>
                     </div>
                 </div>

@@ -13,18 +13,18 @@
         <div class="navbar-content">
             <a href="/" class="logo">CiteBox</a>
             <ul class="nav-links">
-                <li><a href="/">总览</a></li>
-                <li><a href="/library">文献库</a></li>
-                <li><a href="/figures">图片库</a></li>
-                <li><a href="/palettes">配色库</a></li>
-                <li><a href="/groups">分组</a></li>
-                <li><a href="/tags" class="active">标签</a></li>
-                <li><a href="/notes">笔记</a></li>
-                <li><a href="/ai">AI伴读</a></li>
-                <li><a href="/settings">配置</a></li>
+                <li><a href="/" data-i18n="nav.overview">总览</a></li>
+                <li><a href="/library" data-i18n="nav.library">文献库</a></li>
+                <li><a href="/figures" data-i18n="nav.figures">图片库</a></li>
+                <li><a href="/palettes" data-i18n="nav.palettes">配色库</a></li>
+                <li><a href="/groups" data-i18n="nav.groups">分组</a></li>
+                <li><a href="/tags" class="active" data-i18n="nav.tags">标签</a></li>
+                <li><a href="/notes" data-i18n="nav.notes">笔记</a></li>
+                <li><a href="/ai" data-i18n="nav.ai">AI伴读</a></li>
+                <li><a href="/settings" data-i18n="nav.settings">配置</a></li>
             </ul>
             <div class="nav-actions">
-                <a href="/upload" class="nav-cta">上传 PDF</a>
+                <a href="/upload" class="nav-cta" data-i18n="nav.upload_pdf">上传 PDF</a>
             </div>
         </div>
     </nav>
@@ -33,39 +33,39 @@
         <section class="hero compact">
             <div>
                 <p class="eyebrow">Tags</p>
-                <h1>用标签灵活标记文献和图片</h1>
-                <p class="hero-text">文献标签适合标记主题、方法和阅读状态；图片标签适合标记图像内容和实验类型，方便各自检索。</p>
+                <h1 data-i18n="tags.hero_title">用标签灵活标记文献和图片</h1>
+                <p class="hero-text" data-i18n="tags.hero_text">文献标签适合标记主题、方法和阅读状态；图片标签适合标记图像内容和实验类型，方便各自检索。</p>
             </div>
         </section>
 
         <section class="manager-card">
             <div class="manager-head">
-                <h2>标签视图</h2>
-                <p>切换你当前想浏览的是文献标签还是图片标签。</p>
+                <h2 data-i18n="tags.view_title">标签视图</h2>
+                <p data-i18n="tags.view_desc">切换你当前想浏览的是文献标签还是图片标签。</p>
             </div>
             <div id="tagScopeSwitch" class="card-actions"></div>
             <div class="manager-card-divider"></div>
             <div class="manager-head">
-                <h2 id="tagCreatorTitle">新建文献标签</h2>
-                <p id="tagCreatorHint">标签适合轻量、多维、可叠加的整理方式。</p>
+                <h2 id="tagCreatorTitle" data-i18n="tags.create_paper_title">新建文献标签</h2>
+                <p id="tagCreatorHint" data-i18n="tags.hint_default">标签适合轻量、多维、可叠加的整理方式。</p>
             </div>
             <form id="tagPageForm" class="manager-form tag-creator-form">
                 <label class="field tag-name-field">
-                    <span>标签名称</span>
-                    <input id="tagPageNameInput" class="form-input" type="text" placeholder="例如：review" aria-label="标签名称">
+                    <span data-i18n="tags.field_name">标签名称</span>
+                    <input id="tagPageNameInput" class="form-input" type="text" placeholder="例如：review" data-i18n-placeholder="tags.field_name_paper_placeholder" aria-label="标签名称" data-i18n-aria-label="tags.field_name">
                 </label>
                 <div id="tagPresetPanel" class="field tag-preset-panel" hidden>
-                    <span class="field-label-text">常用图片标签</span>
-                    <p class="tag-color-hint">点击已存在标签会直接筛选，点击未创建标签会按当前颜色新建。</p>
-                    <div id="tagPresetList" class="tag-preset-list" role="list" aria-label="常用图片标签"></div>
+                    <span class="field-label-text" data-i18n="tags.preset_label">常用图片标签</span>
+                    <p class="tag-color-hint" data-i18n="tags.preset_hint">点击已存在标签会直接筛选，点击未创建标签会按当前颜色新建。</p>
+                    <div id="tagPresetList" class="tag-preset-list" role="list" aria-label="常用图片标签" data-i18n-aria-label="tags.preset_label"></div>
                 </div>
                 <div class="field tag-color-field">
-                    <span class="field-label-text">标签颜色</span>
-                    <p class="tag-color-hint">点击常用颜色，或用左侧色块自定义。</p>
+                    <span class="field-label-text" data-i18n="tags.field_color">标签颜色</span>
+                    <p class="tag-color-hint" data-i18n="tags.color_hint">点击常用颜色，或用左侧色块自定义。</p>
                     <div class="tag-color-control-row">
-                        <input id="tagPageColorInput" class="color-input" type="color" value="#A45C40" aria-label="标签颜色" title="选择标签颜色">
+                        <input id="tagPageColorInput" class="color-input" type="color" value="#A45C40" aria-label="标签颜色" data-i18n-aria-label="tags.field_color" title="选择标签颜色" data-i18n-title="tags.select_tag_color">
                         <div id="tagColorPresetList" class="tag-color-presets" role="listbox" aria-label="常用标签颜色"></div>
-                        <button id="tagPageSubmit" class="btn btn-primary tag-creator-submit" type="submit">创建文献标签</button>
+                        <button id="tagPageSubmit" class="btn btn-primary tag-creator-submit" type="submit" data-i18n="tags.btn_create_paper">创建文献标签</button>
                     </div>
                 </div>
             </form>
@@ -75,8 +75,8 @@
             <div id="tagCardGrid" class="entity-grid page-entity-grid tag-entity-grid"></div>
             <section class="filters-card">
                 <div class="manager-head">
-                    <h2 id="tagHeadline">全部文献标签下的文献</h2>
-                    <p id="tagScopeHint">点击上方标签列表切换筛选结果。</p>
+                    <h2 id="tagHeadline" data-i18n="tags.headline_all_paper_tags">全部文献标签下的文献</h2>
+                    <p id="tagScopeHint" data-i18n="tags.scope_hint_paper">点击上方标签列表切换筛选结果。</p>
                 </div>
                 <div id="tagResultList" class="paper-grid paper-list-mode"></div>
                 <div id="tagPagination" class="pagination"></div>
@@ -86,12 +86,13 @@
 
     <div id="paperModal" class="modal-shell hidden">
         <div class="modal-dialog">
-            <button id="closePaperModal" class="modal-close" type="button" aria-label="关闭">×</button>
+            <button id="closePaperModal" class="modal-close" type="button" aria-label="关闭" data-i18n-aria-label="btn.close">×</button>
             <div id="paperModalBody"></div>
         </div>
     </div>
 
     <script src="/static/js/theme.js"></script>
+    <script src="/static/js/i18n.js"></script>
     <script src="/static/js/utils.js"></script>
     <script src="/static/js/api.js"></script>
     <script src="/static/js/paper-viewer.js"></script>
