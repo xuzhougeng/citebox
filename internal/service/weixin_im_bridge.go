@@ -1506,9 +1506,9 @@ func weixinHelpText() string {
 		"`/search-papers 自然语言`：强制只搜文献",
 		"`/search-figures 自然语言`：强制只搜图片",
 		"`/recent`：查看最近几篇文献",
-		"`/paper 1`：选择检索结果中的文献",
+		"`/paper 1`：选择检索结果中的文献；普通文字如“看看第三篇文献”也会优先路由到这里",
 		"`/figures`：查看当前文献的图片列表",
-		"`/figure 1`：选择检索结果中的图片或当前文献中的图片，并回发原图预览",
+		"`/figure 1`：选择检索结果中的图片或当前文献中的图片；普通文字如“看看第二张图”也会优先路由到这里，并回发原图预览",
 		"直接发送 PDF：自动导入文献并切换上下文",
 		"`/ask 问题` 或 `/qa 问题`：对当前文献提问",
 		"`/note 内容`：追加文献/图片笔记",
@@ -1556,6 +1556,10 @@ func normalizeWeixinPlainTextCommand(command string) string {
 		return "/search-papers"
 	case "/search-figures", "search-figures", "search_figures":
 		return "/search-figures"
+	case "/paper", "paper":
+		return "/paper"
+	case "/figure", "figure":
+		return "/figure"
 	case "/ask", "ask", "/qa", "qa", "问答":
 		return "/ask"
 	case "/note", "note", "笔记":

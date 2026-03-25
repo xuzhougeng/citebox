@@ -469,6 +469,38 @@ func TestWeixinIMBridgePlainTextSearchRoutesToBestCommand(t *testing.T) {
 	}
 }
 
+func TestWeixinIMBridgePlainTextSelectionRoutesToPaper(t *testing.T) {
+	svc, repo, cfg := newTestService(t)
+	createBridgePaper(t, repo, "Atlas Alpha", "atlas-alpha.pdf")
+	createBridgePaper(t, repo, "Atlas Beta", "atlas-beta.pdf")
+	createBridgePaper(t, repo, "Atlas Gamma", "atlas-gamma.pdf")
+	aiReader := &fakeWeixinAIReader{answer: "ok"}
+	bridge := newTestWeixinBridge(t, svc, aiReader, cfg.StorageDir)
+
+	_ = bridge.handleIncomingText(context.Background(), "/search Atlas")
+	state := bridge.getContext()
+	if len(state.SearchPaperIDs) < 3 {
+		t.Fatalf("search result ids = %v, want at least 3 results", state.SearchPaperIDs)
+	}
+
+	aiReader.commandPlan = &weixinCommandPlan{Command: "/paper", Arg: "3"}
+	reply := bridge.handleIncomingText(context.Background(), "我想看看第三篇文献")
+
+	if bridge.getContext().CurrentPaperID != state.SearchPaperIDs[2] {
+		t.Fatalf("current paper = %d, want third search result %d", bridge.getContext().CurrentPaperID, state.SearchPaperIDs[2])
+	}
+	selectedPaper, err := svc.GetPaper(state.SearchPaperIDs[2])
+	if err != nil {
+		t.Fatalf("GetPaper() error = %v", err)
+	}
+	if selectedPaper == nil {
+		t.Fatal("GetPaper() returned nil selected paper")
+	}
+	if !containsAll(reply, "已选中文献", selectedPaper.Title) {
+		t.Fatalf("plain text selection reply = %q, want selected third paper title %q", reply, selectedPaper.Title)
+	}
+}
+
 func TestWeixinIMBridgePlainTextQuestionRoutesToAsk(t *testing.T) {
 	svc, repo, cfg := newTestService(t)
 	createBridgePaper(t, repo, "Help Atlas", "help-atlas.pdf")

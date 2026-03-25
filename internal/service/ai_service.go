@@ -449,14 +449,15 @@ func (s *AIService) PlanWeixinCommand(ctx context.Context, text string, context 
 1. 只返回 JSON 对象，不要加 Markdown 代码块。
 2. JSON 必须包含 command 和 arg 两个字段。
 3. command 只能从以下列表中选择：
-   "/help", "/status", "/reset", "/recent", "/figures", "/search", "/search-papers", "/search-figures", "/ask", "/note", "/interpret"
+   "/help", "/status", "/reset", "/recent", "/figures", "/search", "/search-papers", "/search-figures", "/paper", "/figure", "/ask", "/note", "/interpret"
 4. arg 必须是字符串；如果命令不需要参数，就返回空字符串 ""。
-5. 不要返回 "/paper" 或 "/figure"。图片和文献结果选择仍应由用户显式输入 slash 命令完成。
-6. 如果用户是在找文献或图片，用 "/search"、"/search-papers" 或 "/search-figures"。
-7. 如果当前已有文献上下文，而用户是在继续追问当前文献内容，用 "/ask"。
-8. 如果当前已有图片上下文，而用户是在要求解释当前图片，用 "/interpret"。
-9. 如果用户是在追加笔记，用 "/note"。
-10. 识别不准时优先选择最保守、最合理的命令；完全无法判断时返回 "/help"。
+5. 如果用户是在找文献或图片，用 "/search"、"/search-papers" 或 "/search-figures"。
+6. 如果用户是在选择最近一次检索结果里的某篇文献，例如“第一篇文献”“第三篇论文”“第 2 个结果”，并且 search_paper_count > 0，就返回 "/paper"，arg 填对应阿拉伯数字序号，如 "3"。
+7. 如果用户是在选择最近一次图片检索结果或当前文献图片列表里的某张图，例如“第二张图”“看看第三幅图”，并且 search_figure_count > 0 或 current_paper_id > 0，就返回 "/figure"，arg 填对应阿拉伯数字序号，如 "2"。
+8. 如果当前已有文献上下文，而用户是在继续追问当前文献内容，用 "/ask"。
+9. 如果当前已有图片上下文，而用户是在要求解释当前图片，用 "/interpret"。
+10. 如果用户是在追加笔记，用 "/note"。
+11. 识别不准时优先选择最保守、最合理的命令；完全无法判断时返回 "/help"。
 
 当前上下文：
 %s

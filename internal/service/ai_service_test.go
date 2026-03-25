@@ -568,6 +568,74 @@ func TestPlanWeixinCommandUsesIntentSceneModel(t *testing.T) {
 	}
 }
 
+func TestPlanWeixinCommandSupportsContextualPaperSelection(t *testing.T) {
+	_, repo, cfg := newTestService(t)
+	aiSvc := NewAIService(repo, cfg, nil)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/responses" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("ReadAll() error = %v", err)
+		}
+		bodyText := string(body)
+		if !strings.Contains(bodyText, "/paper") || !strings.Contains(bodyText, "/figure") {
+			t.Fatalf("request body missing contextual selection commands: %s", bodyText)
+		}
+		if !strings.Contains(bodyText, "search_paper_count: 3") {
+			t.Fatalf("request body missing recent search context: %s", bodyText)
+		}
+		if !strings.Contains(bodyText, "第三篇文献") {
+			t.Fatalf("request body missing original selection text: %s", bodyText)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"output_text":"{\"command\":\"/paper\",\"arg\":\"3\"}"}`))
+	}))
+	defer server.Close()
+
+	if _, err := aiSvc.UpdateSettings(model.AISettings{
+		Models: []model.AIModelConfig{
+			{
+				ID:              "default",
+				Name:            "Default",
+				Provider:        model.AIProviderOpenAI,
+				APIKey:          "default-key",
+				BaseURL:         "https://api.openai.com",
+				Model:           "gpt-default",
+				MaxOutputTokens: 1200,
+			},
+			{
+				ID:              "intent",
+				Name:            "Intent",
+				Provider:        model.AIProviderOpenAI,
+				APIKey:          "intent-key",
+				BaseURL:         server.URL,
+				Model:           "gpt-intent",
+				MaxOutputTokens: 400,
+			},
+		},
+		SceneModels: model.AISceneModelSelection{
+			DefaultModelID:  "default",
+			IMIntentModelID: "intent",
+		},
+		SystemPrompt: "system",
+	}); err != nil {
+		t.Fatalf("UpdateSettings() error = %v", err)
+	}
+
+	plan, err := aiSvc.PlanWeixinCommand(context.Background(), "我想看看第三篇文献", weixinIntentContext{
+		SearchPaperCount: 3,
+	})
+	if err != nil {
+		t.Fatalf("PlanWeixinCommand() error = %v", err)
+	}
+	if plan.Command != "/paper" || plan.Arg != "3" {
+		t.Fatalf("PlanWeixinCommand() = %+v, want /paper 3", plan)
+	}
+}
+
 func TestReviewWeixinFigureSearchSendsCompressedImages(t *testing.T) {
 	_, repo, cfg := newTestService(t)
 	aiSvc := NewAIService(repo, cfg, nil)
