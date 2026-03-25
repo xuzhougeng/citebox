@@ -1,14 +1,15 @@
+if (typeof window.t !== 'function') window.t = function(k,f){return f||k};
 const AppNavigationHotkeys = {
     routes: [
-        { key: '1', path: '/', label: '总览' },
-        { key: '2', path: '/library', label: '文献库' },
-        { key: '3', path: '/figures', label: '图片库' },
-        { key: '4', path: '/palettes', label: '配色库' },
-        { key: '5', path: '/groups', label: '分组' },
-        { key: '6', path: '/tags', label: '标签' },
-        { key: '7', path: '/notes', label: '笔记' },
-        { key: '8', path: '/ai', label: 'AI伴读' },
-        { key: '9', path: '/settings', label: '配置' }
+        { key: '1', path: '/', i18n: 'nav.overview', fallback: '总览' },
+        { key: '2', path: '/library', i18n: 'nav.library', fallback: '文献库' },
+        { key: '3', path: '/figures', i18n: 'nav.figures', fallback: '图片库' },
+        { key: '4', path: '/palettes', i18n: 'nav.palettes', fallback: '配色库' },
+        { key: '5', path: '/groups', i18n: 'nav.groups', fallback: '分组' },
+        { key: '6', path: '/tags', i18n: 'nav.tags', fallback: '标签' },
+        { key: '7', path: '/notes', i18n: 'nav.notes', fallback: '笔记' },
+        { key: '8', path: '/ai', i18n: 'nav.ai', fallback: 'AI伴读' },
+        { key: '9', path: '/settings', i18n: 'nav.settings', fallback: '配置' }
     ],
 
     init() {
@@ -40,7 +41,8 @@ const AppNavigationHotkeys = {
         document.querySelectorAll('.nav-links a[href]').forEach((link) => {
             const route = this.routes.find((item) => this.normalizePath(item.path) === this.normalizePath(link.getAttribute('href') || ''));
             if (!route) return;
-            link.title = `${route.label}（快捷键 ${route.key}）`;
+            const label = t(route.i18n, route.fallback);
+            link.title = `${label}${t('hotkey.shortcut_hint', '（快捷键 {key}）').replace('{key}', route.key)}`;
         });
     },
 
@@ -154,28 +156,28 @@ const AppUpdateNotice = {
     showPrompt(status = {}) {
         this.closePrompt();
 
-        const currentVersion = String(status.current_version || '当前版本').trim();
+        const currentVersion = String(status.current_version || t('update.current_version', '当前版本')).trim();
         const latestVersion = String(status.latest_version || '').trim();
         const releaseURL = String(status.latest_release_url || '').trim();
         const publishedAt = status.published_at
-            ? `发布时间：${Utils.escapeHTML(Utils.formatDate(status.published_at))}`
-            : '已有新的正式版本可用';
+            ? `${t('update.published_at', '发布时间：')}${Utils.escapeHTML(Utils.formatDate(status.published_at))}`
+            : t('update.new_version_available', '已有新的正式版本可用');
 
         const overlay = document.createElement('div');
         overlay.className = 'dialog-overlay';
         overlay.innerHTML = `
             <div class="dialog-box dialog-box-update">
                 <div class="dialog-update-head">
-                    <span class="dialog-update-badge">发现更新</span>
-                    <h3>检测到新版本 ${Utils.escapeHTML(latestVersion)}</h3>
+                    <span class="dialog-update-badge">${t('update.badge', '发现更新')}</span>
+                    <h3>${t('update.new_version_detected', '检测到新版本 {version}').replace('{version}', Utils.escapeHTML(latestVersion))}</h3>
                 </div>
                 <div class="dialog-body dialog-update-body">
-                    <p>当前版本是 <strong>${Utils.escapeHTML(currentVersion)}</strong>，建议更新到 <strong>${Utils.escapeHTML(latestVersion)}</strong>。</p>
+                    <p>${t('update.version_message', '当前版本是 <strong>{current}</strong>，建议更新到 <strong>{latest}</strong>。').replace('{current}', Utils.escapeHTML(currentVersion)).replace('{latest}', Utils.escapeHTML(latestVersion))}</p>
                     <p>${publishedAt}</p>
                 </div>
                 <div class="dialog-footer">
-                    <button class="btn btn-outline" type="button" data-update-action="later">暂不更新</button>
-                    <button class="btn btn-primary" type="button" data-update-action="now">立刻更新</button>
+                    <button class="btn btn-outline" type="button" data-update-action="later">${t('update.later', '暂不更新')}</button>
+                    <button class="btn btn-primary" type="button" data-update-action="now">${t('update.now', '立刻更新')}</button>
                 </div>
             </div>
         `;

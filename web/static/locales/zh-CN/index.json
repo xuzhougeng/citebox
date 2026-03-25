@@ -1,0 +1,58 @@
+{
+    "_title": "总览 - CiteBox",
+
+    "index.hero_title": "一目了然掌握文献进度",
+    "index.hero_text": "查看文献处理进度、图片提取情况和最近更新，快速了解当前工作状态。",
+    "index.next_step": "下一步：",
+    "index.go_library": "进入文献库",
+    "index.go_guide": "查看功能说明",
+
+    "index.status_heading": "当前处理概况",
+    "index.status_desc": "文献总量、解析完成度和待处理项一览。",
+
+    "index.recent_heading": "最近更新的文献",
+    "index.recent_desc": "最近有更新的文献，点击可查看详情。",
+    "index.view_all_papers": "查看全部文献",
+
+    "index.quick_heading": "快捷入口",
+    "index.quick_desc": "按你的当前任务，直接进入对应工作区。",
+    "index.shortcut_upload_desc": "添加新文献到你的库中。",
+    "index.shortcut_figures_desc": "跨文献浏览图片、标签和图片笔记。",
+    "index.shortcut_notes_desc": "集中回看文献笔记、图片笔记和 AI 解读结果。",
+    "index.shortcut_ai_desc": "围绕正文和图片继续提问与整理。",
+
+    "index.guide_heading": "功能说明",
+    "index.guide_desc": "了解各模块的功能与推荐使用顺序。",
+    "index.guide_teaser": "初次使用？功能说明页可以帮你快速上手整个系统。",
+    "index.open_guide": "打开功能说明",
+
+    "index.stat_total_papers": "文献总数",
+    "index.stat_completed": "已完成",
+    "index.stat_processing": "处理中",
+    "index.stat_failed": "解析异常",
+    "index.stat_total_figures": "图片总数",
+    "index.stat_noted_figures": "已写笔记图片",
+
+    "index.empty_title": "还没有文献",
+    "index.empty_desc": "先上传 PDF，系统会在这里展示最近更新的文献。",
+    "index.upload_paper": "上传文献",
+
+    "index.click_to_view": "点击查看详情",
+    "index.ungrouped": "未分组",
+    "index.figures_unit": "张图片",
+    "index.view_detail": "查看详情",
+    "index.manual_annotate": "手动标注",
+    "index.reextract": "重新解析",
+    "index.reextract_submitted": "文献已重新提交解析",
+
+    "hotkey.shortcut_hint": "（快捷键 {key}）",
+
+    "update.badge": "发现更新",
+    "update.new_version_detected": "检测到新版本 {version}",
+    "update.current_version": "当前版本",
+    "update.published_at": "发布时间：",
+    "update.new_version_available": "已有新的正式版本可用",
+    "update.version_message": "当前版本是 <strong>{current}</strong>，建议更新到 <strong>{latest}</strong>。",
+    "update.later": "暂不更新",
+    "update.now": "立刻更新"
+}
