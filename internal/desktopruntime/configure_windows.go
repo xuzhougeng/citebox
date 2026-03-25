@@ -187,12 +187,19 @@ static LRESULT CALLBACK citebox_window_proc(HWND hwnd, UINT msg, WPARAM wp, LPAR
 		}
 		break;
 	case WM_DESTROY:
+		// Forward WM_DESTROY back to the original webview proc so it can
+		// terminate the Windows message loop. Swallowing this leaves the
+		// process alive after the window is closed.
+		WNDPROC prev_wndproc = citebox_prev_wndproc;
 		citebox_cleanup_tray();
-		if (citebox_prev_wndproc != NULL) {
-			SetWindowLongPtrW(hwnd, GWLP_WNDPROC, (LONG_PTR)citebox_prev_wndproc);
+		if (prev_wndproc != NULL) {
+			SetWindowLongPtrW(hwnd, GWLP_WNDPROC, (LONG_PTR)prev_wndproc);
 		}
 		citebox_prev_wndproc = NULL;
 		citebox_tray_hwnd = NULL;
+		if (prev_wndproc != NULL) {
+			return CallWindowProcW(prev_wndproc, hwnd, msg, wp, lp);
+		}
 		break;
 	}
 
