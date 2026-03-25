@@ -148,6 +148,7 @@
     padding: 0.6rem 1rem;
     border-radius: 999px;
     color: var(--muted);
+    white-space: nowrap;
     transition: 0.2s ease;
 }
 

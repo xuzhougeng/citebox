@@ -1,5 +1,32 @@
 /* ===== Responsive Styles ===== */
 
+@media (max-width: 1240px) and (min-width: 721px) {
+    .navbar-content {
+        flex-wrap: wrap;
+        align-items: flex-start;
+        justify-content: flex-start;
+        row-gap: 0.85rem;
+    }
+
+    .nav-actions {
+        margin-left: auto;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+    }
+
+    .nav-links {
+        order: 3;
+        flex: 1 1 100%;
+        flex-wrap: wrap;
+        gap: 0.3rem;
+    }
+
+    .nav-links a {
+        padding: 0.5rem 0.72rem;
+        font-size: 0.97rem;
+    }
+}
+
 @media (max-width: 1080px) {
     .shortcut-grid,
     .overview-grid,
@@ -52,11 +79,19 @@
     .nav-links {
         width: 100%;
         justify-content: flex-start;
-        overflow-x: auto;
+        flex-wrap: wrap;
+        overflow-x: visible;
+        row-gap: 0.45rem;
     }
 
     .nav-actions {
         width: 100%;
+        flex-wrap: wrap;
+        row-gap: 0.65rem;
+    }
+
+    .nav-links a {
+        padding: 0.55rem 0.8rem;
     }
 
     .summary-strip,

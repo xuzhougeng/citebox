@@ -53,6 +53,7 @@
     border-radius: 999px;
     color: var(--on-accent);
     font-weight: 700;
+    white-space: nowrap;
     background: linear-gradient(135deg, var(--accent), var(--accent-deep));
     box-shadow: 0 12px 24px rgba(var(--accent-rgb), 0.2);
     transition: transform 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease;

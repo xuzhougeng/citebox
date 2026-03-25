@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>配色库 - CiteBox</title>
     <link rel="icon" type="image/svg+xml" href="/static/img/citebox-icon.svg">
-    <script>(function(){var t=localStorage.getItem("citebox_theme");if(t&&t!=="warm")document.documentElement.setAttribute("data-theme",t)})()</script>
+    <script>(function(){var d=document.documentElement;try{var t=localStorage.getItem("citebox_theme");if(t&&t!=="warm")d.setAttribute("data-theme",t);var l=localStorage.getItem("citebox_lang")||"zh-CN";d.lang=l;if(l!=="zh-CN")d.setAttribute("data-lang-loading","1");}catch(e){}})()</script>
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>

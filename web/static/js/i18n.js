@@ -124,10 +124,14 @@ var CiteBoxI18n = {
 
     init: function() {
         var self = this;
-        return this.loadLocale().then(function() {
+        return this.loadLocale().catch(function() {
+            self._ready = true;
+        }).then(function() {
             window.t = self.t.bind(self);
             self.applyDOM();
             self.injectSwitcher();
+        }).finally(function() {
+            document.documentElement.removeAttribute('data-lang-loading');
         });
     }
 };
