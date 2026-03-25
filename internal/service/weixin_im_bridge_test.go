@@ -83,10 +83,9 @@ func (f *fakeWeixinAIReader) PlanWeixinSearch(_ context.Context, query, forcedTa
 	if target == "" {
 		target = weixinSearchTargetPaper
 	}
-	return &weixinSearchPlan{
-		Target:   target,
-		Keywords: normalizeWeixinSearchKeywords([]string{query}),
-	}, nil
+	plan := heuristicWeixinSearchPlan(query, target)
+	plan.Target = target
+	return plan, nil
 }
 
 func (f *fakeWeixinAIReader) ReviewWeixinPaperSearch(_ context.Context, _ string, _ []string, candidates []model.Paper) (*weixinSearchReview, error) {
@@ -305,15 +304,17 @@ func TestWeixinIMBridgeSmartPaperSearchUsesPlannedKeywords(t *testing.T) {
 	aiReader := &fakeWeixinAIReader{
 		answer: "ok",
 		searchPlan: &weixinSearchPlan{
-			Target:   weixinSearchTargetPaper,
-			Keywords: []string{"single-cell atlas", "review", "atlas"},
+			Target:     weixinSearchTargetPaper,
+			KeywordsZH: []string{"单细胞图谱", "综述"},
+			KeywordsEN: []string{"single-cell atlas", "review"},
+			Keywords:   []string{"单细胞图谱", "综述", "single-cell atlas", "review"},
 		},
 	}
 	bridge := newTestWeixinBridge(t, svc, aiReader, cfg.StorageDir)
 
 	reply := bridge.handleIncomingText(context.Background(), "/search 我想找单细胞图谱综述")
 
-	if !containsAll(reply, "检索关键词", "评估", "已自动选中文献") {
+	if !containsAll(reply, "中文关键词", "英文关键词", "评估", "已自动选中文献") {
 		t.Fatalf("smart paper search reply = %q, want planned keyword summary and auto-selected paper", reply)
 	}
 	if bridge.getContext().CurrentPaperID != paper.ID {
@@ -332,7 +333,7 @@ func TestWeixinIMBridgeFigureSearchFallsBackToHeuristics(t *testing.T) {
 	}, cfg.StorageDir)
 
 	reply := bridge.handleIncomingText(context.Background(), "/search 我想要一张火山图")
-	if !containsAll(reply, "检索关键词", "汇总后最可能的图片", "Volcano plot") {
+	if !containsAll(reply, "中文关键词", "英文关键词", "汇总后最可能的图片", "Volcano plot") {
 		t.Fatalf("figure search reply = %q, want heuristic keyword search result", reply)
 	}
 
@@ -450,15 +451,17 @@ func TestWeixinIMBridgePlainTextSearchRoutesToBestCommand(t *testing.T) {
 		answer:      "ok",
 		commandPlan: &weixinCommandPlan{Command: "/search-figures", Arg: "我想要一张火山图"},
 		searchPlan: &weixinSearchPlan{
-			Target:   weixinSearchTargetFigure,
-			Keywords: []string{"火山图", "volcano plot", "differential expression"},
+			Target:     weixinSearchTargetFigure,
+			KeywordsZH: []string{"火山图", "差异表达"},
+			KeywordsEN: []string{"volcano plot", "differential expression"},
+			Keywords:   []string{"火山图", "差异表达", "volcano plot", "differential expression"},
 		},
 	}
 	bridge := newTestWeixinBridge(t, svc, aiReader, cfg.StorageDir)
 
 	reply := bridge.handleIncomingText(context.Background(), "我想要一张火山图")
 
-	if !containsAll(reply, "检索关键词", "汇总后最可能的图片") {
+	if !containsAll(reply, "中文关键词", "英文关键词", "汇总后最可能的图片") {
 		t.Fatalf("plain text reply = %q, want auto-routed search result", reply)
 	}
 	if len(bridge.getContext().SearchFigureIDs) == 0 {

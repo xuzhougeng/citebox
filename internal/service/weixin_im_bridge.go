@@ -23,15 +23,16 @@ import (
 )
 
 const (
-	weixinBridgeStateDirName = "weixin-bridge"
-	weixinSyncBufFileName    = "sync_buf"
-	weixinContextFileName    = "im_context.json"
-	weixinReplyMaxRunes      = 3200
-	weixinHistoryLimit       = 6
-	weixinSearchKeywordLimit = 5
-	weixinSearchResultLimit  = 3
-	weixinSearchProbeLimit   = 3
-	weixinSearchReviewLimit  = 6
+	weixinBridgeStateDirName            = "weixin-bridge"
+	weixinSyncBufFileName               = "sync_buf"
+	weixinContextFileName               = "im_context.json"
+	weixinReplyMaxRunes                 = 3200
+	weixinHistoryLimit                  = 6
+	weixinSearchKeywordLimit            = 6
+	weixinSearchKeywordPerLanguageLimit = 3
+	weixinSearchResultLimit             = 3
+	weixinSearchProbeLimit              = 3
+	weixinSearchReviewLimit             = 6
 )
 
 const (
@@ -57,8 +58,10 @@ type weixinIMContext struct {
 }
 
 type weixinSearchPlan struct {
-	Target   string   `json:"target"`
-	Keywords []string `json:"keywords"`
+	Target     string   `json:"target"`
+	Keywords   []string `json:"keywords"`
+	KeywordsZH []string `json:"keywords_zh,omitempty"`
+	KeywordsEN []string `json:"keywords_en,omitempty"`
 }
 
 type weixinIntentContext struct {
@@ -423,9 +426,9 @@ func (b *WeixinIMBridge) search(ctx context.Context, query, forcedTarget string)
 	plan := b.planWeixinSearch(ctx, query, forcedTarget)
 	switch plan.Target {
 	case weixinSearchTargetFigure:
-		return b.searchFigures(ctx, query, plan.Keywords)
+		return b.searchFigures(ctx, query, plan)
 	default:
-		return b.searchPapers(ctx, query, plan.Keywords)
+		return b.searchPapers(ctx, query, plan)
 	}
 }
 
@@ -435,8 +438,10 @@ func (b *WeixinIMBridge) planWeixinSearch(ctx context.Context, query, forcedTarg
 		plan, err := b.aiService.PlanWeixinSearch(ctx, query, normalizedForcedTarget)
 		if err == nil && plan != nil && normalizeWeixinSearchTarget(plan.Target) != "" && len(plan.Keywords) > 0 {
 			return &weixinSearchPlan{
-				Target:   normalizeWeixinSearchTarget(firstNonEmpty(normalizedForcedTarget, plan.Target)),
-				Keywords: normalizeWeixinSearchKeywords(plan.Keywords),
+				Target:     normalizeWeixinSearchTarget(firstNonEmpty(normalizedForcedTarget, plan.Target)),
+				KeywordsZH: normalizeWeixinSearchKeywordsForLanguage(plan.KeywordsZH, "zh"),
+				KeywordsEN: normalizeWeixinSearchKeywordsForLanguage(plan.KeywordsEN, "en"),
+				Keywords:   mergeWeixinSearchKeywords(plan.KeywordsZH, plan.KeywordsEN, plan.Keywords),
 			}
 		}
 		if err != nil {
@@ -454,29 +459,22 @@ func heuristicWeixinSearchPlan(query, forcedTarget string) *weixinSearchPlan {
 		target = inferWeixinSearchTarget(query, cleaned)
 	}
 
-	keywords := []string{query}
-	if cleaned != "" && !strings.EqualFold(cleaned, query) {
-		keywords = append(keywords, cleaned)
-	}
-	keywords = append(keywords, expandWeixinSearchKeywords(query, cleaned, target)...)
-	keywords = normalizeWeixinSearchKeywords(keywords)
-	if len(keywords) == 0 {
-		keywords = []string{query}
-	}
+	keywordsZH, keywordsEN := expandWeixinSearchKeywords(query, cleaned, target)
+	keywordsZH = normalizeWeixinSearchKeywordsForLanguage(keywordsZH, "zh")
+	keywordsEN = normalizeWeixinSearchKeywordsForLanguage(keywordsEN, "en")
 
 	return &weixinSearchPlan{
-		Target:   target,
-		Keywords: keywords,
+		Target:     target,
+		KeywordsZH: keywordsZH,
+		KeywordsEN: keywordsEN,
+		Keywords:   mergeWeixinSearchKeywords(keywordsZH, keywordsEN),
 	}
 }
 
-func (b *WeixinIMBridge) searchPapers(ctx context.Context, query string, keywords []string) string {
-	keywords = normalizeWeixinSearchKeywords(keywords)
-	if len(keywords) == 0 {
-		keywords = normalizeWeixinSearchKeywords([]string{query})
-	}
+func (b *WeixinIMBridge) searchPapers(ctx context.Context, query string, plan *weixinSearchPlan) string {
+	keywordsZH, keywordsEN, keywords := resolveWeixinSearchPlanKeywords(query, plan)
 
-	candidates, err := b.collectPaperSearchCandidates(keywords)
+	candidates, err := b.collectPaperSearchCandidates(keywordsZH, keywordsEN)
 	if err != nil {
 		return fmt.Sprintf("搜索失败：%v", err)
 	}
@@ -505,12 +503,8 @@ func (b *WeixinIMBridge) searchPapers(ctx context.Context, query string, keyword
 		})
 		reply := b.formatPaperSelection(&paper, true)
 		if summary != "" {
-			reply = strings.Join([]string{
-				fmt.Sprintf("检索关键词：%s", strings.Join(keywords, " / ")),
-				fmt.Sprintf("评估：%s", summary),
-				"",
-				reply,
-			}, "\n")
+			lines := append(formatWeixinSearchKeywordLines(keywordsZH, keywordsEN), fmt.Sprintf("评估：%s", summary), "", reply)
+			reply = strings.Join(lines, "\n")
 		}
 		return reply
 	}
@@ -521,7 +515,7 @@ func (b *WeixinIMBridge) searchPapers(ctx context.Context, query string, keyword
 	})
 
 	var lines []string
-	lines = append(lines, fmt.Sprintf("检索关键词：%s", strings.Join(keywords, " / ")))
+	lines = append(lines, formatWeixinSearchKeywordLines(keywordsZH, keywordsEN)...)
 	if summary != "" {
 		lines = append(lines, fmt.Sprintf("评估：%s", summary))
 	}
@@ -539,13 +533,10 @@ func (b *WeixinIMBridge) searchPapers(ctx context.Context, query string, keyword
 	return strings.Join(lines, "\n")
 }
 
-func (b *WeixinIMBridge) searchFigures(ctx context.Context, query string, keywords []string) string {
-	keywords = normalizeWeixinSearchKeywords(keywords)
-	if len(keywords) == 0 {
-		keywords = normalizeWeixinSearchKeywords([]string{query})
-	}
+func (b *WeixinIMBridge) searchFigures(ctx context.Context, query string, plan *weixinSearchPlan) string {
+	keywordsZH, keywordsEN, keywords := resolveWeixinSearchPlanKeywords(query, plan)
 
-	candidates, err := b.collectFigureSearchCandidates(keywords)
+	candidates, err := b.collectFigureSearchCandidates(keywordsZH, keywordsEN)
 	if err != nil {
 		return fmt.Sprintf("搜索失败：%v", err)
 	}
@@ -567,7 +558,7 @@ func (b *WeixinIMBridge) searchFigures(ctx context.Context, query string, keywor
 	})
 
 	var lines []string
-	lines = append(lines, fmt.Sprintf("检索关键词：%s", strings.Join(keywords, " / ")))
+	lines = append(lines, formatWeixinSearchKeywordLines(keywordsZH, keywordsEN)...)
 	if summary != "" {
 		lines = append(lines, fmt.Sprintf("评估：%s", summary))
 	}
@@ -582,10 +573,31 @@ func (b *WeixinIMBridge) searchFigures(ctx context.Context, query string, keywor
 	return strings.Join(lines, "\n")
 }
 
-func (b *WeixinIMBridge) collectPaperSearchCandidates(keywords []string) ([]weixinPaperSearchCandidate, error) {
+func (b *WeixinIMBridge) collectPaperSearchCandidates(keywordsZH, keywordsEN []string) ([]weixinPaperSearchCandidate, error) {
 	byID := map[int64]*weixinPaperSearchCandidate{}
 
-	for keywordIndex, keyword := range keywords {
+	for keywordIndex, keyword := range keywordsZH {
+		result, err := b.libraryService.ListPapers(model.PaperFilter{
+			Keyword:  keyword,
+			Page:     1,
+			PageSize: weixinSearchProbeLimit,
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		for rank, paper := range result.Papers {
+			score := scoreWeixinPaperCandidate(paper, keyword, keywordIndex, rank)
+			existing, ok := byID[paper.ID]
+			if !ok {
+				candidate := &weixinPaperSearchCandidate{Paper: paper}
+				byID[paper.ID] = candidate
+				existing = candidate
+			}
+			existing.Score += score
+		}
+	}
+	for keywordIndex, keyword := range keywordsEN {
 		result, err := b.libraryService.ListPapers(model.PaperFilter{
 			Keyword:  keyword,
 			Page:     1,
@@ -623,10 +635,31 @@ func (b *WeixinIMBridge) collectPaperSearchCandidates(keywords []string) ([]weix
 	return candidates, nil
 }
 
-func (b *WeixinIMBridge) collectFigureSearchCandidates(keywords []string) ([]weixinFigureSearchCandidate, error) {
+func (b *WeixinIMBridge) collectFigureSearchCandidates(keywordsZH, keywordsEN []string) ([]weixinFigureSearchCandidate, error) {
 	byID := map[int64]*weixinFigureSearchCandidate{}
 
-	for keywordIndex, keyword := range keywords {
+	for keywordIndex, keyword := range keywordsZH {
+		result, err := b.libraryService.ListFigures(model.FigureFilter{
+			Keyword:  keyword,
+			Page:     1,
+			PageSize: weixinSearchProbeLimit,
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		for rank, figure := range result.Figures {
+			score := scoreWeixinFigureCandidate(figure, keyword, keywordIndex, rank)
+			existing, ok := byID[figure.ID]
+			if !ok {
+				candidate := &weixinFigureSearchCandidate{Figure: figure}
+				byID[figure.ID] = candidate
+				existing = candidate
+			}
+			existing.Score += score
+		}
+	}
+	for keywordIndex, keyword := range keywordsEN {
 		result, err := b.libraryService.ListFigures(model.FigureFilter{
 			Keyword:  keyword,
 			Page:     1,
@@ -841,7 +874,7 @@ func selectFigureCandidatesByID(candidates []weixinFigureSearchCandidate, ids []
 }
 
 func localWeixinSearchSummary(keywords []string, dimensions string) string {
-	return fmt.Sprintf("已按 %d 个关键词汇总候选，并结合%s做了一次匹配度排序。", len(keywords), dimensions)
+	return fmt.Sprintf("已按中英文共 %d 个关键词分别检索、去重汇总，并结合%s做了一次匹配度排序。", len(keywords), dimensions)
 }
 
 func (b *WeixinIMBridge) importPDFFile(ctx context.Context, item weixin.MessageItem) string {
@@ -1534,6 +1567,39 @@ func normalizeWeixinPlainTextCommand(command string) string {
 	}
 }
 
+func resolveWeixinSearchPlanKeywords(query string, plan *weixinSearchPlan) ([]string, []string, []string) {
+	if plan == nil {
+		plan = heuristicWeixinSearchPlan(query, "")
+	}
+
+	keywordsZH := normalizeWeixinSearchKeywordsForLanguage(plan.KeywordsZH, "zh")
+	keywordsEN := normalizeWeixinSearchKeywordsForLanguage(plan.KeywordsEN, "en")
+	if len(keywordsZH) == 0 || len(keywordsEN) == 0 {
+		fallbackPlan := heuristicWeixinSearchPlan(query, plan.Target)
+		keywordsZH = mergeWeixinSearchKeywords(keywordsZH, fallbackPlan.KeywordsZH)
+		keywordsEN = mergeWeixinSearchKeywords(keywordsEN, fallbackPlan.KeywordsEN)
+		keywordsZH = normalizeWeixinSearchKeywordsForLanguage(keywordsZH, "zh")
+		keywordsEN = normalizeWeixinSearchKeywordsForLanguage(keywordsEN, "en")
+	}
+
+	keywords := mergeWeixinSearchKeywords(keywordsZH, keywordsEN, plan.Keywords)
+	return keywordsZH, keywordsEN, keywords
+}
+
+func formatWeixinSearchKeywordLines(keywordsZH, keywordsEN []string) []string {
+	lines := []string{}
+	if len(keywordsZH) > 0 {
+		lines = append(lines, fmt.Sprintf("中文关键词：%s", strings.Join(keywordsZH, " / ")))
+	}
+	if len(keywordsEN) > 0 {
+		lines = append(lines, fmt.Sprintf("英文关键词：%s", strings.Join(keywordsEN, " / ")))
+	}
+	if len(lines) == 0 {
+		return []string{"检索关键词：无"}
+	}
+	return lines
+}
+
 func cleanupWeixinSearchQuery(query string) string {
 	cleaned := strings.TrimSpace(query)
 	replacements := []string{
@@ -1566,35 +1632,37 @@ func inferWeixinSearchTarget(query, cleaned string) string {
 	return weixinSearchTargetPaper
 }
 
-func expandWeixinSearchKeywords(query, cleaned, target string) []string {
+func expandWeixinSearchKeywords(query, cleaned, target string) ([]string, []string) {
 	type keywordExpansion struct {
-		Needles  []string
-		Keywords []string
+		Needles    []string
+		KeywordsZH []string
+		KeywordsEN []string
 	}
 
 	expansions := []keywordExpansion{
-		{Needles: []string{"火山图", "volcano"}, Keywords: []string{"火山图", "volcano plot", "differential expression", "log2 fold change", "p value"}},
-		{Needles: []string{"热图", "heatmap"}, Keywords: []string{"热图", "heatmap", "expression heatmap", "cluster heatmap"}},
-		{Needles: []string{"umap"}, Keywords: []string{"UMAP", "embedding", "single-cell embedding"}},
-		{Needles: []string{"tsne", "t-sne"}, Keywords: []string{"t-SNE", "embedding", "single-cell embedding"}},
-		{Needles: []string{"pca"}, Keywords: []string{"PCA", "principal component analysis"}},
-		{Needles: []string{"小提琴图", "violin"}, Keywords: []string{"小提琴图", "violin plot"}},
-		{Needles: []string{"点图", "dot plot", "dotplot"}, Keywords: []string{"点图", "dot plot"}},
-		{Needles: []string{"箱线图", "box plot"}, Keywords: []string{"箱线图", "box plot"}},
-		{Needles: []string{"散点图", "scatter"}, Keywords: []string{"散点图", "scatter plot"}},
-		{Needles: []string{"生存曲线", "kaplan", "km曲线", "survival"}, Keywords: []string{"生存曲线", "Kaplan-Meier", "survival curve"}},
-		{Needles: []string{"western blot", "wb"}, Keywords: []string{"western blot", "immunoblot"}},
-		{Needles: []string{"免疫荧光"}, Keywords: []string{"免疫荧光", "immunofluorescence"}},
-		{Needles: []string{"单细胞"}, Keywords: []string{"单细胞", "single cell", "single-cell"}},
-		{Needles: []string{"图谱", "atlas"}, Keywords: []string{"图谱", "atlas"}},
-		{Needles: []string{"综述", "review"}, Keywords: []string{"综述", "review"}},
-		{Needles: []string{"空间转录组"}, Keywords: []string{"空间转录组", "spatial transcriptomics"}},
-		{Needles: []string{"差异表达"}, Keywords: []string{"差异表达", "differential expression"}},
-		{Needles: []string{"轨迹", "拟时"}, Keywords: []string{"轨迹", "trajectory", "pseudotime"}},
+		{Needles: []string{"火山图", "volcano"}, KeywordsZH: []string{"火山图", "差异表达"}, KeywordsEN: []string{"volcano plot", "differential expression"}},
+		{Needles: []string{"热图", "heatmap"}, KeywordsZH: []string{"热图", "表达热图"}, KeywordsEN: []string{"heatmap", "expression heatmap"}},
+		{Needles: []string{"umap"}, KeywordsZH: []string{"UMAP", "降维嵌入"}, KeywordsEN: []string{"UMAP", "embedding"}},
+		{Needles: []string{"tsne", "t-sne"}, KeywordsZH: []string{"t-SNE", "降维嵌入"}, KeywordsEN: []string{"t-SNE", "embedding"}},
+		{Needles: []string{"pca"}, KeywordsZH: []string{"PCA", "主成分分析"}, KeywordsEN: []string{"PCA", "principal component analysis"}},
+		{Needles: []string{"小提琴图", "violin"}, KeywordsZH: []string{"小提琴图"}, KeywordsEN: []string{"violin plot"}},
+		{Needles: []string{"点图", "dot plot", "dotplot"}, KeywordsZH: []string{"点图"}, KeywordsEN: []string{"dot plot"}},
+		{Needles: []string{"箱线图", "box plot"}, KeywordsZH: []string{"箱线图"}, KeywordsEN: []string{"box plot"}},
+		{Needles: []string{"散点图", "scatter"}, KeywordsZH: []string{"散点图"}, KeywordsEN: []string{"scatter plot"}},
+		{Needles: []string{"生存曲线", "kaplan", "km曲线", "survival"}, KeywordsZH: []string{"生存曲线", "Kaplan-Meier"}, KeywordsEN: []string{"Kaplan-Meier", "survival curve"}},
+		{Needles: []string{"western blot", "wb"}, KeywordsZH: []string{"蛋白印迹"}, KeywordsEN: []string{"western blot", "immunoblot"}},
+		{Needles: []string{"免疫荧光", "immunofluorescence"}, KeywordsZH: []string{"免疫荧光"}, KeywordsEN: []string{"immunofluorescence"}},
+		{Needles: []string{"单细胞", "single cell", "single-cell"}, KeywordsZH: []string{"单细胞"}, KeywordsEN: []string{"single cell", "single-cell"}},
+		{Needles: []string{"图谱", "atlas"}, KeywordsZH: []string{"图谱"}, KeywordsEN: []string{"atlas"}},
+		{Needles: []string{"综述", "review"}, KeywordsZH: []string{"综述"}, KeywordsEN: []string{"review"}},
+		{Needles: []string{"空间转录组", "spatial transcriptomics"}, KeywordsZH: []string{"空间转录组"}, KeywordsEN: []string{"spatial transcriptomics"}},
+		{Needles: []string{"差异表达", "differential expression"}, KeywordsZH: []string{"差异表达"}, KeywordsEN: []string{"differential expression"}},
+		{Needles: []string{"轨迹", "拟时", "trajectory", "pseudotime"}, KeywordsZH: []string{"轨迹", "拟时"}, KeywordsEN: []string{"trajectory", "pseudotime"}},
 	}
 
 	normalized := strings.ToLower(strings.Join([]string{query, cleaned}, " "))
-	keywords := make([]string, 0, weixinSearchKeywordLimit)
+	keywordsZH := []string{}
+	keywordsEN := []string{}
 	for _, expansion := range expansions {
 		matched := false
 		for _, needle := range expansion.Needles {
@@ -1604,15 +1672,33 @@ func expandWeixinSearchKeywords(query, cleaned, target string) []string {
 			}
 		}
 		if matched {
-			keywords = append(keywords, expansion.Keywords...)
+			keywordsZH = append(keywordsZH, expansion.KeywordsZH...)
+			keywordsEN = append(keywordsEN, expansion.KeywordsEN...)
 		}
 	}
 
-	if target == weixinSearchTargetPaper {
-		keywords = append(keywords, strings.TrimSpace(strings.ReplaceAll(cleaned, "文献", "")))
+	queryLanguage := detectTranslationLanguageKey(firstNonEmpty(cleaned, query))
+	switch queryLanguage {
+	case "han":
+		keywordsZH = append([]string{firstNonEmpty(cleaned, query)}, keywordsZH...)
+	case "latin":
+		keywordsEN = append([]string{firstNonEmpty(cleaned, query)}, keywordsEN...)
+	default:
+		keywordsZH = append([]string{cleaned}, keywordsZH...)
+		keywordsEN = append([]string{cleaned}, keywordsEN...)
 	}
 
-	return keywords
+	if target == weixinSearchTargetPaper {
+		paperHint := strings.TrimSpace(strings.ReplaceAll(cleaned, "文献", ""))
+		if detectTranslationLanguageKey(paperHint) == "han" {
+			keywordsZH = append(keywordsZH, paperHint)
+		}
+		if detectTranslationLanguageKey(paperHint) == "latin" {
+			keywordsEN = append(keywordsEN, paperHint)
+		}
+	}
+
+	return keywordsZH, keywordsEN
 }
 
 func appendWeixinNote(existing, incoming string) string {

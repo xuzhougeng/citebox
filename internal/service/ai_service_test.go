@@ -55,6 +55,15 @@ func writeFigureFixture(t *testing.T, path string, width, height int) []byte {
 	return data
 }
 
+func containsKeyword(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
+}
+
 func TestAISettingsDefaultsAndPersistence(t *testing.T) {
 	_, repo, cfg := newTestService(t)
 	aiSvc := NewAIService(repo, cfg, nil)
@@ -444,7 +453,7 @@ func TestPlanWeixinSearchUsesIntentSceneModel(t *testing.T) {
 			t.Fatalf("request body missing original query: %s", bodyText)
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"output_text":"{\"target\":\"paper\",\"keywords\":[\"single-cell atlas\",\"review\",\"atlas\",\"single cell\",\"图谱\"]}"}`))
+		_, _ = w.Write([]byte(`{"output_text":"{\"target\":\"paper\",\"keywords_zh\":[\"单细胞图谱\",\"综述\"],\"keywords_en\":[\"single-cell atlas\",\"review\",\"atlas\"]}"}`))
 	}))
 	defer server.Close()
 
@@ -485,11 +494,11 @@ func TestPlanWeixinSearchUsesIntentSceneModel(t *testing.T) {
 	if plan.Target != weixinSearchTargetPaper {
 		t.Fatalf("PlanWeixinSearch() target = %q, want %q", plan.Target, weixinSearchTargetPaper)
 	}
-	if len(plan.Keywords) != weixinSearchKeywordLimit {
-		t.Fatalf("PlanWeixinSearch() keywords = %v, want %d normalized keywords", plan.Keywords, weixinSearchKeywordLimit)
+	if len(plan.KeywordsZH) == 0 || len(plan.KeywordsEN) == 0 {
+		t.Fatalf("PlanWeixinSearch() zh/en keywords = %v / %v, want bilingual keyword groups", plan.KeywordsZH, plan.KeywordsEN)
 	}
-	if plan.Keywords[0] != "我想找单细胞图谱综述" {
-		t.Fatalf("PlanWeixinSearch() keywords = %v, want original query preserved as first keyword", plan.Keywords)
+	if !containsKeyword(plan.KeywordsZH, "单细胞图谱") || !containsKeyword(plan.KeywordsEN, "single-cell atlas") {
+		t.Fatalf("PlanWeixinSearch() zh/en keywords = %v / %v, want requested bilingual search terms", plan.KeywordsZH, plan.KeywordsEN)
 	}
 }
 

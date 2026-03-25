@@ -383,12 +383,14 @@ func (s *AIService) PlanWeixinSearch(ctx context.Context, query, forcedTarget st
 
 输出要求：
 1. 只返回 JSON 对象，不要加 Markdown 代码块。
-2. JSON 必须包含 target 和 keywords 两个字段。
+2. JSON 必须包含 target、keywords_zh、keywords_en 三个字段。
 3. target 只能是 "paper" 或 "figure"。
-4. keywords 是 4 到 6 个字符串数组，优先给出 5 个真正适合检索的名词短语。
-5. 如果用户用中文描述英文图型或术语，请补出常用英文检索词，例如 "火山图" -> "volcano plot"。
-6. 如果用户是想找图片，target 设为 "figure"；如果更像想找论文主题、方法、综述或某类文献，target 设为 "paper"。
-7. keywords 中可以同时包含中文和英文，但不要塞整句，不要重复。
+4. keywords_zh 和 keywords_en 都必须是字符串数组。两组加起来总共给出 4 到 6 个检索短语，优先接近 5 个。
+5. 必须同时包含中文检索词和英文检索词；如果用户只用了一种语言，也要补出另一种语言对应的检索词。
+6. keywords_zh 只放中文短语；keywords_en 只放英文短语。不要把中英混在同一个数组里。
+7. 如果用户用中文描述英文图型或术语，请补出常用英文检索词，例如 "火山图" -> "volcano plot"；如果用户用英文描述，也要补出自然的中文检索词。
+8. 如果用户是想找图片，target 设为 "figure"；如果更像想找论文主题、方法、综述或某类文献，target 设为 "paper"。
+9. 不要塞整句，不要重复，不要输出无意义的超泛词。
 
 限制：
 - 当前强制目标：%s
@@ -410,10 +412,13 @@ func (s *AIService) PlanWeixinSearch(ctx context.Context, query, forcedTarget st
 	if forced := normalizeWeixinSearchTarget(forcedTarget); forced != "" {
 		plan.Target = forced
 	}
-	plan.Keywords = normalizeWeixinSearchKeywords(append([]string{query}, plan.Keywords...))
-	if len(plan.Keywords) == 0 {
-		return nil, apperr.New(apperr.CodeUnavailable, "IM 检索规划未返回有效关键词")
+	fallbackPlan := heuristicWeixinSearchPlan(query, forcedTarget)
+	plan.KeywordsZH = mergeWeixinSearchKeywords(plan.KeywordsZH, fallbackPlan.KeywordsZH)
+	plan.KeywordsEN = mergeWeixinSearchKeywords(plan.KeywordsEN, fallbackPlan.KeywordsEN)
+	if len(plan.KeywordsZH) == 0 || len(plan.KeywordsEN) == 0 {
+		return nil, apperr.New(apperr.CodeUnavailable, "IM 检索规划未同时返回有效的中英文关键词")
 	}
+	plan.Keywords = mergeWeixinSearchKeywords(plan.KeywordsZH, plan.KeywordsEN)
 
 	return plan, nil
 }
@@ -701,14 +706,26 @@ func parseWeixinSearchPlan(raw string) (*weixinSearchPlan, error) {
 	}
 
 	plan := &weixinSearchPlan{
-		Target:   normalizeWeixinSearchTarget(firstString(payload["target"], payload["type"], payload["mode"])),
-		Keywords: normalizeWeixinSearchKeywords(toStringSlice(payload["keywords"], payload["keyword"], payload["queries"])),
+		Target: normalizeWeixinSearchTarget(firstString(payload["target"], payload["type"], payload["mode"])),
+		KeywordsZH: normalizeWeixinSearchKeywordsForLanguage(toStringSlice(
+			payload["keywords_zh"],
+			payload["zh_keywords"],
+			payload["keywordsZh"],
+			filterWeixinSearchKeywordsByLanguage(toStringSlice(payload["keywords"], payload["keyword"], payload["queries"]), "zh"),
+		), "zh"),
+		KeywordsEN: normalizeWeixinSearchKeywordsForLanguage(toStringSlice(
+			payload["keywords_en"],
+			payload["en_keywords"],
+			payload["keywordsEn"],
+			filterWeixinSearchKeywordsByLanguage(toStringSlice(payload["keywords"], payload["keyword"], payload["queries"]), "en"),
+		), "en"),
 	}
 	if plan.Target == "" {
 		return nil, apperr.New(apperr.CodeUnavailable, "IM 检索规划缺少 target")
 	}
-	if len(plan.Keywords) == 0 {
-		return nil, apperr.New(apperr.CodeUnavailable, "IM 检索规划缺少 keywords")
+	plan.Keywords = mergeWeixinSearchKeywords(plan.KeywordsZH, plan.KeywordsEN)
+	if len(plan.KeywordsZH) == 0 || len(plan.KeywordsEN) == 0 {
+		return nil, apperr.New(apperr.CodeUnavailable, "IM 检索规划缺少中英文关键词")
 	}
 	return plan, nil
 }
@@ -827,6 +844,69 @@ func normalizeWeixinSearchKeywords(keywords []string) []string {
 	}
 
 	return normalized
+}
+
+func normalizeWeixinSearchKeywordsForLanguage(keywords []string, language string) []string {
+	filtered := filterWeixinSearchKeywordsByLanguage(keywords, language)
+	normalized := normalizeWeixinSearchKeywords(filtered)
+	if len(normalized) > weixinSearchKeywordPerLanguageLimit {
+		return append([]string(nil), normalized[:weixinSearchKeywordPerLanguageLimit]...)
+	}
+	return normalized
+}
+
+func filterWeixinSearchKeywordsByLanguage(keywords []string, language string) []string {
+	filtered := make([]string, 0, len(keywords))
+	want := strings.ToLower(strings.TrimSpace(language))
+	for _, keyword := range keywords {
+		for _, part := range splitWeixinSearchKeyword(keyword) {
+			part = strings.TrimSpace(part)
+			if part == "" {
+				continue
+			}
+			switch want {
+			case "zh":
+				if detectTranslationLanguageKey(part) == "han" {
+					filtered = append(filtered, part)
+				}
+			case "en":
+				if detectTranslationLanguageKey(part) == "latin" {
+					filtered = append(filtered, part)
+				}
+			default:
+				filtered = append(filtered, part)
+			}
+		}
+	}
+	return filtered
+}
+
+func mergeWeixinSearchKeywords(keywordGroups ...[]string) []string {
+	merged := make([]string, 0, weixinSearchKeywordLimit)
+	seen := map[string]struct{}{}
+
+	for _, keywords := range keywordGroups {
+		for _, keyword := range keywords {
+			for _, part := range splitWeixinSearchKeyword(keyword) {
+				part = strings.Trim(part, " \t\r\n'\"`[](){}<>")
+				part = strings.Join(strings.Fields(part), " ")
+				if part == "" {
+					continue
+				}
+				lookupKey := strings.ToLower(part)
+				if _, exists := seen[lookupKey]; exists {
+					continue
+				}
+				seen[lookupKey] = struct{}{}
+				merged = append(merged, part)
+				if len(merged) >= weixinSearchKeywordLimit {
+					return merged
+				}
+			}
+		}
+	}
+
+	return merged
 }
 
 func splitWeixinSearchKeyword(keyword string) []string {
