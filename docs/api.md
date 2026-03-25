@@ -921,7 +921,7 @@ AI 流式阅读通过：
 常用字段：
 
 - `extractor_profile`：`pdffigx_v1` 或 `open_source_vision`
-- `pdf_text_source`：`pdffigx_v1` 模式下可选 `extractor` 或 `pdfjs`；`open_source_vision` 会固定归一化成 `pdfjs`
+- `pdf_text_source`：兼容旧字段保留，但当前由后端按 `extractor_profile` 自动归一化；`pdffigx_v1` 固定为 `extractor`，`open_source_vision` 固定为 `pdfjs`
 - 其余字段与提取接口地址、鉴权和超时设置相同
 
 #### `GET /api/settings/wolai`

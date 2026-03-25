@@ -87,7 +87,7 @@
             <details class="manager-card settings-collapsible">
                 <summary class="settings-collapsible-toggle">
                     <h2>场景绑定</h2>
-                    <p>为不同用途指定默认模型，并调整通用设置。修改会自动保存。</p>
+                    <p>为阅读和整理场景指定默认模型，并调整通用设置。修改会自动保存。</p>
                 </summary>
                 <div class="manager-form">
                     <div class="form-grid">
@@ -98,14 +98,6 @@
                         <label class="field">
                             <span>通用问答模型</span>
                             <select id="aiQAModelSelect" class="form-input"></select>
-                        </label>
-                        <label class="field">
-                            <span>IM 意图识别模型</span>
-                            <select id="aiIMIntentModelSelect" class="form-input"></select>
-                        </label>
-                        <label class="field">
-                            <span>图片解读模型</span>
-                            <select id="aiFigureModelSelect" class="form-input"></select>
                         </label>
                         <label class="field">
                             <span>Tag 建议模型</span>
@@ -456,36 +448,34 @@ User Prompt:
                                 <option value="open_source_vision">内置 LLM 坐标提取</option>
                             </select>
                         </label>
-                        <label class="field">
-                            <span>全文来源</span>
-                            <select id="extractorPDFTextSourceSelect" class="form-input">
-                                <option value="extractor">由解析服务返回</option>
-                                <option value="pdfjs">由浏览器 pdf.js 提取</option>
-                            </select>
+                        <label id="extractorFigureModelField" class="field field-span-2 hidden">
+                            <span>坐标提取模型</span>
+                            <select id="aiFigureModelSelect" class="form-input"></select>
                         </label>
-                        <label class="field field-span-2">
+                        <label id="extractorURLField" class="field field-span-2">
                             <span>提取服务地址</span>
                             <input id="extractorURLInput" class="form-input" type="text" placeholder="例如：http://127.0.0.1:8000">
                         </label>
-                        <label class="field field-span-2">
+                        <label id="extractorTokenField" class="field field-span-2">
                             <span>鉴权 Token</span>
                             <input id="extractorTokenInput" class="form-input" type="password" autocomplete="off" placeholder="可选">
                         </label>
-                        <label class="field">
+                        <label id="extractorFileFieldField" class="field">
                             <span>上传字段名</span>
                             <input id="extractorFileFieldInput" class="form-input" type="text" placeholder="默认 file">
                         </label>
-                        <label class="field">
+                        <label id="extractorTimeoutField" class="field">
                             <span>请求超时（秒）</span>
                             <input id="extractorTimeoutInput" class="form-input" type="number" min="1" step="1">
                         </label>
-                        <label class="field">
+                        <label id="extractorPollIntervalField" class="field">
                             <span>轮询间隔（秒）</span>
                             <input id="extractorPollIntervalInput" class="form-input" type="number" min="1" step="1">
                         </label>
                     </div>
 
-                    <p class="muted">如果选择标准 pdffigx，只需要填写 `http://127.0.0.1:8000` 这样的服务根地址，系统会自动补全 `/api/v1/extract` 和 `/api/v1/jobs`。如果选择“内置 LLM 坐标提取”，则不再使用外部提取服务地址，图片坐标会由 CiteBox 的多模态模型直接识别。</p>
+                    <p id="extractorPDFFigXHint" class="muted">如果选择标准 pdffigx，只需要填写 `http://127.0.0.1:8000` 这样的服务根地址，系统会自动补全 `/api/v1/extract` 和 `/api/v1/jobs`。</p>
+                    <p id="extractorBuiltInHint" class="muted hidden">当前使用内置 LLM 坐标提取，不需要配置 pdffigx 地址、鉴权或轮询参数。图片坐标会由这里选择的多模态模型直接识别；全文默认走浏览器 pdf.js，并保留服务端兜底。</p>
 
                     <div id="extractorSummary" class="settings-summary-box"></div>
 
@@ -493,6 +483,73 @@ User Prompt:
                         <button class="btn btn-primary" type="submit">保存提取服务配置</button>
                     </div>
                 </form>
+            </details>
+
+            <details class="manager-card settings-collapsible" open>
+                <summary class="settings-collapsible-toggle">
+                    <h2>微信配置</h2>
+                    <p>设置微信消息桥接、绑定状态，以及消息意图识别所使用的模型。</p>
+                </summary>
+                <div class="manager-form weixin-settings-layout">
+                    <div class="weixin-overview-panel">
+                        <div class="weixin-overview-copy">
+                            <span class="weixin-overview-eyebrow">WeChat Bridge</span>
+                            <h3>通过微信接收消息、上传文献，并触发自动解析</h3>
+                            <p>开启桥接后，可以直接从微信上传 PDF、发起问答或交互命令。IM 意图识别模型修改后会自动保存。</p>
+                        </div>
+                        <label class="field weixin-model-field">
+                            <span>IM 意图识别模型</span>
+                            <select id="aiIMIntentModelSelect" class="form-input"></select>
+                        </label>
+                        <div id="weixinBindingSummary" class="weixin-binding-summary"></div>
+                    </div>
+                    <div class="weixin-control-grid">
+                        <section class="weixin-control-card weixin-bridge-card">
+                            <div class="weixin-card-head">
+                                <div>
+                                    <h3>消息桥接</h3>
+                                    <p>控制是否自动接收和回复微信消息。保存后才会真正切换桥接状态。</p>
+                                </div>
+                            </div>
+                            <label class="field checkbox-field weixin-bridge-toggle">
+                                <input id="weixinBridgeEnabledInput" type="checkbox">
+                                <span>
+                                    <strong>启用微信消息通知</strong><br>
+                                    开启后可通过微信接收和回复消息；关闭后不再收发微信消息。
+                                </span>
+                            </label>
+                            <p id="weixinBridgeSaveStatus" class="settings-inline-status">修改后点击保存桥接配置。</p>
+                            <div class="weixin-action-row">
+                                <button id="saveWeixinBridgeButton" class="btn btn-secondary" type="button">保存微信桥接配置</button>
+                            </div>
+                        </section>
+                        <section class="weixin-control-card weixin-binding-card">
+                            <div class="weixin-card-head">
+                                <div>
+                                    <h3>账号绑定</h3>
+                                    <p>扫码绑定后，可直接通过微信上传文献、发送消息，并触发自动解析流程。</p>
+                                </div>
+                            </div>
+                            <p id="weixinBindingStatus" class="settings-inline-status">点击“开始绑定”生成二维码。</p>
+                            <div class="weixin-action-row">
+                                <button id="startWeixinBindingButton" class="btn btn-secondary" type="button">开始绑定</button>
+                                <button id="unbindWeixinButton" class="btn btn-danger hidden" type="button">解除绑定</button>
+                            </div>
+                            <div id="weixinQRCodePlaceholder" class="weixin-qr-placeholder">
+                                <strong>二维码未生成</strong>
+                                <p>点击“开始绑定”后，这里会显示可扫码的二维码。已绑定账号时，也可以用它重新绑定。</p>
+                            </div>
+                            <div id="weixinQRCodePanel" class="weixin-qr-panel hidden">
+                                <img id="weixinQRCodeImage" class="weixin-qr-image" alt="微信绑定二维码">
+                                <p class="muted">请使用微信扫码。二维码过期后可重新生成。</p>
+                                <p class="weixin-qr-fallback">
+                                    二维码内容：
+                                    <a id="weixinQRCodeLink" href="#" target="_blank" rel="noreferrer">打开原始链接</a>
+                                </p>
+                            </div>
+                        </section>
+                    </div>
+                </div>
             </details>
 
             <details class="manager-card settings-collapsible" open>
@@ -533,38 +590,9 @@ User Prompt:
             <details class="manager-card settings-collapsible" open>
                 <summary class="settings-collapsible-toggle">
                     <h2>账号管理</h2>
-                    <p>修改密码、管理微信绑定或退出登录。</p>
+                    <p>修改密码或退出登录。</p>
                 </summary>
                 <div class="db-actions-grid">
-                    <div class="db-action-item">
-                        <h3>绑定微信</h3>
-                        <p>开启或关闭微信消息通知，管理微信账号的绑定状态。</p>
-                        <div class="settings-action-form weixin-binding-panel">
-                            <div id="weixinBindingSummary" class="weixin-binding-summary"></div>
-                            <label class="field checkbox-field">
-                                <input id="weixinBridgeEnabledInput" type="checkbox">
-                                <span>
-                                    <strong>启用微信消息通知</strong><br>
-                                    开启后可通过微信接收和回复消息；关闭后不再收发微信消息。
-                                </span>
-                            </label>
-                            <p id="weixinBridgeSaveStatus" class="settings-inline-status">修改后点击保存桥接配置。</p>
-                            <button id="saveWeixinBridgeButton" class="btn btn-secondary" type="button">保存微信桥接配置</button>
-                            <div id="weixinQRCodePanel" class="weixin-qr-panel hidden">
-                                <img id="weixinQRCodeImage" class="weixin-qr-image" alt="微信绑定二维码">
-                                <p class="muted">请使用微信扫码。二维码过期后可重新生成。</p>
-                                <p id="weixinBindingStatus" class="settings-inline-status">等待微信扫码</p>
-                                <p class="weixin-qr-fallback">
-                                    二维码内容：
-                                    <a id="weixinQRCodeLink" href="#" target="_blank" rel="noreferrer">打开原始链接</a>
-                                </p>
-                            </div>
-                            <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
-                                <button id="startWeixinBindingButton" class="btn btn-secondary" type="button">开始绑定</button>
-                                <button id="unbindWeixinButton" class="btn btn-danger hidden" type="button">解除绑定</button>
-                            </div>
-                        </div>
-                    </div>
                     <div class="db-action-item">
                         <h3>修改密码</h3>
                         <p>更改管理员账号的登录密码</p>

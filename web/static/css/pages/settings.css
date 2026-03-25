@@ -410,37 +410,242 @@ details[open] > .settings-subsection-toggle::after {
     transform: translateY(-1px);
 }
 
-.weixin-binding-panel {
+.weixin-settings-layout {
     gap: 1rem;
 }
 
-.weixin-binding-summary {
+.weixin-overview-panel {
     display: grid;
-    gap: 0.45rem;
-    padding: 0.9rem 1rem;
-    border-radius: 16px;
+    grid-template-columns: minmax(0, 1.15fr) minmax(280px, 0.92fr);
+    gap: 1rem;
+    padding: 1.2rem;
+    border-radius: 24px;
+    border: 1px solid rgba(var(--ink-rgb), 0.08);
     background:
-        radial-gradient(circle at top right, rgba(var(--accent-rgb), 0.08), transparent 10rem),
-        rgba(var(--surface-rgb), 0.86);
+        radial-gradient(circle at top right, rgba(var(--accent-rgb), 0.09), transparent 11rem),
+        linear-gradient(180deg, rgba(var(--surface-rgb), 0.96), rgba(var(--surface-rgb), 0.92));
+    box-shadow: 0 18px 34px rgba(var(--shadow-rgb), 0.05);
+}
+
+.weixin-overview-copy {
+    display: grid;
+    gap: 0.55rem;
+    align-content: start;
+}
+
+.weixin-overview-eyebrow {
+    color: var(--accent-deep);
+    font-size: 0.76rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.weixin-overview-copy h3 {
+    margin: 0;
+    font-family: var(--font-display);
+    font-size: 1.4rem;
+    line-height: 1.25;
+}
+
+.weixin-overview-copy p {
+    margin: 0;
+    color: var(--muted);
+    line-height: 1.7;
+    max-width: 58ch;
+}
+
+.weixin-model-field {
+    margin: 0;
+    align-self: start;
+    padding: 1rem;
+    border-radius: 20px;
+    border: 1px solid rgba(var(--ink-rgb), 0.08);
+    background: rgba(var(--surface-rgb), 0.8);
+}
+
+.weixin-binding-summary {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.9fr);
+    gap: 1rem;
+    align-items: start;
+}
+
+.weixin-summary-hero,
+.weixin-summary-meta {
+    min-width: 0;
+    padding: 1rem 1.05rem;
+    border-radius: 20px;
+    background: rgba(var(--surface-rgb), 0.84);
     border: 1px solid rgba(var(--ink-rgb), 0.08);
 }
 
-.weixin-binding-summary span {
-    color: var(--muted);
-    font-size: 0.86rem;
+.weixin-summary-hero {
+    display: grid;
+    gap: 0.75rem;
+    align-content: start;
+}
+
+.weixin-status-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.55rem;
+}
+
+.weixin-status-pill {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2rem;
+    padding: 0.18rem 0.72rem;
+    border-radius: 999px;
+    font-size: 0.84rem;
     font-weight: 700;
-    letter-spacing: 0.02em;
+    border: 1px solid rgba(var(--ink-rgb), 0.08);
+    background: rgba(var(--surface-rgb), 0.9);
 }
 
-.weixin-binding-summary strong {
+.weixin-status-pill.is-active {
+    color: var(--accent-deep);
+    border-color: rgba(var(--accent-rgb), 0.2);
+    background: rgba(var(--accent-rgb), 0.12);
+}
+
+.weixin-status-pill.is-idle {
+    color: var(--muted);
+}
+
+.weixin-summary-title {
+    display: block;
     color: var(--ink);
-    font-size: 1rem;
+    font-size: 1.18rem;
+    line-height: 1.4;
+    font-family: var(--font-display);
 }
 
-.weixin-binding-summary p {
+.weixin-summary-hero p {
     margin: 0;
     color: var(--muted);
+    line-height: 1.7;
+}
+
+.weixin-summary-meta {
+    display: grid;
+    gap: 0.8rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.weixin-summary-item {
+    min-width: 0;
+    padding: 0.85rem 0.9rem;
+    border-radius: 16px;
+    background: rgba(var(--surface-rgb), 0.9);
+    border: 1px solid rgba(var(--ink-rgb), 0.06);
+}
+
+.weixin-summary-item span {
+    display: block;
+    color: var(--muted);
+    font-size: 0.83rem;
+}
+
+.weixin-summary-item strong {
+    display: block;
+    margin-top: 0.35rem;
+    font-size: 0.96rem;
+    line-height: 1.55;
+    overflow-wrap: anywhere;
+}
+
+.weixin-control-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(320px, 0.92fr);
+    gap: 1rem;
+    align-items: start;
+}
+
+.weixin-control-card {
+    display: grid;
+    gap: 0.95rem;
+    padding: 1.15rem;
+    border-radius: 22px;
+    background:
+        linear-gradient(180deg, rgba(var(--surface-rgb), 0.96), rgba(var(--surface-rgb), 0.9));
+    border: 1px solid rgba(var(--ink-rgb), 0.08);
+    box-shadow: 0 16px 30px rgba(var(--shadow-rgb), 0.05);
+}
+
+.weixin-bridge-card {
+    background:
+        linear-gradient(180deg, rgba(var(--surface-rgb), 0.97), rgba(var(--surface-rgb), 0.92));
+}
+
+.weixin-binding-card {
+    background:
+        radial-gradient(circle at top right, rgba(var(--accent-rgb), 0.08), transparent 12rem),
+        linear-gradient(180deg, rgba(var(--surface-rgb), 0.97), rgba(var(--surface-rgb), 0.92));
+}
+
+.weixin-card-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    align-items: flex-start;
+}
+
+.weixin-card-head h3 {
+    margin: 0;
+    font-size: 1.02rem;
+    font-family: var(--font-display);
+}
+
+.weixin-card-head p {
+    margin: 0.35rem 0 0;
+    color: var(--muted);
     line-height: 1.6;
+}
+
+.weixin-bridge-toggle {
+    margin: 0;
+    padding: 0.95rem 1rem;
+    border-radius: 18px;
+    border: 1px solid rgba(var(--ink-rgb), 0.08);
+    background: rgba(var(--surface-rgb), 0.78);
+}
+
+.weixin-action-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+}
+
+.weixin-control-card .settings-inline-status {
+    min-height: 1.4rem;
+    margin: 0;
+}
+
+.weixin-qr-placeholder {
+    display: grid;
+    gap: 0.45rem;
+    justify-items: center;
+    padding: 1.2rem 1rem;
+    border-radius: 18px;
+    border: 1px dashed rgba(var(--accent-rgb), 0.24);
+    background:
+        radial-gradient(circle at top, rgba(var(--accent-rgb), 0.08), transparent 10rem),
+        rgba(var(--surface-rgb), 0.76);
+    text-align: center;
+}
+
+.weixin-qr-placeholder strong {
+    font-size: 1rem;
+    font-family: var(--font-display);
+}
+
+.weixin-qr-placeholder p {
+    margin: 0;
+    color: var(--muted);
+    line-height: 1.65;
 }
 
 .weixin-qr-panel {

@@ -94,7 +94,7 @@ go run ./cmd/desktop
 | `DATABASE_PATH` | `./data/library.db` | SQLite 数据库路径 |
 | `MAX_UPLOAD_SIZE` | `262144000` | 单个 PDF 最大体积，默认 250MB |
 | `PDF_EXTRACTOR_PROFILE` | `pdffigx_v1` | PDF 提取方案默认类型；可选 `pdffigx_v1` 或 `open_source_vision`（内置 LLM 坐标提取） |
-| `PDF_EXTRACTOR_PDF_TEXT_SOURCE` | `extractor` | PDF 全文默认来源；`pdffigx_v1` 可选 `extractor` 或 `pdfjs`，`open_source_vision` 会固定使用 `pdfjs` |
+| `PDF_EXTRACTOR_PDF_TEXT_SOURCE` | `extractor` | 兼容旧配置保留；当前会按提取方案自动选择全文来源，`pdffigx_v1` 固定走解析服务，`open_source_vision` 固定走 `pdfjs` |
 | `PDF_EXTRACTOR_URL` | 空 | PDF 解析后端 base URL 或完整提取接口地址 |
 | `PDF_EXTRACTOR_JOBS_URL` | 空 | 可选；仅在异步任务地址和 base URL 不一致时才需要单独覆盖 |
 | `PDF_EXTRACTOR_TOKEN` | 空 | 解析后端 Bearer Token |
@@ -149,14 +149,14 @@ export PDF_EXTRACTOR_URL=http://127.0.0.1:8000/api/v1/extract
 - `include_boxes=true`
 - `persist_artifacts=false`
 
-`pdffigx_v1` 模式下，全文来源会按设置页中的“全文来源”切换：
+当前全文来源不再需要手工配置，而是按提取方案自动选择：
 
-- `extractor`：请求里会带 `include_pdf_text=true`
-- `pdfjs`：请求里会带 `include_pdf_text=false`，全文改由浏览器端 `pdf.js` 提取并通过 `/api/papers/{id}/pdf-text` 保存
+- `pdffigx_v1`：请求里会带 `include_pdf_text=true`，优先使用解析服务返回的全文
+- `open_source_vision`：请求里会带 `include_pdf_text=false`，优先由浏览器端 `pdf.js` 提取全文并通过 `/api/papers/{id}/pdf-text` 保存；如果浏览器没有写回，服务端也会补提全文
 
 推荐用法：
 
-- 标准 `pdffigx` 部署：保持“全文来源 = 解析服务返回”
+- 标准 `pdffigx` 部署：直接配置接口地址即可，不需要额外选择全文来源
 - `open_source_vision`：后台异步渲染 PDF 页面，调用 CiteBox 已配置的多模态模型识别图片坐标，再把裁剪结果直接入库
 - 只走手工标注时：上传完成后也会默认使用浏览器 `pdf.js` 提取全文并保存，即便没有配置自动解析模型
 

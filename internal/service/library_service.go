@@ -1793,15 +1793,11 @@ func normalizeExtractorProfile(value string) string {
 }
 
 func normalizePDFTextSource(value, profile string) string {
-	if normalizeExtractorProfile(profile) == extractorProfileOpenSourceVision {
+	switch normalizeExtractorProfile(profile) {
+	case extractorProfileOpenSourceVision:
 		return pdfTextSourcePDFJS
-	}
-
-	switch strings.TrimSpace(value) {
-	case pdfTextSourceExtractor:
+	case extractorProfilePDFFigXV1:
 		return pdfTextSourceExtractor
-	case pdfTextSourcePDFJS:
-		return pdfTextSourcePDFJS
 	default:
 		return pdfTextSourceExtractor
 	}

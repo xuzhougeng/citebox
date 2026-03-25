@@ -48,12 +48,19 @@ const SettingsPage = {
 
         this.extractorSettingsForm = document.getElementById('extractorSettingsForm');
         this.extractorProfileSelect = document.getElementById('extractorProfileSelect');
-        this.extractorPDFTextSourceSelect = document.getElementById('extractorPDFTextSourceSelect');
+        this.extractorFigureModelField = document.getElementById('extractorFigureModelField');
+        this.extractorURLField = document.getElementById('extractorURLField');
         this.extractorURLInput = document.getElementById('extractorURLInput');
+        this.extractorTokenField = document.getElementById('extractorTokenField');
         this.extractorTokenInput = document.getElementById('extractorTokenInput');
+        this.extractorFileFieldField = document.getElementById('extractorFileFieldField');
         this.extractorFileFieldInput = document.getElementById('extractorFileFieldInput');
+        this.extractorTimeoutField = document.getElementById('extractorTimeoutField');
         this.extractorTimeoutInput = document.getElementById('extractorTimeoutInput');
+        this.extractorPollIntervalField = document.getElementById('extractorPollIntervalField');
         this.extractorPollIntervalInput = document.getElementById('extractorPollIntervalInput');
+        this.extractorPDFFigXHint = document.getElementById('extractorPDFFigXHint');
+        this.extractorBuiltInHint = document.getElementById('extractorBuiltInHint');
         this.extractorSummary = document.getElementById('extractorSummary');
         this.wolaiSettingsForm = document.getElementById('wolaiSettingsForm');
         this.wolaiTokenInput = document.getElementById('wolaiTokenInput');
@@ -78,6 +85,7 @@ const SettingsPage = {
         this.confirmPasswordInput = document.getElementById('confirmPassword');
         this.logoutButton = document.getElementById('logoutButton');
         this.weixinBindingSummary = document.getElementById('weixinBindingSummary');
+        this.weixinQRCodePlaceholder = document.getElementById('weixinQRCodePlaceholder');
         this.weixinQRCodePanel = document.getElementById('weixinQRCodePanel');
         this.weixinQRCodeImage = document.getElementById('weixinQRCodeImage');
         this.weixinQRCodeLink = document.getElementById('weixinQRCodeLink');
@@ -327,6 +335,12 @@ const SettingsPage = {
         this.renderAIModels();
         this.renderSceneModelSelectors(settings.scene_models || {});
         this.renderRolePromptList();
+        if (this.extractorSettings) {
+            this.renderExtractorSummary(this.extractorSettings);
+        }
+        if (this.authSettings) {
+            this.renderWeixinBindingSummary(this.authSettings.weixin_binding || {});
+        }
         this.isHydratingAISettings = false;
     },
 
@@ -635,12 +649,10 @@ const SettingsPage = {
     async loadExtractorSettings() {
         const settings = await API.getExtractorSettings();
         const extractorURLValue = this.extractorAddressValue(settings.extractor_url || '');
+        this.extractorSettings = settings;
 
         if (this.extractorProfileSelect) {
             this.extractorProfileSelect.value = settings.extractor_profile || 'pdffigx_v1';
-        }
-        if (this.extractorPDFTextSourceSelect) {
-            this.extractorPDFTextSourceSelect.value = settings.pdf_text_source || 'extractor';
         }
         this.extractorURLInput.value = extractorURLValue;
         this.extractorTokenInput.value = settings.extractor_token || '';
@@ -697,9 +709,10 @@ const SettingsPage = {
 
     async saveExtractorSettings() {
         this.syncExtractorProfileFormState();
+        const extractorProfile = this.extractorProfileSelect?.value || 'pdffigx_v1';
         const payload = {
-            extractor_profile: this.extractorProfileSelect?.value || 'pdffigx_v1',
-            pdf_text_source: this.extractorPDFTextSourceSelect?.value || 'extractor',
+            extractor_profile: extractorProfile,
+            pdf_text_source: this.extractorPDFTextSourceValue(extractorProfile),
             extractor_url: this.extractorURLInput.value.trim(),
             extractor_jobs_url: '',
             extractor_token: this.extractorTokenInput.value.trim(),
@@ -709,6 +722,7 @@ const SettingsPage = {
         };
 
         const response = await API.updateExtractorSettings(payload);
+        this.extractorSettings = response.settings || payload;
         this.syncExtractorProfileFormState();
         this.renderExtractorSummary(response.settings);
         Utils.showToast('PDF 提取服务配置已保存');
@@ -861,6 +875,9 @@ const SettingsPage = {
                 enabled ? 'success' : ''
             );
         }
+        if (!this.pendingWeixinQRCode) {
+            this.setWeixinQRCodeVisible(false);
+        }
     },
 
     renderWeixinBindingSummary(binding = {}) {
@@ -868,21 +885,50 @@ const SettingsPage = {
 
         const isBound = Boolean(binding.bound);
         const bridgeEnabled = Boolean(this.authSettings?.weixin_bridge?.enabled);
-        const title = bridgeEnabled ? '微信已启用' : '微信已关闭';
-        const detail = [
-            bridgeEnabled ? '开启状态：会自动接收和回复微信消息。' : '关闭状态：不会收发微信消息。',
-            isBound
-                ? `绑定账号：${Utils.escapeHTML(binding.account_id || '微信账号')}`
-                : '当前未绑定微信，可先保存桥接开关，再扫码完成绑定。',
-            binding.user_id ? `用户 ID：${Utils.escapeHTML(binding.user_id)}` : '',
-            binding.bound_at ? `绑定时间：${Utils.escapeHTML(Utils.formatDate(binding.bound_at))}` : '',
-            binding.base_url ? `接入域名：${Utils.escapeHTML(binding.base_url)}` : ''
-        ].filter(Boolean).join('<br>');
+        const accountFull = String(binding.account_id || '').trim();
+        const userIDFull = String(binding.user_id || '').trim();
+        const endpointFull = String(binding.base_url || '').trim();
+        const bridgeStateLabel = bridgeEnabled ? '桥接已开启' : '桥接已关闭';
+        const bindingStateLabel = isBound ? '微信已绑定' : '尚未绑定';
+        const overviewTitle = bridgeEnabled && isBound
+            ? '微信入口已就绪'
+            : (bridgeEnabled ? '等待扫码绑定账号' : '桥接当前未启用');
+        const accountLabel = isBound
+            ? this.compactDisplayText(accountFull || '微信账号', 10, 9)
+            : '未绑定';
+        const boundAtLabel = isBound && binding.bound_at
+            ? Utils.formatDate(binding.bound_at)
+            : '未绑定';
+        const endpointLabel = endpointFull
+            ? this.compactURLLabel(endpointFull)
+            : '使用当前桥接配置';
+        const userIDLabel = userIDFull
+            ? this.compactDisplayText(userIDFull, 10, 8)
+            : '未返回';
+        let detail = '当前未绑定微信账号，可先保存桥接开关，再生成二维码完成绑定。';
+        if (bridgeEnabled && isBound) {
+            detail = '桥接和账号绑定都已就绪，可以直接通过微信上传 PDF、发送消息并触发自动解析。';
+        } else if (bridgeEnabled && !isBound) {
+            detail = '桥接已开启，但还没有绑定账号。生成二维码后扫码即可开始使用。';
+        } else if (!bridgeEnabled && isBound) {
+            detail = '账号已绑定，但桥接处于关闭状态，当前不会接收或回复微信消息。';
+        }
 
         this.weixinBindingSummary.innerHTML = `
-            <span>WeChat Bridge</span>
-            <strong>${title}</strong>
-            <p>${detail}</p>
+            <section class="weixin-summary-hero">
+                <div class="weixin-status-row">
+                    <span class="weixin-status-pill ${bridgeEnabled ? 'is-active' : 'is-idle'}">${Utils.escapeHTML(bridgeStateLabel)}</span>
+                    <span class="weixin-status-pill ${isBound ? 'is-active' : 'is-idle'}">${Utils.escapeHTML(bindingStateLabel)}</span>
+                </div>
+                <strong class="weixin-summary-title">${Utils.escapeHTML(overviewTitle)}</strong>
+                <p>${Utils.escapeHTML(detail)}</p>
+            </section>
+            <div class="weixin-summary-meta">
+                ${this.renderWeixinSummaryItem('绑定账号', accountLabel, accountFull || '未绑定')}
+                ${this.renderWeixinSummaryItem('绑定时间', boundAtLabel)}
+                ${this.renderWeixinSummaryItem('接入域名', endpointLabel, endpointFull || '使用当前桥接配置')}
+                ${this.renderWeixinSummaryItem('用户 ID', userIDLabel, userIDFull || '未返回')}
+            </div>
         `;
 
         if (this.startWeixinBindingButton) {
@@ -891,6 +937,40 @@ const SettingsPage = {
         if (this.unbindWeixinButton) {
             this.unbindWeixinButton.classList.toggle('hidden', !isBound);
         }
+    },
+
+    renderWeixinSummaryItem(label, value, title = '') {
+        const titleAttr = title ? ` title="${Utils.escapeHTML(title)}"` : '';
+        return `
+            <div class="weixin-summary-item">
+                <span>${Utils.escapeHTML(label)}</span>
+                <strong${titleAttr}>${Utils.escapeHTML(value)}</strong>
+            </div>
+        `;
+    },
+
+    compactDisplayText(value, prefix = 12, suffix = 10) {
+        const normalized = String(value || '').trim();
+        if (!normalized) return '';
+        if (normalized.length <= prefix + suffix + 3) {
+            return normalized;
+        }
+        return `${normalized.slice(0, prefix)}...${normalized.slice(-suffix)}`;
+    },
+
+    compactURLLabel(value) {
+        const normalized = String(value || '').trim();
+        if (!normalized) return '';
+        try {
+            return new URL(normalized).host || normalized;
+        } catch (_) {
+            return this.compactDisplayText(normalized, 16, 10);
+        }
+    },
+
+    setWeixinQRCodeVisible(visible) {
+        this.weixinQRCodePanel?.classList.toggle('hidden', !visible);
+        this.weixinQRCodePlaceholder?.classList.toggle('hidden', visible);
     },
 
     setWeixinBindingStatus(message, tone = '') {
@@ -939,7 +1019,7 @@ const SettingsPage = {
                 this.weixinQRCodeLink.href = result.qrcode_content || '#';
                 this.weixinQRCodeLink.textContent = result.qrcode_content || '二维码内容不可用';
             }
-            this.weixinQRCodePanel?.classList.remove('hidden');
+            this.setWeixinQRCodeVisible(true);
             this.setWeixinBindingStatus(result.message || '请使用微信扫码完成绑定', 'saving');
 
             if (!this.pendingWeixinQRCode) {
@@ -967,7 +1047,8 @@ const SettingsPage = {
                 this.authSettings.weixin_binding = {};
             }
             this.renderWeixinBindingSummary({});
-            this.weixinQRCodePanel?.classList.add('hidden');
+            this.pendingWeixinQRCode = '';
+            this.setWeixinQRCodeVisible(false);
             this.setWeixinBindingStatus('');
             Utils.showToast('微信绑定已解除');
         } catch (error) {
@@ -1003,7 +1084,7 @@ const SettingsPage = {
                     weixin_binding: result.binding || {}
                 };
                 this.renderAuthSettings(this.authSettings);
-                this.weixinQRCodePanel?.classList.add('hidden');
+                this.setWeixinQRCodeVisible(false);
                 this.setWeixinBindingStatus(message, 'success');
                 Utils.showToast(message || '微信绑定成功');
                 return;
@@ -1012,6 +1093,7 @@ const SettingsPage = {
             if (status === 'expired') {
                 this.stopWeixinBindingPolling();
                 this.pendingWeixinQRCode = '';
+                this.setWeixinQRCodeVisible(false);
                 this.setWeixinBindingStatus(message, 'error');
                 return;
             }
@@ -1301,6 +1383,20 @@ const SettingsPage = {
         };
     },
 
+    aiModelDisplayLabel(modelID, fallbackModelID = '', emptyLabel = '未配置') {
+        const normalizedModelID = String(modelID || '').trim() || String(fallbackModelID || '').trim();
+        if (!normalizedModelID) {
+            return emptyLabel;
+        }
+
+        const matchedModel = (this.aiModelDraft || []).find((item) => item.id === normalizedModelID);
+        if (!matchedModel) {
+            return emptyLabel;
+        }
+
+        return `${matchedModel.name || '未命名模型'} · ${matchedModel.provider || 'openai'} / ${matchedModel.model || '未填写模型名'}`;
+    },
+
     getAIPayloadModels(models = this.aiModelDraft) {
         return models.map((item) => ({
             id: item.id,
@@ -1347,26 +1443,28 @@ const SettingsPage = {
 
     renderExtractorSummary(settings) {
         const usesBuiltIn = String(settings?.extractor_profile || '').trim() === 'open_source_vision';
-        const extractURL = usesBuiltIn
-            ? '内置 AI 坐标提取，不使用外部提取接口'
-            : (settings.effective_extractor_url || '未配置');
-        const jobsURL = usesBuiltIn
-            ? '不适用'
-            : (settings.effective_jobs_url || '未配置');
-        const tokenLabel = usesBuiltIn
-            ? '不适用'
-            : (settings.extractor_token ? '已配置' : '未配置');
-        const fileFieldLabel = usesBuiltIn
-            ? '不适用'
-            : (settings.extractor_file_field || 'file');
+        if (usesBuiltIn) {
+            const figureModelLabel = this.aiModelDisplayLabel(
+                this.figureModelSelect?.value,
+                this.defaultModelSelect?.value,
+                '载入中...'
+            );
+            this.extractorSummary.innerHTML = `
+                <div><span>提取方案</span><strong>${Utils.escapeHTML(this.extractorProfileLabel(settings.extractor_profile))}</strong></div>
+                <div><span>全文来源</span><strong>${Utils.escapeHTML(this.extractorPDFTextSourceLabel(settings.pdf_text_source))}</strong></div>
+                <div><span>坐标提取模型</span><strong>${Utils.escapeHTML(figureModelLabel)}</strong></div>
+                <div><span>外部提取服务</span><strong>已隐藏，不使用</strong></div>
+            `;
+            return;
+        }
 
         this.extractorSummary.innerHTML = `
             <div><span>提取方案</span><strong>${Utils.escapeHTML(this.extractorProfileLabel(settings.extractor_profile))}</strong></div>
             <div><span>全文来源</span><strong>${Utils.escapeHTML(this.extractorPDFTextSourceLabel(settings.pdf_text_source))}</strong></div>
-            <div><span>生效的提取接口</span><strong class="settings-url-value">${Utils.escapeHTML(extractURL)}</strong></div>
-            <div><span>生效的任务接口</span><strong class="settings-url-value">${Utils.escapeHTML(jobsURL)}</strong></div>
-            <div><span>上传字段名</span><strong>${Utils.escapeHTML(fileFieldLabel)}</strong></div>
-            <div><span>鉴权 Token</span><strong>${Utils.escapeHTML(tokenLabel)}</strong></div>
+            <div><span>生效的提取接口</span><strong class="settings-url-value">${Utils.escapeHTML(settings.effective_extractor_url || '未配置')}</strong></div>
+            <div><span>生效的任务接口</span><strong class="settings-url-value">${Utils.escapeHTML(settings.effective_jobs_url || '未配置')}</strong></div>
+            <div><span>上传字段名</span><strong>${Utils.escapeHTML(settings.extractor_file_field || 'file')}</strong></div>
+            <div><span>鉴权 Token</span><strong>${Utils.escapeHTML(settings.extractor_token ? '已配置' : '未配置')}</strong></div>
         `;
     },
 
@@ -1390,17 +1488,33 @@ const SettingsPage = {
         }
     },
 
+    extractorPDFTextSourceValue(profile) {
+        return String(profile || '').trim() === 'open_source_vision' ? 'pdfjs' : 'extractor';
+    },
+
     syncExtractorProfileFormState() {
         const usesBuiltIn = String(this.extractorProfileSelect?.value || '').trim() === 'open_source_vision';
 
-        if (usesBuiltIn && this.extractorPDFTextSourceSelect) {
-            this.extractorPDFTextSourceSelect.value = 'pdfjs';
-        }
-        if (this.extractorPDFTextSourceSelect) {
-            this.extractorPDFTextSourceSelect.disabled = usesBuiltIn;
-        }
+        [
+            this.extractorFigureModelField,
+            this.extractorURLField,
+            this.extractorTokenField,
+            this.extractorFileFieldField,
+            this.extractorTimeoutField,
+            this.extractorPollIntervalField,
+            this.extractorPDFFigXHint
+        ].forEach((element) => {
+            if (!element) return;
+            if (element === this.extractorFigureModelField) {
+                element.classList.toggle('hidden', !usesBuiltIn);
+                return;
+            }
+            element.classList.toggle('hidden', usesBuiltIn);
+        });
+        this.extractorBuiltInHint?.classList.toggle('hidden', !usesBuiltIn);
 
         [
+            this.figureModelSelect,
             this.extractorURLInput,
             this.extractorTokenInput,
             this.extractorFileFieldInput,
@@ -1408,6 +1522,10 @@ const SettingsPage = {
             this.extractorPollIntervalInput
         ].forEach((element) => {
             if (element) {
+                if (element === this.figureModelSelect) {
+                    element.disabled = !usesBuiltIn;
+                    return;
+                }
                 element.disabled = usesBuiltIn;
             }
         });

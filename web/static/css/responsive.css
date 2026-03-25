@@ -7,13 +7,17 @@
     .figure-lightbox,
     .note-lightbox,
     .ai-layout,
-    .manual-layout {
+    .manual-layout,
+    .weixin-overview-panel,
+    .weixin-control-grid {
         grid-template-columns: 1fr;
     }
 
     .summary-strip,
     .filters-grid,
     .form-grid,
+    .weixin-binding-summary,
+    .weixin-summary-meta,
     .compact-grid-form,
     .detail-form-grid,
     .note-lightbox-meta-grid {
@@ -60,6 +64,8 @@
     .workflow-grid,
     .filters-grid,
     .form-grid,
+    .weixin-binding-summary,
+    .weixin-summary-meta,
     .compact-grid-form,
     .detail-form-grid,
     .note-lightbox-meta-grid,
@@ -136,7 +142,8 @@
     .manual-fulltext-head,
     .manual-stage-head,
     .manual-toolbar,
-    .manual-selection-head {
+    .manual-selection-head,
+    .weixin-card-head {
         flex-direction: column;
         align-items: flex-start;
     }

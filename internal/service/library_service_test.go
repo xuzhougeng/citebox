@@ -1187,6 +1187,21 @@ func TestBuiltInLLMExtractorForcesPDFJSTextSource(t *testing.T) {
 	}
 }
 
+func TestPDFFigXExtractorForcesExtractorTextSource(t *testing.T) {
+	svc, _, _ := newTestService(t)
+
+	updated, err := svc.UpdateExtractorSettings(model.ExtractorSettings{
+		ExtractorProfile: extractorProfilePDFFigXV1,
+		PDFTextSource:    pdfTextSourcePDFJS,
+	})
+	if err != nil {
+		t.Fatalf("UpdateExtractorSettings() error = %v", err)
+	}
+	if updated.PDFTextSource != pdfTextSourceExtractor {
+		t.Fatalf("UpdateExtractorSettings() pdf_text_source = %q, want %q", updated.PDFTextSource, pdfTextSourceExtractor)
+	}
+}
+
 func TestBuildExtractorUploadBodyUsesRuntimeFileField(t *testing.T) {
 	svc, _, cfg := newTestService(t)
 
