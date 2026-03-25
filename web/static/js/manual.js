@@ -12,6 +12,8 @@ const ManualPage = {
         drawing: null,
         loadingPreview: false,
         submitting: false,
+        extractingText: false,
+        extractingTextPage: 0,
         pdfjsLib: null,
         pdfDocument: null,
         renderCache: new Map(),
@@ -50,9 +52,11 @@ const ManualPage = {
         this.clearPageBtn = document.getElementById('manualClearPageBtn');
         this.clearAllBtn = document.getElementById('manualClearAllBtn');
         this.submitBtn = document.getElementById('manualSubmitBtn');
+        this.extractTextBtn = document.getElementById('manualExtractTextBtn');
         this.selectionList = document.getElementById('manualSelectionList');
         this.workspaceHint = document.getElementById('manualWorkspaceHint');
         this.notice = document.getElementById('manualExtractionNotice');
+        this.fullTextStatus = document.getElementById('manualFullTextStatus');
     },
 
     bindEvents() {
@@ -85,6 +89,10 @@ const ManualPage = {
 
         this.submitBtn.addEventListener('click', async () => {
             await this.submitSelections();
+        });
+
+        this.extractTextBtn.addEventListener('click', async () => {
+            await this.extractAndSaveFullText();
         });
 
         this.selectionList.addEventListener('input', (event) => {
@@ -205,13 +213,14 @@ const ManualPage = {
             : '正在读取 PDF...';
         this.prevPageBtn.disabled = this.state.currentPage <= 1;
         this.nextPageBtn.disabled = !this.state.pageCount || this.state.currentPage >= this.state.pageCount;
-        this.submitBtn.disabled = this.state.submitting;
+        this.submitBtn.disabled = this.state.submitting || this.state.extractingText;
         this.submitBtn.textContent = this.state.submitting ? '提取中...' : '提取并录入图片';
 
         this.summaryStrip.innerHTML = `
             <div class="stat-card"><span>PDF 页数</span><strong>${this.state.pageCount || '...'}</strong></div>
             <div class="stat-card"><span>已有图片</span><strong>${paper.figure_count || (paper.figures || []).length || 0}</strong></div>
             <div class="stat-card"><span>人工补录</span><strong>${manualCount}</strong></div>
+            <div class="stat-card"><span>PDF 全文</span><strong>${paper.pdf_text ? `${paper.pdf_text.length.toLocaleString()} 字` : '未保存'}</strong></div>
             <div class="stat-card"><span>当前状态</span><strong>${Utils.escapeHTML(Utils.statusLabel(status))}</strong></div>
         `;
 
@@ -223,6 +232,8 @@ const ManualPage = {
             this.notice.classList.add('hidden');
             this.notice.textContent = '';
         }
+
+        this.renderFullTextStatus();
     },
 
     renderMissingPaper(message = '无法加载当前文献，请返回文献库重新进入。') {
@@ -528,6 +539,35 @@ const ManualPage = {
         this.previewFrame.scrollIntoView({ behavior: 'smooth', block: 'center' });
     },
 
+    renderFullTextStatus() {
+        if (!this.extractTextBtn || !this.fullTextStatus) return;
+
+        const paper = this.state.paper;
+        const hasText = Boolean(paper?.pdf_text);
+        const extracting = this.state.extractingText;
+        const pageCount = Math.max(this.state.pageCount || 0, 0);
+        const extractingPage = Math.min(this.state.extractingTextPage || 0, pageCount || Number.MAX_SAFE_INTEGER);
+
+        this.extractTextBtn.disabled = extracting || this.state.submitting || !this.state.pdfDocument;
+        this.extractTextBtn.textContent = extracting
+            ? `提取全文中 ${pageCount ? `${extractingPage}/${pageCount}` : ''}`.trim()
+            : (hasText ? '重新提取全文' : '提取全文并保存');
+
+        if (extracting) {
+            this.fullTextStatus.textContent = pageCount
+                ? `正在读取第 ${extractingPage} / ${pageCount} 页文本并保存到当前文献。`
+                : '正在提取当前 PDF 的全文内容。';
+            return;
+        }
+
+        if (hasText) {
+            this.fullTextStatus.textContent = `当前已保存 ${paper.pdf_text.length.toLocaleString()} 字全文，可重新提取覆盖，供 AI 伴读、检索和后续整理使用。`;
+            return;
+        }
+
+        this.fullTextStatus.textContent = '当前还没有保存 PDF 全文。可直接从浏览器中的 PDF 提取并写回文献，供后续问答使用。';
+    },
+
     async buildSelectionImageData(selection) {
         const canvas = await this.getExtractionCanvas(selection.page_number);
         const left = Math.max(0, Math.floor(selection.x * canvas.width));
@@ -591,5 +631,123 @@ const ManualPage = {
             this.submitBtn.disabled = false;
             this.submitBtn.textContent = '提取并录入图片';
         }
+    },
+
+    async extractAndSaveFullText() {
+        if (this.state.extractingText) return;
+        if (!this.state.pdfDocument) {
+            Utils.showToast('PDF 还没有加载完成', 'error');
+            return;
+        }
+
+        this.state.extractingText = true;
+        this.state.extractingTextPage = 0;
+        this.renderFullTextStatus();
+
+        try {
+            const pdfText = await this.extractFullTextFromPDF();
+            if (!pdfText) {
+                throw new Error('没有从当前 PDF 中提取到可用全文');
+            }
+
+            const payload = await API.updatePaperPDFText(this.state.paperId, {
+                pdf_text: pdfText
+            });
+
+            this.state.paper = payload.paper;
+            this.renderWorkspace();
+            Utils.showToast(`已保存全文（${pdfText.length.toLocaleString()} 字）`);
+        } catch (error) {
+            Utils.showToast(error.message || '提取全文失败', 'error');
+        } finally {
+            this.state.extractingText = false;
+            this.state.extractingTextPage = 0;
+            this.renderFullTextStatus();
+        }
+    },
+
+    async extractFullTextFromPDF() {
+        const pages = [];
+
+        for (let pageNumber = 1; pageNumber <= this.state.pageCount; pageNumber += 1) {
+            this.state.extractingTextPage = pageNumber;
+            this.renderFullTextStatus();
+
+            const page = await this.state.pdfDocument.getPage(pageNumber);
+            const textContent = await page.getTextContent();
+            const pageText = this.extractPageText(textContent);
+            if (pageText) {
+                pages.push(pageText);
+            }
+        }
+
+        return pages.join('\n\n').trim();
+    },
+
+    extractPageText(textContent) {
+        const items = Array.isArray(textContent?.items) ? textContent.items : [];
+        const lines = [];
+        let currentLine = '';
+        let previousItem = null;
+
+        const flushLine = () => {
+            const normalized = currentLine.trimEnd();
+            if (normalized) {
+                lines.push(normalized);
+            }
+            currentLine = '';
+        };
+
+        // pdf.js 会按阅读顺序给出 textContent，这里用坐标和 hasEOL 做轻量行重建。
+        items.forEach((item) => {
+            const text = String(item?.str || '').replace(/\u00a0/g, ' ');
+            const x = Number(item?.transform?.[4] || 0);
+            const y = Number(item?.transform?.[5] || 0);
+            const width = Number(item?.width || 0);
+
+            if (!text) {
+                if (item?.hasEOL) {
+                    flushLine();
+                    previousItem = null;
+                }
+                return;
+            }
+
+            if (previousItem && Math.abs(y - previousItem.y) > 2) {
+                flushLine();
+                previousItem = null;
+            }
+
+            if (previousItem && this.shouldInsertSpaceBetween(previousItem, { text, x })) {
+                currentLine += ' ';
+            }
+
+            currentLine += text;
+
+            if (item?.hasEOL) {
+                flushLine();
+                previousItem = null;
+                return;
+            }
+
+            previousItem = { text, x, y, width };
+        });
+
+        flushLine();
+        return lines.join('\n').trim();
+    },
+
+    shouldInsertSpaceBetween(previousItem, currentItem) {
+        if (!previousItem || !currentItem) return false;
+        if (!previousItem.text || !currentItem.text) return false;
+        if (/\s$/.test(previousItem.text) || /^\s/.test(currentItem.text)) return false;
+        if (/^[,.;:!?%)\]}]/.test(currentItem.text)) return false;
+        if (/[([{]$/.test(previousItem.text)) return false;
+        if (this.isCJKBoundary(previousItem.text, currentItem.text)) return false;
+        return currentItem.x - (previousItem.x + previousItem.width) > 1;
+    },
+
+    isCJKBoundary(previousText, currentText) {
+        return /[\u3400-\u9fff]$/.test(previousText) && /^[\u3400-\u9fff]/.test(currentText);
     }
 };

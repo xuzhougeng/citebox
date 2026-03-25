@@ -976,6 +976,31 @@ func TestUpdatePaperKeepsPDFTextWhenOmitted(t *testing.T) {
 	}
 }
 
+func TestUpdatePaperPDFTextOnlyPersistsText(t *testing.T) {
+	svc, repo, _ := newTestService(t)
+	paper := createTestPaper(t, repo)
+
+	updated, err := svc.UpdatePaperPDFText(paper.ID, "  Extracted PDF full text  ")
+	if err != nil {
+		t.Fatalf("UpdatePaperPDFText() error = %v", err)
+	}
+
+	if updated.PDFText != "Extracted PDF full text" {
+		t.Fatalf("UpdatePaperPDFText() pdf_text = %q, want %q", updated.PDFText, "Extracted PDF full text")
+	}
+	if updated.Title != paper.Title || updated.AbstractText != paper.AbstractText || updated.NotesText != paper.NotesText {
+		t.Fatalf("UpdatePaperPDFText() mutated metadata: %+v", updated)
+	}
+}
+
+func TestUpdatePaperPDFTextRejectsEmpty(t *testing.T) {
+	svc, _, _ := newTestService(t)
+
+	if _, err := svc.UpdatePaperPDFText(1, "   "); !apperr.IsCode(err, apperr.CodeInvalidArgument) {
+		t.Fatalf("UpdatePaperPDFText() code = %q, want %q", apperr.CodeOf(err), apperr.CodeInvalidArgument)
+	}
+}
+
 func TestUpdateFigureTagsOnlyTouchesSelectedFigure(t *testing.T) {
 	svc, repo, _ := newTestService(t)
 

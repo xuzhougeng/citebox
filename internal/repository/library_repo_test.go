@@ -583,6 +583,43 @@ func TestUpdatePaperTagsPreservesExistingTagsAcrossMultipleUpdates(t *testing.T)
 	}
 }
 
+func TestUpdatePaperPDFTextOnlyTouchesFullText(t *testing.T) {
+	repo := newTestRepository(t)
+
+	paper, err := repo.CreatePaper(PaperUpsertInput{
+		Title:            "PDF Text Only",
+		OriginalFilename: "pdf-text-only.pdf",
+		StoredPDFName:    "pdf-text-only.pdf",
+		FileSize:         256,
+		ContentType:      "application/pdf",
+		PDFText:          "Original full text",
+		AbstractText:     "Original abstract",
+		NotesText:        "Original notes",
+		ExtractionStatus: "completed",
+		Tags: []TagUpsertInput{
+			{Name: "Needle", Color: "#111111"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreatePaper() error = %v", err)
+	}
+
+	updated, err := repo.UpdatePaperPDFText(paper.ID, "Extracted full text")
+	if err != nil {
+		t.Fatalf("UpdatePaperPDFText() error = %v", err)
+	}
+
+	if updated.PDFText != "Extracted full text" {
+		t.Fatalf("UpdatePaperPDFText() pdf_text = %q, want %q", updated.PDFText, "Extracted full text")
+	}
+	if updated.Title != paper.Title || updated.AbstractText != paper.AbstractText || updated.NotesText != paper.NotesText {
+		t.Fatalf("UpdatePaperPDFText() mutated metadata: %+v", updated)
+	}
+	if len(updated.Tags) != 1 || updated.Tags[0].Name != "Needle" {
+		t.Fatalf("UpdatePaperPDFText() tags = %+v, want preserved tags", updated.Tags)
+	}
+}
+
 func TestUpdateFigureNotesOnlyAffectsTargetFigureAndSearch(t *testing.T) {
 	repo := newTestRepository(t)
 

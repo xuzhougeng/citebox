@@ -45,6 +45,19 @@
 
         <section id="manualSummaryStrip" class="summary-strip"></section>
 
+        <section class="manager-card manual-fulltext-card">
+            <div class="manual-fulltext-head">
+                <div>
+                    <p class="eyebrow">Full Text Extraction</p>
+                    <h2>PDF 全文提取</h2>
+                    <p id="manualFullTextStatus" class="manual-fulltext-status">
+                        当前还没有保存 PDF 全文。可直接从浏览器中的 PDF 提取并写回文献，供后续问答使用。
+                    </p>
+                </div>
+                <button id="manualExtractTextBtn" class="btn btn-outline" type="button">提取全文并保存</button>
+            </div>
+        </section>
+
         <section class="manual-layout">
             <section class="result-card manual-stage-card">
                 <div class="manual-stage-head">
@@ -84,7 +97,7 @@
 
             <aside class="manager-card manual-sidebar">
                 <div class="manager-head">
-                    <h2>待录入区域</h2>
+                    <h2>图片待录入</h2>
                     <p>可跨页累积多个框选。提交后会把裁剪结果追加到当前文献，不覆盖已有图片。</p>
                 </div>
 

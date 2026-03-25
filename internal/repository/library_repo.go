@@ -92,6 +92,10 @@ func (r *LibraryRepository) UpdatePaper(id int64, input PaperUpdateInput) (*mode
 	return r.Paper.UpdatePaper(id, input)
 }
 
+func (r *LibraryRepository) UpdatePaperPDFText(id int64, pdfText string) (*model.Paper, error) {
+	return r.Paper.UpdatePaperPDFText(id, pdfText)
+}
+
 // DeletePaper 删除文献（委托给 Paper 仓库）
 func (r *LibraryRepository) DeletePaper(id int64) error {
 	return r.Paper.DeletePaper(id)

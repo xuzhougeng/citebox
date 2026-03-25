@@ -230,6 +230,10 @@ func buildHandler(
 			paperHandler.Reextract(w, r)
 			return
 		}
+		if r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/pdf-text") {
+			paperHandler.UpdatePDFText(w, r)
+			return
+		}
 		if strings.HasSuffix(r.URL.Path, "/manual-extraction") {
 			switch r.Method {
 			case http.MethodGet:

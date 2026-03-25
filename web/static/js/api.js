@@ -129,6 +129,16 @@ const API = {
         });
     },
 
+    updatePaperPDFText(id, data) {
+        return requestJSON(`${API_BASE}/papers/${id}/pdf-text`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        });
+    },
+
     deletePaper(id) {
         return requestJSON(`${API_BASE}/papers/${id}`, {
             method: 'DELETE'

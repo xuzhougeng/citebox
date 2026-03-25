@@ -144,6 +144,23 @@ func (r *PaperRepository) UpdatePaper(id int64, input PaperUpdateInput) (*model.
 	return r.GetPaperDetail(id)
 }
 
+func (r *PaperRepository) UpdatePaperPDFText(id int64, pdfText string) (*model.Paper, error) {
+	result, err := r.db.Exec(`
+		UPDATE papers
+		SET pdf_text = ?, updated_at = CURRENT_TIMESTAMP
+		WHERE id = ?
+	`, pdfText, id)
+	if err != nil {
+		return nil, wrapDBError(err, "更新 PDF 全文失败")
+	}
+
+	if err := ensureRowsAffected(result, "paper not found"); err != nil {
+		return nil, err
+	}
+
+	return r.GetPaperDetail(id)
+}
+
 // DeletePaper 删除文献
 func (r *PaperRepository) DeletePaper(id int64) error {
 	result, err := r.db.Exec("DELETE FROM papers WHERE id = ?", id)

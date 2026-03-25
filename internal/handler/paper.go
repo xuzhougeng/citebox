@@ -200,6 +200,33 @@ func (h *PaperHandler) ManualExtract(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (h *PaperHandler) UpdatePDFText(w http.ResponseWriter, r *http.Request) {
+	id, err := parseIDWithSuffix(r.URL.Path, "/api/papers/", "/pdf-text")
+	if err != nil {
+		sendError(w, apperr.New(apperr.CodeInvalidArgument, "paper id 无效"))
+		return
+	}
+
+	var req struct {
+		PDFText string `json:"pdf_text"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		sendError(w, apperr.New(apperr.CodeInvalidArgument, "请求体格式错误"))
+		return
+	}
+
+	paper, err := h.service.UpdatePaperPDFText(id, req.PDFText)
+	if err != nil {
+		sendError(w, err)
+		return
+	}
+
+	sendJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"paper":   paper,
+	})
+}
+
 func (h *PaperHandler) Update(w http.ResponseWriter, r *http.Request) {
 	id, err := parseIDFromPath(r.URL.Path, "/api/papers/")
 	if err != nil {

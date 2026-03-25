@@ -540,6 +540,21 @@ func (s *LibraryService) UpdatePaper(id int64, params UpdatePaperParams) (*model
 	return paper, nil
 }
 
+func (s *LibraryService) UpdatePaperPDFText(id int64, pdfText string) (*model.Paper, error) {
+	normalized := strings.TrimSpace(pdfText)
+	if normalized == "" {
+		return nil, apperr.New(apperr.CodeInvalidArgument, "PDF 全文不能为空")
+	}
+
+	paper, err := s.repo.UpdatePaperPDFText(id, normalized)
+	if err != nil {
+		return nil, err
+	}
+
+	s.decoratePaper(paper)
+	return paper, nil
+}
+
 func (s *LibraryService) PurgeLibrary() error {
 	if err := s.repo.PurgeLibrary(); err != nil {
 		return err

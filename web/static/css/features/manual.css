@@ -127,6 +127,30 @@
     top: 6rem;
 }
 
+.manual-fulltext-card {
+    margin-top: 1.2rem;
+    padding: 1.25rem;
+}
+
+.manual-fulltext-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.manual-fulltext-head h2 {
+    margin: 0.3rem 0 0;
+    font-family: var(--font-display);
+}
+
+.manual-fulltext-status {
+    margin: 0.45rem 0 0;
+    color: var(--muted);
+    font-size: 0.92rem;
+    line-height: 1.6;
+}
+
 .manual-selection-list {
     display: grid;
     gap: 0.85rem;
