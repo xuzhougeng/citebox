@@ -13,18 +13,18 @@
         <div class="navbar-content">
             <a href="/" class="logo">CiteBox</a>
             <ul class="nav-links">
-                <li><a href="/">总览</a></li>
-                <li><a href="/library">文献库</a></li>
-                <li><a href="/figures">图片库</a></li>
-                <li><a href="/palettes">配色库</a></li>
-                <li><a href="/groups">分组</a></li>
-                <li><a href="/tags">标签</a></li>
-                <li><a href="/notes" class="active">笔记</a></li>
-                <li><a href="/ai">AI伴读</a></li>
-                <li><a href="/settings">配置</a></li>
+                <li><a href="/" data-i18n="nav.overview">总览</a></li>
+                <li><a href="/library" data-i18n="nav.library">文献库</a></li>
+                <li><a href="/figures" data-i18n="nav.figures">图片库</a></li>
+                <li><a href="/palettes" data-i18n="nav.palettes">配色库</a></li>
+                <li><a href="/groups" data-i18n="nav.groups">分组</a></li>
+                <li><a href="/tags" data-i18n="nav.tags">标签</a></li>
+                <li><a href="/notes" class="active" data-i18n="nav.notes">笔记</a></li>
+                <li><a href="/ai" data-i18n="nav.ai">AI伴读</a></li>
+                <li><a href="/settings" data-i18n="nav.settings">配置</a></li>
             </ul>
             <div class="nav-actions">
-                <a href="/upload" class="nav-cta">上传 PDF</a>
+                <a href="/upload" class="nav-cta" data-i18n="nav.upload_pdf">上传 PDF</a>
             </div>
         </div>
     </nav>
@@ -33,8 +33,8 @@
         <section class="hero">
             <div>
                 <p class="eyebrow">Notes Desk</p>
-                <h1>查看和编辑笔记</h1>
-                <p class="hero-text">集中查看文献笔记和图片笔记。文献的基本信息请在详情页中编辑。</p>
+                <h1 data-i18n="notes.hero_title">查看和编辑笔记</h1>
+                <p class="hero-text" data-i18n="notes.hero_text">集中查看文献笔记和图片笔记。文献的基本信息请在详情页中编辑。</p>
             </div>
         </section>
 
@@ -42,33 +42,33 @@
             <div class="filters-card-head">
                 <div>
                     <p class="eyebrow">Notes Filter</p>
-                    <h2>筛选笔记</h2>
-                    <p id="notesFilterDescription">这里只显示已经写过文献笔记的条目，你可以继续编辑、回看内容或跳转到来源文献。</p>
+                    <h2 data-i18n="notes.filter_title">筛选笔记</h2>
+                    <p id="notesFilterDescription" data-i18n="notes.filter_desc_paper">这里只显示已经写过文献笔记的条目，你可以继续编辑、回看内容或跳转到来源文献。</p>
                 </div>
                 <div id="notesTypeSwitch" class="notes-type-switch" role="tablist" aria-label="笔记类型切换">
-                    <button class="btn btn-primary" type="button" data-notes-mode="paper" aria-pressed="true">文献笔记</button>
-                    <button class="btn btn-outline" type="button" data-notes-mode="figure" aria-pressed="false">图片笔记</button>
+                    <button class="btn btn-primary" type="button" data-notes-mode="paper" aria-pressed="true" data-i18n="notes.type_paper">文献笔记</button>
+                    <button class="btn btn-outline" type="button" data-notes-mode="figure" aria-pressed="false" data-i18n="notes.type_figure">图片笔记</button>
                 </div>
             </div>
             <div class="filters-grid">
                 <label class="field">
-                    <span>关键词</span>
-                    <input id="notesKeywordInput" class="form-input" type="text" placeholder="文献标题、摘要、文献笔记、标签">
+                    <span data-i18n="label.keyword">关键词</span>
+                    <input id="notesKeywordInput" class="form-input" type="text" placeholder="文献标题、摘要、文献笔记、标签" data-i18n-placeholder="notes.filter_keyword_paper_placeholder">
                 </label>
                 <label class="field">
-                    <span>来源分组</span>
+                    <span data-i18n="notes.filter_group">来源分组</span>
                     <select id="notesGroupFilter" class="form-input">
-                        <option value="">全部分组</option>
+                        <option value="" data-i18n="notes.filter_all_groups">全部分组</option>
                     </select>
                 </label>
                 <label class="field">
-                    <span id="notesTagFilterLabel">文献标签</span>
+                    <span id="notesTagFilterLabel" data-i18n="notes.filter_tag_paper">文献标签</span>
                     <select id="notesTagFilter" class="form-input">
-                        <option value="">全部文献标签</option>
+                        <option value="" data-i18n="notes.filter_all_paper_tags">全部文献标签</option>
                     </select>
                 </label>
                 <label class="field">
-                    <span>排序方式</span>
+                    <span data-i18n="notes.filter_sort">排序方式</span>
                     <select id="notesSortFilter" class="form-input"></select>
                 </label>
             </div>
@@ -79,7 +79,7 @@
             <div class="notes-results-head">
                 <div>
                     <p class="eyebrow">Notes Shelf</p>
-                    <h2>笔记列表</h2>
+                    <h2 data-i18n="notes.shelf_title">笔记列表</h2>
                 </div>
                 <div id="notesPageControls" class="figure-page-controls"></div>
             </div>
@@ -90,12 +90,13 @@
 
     <div id="paperModal" class="modal-shell hidden">
         <div class="modal-dialog">
-            <button id="closePaperModal" class="modal-close" type="button" aria-label="关闭">×</button>
+            <button id="closePaperModal" class="modal-close" type="button" aria-label="关闭" data-i18n-aria-label="btn.close">×</button>
             <div id="paperModalBody"></div>
         </div>
     </div>
 
     <script src="/static/js/theme.js"></script>
+    <script src="/static/js/i18n.js"></script>
     <script src="/static/js/utils.js"></script>
     <script src="/static/js/api.js"></script>
     <script src="/static/js/paper-viewer.js"></script>

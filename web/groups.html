@@ -13,18 +13,18 @@
         <div class="navbar-content">
             <a href="/" class="logo">CiteBox</a>
             <ul class="nav-links">
-                <li><a href="/">总览</a></li>
-                <li><a href="/library">文献库</a></li>
-                <li><a href="/figures">图片库</a></li>
-                <li><a href="/palettes">配色库</a></li>
-                <li><a href="/groups" class="active">分组</a></li>
-                <li><a href="/tags">标签</a></li>
-                <li><a href="/notes">笔记</a></li>
-                <li><a href="/ai">AI伴读</a></li>
-                <li><a href="/settings">配置</a></li>
+                <li><a href="/" data-i18n="nav.overview">总览</a></li>
+                <li><a href="/library" data-i18n="nav.library">文献库</a></li>
+                <li><a href="/figures" data-i18n="nav.figures">图片库</a></li>
+                <li><a href="/palettes" data-i18n="nav.palettes">配色库</a></li>
+                <li><a href="/groups" class="active" data-i18n="nav.groups">分组</a></li>
+                <li><a href="/tags" data-i18n="nav.tags">标签</a></li>
+                <li><a href="/notes" data-i18n="nav.notes">笔记</a></li>
+                <li><a href="/ai" data-i18n="nav.ai">AI伴读</a></li>
+                <li><a href="/settings" data-i18n="nav.settings">配置</a></li>
             </ul>
             <div class="nav-actions">
-                <a href="/upload" class="nav-cta">上传 PDF</a>
+                <a href="/upload" class="nav-cta" data-i18n="nav.upload_pdf">上传 PDF</a>
             </div>
         </div>
     </nav>
@@ -33,29 +33,29 @@
         <section class="hero compact">
             <div>
                 <p class="eyebrow">Groups</p>
-                <h1>用分组管理文献集合</h1>
-                <p class="hero-text">适合按项目、课题或阶段组织文献，再进入分组内部集中浏览。</p>
+                <h1 data-i18n="groups.hero_title">用分组管理文献集合</h1>
+                <p class="hero-text" data-i18n="groups.hero_text">适合按项目、课题或阶段组织文献，再进入分组内部集中浏览。</p>
             </div>
         </section>
 
         <section class="manager-card">
             <div class="manager-head">
-                <h2>新建分组</h2>
-                <p>分组适合相对稳定的组织结构。</p>
+                <h2 data-i18n="groups.create_title">新建分组</h2>
+                <p data-i18n="groups.create_desc">分组适合相对稳定的组织结构。</p>
             </div>
             <form id="groupPageForm" class="manager-form">
                 <div class="form-grid compact-grid-form">
                     <label class="field">
-                        <span>分组名称</span>
-                        <input id="groupPageNameInput" class="form-input" type="text" placeholder="例如：单细胞图谱">
+                        <span data-i18n="groups.field_name">分组名称</span>
+                        <input id="groupPageNameInput" class="form-input" type="text" placeholder="例如：单细胞图谱" data-i18n-placeholder="groups.field_name_placeholder">
                     </label>
                     <label class="field">
-                        <span>说明</span>
-                        <input id="groupPageDescriptionInput" class="form-input" type="text" placeholder="一句话说明这个分组的用途">
+                        <span data-i18n="groups.field_desc">说明</span>
+                        <input id="groupPageDescriptionInput" class="form-input" type="text" placeholder="一句话说明这个分组的用途" data-i18n-placeholder="groups.field_desc_placeholder">
                     </label>
                 </div>
                 <div class="submit-row">
-                    <button class="btn btn-primary" type="submit">创建分组</button>
+                    <button class="btn btn-primary" type="submit" data-i18n="groups.btn_create">创建分组</button>
                 </div>
             </form>
         </section>
@@ -64,8 +64,8 @@
             <div id="groupCardGrid" class="entity-grid page-entity-grid"></div>
             <section class="filters-card">
                 <div class="manager-head">
-                    <h2 id="groupHeadline">全部文献</h2>
-                    <p>点击上方分组列表切换筛选结果。</p>
+                    <h2 id="groupHeadline" data-i18n="groups.headline_all">全部文献</h2>
+                    <p data-i18n="groups.papers_hint">点击上方分组列表切换筛选结果。</p>
                 </div>
                 <div id="groupPaperList" class="paper-grid paper-list-mode"></div>
                 <div id="groupPagination" class="pagination"></div>
@@ -75,12 +75,13 @@
 
     <div id="paperModal" class="modal-shell hidden">
         <div class="modal-dialog">
-            <button id="closePaperModal" class="modal-close" type="button" aria-label="关闭">×</button>
+            <button id="closePaperModal" class="modal-close" type="button" aria-label="关闭" data-i18n-aria-label="btn.close">×</button>
             <div id="paperModalBody"></div>
         </div>
     </div>
 
     <script src="/static/js/theme.js"></script>
+    <script src="/static/js/i18n.js"></script>
     <script src="/static/js/utils.js"></script>
     <script src="/static/js/api.js"></script>
     <script src="/static/js/paper-viewer.js"></script>

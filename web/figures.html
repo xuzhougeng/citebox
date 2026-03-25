@@ -13,18 +13,18 @@
         <div class="navbar-content">
             <a href="/" class="logo">CiteBox</a>
             <ul class="nav-links">
-                <li><a href="/">总览</a></li>
-                <li><a href="/library">文献库</a></li>
-                <li><a href="/figures" class="active">图片库</a></li>
-                <li><a href="/palettes">配色库</a></li>
-                <li><a href="/groups">分组</a></li>
-                <li><a href="/tags">标签</a></li>
-                <li><a href="/notes">笔记</a></li>
-                <li><a href="/ai">AI伴读</a></li>
-                <li><a href="/settings">配置</a></li>
+                <li><a href="/" data-i18n="nav.overview">总览</a></li>
+                <li><a href="/library" data-i18n="nav.library">文献库</a></li>
+                <li><a href="/figures" class="active" data-i18n="nav.figures">图片库</a></li>
+                <li><a href="/palettes" data-i18n="nav.palettes">配色库</a></li>
+                <li><a href="/groups" data-i18n="nav.groups">分组</a></li>
+                <li><a href="/tags" data-i18n="nav.tags">标签</a></li>
+                <li><a href="/notes" data-i18n="nav.notes">笔记</a></li>
+                <li><a href="/ai" data-i18n="nav.ai">AI伴读</a></li>
+                <li><a href="/settings" data-i18n="nav.settings">配置</a></li>
             </ul>
             <div class="nav-actions">
-                <a href="/upload" class="nav-cta">上传 PDF</a>
+                <a href="/upload" class="nav-cta" data-i18n="nav.upload_pdf">上传 PDF</a>
             </div>
         </div>
     </nav>
@@ -33,8 +33,8 @@
         <section class="hero">
             <div>
                 <p class="eyebrow">Image Library</p>
-                <h1>跨文献浏览所有提取图片</h1>
-                <p class="hero-text">浏览所有文献中提取的图片，按标签整理，随时回到来源文献。</p>
+                <h1 data-i18n="figures.hero_title">跨文献浏览所有提取图片</h1>
+                <p class="hero-text" data-i18n="figures.hero_text">浏览所有文献中提取的图片，按标签整理，随时回到来源文献。</p>
             </div>
         </section>
 
@@ -42,32 +42,32 @@
             <div class="filters-card-head">
                 <div>
                     <p class="eyebrow">Filter Dock</p>
-                    <h2>按条件筛选图片</h2>
-                    <p>支持按来源分组和图片标签筛选，快速找到目标图片。</p>
+                    <h2 data-i18n="figures.filter_title">按条件筛选图片</h2>
+                    <p data-i18n="figures.filter_desc">支持按来源分组和图片标签筛选，快速找到目标图片。</p>
                 </div>
             </div>
             <div class="filters-grid">
                 <label class="field">
-                    <span>关键词</span>
-                    <input id="figureKeywordInput" class="form-input" type="text" placeholder="文献标题、图片说明、标签、笔记">
+                    <span data-i18n="label.keyword">关键词</span>
+                    <input id="figureKeywordInput" class="form-input" type="text" placeholder="文献标题、图片说明、标签、笔记" data-i18n-placeholder="figures.filter_keyword_placeholder">
                 </label>
                 <label class="field">
-                    <span>来源分组</span>
+                    <span data-i18n="figures.filter_group">来源分组</span>
                     <select id="figureGroupFilter" class="form-input">
-                        <option value="">全部分组</option>
+                        <option value="" data-i18n="figures.filter_all_groups">全部分组</option>
                     </select>
                 </label>
                 <label class="field">
-                    <span>图片标签</span>
+                    <span data-i18n="figures.filter_tag">图片标签</span>
                     <select id="figureTagFilter" class="form-input">
-                        <option value="">全部图片标签</option>
+                        <option value="" data-i18n="figures.filter_all_tags">全部图片标签</option>
                     </select>
                 </label>
                 <label class="field">
-                    <span>排序方式</span>
+                    <span data-i18n="figures.filter_sort">排序方式</span>
                     <select id="figureSortFilter" class="form-input">
-                        <option value="created_at">按图片创建时间</option>
-                        <option value="paper_created_at_figure_index">按文献创建时间，文献内按 Fig 顺序</option>
+                        <option value="created_at" data-i18n="figures.sort_created_at">按图片创建时间</option>
+                        <option value="paper_created_at_figure_index" data-i18n="figures.sort_paper_created_at">按文献创建时间，文献内按 Fig 顺序</option>
                     </select>
                 </label>
             </div>
@@ -78,7 +78,7 @@
             <div class="figure-results-head">
                 <div>
                     <p class="eyebrow">Library Shelf</p>
-                    <h2>图片库</h2>
+                    <h2 data-i18n="figures.shelf_title">图片库</h2>
                 </div>
                 <div id="figurePageControls" class="figure-page-controls"></div>
             </div>
@@ -89,19 +89,20 @@
 
     <div id="paperModal" class="modal-shell hidden">
         <div class="modal-dialog">
-            <button id="closePaperModal" class="modal-close" type="button" aria-label="关闭">×</button>
+            <button id="closePaperModal" class="modal-close" type="button" aria-label="关闭" data-i18n-aria-label="btn.close">×</button>
             <div id="paperModalBody"></div>
         </div>
     </div>
 
     <div id="figureModal" class="modal-shell hidden">
         <div class="modal-dialog figure-modal-dialog">
-            <button id="closeFigureModal" class="modal-close" type="button" aria-label="关闭">×</button>
+            <button id="closeFigureModal" class="modal-close" type="button" aria-label="关闭" data-i18n-aria-label="btn.close">×</button>
             <div id="figureModalBody"></div>
         </div>
     </div>
 
     <script src="/static/js/theme.js"></script>
+    <script src="/static/js/i18n.js"></script>
     <script src="/static/js/utils.js"></script>
     <script src="/static/js/api.js"></script>
     <script src="/static/js/paper-viewer.js"></script>
