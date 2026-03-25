@@ -13,18 +13,18 @@
         <div class="navbar-content">
             <a href="/" class="logo">CiteBox</a>
             <ul class="nav-links">
-                <li><a href="/">总览</a></li>
-                <li><a href="/library">文献库</a></li>
-                <li><a href="/figures">图片库</a></li>
-                <li><a href="/palettes">配色库</a></li>
-                <li><a href="/groups">分组</a></li>
-                <li><a href="/tags">标签</a></li>
-                <li><a href="/notes">笔记</a></li>
-                <li><a href="/ai" class="active">AI伴读</a></li>
-                <li><a href="/settings">配置</a></li>
+                <li><a href="/" data-i18n="nav.overview">总览</a></li>
+                <li><a href="/library" data-i18n="nav.library">文献库</a></li>
+                <li><a href="/figures" data-i18n="nav.figures">图片库</a></li>
+                <li><a href="/palettes" data-i18n="nav.palettes">配色库</a></li>
+                <li><a href="/groups" data-i18n="nav.groups">分组</a></li>
+                <li><a href="/tags" data-i18n="nav.tags">标签</a></li>
+                <li><a href="/notes" data-i18n="nav.notes">笔记</a></li>
+                <li><a href="/ai" class="active" data-i18n="nav.ai">AI伴读</a></li>
+                <li><a href="/settings" data-i18n="nav.settings">配置</a></li>
             </ul>
             <div class="nav-actions">
-                <a href="/upload" class="nav-cta">上传 PDF</a>
+                <a href="/upload" class="nav-cta" data-i18n="nav.upload_pdf">上传 PDF</a>
             </div>
         </div>
     </nav>
@@ -32,22 +32,22 @@
     <main class="page-shell">
         <div class="ai-page-tools">
             <details class="ai-shortcut-help">
-                <summary class="ai-help-button" aria-label="快捷键帮助">?</summary>
+                <summary class="ai-help-button" aria-label="快捷键帮助" data-i18n-aria-label="ai.help_label">?</summary>
                 <div class="ai-help-panel">
                     <p class="eyebrow">Hotkeys</p>
-                    <h3>快捷键</h3>
+                    <h3 data-i18n="ai.help_heading">快捷键</h3>
                     <div class="ai-help-list">
                         <div class="ai-help-row">
-                            <span class="ai-help-key">5 Turns Max</span>
-                            <p>单篇文献支持最多 5 轮连续提问，超出后请清空对话重新开始。</p>
+                            <span class="ai-help-key" data-i18n="ai.help_turns_key">5 Turns Max</span>
+                            <p data-i18n="ai.help_turns_desc">单篇文献支持最多 5 轮连续提问，超出后请清空对话重新开始。</p>
                         </div>
                         <div class="ai-help-row">
-                            <span class="ai-help-key">Ctrl/Cmd + Enter</span>
-                            <p>直接发送当前问题。</p>
+                            <span class="ai-help-key" data-i18n="ai.help_send_key">Ctrl/Cmd + Enter</span>
+                            <p data-i18n="ai.help_send_desc">直接发送当前问题。</p>
                         </div>
                         <div class="ai-help-row">
-                            <span class="ai-help-key">@角色名</span>
-                            <p>直接调用配置页里保存的角色 Prompt，例如 <code>@严格证据模式</code>。</p>
+                            <span class="ai-help-key" data-i18n="ai.help_role_key">@角色名</span>
+                            <p data-i18n-html="ai.help_role_desc">直接调用配置页里保存的角色 Prompt，例如 <code>@严格证据模式</code>。</p>
                         </div>
                     </div>
                 </div>
@@ -56,9 +56,9 @@
 
         <section class="hero compact">
             <div>
-                <p class="eyebrow">AI Reader</p>
-                <h1>AI 结合全文和图片帮你读文献</h1>
-                <p class="hero-text">
+                <p class="eyebrow" data-i18n="ai.hero_eyebrow">AI Reader</p>
+                <h1 data-i18n="ai.hero_title">AI 结合全文和图片帮你读文献</h1>
+                <p class="hero-text" data-i18n="ai.hero_text">
                     选择一篇文献，向 AI 提问——AI 会结合全文和图片帮你理解论文内容。
                 </p>
             </div>
@@ -68,8 +68,8 @@
             <details class="filters-card ai-config-details">
                 <summary class="manager-head ai-collapsible-head">
                     <div>
-                        <h2>当前配置摘要</h2>
-                        <p>当前生效的 AI 和解析服务设置。未配置时请先前往配置页完成设置。</p>
+                        <h2 data-i18n="ai.config_heading">当前配置摘要</h2>
+                        <p data-i18n="ai.config_desc">当前生效的 AI 和解析服务设置。未配置时请先前往配置页完成设置。</p>
                     </div>
                     <span class="ai-collapsible-toggle" aria-hidden="true"></span>
                 </summary>
@@ -78,12 +78,12 @@
 
             <section class="filters-card ai-workspace-card">
                 <div class="manager-head">
-                    <h2>选择文献</h2>
+                    <h2 data-i18n="ai.select_paper_heading">选择文献</h2>
                 </div>
                 <div class="form-grid compact-grid-form">
                     <label class="field field-span-2">
-                        <span>检索文献</span>
-                        <input id="aiPaperSearchInput" class="form-input" type="text" placeholder="按标题、文件名、摘要、备注或标签过滤">
+                        <span data-i18n="ai.search_label">检索文献</span>
+                        <input id="aiPaperSearchInput" class="form-input" type="text" placeholder="按标题、文件名、摘要、备注或标签过滤" data-i18n-placeholder="ai.search_placeholder">
                     </label>
                 </div>
                 <div id="aiPaperList" class="ai-paper-list"></div>
@@ -92,29 +92,29 @@
 
             <section class="result-card ai-query-card">
                 <div class="ai-action-head">
-                    <span class="ai-section-kicker">自由提问</span>
+                    <span class="ai-section-kicker" data-i18n="ai.free_ask">自由提问</span>
                     <span class="ai-section-rule" aria-hidden="true"></span>
                     <span id="aiRoundBadge" class="ai-round-badge">0 / 5 轮</span>
                 </div>
                 <div class="ai-session-bar">
-                    <p id="aiSessionHint" class="ai-session-hint">当前还没有对话记录，选中文献后就可以开始提问。</p>
+                    <p id="aiSessionHint" class="ai-session-hint" data-i18n="ai.session_hint_empty">当前还没有对话记录，选中文献后就可以开始提问。</p>
                     <div class="ai-session-actions">
-                        <button id="exportAIConversationButton" class="btn btn-outline" type="button">对话导出</button>
-                        <button id="clearAIConversationButton" class="btn btn-outline" type="button">清空对话</button>
+                        <button id="exportAIConversationButton" class="btn btn-outline" type="button" data-i18n="ai.btn_export_conversation">对话导出</button>
+                        <button id="clearAIConversationButton" class="btn btn-outline" type="button" data-i18n="ai.btn_clear_conversation">清空对话</button>
                     </div>
                 </div>
                 <div id="aiConversation" class="ai-conversation"></div>
                 <label class="field ai-question-field">
-                    <span class="ai-question-label">想让 AI 帮你什么？</span>
+                    <span class="ai-question-label" data-i18n="ai.question_label">想让 AI 帮你什么？</span>
                     <div class="ai-role-prompt-bar">
-                        <p id="aiRolePromptHint" class="ai-role-prompt-hint">输入 @角色名 直接调用角色 Prompt，也可以点击下面的快捷项插入。</p>
+                        <p id="aiRolePromptHint" class="ai-role-prompt-hint" data-i18n="ai.role_prompt_hint">输入 @角色名 直接调用角色 Prompt，也可以点击下面的快捷项插入。</p>
                         <div id="aiRolePromptQuickList" class="ai-role-prompt-list"></div>
                     </div>
-                    <textarea id="aiQuestionInput" class="form-textarea ai-question-input" rows="5" placeholder="例如：@严格证据模式 请解释这篇文章的核心结论，以及哪些图片最关键。"></textarea>
+                    <textarea id="aiQuestionInput" class="form-textarea ai-question-input" rows="5" placeholder="例如：@严格证据模式 请解释这篇文章的核心结论，以及哪些图片最关键。" data-i18n-placeholder="ai.question_placeholder"></textarea>
                 </label>
                 <div class="submit-row">
-                    <button id="runAIReaderButton" class="btn btn-primary" type="button">发送问题</button>
-                    <button id="stopAIReaderButton" class="btn btn-outline" type="button" hidden>停止生成</button>
+                    <button id="runAIReaderButton" class="btn btn-primary" type="button" data-i18n="ai.btn_send">发送问题</button>
+                    <button id="stopAIReaderButton" class="btn btn-outline" type="button" hidden data-i18n="ai.btn_stop">停止生成</button>
                     <div id="aiModelSummary" class="ai-model-summary"></div>
                 </div>
             </section>
@@ -123,12 +123,13 @@
 
     <div id="paperModal" class="modal-shell hidden">
         <div class="modal-dialog">
-            <button id="closePaperModal" class="modal-close" type="button" aria-label="关闭">×</button>
+            <button id="closePaperModal" class="modal-close" type="button" aria-label="关闭" data-i18n-aria-label="ai.btn_close_modal">×</button>
             <div id="paperModalBody"></div>
         </div>
     </div>
 
     <script src="/static/js/theme.js"></script>
+    <script src="/static/js/i18n.js"></script>
     <script src="/static/js/utils.js"></script>
     <script src="/static/js/api.js"></script>
     <script src="/static/js/paper-viewer.js"></script>
