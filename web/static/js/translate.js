@@ -1,3 +1,4 @@
+if (typeof window.t !== 'function') window.t = function(k,f){return f||k};
 const DesktopTranslate = {
     init() {
         if (this.initialized) return;
@@ -22,8 +23,8 @@ const DesktopTranslate = {
         this.menu.id = 'desktopTranslateMenu';
         this.menu.className = 'translate-context-menu hidden';
         this.menu.innerHTML = `
-            <button type="button" data-translate-action="copy">复制</button>
-            <button type="button" data-translate-action="translate">翻译</button>
+            <button type="button" data-translate-action="copy">${t('shared.translate.copy', '复制')}</button>
+            <button type="button" data-translate-action="translate">${t('shared.translate.translate', '翻译')}</button>
         `;
         document.body.appendChild(this.menu);
     },
@@ -154,7 +155,7 @@ const DesktopTranslate = {
         this.pendingText = '';
         this.hideMenu();
         await this.translateText(text, {
-            title: '划词翻译'
+            title: t('shared.translate.word_translate', '划词翻译')
         });
     },
 
@@ -163,19 +164,19 @@ const DesktopTranslate = {
         this.pendingText = '';
         this.hideMenu();
         if (!text.trim()) {
-            Utils.showToast('没有可复制的内容', 'error');
+            Utils.showToast(t('shared.translate.no_content_to_copy', '没有可复制的内容'), 'error');
             return;
         }
         await this.copyText(text, {
-            successMessage: '已复制所选内容',
-            errorMessage: '复制失败，请手动选择文本'
+            successMessage: t('shared.translate.copied_selection', '已复制所选内容'),
+            errorMessage: t('shared.translate.copy_failed', '复制失败，请手动选择文本')
         });
     },
 
     async translateText(text, options = {}) {
         const content = String(text || '').trim();
-        const title = String(options.title || '').trim() || 'AI 翻译';
-        const emptyMessage = String(options.emptyMessage || '').trim() || '没有可翻译的内容';
+        const title = String(options.title || '').trim() || t('shared.translate.ai_translate', 'AI 翻译');
+        const emptyMessage = String(options.emptyMessage || '').trim() || t('shared.translate.no_content_to_translate', '没有可翻译的内容');
         if (!content) {
             Utils.showToast(emptyMessage, 'error');
             return;
@@ -202,7 +203,7 @@ const DesktopTranslate = {
             this.renderResultDialog({
                 title,
                 loading: false,
-                error: error.message || '翻译失败',
+                error: error.message || t('shared.translate.failed', '翻译失败'),
                 sourceLanguage: '',
                 targetLanguage: '',
                 translation: ''
@@ -219,17 +220,17 @@ const DesktopTranslate = {
             <div class="dialog-box translate-dialog-box">
                 <div class="dialog-header translate-dialog-header">
                     <div>
-                        <h3>${Utils.escapeHTML(state.title || 'AI 翻译')}</h3>
+                        <h3>${Utils.escapeHTML(state.title || t('shared.translate.ai_translate', 'AI 翻译'))}</h3>
                         <p class="translate-dialog-subtitle">${this.renderSubtitle(state)}</p>
                     </div>
-                    <button class="modal-close translate-dialog-close" type="button" data-translate-dialog-action="close" aria-label="关闭">×</button>
+                    <button class="modal-close translate-dialog-close" type="button" data-translate-dialog-action="close" aria-label="${t('shared.translate.close', '关闭')}">×</button>
                 </div>
                 <div class="translate-dialog-body">
                     ${this.renderDialogBody(state)}
                 </div>
                 <div class="dialog-footer">
-                    <button class="btn btn-outline" type="button" data-translate-dialog-action="close">关闭</button>
-                    ${state.loading || state.error ? '' : '<button class="btn btn-primary" type="button" data-translate-dialog-action="copy">复制译文</button>'}
+                    <button class="btn btn-outline" type="button" data-translate-dialog-action="close">${t('shared.translate.close', '关闭')}</button>
+                    ${state.loading || state.error ? '' : `<button class="btn btn-primary" type="button" data-translate-dialog-action="copy">${t('shared.translate.copy_translation', '复制译文')}</button>`}
                 </div>
             </div>
         `;
@@ -259,20 +260,20 @@ const DesktopTranslate = {
 
     renderSubtitle(state = {}) {
         if (state.loading) {
-            return '正在请求翻译结果...';
+            return t('shared.translate.requesting', '正在请求翻译结果...');
         }
         if (state.error) {
-            return '翻译失败';
+            return t('shared.translate.failed', '翻译失败');
         }
         if (state.sourceLanguage && state.targetLanguage) {
             return `${Utils.escapeHTML(state.sourceLanguage)} -> ${Utils.escapeHTML(state.targetLanguage)}`;
         }
-        return '翻译结果';
+        return t('shared.translate.result', '翻译结果');
     },
 
     renderDialogBody(state = {}) {
         if (state.loading) {
-            return '<div class="translate-result-loading">正在调用翻译模型，请稍候。</div>';
+            return `<div class="translate-result-loading">${t('shared.translate.loading_model', '正在调用翻译模型，请稍候。')}</div>`;
         }
         if (state.error) {
             return `<div class="translate-result-error">${Utils.escapeHTML(state.error)}</div>`;
@@ -283,13 +284,13 @@ const DesktopTranslate = {
     async copyTranslation(text = '') {
         const content = String(text || '').trim();
         if (!content) {
-            Utils.showToast('没有可复制的译文', 'error');
+            Utils.showToast(t('shared.translate.no_translation_to_copy', '没有可复制的译文'), 'error');
             return;
         }
 
         await this.copyText(content, {
-            successMessage: '译文已复制',
-            errorMessage: '复制失败，请手动选择文本'
+            successMessage: t('shared.translate.translation_copied', '译文已复制'),
+            errorMessage: t('shared.translate.copy_failed', '复制失败，请手动选择文本')
         });
     },
 
@@ -305,10 +306,10 @@ const DesktopTranslate = {
             } else {
                 await navigator.clipboard.writeText(content);
             }
-            Utils.showToast(messages.successMessage || '已复制');
+            Utils.showToast(messages.successMessage || t('shared.translate.copied', '已复制'));
             return true;
         } catch (error) {
-            Utils.showToast(messages.errorMessage || '复制失败，请手动选择文本', 'error');
+            Utils.showToast(messages.errorMessage || t('shared.translate.copy_failed', '复制失败，请手动选择文本'), 'error');
             return false;
         }
     },

@@ -1,3 +1,4 @@
+if (typeof window.t !== 'function') window.t = function(k,f){return f||k};
 const API_BASE = '/api';
 
 function clearLegacyAuthState() {
@@ -39,7 +40,7 @@ async function requestJSON(path, options = {}) {
     }
 
     if (!response.ok) {
-        const error = new Error(payload.error || `请求失败 (${response.status})`);
+        const error = new Error(payload.error || `${t('shared.api.request_failed', '请求失败')} (${response.status})`);
         error.code = payload.code || '';
         error.status = response.status;
         error.payload = payload;
@@ -83,7 +84,7 @@ async function requestBlob(path, options = {}) {
 
     if (!response.ok) {
         const payload = await parseJSONResponse(response);
-        const error = new Error(payload.error || `请求失败 (${response.status})`);
+        const error = new Error(payload.error || `${t('shared.api.request_failed', '请求失败')} (${response.status})`);
         error.code = payload.code || '';
         error.status = response.status;
         error.payload = payload;
@@ -424,11 +425,11 @@ const API = {
             if (response.status === 401) {
                 handleUnauthenticatedResponse();
             }
-            throw new Error(payload.error || `请求失败 (${response.status})`);
+            throw new Error(payload.error || `${t('shared.api.request_failed', '请求失败')} (${response.status})`);
         }
 
         if (!response.body) {
-            throw new Error('当前浏览器不支持流式响应');
+            throw new Error(t('shared.api.stream_unsupported', '当前浏览器不支持流式响应'));
         }
 
         const reader = response.body.getReader();
