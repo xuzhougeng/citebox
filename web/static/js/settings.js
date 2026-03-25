@@ -321,8 +321,8 @@ const SettingsPage = {
             : [this.createAIModelDraft()];
         this.temperatureInput.value = settings.temperature ?? 0.2;
         this.maxFiguresInput.value = settings.max_figures ?? 0;
-        this.translationPrimaryLanguageInput.value = settings.translation?.primary_language || '中文';
-        this.translationTargetLanguageInput.value = settings.translation?.target_language || '英文';
+        this.translationPrimaryLanguageInput.value = settings.translation?.primary_language || t('settings.ai.primary_language_default', '中文');
+        this.translationTargetLanguageInput.value = settings.translation?.target_language || t('settings.ai.target_language_default', '英文');
 
         if (overwritePromptInputs) {
             this.applyPromptSettingsToInputs(settings);

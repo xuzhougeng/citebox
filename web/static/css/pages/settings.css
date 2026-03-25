@@ -294,7 +294,7 @@ details[open] > .settings-subsection-toggle::after {
     cursor: pointer;
     list-style: none;
     color: var(--accent-deep);
-    font-size: 0.92rem;
+    font-size: 0;
     font-weight: 700;
 }
 
@@ -303,10 +303,19 @@ details[open] > .settings-subsection-toggle::after {
 }
 
 .prompt-template-details summary::before {
-    content: "展开实际模板";
+    content: "Expand template";
+    font-size: 0.92rem;
 }
 
 .prompt-template-details[open] summary::before {
+    content: "Collapse template";
+}
+
+html[lang^="zh"] .prompt-template-details summary::before {
+    content: "展开实际模板";
+}
+
+html[lang^="zh"] .prompt-template-details[open] summary::before {
     content: "收起实际模板";
 }
 

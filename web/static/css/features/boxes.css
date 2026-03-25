@@ -14,7 +14,7 @@
 }
 
 .detail-section-collapsible > summary::after {
-    content: "展开";
+    content: "Expand";
     color: var(--muted);
     font-size: 0.85rem;
     font-weight: 700;
@@ -23,6 +23,14 @@
 }
 
 .detail-section-collapsible[open] > summary::after {
+    content: "Collapse";
+}
+
+html[lang^="zh"] .detail-section-collapsible > summary::after {
+    content: "展开";
+}
+
+html[lang^="zh"] .detail-section-collapsible[open] > summary::after {
     content: "收起";
 }
 

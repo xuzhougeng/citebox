@@ -455,7 +455,7 @@ User Prompt:
                         </label>
                         <label id="extractorURLField" class="field field-span-2">
                             <span data-i18n="settings.extractor.service_url">提取服务地址</span>
-                            <input id="extractorURLInput" class="form-input" type="text" placeholder="例如：http://127.0.0.1:8000">
+                            <input id="extractorURLInput" class="form-input" type="text" data-i18n-placeholder="settings.extractor.service_url_placeholder" placeholder="例如：http://127.0.0.1:8000">
                         </label>
                         <label id="extractorTokenField" class="field field-span-2">
                             <span data-i18n="settings.extractor.auth_token">鉴权 Token</span>
@@ -463,7 +463,7 @@ User Prompt:
                         </label>
                         <label id="extractorFileFieldField" class="field">
                             <span data-i18n="settings.extractor.file_field">上传字段名</span>
-                            <input id="extractorFileFieldInput" class="form-input" type="text" placeholder="默认 file">
+                            <input id="extractorFileFieldInput" class="form-input" type="text" data-i18n-placeholder="settings.extractor.file_field_placeholder" placeholder="默认 file">
                         </label>
                         <label id="extractorTimeoutField" class="field">
                             <span data-i18n="settings.extractor.timeout">请求超时（秒）</span>
@@ -532,21 +532,21 @@ User Prompt:
                                     <p data-i18n="settings.weixin.binding_desc">扫码绑定后，可直接通过微信上传文献、发送消息，并触发自动解析流程。</p>
                                 </div>
                             </div>
-                            <p id=”weixinBindingStatus” class=”settings-inline-status” data-i18n=”settings.weixin.binding_status_hint”>点击”开始绑定”生成二维码。</p>
-                            <div class=”weixin-action-row”>
-                                <button id=”startWeixinBindingButton” class=”btn btn-secondary” type=”button” data-i18n=”settings.weixin.start_binding”>开始绑定</button>
-                                <button id=”unbindWeixinButton” class=”btn btn-danger hidden” type=”button” data-i18n=”settings.weixin.unbind”>解除绑定</button>
+                            <p id="weixinBindingStatus" class="settings-inline-status" data-i18n="settings.weixin.binding_status_hint">点击"开始绑定"生成二维码。</p>
+                            <div class="weixin-action-row">
+                                <button id="startWeixinBindingButton" class="btn btn-secondary" type="button" data-i18n="settings.weixin.start_binding">开始绑定</button>
+                                <button id="unbindWeixinButton" class="btn btn-outline danger hidden" type="button" data-i18n="settings.weixin.unbind">解除绑定</button>
                             </div>
-                            <div id=”weixinQRCodePlaceholder” class=”weixin-qr-placeholder”>
-                                <strong data-i18n=”settings.weixin.qr_not_generated”>二维码未生成</strong>
-                                <p data-i18n=”settings.weixin.qr_placeholder_text”>点击”开始绑定”后，这里会显示可扫码的二维码。已绑定账号时，也可以用它重新绑定。</p>
+                            <div id="weixinQRCodePlaceholder" class="weixin-qr-placeholder">
+                                <strong data-i18n="settings.weixin.qr_not_generated">二维码未生成</strong>
+                                <p data-i18n="settings.weixin.qr_placeholder_text">点击"开始绑定"后，这里会显示可扫码的二维码。已绑定账号时，也可以用它重新绑定。</p>
                             </div>
-                            <div id=”weixinQRCodePanel” class=”weixin-qr-panel hidden”>
-                                <img id=”weixinQRCodeImage” class=”weixin-qr-image” alt=”微信绑定二维码”>
-                                <p class=”muted” data-i18n=”settings.weixin.qr_scan_hint”>请使用微信扫码。二维码过期后可重新生成。</p>
-                                <p class=”weixin-qr-fallback”>
-                                    <span data-i18n=”settings.weixin.qr_content_label”>二维码内容：</span>
-                                    <a id=”weixinQRCodeLink” href=”#” target=”_blank” rel=”noreferrer” data-i18n=”settings.weixin.qr_open_link”>打开原始链接</a>
+                            <div id="weixinQRCodePanel" class="weixin-qr-panel hidden">
+                                <img id="weixinQRCodeImage" class="weixin-qr-image" alt="微信绑定二维码">
+                                <p class="muted" data-i18n="settings.weixin.qr_scan_hint">请使用微信扫码。二维码过期后可重新生成。</p>
+                                <p class="weixin-qr-fallback">
+                                    <span data-i18n="settings.weixin.qr_content_label">二维码内容：</span>
+                                    <a id="weixinQRCodeLink" href="#" target="_blank" rel="noreferrer" data-i18n="settings.weixin.qr_open_link">打开原始链接</a>
                                 </p>
                             </div>
                         </section>
@@ -571,11 +571,11 @@ User Prompt:
                         </label>
                         <label class="field field-span-2">
                             <span data-i18n="settings.wolai.base_url">OpenAPI 地址</span>
-                            <input id="wolaiBaseURLInput" class="form-input" type="text" placeholder="默认 https://openapi.wolai.com">
+                            <input id="wolaiBaseURLInput" class="form-input" type="text" data-i18n-placeholder="settings.wolai.base_url_placeholder" placeholder="默认 https://openapi.wolai.com">
                         </label>
                     </div>
 
-                    <p class=”muted” data-i18n=”settings.wolai.usage_hint”>”测试 Token”会校验访问权限；”插入测试页面”会创建 `Test Page`、写入 `Test works` 和一条图片导出 TODO 说明；”保存到 Wolai”会把当前笔记草稿保存为新的块页面，不会替代本地保存，但笔记中的图片当前只会写入 TODO 占位。</p>
+                    <p class="muted" data-i18n="settings.wolai.usage_hint">"测试 Token"会校验访问权限；"插入测试页面"会创建 `Test Page`、写入 `Test works` 和一条图片导出 TODO 说明；"保存到 Wolai"会把当前笔记草稿保存为新的块页面，不会替代本地保存，但笔记中的图片当前只会写入 TODO 占位。</p>
 
                     <div id="wolaiSummary" class="settings-summary-box"></div>
                     <p id="wolaiStatus" class="settings-inline-status" data-i18n="settings.wolai.status_hint">修改后可先测试，再保存配置。</p>
@@ -656,7 +656,7 @@ User Prompt:
                 <div class="form-grid">
                     <label class="field">
                         <span data-i18n="settings.ai.model_name">模型名称</span>
-                        <input id="aiModelNameInput" class="form-input" type="text" placeholder="例如：OpenAI 快速问答">
+                        <input id="aiModelNameInput" class="form-input" type="text" data-i18n-placeholder="settings.ai.model_name_placeholder" placeholder="例如：OpenAI 快速问答">
                     </label>
                     <label class="field">
                         <span data-i18n="settings.ai.model_provider">提供商</span>
@@ -668,11 +668,11 @@ User Prompt:
                     </label>
                     <label class="field">
                         <span data-i18n="settings.ai.model_id">模型名</span>
-                        <input id="aiModelIdentifierInput" class="form-input" type="text" placeholder="例如：gpt-4.1-mini">
+                        <input id="aiModelIdentifierInput" class="form-input" type="text" data-i18n-placeholder="settings.ai.model_identifier_placeholder" placeholder="例如：gpt-4.1-mini">
                     </label>
                     <label class="field">
                         <span>Max Output Tokens</span>
-                        <input id="aiModelMaxTokensInput" class="form-input" type="number" min="1" step="1" placeholder="例如：1200">
+                        <input id="aiModelMaxTokensInput" class="form-input" type="number" min="1" step="1" data-i18n-placeholder="settings.ai.model_max_tokens_placeholder" placeholder="例如：1200">
                     </label>
                     <label class="field field-span-2">
                         <span>Base URL</span>

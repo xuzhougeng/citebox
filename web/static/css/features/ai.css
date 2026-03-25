@@ -94,13 +94,21 @@
 }
 
 .ai-collapsible-toggle::before {
-    content: "展开";
+    content: "Expand";
     color: var(--muted);
     font-size: 0.92rem;
     font-weight: 700;
 }
 
 .ai-config-details[open] .ai-collapsible-toggle::before {
+    content: "Collapse";
+}
+
+html[lang^="zh"] .ai-collapsible-toggle::before {
+    content: "展开";
+}
+
+html[lang^="zh"] .ai-config-details[open] .ai-collapsible-toggle::before {
     content: "收起";
 }
 
