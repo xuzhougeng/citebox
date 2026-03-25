@@ -99,7 +99,7 @@ static void citebox_focus_window(void *windowPtr) {
 	}
 }
 
-@interface CiteBoxStatusController : NSObject {
+@interface CiteBoxStatusController : NSObject <NSWindowDelegate, NSMenuDelegate> {
 @public
 	NSWindow *_window;
 	id _originalDelegate;
@@ -107,11 +107,13 @@ static void citebox_focus_window(void *windowPtr) {
 	NSMenu *_menu;
 	NSString *_appName;
 	NSString *_iconPath;
+	BOOL _showingMenu;
 }
 - (instancetype)initWithWindow:(NSWindow *)window appName:(NSString *)appName iconPath:(NSString *)iconPath;
 - (void)openWindow:(id)sender;
 - (void)quitApp:(id)sender;
 - (void)statusItemClicked:(id)sender;
+- (void)showStatusItemMenu;
 @end
 
 @implementation CiteBoxStatusController
@@ -166,6 +168,7 @@ static void citebox_focus_window(void *windowPtr) {
 	}
 
 	_menu = [[NSMenu alloc] initWithTitle:_appName ?: @"CiteBox"];
+	[_menu setDelegate:self];
 
 	NSMenuItem *openItem = [[[NSMenuItem alloc]
 		initWithTitle:[NSString stringWithFormat:@"Open %@", _appName ?: @"CiteBox"]
@@ -195,6 +198,7 @@ static void citebox_focus_window(void *windowPtr) {
 	[[NSStatusBar systemStatusBar] removeStatusItem:_statusItem];
 	_statusItem = nil;
 	_menu = nil;
+	_showingMenu = NO;
 }
 
 - (void)openWindow:(id)sender {
@@ -207,18 +211,56 @@ static void citebox_focus_window(void *windowPtr) {
 	[[NSApplication sharedApplication] terminate:nil];
 }
 
+- (void)showStatusItemMenu {
+	if (_showingMenu || _statusItem == nil || _menu == nil) {
+		return;
+	}
+
+	NSStatusBarButton *button = [_statusItem button];
+	if (button == nil) {
+		return;
+	}
+
+	_showingMenu = YES;
+	[_statusItem setMenu:_menu];
+	[button setTarget:nil];
+	[button setAction:nil];
+	[button performClick:nil];
+}
+
+- (void)menuDidClose:(NSMenu *)menu {
+	_showingMenu = NO;
+
+	if (_statusItem == nil) {
+		return;
+	}
+
+	[_statusItem setMenu:nil];
+
+	NSStatusBarButton *button = [_statusItem button];
+	if (button == nil) {
+		return;
+	}
+
+	[button setTarget:self];
+	[button setAction:@selector(statusItemClicked:)];
+}
+
 - (void)statusItemClicked:(id)sender {
 	NSEvent *event = [NSApp currentEvent];
-	if (event != nil && [event type] == NSEventTypeRightMouseUp) {
-		[_statusItem popUpStatusItemMenu:_menu];
+	if (event != nil &&
+		([event type] == NSEventTypeRightMouseUp ||
+			([event type] == NSEventTypeLeftMouseUp &&
+				([event modifierFlags] & NSEventModifierFlagControl) == NSEventModifierFlagControl))) {
+		[self showStatusItemMenu];
 		return;
 	}
 	[self openWindow:sender];
 }
 
-- (BOOL)windowShouldClose:(id)sender {
+- (BOOL)windowShouldClose:(NSWindow *)sender {
 	[self ensureStatusItem];
-	[(NSWindow *)sender orderOut:nil];
+	[sender orderOut:nil];
 	return NO;
 }
 

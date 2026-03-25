@@ -119,9 +119,11 @@ static LRESULT CALLBACK citebox_window_proc(HWND hwnd, UINT msg, WPARAM wp, LPAR
 		}
 		break;
 	case CITEBOX_TRAY_CALLBACK_MESSAGE:
-		switch ((UINT)lp) {
+		switch (LOWORD(lp)) {
 		case WM_LBUTTONUP:
 		case WM_LBUTTONDBLCLK:
+		case NIN_SELECT:
+		case NIN_KEYSELECT:
 			citebox_restore_window(hwnd);
 			return 0;
 		case WM_RBUTTONUP:
