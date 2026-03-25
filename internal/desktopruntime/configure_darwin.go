@@ -7,8 +7,11 @@ package desktopruntime
 #cgo LDFLAGS: -framework Cocoa
 #import <Cocoa/Cocoa.h>
 #import <objc/runtime.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+
+extern int citeboxRequestClosePrompt(uintptr_t windowToken);
 
 static NSView *citebox_find_first_responder_view(NSView *view) {
 	if (view == nil) {
@@ -284,6 +287,10 @@ static void citebox_focus_window(void *windowPtr) {
 }
 
 - (BOOL)windowShouldClose:(NSWindow *)sender {
+	if (citeboxRequestClosePrompt((uintptr_t)sender)) {
+		return NO;
+	}
+
 	NSModalResponse response = [self promptCloseAction];
 	if (response == NSAlertFirstButtonReturn) {
 		if ([self ensureStatusItem]) {
@@ -422,6 +429,13 @@ static const char *citebox_write_clipboard_text(const char *textCString) {
 
 static const void *citebox_status_controller_key = &citebox_status_controller_key;
 
+static CiteBoxStatusController *citebox_status_controller_for_window(NSWindow *window) {
+	if (window == nil) {
+		return nil;
+	}
+	return objc_getAssociatedObject(window, citebox_status_controller_key);
+}
+
 static const char *citebox_install_status_item(void *windowPtr, const char *appNameCString, const char *iconPathCString) {
 	@autoreleasepool {
 		NSWindow *window = (NSWindow *)windowPtr;
@@ -444,6 +458,33 @@ static const char *citebox_install_status_item(void *windowPtr, const char *appN
 		objc_setAssociatedObject(window, citebox_status_controller_key, controller, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 		[window setDelegate:controller];
 		return NULL;
+	}
+}
+
+static const char *citebox_minimize_to_status_item(void *windowPtr) {
+	@autoreleasepool {
+		NSWindow *window = (NSWindow *)windowPtr;
+		CiteBoxStatusController *controller = citebox_status_controller_for_window(window);
+		if (controller == nil) {
+			return "missing status controller";
+		}
+		if (![controller ensureStatusItem]) {
+			return "Failed to create status item";
+		}
+		[window orderOut:nil];
+		return NULL;
+	}
+}
+
+static void citebox_exit_desktop_app(void *windowPtr) {
+	@autoreleasepool {
+		NSWindow *window = (NSWindow *)windowPtr;
+		CiteBoxStatusController *controller = citebox_status_controller_for_window(window);
+		if (controller != nil) {
+			[controller quitApp:nil];
+			return;
+		}
+		[[NSApplication sharedApplication] terminate:nil];
 	}
 }
 */
@@ -485,6 +526,13 @@ func Configure(w webview.WebView, appName string, iconAssets desktopicon.Assets)
 	if err := initDesktopBridge(w); err != nil {
 		return err
 	}
+	if err := bindClosePromptActions(w, func() error {
+		return minimizeToTray(w.Window())
+	}, func() error {
+		return exitDesktopApp(w.Window())
+	}); err != nil {
+		return err
+	}
 
 	cAppName := C.CString(appName)
 	defer C.free(unsafe.Pointer(cAppName))
@@ -496,6 +544,18 @@ func Configure(w webview.WebView, appName string, iconAssets desktopicon.Assets)
 		return fmt.Errorf("install macOS status item integration: %s", C.GoString(errMessage))
 	}
 	C.citebox_focus_window(w.Window())
+	return nil
+}
+
+func minimizeToTray(window unsafe.Pointer) error {
+	if errMessage := C.citebox_minimize_to_status_item(window); errMessage != nil {
+		return fmt.Errorf("minimize to status item: %s", C.GoString(errMessage))
+	}
+	return nil
+}
+
+func exitDesktopApp(window unsafe.Pointer) error {
+	C.citebox_exit_desktop_app(window)
 	return nil
 }
 

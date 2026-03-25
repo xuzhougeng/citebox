@@ -7,7 +7,10 @@ package desktopruntime
 #define _UNICODE
 #include <windows.h>
 #include <shellapi.h>
+#include <stdint.h>
 #include <stdlib.h>
+
+extern int citeboxRequestClosePrompt(uintptr_t windowToken);
 
 #define CITEBOX_TRAY_CALLBACK_MESSAGE (WM_APP + 1)
 #define CITEBOX_TRAY_OPEN_COMMAND 1001
@@ -20,6 +23,8 @@ static HMENU citebox_tray_menu = NULL;
 static HICON citebox_tray_hicon = NULL;
 static BOOL citebox_tray_icon_owned = FALSE;
 static BOOL citebox_tray_visible = FALSE;
+
+static BOOL citebox_ensure_tray_icon(HWND hwnd);
 
 static wchar_t *citebox_utf8_to_utf16(const char *src) {
 	int len = MultiByteToWideChar(CP_UTF8, 0, src, -1, NULL, 0);
@@ -94,6 +99,24 @@ static void citebox_show_tray_unavailable(HWND hwnd) {
 	MessageBoxW(hwnd, L"当前无法创建托盘图标，窗口将保持打开。", L"无法最小化到托盘", MB_OK | MB_ICONWARNING);
 }
 
+static const char *citebox_minimize_to_tray(HWND hwnd) {
+	if (hwnd == NULL) {
+		return "missing window handle";
+	}
+	if (!citebox_ensure_tray_icon(hwnd)) {
+		return "Failed to create tray icon";
+	}
+	ShowWindow(hwnd, SW_HIDE);
+	return NULL;
+}
+
+static void citebox_exit_app(HWND hwnd) {
+	citebox_cleanup_tray();
+	if (hwnd != NULL) {
+		DestroyWindow(hwnd);
+	}
+}
+
 static BOOL citebox_ensure_tray_icon(HWND hwnd) {
 	if (citebox_tray_visible) {
 		return TRUE;
@@ -112,6 +135,9 @@ static BOOL citebox_ensure_tray_icon(HWND hwnd) {
 static LRESULT CALLBACK citebox_window_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 	switch (msg) {
 	case WM_CLOSE:
+		if (citeboxRequestClosePrompt((uintptr_t)hwnd)) {
+			return 0;
+		}
 		switch (citebox_confirm_close_action(hwnd)) {
 		case IDYES:
 			if (citebox_ensure_tray_icon(hwnd)) {
@@ -249,6 +275,13 @@ func Configure(w webview.WebView, appName string, iconAssets desktopicon.Assets)
 	if err := initDesktopBridge(w); err != nil {
 		return err
 	}
+	if err := bindClosePromptActions(w, func() error {
+		return minimizeToTray(w.Window())
+	}, func() error {
+		return exitDesktopApp(w.Window())
+	}); err != nil {
+		return err
+	}
 
 	cAppName := C.CString(appName)
 	defer C.free(unsafe.Pointer(cAppName))
@@ -259,5 +292,17 @@ func Configure(w webview.WebView, appName string, iconAssets desktopicon.Assets)
 	if errMessage := C.citebox_install_tray((C.HWND)(w.Window()), cAppName, cIconPath); errMessage != nil {
 		return fmt.Errorf("install windows tray integration: %s", C.GoString(errMessage))
 	}
+	return nil
+}
+
+func minimizeToTray(window unsafe.Pointer) error {
+	if errMessage := C.citebox_minimize_to_tray((C.HWND)(window)); errMessage != nil {
+		return fmt.Errorf("minimize to tray: %s", C.GoString(errMessage))
+	}
+	return nil
+}
+
+func exitDesktopApp(window unsafe.Pointer) error {
+	C.citebox_exit_app((C.HWND)(window))
 	return nil
 }
