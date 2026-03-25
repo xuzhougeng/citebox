@@ -1,0 +1,33 @@
+{
+    "_title": "功能说明 - CiteBox",
+
+    "guide.hero_title": "功能说明与使用指南",
+    "guide.hero_text": "了解系统各模块的功能与推荐使用顺序，帮你快速上手。",
+    "guide.hero_inline_links": "<span>继续浏览：</span><a href=\"/library\">进入文献库</a><span aria-hidden=\"true\">/</span><a href=\"/\">返回总览</a>",
+
+    "guide.workflow_title": "建议使用顺序",
+
+    "guide.step_1_title": "上传 PDF",
+    "guide.step_1_desc": "上传 PDF，系统自动解析并提取图片。",
+    "guide.step_2_title": "查看文献库",
+    "guide.step_2_desc": "筛选和浏览文献，点进详情查看全文和图片。",
+    "guide.step_3_title": "进入图片库",
+    "guide.step_3_desc": "浏览所有文献的图片，给图片打标签或写笔记。",
+    "guide.step_4_title": "记录到笔记",
+    "guide.step_4_desc": "把阅读收获记下来，方便之后搜索和回顾。",
+    "guide.step_5_title": "用 AI伴读补充",
+    "guide.step_5_desc": "结合全文和图片向 AI 提问，深入理解论文。",
+
+    "guide.feature_overview_title": "总览",
+    "guide.feature_overview_desc": "展示文献总量、解析完成度、图片与笔记积累情况，以及最近更新的文献。",
+    "guide.feature_library_title": "文献库",
+    "guide.feature_library_desc": "按条件筛选和浏览文献，点击进入详情查看全文与图片。",
+    "guide.feature_figures_title": "图片库",
+    "guide.feature_figures_desc": "以图片为单位整理标签和笔记，从视觉角度组织知识。",
+    "guide.feature_notes_title": "笔记",
+    "guide.feature_notes_desc": "集中查看文献笔记和图片笔记，汇总可搜索的说明文本和 AI 解读结果。",
+    "guide.feature_tags_groups_title": "分组与标签",
+    "guide.feature_tags_groups_desc": "分组用来归类（如按项目），标签用来多维标记（如按方法）；文献和图片的标签各自独立。",
+    "guide.feature_ai_title": "AI伴读",
+    "guide.feature_ai_desc": "把正文和图片一起交给 AI，帮你归纳、解释和记录要点。"
+}

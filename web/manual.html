@@ -13,18 +13,18 @@
         <div class="navbar-content">
             <a href="/" class="logo">CiteBox</a>
             <ul class="nav-links">
-                <li><a href="/">总览</a></li>
-                <li><a href="/library">文献库</a></li>
-                <li><a href="/figures">图片库</a></li>
-                <li><a href="/palettes">配色库</a></li>
-                <li><a href="/groups">分组</a></li>
-                <li><a href="/tags">标签</a></li>
-                <li><a href="/notes">笔记</a></li>
-                <li><a href="/ai">AI伴读</a></li>
-                <li><a href="/settings">配置</a></li>
+                <li><a href="/" data-i18n="nav.overview">总览</a></li>
+                <li><a href="/library" data-i18n="nav.library">文献库</a></li>
+                <li><a href="/figures" data-i18n="nav.figures">图片库</a></li>
+                <li><a href="/palettes" data-i18n="nav.palettes">配色库</a></li>
+                <li><a href="/groups" data-i18n="nav.groups">分组</a></li>
+                <li><a href="/tags" data-i18n="nav.tags">标签</a></li>
+                <li><a href="/notes" data-i18n="nav.notes">笔记</a></li>
+                <li><a href="/ai" data-i18n="nav.ai">AI伴读</a></li>
+                <li><a href="/settings" data-i18n="nav.settings">配置</a></li>
             </ul>
             <div class="nav-actions">
-                <a href="/upload" class="nav-cta">上传 PDF</a>
+                <a href="/upload" class="nav-cta" data-i18n="nav.upload_pdf">上传 PDF</a>
             </div>
         </div>
     </nav>
@@ -33,13 +33,13 @@
         <section class="hero compact">
             <div>
                 <p class="eyebrow">Manual Extraction</p>
-                <h1 id="manualPageTitle">上传后人工框选提取图片</h1>
-                <p id="manualPageSubtitle" class="hero-text">
+                <h1 id="manualPageTitle" data-i18n="manual.page_title">上传后人工框选提取图片</h1>
+                <p id="manualPageSubtitle" class="hero-text" data-i18n="manual.page_subtitle">
                     当自动解析不可用、解析失败或仍有遗漏时，可以直接在 PDF 页面上框选需要的图片区域。
                 </p>
             </div>
             <div class="hero-actions">
-                <a id="manualOpenPDFLink" class="btn btn-outline" href="/">打开原 PDF</a>
+                <a id="manualOpenPDFLink" class="btn btn-outline" href="/" data-i18n="manual.open_pdf">打开原 PDF</a>
             </div>
         </section>
 
@@ -49,12 +49,12 @@
             <div class="manual-fulltext-head">
                 <div>
                     <p class="eyebrow">Full Text Extraction</p>
-                    <h2>PDF 全文提取</h2>
-                    <p id="manualFullTextStatus" class="manual-fulltext-status">
+                    <h2 data-i18n="manual.fulltext_title">PDF 全文提取</h2>
+                    <p id="manualFullTextStatus" class="manual-fulltext-status" data-i18n="manual.fulltext_status_empty">
                         当前还没有保存全文。点击右侧按钮即可提取并保存，供 AI 伴读和检索使用。
                     </p>
                 </div>
-                <button id="manualExtractTextBtn" class="btn btn-outline" type="button">提取全文并保存</button>
+                <button id="manualExtractTextBtn" class="btn btn-outline" type="button" data-i18n="manual.extract_text_btn">提取全文并保存</button>
             </div>
         </section>
 
@@ -63,32 +63,32 @@
                 <div class="manual-stage-head">
                     <div>
                         <p class="eyebrow">Page Canvas</p>
-                        <h2>拖拽框选需要提取的图片区域</h2>
+                        <h2 data-i18n="manual.canvas_title">拖拽框选需要提取的图片区域</h2>
                     </div>
                     <div class="manual-stage-actions">
-                        <button id="manualPrevPageBtn" class="btn btn-outline" type="button">上一页</button>
-                        <span id="manualPageIndicator" class="figure-page-indicator">第 1 / 1 页</span>
-                        <button id="manualNextPageBtn" class="btn btn-outline" type="button">下一页</button>
+                        <button id="manualPrevPageBtn" class="btn btn-outline" type="button" data-i18n="manual.prev_page">上一页</button>
+                        <span id="manualPageIndicator" class="figure-page-indicator" data-i18n="manual.page_indicator">第 1 / 1 页</span>
+                        <button id="manualNextPageBtn" class="btn btn-outline" type="button" data-i18n="manual.next_page">下一页</button>
                     </div>
                 </div>
 
                 <div class="manual-toolbar">
-                    <div id="manualWorkspaceHint" class="manual-hint">
+                    <div id="manualWorkspaceHint" class="manual-hint" data-i18n="manual.workspace_hint">
                         在页图上按下并拖拽即可生成一个框选区域。
                     </div>
                     <div class="manual-toolbar-actions">
-                        <button id="manualClearPageBtn" class="btn btn-outline" type="button">清空本页框选</button>
-                        <button id="manualClearAllBtn" class="btn btn-outline" type="button">清空全部框选</button>
+                        <button id="manualClearPageBtn" class="btn btn-outline" type="button" data-i18n="manual.clear_page">清空本页框选</button>
+                        <button id="manualClearAllBtn" class="btn btn-outline" type="button" data-i18n="manual.clear_all">清空全部框选</button>
                     </div>
                 </div>
 
                 <div class="manual-preview-shell">
                     <div class="manual-preview-scroll">
                         <div id="manualPreviewFrame" class="manual-preview-frame">
-                            <canvas id="manualPreviewCanvas" class="manual-preview-canvas" aria-label="PDF 页面预览"></canvas>
+                            <canvas id="manualPreviewCanvas" class="manual-preview-canvas" data-i18n-aria-label="manual.canvas_aria" aria-label="PDF 页面预览"></canvas>
                             <div id="manualOverlay" class="manual-overlay"></div>
                             <div id="manualDraftBox" class="manual-selection-box draft hidden">
-                                <span>拖拽中</span>
+                                <span data-i18n="manual.drafting">拖拽中</span>
                             </div>
                         </div>
                     </div>
@@ -97,22 +97,23 @@
 
             <aside class="manager-card manual-sidebar">
                 <div class="manager-head">
-                    <h2>待提交的框选</h2>
-                    <p>可跨页框选多张图片。提交后会追加到当前文献，不会覆盖已有图片。</p>
+                    <h2 data-i18n="manual.sidebar_title">待提交的框选</h2>
+                    <p data-i18n="manual.sidebar_desc">可跨页框选多张图片。提交后会追加到当前文献，不会覆盖已有图片。</p>
                 </div>
 
                 <div id="manualExtractionNotice" class="notice info hidden"></div>
                 <div id="manualSelectionList" class="manual-selection-list"></div>
 
                 <div class="submit-row manual-submit-row">
-                    <button id="manualSubmitBtn" class="btn btn-primary" type="button">提取并录入图片</button>
-                    <a id="manualBackLibraryLink" class="btn btn-outline" href="/library">返回文献库</a>
+                    <button id="manualSubmitBtn" class="btn btn-primary" type="button" data-i18n="manual.submit_btn">提取并录入图片</button>
+                    <a id="manualBackLibraryLink" class="btn btn-outline" href="/library" data-i18n="manual.back_library">返回文献库</a>
                 </div>
             </aside>
         </section>
     </main>
 
     <script src="/static/js/theme.js"></script>
+    <script src="/static/js/i18n.js"></script>
     <script src="/static/js/utils.js"></script>
     <script src="/static/js/api.js"></script>
     <script src="/static/js/manual.js"></script>

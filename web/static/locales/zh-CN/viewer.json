@@ -1,0 +1,25 @@
+{
+    "_title": "文件查看 - CiteBox",
+
+    "viewer.btn_back": "返回",
+    "viewer.kind_label": "文件查看",
+    "viewer.loading": "正在加载...",
+    "viewer.image_hint": "滚轮缩放，按住左键或中键拖动",
+    "viewer.reset_view": "复原视图",
+
+    "viewer.err_title_failed": "文件查看失败 - CiteBox",
+    "viewer.err_kind_label": "文件查看",
+    "viewer.err_cannot_open": "无法打开资源",
+    "viewer.err_cannot_open_title": "无法打开这个资源",
+    "viewer.err_invalid_resource": "资源地址无效或不受支持。",
+    "viewer.err_missing_src": "缺少资源地址。",
+    "viewer.err_cross_origin": "只支持打开 CiteBox 当前实例中的资源。",
+    "viewer.err_image_only": "当前仅支持打开图片库中的原图资源。",
+    "viewer.err_pdf_only": "当前仅支持打开文献 PDF 资源。",
+    "viewer.err_unsupported_kind": "不支持的资源类型。",
+
+    "viewer.label_image": "原图查看",
+    "viewer.label_image_default": "图片",
+    "viewer.label_pdf": "PDF 查看",
+    "viewer.label_pdf_default": "PDF 文档"
+}

@@ -21,12 +21,13 @@ const ManualPage = {
     },
 
     async init() {
+        if (typeof t !== 'function') window.t = function(k, f) { return f || k; };
         this.cacheElements();
         if (!this.previewFrame) return;
 
         const paperId = Number(new URLSearchParams(window.location.search).get('paper_id'));
         if (!paperId) {
-            Utils.showToast('缺少 paper_id 参数', 'error');
+            Utils.showToast(t('manual.err_missing_paper_id', '缺少 paper_id 参数'), 'error');
             this.renderMissingPaper();
             return;
         }
@@ -73,7 +74,7 @@ const ManualPage = {
         this.clearPageBtn.addEventListener('click', async () => {
             const pageSelections = this.currentPageSelections();
             if (!pageSelections.length) return;
-            const confirmed = await Utils.confirm(`将删除第 ${this.state.currentPage} 页上的 ${pageSelections.length} 个框选区域。`);
+            const confirmed = await Utils.confirm(t('manual.msg_confirm_clear_page', '将删除第 {page} 页上的 {count} 个框选区域。').replace('{page}', this.state.currentPage).replace('{count}', pageSelections.length));
             if (!confirmed) return;
             this.state.selections = this.state.selections.filter((item) => item.page_number !== this.state.currentPage);
             this.renderSelections();
@@ -81,7 +82,7 @@ const ManualPage = {
 
         this.clearAllBtn.addEventListener('click', async () => {
             if (!this.state.selections.length) return;
-            const confirmed = await Utils.confirm('将清空当前文献的全部待提交框选区域。');
+            const confirmed = await Utils.confirm(t('manual.msg_confirm_clear_all', '将清空当前文献的全部待提交框选区域。'));
             if (!confirmed) return;
             this.state.selections = [];
             this.renderSelections();
@@ -171,11 +172,11 @@ const ManualPage = {
 
     async loadPDFDocument() {
         if (!this.state.paper?.pdf_url) {
-            throw new Error('当前文献缺少 PDF 文件地址');
+            throw new Error(t('manual.err_no_pdf_url', '当前文献缺少 PDF 文件地址'));
         }
 
         this.previewFrame.classList.add('is-loading');
-        this.workspaceHint.textContent = '正在加载 PDF 文档...';
+        this.workspaceHint.textContent = t('manual.msg_loading_pdf', '正在加载 PDF 文档...');
 
         const pdfjsLib = await this.ensurePDFJSReady();
         const loadingTask = pdfjsLib.getDocument({
@@ -199,29 +200,33 @@ const ManualPage = {
         const manualCount = (paper.figures || []).filter((figure) => figure.source === 'manual').length;
         const status = paper.extraction_status || '';
 
-        this.pageTitle.textContent = `${paper.title} 的人工框选提取`;
+        this.pageTitle.textContent = t('manual.msg_title_format', '{title} 的人工框选提取').replace('{title}', paper.title);
         this.pageSubtitle.textContent = paper.extractor_message
             ? ((status === 'queued' || status === 'running' || status === 'failed' || status === 'cancelled')
-                ? `自动解析状态：${Utils.statusLabel(status)}。${paper.extractor_message}`
+                ? t('manual.msg_auto_status', '自动解析状态：{status}。{message}').replace('{status}', Utils.statusLabel(status)).replace('{message}', paper.extractor_message)
                 : paper.extractor_message)
-            : '在页面上框选图片区域，提交后会追加到当前文献。';
+            : t('manual.msg_default_subtitle', '在页面上框选图片区域，提交后会追加到当前文献。');
 
         this.openPDFLink.href = paper.pdf_url ? Utils.resourceViewerURL('pdf', paper.pdf_url) : '/';
         this.backLibraryLink.href = `/library?paper_id=${encodeURIComponent(paper.id)}`;
         this.pageIndicator.textContent = this.state.pageCount
-            ? `第 ${this.state.currentPage} / ${this.state.pageCount} 页`
-            : '正在读取 PDF...';
+            ? t('manual.page_indicator', '第 {current} / {total} 页').replace('{current}', this.state.currentPage).replace('{total}', this.state.pageCount)
+            : t('manual.msg_reading_pdf', '正在读取 PDF...');
         this.prevPageBtn.disabled = this.state.currentPage <= 1;
         this.nextPageBtn.disabled = !this.state.pageCount || this.state.currentPage >= this.state.pageCount;
         this.submitBtn.disabled = this.state.submitting || this.state.extractingText;
-        this.submitBtn.textContent = this.state.submitting ? '提取中...' : '提取并录入图片';
+        this.submitBtn.textContent = this.state.submitting ? t('manual.msg_submitting', '提取中...') : t('manual.submit_btn', '提取并录入图片');
+
+        const fullTextDisplay = paper.pdf_text
+            ? t('manual.stat_fulltext_chars', '{count} 字').replace('{count}', paper.pdf_text.length.toLocaleString())
+            : t('manual.stat_fulltext_none', '未保存');
 
         this.summaryStrip.innerHTML = `
-            <div class="stat-card"><span>PDF 页数</span><strong>${this.state.pageCount || '...'}</strong></div>
-            <div class="stat-card"><span>已有图片</span><strong>${paper.figure_count || (paper.figures || []).length || 0}</strong></div>
-            <div class="stat-card"><span>人工补录</span><strong>${manualCount}</strong></div>
-            <div class="stat-card"><span>PDF 全文</span><strong>${paper.pdf_text ? `${paper.pdf_text.length.toLocaleString()} 字` : '未保存'}</strong></div>
-            <div class="stat-card"><span>当前状态</span><strong>${Utils.escapeHTML(Utils.statusLabel(status))}</strong></div>
+            <div class="stat-card"><span>${t('manual.stat_pdf_pages', 'PDF 页数')}</span><strong>${this.state.pageCount || '...'}</strong></div>
+            <div class="stat-card"><span>${t('manual.stat_figures', '已有图片')}</span><strong>${paper.figure_count || (paper.figures || []).length || 0}</strong></div>
+            <div class="stat-card"><span>${t('manual.stat_manual', '人工补录')}</span><strong>${manualCount}</strong></div>
+            <div class="stat-card"><span>${t('manual.stat_fulltext', 'PDF 全文')}</span><strong>${fullTextDisplay}</strong></div>
+            <div class="stat-card"><span>${t('manual.stat_status', '当前状态')}</span><strong>${Utils.escapeHTML(Utils.statusLabel(status))}</strong></div>
         `;
 
         if (paper.extractor_message) {
@@ -236,15 +241,17 @@ const ManualPage = {
         this.renderFullTextStatus();
     },
 
-    renderMissingPaper(message = '无法加载当前文献，请返回文献库重新进入。') {
-        if (this.pageTitle) this.pageTitle.textContent = '人工框选提取';
+    renderMissingPaper(message) {
+        const defaultMessage = t('manual.err_load_failed', '无法加载当前文献，请返回文献库重新进入。');
+        message = message || defaultMessage;
+        if (this.pageTitle) this.pageTitle.textContent = t('manual.err_workspace_title', '人工框选提取');
         if (this.pageSubtitle) this.pageSubtitle.textContent = message;
         if (this.summaryStrip) {
             this.summaryStrip.innerHTML = `
                 <div class="empty-state">
-                    <h3>无法进入手动标注工作台</h3>
+                    <h3>${t('manual.err_workspace_empty_title', '无法进入手动标注工作台')}</h3>
                     <p>${Utils.escapeHTML(message)}</p>
-                    <a class="btn btn-primary" href="/library">返回文献库</a>
+                    <a class="btn btn-primary" href="/library">${t('manual.back_library', '返回文献库')}</a>
                 </div>
             `;
         }
@@ -256,8 +263,8 @@ const ManualPage = {
         this.state.currentPage = page;
         this.state.loadingPreview = true;
         this.previewFrame.classList.add('is-loading');
-        this.workspaceHint.textContent = `正在渲染第 ${page} 页...`;
-        this.pageIndicator.textContent = `第 ${page} / ${this.state.pageCount} 页`;
+        this.workspaceHint.textContent = t('manual.msg_rendering_page', '正在渲染第 {page} 页...').replace('{page}', page);
+        this.pageIndicator.textContent = t('manual.page_indicator', '第 {current} / {total} 页').replace('{current}', page).replace('{total}', this.state.pageCount);
         this.prevPageBtn.disabled = page <= 1;
         this.nextPageBtn.disabled = page >= this.state.pageCount;
         this.renderSelections();
@@ -270,7 +277,7 @@ const ManualPage = {
             }
             this.state.loadingPreview = false;
             this.previewFrame.classList.remove('is-loading');
-            this.workspaceHint.textContent = `当前是第 ${page} 页。拖拽可新增框选，右侧可补充 caption 并提交。`;
+            this.workspaceHint.textContent = t('manual.msg_page_hint', '当前是第 {page} 页。拖拽可新增框选，右侧可补充 caption 并提交。').replace('{page}', page);
             this.renderSelections();
         } catch (error) {
             if (renderToken !== this.state.previewRenderToken) {
@@ -278,8 +285,8 @@ const ManualPage = {
             }
             this.state.loadingPreview = false;
             this.previewFrame.classList.remove('is-loading');
-            this.workspaceHint.textContent = 'PDF 页面渲染失败，请稍后重试。';
-            Utils.showToast(error.message || 'PDF 页面渲染失败', 'error');
+            this.workspaceHint.textContent = t('manual.err_render_failed', 'PDF 页面渲染失败，请稍后重试。');
+            Utils.showToast(error.message || t('manual.err_render_failed_short', 'PDF 页面渲染失败'), 'error');
         }
     },
 
@@ -443,8 +450,8 @@ const ManualPage = {
         if (!this.state.selections.length) {
             this.selectionList.innerHTML = `
                 <div class="empty-state manual-empty-state">
-                    <h3>还没有待提交的框选</h3>
-                    <p>切到需要的页面后直接拖拽，右侧会同步生成待录入项。</p>
+                    <h3>${t('manual.empty_title', '还没有待提交的框选')}</h3>
+                    <p>${t('manual.empty_desc', '切到需要的页面后直接拖拽，右侧会同步生成待录入项。')}</p>
                 </div>
             `;
             return;
@@ -454,12 +461,12 @@ const ManualPage = {
             <article class="manual-selection-item ${selection.page_number === this.state.currentPage ? 'is-current-page' : ''}">
                 <div class="manual-selection-head">
                     <div>
-                        <strong>区域 ${index + 1}</strong>
-                        <span>第 ${selection.page_number} 页</span>
+                        <strong>${t('manual.selection_region', '区域 {index}').replace('{index}', index + 1)}</strong>
+                        <span>${t('manual.selection_page', '第 {page} 页').replace('{page}', selection.page_number)}</span>
                     </div>
                     <div class="manual-selection-actions">
-                        <button class="btn btn-outline btn-small" type="button" data-selection-action="locate" data-selection-id="${selection.id}">定位</button>
-                        <button class="btn btn-outline btn-small" type="button" data-selection-action="remove" data-selection-id="${selection.id}">删除</button>
+                        <button class="btn btn-outline btn-small" type="button" data-selection-action="locate" data-selection-id="${selection.id}">${t('manual.selection_locate', '定位')}</button>
+                        <button class="btn btn-outline btn-small" type="button" data-selection-action="remove" data-selection-id="${selection.id}">${t('manual.selection_remove', '删除')}</button>
                     </div>
                 </div>
                 <div class="manual-selection-meta">
@@ -469,17 +476,17 @@ const ManualPage = {
                     <span>h ${(selection.height * 100).toFixed(1)}%</span>
                 </div>
                 <label class="field">
-                    <span>Caption / 备注</span>
+                    <span>${t('manual.selection_caption_label', 'Caption / 备注')}</span>
                     <textarea
                         class="form-textarea manual-selection-caption"
                         rows="3"
-                        placeholder="可选，提交后作为图片说明保存"
+                        placeholder="${t('manual.selection_caption_placeholder', '可选，提交后作为图片说明保存')}"
                         data-selection-field="caption"
                         data-selection-id="${selection.id}"
                     >${Utils.escapeHTML(selection.caption || '')}</textarea>
                 </label>
                 <label class="field">
-                    <span>替换已有图片</span>
+                    <span>${t('manual.selection_replace_label', '替换已有图片')}</span>
                     <select
                         class="form-input"
                         data-selection-field="replace_figure_id"
@@ -520,9 +527,9 @@ const ManualPage = {
                 .map((item) => Number(item.replace_figure_id))
         );
 
-        const options = ['<option value="">作为新图片追加</option>'];
+        const options = [`<option value="">${t('manual.selection_replace_new', '作为新图片追加')}</option>`];
         figures.forEach((figure) => {
-            const label = `第 ${figure.page_number || '-'} 页`;
+            const label = t('manual.selection_page', '第 {page} 页').replace('{page}', figure.page_number || '-');
 
             const disabled = selectedElsewhere.has(Number(figure.id));
             const selected = Number(selection.replace_figure_id) === Number(figure.id);
@@ -549,23 +556,29 @@ const ManualPage = {
         const extractingPage = Math.min(this.state.extractingTextPage || 0, pageCount || Number.MAX_SAFE_INTEGER);
 
         this.extractTextBtn.disabled = extracting || this.state.submitting || !this.state.pdfDocument;
-        this.extractTextBtn.textContent = extracting
-            ? `提取全文中 ${pageCount ? `${extractingPage}/${pageCount}` : ''}`.trim()
-            : (hasText ? '重新提取全文' : '提取全文并保存');
+
+        if (extracting) {
+            const progress = pageCount ? `${extractingPage}/${pageCount}` : '';
+            this.extractTextBtn.textContent = t('manual.extract_text_progress', '提取全文中 {progress}').replace('{progress}', progress).trim();
+        } else if (hasText) {
+            this.extractTextBtn.textContent = t('manual.extract_text_re', '重新提取全文');
+        } else {
+            this.extractTextBtn.textContent = t('manual.extract_text_btn', '提取全文并保存');
+        }
 
         if (extracting) {
             this.fullTextStatus.textContent = pageCount
-                ? `正在读取第 ${extractingPage} / ${pageCount} 页文本并保存到当前文献。`
-                : '正在提取当前 PDF 的全文内容。';
+                ? t('manual.fulltext_extracting_page', '正在读取第 {current} / {total} 页文本并保存到当前文献。').replace('{current}', extractingPage).replace('{total}', pageCount)
+                : t('manual.fulltext_extracting', '正在提取当前 PDF 的全文内容。');
             return;
         }
 
         if (hasText) {
-            this.fullTextStatus.textContent = `当前已保存 ${paper.pdf_text.length.toLocaleString()} 字全文，可重新提取覆盖，供 AI 伴读、检索和后续整理使用。`;
+            this.fullTextStatus.textContent = t('manual.fulltext_status_has_text', '当前已保存 {count} 字全文，可重新提取覆盖，供 AI 伴读、检索和后续整理使用。').replace('{count}', paper.pdf_text.length.toLocaleString());
             return;
         }
 
-        this.fullTextStatus.textContent = '当前还没有保存全文。点击右侧按钮即可提取并保存，供 AI 伴读和检索使用。';
+        this.fullTextStatus.textContent = t('manual.fulltext_status_empty', '当前还没有保存全文。点击右侧按钮即可提取并保存，供 AI 伴读和检索使用。');
     },
 
     async buildSelectionImageData(selection) {
@@ -578,7 +591,7 @@ const ManualPage = {
         const height = bottom - top;
 
         if (width < 2 || height < 2) {
-            throw new Error('框选区域过小，请重新选择');
+            throw new Error(t('manual.err_selection_too_small', '框选区域过小，请重新选择'));
         }
 
         const cropCanvas = document.createElement('canvas');
@@ -594,13 +607,13 @@ const ManualPage = {
     async submitSelections() {
         if (this.state.submitting) return;
         if (!this.state.selections.length) {
-            Utils.showToast('请先框选至少一个区域', 'error');
+            Utils.showToast(t('manual.err_no_selection', '请先框选至少一个区域'), 'error');
             return;
         }
 
         this.state.submitting = true;
         this.submitBtn.disabled = true;
-        this.submitBtn.textContent = '提取中...';
+        this.submitBtn.textContent = t('manual.msg_submitting', '提取中...');
 
         try {
             const regions = [];
@@ -623,20 +636,20 @@ const ManualPage = {
             this.state.selections = [];
             this.renderWorkspace();
             this.renderSelections();
-            Utils.showToast(`已录入 ${payload.added_count || 0} 张图片`);
+            Utils.showToast(t('manual.msg_added_figures', '已录入 {count} 张图片').replace('{count}', payload.added_count || 0));
         } catch (error) {
             Utils.showToast(error.message, 'error');
         } finally {
             this.state.submitting = false;
             this.submitBtn.disabled = false;
-            this.submitBtn.textContent = '提取并录入图片';
+            this.submitBtn.textContent = t('manual.submit_btn', '提取并录入图片');
         }
     },
 
     async extractAndSaveFullText() {
         if (this.state.extractingText) return;
         if (!this.state.pdfDocument) {
-            Utils.showToast('PDF 还没有加载完成', 'error');
+            Utils.showToast(t('manual.err_pdf_not_loaded', 'PDF 还没有加载完成'), 'error');
             return;
         }
 
@@ -647,7 +660,7 @@ const ManualPage = {
         try {
             const pdfText = await this.extractFullTextFromPDF();
             if (!pdfText) {
-                throw new Error('没有从当前 PDF 中提取到可用全文');
+                throw new Error(t('manual.err_no_text_extracted', '没有从当前 PDF 中提取到可用全文'));
             }
 
             const payload = await API.updatePaperPDFText(this.state.paperId, {
@@ -656,9 +669,9 @@ const ManualPage = {
 
             this.state.paper = payload.paper;
             this.renderWorkspace();
-            Utils.showToast(`已保存全文（${pdfText.length.toLocaleString()} 字）`);
+            Utils.showToast(t('manual.msg_saved_text', '已保存全文（{count} 字）').replace('{count}', pdfText.length.toLocaleString()));
         } catch (error) {
-            Utils.showToast(error.message || '提取全文失败', 'error');
+            Utils.showToast(error.message || t('manual.err_extract_text_failed', '提取全文失败'), 'error');
         } finally {
             this.state.extractingText = false;
             this.state.extractingTextPage = 0;
@@ -698,7 +711,6 @@ const ManualPage = {
             currentLine = '';
         };
 
-        // pdf.js 会按阅读顺序给出 textContent，这里用坐标和 hasEOL 做轻量行重建。
         items.forEach((item) => {
             const text = String(item?.str || '').replace(/\u00a0/g, ' ');
             const x = Number(item?.transform?.[4] || 0);

@@ -1,5 +1,6 @@
 const ResourceViewerPage = {
     init() {
+        if (typeof t !== 'function') window.t = function(k, f) { return f || k; };
         this.stage = document.getElementById('viewerStage');
         this.closeButton = document.getElementById('viewerCloseButton');
         this.kindLabel = document.getElementById('viewerKindLabel');
@@ -89,14 +90,14 @@ const ResourceViewerPage = {
             `;
         } catch (error) {
             this.toggleImageToolbar(false);
-            document.title = '文件查看失败 - CiteBox';
-            this.kindLabel.textContent = '文件查看';
-            this.title.textContent = '无法打开资源';
+            document.title = t('viewer.err_title_failed', '文件查看失败 - CiteBox');
+            this.kindLabel.textContent = t('viewer.err_kind_label', '文件查看');
+            this.title.textContent = t('viewer.err_cannot_open', '无法打开资源');
             this.stage.className = 'viewer-stage';
             this.stage.innerHTML = `
                 <div class="viewer-empty">
-                    <h1>无法打开这个资源</h1>
-                    <p>${this.escapeHTML(error.message || '资源地址无效或不受支持。')}</p>
+                    <h1>${t('viewer.err_cannot_open_title', '无法打开这个资源')}</h1>
+                    <p>${this.escapeHTML(error.message || t('viewer.err_invalid_resource', '资源地址无效或不受支持。'))}</p>
                 </div>
             `;
         }
@@ -238,39 +239,39 @@ const ResourceViewerPage = {
         const src = String(params.get('src') || '').trim();
 
         if (!src) {
-            throw new Error('缺少资源地址。');
+            throw new Error(t('viewer.err_missing_src', '缺少资源地址。'));
         }
 
         const url = new URL(src, window.location.origin);
         if (url.origin !== window.location.origin) {
-            throw new Error('只支持打开 CiteBox 当前实例中的资源。');
+            throw new Error(t('viewer.err_cross_origin', '只支持打开 CiteBox 当前实例中的资源。'));
         }
 
         if (kind === 'image') {
             if (!url.pathname.startsWith('/files/figures/')) {
-                throw new Error('当前仅支持打开图片库中的原图资源。');
+                throw new Error(t('viewer.err_image_only', '当前仅支持打开图片库中的原图资源。'));
             }
             return {
                 kind,
                 href: url.href,
-                label: '原图查看',
-                name: this.filenameFromURL(url) || '图片'
+                label: t('viewer.label_image', '原图查看'),
+                name: this.filenameFromURL(url) || t('viewer.label_image_default', '图片')
             };
         }
 
         if (kind === 'pdf') {
             if (!url.pathname.startsWith('/files/papers/')) {
-                throw new Error('当前仅支持打开文献 PDF 资源。');
+                throw new Error(t('viewer.err_pdf_only', '当前仅支持打开文献 PDF 资源。'));
             }
             return {
                 kind,
                 href: url.href,
-                label: 'PDF 查看',
-                name: this.filenameFromURL(url) || 'PDF 文档'
+                label: t('viewer.label_pdf', 'PDF 查看'),
+                name: this.filenameFromURL(url) || t('viewer.label_pdf_default', 'PDF 文档')
             };
         }
 
-        throw new Error('不支持的资源类型。');
+        throw new Error(t('viewer.err_unsupported_kind', '不支持的资源类型。'));
     },
 
     filenameFromURL(url) {

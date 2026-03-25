@@ -13,18 +13,18 @@
         <div class="navbar-content">
             <a href="/" class="logo">CiteBox</a>
             <ul class="nav-links">
-                <li><a href="/">总览</a></li>
-                <li><a href="/library">文献库</a></li>
-                <li><a href="/figures">图片库</a></li>
-                <li><a href="/palettes">配色库</a></li>
-                <li><a href="/groups">分组</a></li>
-                <li><a href="/tags">标签</a></li>
-                <li><a href="/notes">笔记</a></li>
-                <li><a href="/ai">AI伴读</a></li>
-                <li><a href="/settings">配置</a></li>
+                <li><a href="/" data-i18n="nav.overview">总览</a></li>
+                <li><a href="/library" data-i18n="nav.library">文献库</a></li>
+                <li><a href="/figures" data-i18n="nav.figures">图片库</a></li>
+                <li><a href="/palettes" data-i18n="nav.palettes">配色库</a></li>
+                <li><a href="/groups" data-i18n="nav.groups">分组</a></li>
+                <li><a href="/tags" data-i18n="nav.tags">标签</a></li>
+                <li><a href="/notes" data-i18n="nav.notes">笔记</a></li>
+                <li><a href="/ai" data-i18n="nav.ai">AI伴读</a></li>
+                <li><a href="/settings" data-i18n="nav.settings">配置</a></li>
             </ul>
             <div class="nav-actions">
-                <a href="/upload" class="nav-cta">上传 PDF</a>
+                <a href="/upload" class="nav-cta" data-i18n="nav.upload_pdf">上传 PDF</a>
             </div>
         </div>
     </nav>
@@ -33,11 +33,11 @@
         <section class="hero">
             <div>
                 <p class="eyebrow">Guide</p>
-                <h1>功能说明与使用指南</h1>
-                <p class="hero-text">
+                <h1 data-i18n="guide.hero_title">功能说明与使用指南</h1>
+                <p class="hero-text" data-i18n="guide.hero_text">
                     了解系统各模块的功能与推荐使用顺序，帮你快速上手。
                 </p>
-                <p class="hero-inline-links">
+                <p class="hero-inline-links" data-i18n-html="guide.hero_inline_links">
                     <span>继续浏览：</span>
                     <a href="/library">进入文献库</a>
                     <span aria-hidden="true">/</span>
@@ -50,34 +50,34 @@
             <div class="filters-card-head">
                 <div>
                     <p class="eyebrow">Workflow</p>
-                    <h2>建议使用顺序</h2>
+                    <h2 data-i18n="guide.workflow_title">建议使用顺序</h2>
                 </div>
             </div>
             <div class="workflow-grid">
                 <article class="workflow-card">
                     <span class="workflow-step">01</span>
-                    <h3>上传 PDF</h3>
-                    <p>上传 PDF，系统自动解析并提取图片。</p>
+                    <h3 data-i18n="guide.step_1_title">上传 PDF</h3>
+                    <p data-i18n="guide.step_1_desc">上传 PDF，系统自动解析并提取图片。</p>
                 </article>
                 <article class="workflow-card">
                     <span class="workflow-step">02</span>
-                    <h3>查看文献库</h3>
-                    <p>筛选和浏览文献，点进详情查看全文和图片。</p>
+                    <h3 data-i18n="guide.step_2_title">查看文献库</h3>
+                    <p data-i18n="guide.step_2_desc">筛选和浏览文献，点进详情查看全文和图片。</p>
                 </article>
                 <article class="workflow-card">
                     <span class="workflow-step">03</span>
-                    <h3>进入图片库</h3>
-                    <p>浏览所有文献的图片，给图片打标签或写笔记。</p>
+                    <h3 data-i18n="guide.step_3_title">进入图片库</h3>
+                    <p data-i18n="guide.step_3_desc">浏览所有文献的图片，给图片打标签或写笔记。</p>
                 </article>
                 <article class="workflow-card">
                     <span class="workflow-step">04</span>
-                    <h3>记录到笔记</h3>
-                    <p>把阅读收获记下来，方便之后搜索和回顾。</p>
+                    <h3 data-i18n="guide.step_4_title">记录到笔记</h3>
+                    <p data-i18n="guide.step_4_desc">把阅读收获记下来，方便之后搜索和回顾。</p>
                 </article>
                 <article class="workflow-card">
                     <span class="workflow-step">05</span>
-                    <h3>用 AI伴读补充</h3>
-                    <p>结合全文和图片向 AI 提问，深入理解论文。</p>
+                    <h3 data-i18n="guide.step_5_title">用 AI伴读补充</h3>
+                    <p data-i18n="guide.step_5_desc">结合全文和图片向 AI 提问，深入理解论文。</p>
                 </article>
             </div>
         </section>
@@ -85,36 +85,37 @@
         <section class="shortcut-grid">
             <article class="shortcut-card">
                 <span class="eyebrow">Overview</span>
-                <h2>总览</h2>
-                <p>展示文献总量、解析完成度、图片与笔记积累情况，以及最近更新的文献。</p>
+                <h2 data-i18n="guide.feature_overview_title">总览</h2>
+                <p data-i18n="guide.feature_overview_desc">展示文献总量、解析完成度、图片与笔记积累情况，以及最近更新的文献。</p>
             </article>
             <article class="shortcut-card">
                 <span class="eyebrow">Library</span>
-                <h2>文献库</h2>
-                <p>按条件筛选和浏览文献，点击进入详情查看全文与图片。</p>
+                <h2 data-i18n="guide.feature_library_title">文献库</h2>
+                <p data-i18n="guide.feature_library_desc">按条件筛选和浏览文献，点击进入详情查看全文与图片。</p>
             </article>
             <article class="shortcut-card">
                 <span class="eyebrow">Figures</span>
-                <h2>图片库</h2>
-                <p>以图片为单位整理标签和笔记，从视觉角度组织知识。</p>
+                <h2 data-i18n="guide.feature_figures_title">图片库</h2>
+                <p data-i18n="guide.feature_figures_desc">以图片为单位整理标签和笔记，从视觉角度组织知识。</p>
             </article>
             <article class="shortcut-card">
                 <span class="eyebrow">Notes</span>
-                <h2>笔记</h2>
-                <p>集中查看文献笔记和图片笔记，汇总可搜索的说明文本和 AI 解读结果。</p>
+                <h2 data-i18n="guide.feature_notes_title">笔记</h2>
+                <p data-i18n="guide.feature_notes_desc">集中查看文献笔记和图片笔记，汇总可搜索的说明文本和 AI 解读结果。</p>
             </article>
             <article class="shortcut-card">
                 <span class="eyebrow">Tags & Groups</span>
-                <h2>分组与标签</h2>
-                <p>分组用来归类（如按项目），标签用来多维标记（如按方法）；文献和图片的标签各自独立。</p>
+                <h2 data-i18n="guide.feature_tags_groups_title">分组与标签</h2>
+                <p data-i18n="guide.feature_tags_groups_desc">分组用来归类（如按项目），标签用来多维标记（如按方法）；文献和图片的标签各自独立。</p>
             </article>
             <article class="shortcut-card">
                 <span class="eyebrow">AI</span>
-                <h2>AI伴读</h2>
-                <p>把正文和图片一起交给 AI，帮你归纳、解释和记录要点。</p>
+                <h2 data-i18n="guide.feature_ai_title">AI伴读</h2>
+                <p data-i18n="guide.feature_ai_desc">把正文和图片一起交给 AI，帮你归纳、解释和记录要点。</p>
             </article>
         </section>
     </main>
     <script src="/static/js/theme.js"></script>
+    <script src="/static/js/i18n.js"></script>
 </body>
 </html>
