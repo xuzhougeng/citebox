@@ -1325,7 +1325,7 @@ func TestUploadPaperWithManualModeSkipsConfiguredExtractor(t *testing.T) {
 	}
 }
 
-func TestUploadPaperWithBuiltInLLMAutoModeUsesCompletedState(t *testing.T) {
+func TestUploadPaperWithBuiltInLLMAutoModeQueuesBackgroundTask(t *testing.T) {
 	svc, repo, cfg := newTestService(t)
 	aiSvc := NewAIService(repo, cfg, nil)
 
@@ -1373,11 +1373,11 @@ func TestUploadPaperWithBuiltInLLMAutoModeUsesCompletedState(t *testing.T) {
 	if err != nil {
 		t.Fatalf("UploadPaper() error = %v", err)
 	}
-	if paper.ExtractionStatus != "completed" {
-		t.Fatalf("UploadPaper() status = %q, want %q", paper.ExtractionStatus, "completed")
+	if paper.ExtractionStatus != "queued" {
+		t.Fatalf("UploadPaper() status = %q, want %q", paper.ExtractionStatus, "queued")
 	}
-	if !strings.Contains(paper.ExtractorMessage, "内置 AI") {
-		t.Fatalf("UploadPaper() extractor_message = %q, want built-in LLM hint", paper.ExtractorMessage)
+	if !strings.Contains(paper.ExtractorMessage, "等待内置 AI") {
+		t.Fatalf("UploadPaper() extractor_message = %q, want built-in queue hint", paper.ExtractorMessage)
 	}
 }
 

@@ -157,7 +157,7 @@ export PDF_EXTRACTOR_URL=http://127.0.0.1:8000/api/v1/extract
 推荐用法：
 
 - 标准 `pdffigx` 部署：保持“全文来源 = 解析服务返回”
-- `open_source_vision`：浏览器用 `pdf.js` 渲染 PDF 页面，后端调用 CiteBox 已配置的多模态模型返回图片坐标，再通过手工提取接口自动入库
+- `open_source_vision`：后台异步渲染 PDF 页面，调用 CiteBox 已配置的多模态模型识别图片坐标，再把裁剪结果直接入库
 - 只走手工标注时：上传完成后也会默认使用浏览器 `pdf.js` 提取全文并保存，即便没有配置自动解析模型
 
 当前后端期望解析服务返回 JSON，至少兼容下面这类结构:

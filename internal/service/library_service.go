@@ -126,6 +126,7 @@ type extractedFigure struct {
 	Caption     string
 	BBox        json.RawMessage
 	Data        string
+	Source      string
 }
 
 type extractorResponse struct {
@@ -413,7 +414,7 @@ func (s *LibraryService) UploadPaper(file multipart.File, header *multipart.File
 			return nil, apperr.New(apperr.CodeFailedPrecondition, "未配置自动解析服务，请改用手工标注")
 		}
 		if usesBuiltInLLMExtraction {
-			extractionStatus = "completed"
+			extractionStatus = "queued"
 			extractorMessage = builtInLLMWorkflowMessage()
 		} else {
 			extractionStatus = "queued"
@@ -462,7 +463,7 @@ func (s *LibraryService) UploadPaper(file multipart.File, header *multipart.File
 		return nil, err
 	}
 
-	if extractionMode == extractionModeAuto && !usesBuiltInLLMExtraction {
+	if extractionMode == extractionModeAuto && s.startBackground {
 		go s.runPaperExtraction(paper.ID, pdfPath, header.Filename)
 	}
 
@@ -877,10 +878,7 @@ func (s *LibraryService) ReextractPaper(id int64) (*model.Paper, error) {
 	if err != nil {
 		return nil, err
 	}
-	if usesBuiltInLLMCoordinateExtraction(*settings) {
-		return nil, apperr.New(apperr.CodeFailedPrecondition, "当前提取方案使用浏览器内置 AI 坐标提取，请重新上传或进入人工提取页处理")
-	}
-	if strings.TrimSpace(settings.EffectiveExtractorURL) == "" {
+	if !usesBuiltInLLMCoordinateExtraction(*settings) && strings.TrimSpace(settings.EffectiveExtractorURL) == "" {
 		return nil, apperr.New(apperr.CodeFailedPrecondition, "未配置自动解析服务，请直接使用人工处理")
 	}
 
@@ -897,11 +895,17 @@ func (s *LibraryService) ReextractPaper(id int64) (*model.Paper, error) {
 		return nil, apperr.Wrap(apperr.CodeFailedPrecondition, "原始 PDF 不存在，无法重新解析", err)
 	}
 
-	if err := s.repo.UpdatePaperExtractionState(id, "queued", "已重新提交解析任务", ""); err != nil {
+	message := "已重新提交解析任务"
+	if usesBuiltInLLMCoordinateExtraction(*settings) {
+		message = "已重新提交内置 AI 解析任务"
+	}
+	if err := s.repo.UpdatePaperExtractionState(id, "queued", message, ""); err != nil {
 		return nil, err
 	}
 
-	go s.runPaperExtraction(id, pdfPath, paper.OriginalFilename)
+	if s.startBackground {
+		go s.runPaperExtraction(id, pdfPath, paper.OriginalFilename)
+	}
 
 	updatedPaper, err := s.repo.GetPaperDetail(id)
 	if err != nil {
@@ -1253,7 +1257,9 @@ func (s *LibraryService) validateGroup(groupID *int64) error {
 func (s *LibraryService) runPaperExtraction(paperID int64, pdfPath, originalFilename string) {
 	settings, err := s.GetExtractorSettings()
 	if err == nil {
-		if jobsURL := strings.TrimSpace(settings.EffectiveJobsURL); jobsURL != "" {
+		if usesBuiltInLLMCoordinateExtraction(*settings) {
+			err = s.processBuiltInLLMExtraction(*settings, paperID, pdfPath, originalFilename)
+		} else if jobsURL := strings.TrimSpace(settings.EffectiveJobsURL); jobsURL != "" {
 			err = s.processPaperExtractionJob(*settings, paperID, jobsURL, pdfPath, originalFilename)
 		} else {
 			err = s.processPaperExtractionSync(*settings, paperID, pdfPath, originalFilename)
@@ -1509,7 +1515,21 @@ func (s *LibraryService) resolvePDFTextForPersistence(paperID int64, settings mo
 	if paper == nil {
 		return "", nil
 	}
-	return paper.PDFText, nil
+	if strings.TrimSpace(paper.PDFText) != "" {
+		return paper.PDFText, nil
+	}
+
+	pdfPath := filepath.Join(s.config.PapersDir(), paper.StoredPDFName)
+	fallbackText, fallbackErr := s.extractServerPDFTextFallback(pdfPath)
+	if fallbackErr != nil {
+		s.logger.Warn("server-side pdf text fallback failed",
+			"paper_id", paperID,
+			"path", pdfPath,
+			"error", fallbackErr,
+		)
+		return paper.PDFText, nil
+	}
+	return fallbackText, nil
 }
 
 func (s *LibraryService) markPaperExtractionFailed(paperID int64, jobID string, err error) {
@@ -1830,7 +1850,7 @@ func (s *LibraryService) materializeFigures(figures []extractedFigure) ([]reposi
 			FigureIndex:    figure.FigureIndex,
 			ParentFigureID: nil,
 			SubfigureLabel: "",
-			Source:         "auto",
+			Source:         firstNonEmpty(strings.TrimSpace(figure.Source), "auto"),
 			Caption:        figure.Caption,
 			BBoxJSON:       strings.TrimSpace(string(figure.BBox)),
 		})
@@ -2234,7 +2254,7 @@ func manualWorkflowMessage(autoUnavailable bool) string {
 }
 
 func builtInLLMWorkflowMessage() string {
-	return "文献已入库，当前页面会继续用内置 AI 识别图片坐标，并用 pdf.js 保存全文"
+	return "文献已入库，等待内置 AI 在后台解析图片坐标；若浏览器未写回全文，服务端也会补提 PDF 全文"
 }
 
 func extractorErrorMessage(body []byte) string {

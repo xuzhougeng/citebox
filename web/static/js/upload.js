@@ -149,7 +149,7 @@ const UploadPage = {
 
         if (this.extractionModeHint) {
             if (this.usesBuiltInLLMExtraction(this.extractorSettings) && this.extractorReady) {
-                this.extractionModeHint.textContent = '默认使用自动标注；上传后当前页面会用内置 AI 识别图片坐标，并由浏览器 pdf.js 自动保存全文。';
+                this.extractionModeHint.textContent = '默认使用自动标注；上传后后台会用内置 AI 解析图片坐标，浏览器仍会尝试用 pdf.js 自动保存全文。';
             } else if (this.usesBuiltInLLMExtraction(this.extractorSettings)) {
                 this.extractionModeHint.textContent = '当前已选择内置 AI 坐标提取，但图片场景模型或 API Key 还没配好，只能使用手工标注；上传后会默认用浏览器 pdf.js 保存全文。';
             } else if (this.extractorReady && this.usesBrowserPDFText(this.extractorSettings)) {
@@ -216,9 +216,7 @@ const UploadPage = {
             void this.runPostUploadEnrichment(paper, sourceFile, extractorSettings, extractionMode);
 
             let toastMessage = '文献已入库';
-            if (this.shouldRunBuiltInLLMExtraction(extractorSettings, extractionMode)) {
-                toastMessage = '文献已入库，当前页面开始用 AI 识别图片坐标';
-            } else if (Utils.isProcessingStatus(paper.extraction_status)) {
+            if (Utils.isProcessingStatus(paper.extraction_status)) {
                 toastMessage = '文献已入库，后台开始解析';
             }
             Utils.showToast(toastMessage, Utils.statusTone(paper.extraction_status));
@@ -417,13 +415,7 @@ const UploadPage = {
     },
 
     async runPostUploadEnrichment(paper, file, settings, extractionMode) {
-        let currentPaper = paper;
-
-        if (this.shouldRunBuiltInLLMExtraction(settings, extractionMode)) {
-            currentPaper = await this.maybeDetectAndSaveFiguresWithLLM(currentPaper, file);
-        }
-
-        return this.maybeExtractAndSavePDFText(currentPaper, file, settings, extractionMode);
+        return this.maybeExtractAndSavePDFText(paper, file, settings, extractionMode);
     },
 
     async maybeExtractAndSavePDFText(paper, file, settings, extractionMode) {
