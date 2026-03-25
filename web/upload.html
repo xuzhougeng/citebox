@@ -35,7 +35,7 @@
                 <p class="eyebrow">文献上传</p>
                 <h1>上传 PDF，生成新的文献条目</h1>
                 <p class="hero-text">
-                    上传 PDF 后，可以走外部 pdffigx，或直接用内置 LLM 识别图片坐标；手工标注模式下也会自动保存全文。
+                    上传后的处理方式由“PDF 提取配置”决定。手工方案只保存全文；内置 LLM 和标准 pdffigx 会继续自动提图。
                 </p>
             </div>
         </section>
@@ -75,7 +75,7 @@
                 </label>
 
                 <label class="field">
-                    <span>标注方式</span>
+                    <span>上传处理方式</span>
                     <select id="extractionModeSelect" class="form-input">
                         <option value="auto">自动标注</option>
                         <option value="manual">手工标注</option>

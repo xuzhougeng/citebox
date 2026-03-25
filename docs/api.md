@@ -169,6 +169,7 @@ AI 流式阅读通过：
 
 - Web 上传页在 `manual` 模式下会默认调用浏览器 `pdf.js` 提取全文，并通过 `POST /api/papers/{id}/pdf-text` 保存
 - 即便当前没有配置自动解析模型，只要能上传到手工流程，仍会走这条浏览器端全文提取链路
+- 当全局 `extractor_profile` 设为 `manual` 时，前端上传和微信上传都会默认落到这条“只提全文、不自动提图”的流程
 
 #### `PUT /api/papers/{id}`
 
@@ -920,8 +921,8 @@ AI 流式阅读通过：
 
 常用字段：
 
-- `extractor_profile`：`pdffigx_v1` 或 `open_source_vision`
-- `pdf_text_source`：兼容旧字段保留，但当前由后端按 `extractor_profile` 自动归一化；`pdffigx_v1` 固定为 `extractor`，`open_source_vision` 固定为 `pdfjs`
+- `extractor_profile`：`manual`、`pdffigx_v1` 或 `open_source_vision`
+- `pdf_text_source`：兼容旧字段保留，但当前由后端按 `extractor_profile` 自动归一化；`manual` / `open_source_vision` 固定为 `pdfjs`，`pdffigx_v1` 固定为 `extractor`
 - 其余字段与提取接口地址、鉴权和超时设置相同
 
 #### `GET /api/settings/wolai`

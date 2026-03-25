@@ -22,6 +22,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/xuzhougeng/citebox/internal/apperr"
 	"github.com/xuzhougeng/citebox/internal/config"
@@ -61,6 +62,29 @@ func newTestService(t *testing.T) (*LibraryService, *repository.LibraryRepositor
 	}
 
 	return svc, repo, cfg
+}
+
+func waitForPaperPDFText(t *testing.T, svc *LibraryService, paperID int64) string {
+	t.Helper()
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		paper, err := svc.GetPaper(paperID)
+		if err == nil && paper != nil {
+			pdfText := strings.TrimSpace(paper.PDFText)
+			if pdfText != "" {
+				return pdfText
+			}
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+
+	paper, err := svc.GetPaper(paperID)
+	if err != nil {
+		t.Fatalf("GetPaper() after waiting error = %v", err)
+	}
+	t.Fatalf("paper %d pdf_text still empty after waiting; paper = %+v", paperID, paper)
+	return ""
 }
 
 func createTestPaper(t *testing.T, repo *repository.LibraryRepository) *model.Paper {
@@ -1187,6 +1211,21 @@ func TestBuiltInLLMExtractorForcesPDFJSTextSource(t *testing.T) {
 	}
 }
 
+func TestManualExtractorForcesPDFJSTextSource(t *testing.T) {
+	svc, _, _ := newTestService(t)
+
+	updated, err := svc.UpdateExtractorSettings(model.ExtractorSettings{
+		ExtractorProfile: extractorProfileManual,
+		PDFTextSource:    pdfTextSourceExtractor,
+	})
+	if err != nil {
+		t.Fatalf("UpdateExtractorSettings() error = %v", err)
+	}
+	if updated.PDFTextSource != pdfTextSourcePDFJS {
+		t.Fatalf("UpdateExtractorSettings() pdf_text_source = %q, want %q", updated.PDFTextSource, pdfTextSourcePDFJS)
+	}
+}
+
 func TestPDFFigXExtractorForcesExtractorTextSource(t *testing.T) {
 	svc, _, _ := newTestService(t)
 
@@ -1340,6 +1379,110 @@ func TestUploadPaperWithManualModeSkipsConfiguredExtractor(t *testing.T) {
 	}
 }
 
+func TestUploadPaperWithManualModeBackfillsPDFTextInBackground(t *testing.T) {
+	svc, _, _ := newTestService(t)
+	svc.startBackground = true
+	svc.pdfTextExtractor = func(path string) (string, error) {
+		return "manual upload full text", nil
+	}
+
+	content := []byte("%PDF-1.4 manual fallback")
+	file := &testMultipartFile{Reader: bytes.NewReader(content)}
+	header := &multipart.FileHeader{
+		Filename: "manual-fallback.pdf",
+		Size:     int64(len(content)),
+		Header: textproto.MIMEHeader{
+			"Content-Type": []string{"application/pdf"},
+		},
+	}
+
+	paper, err := svc.UploadPaper(file, header, UploadPaperParams{
+		Title:          "Manual Fallback",
+		ExtractionMode: "manual",
+	})
+	if err != nil {
+		t.Fatalf("UploadPaper() error = %v", err)
+	}
+
+	if got := waitForPaperPDFText(t, svc, paper.ID); got != "manual upload full text" {
+		t.Fatalf("waitForPaperPDFText() = %q, want %q", got, "manual upload full text")
+	}
+}
+
+func TestUploadPaperWithManualExtractorProfileIgnoresConfiguredPDFFigX(t *testing.T) {
+	svc, _, _ := newTestService(t)
+	svc.startBackground = true
+	svc.pdfTextExtractor = func(path string) (string, error) {
+		return "manual profile full text", nil
+	}
+
+	if _, err := svc.UpdateExtractorSettings(model.ExtractorSettings{
+		ExtractorProfile:    extractorProfileManual,
+		ExtractorURL:        "http://127.0.0.1:9000/api/v1/extract",
+		ExtractorToken:      "secret",
+		ExtractorFileField:  "upload",
+		TimeoutSeconds:      120,
+		PollIntervalSeconds: 5,
+	}); err != nil {
+		t.Fatalf("UpdateExtractorSettings() error = %v", err)
+	}
+
+	content := []byte("%PDF-1.4 manual profile")
+	file := &testMultipartFile{Reader: bytes.NewReader(content)}
+	header := &multipart.FileHeader{
+		Filename: "manual-profile.pdf",
+		Size:     int64(len(content)),
+		Header: textproto.MIMEHeader{
+			"Content-Type": []string{"application/pdf"},
+		},
+	}
+
+	paper, err := svc.UploadPaper(file, header, UploadPaperParams{Title: "Manual Profile"})
+	if err != nil {
+		t.Fatalf("UploadPaper() error = %v", err)
+	}
+	if paper.ExtractionStatus != "completed" {
+		t.Fatalf("UploadPaper() status = %q, want %q", paper.ExtractionStatus, "completed")
+	}
+	if !strings.Contains(paper.ExtractorMessage, "当前 PDF 提取方案为手工") {
+		t.Fatalf("UploadPaper() extractor_message = %q, want manual-profile hint", paper.ExtractorMessage)
+	}
+	if got := waitForPaperPDFText(t, svc, paper.ID); got != "manual profile full text" {
+		t.Fatalf("waitForPaperPDFText() = %q, want %q", got, "manual profile full text")
+	}
+}
+
+func TestUploadPaperRejectsAutoModeWhenManualExtractorProfileSelected(t *testing.T) {
+	svc, _, _ := newTestService(t)
+
+	if _, err := svc.UpdateExtractorSettings(model.ExtractorSettings{
+		ExtractorProfile: extractorProfileManual,
+	}); err != nil {
+		t.Fatalf("UpdateExtractorSettings() error = %v", err)
+	}
+
+	content := []byte("%PDF-1.4 manual profile auto")
+	file := &testMultipartFile{Reader: bytes.NewReader(content)}
+	header := &multipart.FileHeader{
+		Filename: "manual-profile-auto.pdf",
+		Size:     int64(len(content)),
+		Header: textproto.MIMEHeader{
+			"Content-Type": []string{"application/pdf"},
+		},
+	}
+
+	_, err := svc.UploadPaper(file, header, UploadPaperParams{
+		Title:          "Manual Profile Auto",
+		ExtractionMode: "auto",
+	})
+	if !apperr.IsCode(err, apperr.CodeFailedPrecondition) {
+		t.Fatalf("UploadPaper() code = %q, want %q", apperr.CodeOf(err), apperr.CodeFailedPrecondition)
+	}
+	if !strings.Contains(err.Error(), "当前 PDF 提取方案为手工") {
+		t.Fatalf("UploadPaper() error = %v, want manual-profile message", err)
+	}
+}
+
 func TestUploadPaperWithBuiltInLLMAutoModeQueuesBackgroundTask(t *testing.T) {
 	svc, repo, cfg := newTestService(t)
 	aiSvc := NewAIService(repo, cfg, nil)
@@ -1393,6 +1536,55 @@ func TestUploadPaperWithBuiltInLLMAutoModeQueuesBackgroundTask(t *testing.T) {
 	}
 	if !strings.Contains(paper.ExtractorMessage, "等待内置 AI") {
 		t.Fatalf("UploadPaper() extractor_message = %q, want built-in queue hint", paper.ExtractorMessage)
+	}
+}
+
+func TestPersistExtractionResultMapsBuiltInLLMFiguresToAutoSource(t *testing.T) {
+	svc, repo, _ := newTestService(t)
+
+	paper, err := repo.CreatePaper(repository.PaperUpsertInput{
+		Title:            "LLM Source Mapping",
+		OriginalFilename: "llm-source.pdf",
+		StoredPDFName:    "llm-source.pdf",
+		FileSize:         256,
+		ContentType:      "application/pdf",
+		ExtractionStatus: "queued",
+	})
+	if err != nil {
+		t.Fatalf("CreatePaper() error = %v", err)
+	}
+
+	imageData := strings.TrimPrefix(testPNGDataURL(t, 24, 18), "data:image/png;base64,")
+	if err := svc.persistExtractionResult(paper.ID, "", model.ExtractorSettings{
+		ExtractorProfile: extractorProfileOpenSourceVision,
+		PDFTextSource:    pdfTextSourcePDFJS,
+	}, &extractionResult{
+		PDFText: "full text",
+		Boxes:   json.RawMessage(`[]`),
+		Figures: []extractedFigure{
+			{
+				Filename:    "llm.png",
+				ContentType: "image/png",
+				PageNumber:  1,
+				FigureIndex: 1,
+				BBox:        json.RawMessage(`{"source":"llm"}`),
+				Data:        imageData,
+				Source:      manualFigureSourceLLM,
+			},
+		},
+	}); err != nil {
+		t.Fatalf("persistExtractionResult() error = %v", err)
+	}
+
+	updated, err := svc.GetPaper(paper.ID)
+	if err != nil {
+		t.Fatalf("GetPaper() error = %v", err)
+	}
+	if len(updated.Figures) != 1 {
+		t.Fatalf("GetPaper() figures = %d, want 1", len(updated.Figures))
+	}
+	if updated.Figures[0].Source != figureSourceAuto {
+		t.Fatalf("figure source = %q, want %q", updated.Figures[0].Source, figureSourceAuto)
 	}
 }
 
@@ -1918,6 +2110,24 @@ func TestNormalizeManualRegionRejectsMissingImageData(t *testing.T) {
 		Height:     0.4,
 	}); !apperr.IsCode(err, apperr.CodeInvalidArgument) {
 		t.Fatalf("normalizeManualRegion() code = %q, want %q", apperr.CodeOf(err), apperr.CodeInvalidArgument)
+	}
+}
+
+func TestNormalizeManualRegionMapsLLMSourceToAuto(t *testing.T) {
+	region, err := normalizeManualRegion(model.ManualExtractionRegion{
+		PageNumber: 1,
+		X:          0.1,
+		Y:          0.1,
+		Width:      0.4,
+		Height:     0.4,
+		Source:     manualFigureSourceLLM,
+		ImageData:  testPNGDataURL(t, 12, 10),
+	})
+	if err != nil {
+		t.Fatalf("normalizeManualRegion() error = %v", err)
+	}
+	if region.Source != figureSourceAuto {
+		t.Fatalf("normalizeManualRegion() source = %q, want %q", region.Source, figureSourceAuto)
 	}
 }
 

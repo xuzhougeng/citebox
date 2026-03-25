@@ -34,6 +34,7 @@ type LibraryService struct {
 	httpClient          *http.Client
 	logger              *slog.Logger
 	startBackground     bool
+	pdfTextExtractor    func(string) (string, error)
 	weixinClientFactory func(token string) weixinBindingClient
 	wolaiClientFactory  func(settings model.WolaiSettings) (wolaiClient, error)
 }
@@ -44,10 +45,12 @@ const (
 	manualPendingStatus              = "manual_pending"
 	extractionModeAuto               = "auto"
 	extractionModeManual             = "manual"
+	extractorProfileManual           = "manual"
 	extractorProfilePDFFigXV1        = "pdffigx_v1"
 	extractorProfileOpenSourceVision = "open_source_vision"
 	pdfTextSourceExtractor           = "extractor"
 	pdfTextSourcePDFJS               = "pdfjs"
+	figureSourceAuto                 = "auto"
 	manualFigureSourceManual         = "manual"
 	manualFigureSourceLLM            = "llm"
 )
@@ -199,6 +202,7 @@ func NewLibraryService(repo *repository.LibraryRepository, cfg *config.Config, o
 		weixinClientFactory: defaultWeixinBindingClientFactory,
 		wolaiClientFactory:  defaultWolaiClientFactory,
 	}
+	service.pdfTextExtractor = service.extractServerPDFTextFallback
 
 	for _, opt := range opts {
 		opt(service)
@@ -393,6 +397,7 @@ func (s *LibraryService) UploadPaper(file multipart.File, header *multipart.File
 		os.Remove(pdfPath)
 		return nil, err
 	}
+	usesManualProfile := usesManualExtractionProfile(*extractorSettings)
 	usesBuiltInLLMExtraction := usesBuiltInLLMCoordinateExtraction(*extractorSettings)
 
 	extractionMode := normalizeExtractionMode(params.ExtractionMode)
@@ -405,12 +410,15 @@ func (s *LibraryService) UploadPaper(file multipart.File, header *multipart.File
 	}
 
 	extractionStatus := "completed"
-	extractorMessage := manualWorkflowMessage(!autoExtractionConfigured)
+	extractorMessage := manualWorkflowMessage(!autoExtractionConfigured, usesManualProfile)
 
 	switch extractionMode {
 	case extractionModeAuto:
 		if !autoExtractionConfigured {
 			os.Remove(pdfPath)
+			if usesManualProfile {
+				return nil, apperr.New(apperr.CodeFailedPrecondition, "当前 PDF 提取方案为手工，请改用手工上传")
+			}
 			return nil, apperr.New(apperr.CodeFailedPrecondition, "未配置自动解析服务，请改用手工标注")
 		}
 		if usesBuiltInLLMExtraction {
@@ -466,6 +474,9 @@ func (s *LibraryService) UploadPaper(file multipart.File, header *multipart.File
 	if extractionMode == extractionModeAuto && s.startBackground {
 		go s.runPaperExtraction(paper.ID, pdfPath, header.Filename)
 	}
+	if s.shouldQueuePaperPDFTextBackfill(extractionMode, *extractorSettings) {
+		s.queuePaperPDFTextBackfill(paper.ID, pdfPath)
+	}
 
 	s.decoratePaper(paper)
 	return paper, nil
@@ -509,7 +520,7 @@ func (s *LibraryService) migrateLegacyManualPendingPapers() error {
 	for _, paper := range papers {
 		message := strings.TrimSpace(paper.ExtractorMessage)
 		if message == "" || !strings.Contains(message, "人工录入") {
-			message = manualWorkflowMessage(true)
+			message = manualWorkflowMessage(true, false)
 		}
 		if err := s.repo.UpdatePaperExtractionState(paper.ID, "completed", message, ""); err != nil {
 			return err
@@ -877,6 +888,9 @@ func (s *LibraryService) ReextractPaper(id int64) (*model.Paper, error) {
 	settings, err := s.GetExtractorSettings()
 	if err != nil {
 		return nil, err
+	}
+	if usesManualExtractionProfile(*settings) {
+		return nil, apperr.New(apperr.CodeFailedPrecondition, "当前 PDF 提取方案为手工，不支持重新自动解析")
 	}
 	if !usesBuiltInLLMCoordinateExtraction(*settings) && strings.TrimSpace(settings.EffectiveExtractorURL) == "" {
 		return nil, apperr.New(apperr.CodeFailedPrecondition, "未配置自动解析服务，请直接使用人工处理")
@@ -1257,7 +1271,9 @@ func (s *LibraryService) validateGroup(groupID *int64) error {
 func (s *LibraryService) runPaperExtraction(paperID int64, pdfPath, originalFilename string) {
 	settings, err := s.GetExtractorSettings()
 	if err == nil {
-		if usesBuiltInLLMCoordinateExtraction(*settings) {
+		if usesManualExtractionProfile(*settings) {
+			err = apperr.New(apperr.CodeFailedPrecondition, "当前 PDF 提取方案为手工，不执行自动解析")
+		} else if usesBuiltInLLMCoordinateExtraction(*settings) {
 			err = s.processBuiltInLLMExtraction(*settings, paperID, pdfPath, originalFilename)
 		} else if jobsURL := strings.TrimSpace(settings.EffectiveJobsURL); jobsURL != "" {
 			err = s.processPaperExtractionJob(*settings, paperID, jobsURL, pdfPath, originalFilename)
@@ -1268,6 +1284,15 @@ func (s *LibraryService) runPaperExtraction(paperID int64, pdfPath, originalFile
 
 	if err == nil || apperr.IsCode(err, apperr.CodeNotFound) {
 		return
+	}
+	if settings != nil && normalizePDFTextSource(settings.PDFTextSource, settings.ExtractorProfile) == pdfTextSourcePDFJS {
+		if backfillErr := s.backfillPaperPDFTextIfMissing(paperID, pdfPath); backfillErr != nil && !apperr.IsCode(backfillErr, apperr.CodeNotFound) {
+			s.logger.Warn("paper extraction text backfill failed",
+				"paper_id", paperID,
+				"path", pdfPath,
+				"error", backfillErr,
+			)
+		}
 	}
 
 	s.logger.Error("paper extraction failed",
@@ -1532,6 +1557,69 @@ func (s *LibraryService) resolvePDFTextForPersistence(paperID int64, settings mo
 	return fallbackText, nil
 }
 
+func (s *LibraryService) shouldQueuePaperPDFTextBackfill(extractionMode string, settings model.ExtractorSettings) bool {
+	if normalizeExtractionMode(extractionMode) == extractionModeManual {
+		return true
+	}
+	return normalizePDFTextSource(settings.PDFTextSource, settings.ExtractorProfile) == pdfTextSourcePDFJS
+}
+
+func (s *LibraryService) queuePaperPDFTextBackfill(paperID int64, pdfPath string) {
+	if !s.startBackground {
+		return
+	}
+
+	go func() {
+		if err := s.backfillPaperPDFTextIfMissing(paperID, pdfPath); err != nil && !apperr.IsCode(err, apperr.CodeNotFound) {
+			s.logger.Warn("paper pdf text backfill failed",
+				"paper_id", paperID,
+				"path", pdfPath,
+				"error", err,
+			)
+		}
+	}()
+}
+
+func (s *LibraryService) backfillPaperPDFTextIfMissing(paperID int64, pdfPath string) error {
+	s.repoMu.RLock()
+	paper, err := s.repo.GetPaperDetail(paperID)
+	s.repoMu.RUnlock()
+	if err != nil {
+		return err
+	}
+	if paper == nil || strings.TrimSpace(paper.PDFText) != "" {
+		return nil
+	}
+
+	extract := s.pdfTextExtractor
+	if extract == nil {
+		extract = s.extractServerPDFTextFallback
+	}
+	pdfText, err := extract(pdfPath)
+	if err != nil {
+		return err
+	}
+	pdfText = strings.TrimSpace(pdfText)
+	if pdfText == "" {
+		return nil
+	}
+
+	s.repoMu.RLock()
+	current, err := s.repo.GetPaperDetail(paperID)
+	s.repoMu.RUnlock()
+	if err != nil {
+		return err
+	}
+	if current == nil || strings.TrimSpace(current.PDFText) != "" {
+		return nil
+	}
+
+	s.repoMu.RLock()
+	_, err = s.repo.UpdatePaperPDFText(paperID, pdfText)
+	s.repoMu.RUnlock()
+	return err
+}
+
 func (s *LibraryService) markPaperExtractionFailed(paperID int64, jobID string, err error) {
 	if strings.TrimSpace(jobID) == "" {
 		s.repoMu.RLock()
@@ -1783,6 +1871,8 @@ func parseExtractionResult(respBody []byte) (*extractionResult, error) {
 
 func normalizeExtractorProfile(value string) string {
 	switch strings.TrimSpace(value) {
+	case extractorProfileManual:
+		return extractorProfileManual
 	case extractorProfileOpenSourceVision:
 		return extractorProfileOpenSourceVision
 	case extractorProfilePDFFigXV1:
@@ -1794,6 +1884,8 @@ func normalizeExtractorProfile(value string) string {
 
 func normalizePDFTextSource(value, profile string) string {
 	switch normalizeExtractorProfile(profile) {
+	case extractorProfileManual:
+		return pdfTextSourcePDFJS
 	case extractorProfileOpenSourceVision:
 		return pdfTextSourcePDFJS
 	case extractorProfilePDFFigXV1:
@@ -1846,9 +1938,10 @@ func (s *LibraryService) materializeFigures(figures []extractedFigure) ([]reposi
 			FigureIndex:    figure.FigureIndex,
 			ParentFigureID: nil,
 			SubfigureLabel: "",
-			Source:         firstNonEmpty(strings.TrimSpace(figure.Source), "auto"),
-			Caption:        figure.Caption,
-			BBoxJSON:       strings.TrimSpace(string(figure.BBox)),
+			// Automatic extraction results should remain refreshable on re-extract.
+			Source:   figureSourceAuto,
+			Caption:  figure.Caption,
+			BBoxJSON: strings.TrimSpace(string(figure.BBox)),
 		})
 	}
 
@@ -1929,6 +2022,9 @@ func (s *LibraryService) autoExtractionConfigured() (bool, error) {
 	if err != nil {
 		return false, err
 	}
+	if usesManualExtractionProfile(*settings) {
+		return false, nil
+	}
 	if usesBuiltInLLMCoordinateExtraction(*settings) {
 		return s.builtInLLMCoordinateExtractionConfigured()
 	}
@@ -1962,6 +2058,10 @@ func (s *LibraryService) builtInLLMCoordinateExtractionConfigured() (bool, error
 
 func usesBuiltInLLMCoordinateExtraction(settings model.ExtractorSettings) bool {
 	return normalizeExtractorProfile(settings.ExtractorProfile) == extractorProfileOpenSourceVision
+}
+
+func usesManualExtractionProfile(settings model.ExtractorSettings) bool {
+	return normalizeExtractorProfile(settings.ExtractorProfile) == extractorProfileManual
 }
 
 func maxFigureIndex(figures []model.Figure) int {
@@ -1999,7 +2099,7 @@ func normalizeManualRegion(region model.ManualExtractionRegion) (model.ManualExt
 func normalizeManualFigureSource(value string) string {
 	switch strings.TrimSpace(value) {
 	case manualFigureSourceLLM:
-		return manualFigureSourceLLM
+		return figureSourceAuto
 	default:
 		return manualFigureSourceManual
 	}
@@ -2242,7 +2342,10 @@ func normalizeExtractionMode(mode string) string {
 	}
 }
 
-func manualWorkflowMessage(autoUnavailable bool) string {
+func manualWorkflowMessage(autoUnavailable, manualProfile bool) string {
+	if manualProfile {
+		return "当前 PDF 提取方案为手工，文献已入库；系统会自动提取并保存 PDF 全文"
+	}
 	if autoUnavailable {
 		return "未配置自动解析服务，文献已入库，可随时进入手工标注补录图片"
 	}

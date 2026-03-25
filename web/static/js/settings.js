@@ -60,6 +60,7 @@ const SettingsPage = {
         this.extractorPollIntervalField = document.getElementById('extractorPollIntervalField');
         this.extractorPollIntervalInput = document.getElementById('extractorPollIntervalInput');
         this.extractorPDFFigXHint = document.getElementById('extractorPDFFigXHint');
+        this.extractorManualHint = document.getElementById('extractorManualHint');
         this.extractorBuiltInHint = document.getElementById('extractorBuiltInHint');
         this.extractorSummary = document.getElementById('extractorSummary');
         this.wolaiSettingsForm = document.getElementById('wolaiSettingsForm');
@@ -1442,7 +1443,18 @@ const SettingsPage = {
     },
 
     renderExtractorSummary(settings) {
-        const usesBuiltIn = String(settings?.extractor_profile || '').trim() === 'open_source_vision';
+        const profile = String(settings?.extractor_profile || '').trim();
+        const usesBuiltIn = profile === 'open_source_vision';
+        const usesManual = profile === 'manual';
+        if (usesManual) {
+            this.extractorSummary.innerHTML = `
+                <div><span>提取方案</span><strong>${Utils.escapeHTML(this.extractorProfileLabel(settings.extractor_profile))}</strong></div>
+                <div><span>图片提取</span><strong>关闭，仅保留手工标注</strong></div>
+                <div><span>全文处理</span><strong>上传后自动提取并保存 PDF 全文</strong></div>
+                <div><span>外部提取服务</span><strong>已隐藏，不使用</strong></div>
+            `;
+            return;
+        }
         if (usesBuiltIn) {
             const figureModelLabel = this.aiModelDisplayLabel(
                 this.figureModelSelect?.value,
@@ -1470,6 +1482,8 @@ const SettingsPage = {
 
     extractorProfileLabel(value) {
         switch (String(value || '').trim()) {
+            case 'manual':
+                return '手工';
             case 'open_source_vision':
                 return '内置 LLM 坐标提取';
             case 'pdffigx_v1':
@@ -1489,11 +1503,13 @@ const SettingsPage = {
     },
 
     extractorPDFTextSourceValue(profile) {
-        return String(profile || '').trim() === 'open_source_vision' ? 'pdfjs' : 'extractor';
+        return ['manual', 'open_source_vision'].includes(String(profile || '').trim()) ? 'pdfjs' : 'extractor';
     },
 
     syncExtractorProfileFormState() {
-        const usesBuiltIn = String(this.extractorProfileSelect?.value || '').trim() === 'open_source_vision';
+        const profile = String(this.extractorProfileSelect?.value || '').trim();
+        const usesBuiltIn = profile === 'open_source_vision';
+        const usesManual = profile === 'manual';
 
         [
             this.extractorFigureModelField,
@@ -1509,8 +1525,9 @@ const SettingsPage = {
                 element.classList.toggle('hidden', !usesBuiltIn);
                 return;
             }
-            element.classList.toggle('hidden', usesBuiltIn);
+            element.classList.toggle('hidden', usesBuiltIn || usesManual);
         });
+        this.extractorManualHint?.classList.toggle('hidden', !usesManual);
         this.extractorBuiltInHint?.classList.toggle('hidden', !usesBuiltIn);
 
         [
@@ -1526,7 +1543,7 @@ const SettingsPage = {
                     element.disabled = !usesBuiltIn;
                     return;
                 }
-                element.disabled = usesBuiltIn;
+                element.disabled = usesBuiltIn || usesManual;
             }
         });
     },

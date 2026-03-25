@@ -437,13 +437,14 @@ User Prompt:
             <details class="manager-card settings-collapsible" open>
                 <summary class="settings-collapsible-toggle">
                     <h2>PDF 提取配置</h2>
-                    <p>选择自动提图方案。可接外部 pdffigx，也可直接用内置多模态模型识别图片坐标。</p>
+                    <p>选择当前 PDF 提取方案。可切换为手工、内置 LLM 坐标提取，或标准 pdffigx。</p>
                 </summary>
                 <form id="extractorSettingsForm" class="manager-form">
                     <div class="form-grid">
                         <label class="field">
                             <span>提取方案</span>
                             <select id="extractorProfileSelect" class="form-input">
+                                <option value="manual">手工</option>
                                 <option value="pdffigx_v1">标准 pdffigx</option>
                                 <option value="open_source_vision">内置 LLM 坐标提取</option>
                             </select>
@@ -475,6 +476,7 @@ User Prompt:
                     </div>
 
                     <p id="extractorPDFFigXHint" class="muted">如果选择标准 pdffigx，只需要填写 `http://127.0.0.1:8000` 这样的服务根地址，系统会自动补全 `/api/v1/extract` 和 `/api/v1/jobs`。</p>
+                    <p id="extractorManualHint" class="muted hidden">当前使用手工方案，不会自动提取图片；前端上传和微信上传都会自动保存 PDF 全文，后续可再进入手工标注补录图片。</p>
                     <p id="extractorBuiltInHint" class="muted hidden">当前使用内置 LLM 坐标提取，不需要配置 pdffigx 地址、鉴权或轮询参数。图片坐标会由这里选择的多模态模型直接识别；全文默认走浏览器 pdf.js，并保留服务端兜底。</p>
 
                     <div id="extractorSummary" class="settings-summary-box"></div>

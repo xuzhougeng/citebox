@@ -93,8 +93,8 @@ go run ./cmd/desktop
 | `STORAGE_DIR` | `./data/library` | 文献 PDF 与提取图片存储根目录 |
 | `DATABASE_PATH` | `./data/library.db` | SQLite 数据库路径 |
 | `MAX_UPLOAD_SIZE` | `262144000` | 单个 PDF 最大体积，默认 250MB |
-| `PDF_EXTRACTOR_PROFILE` | `pdffigx_v1` | PDF 提取方案默认类型；可选 `pdffigx_v1` 或 `open_source_vision`（内置 LLM 坐标提取） |
-| `PDF_EXTRACTOR_PDF_TEXT_SOURCE` | `extractor` | 兼容旧配置保留；当前会按提取方案自动选择全文来源，`pdffigx_v1` 固定走解析服务，`open_source_vision` 固定走 `pdfjs` |
+| `PDF_EXTRACTOR_PROFILE` | `pdffigx_v1` | PDF 提取方案默认类型；可选 `manual`、`pdffigx_v1` 或 `open_source_vision`（内置 LLM 坐标提取） |
+| `PDF_EXTRACTOR_PDF_TEXT_SOURCE` | `extractor` | 兼容旧配置保留；当前会按提取方案自动选择全文来源，`manual` / `open_source_vision` 固定走 `pdfjs` 语义，`pdffigx_v1` 固定走解析服务 |
 | `PDF_EXTRACTOR_URL` | 空 | PDF 解析后端 base URL 或完整提取接口地址 |
 | `PDF_EXTRACTOR_JOBS_URL` | 空 | 可选；仅在异步任务地址和 base URL 不一致时才需要单独覆盖 |
 | `PDF_EXTRACTOR_TOKEN` | 空 | 解析后端 Bearer Token |
@@ -151,6 +151,7 @@ export PDF_EXTRACTOR_URL=http://127.0.0.1:8000/api/v1/extract
 
 当前全文来源不再需要手工配置，而是按提取方案自动选择：
 
+- `manual`：不自动提图；Web 上传和微信上传都会自动提取并保存 PDF 全文，后续可再进入手工标注补图
 - `pdffigx_v1`：请求里会带 `include_pdf_text=true`，优先使用解析服务返回的全文
 - `open_source_vision`：请求里会带 `include_pdf_text=false`，优先由浏览器端 `pdf.js` 提取全文并通过 `/api/papers/{id}/pdf-text` 保存；如果浏览器没有写回，服务端也会补提全文
 

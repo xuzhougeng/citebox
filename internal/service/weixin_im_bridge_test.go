@@ -584,6 +584,54 @@ func TestWeixinIMBridgeImportsPDFFileAndSelectsPaper(t *testing.T) {
 	}
 }
 
+func TestWeixinIMBridgeImportsPDFFileBackfillsFullText(t *testing.T) {
+	svc, _, cfg := newTestService(t)
+	svc.startBackground = true
+	svc.pdfTextExtractor = func(path string) (string, error) {
+		return "wechat imported full text", nil
+	}
+
+	bridge := newTestWeixinBridge(t, svc, &fakeWeixinAIReader{answer: "ok"}, cfg.StorageDir)
+	bridge.downloadFile = func(context.Context, weixin.MessageItem) (*weixin.DownloadedFile, error) {
+		return &weixin.DownloadedFile{
+			Filename:    "wechat-text.pdf",
+			ContentType: "application/pdf",
+			Data:        []byte("%PDF-1.4 wechat full text"),
+		}, nil
+	}
+
+	reply := bridge.handleIncomingMessage(context.Background(), weixin.Message{
+		ItemList: []weixin.MessageItem{
+			{
+				Type: weixin.ItemTypeFile,
+				FileItem: &weixin.FileItem{
+					FileName: "wechat-text.pdf",
+					Len:      "27",
+					Media: &weixin.CDNMedia{
+						EncryptQueryParam: "encrypted",
+						AESKey:            "aeskey",
+					},
+				},
+			},
+		},
+	})
+
+	if !containsAll(reply, "已从微信导入 PDF", "已选中文献") {
+		t.Fatalf("import reply = %q, want import success message", reply)
+	}
+
+	result, err := svc.ListPapers(model.PaperFilter{})
+	if err != nil {
+		t.Fatalf("ListPapers() error = %v", err)
+	}
+	if result.Total != 1 || len(result.Papers) != 1 {
+		t.Fatalf("paper total = %d papers=%d, want 1", result.Total, len(result.Papers))
+	}
+	if got := waitForPaperPDFText(t, svc, result.Papers[0].ID); got != "wechat imported full text" {
+		t.Fatalf("waitForPaperPDFText() = %q, want %q", got, "wechat imported full text")
+	}
+}
+
 func TestWeixinIMBridgeReusesExistingPaperForDuplicatePDF(t *testing.T) {
 	svc, _, cfg := newTestService(t)
 	content := []byte("%PDF-1.4 duplicate upload")

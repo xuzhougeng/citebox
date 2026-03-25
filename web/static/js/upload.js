@@ -138,17 +138,27 @@ const UploadPage = {
         }
 
         this.extractorReady = this.isAutoExtractionReady(this.extractorSettings, this.aiSettings);
+        const usesManualProfile = this.usesManualExtractionProfile(this.extractorSettings);
 
         if (!this.extractionModeSelect) return;
 
-        this.extractionModeSelect.innerHTML = `
-            <option value="auto" ${this.extractorReady ? '' : 'disabled'}>自动标注</option>
-            <option value="manual">手工标注</option>
-        `;
-        this.extractionModeSelect.value = this.extractorReady ? 'auto' : 'manual';
+        if (usesManualProfile) {
+            this.extractionModeSelect.innerHTML = '<option value="manual">手工</option>';
+            this.extractionModeSelect.value = 'manual';
+            this.extractionModeSelect.disabled = true;
+        } else {
+            this.extractionModeSelect.innerHTML = `
+                <option value="auto" ${this.extractorReady ? '' : 'disabled'}>自动标注</option>
+                <option value="manual">手工标注</option>
+            `;
+            this.extractionModeSelect.value = this.extractorReady ? 'auto' : 'manual';
+            this.extractionModeSelect.disabled = false;
+        }
 
         if (this.extractionModeHint) {
-            if (this.usesBuiltInLLMExtraction(this.extractorSettings) && this.extractorReady) {
+            if (usesManualProfile) {
+                this.extractionModeHint.textContent = '当前 PDF 提取方案为手工：上传后不会自动提图，但会自动提取并保存全文；微信上传也同样如此。';
+            } else if (this.usesBuiltInLLMExtraction(this.extractorSettings) && this.extractorReady) {
                 this.extractionModeHint.textContent = '默认使用自动标注；上传后后台会用内置 AI 解析图片坐标，全文也会自动保存。';
             } else if (this.usesBuiltInLLMExtraction(this.extractorSettings)) {
                 this.extractionModeHint.textContent = '当前已选择内置 AI 坐标提取，但图片场景模型或 API Key 还没配好，只能使用手工标注；上传后会自动保存全文。';
@@ -311,6 +321,10 @@ const UploadPage = {
         return String(settings?.extractor_profile || '').trim() === 'open_source_vision';
     },
 
+    usesManualExtractionProfile(settings) {
+        return String(settings?.extractor_profile || '').trim() === 'manual';
+    },
+
     usesBrowserPDFText(settings) {
         return String(settings?.pdf_text_source || '').trim() === 'pdfjs';
     },
@@ -348,6 +362,9 @@ const UploadPage = {
     },
 
     isAutoExtractionReady(settings, aiSettings) {
+        if (this.usesManualExtractionProfile(settings)) {
+            return false;
+        }
         if (this.usesBuiltInLLMExtraction(settings)) {
             return this.isBuiltInLLMReady(settings, aiSettings);
         }
