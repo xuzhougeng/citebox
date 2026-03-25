@@ -23,6 +23,13 @@ node --check web/static/js/library.js
 
 Use `gofmt` for all Go files; keep package names lowercase and exported identifiers in `PascalCase`. Follow the existing layered design: handlers should stay thin, services own workflow logic, repositories own SQL and migrations. Frontend code uses plain JavaScript objects/modules, 4-space indentation, `camelCase` identifiers, and descriptive `data-*` hooks in HTML. Prefer ASCII unless a file already contains localized copy.
 
+## I18n Guidelines
+
+- Treat i18n as required for all user-visible frontend copy. Do not add or keep new hardcoded UI text in HTML or JavaScript when it can be served through the existing locale system.
+- When adding or changing frontend text, update both `web/static/locales/zh-CN/` and `web/static/locales/en/` in the same change, and keep keys aligned across languages.
+- Put page-specific strings in the matching page locale file and reserve `shared.json` for copy reused across multiple pages or features.
+- When wiring UI text, prefer the existing translation hooks and helpers already used in the repo, such as `data-i18n` attributes and `t(...)`/`CiteBoxI18n` lookups.
+
 ## Testing Guidelines
 
 Go tests are colocated as `*_test.go` files, especially under `internal/repository` and `internal/service`. Name tests as `Test<Behavior>`. Add repository tests for schema changes, migrations, constraints, and search behavior. Use `go test ./...` before submitting; for UI-only changes, include at least a JS syntax check and a brief manual verification note.
