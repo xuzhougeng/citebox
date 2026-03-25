@@ -1,3 +1,5 @@
+//go:build cgo && !nocgo
+
 package service
 
 import (
