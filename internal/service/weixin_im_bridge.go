@@ -26,8 +26,6 @@ const (
 	weixinBridgeStateDirName            = "weixin-bridge"
 	weixinSyncBufFileName               = "sync_buf"
 	weixinContextFileName               = "im_context.json"
-	weixinReplyMaxRunes                 = 3200
-	weixinReplyChunkRunes               = 1000
 	weixinHistoryLimit                  = 6
 	weixinSearchKeywordLimit            = 6
 	weixinSearchKeywordPerLanguageLimit = 3
@@ -463,13 +461,11 @@ func (b *WeixinIMBridge) executeWeixinCommandReply(ctx context.Context, command,
 	case "/ask", "/qa":
 		return b.answerCurrentPaperReply(ctx, arg)
 	case "/testvoice":
-		return weixinReplyEnvelope{
-			Text:                      fmt.Sprintf("测试语音：%s", ttsTestDemoText),
-			TTSText:                   ttsTestDemoText,
-			RequireTTS:                true,
-			VoiceResolveFailureNotice: "测试语音生成失败，请先保存可用的 TTS 配置。",
-			VoiceSendFailureNotice:    "测试语音发送失败。",
-		}
+		return b.buildWeixinTestVoiceReply()
+	case "/voiceoff":
+		return b.setWeixinVoiceOutputEnabledReply(false)
+	case "/voiceon":
+		return b.setWeixinVoiceOutputEnabledReply(true)
 	default:
 		return weixinReplyEnvelope{Text: weixinHelpText()}
 	}
@@ -1525,10 +1521,46 @@ func (b *WeixinIMBridge) resolveVoiceReplySettings(reply weixinReplyEnvelope) (*
 		}
 		return nil, nil
 	}
+	if !settings.WeixinVoiceOutputEnabled {
+		return nil, nil
+	}
 	if b.synthesizeTTS == nil {
 		return nil, errors.New("weixin tts synthesizer is nil")
 	}
 	return settings, nil
+}
+
+func (b *WeixinIMBridge) buildWeixinTestVoiceReply() weixinReplyEnvelope {
+	settings, err := b.libraryService.GetTTSSettings()
+	if err != nil {
+		return weixinReplyEnvelope{Text: fmt.Sprintf("读取 TTS 配置失败：%v", err)}
+	}
+	if settings != nil && !settings.WeixinVoiceOutputEnabled {
+		return weixinReplyEnvelope{Text: "微信 TTS 语音输出当前已关闭。发送 `/voiceon` 重新开启后，再试 `/testvoice`。"}
+	}
+	return weixinReplyEnvelope{
+		Text:                      fmt.Sprintf("测试语音：%s", ttsTestDemoText),
+		TTSText:                   ttsTestDemoText,
+		RequireTTS:                true,
+		VoiceResolveFailureNotice: "测试语音生成失败，请先保存可用的 TTS 配置。",
+		VoiceSendFailureNotice:    "测试语音发送失败。",
+	}
+}
+
+func (b *WeixinIMBridge) setWeixinVoiceOutputEnabledReply(enabled bool) weixinReplyEnvelope {
+	settings, err := b.libraryService.SetWeixinVoiceOutputEnabled(enabled)
+	if err != nil {
+		return weixinReplyEnvelope{Text: fmt.Sprintf("更新微信 TTS 语音输出失败：%v", err)}
+	}
+
+	if enabled {
+		if err := validateTTSSettings(*settings); err != nil {
+			return weixinReplyEnvelope{Text: "已开启微信 TTS 语音输出。当前还没有可用的 TTS 配置，请先在设置页保存。"}
+		}
+		return weixinReplyEnvelope{Text: "已开启微信 TTS 语音输出。`/ask`、`/qa` 和 `/testvoice` 会附带语音。"}
+	}
+
+	return weixinReplyEnvelope{Text: "已关闭微信 TTS 语音输出。`/ask`、`/qa` 和 `/testvoice` 将只返回文字。"}
 }
 
 func (b *WeixinIMBridge) resolveVoiceReplyWithSettings(ctx context.Context, message weixin.Message, reply weixinReplyEnvelope, settings model.TTSSettings) (string, func(), error) {
@@ -1665,6 +1697,8 @@ func weixinHelpText() string {
 		"`/note 内容`：追加文献/图片笔记",
 		"`/interpret 问题`：解读当前图片",
 		"`/testvoice`：回一条测试文本，并追加一段基于当前 TTS 配置的 Hello World 语音",
+		"`/voiceoff`：关闭微信 TTS 语音输出，后续 `/ask`、`/qa`、`/testvoice` 只返回文字",
+		"`/voiceon`：重新开启微信 TTS 语音输出",
 		"`/status`：查看当前上下文",
 		"`/reset`：清空当前上下文",
 		"`/help`：查看帮助",
@@ -1867,15 +1901,7 @@ func appendWeixinNote(existing, incoming string) string {
 }
 
 func trimWeixinReply(text string) string {
-	text = strings.TrimSpace(text)
-	if text == "" {
-		return ""
-	}
-	runes := []rune(text)
-	if len(runes) <= weixinReplyMaxRunes {
-		return text
-	}
-	return string(runes[:weixinReplyMaxRunes]) + "\n\n[内容已截断]"
+	return strings.TrimSpace(text)
 }
 
 func appendWeixinReplyNotice(text, notice string) string {
@@ -1891,33 +1917,107 @@ func appendWeixinReplyNotice(text, notice string) string {
 	}
 }
 
-func splitWeixinReplyText(text string, maxRunes int) []string {
+func splitWeixinReplyText(text string) []string {
 	text = strings.TrimSpace(text)
 	if text == "" {
 		return nil
 	}
-	if maxRunes <= 0 {
-		return []string{text}
-	}
 
 	runes := []rune(text)
-	if len(runes) <= maxRunes {
-		return []string{text}
-	}
 
-	chunks := make([]string, 0, (len(runes)+maxRunes-1)/maxRunes)
-	for start := 0; start < len(runes); start += maxRunes {
-		end := start + maxRunes
-		if end > len(runes) {
-			end = len(runes)
+	chunks := make([]string, 0, strings.Count(text, "\n")+1)
+	start := 0
+	for index := 0; index < len(runes); index++ {
+		split := 0
+		switch {
+		case matchWeixinReplyParagraphBreak(runes, index) > 0:
+			split = matchWeixinReplyParagraphBreak(runes, index)
+		case matchWeixinReplyLineBreak(runes, index) > 0:
+			split = matchWeixinReplyLineBreak(runes, index)
+		case matchWeixinReplySentenceBreak(runes, index) > 0:
+			split = matchWeixinReplySentenceBreak(runes, index)
 		}
-		chunks = append(chunks, string(runes[start:end]))
+		if split > start {
+			chunks = append(chunks, string(runes[start:split]))
+			start = split
+		}
+	}
+	if start < len(runes) {
+		chunks = append(chunks, string(runes[start:]))
 	}
 	return chunks
 }
 
+func matchWeixinReplyParagraphBreak(runes []rune, index int) int {
+	if index <= 0 || index >= len(runes) {
+		return 0
+	}
+	if runes[index-1] == '\n' && runes[index] == '\n' {
+		return index + 1
+	}
+	return 0
+}
+
+func matchWeixinReplyLineBreak(runes []rune, index int) int {
+	if index < 0 || index >= len(runes) || runes[index] != '\n' {
+		return 0
+	}
+	return index + 1
+}
+
+func matchWeixinReplySentenceBreak(runes []rune, index int) int {
+	if index < 0 || index >= len(runes) {
+		return 0
+	}
+	if isWeixinReplySentenceBoundaryRune(runes[index]) {
+		return extendWeixinReplySplitIndex(runes, index+1)
+	}
+	if isWeixinReplyClosingRune(runes[index]) && index > 0 && isWeixinReplySentenceBoundaryRune(runes[index-1]) {
+		return extendWeixinReplySplitIndex(runes, index+1)
+	}
+	return 0
+}
+
+func extendWeixinReplySplitIndex(runes []rune, index int) int {
+	for index < len(runes) {
+		if isWeixinReplyClosingRune(runes[index]) || isWeixinReplyWhitespaceRune(runes[index]) {
+			index++
+			continue
+		}
+		break
+	}
+	return index
+}
+
+func isWeixinReplySentenceBoundaryRune(r rune) bool {
+	switch r {
+	case '。', '！', '？', '!', '?', ';', '；':
+		return true
+	default:
+		return false
+	}
+}
+
+func isWeixinReplyClosingRune(r rune) bool {
+	switch r {
+	case '"', '\'', ')', ']', '}', '》', '」', '』', '】', '）':
+		return true
+	default:
+		return false
+	}
+}
+
+func isWeixinReplyWhitespaceRune(r rune) bool {
+	switch r {
+	case ' ', '\t', '\n', '\r':
+		return true
+	default:
+		return false
+	}
+}
+
 func sendWeixinTextReply(ctx context.Context, client *weixin.Client, toUserID, text, contextToken string) error {
-	chunks := splitWeixinReplyText(text, weixinReplyChunkRunes)
+	chunks := splitWeixinReplyText(text)
 	for _, chunk := range chunks {
 		if err := client.SendTextMessage(ctx, toUserID, chunk, contextToken); err != nil {
 			return err

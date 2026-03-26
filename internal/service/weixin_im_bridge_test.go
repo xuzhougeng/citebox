@@ -621,6 +621,37 @@ func TestWeixinIMBridgeTestVoiceReturnsVoiceAttachment(t *testing.T) {
 	}
 }
 
+func TestWeixinIMBridgeVoiceToggleCommandsPersistSetting(t *testing.T) {
+	svc, _, cfg := newTestService(t)
+	bridge := newTestWeixinBridge(t, svc, &fakeWeixinAIReader{answer: "ok"}, cfg.StorageDir)
+
+	reply := bridge.handleIncomingText(context.Background(), "/voiceoff")
+	if !containsAll(reply, "已关闭微信 TTS 语音输出", "/ask", "/qa", "/testvoice") {
+		t.Fatalf("/voiceoff reply = %q, want disable confirmation", reply)
+	}
+
+	settings, err := svc.GetTTSSettings()
+	if err != nil {
+		t.Fatalf("GetTTSSettings() after /voiceoff error = %v", err)
+	}
+	if settings.WeixinVoiceOutputEnabled {
+		t.Fatalf("GetTTSSettings() after /voiceoff = %+v, want disabled voice output", settings)
+	}
+
+	reply = bridge.handleIncomingText(context.Background(), "/voiceon")
+	if !containsAll(reply, "已开启微信 TTS 语音输出") {
+		t.Fatalf("/voiceon reply = %q, want enable confirmation", reply)
+	}
+
+	settings, err = svc.GetTTSSettings()
+	if err != nil {
+		t.Fatalf("GetTTSSettings() after /voiceon error = %v", err)
+	}
+	if !settings.WeixinVoiceOutputEnabled {
+		t.Fatalf("GetTTSSettings() after /voiceon = %+v, want enabled voice output", settings)
+	}
+}
+
 func TestWeixinIMBridgeAskReplyReturnsSynthesizedVoiceWhenTTSConfigured(t *testing.T) {
 	svc, _, cfg := newTestService(t)
 	if _, err := svc.UpdateWeixinBridgeSettings(model.WeixinBridgeSettings{Enabled: true}); err != nil {
@@ -694,6 +725,93 @@ func TestWeixinIMBridgeAskReplyReturnsSynthesizedVoiceWhenTTSConfigured(t *testi
 	}
 }
 
+func TestWeixinIMBridgeAskReplySkipsVoiceWhenWeixinVoiceOutputDisabled(t *testing.T) {
+	svc, _, cfg := newTestService(t)
+	if _, err := svc.UpdateWeixinBridgeSettings(model.WeixinBridgeSettings{Enabled: true}); err != nil {
+		t.Fatalf("UpdateWeixinBridgeSettings() error = %v", err)
+	}
+	if _, err := svc.UpdateTTSSettings(model.TTSSettings{
+		AppID:                       "app-id",
+		AccessKey:                   "access-key",
+		Speaker:                     "speaker-id",
+		WeixinVoiceOutputEnabled:    false,
+		WeixinVoiceOutputEnabledSet: true,
+	}); err != nil {
+		t.Fatalf("UpdateTTSSettings() error = %v", err)
+	}
+
+	bridge := newTestWeixinBridge(t, svc, &fakeWeixinAIReader{
+		answer:     "这是 Ask 的文字答案。",
+		ttsRewrite: "这是 Ask 的语音答案。",
+	}, cfg.StorageDir)
+	paper := createBridgePaper(t, svc.repo, "Ask Voice Off Paper", "ask-voiceoff.pdf")
+	bridge.activatePaperContext(paper.ID, true)
+
+	synthCalled := false
+	bridge.synthesizeTTS = func(_ context.Context, text, uid string, settings model.TTSSettings) (string, func(), error) {
+		synthCalled = true
+		return "", func() {}, nil
+	}
+
+	reply := bridge.handleIncomingMessageReply(context.Background(), weixin.Message{
+		FromUserID: "user@im.wechat",
+		ItemList: []weixin.MessageItem{
+			{
+				Type:     weixin.ItemTypeText,
+				TextItem: &weixin.TextItem{Text: "/ask 总结一下"},
+			},
+		},
+	})
+	if !containsAll(reply.Text, "文献问答", "这是 Ask 的文字答案。") {
+		t.Fatalf("handleIncomingMessageReply() = %+v, want ask answer text", reply)
+	}
+
+	selectedPath, cleanup, err := bridge.resolveVoiceReply(context.Background(), weixin.Message{
+		FromUserID: "user@im.wechat",
+	}, reply)
+	if err != nil {
+		t.Fatalf("resolveVoiceReply() error = %v", err)
+	}
+	cleanup()
+	if synthCalled {
+		t.Fatal("resolveVoiceReply() synthesized voice even though weixin voice output is disabled")
+	}
+	if selectedPath != "" {
+		t.Fatalf("resolveVoiceReply() path = %q, want empty path when weixin voice output is disabled", selectedPath)
+	}
+}
+
+func TestWeixinIMBridgeTestVoiceReturnsHintWhenVoiceOutputDisabled(t *testing.T) {
+	svc, _, cfg := newTestService(t)
+	if _, err := svc.UpdateTTSSettings(model.TTSSettings{
+		AppID:                       "app-id",
+		AccessKey:                   "access-key",
+		Speaker:                     "speaker-id",
+		WeixinVoiceOutputEnabled:    false,
+		WeixinVoiceOutputEnabledSet: true,
+	}); err != nil {
+		t.Fatalf("UpdateTTSSettings() error = %v", err)
+	}
+	bridge := newTestWeixinBridge(t, svc, &fakeWeixinAIReader{answer: "ok"}, cfg.StorageDir)
+
+	reply := bridge.handleIncomingText(context.Background(), "/testvoice")
+	if !containsAll(reply, "微信 TTS 语音输出当前已关闭", "/voiceon", "/testvoice") {
+		t.Fatalf("/testvoice reply = %q, want disabled hint", reply)
+	}
+
+	replyEnvelope := bridge.handleIncomingTextReply(context.Background(), "/testvoice")
+	selectedPath, cleanup, err := bridge.resolveVoiceReply(context.Background(), weixin.Message{
+		FromUserID: "user@im.wechat",
+	}, replyEnvelope)
+	if err != nil {
+		t.Fatalf("resolveVoiceReply() error = %v, want nil when /testvoice is blocked by disabled voice output", err)
+	}
+	cleanup()
+	if selectedPath != "" {
+		t.Fatalf("resolveVoiceReply() path = %q, want empty path when /testvoice is blocked by disabled voice output", selectedPath)
+	}
+}
+
 func TestWeixinIMBridgeVoiceRewriteFallbackSanitizesMarkdown(t *testing.T) {
 	svc, _, cfg := newTestService(t)
 	if _, err := svc.UpdateTTSSettings(model.TTSSettings{
@@ -746,24 +864,47 @@ func TestWeixinIMBridgeVoiceRewriteFallbackSanitizesMarkdown(t *testing.T) {
 }
 
 func TestSplitWeixinReplyTextSplitsLongReply(t *testing.T) {
-	longText := strings.Repeat("测", weixinReplyChunkRunes*2+17)
+	longText := strings.Repeat("测", 2017)
 
-	chunks := splitWeixinReplyText(longText, weixinReplyChunkRunes)
-	if len(chunks) != 3 {
-		t.Fatalf("len(chunks) = %d, want %d", len(chunks), 3)
-	}
-	for index, chunk := range chunks {
-		if got := len([]rune(chunk)); got > weixinReplyChunkRunes {
-			t.Fatalf("chunk %d rune count = %d, want <= %d", index, got, weixinReplyChunkRunes)
-		}
+	chunks := splitWeixinReplyText(longText)
+	if len(chunks) != 1 {
+		t.Fatalf("len(chunks) = %d, want %d for uninterrupted text", len(chunks), 1)
 	}
 	if strings.Join(chunks, "") != longText {
 		t.Fatal("splitWeixinReplyText() chunks do not reconstruct original text")
 	}
 }
 
+func TestSplitWeixinReplyTextPrefersNaturalBreaks(t *testing.T) {
+	text := "第一段先把背景交代清楚，也把主要结论说清楚。\n\n第二段先解释方法。第二段再解释结果。"
+
+	chunks := splitWeixinReplyText(text)
+	if len(chunks) != 3 {
+		t.Fatalf("len(chunks) = %d, want %d", len(chunks), 3)
+	}
+	if chunks[0] != "第一段先把背景交代清楚，也把主要结论说清楚。\n\n" {
+		t.Fatalf("chunks[0] = %q, want paragraph-aligned split", chunks[0])
+	}
+	if chunks[1] != "第二段先解释方法。" {
+		t.Fatalf("chunks[1] = %q, want sentence-aligned split", chunks[1])
+	}
+	if chunks[2] != "第二段再解释结果。" {
+		t.Fatalf("chunks[2] = %q, want remaining sentence preserved", chunks[2])
+	}
+	if strings.Join(chunks, "") != text {
+		t.Fatal("splitWeixinReplyText() chunks do not reconstruct original text")
+	}
+}
+
+func TestTrimWeixinReplyPreservesLongReply(t *testing.T) {
+	longText := strings.Repeat("长", 5000)
+	if got := trimWeixinReply(longText); got != longText {
+		t.Fatalf("trimWeixinReply() = %q, want full text preserved", got)
+	}
+}
+
 func TestSplitWeixinReplyTextReturnsNilForBlankText(t *testing.T) {
-	chunks := splitWeixinReplyText(" \n\t ", weixinReplyChunkRunes)
+	chunks := splitWeixinReplyText(" \n\t ")
 	if len(chunks) != 0 {
 		t.Fatalf("len(chunks) = %d, want 0", len(chunks))
 	}

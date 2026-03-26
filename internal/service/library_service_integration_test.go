@@ -156,6 +156,9 @@ func TestGetTTSSettingsDefaultsResourceID(t *testing.T) {
 	if settings.ResourceID != doubaoTTSDefaultResourceID {
 		t.Fatalf("GetTTSSettings() resource_id = %q, want %q", settings.ResourceID, doubaoTTSDefaultResourceID)
 	}
+	if !settings.WeixinVoiceOutputEnabled {
+		t.Fatalf("GetTTSSettings() weixin_voice_output_enabled = %v, want true", settings.WeixinVoiceOutputEnabled)
+	}
 }
 
 func TestUpdateTTSSettingsPersistsSeparately(t *testing.T) {
@@ -176,6 +179,9 @@ func TestUpdateTTSSettingsPersistsSeparately(t *testing.T) {
 	if settings.ResourceID != doubaoTTSDefaultResourceID {
 		t.Fatalf("UpdateTTSSettings() resource_id = %q, want %q", settings.ResourceID, doubaoTTSDefaultResourceID)
 	}
+	if !settings.WeixinVoiceOutputEnabled {
+		t.Fatalf("UpdateTTSSettings() weixin_voice_output_enabled = %v, want true", settings.WeixinVoiceOutputEnabled)
+	}
 
 	reloaded, err := svc.GetTTSSettings()
 	if err != nil {
@@ -184,13 +190,44 @@ func TestUpdateTTSSettingsPersistsSeparately(t *testing.T) {
 	if reloaded.AppID != "app-id" || reloaded.AccessKey != "access-key" || reloaded.Speaker != "speaker-id" {
 		t.Fatalf("GetTTSSettings() reload = %+v, want persisted values", reloaded)
 	}
+	if !reloaded.WeixinVoiceOutputEnabled {
+		t.Fatalf("GetTTSSettings() reload weixin_voice_output_enabled = %v, want true", reloaded.WeixinVoiceOutputEnabled)
+	}
 
 	raw, err := repo.GetAppSetting(ttsSettingsKey)
 	if err != nil {
 		t.Fatalf("GetAppSetting(%q) error = %v", ttsSettingsKey, err)
 	}
-	if !strings.Contains(raw, `"app_id":"app-id"`) || !strings.Contains(raw, `"speaker":"speaker-id"`) {
+	if !strings.Contains(raw, `"app_id":"app-id"`) || !strings.Contains(raw, `"speaker":"speaker-id"`) || !strings.Contains(raw, `"weixin_voice_output_enabled":true`) {
 		t.Fatalf("saved tts settings = %q, want TTS fields persisted", raw)
+	}
+}
+
+func TestSetWeixinVoiceOutputEnabledPersistsSeparately(t *testing.T) {
+	svc, repo, _ := newTestService(t)
+
+	settings, err := svc.SetWeixinVoiceOutputEnabled(false)
+	if err != nil {
+		t.Fatalf("SetWeixinVoiceOutputEnabled(false) error = %v", err)
+	}
+	if settings.WeixinVoiceOutputEnabled {
+		t.Fatalf("SetWeixinVoiceOutputEnabled(false) = %+v, want weixin voice output disabled", settings)
+	}
+
+	reloaded, err := svc.GetTTSSettings()
+	if err != nil {
+		t.Fatalf("GetTTSSettings() reload error = %v", err)
+	}
+	if reloaded.WeixinVoiceOutputEnabled {
+		t.Fatalf("GetTTSSettings() reload = %+v, want weixin voice output disabled", reloaded)
+	}
+
+	raw, err := repo.GetAppSetting(ttsSettingsKey)
+	if err != nil {
+		t.Fatalf("GetAppSetting(%q) error = %v", ttsSettingsKey, err)
+	}
+	if !strings.Contains(raw, `"weixin_voice_output_enabled":false`) {
+		t.Fatalf("saved tts settings = %q, want weixin voice output flag persisted", raw)
 	}
 }
 
@@ -207,6 +244,9 @@ func TestGetTTSSettingsFallsBackToLegacyWeixinBridgeFields(t *testing.T) {
 	}
 	if settings.AppID != "legacy-app" || settings.AccessKey != "legacy-key" || settings.ResourceID != "legacy-resource" || settings.Speaker != "legacy-speaker" {
 		t.Fatalf("GetTTSSettings() = %+v, want legacy values", settings)
+	}
+	if !settings.WeixinVoiceOutputEnabled {
+		t.Fatalf("GetTTSSettings() legacy weixin_voice_output_enabled = %v, want true", settings.WeixinVoiceOutputEnabled)
 	}
 }
 

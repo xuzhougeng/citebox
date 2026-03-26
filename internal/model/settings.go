@@ -37,11 +37,15 @@ type WeixinBridgeSettings struct {
 }
 
 type TTSSettings struct {
-	AppID      string `json:"app_id"`
-	AccessKey  string `json:"access_key"`
-	ResourceID string `json:"resource_id"`
-	Speaker    string `json:"speaker"`
+	AppID                       string `json:"app_id"`
+	AccessKey                   string `json:"access_key"`
+	ResourceID                  string `json:"resource_id"`
+	Speaker                     string `json:"speaker"`
+	WeixinVoiceOutputEnabled    bool   `json:"weixin_voice_output_enabled"`
+	WeixinVoiceOutputEnabledSet bool   `json:"-"`
 }
+
+const DefaultWeixinVoiceOutputEnabled = true
 
 type ChangePasswordRequest struct {
 	CurrentPassword string `json:"current_password"`

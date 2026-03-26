@@ -1041,7 +1041,8 @@ const SettingsPage = {
             app_id: String(settings.app_id || '').trim(),
             access_key: String(settings.access_key || '').trim(),
             resource_id: String(settings.resource_id || '').trim(),
-            speaker: String(settings.speaker || '').trim()
+            speaker: String(settings.speaker || '').trim(),
+            weixin_voice_output_enabled: settings.weixin_voice_output_enabled !== false
         };
     },
 

@@ -1079,7 +1079,8 @@ AI 流式阅读通过：
   "app_id": "1234567890",
   "access_key": "doubao-access-key",
   "resource_id": "seed-tts-2.0",
-  "speaker": "zh_female_shuangkuaisisi_moon_bigtts"
+  "speaker": "zh_female_shuangkuaisisi_moon_bigtts",
+  "weixin_voice_output_enabled": true
 }
 ```
 
@@ -1090,6 +1091,7 @@ AI 流式阅读通过：
 - 保存独立的 TTS 配置
 - 保存后，微信 `/ask`、`/qa` 会在成功回复后追加 TTS 音频
 - 微信 `/testvoice` 也会直接调用当前已保存的 TTS 配置，合成一段 Hello World 测试音频
+- `weixin_voice_output_enabled` 用于控制微信 `/ask`、`/qa`、`/testvoice` 是否真的发送语音附件；`/voiceoff` 与 `/voiceon` 也会更新这个值
 
 请求体：
 
@@ -1098,7 +1100,8 @@ AI 流式阅读通过：
   "app_id": "1234567890",
   "access_key": "doubao-access-key",
   "resource_id": "seed-tts-2.0",
-  "speaker": "zh_female_shuangkuaisisi_moon_bigtts"
+  "speaker": "zh_female_shuangkuaisisi_moon_bigtts",
+  "weixin_voice_output_enabled": true
 }
 ```
 

@@ -224,6 +224,8 @@ export PDF_EXTRACTOR_URL=http://127.0.0.1:8000/api/v1/extract
 - `/ask 问题` 或 `/qa 问题`：对当前文献提问
 - `/interpret 问题`：解读当前选中的图片
 - `/note 内容`：追加文献或图片笔记
+- `/voiceoff`：关闭微信 TTS 语音输出，后续 `/ask`、`/qa`、`/testvoice` 只返回文字
+- `/voiceon`：重新开启微信 TTS 语音输出
 - `/status`：查看当前上下文
 - `/reset`：清空当前 IM 上下文
 - `/help`：查看帮助

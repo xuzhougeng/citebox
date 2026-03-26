@@ -182,13 +182,31 @@ func (h *SettingsHandler) GetTTSSettings(w http.ResponseWriter, r *http.Request)
 }
 
 func (h *SettingsHandler) UpdateTTSSettings(w http.ResponseWriter, r *http.Request) {
-	var req model.TTSSettings
+	var req struct {
+		AppID                    string `json:"app_id"`
+		AccessKey                string `json:"access_key"`
+		ResourceID               string `json:"resource_id"`
+		Speaker                  string `json:"speaker"`
+		WeixinVoiceOutputEnabled *bool  `json:"weixin_voice_output_enabled"`
+	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		sendError(w, apperr.New(apperr.CodeInvalidArgument, "请求体格式错误"))
 		return
 	}
 
-	settings, err := h.libraryService.UpdateTTSSettings(req)
+	input := model.TTSSettings{
+		AppID:                    req.AppID,
+		AccessKey:                req.AccessKey,
+		ResourceID:               req.ResourceID,
+		Speaker:                  req.Speaker,
+		WeixinVoiceOutputEnabled: model.DefaultWeixinVoiceOutputEnabled,
+	}
+	if req.WeixinVoiceOutputEnabled != nil {
+		input.WeixinVoiceOutputEnabled = *req.WeixinVoiceOutputEnabled
+		input.WeixinVoiceOutputEnabledSet = true
+	}
+
+	settings, err := h.libraryService.UpdateTTSSettings(input)
 	if err != nil {
 		sendError(w, err)
 		return

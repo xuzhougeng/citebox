@@ -24,6 +24,14 @@ type legacyWeixinBridgeTTSSettings struct {
 	TTSSpeaker    string `json:"tts_speaker"`
 }
 
+type persistedTTSSettings struct {
+	AppID                    string `json:"app_id"`
+	AccessKey                string `json:"access_key"`
+	ResourceID               string `json:"resource_id"`
+	Speaker                  string `json:"speaker"`
+	WeixinVoiceOutputEnabled *bool  `json:"weixin_voice_output_enabled"`
+}
+
 func (s *LibraryService) GetTTSSettings() (*model.TTSSettings, error) {
 	raw, err := s.repo.GetAppSetting(ttsSettingsKey)
 	if err != nil {
@@ -32,10 +40,10 @@ func (s *LibraryService) GetTTSSettings() (*model.TTSSettings, error) {
 
 	settings := normalizeTTSSettings(model.TTSSettings{})
 	if strings.TrimSpace(raw) != "" {
-		if err := json.Unmarshal([]byte(raw), &settings); err != nil {
+		settings, err := decodePersistedTTSSettings(raw)
+		if err != nil {
 			return nil, apperr.Wrap(apperr.CodeInternal, "解析 TTS 配置失败", err)
 		}
-		settings = normalizeTTSSettings(settings)
 		return &settings, nil
 	}
 
@@ -73,6 +81,19 @@ func (s *LibraryService) UpdateTTSSettings(input model.TTSSettings) (*model.TTSS
 	}
 
 	return &settings, nil
+}
+
+func (s *LibraryService) SetWeixinVoiceOutputEnabled(enabled bool) (*model.TTSSettings, error) {
+	settings, err := s.GetTTSSettings()
+	if err != nil {
+		return nil, err
+	}
+	if settings == nil {
+		settings = &model.TTSSettings{}
+	}
+	settings.WeixinVoiceOutputEnabled = enabled
+	settings.WeixinVoiceOutputEnabledSet = true
+	return s.UpdateTTSSettings(*settings)
 }
 
 func (s *LibraryService) getTTSSettingsSummary() model.TTSSettings {
@@ -117,12 +138,39 @@ func synthesizeTTSTestAudio(ctx context.Context, text string, settings model.TTS
 	return synthesizeDoubaoTTSAudio(ctx, doubaoTTSHTTPClient, newDoubaoTTSSettings(settings), text, "citebox-settings-test")
 }
 
-func normalizeTTSSettings(input model.TTSSettings) model.TTSSettings {
+func decodePersistedTTSSettings(raw string) (model.TTSSettings, error) {
+	var persisted persistedTTSSettings
+	if err := json.Unmarshal([]byte(raw), &persisted); err != nil {
+		return model.TTSSettings{}, err
+	}
+
 	settings := model.TTSSettings{
-		AppID:      strings.TrimSpace(input.AppID),
-		AccessKey:  strings.TrimSpace(input.AccessKey),
-		ResourceID: strings.TrimSpace(input.ResourceID),
-		Speaker:    strings.TrimSpace(input.Speaker),
+		AppID:                    persisted.AppID,
+		AccessKey:                persisted.AccessKey,
+		ResourceID:               persisted.ResourceID,
+		Speaker:                  persisted.Speaker,
+		WeixinVoiceOutputEnabled: model.DefaultWeixinVoiceOutputEnabled,
+	}
+	if persisted.WeixinVoiceOutputEnabled != nil {
+		settings.WeixinVoiceOutputEnabled = *persisted.WeixinVoiceOutputEnabled
+		settings.WeixinVoiceOutputEnabledSet = true
+	}
+	return normalizeTTSSettings(settings), nil
+}
+
+func normalizeTTSSettings(input model.TTSSettings) model.TTSSettings {
+	weixinVoiceOutputEnabled := model.DefaultWeixinVoiceOutputEnabled
+	if input.WeixinVoiceOutputEnabledSet {
+		weixinVoiceOutputEnabled = input.WeixinVoiceOutputEnabled
+	}
+
+	settings := model.TTSSettings{
+		AppID:                       strings.TrimSpace(input.AppID),
+		AccessKey:                   strings.TrimSpace(input.AccessKey),
+		ResourceID:                  strings.TrimSpace(input.ResourceID),
+		Speaker:                     strings.TrimSpace(input.Speaker),
+		WeixinVoiceOutputEnabled:    weixinVoiceOutputEnabled,
+		WeixinVoiceOutputEnabledSet: true,
 	}
 	if settings.ResourceID == "" {
 		settings.ResourceID = doubaoTTSDefaultResourceID
