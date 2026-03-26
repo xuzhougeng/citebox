@@ -1356,7 +1356,12 @@ func (b *WeixinIMBridge) interpretCurrentFigure(ctx context.Context, question st
 	}
 
 	caption := firstNonEmpty(strings.TrimSpace(figure.Caption), strings.TrimSpace(figure.OriginalName), "未命名图片")
-	return fmt.Sprintf("图片解读 · %s\n\n%s", clipRunes(caption, 72), strings.TrimSpace(response.Answer))
+	answer := strings.TrimSpace(response.Answer)
+	displayAnswer := renderWeixinMarkdown(answer)
+	if displayAnswer == "" {
+		displayAnswer = answer
+	}
+	return fmt.Sprintf("图片解读 · %s\n\n%s", clipRunes(caption, 72), displayAnswer)
 }
 
 func (b *WeixinIMBridge) answerCurrentPaper(ctx context.Context, question string) string {
@@ -1396,7 +1401,11 @@ func (b *WeixinIMBridge) answerCurrentPaperReply(ctx context.Context, question s
 		}
 	})
 
-	replyText := fmt.Sprintf("文献问答 · %s\n\n%s", clipRunes(paper.Title, 72), turn.Answer)
+	displayAnswer := renderWeixinMarkdown(turn.Answer)
+	if displayAnswer == "" {
+		displayAnswer = turn.Answer
+	}
+	replyText := fmt.Sprintf("文献问答 · %s\n\n%s", clipRunes(paper.Title, 72), displayAnswer)
 	reply := weixinReplyEnvelope{Text: replyText}
 	if turn.Answer != "" {
 		reply.TTSText = turn.Answer
