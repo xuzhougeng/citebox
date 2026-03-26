@@ -12,6 +12,9 @@ CiteBox is a Go + SQLite application with a native HTML/CSS/JavaScript frontend.
 - `make test`: run the full Go test suite (`go test ./...`).
 - `make prepare-web-assets`: fetch `pdf.js` runtime assets required by some web flows.
 - `make package-desktop-linux|darwin|windows`: create desktop distribution archives in `dist/`.
+- `scripts/macos-desktop-ui-smoke.zsh smoke`: macOS-only desktop UI smoke test for close prompt, "minimize to tray", and Dock reopen flows. Start the desktop app first, and make sure Terminal/`osascript` already has Accessibility permission.
+
+For targeted macOS desktop UI checks, `scripts/macos-desktop-ui-smoke.zsh` also exposes helper commands: `processes`, `windows`, `tree`, `close-prompt`, `to-tray`, `dock-items`, and `dock-reopen`. Override the default process/window/Dock names with `CITEBOX_MACOS_PROCESS_NAME`, `CITEBOX_MACOS_WINDOW_NAME`, and `CITEBOX_MACOS_DOCK_ICON_NAME` when the local app label differs.
 
 When editing frontend code, also syntax-check touched files, for example:
 
@@ -33,6 +36,8 @@ Use `gofmt` for all Go files; keep package names lowercase and exported identifi
 ## Testing Guidelines
 
 Go tests are colocated as `*_test.go` files, especially under `internal/repository` and `internal/service`. Name tests as `Test<Behavior>`. Add repository tests for schema changes, migrations, constraints, and search behavior. Use `go test ./...` before submitting; for UI-only changes, include at least a JS syntax check and a brief manual verification note.
+
+When changing macOS desktop window-management flows, tray behavior, close-confirmation dialogs, or Dock reopen behavior, run `scripts/macos-desktop-ui-smoke.zsh smoke` as part of manual verification. If the full smoke command fails, use the script's helper subcommands to isolate whether the issue is process discovery, window selection, close prompt rendering, tray minimization, or Dock reopening.
 
 ## Commit & Pull Request Guidelines
 

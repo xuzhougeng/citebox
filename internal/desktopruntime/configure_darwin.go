@@ -13,22 +13,6 @@ package desktopruntime
 
 extern int citeboxRequestClosePrompt(uintptr_t windowToken);
 
-static NSView *citebox_find_first_responder_view(NSView *view) {
-	if (view == nil) {
-		return nil;
-	}
-	if ([view acceptsFirstResponder]) {
-		return view;
-	}
-	for (NSView *subview in [view subviews]) {
-		NSView *candidate = citebox_find_first_responder_view(subview);
-		if (candidate != nil) {
-			return candidate;
-		}
-	}
-	return nil;
-}
-
 static NSMenuItem *citebox_new_menu_item(NSString *title, SEL action, NSString *keyEquivalent, NSEventModifierFlags modifiers) {
 	NSMenuItem *item = [[NSMenuItem alloc] initWithTitle:title action:action keyEquivalent:keyEquivalent ?: @""];
 	[item setKeyEquivalentModifierMask:modifiers];
@@ -93,13 +77,16 @@ static void citebox_focus_window(void *windowPtr) {
 		}
 
 		[window makeKeyAndOrderFront:nil];
-
-		NSView *contentView = [window contentView];
-		NSView *target = citebox_find_first_responder_view(contentView);
-		if (target != nil) {
-			[window makeFirstResponder:target];
-		}
 	}
+}
+
+static void citebox_prepare_window_for_hide(NSWindow *window) {
+	if (window == nil) {
+		return;
+	}
+
+	[window endEditingFor:nil];
+	[window makeFirstResponder:nil];
 }
 
 @interface CiteBoxStatusController : NSObject <NSWindowDelegate, NSMenuDelegate> {
@@ -120,6 +107,11 @@ static void citebox_focus_window(void *windowPtr) {
 - (void)showStatusItemMenu;
 - (void)showTrayUnavailableAlert;
 - (NSModalResponse)promptCloseAction;
+- (BOOL)reopenWindowIfNeeded;
+@end
+
+@interface CiteBoxAppDelegateBridge : NSObject
+- (BOOL)applicationShouldHandleReopen:(NSApplication *)sender hasVisibleWindows:(BOOL)hasVisibleWindows;
 @end
 
 @implementation CiteBoxStatusController
@@ -210,12 +202,18 @@ static void citebox_focus_window(void *windowPtr) {
 }
 
 - (void)openWindow:(id)sender {
-	[self removeStatusItem];
 	citebox_focus_window(_window);
 }
 
+- (BOOL)reopenWindowIfNeeded {
+	if (_window == nil || [_window isVisible]) {
+		return NO;
+	}
+	[self openWindow:nil];
+	return YES;
+}
+
 - (void)quitApp:(id)sender {
-	[self removeStatusItem];
 	[[NSApplication sharedApplication] terminate:nil];
 }
 
@@ -294,6 +292,7 @@ static void citebox_focus_window(void *windowPtr) {
 	NSModalResponse response = [self promptCloseAction];
 	if (response == NSAlertFirstButtonReturn) {
 		if ([self ensureStatusItem]) {
+			citebox_prepare_window_for_hide(sender);
 			[sender orderOut:nil];
 		} else {
 			[self showTrayUnavailableAlert];
@@ -305,6 +304,20 @@ static void citebox_focus_window(void *windowPtr) {
 		return NO;
 	}
 	return NO;
+}
+
+@end
+
+static const void *citebox_app_delegate_status_controller_key = &citebox_app_delegate_status_controller_key;
+
+@implementation CiteBoxAppDelegateBridge
+
+- (BOOL)applicationShouldHandleReopen:(NSApplication *)sender hasVisibleWindows:(BOOL)hasVisibleWindows {
+	CiteBoxStatusController *controller = objc_getAssociatedObject(self, citebox_app_delegate_status_controller_key);
+	if (!hasVisibleWindows && [controller reopenWindowIfNeeded]) {
+		return NO;
+	}
+	return YES;
 }
 
 @end
@@ -436,6 +449,33 @@ static CiteBoxStatusController *citebox_status_controller_for_window(NSWindow *w
 	return objc_getAssociatedObject(window, citebox_status_controller_key);
 }
 
+static void citebox_install_app_delegate_reopen_handler(CiteBoxStatusController *controller) {
+	if (controller == nil) {
+		return;
+	}
+
+	NSApplication *app = [NSApplication sharedApplication];
+	if (app == nil) {
+		return;
+	}
+
+	id delegate = [app delegate];
+	if (delegate == nil) {
+		return;
+	}
+
+	objc_setAssociatedObject(delegate, citebox_app_delegate_status_controller_key, controller, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+
+	SEL selector = @selector(applicationShouldHandleReopen:hasVisibleWindows:);
+	Class delegateClass = [delegate class];
+	if (class_getInstanceMethod(delegateClass, selector) != NULL) {
+		return;
+	}
+
+	Method bridgeMethod = class_getInstanceMethod([CiteBoxAppDelegateBridge class], selector);
+	class_addMethod(delegateClass, selector, method_getImplementation(bridgeMethod), method_getTypeEncoding(bridgeMethod));
+}
+
 static const char *citebox_install_status_item(void *windowPtr, const char *appNameCString, const char *iconPathCString) {
 	@autoreleasepool {
 		NSWindow *window = (NSWindow *)windowPtr;
@@ -457,6 +497,7 @@ static const char *citebox_install_status_item(void *windowPtr, const char *appN
 		controller = [[[CiteBoxStatusController alloc] initWithWindow:window appName:appName iconPath:iconPath] autorelease];
 		objc_setAssociatedObject(window, citebox_status_controller_key, controller, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 		[window setDelegate:controller];
+		citebox_install_app_delegate_reopen_handler(controller);
 		return NULL;
 	}
 }
@@ -471,6 +512,7 @@ static const char *citebox_minimize_to_status_item(void *windowPtr) {
 		if (![controller ensureStatusItem]) {
 			return "Failed to create status item";
 		}
+		citebox_prepare_window_for_hide(window);
 		[window orderOut:nil];
 		return NULL;
 	}
