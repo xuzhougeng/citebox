@@ -550,6 +550,14 @@ func buildHandler(
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
 	})
+	mux.HandleFunc("/api/settings/weixin-bridge/daily-recommendation/test", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPost:
+			settingsHandler.TestWeixinDailyRecommendation(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
 	mux.HandleFunc("/api/settings/tts", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:

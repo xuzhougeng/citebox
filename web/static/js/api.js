@@ -544,6 +544,16 @@ const API = {
         });
     },
 
+    testWeixinDailyRecommendation(data) {
+        return requestJSON(`${API_BASE}/settings/weixin-bridge/daily-recommendation/test`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        });
+    },
+
     getTTSSettings() {
         return requestJSON(`${API_BASE}/settings/tts`);
     },

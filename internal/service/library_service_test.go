@@ -157,6 +157,12 @@ func (f *testMultipartFile) Close() error {
 func testPNGDataURL(t *testing.T, width, height int) string {
 	t.Helper()
 
+	return "data:image/png;base64," + base64.StdEncoding.EncodeToString(testPNGBytes(t, width, height))
+}
+
+func testPNGBytes(t *testing.T, width, height int) []byte {
+	t.Helper()
+
 	img := image.NewRGBA(image.Rect(0, 0, width, height))
 	for y := 0; y < height; y++ {
 		for x := 0; x < width; x++ {
@@ -169,7 +175,18 @@ func testPNGDataURL(t *testing.T, width, height int) string {
 		t.Fatalf("png.Encode() error = %v", err)
 	}
 
-	return "data:image/png;base64," + base64.StdEncoding.EncodeToString(buf.Bytes())
+	return buf.Bytes()
+}
+
+func writeTestPNGFile(t *testing.T, path string) {
+	t.Helper()
+
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("MkdirAll(%q) error = %v", path, err)
+	}
+	if err := os.WriteFile(path, testPNGBytes(t, 8, 8), 0o644); err != nil {
+		t.Fatalf("WriteFile(%q) error = %v", path, err)
+	}
 }
 
 func useWeixinBindingTestServer(t *testing.T, svc *LibraryService, handler http.Handler) {

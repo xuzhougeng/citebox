@@ -174,6 +174,10 @@ func (r *LibraryRepository) ListFigures(filter model.FigureFilter) ([]model.Figu
 	return r.Figure.ListFigures(filter)
 }
 
+func (r *LibraryRepository) ListRandomFigureIDs(limit int) ([]int64, error) {
+	return r.Figure.ListRandomFigureIDs(limit)
+}
+
 // UpdateFigure 更新图片（委托给 Figure 仓库）
 func (r *LibraryRepository) UpdateFigure(id int64, input FigureUpdateInput) (*model.Paper, error) {
 	// 先执行更新

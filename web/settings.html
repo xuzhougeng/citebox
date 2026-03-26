@@ -602,6 +602,34 @@ User Prompt:
                                 </p>
                             </div>
                         </section>
+                        <section class="weixin-control-card weixin-daily-card">
+                            <div class="weixin-card-head">
+                                <div>
+                                    <h3 data-i18n="settings.weixin.daily_title">今日推荐</h3>
+                                    <p data-i18n="settings.weixin.daily_desc">开启后会在每天设定时间随机发送一张已保存图片到绑定微信，也支持立即测试发图。</p>
+                                </div>
+                            </div>
+                            <div class="form-grid">
+                                <label class="field checkbox-field weixin-bridge-toggle field-span-2">
+                                    <input id="weixinDailyRecommendationEnabledInput" type="checkbox">
+                                    <span data-i18n-html="settings.weixin.daily_checkbox">
+                                        <strong>启用今日推荐</strong><br>
+                                        每天固定时间随机发送 1 张图片到当前绑定的微信账号。
+                                    </span>
+                                </label>
+                                <label class="field">
+                                    <span data-i18n="settings.weixin.daily_time">发送时间</span>
+                                    <input id="weixinDailyRecommendationTimeInput" class="form-input" type="time" step="60">
+                                </label>
+                            </div>
+                            <p class="muted" data-i18n="settings.weixin.daily_help">测试发图会直接使用当前表单配置；正式定时发送以保存后的配置为准。若微信桥接关闭或尚未绑定账号，自动发送不会生效。</p>
+                            <p id="weixinDailyRecommendationSaveStatus" class="settings-inline-status" data-i18n="settings.weixin.daily_save_hint">修改后点击保存今日推荐配置。</p>
+                            <p id="weixinDailyRecommendationTestStatus" class="settings-inline-status" data-i18n="settings.weixin.daily_test_hint">点击“发送测试图片”后，会立即向绑定微信发送一张随机图片。</p>
+                            <div class="weixin-action-row">
+                                <button id="testWeixinDailyRecommendationButton" class="btn btn-outline" type="button" data-i18n="settings.weixin.daily_test_btn">发送测试图片</button>
+                                <button id="saveWeixinDailyRecommendationButton" class="btn btn-secondary" type="button" data-i18n="settings.weixin.daily_save_btn">保存今日推荐配置</button>
+                            </div>
+                        </section>
                     </div>
                 </div>
             </details>

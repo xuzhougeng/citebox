@@ -595,6 +595,17 @@ html[lang^="zh"] .prompt-template-details[open] summary::before {
         linear-gradient(180deg, rgba(var(--surface-rgb), 0.97), rgba(var(--surface-rgb), 0.92));
 }
 
+.weixin-daily-card {
+    grid-column: 1 / -1;
+    background:
+        radial-gradient(circle at top left, rgba(var(--info-rgb), 0.09), transparent 12rem),
+        linear-gradient(180deg, rgba(var(--surface-rgb), 0.97), rgba(var(--surface-rgb), 0.92));
+}
+
+.weixin-daily-card input[type="time"] {
+    max-width: 12rem;
+}
+
 .weixin-card-head {
     display: flex;
     justify-content: space-between;

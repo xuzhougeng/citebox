@@ -28,6 +28,8 @@
   - 版本检查：`/api/settings/version`
   - 提取器设置：`/api/settings/extractor`
   - 桌面端关闭行为设置：`/api/settings/desktop-close`
+  - 微信桥接设置：`/api/settings/weixin-bridge`
+  - 今日推荐测试发图：`/api/settings/weixin-bridge/daily-recommendation/test`
   - Wolai 设置：`/api/settings/wolai`
   - Wolai 笔记导出：`/api/wolai/...`
   - 数据库备份导入导出：`/api/database/...`
@@ -1041,13 +1043,17 @@ AI 流式阅读通过：
 
 用途：
 
-- 获取当前微信 IM 桥接开关
+- 获取当前微信 IM 桥接开关与今日推荐配置
 
 响应示例：
 
 ```json
 {
-  "enabled": true
+  "enabled": true,
+  "daily_recommendation": {
+    "enabled": true,
+    "send_time": "09:00"
+  }
 }
 ```
 
@@ -1055,13 +1061,47 @@ AI 流式阅读通过：
 
 用途：
 
-- 保存当前微信 IM 桥接开关
+- 保存当前微信 IM 桥接开关与今日推荐配置
 
 请求体：
 
 ```json
 {
-  "enabled": true
+  "enabled": true,
+  "daily_recommendation": {
+    "enabled": true,
+    "send_time": "09:00"
+  }
+}
+```
+
+说明：
+
+- `daily_recommendation.send_time` 使用 `HH:MM` 24 小时格式
+- 留空时会自动回退到默认值 `09:00`
+
+#### `POST /api/settings/weixin-bridge/daily-recommendation/test`
+
+用途：
+
+- 使用当前表单里的今日推荐配置立即向已绑定微信发送一张随机图片
+- 该接口不会保存配置，也不会写入当天的定时发送状态
+
+请求体：
+
+```json
+{
+  "enabled": true,
+  "send_time": "09:00"
+}
+```
+
+响应示例：
+
+```json
+{
+  "success": true,
+  "message": "测试图片已发送到微信：Cell Atlas · Fig 1"
 }
 ```
 
@@ -1261,10 +1301,10 @@ AI 流式阅读通过：
   "password_from_db": false,
   "weixin_bridge": {
     "enabled": true,
-    "tts_app_id": "1234567890",
-    "tts_access_key": "doubao-access-key",
-    "tts_resource_id": "seed-tts-2.0",
-    "tts_speaker": "zh_female_shuangkuaisisi_moon_bigtts"
+    "daily_recommendation": {
+      "enabled": true,
+      "send_time": "09:00"
+    }
   },
   "weixin_binding": {
     "bound": true,

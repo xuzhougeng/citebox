@@ -99,6 +99,12 @@ const SettingsPage = {
         this.weixinQRCodeLink = document.getElementById('weixinQRCodeLink');
         this.weixinBindingStatus = document.getElementById('weixinBindingStatus');
         this.weixinBridgeEnabledInput = document.getElementById('weixinBridgeEnabledInput');
+        this.weixinDailyRecommendationEnabledInput = document.getElementById('weixinDailyRecommendationEnabledInput');
+        this.weixinDailyRecommendationTimeInput = document.getElementById('weixinDailyRecommendationTimeInput');
+        this.weixinDailyRecommendationSaveStatus = document.getElementById('weixinDailyRecommendationSaveStatus');
+        this.weixinDailyRecommendationTestStatus = document.getElementById('weixinDailyRecommendationTestStatus');
+        this.saveWeixinDailyRecommendationButton = document.getElementById('saveWeixinDailyRecommendationButton');
+        this.testWeixinDailyRecommendationButton = document.getElementById('testWeixinDailyRecommendationButton');
         this.ttsSettingsForm = document.getElementById('ttsSettingsForm');
         this.ttsAppIDInput = document.getElementById('ttsAppIDInput');
         this.ttsAccessKeyInput = document.getElementById('ttsAccessKeyInput');
@@ -232,6 +238,12 @@ const SettingsPage = {
         this.weixinBridgeEnabledInput?.addEventListener('change', () => {
             this.setWeixinBridgeSaveStatus(t('settings.weixin.bridge_modified', '配置已修改，点击”保存微信桥接配置”后生效。'), 'saving');
         });
+        this.weixinDailyRecommendationEnabledInput?.addEventListener('change', () => {
+            this.setWeixinDailyRecommendationSaveStatus(t('settings.weixin.daily_modified', '配置已修改，点击“保存今日推荐配置”后生效。'), 'saving');
+        });
+        this.weixinDailyRecommendationTimeInput?.addEventListener('input', () => {
+            this.setWeixinDailyRecommendationSaveStatus(t('settings.weixin.daily_modified', '配置已修改，点击“保存今日推荐配置”后生效。'), 'saving');
+        });
         [
             this.ttsAppIDInput,
             this.ttsAccessKeyInput,
@@ -246,6 +258,12 @@ const SettingsPage = {
         });
         this.saveWeixinBridgeButton?.addEventListener('click', async () => {
             await this.saveWeixinBridgeSettings();
+        });
+        this.saveWeixinDailyRecommendationButton?.addEventListener('click', async () => {
+            await this.saveWeixinDailyRecommendationSettings();
+        });
+        this.testWeixinDailyRecommendationButton?.addEventListener('click', async () => {
+            await this.testWeixinDailyRecommendation();
         });
         this.ttsSettingsForm?.addEventListener('submit', async (event) => {
             event.preventDefault();
@@ -937,16 +955,22 @@ const SettingsPage = {
         }
     },
 
-    async saveWeixinBridgeSettings() {
-        const button = this.saveWeixinBridgeButton;
-        const originalLabel = button?.textContent || t('settings.weixin.save_bridge', '保存微信桥接配置');
+    async persistWeixinBridgeSettings(options = {}) {
+        const {
+            button = null,
+            defaultLabel = t('settings.weixin.save_bridge', '保存微信桥接配置'),
+            savingLabel = t('settings.weixin.saving_btn', '保存中...'),
+            toastMessage = t('settings.weixin.saved_toast', '微信配置已保存')
+        } = options;
+        const originalLabel = button?.textContent || defaultLabel;
         if (button) {
             button.disabled = true;
-            button.textContent = t('settings.weixin.saving_btn', '保存中...');
+            button.textContent = savingLabel;
         }
 
         try {
             const response = await API.updateWeixinBridgeSettings(this.weixinBridgeSavePayload());
+            const dailySettings = response.settings?.daily_recommendation || {};
             this.authSettings = {
                 ...(this.authSettings || {}),
                 weixin_bridge: response.settings || {}
@@ -956,13 +980,61 @@ const SettingsPage = {
                 response.settings?.enabled ? t('settings.weixin.bridge_enabled', '微信消息通知已开启。') : t('settings.weixin.bridge_disabled', '微信消息通知已关闭。'),
                 'success'
             );
-            Utils.showToast(response.settings?.enabled ? t('settings.weixin.bridge_enabled_toast', '微信消息通知已开启') : t('settings.weixin.bridge_disabled_toast', '微信消息通知已关闭'));
+            this.setWeixinDailyRecommendationSaveStatus(
+                this.weixinDailyRecommendationStatusMessage(dailySettings),
+                dailySettings.enabled ? 'success' : ''
+            );
+            Utils.showToast(toastMessage);
         } catch (error) {
             this.setWeixinBridgeSaveStatus(t('settings.weixin.bridge_save_failed', '保存失败：{0}').replace('{0}', error.message), 'error');
+            this.setWeixinDailyRecommendationSaveStatus(t('settings.weixin.daily_save_failed', '保存失败：{0}').replace('{0}', error.message), 'error');
             Utils.showToast(error.message, 'error');
         } finally {
             if (button) {
                 button.disabled = false;
+                button.textContent = originalLabel;
+            }
+        }
+    },
+
+    async saveWeixinBridgeSettings() {
+        await this.persistWeixinBridgeSettings({
+            button: this.saveWeixinBridgeButton,
+            defaultLabel: t('settings.weixin.save_bridge', '保存微信桥接配置'),
+            savingLabel: t('settings.weixin.saving_btn', '保存中...'),
+            toastMessage: t('settings.weixin.saved_toast', '微信配置已保存')
+        });
+    },
+
+    async saveWeixinDailyRecommendationSettings() {
+        await this.persistWeixinBridgeSettings({
+            button: this.saveWeixinDailyRecommendationButton,
+            defaultLabel: t('settings.weixin.daily_save_btn', '保存今日推荐配置'),
+            savingLabel: t('settings.weixin.daily_saving_btn', '保存中...'),
+            toastMessage: t('settings.weixin.daily_saved_toast', '今日推荐配置已保存')
+        });
+    },
+
+    async testWeixinDailyRecommendation() {
+        const button = this.testWeixinDailyRecommendationButton;
+        const originalLabel = button?.textContent || t('settings.weixin.daily_test_btn', '发送测试图片');
+        if (button) {
+            button.disabled = true;
+            button.textContent = t('settings.weixin.daily_testing_btn', '发送中...');
+        }
+
+        this.setWeixinDailyRecommendationTestStatus(t('settings.weixin.daily_testing_status', '正在向绑定微信发送一张随机测试图片...'), 'saving');
+
+        try {
+            const result = await API.testWeixinDailyRecommendation(this.weixinDailyRecommendationTestPayload());
+            this.setWeixinDailyRecommendationTestStatus(result.message || t('settings.weixin.daily_test_ok', '测试图片已发送到微信。'), 'success');
+            Utils.showToast(result.message || t('settings.weixin.daily_test_ok', '测试图片已发送到微信。'));
+        } catch (error) {
+            this.setWeixinDailyRecommendationTestStatus(t('settings.weixin.daily_test_failed', '测试失败：{0}').replace('{0}', error.message), 'error');
+            Utils.showToast(error.message, 'error');
+        } finally {
+            this.updateWeixinDailyRecommendationTestButton();
+            if (button) {
                 button.textContent = originalLabel;
             }
         }
@@ -1023,7 +1095,16 @@ const SettingsPage = {
     currentSavedWeixinBridgeSettings() {
         const settings = this.authSettings?.weixin_bridge || {};
         return {
-            enabled: Boolean(settings.enabled)
+            enabled: Boolean(settings.enabled),
+            daily_recommendation: this.currentSavedWeixinDailyRecommendationSettings()
+        };
+    },
+
+    currentSavedWeixinDailyRecommendationSettings() {
+        const settings = this.authSettings?.weixin_bridge?.daily_recommendation || {};
+        return {
+            enabled: Boolean(settings.enabled),
+            send_time: String(settings.send_time || '09:00').trim() || '09:00'
         };
     },
 
@@ -1031,7 +1112,19 @@ const SettingsPage = {
         const saved = this.currentSavedWeixinBridgeSettings();
         return {
             ...saved,
-            enabled: Boolean(this.weixinBridgeEnabledInput?.checked)
+            enabled: Boolean(this.weixinBridgeEnabledInput?.checked),
+            daily_recommendation: {
+                ...saved.daily_recommendation,
+                enabled: Boolean(this.weixinDailyRecommendationEnabledInput?.checked),
+                send_time: String(this.weixinDailyRecommendationTimeInput?.value || '').trim()
+            }
+        };
+    },
+
+    weixinDailyRecommendationTestPayload() {
+        return {
+            enabled: Boolean(this.weixinDailyRecommendationEnabledInput?.checked),
+            send_time: String(this.weixinDailyRecommendationTimeInput?.value || '').trim()
         };
     },
 
@@ -1095,6 +1188,7 @@ const SettingsPage = {
         if (this.weixinBridgeEnabledInput) {
             this.weixinBridgeEnabledInput.checked = enabled;
         }
+        this.renderWeixinDailyRecommendationControls(settings.daily_recommendation || {});
         if (!this.weixinBridgeSaveStatus?.textContent) {
             this.setWeixinBridgeSaveStatus(
                 enabled ? t('settings.weixin.bridge_enabled_current', '微信消息通知当前已开启。') : t('settings.weixin.bridge_disabled_current', '微信消息通知当前已关闭。'),
@@ -1104,6 +1198,57 @@ const SettingsPage = {
         if (!this.pendingWeixinQRCode) {
             this.setWeixinQRCodeVisible(false);
         }
+    },
+
+    renderWeixinDailyRecommendationControls(settings = {}) {
+        const safeSettings = {
+            enabled: Boolean(settings.enabled),
+            send_time: String(settings.send_time || '09:00').trim() || '09:00'
+        };
+
+        if (this.weixinDailyRecommendationEnabledInput) {
+            this.weixinDailyRecommendationEnabledInput.checked = safeSettings.enabled;
+        }
+        if (this.weixinDailyRecommendationTimeInput) {
+            this.weixinDailyRecommendationTimeInput.value = safeSettings.send_time;
+        }
+        if (!this.weixinDailyRecommendationSaveStatus?.textContent) {
+            this.setWeixinDailyRecommendationSaveStatus(this.weixinDailyRecommendationStatusMessage(safeSettings), safeSettings.enabled ? 'success' : '');
+        }
+        if (!this.weixinDailyRecommendationTestStatus?.textContent) {
+            this.setWeixinDailyRecommendationTestStatus(
+                t('settings.weixin.daily_test_hint', '点击“发送测试图片”后，会立即向绑定微信发送一张随机图片。')
+            );
+        }
+        this.updateWeixinDailyRecommendationTestButton();
+    },
+
+    weixinDailyRecommendationStatusMessage(settings = {}) {
+        const enabled = Boolean(settings.enabled);
+        const sendTime = String(settings.send_time || '09:00').trim() || '09:00';
+        const bridgeEnabled = Boolean(this.authSettings?.weixin_bridge?.enabled);
+        const isBound = Boolean(this.authSettings?.weixin_binding?.bound);
+
+        if (!enabled) {
+            return t('settings.weixin.daily_disabled_current', '今日推荐当前已关闭。');
+        }
+        if (!bridgeEnabled) {
+            return t('settings.weixin.daily_enabled_bridge_off', '今日推荐已开启，计划每天 {0} 发送；当前微信桥接关闭，暂不会自动发送。').replace('{0}', sendTime);
+        }
+        if (!isBound) {
+            return t('settings.weixin.daily_enabled_not_bound', '今日推荐已开启，计划每天 {0} 发送；当前尚未绑定微信账号，暂不会自动发送。').replace('{0}', sendTime);
+        }
+        return t('settings.weixin.daily_enabled_current', '今日推荐当前已开启，将在每天 {0} 随机发送 1 张图片。').replace('{0}', sendTime);
+    },
+
+    updateWeixinDailyRecommendationTestButton() {
+        if (!this.testWeixinDailyRecommendationButton) return;
+
+        const isBound = Boolean(this.authSettings?.weixin_binding?.bound);
+        this.testWeixinDailyRecommendationButton.disabled = !isBound;
+        this.testWeixinDailyRecommendationButton.title = isBound
+            ? ''
+            : t('settings.weixin.daily_test_requires_binding', '请先完成微信绑定，再测试发图。');
     },
 
     renderTTSSettings(settings = {}) {
@@ -1179,6 +1324,7 @@ const SettingsPage = {
         if (this.unbindWeixinButton) {
             this.unbindWeixinButton.classList.toggle('hidden', !isBound);
         }
+        this.updateWeixinDailyRecommendationTestButton();
     },
 
     renderWeixinSummaryItem(label, value, title = '') {
@@ -1260,6 +1406,14 @@ const SettingsPage = {
 
     setWeixinBridgeSaveStatus(message, tone = '') {
         this.setInlineStatus(this.weixinBridgeSaveStatus, message, tone);
+    },
+
+    setWeixinDailyRecommendationSaveStatus(message, tone = '') {
+        this.setInlineStatus(this.weixinDailyRecommendationSaveStatus, message, tone);
+    },
+
+    setWeixinDailyRecommendationTestStatus(message, tone = '') {
+        this.setInlineStatus(this.weixinDailyRecommendationTestStatus, message, tone);
     },
 
     setTTSSaveStatus(message, tone = '') {

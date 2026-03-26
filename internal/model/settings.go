@@ -33,7 +33,13 @@ func NormalizeDesktopCloseAction(action string) string {
 }
 
 type WeixinBridgeSettings struct {
-	Enabled bool `json:"enabled"`
+	Enabled             bool                              `json:"enabled"`
+	DailyRecommendation WeixinDailyRecommendationSettings `json:"daily_recommendation"`
+}
+
+type WeixinDailyRecommendationSettings struct {
+	Enabled  bool   `json:"enabled"`
+	SendTime string `json:"send_time"`
 }
 
 type TTSSettings struct {
@@ -46,6 +52,7 @@ type TTSSettings struct {
 }
 
 const DefaultWeixinVoiceOutputEnabled = true
+const DefaultWeixinDailyRecommendationSendTime = "09:00"
 
 type ChangePasswordRequest struct {
 	CurrentPassword string `json:"current_password"`

@@ -77,10 +77,6 @@ func (c *Client) GetUploadURL(ctx context.Context, body GetUploadURLRequest) (*G
 }
 
 func (c *Client) SendImageFile(ctx context.Context, toUserID, filePath, contextToken string) error {
-	if strings.TrimSpace(contextToken) == "" {
-		return fmt.Errorf("context token is required for image sends")
-	}
-
 	uploaded, err := c.uploadImageFile(ctx, filePath, toUserID)
 	if err != nil {
 		return err

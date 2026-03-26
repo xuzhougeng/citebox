@@ -207,6 +207,36 @@ func (r *FigureRepository) ListFigures(filter model.FigureFilter) ([]model.Figur
 	return figures, total, nil
 }
 
+func (r *FigureRepository) ListRandomFigureIDs(limit int) ([]int64, error) {
+	if limit <= 0 {
+		limit = 1
+	}
+
+	rows, err := r.db.Query(`
+		SELECT id
+		FROM paper_figures
+		ORDER BY RANDOM()
+		LIMIT ?
+	`, limit)
+	if err != nil {
+		return nil, wrapDBError(err, "随机查询图片失败")
+	}
+	defer rows.Close()
+
+	ids := make([]int64, 0, limit)
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, wrapDBError(err, "随机查询图片失败")
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, wrapDBError(err, "随机查询图片失败")
+	}
+	return ids, nil
+}
+
 // UpdateFigure 更新图片信息
 func (r *FigureRepository) UpdateFigure(id int64, input FigureUpdateInput) (*model.Paper, error) {
 	tx, err := r.db.Begin()

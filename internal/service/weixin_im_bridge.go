@@ -18,6 +18,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/xuzhougeng/citebox/internal/apperr"
 	"github.com/xuzhougeng/citebox/internal/model"
 	"github.com/xuzhougeng/citebox/internal/weixin"
 )
@@ -26,6 +27,7 @@ const (
 	weixinBridgeStateDirName            = "weixin-bridge"
 	weixinSyncBufFileName               = "sync_buf"
 	weixinContextFileName               = "im_context.json"
+	weixinDailyRecommendationInterval   = 30 * time.Second
 	weixinReplyChunkMaxRunes            = 3200
 	weixinHistoryLimit                  = 6
 	weixinSearchKeywordLimit            = 6
@@ -198,12 +200,64 @@ func (b *WeixinIMBridge) Run(ctx context.Context) error {
 		client := weixin.NewClient(binding.BaseURL, binding.Token, nil)
 		b.logger.Info("weixin IM bridge polling", "user_id", binding.UserID)
 
-		if err := b.runPolling(ctx, client, binding); err != nil && !errors.Is(err, context.Canceled) {
+		pollCtx, cancelPolling := context.WithCancel(ctx)
+		dailyDone := make(chan struct{})
+		go func() {
+			defer close(dailyDone)
+			b.runDailyRecommendationLoop(pollCtx)
+		}()
+
+		if err := b.runPolling(pollCtx, client, binding); err != nil && !errors.Is(err, context.Canceled) {
 			b.logger.Warn("weixin IM bridge polling stopped", "error", err)
 		}
+		cancelPolling()
+		<-dailyDone
 
 		if !sleepContext(ctx, 3*time.Second) {
 			return ctx.Err()
+		}
+	}
+}
+
+func (b *WeixinIMBridge) runDailyRecommendationLoop(ctx context.Context) {
+	if result, err := b.libraryService.MaybeSendWeixinDailyRecommendation(ctx, time.Now()); err != nil {
+		if !apperr.IsCode(err, apperr.CodeFailedPrecondition) {
+			b.logger.Warn("send weixin daily recommendation failed", "error", err)
+		}
+	} else if result != nil {
+		b.logger.Info("weixin daily recommendation sent",
+			"figure_id", result.FigureID,
+			"paper_title", result.PaperTitle,
+			"display_label", result.DisplayLabel,
+			"test", result.Test,
+		)
+	}
+
+	ticker := time.NewTicker(weixinDailyRecommendationInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case tickAt := <-ticker.C:
+			result, err := b.libraryService.MaybeSendWeixinDailyRecommendation(ctx, tickAt)
+			if err != nil {
+				if !apperr.IsCode(err, apperr.CodeFailedPrecondition) {
+					b.logger.Warn("send weixin daily recommendation failed", "error", err)
+				}
+				continue
+			}
+			if result == nil {
+				continue
+			}
+
+			b.logger.Info("weixin daily recommendation sent",
+				"figure_id", result.FigureID,
+				"paper_title", result.PaperTitle,
+				"display_label", result.DisplayLabel,
+				"test", result.Test,
+			)
 		}
 	}
 }

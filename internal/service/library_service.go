@@ -22,6 +22,7 @@ type LibraryService struct {
 	httpClient          *http.Client
 	logger              *slog.Logger
 	startBackground     bool
+	weixinRecommendMu   sync.Mutex
 	pdfTextExtractor    func(string) (string, error)
 	ttsAudioSynthesizer func(context.Context, string, model.TTSSettings) ([]byte, string, error)
 	weixinClientFactory func(token string) weixinBindingClient

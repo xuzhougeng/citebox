@@ -109,6 +109,12 @@ func TestGetWeixinBridgeSettingsDefaultsToConfig(t *testing.T) {
 	if settings.Enabled {
 		t.Fatalf("GetWeixinBridgeSettings() enabled = %v, want false by default", settings.Enabled)
 	}
+	if settings.DailyRecommendation.Enabled {
+		t.Fatalf("GetWeixinBridgeSettings() daily_recommendation.enabled = %v, want false by default", settings.DailyRecommendation.Enabled)
+	}
+	if settings.DailyRecommendation.SendTime != model.DefaultWeixinDailyRecommendationSendTime {
+		t.Fatalf("GetWeixinBridgeSettings() daily_recommendation.send_time = %q, want %q", settings.DailyRecommendation.SendTime, model.DefaultWeixinDailyRecommendationSendTime)
+	}
 }
 
 func TestUpdateWeixinBridgeSettingsPersistsAndAppearsInAuthSettings(t *testing.T) {
@@ -116,12 +122,19 @@ func TestUpdateWeixinBridgeSettingsPersistsAndAppearsInAuthSettings(t *testing.T
 
 	settings, err := svc.UpdateWeixinBridgeSettings(model.WeixinBridgeSettings{
 		Enabled: true,
+		DailyRecommendation: model.WeixinDailyRecommendationSettings{
+			Enabled:  true,
+			SendTime: "08:30",
+		},
 	})
 	if err != nil {
 		t.Fatalf("UpdateWeixinBridgeSettings() error = %v", err)
 	}
 	if !settings.Enabled {
 		t.Fatalf("UpdateWeixinBridgeSettings() enabled = %v, want true", settings.Enabled)
+	}
+	if !settings.DailyRecommendation.Enabled || settings.DailyRecommendation.SendTime != "08:30" {
+		t.Fatalf("UpdateWeixinBridgeSettings() daily_recommendation = %+v, want enabled at 08:30", settings.DailyRecommendation)
 	}
 
 	reloaded, err := svc.GetWeixinBridgeSettings()
@@ -131,18 +144,40 @@ func TestUpdateWeixinBridgeSettingsPersistsAndAppearsInAuthSettings(t *testing.T
 	if !reloaded.Enabled {
 		t.Fatalf("GetWeixinBridgeSettings() reload enabled = %v, want true", reloaded.Enabled)
 	}
+	if !reloaded.DailyRecommendation.Enabled || reloaded.DailyRecommendation.SendTime != "08:30" {
+		t.Fatalf("GetWeixinBridgeSettings() reload daily_recommendation = %+v, want enabled at 08:30", reloaded.DailyRecommendation)
+	}
 
 	authSettings := svc.GetAuthSettings()
 	if !authSettings.WeixinBridge.Enabled {
 		t.Fatalf("GetAuthSettings() weixin_bridge = %+v, want enabled", authSettings.WeixinBridge)
+	}
+	if !authSettings.WeixinBridge.DailyRecommendation.Enabled || authSettings.WeixinBridge.DailyRecommendation.SendTime != "08:30" {
+		t.Fatalf("GetAuthSettings() weixin_bridge.daily_recommendation = %+v, want enabled at 08:30", authSettings.WeixinBridge.DailyRecommendation)
 	}
 
 	raw, err := repo.GetAppSetting(weixinBridgeSettingsKey)
 	if err != nil {
 		t.Fatalf("GetAppSetting(%q) error = %v", weixinBridgeSettingsKey, err)
 	}
-	if !strings.Contains(raw, `"enabled":true`) {
-		t.Fatalf("saved weixin bridge settings = %q, want enabled persisted", raw)
+	if !strings.Contains(raw, `"enabled":true`) || !strings.Contains(raw, `"daily_recommendation":{"enabled":true,"send_time":"08:30"}`) {
+		t.Fatalf("saved weixin bridge settings = %q, want bridge and daily recommendation persisted", raw)
+	}
+}
+
+func TestUpdateWeixinBridgeSettingsDefaultsDailyRecommendationTimeWhenBlank(t *testing.T) {
+	svc, _, _ := newTestService(t)
+
+	settings, err := svc.UpdateWeixinBridgeSettings(model.WeixinBridgeSettings{
+		DailyRecommendation: model.WeixinDailyRecommendationSettings{
+			Enabled: true,
+		},
+	})
+	if err != nil {
+		t.Fatalf("UpdateWeixinBridgeSettings() error = %v", err)
+	}
+	if settings.DailyRecommendation.SendTime != model.DefaultWeixinDailyRecommendationSendTime {
+		t.Fatalf("UpdateWeixinBridgeSettings() daily_recommendation.send_time = %q, want %q", settings.DailyRecommendation.SendTime, model.DefaultWeixinDailyRecommendationSendTime)
 	}
 }
 

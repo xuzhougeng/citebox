@@ -171,6 +171,25 @@ func (h *SettingsHandler) UpdateWeixinBridgeSettings(w http.ResponseWriter, r *h
 	})
 }
 
+func (h *SettingsHandler) TestWeixinDailyRecommendation(w http.ResponseWriter, r *http.Request) {
+	var req model.WeixinDailyRecommendationSettings
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		sendError(w, apperr.New(apperr.CodeInvalidArgument, "请求体格式错误"))
+		return
+	}
+
+	message, err := h.libraryService.TestWeixinDailyRecommendation(r.Context(), req)
+	if err != nil {
+		sendError(w, err)
+		return
+	}
+
+	sendJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"message": message,
+	})
+}
+
 func (h *SettingsHandler) GetTTSSettings(w http.ResponseWriter, r *http.Request) {
 	settings, err := h.libraryService.GetTTSSettings()
 	if err != nil {
