@@ -44,6 +44,16 @@ $nsisScriptPath = Join-Path $supportDir "installer.nsi"
 $iconPath = Join-Path $supportDir "installer.ico"
 $hostArch = go env GOARCH
 $buildTime = Get-Date -AsUTC -Format "yyyy-MM-ddTHH:mm:ssZ"
+$fitzLib = Join-Path "third_party\go-fitz\libs" "libmupdf_windows_$hostArch.a"
+$buildTags = @()
+
+if ($env:CITEBOX_FORCE_NOCGO -eq "1") {
+    Write-Host "CITEBOX_FORCE_NOCGO=1, building Windows desktop package with -tags nocgo"
+    $buildTags = @("-tags", "nocgo")
+} elseif (-not (Test-Path $fitzLib)) {
+    Write-Host "MuPDF static library not found at $fitzLib, building Windows desktop package with -tags nocgo"
+    $buildTags = @("-tags", "nocgo")
+}
 
 if (Test-Path $stageDir) {
     Remove-Item $stageDir -Recurse -Force
@@ -59,7 +69,7 @@ $makensis = Resolve-Makensis
 
 $env:CGO_ENABLED = "1"
 $env:GOOS = "windows"
-go build -trimpath -ldflags "-s -w -H windowsgui -X github.com/xuzhougeng/citebox/internal/buildinfo.Version=$Version -X github.com/xuzhougeng/citebox/internal/buildinfo.BuildTime=$buildTime" -o (Join-Path $payloadDir "$binaryName.exe") ./cmd/desktop
+go build -trimpath @buildTags -ldflags "-s -w -H windowsgui -X github.com/xuzhougeng/citebox/internal/buildinfo.Version=$Version -X github.com/xuzhougeng/citebox/internal/buildinfo.BuildTime=$buildTime" -o (Join-Path $payloadDir "$binaryName.exe") ./cmd/desktop
 Remove-Item Env:GOOS
 Remove-Item Env:CGO_ENABLED
 

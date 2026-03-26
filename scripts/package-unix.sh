@@ -28,13 +28,27 @@ PACKAGE_DIR="dist/${BINARY_NAME}-${PLATFORM}-${VERSION}"
 ARCHIVE_PATH="${PACKAGE_DIR}.tar.gz"
 BUILD_TIME="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
 BUILDINFO_PKG="github.com/xuzhougeng/citebox/internal/buildinfo"
+FITZ_LIB="third_party/go-fitz/libs/libmupdf_${GOOS_VALUE}_amd64.a"
+BUILD_TAGS=()
+CGO_VALUE=1
+
+if [[ "${CITEBOX_FORCE_NOCGO:-}" == "1" ]]; then
+    printf '%s\n' "CITEBOX_FORCE_NOCGO=1, building server package with -tags nocgo"
+    BUILD_TAGS=(-tags nocgo)
+    CGO_VALUE=0
+elif [[ ! -f "${FITZ_LIB}" ]]; then
+    printf '%s\n' "MuPDF static library not found at ${FITZ_LIB}, building server package with -tags nocgo"
+    BUILD_TAGS=(-tags nocgo)
+    CGO_VALUE=0
+fi
 
 rm -rf "${PACKAGE_DIR}"
 mkdir -p "${PACKAGE_DIR}/data/library/papers"
 mkdir -p "${PACKAGE_DIR}/data/library/figures"
 
-GOOS="${GOOS_VALUE}" GOARCH=amd64 go build \
+CGO_ENABLED="${CGO_VALUE}" GOOS="${GOOS_VALUE}" GOARCH=amd64 go build \
     -trimpath \
+    "${BUILD_TAGS[@]}" \
     -ldflags "-s -w -X ${BUILDINFO_PKG}.Version=${VERSION} -X ${BUILDINFO_PKG}.BuildTime=${BUILD_TIME}" \
     -o "${PACKAGE_DIR}/${BINARY_NAME}" \
     ./cmd/server

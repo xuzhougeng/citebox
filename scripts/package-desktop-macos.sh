@@ -24,6 +24,17 @@ BUILD_TIME="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
 BUILDINFO_PKG="github.com/xuzhougeng/citebox/internal/buildinfo"
 PLIST_VERSION="${VERSION#v}"
 MACOS_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-14.0}"
+HOST_ARCH="$(go env GOARCH)"
+FITZ_LIB="third_party/go-fitz/libs/libmupdf_darwin_${HOST_ARCH}.a"
+BUILD_TAGS=()
+
+if [[ "${CITEBOX_FORCE_NOCGO:-}" == "1" ]]; then
+    printf '%s\n' "CITEBOX_FORCE_NOCGO=1, building macOS desktop package with -tags nocgo"
+    BUILD_TAGS=(-tags nocgo)
+elif [[ ! -f "${FITZ_LIB}" ]]; then
+    printf '%s\n' "MuPDF static library not found at ${FITZ_LIB}, building macOS desktop package with -tags nocgo"
+    BUILD_TAGS=(-tags nocgo)
+fi
 
 cleanup() {
     rm -rf "${ICON_TMP}"
@@ -56,6 +67,7 @@ mkdir -p "${MACOS_DIR}" "${RESOURCES_DIR}"
 MACOSX_DEPLOYMENT_TARGET="${MACOS_DEPLOYMENT_TARGET}" \
 CGO_ENABLED=1 GOOS=darwin go build \
     -trimpath \
+    "${BUILD_TAGS[@]}" \
     -ldflags "-s -w -X ${BUILDINFO_PKG}.Version=${VERSION} -X ${BUILDINFO_PKG}.BuildTime=${BUILD_TIME}" \
     -o "${MACOS_DIR}/${APP_NAME}" \
     ./cmd/desktop

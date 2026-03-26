@@ -9,6 +9,19 @@ $binaryName = "citebox"
 $packageDir = Join-Path "dist" "$binaryName-windows-$Version"
 $archivePath = "$packageDir.zip"
 $buildTime = Get-Date -AsUTC -Format "yyyy-MM-ddTHH:mm:ssZ"
+$fitzLib = Join-Path "third_party\go-fitz\libs" "libmupdf_windows_amd64.a"
+$buildTags = @()
+$cgoEnabled = "1"
+
+if ($env:CITEBOX_FORCE_NOCGO -eq "1") {
+    Write-Host "CITEBOX_FORCE_NOCGO=1, building Windows server package with -tags nocgo"
+    $buildTags = @("-tags", "nocgo")
+    $cgoEnabled = "0"
+} elseif (-not (Test-Path $fitzLib)) {
+    Write-Host "MuPDF static library not found at $fitzLib, building Windows server package with -tags nocgo"
+    $buildTags = @("-tags", "nocgo")
+    $cgoEnabled = "0"
+}
 
 if (Test-Path $packageDir) {
     Remove-Item $packageDir -Recurse -Force
@@ -19,9 +32,11 @@ New-Item -ItemType Directory -Path (Join-Path $packageDir "data\library\figures"
 
 $env:GOOS = "windows"
 $env:GOARCH = "amd64"
-go build -trimpath -ldflags "-s -w -X github.com/xuzhougeng/citebox/internal/buildinfo.Version=$Version -X github.com/xuzhougeng/citebox/internal/buildinfo.BuildTime=$buildTime" -o (Join-Path $packageDir "$binaryName.exe") ./cmd/server
+$env:CGO_ENABLED = $cgoEnabled
+go build -trimpath @buildTags -ldflags "-s -w -X github.com/xuzhougeng/citebox/internal/buildinfo.Version=$Version -X github.com/xuzhougeng/citebox/internal/buildinfo.BuildTime=$buildTime" -o (Join-Path $packageDir "$binaryName.exe") ./cmd/server
 Remove-Item Env:GOOS
 Remove-Item Env:GOARCH
+Remove-Item Env:CGO_ENABLED
 
 Copy-Item "web" -Destination $packageDir -Recurse
 Copy-Item "README.md" -Destination $packageDir

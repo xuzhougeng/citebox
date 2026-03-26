@@ -33,12 +33,23 @@ ARCHIVE_PATH="${PACKAGE_DIR}.tar.gz"
 HOST_ARCH="$(go env GOARCH)"
 BUILD_TIME="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
 BUILDINFO_PKG="github.com/xuzhougeng/citebox/internal/buildinfo"
+FITZ_LIB="third_party/go-fitz/libs/libmupdf_${GOOS_VALUE}_${HOST_ARCH}.a"
+BUILD_TAGS=()
+
+if [[ "${CITEBOX_FORCE_NOCGO:-}" == "1" ]]; then
+    printf '%s\n' "CITEBOX_FORCE_NOCGO=1, building desktop package with -tags nocgo"
+    BUILD_TAGS=(-tags nocgo)
+elif [[ ! -f "${FITZ_LIB}" ]]; then
+    printf '%s\n' "MuPDF static library not found at ${FITZ_LIB}, building desktop package with -tags nocgo"
+    BUILD_TAGS=(-tags nocgo)
+fi
 
 rm -rf "${PACKAGE_DIR}"
 mkdir -p "${PACKAGE_DIR}"
 
 CGO_ENABLED=1 GOOS="${GOOS_VALUE}" go build \
     -trimpath \
+    "${BUILD_TAGS[@]}" \
     -ldflags "-s -w -X ${BUILDINFO_PKG}.Version=${VERSION} -X ${BUILDINFO_PKG}.BuildTime=${BUILD_TIME}" \
     -o "${PACKAGE_DIR}/${BINARY_NAME}" \
     ./cmd/desktop
