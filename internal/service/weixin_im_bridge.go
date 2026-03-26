@@ -82,6 +82,7 @@ type weixinCommandPlan struct {
 
 type weixinReplyEnvelope struct {
 	Text                      string
+	PreviewCurrentFigure      bool
 	TTSText                   string
 	OptimizeTTSText           bool
 	RequireTTS                bool
@@ -340,7 +341,7 @@ func (b *WeixinIMBridge) runPolling(ctx context.Context, client *weixin.Client, 
 				}
 				b.logger.Warn("resolve weixin voice reply settings failed", "error", ttsErr)
 			}
-			previewPath, previewErr := b.selectedFigurePreviewPath(message, reply.Text)
+			previewPath, previewErr := b.selectedFigurePreviewPath(message, reply)
 			if previewErr != nil {
 				reply.Text = trimWeixinReply(appendWeixinReplyNotice(reply.Text, "图片已选中，但原图预览不可用。"))
 				b.logger.Warn("resolve weixin figure preview failed", "error", previewErr)
@@ -508,7 +509,9 @@ func (b *WeixinIMBridge) executeWeixinCommandReply(ctx context.Context, command,
 	case "/paper":
 		return weixinReplyEnvelope{Text: b.selectPaper(arg)}
 	case "/figure":
-		return weixinReplyEnvelope{Text: b.selectFigure(arg)}
+		return weixinReplyEnvelope{Text: b.selectFigure(arg), PreviewCurrentFigure: true}
+	case "/random":
+		return weixinReplyEnvelope{Text: b.selectRandomFigure(arg), PreviewCurrentFigure: true}
 	case "/note":
 		return weixinReplyEnvelope{Text: b.appendNote(arg)}
 	case "/interpret":
@@ -1198,6 +1201,58 @@ func (b *WeixinIMBridge) selectFigure(arg string) string {
 	)
 }
 
+func (b *WeixinIMBridge) selectRandomFigure(_ string) string {
+	candidateIDs, err := b.libraryService.repo.ListRandomFigureIDs(8)
+	if err != nil {
+		return fmt.Sprintf("随机选图失败：%v", err)
+	}
+	if len(candidateIDs) == 0 {
+		return "当前还没有图片。先导入 PDF 并提取图片后再试。"
+	}
+
+	for _, figureID := range candidateIDs {
+		figureRef, err := b.libraryService.repo.GetFigure(figureID)
+		if err != nil {
+			continue
+		}
+		if figureRef == nil {
+			continue
+		}
+
+		paper, err := b.libraryService.GetPaper(figureRef.PaperID)
+		if err != nil || paper == nil {
+			continue
+		}
+
+		figure := findFigureByID(paper.Figures, figureID)
+		if figure == nil {
+			continue
+		}
+
+		b.updateContext(func(state *weixinIMContext) {
+			state.CurrentPaperID = paper.ID
+			state.CurrentFigureID = figure.ID
+			state.SearchPaperIDs = nil
+			state.SearchFigureIDs = nil
+			state.QAHistory = nil
+		})
+
+		caption := firstNonEmpty(strings.TrimSpace(figure.Caption), strings.TrimSpace(figure.OriginalName), "未命名图片")
+		label := firstNonEmpty(strings.TrimSpace(figure.DisplayLabel), fmt.Sprintf("图 %d", figure.FigureIndex))
+		return fmt.Sprintf(
+			"已随机选中图片 [ID %d]\n所属文献：[ID %d] %s\n第 %d 页 · %s\n%s\n\n如果原图可用，下一条消息会回发图片预览。发送 `/interpret 问题` 获取图片解读，或 `/note 你的内容` 追加图片笔记。",
+			figure.ID,
+			paper.ID,
+			clipRunes(paper.Title, 72),
+			figure.PageNumber,
+			label,
+			clipRunes(caption, 180),
+		)
+	}
+
+	return "当前还没有可用图片。先导入 PDF 并提取图片后再试。"
+}
+
 func (b *WeixinIMBridge) selectFigureFromSearchResult(figureID int64) string {
 	figureRef, err := b.libraryService.repo.GetFigure(figureID)
 	if err != nil {
@@ -1531,12 +1586,14 @@ func (b *WeixinIMBridge) loadSyncBuf() string {
 	return strings.TrimSpace(string(data))
 }
 
-func (b *WeixinIMBridge) selectedFigurePreviewPath(message weixin.Message, replyText string) (string, error) {
-	command, _, ok := parseWeixinSlashCommand(extractWeixinText(message))
-	if !ok || command != "/figure" {
-		return "", nil
+func (b *WeixinIMBridge) selectedFigurePreviewPath(message weixin.Message, reply weixinReplyEnvelope) (string, error) {
+	if !reply.PreviewCurrentFigure {
+		command, _, ok := parseWeixinSlashCommand(extractWeixinText(message))
+		if !ok || (command != "/figure" && command != "/random") {
+			return "", nil
+		}
 	}
-	if !strings.HasPrefix(strings.TrimSpace(replyText), "已选中图片 [ID ") {
+	if !strings.HasPrefix(strings.TrimSpace(reply.Text), "已选中图片 [ID ") && !strings.HasPrefix(strings.TrimSpace(reply.Text), "已随机选中图片 [ID ") {
 		return "", nil
 	}
 
@@ -1747,6 +1804,7 @@ func weixinHelpText() string {
 		"`/paper 1`：选择检索结果中的文献；普通文字如“看看第三篇文献”也会优先路由到这里",
 		"`/figures`：查看当前文献的图片列表",
 		"`/figure 1`：选择检索结果中的图片或当前文献中的图片；普通文字如“看看第二张图”也会优先路由到这里，并回发原图预览",
+		"`/random`：随机选中一张图片，并回发原图预览",
 		"直接发送 PDF：自动导入文献并切换上下文",
 		"`/ask 问题` 或 `/qa 问题`：对当前文献提问",
 		"`/note 内容`：追加文献/图片笔记",
@@ -1801,6 +1859,8 @@ func normalizeWeixinPlainTextCommand(command string) string {
 		return "/paper"
 	case "/figure", "figure":
 		return "/figure"
+	case "/random", "random", "随机":
+		return "/random"
 	case "/ask", "ask", "/qa", "qa", "问答":
 		return "/ask"
 	case "/note", "note", "笔记":

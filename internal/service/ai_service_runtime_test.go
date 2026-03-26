@@ -222,6 +222,69 @@ func TestPlanWeixinCommandSupportsContextualPaperSelection(t *testing.T) {
 	}
 }
 
+func TestPlanWeixinCommandSupportsRandomFigureSelection(t *testing.T) {
+	_, repo, cfg := newTestService(t)
+	aiSvc := NewAIService(repo, cfg, nil)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/responses" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("ReadAll() error = %v", err)
+		}
+		bodyText := string(body)
+		if !strings.Contains(bodyText, "/random") {
+			t.Fatalf("request body missing random figure command: %s", bodyText)
+		}
+		if !strings.Contains(bodyText, "随机来一张图") {
+			t.Fatalf("request body missing original random request: %s", bodyText)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"output_text":"{\"command\":\"/random\",\"arg\":\"\"}"}`))
+	}))
+	defer server.Close()
+
+	if _, err := aiSvc.UpdateSettings(model.AISettings{
+		Models: []model.AIModelConfig{
+			{
+				ID:              "default",
+				Name:            "Default",
+				Provider:        model.AIProviderOpenAI,
+				APIKey:          "default-key",
+				BaseURL:         "https://api.openai.com",
+				Model:           "gpt-default",
+				MaxOutputTokens: 1200,
+			},
+			{
+				ID:              "intent",
+				Name:            "Intent",
+				Provider:        model.AIProviderOpenAI,
+				APIKey:          "intent-key",
+				BaseURL:         server.URL,
+				Model:           "gpt-intent",
+				MaxOutputTokens: 400,
+			},
+		},
+		SceneModels: model.AISceneModelSelection{
+			DefaultModelID:  "default",
+			IMIntentModelID: "intent",
+		},
+		SystemPrompt: "system",
+	}); err != nil {
+		t.Fatalf("UpdateSettings() error = %v", err)
+	}
+
+	plan, err := aiSvc.PlanWeixinCommand(context.Background(), "随机来一张图", weixinIntentContext{})
+	if err != nil {
+		t.Fatalf("PlanWeixinCommand() error = %v", err)
+	}
+	if plan.Command != "/random" || plan.Arg != "" {
+		t.Fatalf("PlanWeixinCommand() = %+v, want /random with empty arg", plan)
+	}
+}
+
 func TestReviewWeixinFigureSearchSendsCompressedImages(t *testing.T) {
 	_, repo, cfg := newTestService(t)
 	aiSvc := NewAIService(repo, cfg, nil)

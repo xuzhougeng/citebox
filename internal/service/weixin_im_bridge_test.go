@@ -423,7 +423,7 @@ func TestWeixinIMBridgeSelectFigureResolvesPreviewPath(t *testing.T) {
 	}
 
 	_ = bridge.handleIncomingText(context.Background(), "/search Preview Atlas")
-	reply := bridge.handleIncomingText(context.Background(), "/figure 1")
+	reply := bridge.handleIncomingTextReply(context.Background(), "/figure 1")
 	previewPath, err := bridge.selectedFigurePreviewPath(weixin.Message{
 		ItemList: []weixin.MessageItem{
 			{
@@ -437,6 +437,84 @@ func TestWeixinIMBridgeSelectFigureResolvesPreviewPath(t *testing.T) {
 	}
 	if previewPath != figurePath {
 		t.Fatalf("selectedFigurePreviewPath() path = %q, want %q", previewPath, figurePath)
+	}
+}
+
+func TestWeixinIMBridgeRandomSelectsFigureAndResolvesPreviewPath(t *testing.T) {
+	svc, repo, cfg := newTestService(t)
+	firstPaper := createBridgePaper(t, repo, "Random Atlas A", "random-atlas-a.pdf")
+	secondPaper := createBridgePaper(t, repo, "Random Atlas B", "random-atlas-b.pdf")
+	bridge := newTestWeixinBridge(t, svc, &fakeWeixinAIReader{answer: "ok"}, cfg.StorageDir)
+
+	firstFigurePath := filepath.Join(cfg.FiguresDir(), firstPaper.Figures[0].Filename)
+	secondFigurePath := filepath.Join(cfg.FiguresDir(), secondPaper.Figures[0].Filename)
+	writeTestPNGFile(t, firstFigurePath)
+	writeTestPNGFile(t, secondFigurePath)
+
+	reply := bridge.handleIncomingTextReply(context.Background(), "/random")
+	if !containsAll(reply.Text, "已随机选中图片", "所属文献") {
+		t.Fatalf("/random reply = %q, want random figure selection summary", reply.Text)
+	}
+
+	state := bridge.getContext()
+	if state.CurrentPaperID == 0 || state.CurrentFigureID == 0 {
+		t.Fatalf("context after /random = %+v, want selected paper and figure", state)
+	}
+	if state.CurrentFigureID != firstPaper.Figures[0].ID && state.CurrentFigureID != secondPaper.Figures[0].ID {
+		t.Fatalf("current figure id = %d, want one of seeded figures", state.CurrentFigureID)
+	}
+
+	previewPath, err := bridge.selectedFigurePreviewPath(weixin.Message{
+		ItemList: []weixin.MessageItem{
+			{
+				Type:     weixin.ItemTypeText,
+				TextItem: &weixin.TextItem{Text: "/random"},
+			},
+		},
+	}, reply)
+	if err != nil {
+		t.Fatalf("selectedFigurePreviewPath() error = %v", err)
+	}
+	if previewPath != firstFigurePath && previewPath != secondFigurePath {
+		t.Fatalf("selectedFigurePreviewPath() path = %q, want one of seeded figure paths", previewPath)
+	}
+}
+
+func TestWeixinIMBridgePlannedRandomResolvesPreviewPath(t *testing.T) {
+	svc, repo, cfg := newTestService(t)
+	firstPaper := createBridgePaper(t, repo, "Planned Random A", "planned-random-a.pdf")
+	secondPaper := createBridgePaper(t, repo, "Planned Random B", "planned-random-b.pdf")
+	bridge := newTestWeixinBridge(t, svc, &fakeWeixinAIReader{
+		answer:      "ok",
+		commandPlan: &weixinCommandPlan{Command: "/random"},
+	}, cfg.StorageDir)
+
+	firstFigurePath := filepath.Join(cfg.FiguresDir(), firstPaper.Figures[0].Filename)
+	secondFigurePath := filepath.Join(cfg.FiguresDir(), secondPaper.Figures[0].Filename)
+	writeTestPNGFile(t, firstFigurePath)
+	writeTestPNGFile(t, secondFigurePath)
+
+	reply := bridge.handleIncomingTextReply(context.Background(), "随机来一张图")
+	if !reply.PreviewCurrentFigure {
+		t.Fatalf("reply preview flag = false, want true for planned /random")
+	}
+	if !containsAll(reply.Text, "已随机选中图片", "所属文献") {
+		t.Fatalf("planned random reply = %q, want random figure selection summary", reply.Text)
+	}
+
+	previewPath, err := bridge.selectedFigurePreviewPath(weixin.Message{
+		ItemList: []weixin.MessageItem{
+			{
+				Type:     weixin.ItemTypeText,
+				TextItem: &weixin.TextItem{Text: "随机来一张图"},
+			},
+		},
+	}, reply)
+	if err != nil {
+		t.Fatalf("selectedFigurePreviewPath() error = %v", err)
+	}
+	if previewPath != firstFigurePath && previewPath != secondFigurePath {
+		t.Fatalf("selectedFigurePreviewPath() path = %q, want one of seeded figure paths", previewPath)
 	}
 }
 
