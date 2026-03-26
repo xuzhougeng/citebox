@@ -673,6 +673,30 @@ func TestWeixinIMBridgeAskReplyReturnsSynthesizedVoiceWhenTTSConfigured(t *testi
 	}
 }
 
+func TestSplitWeixinReplyTextSplitsLongReply(t *testing.T) {
+	longText := strings.Repeat("测", weixinReplyChunkRunes*2+17)
+
+	chunks := splitWeixinReplyText(longText, weixinReplyChunkRunes)
+	if len(chunks) != 3 {
+		t.Fatalf("len(chunks) = %d, want %d", len(chunks), 3)
+	}
+	for index, chunk := range chunks {
+		if got := len([]rune(chunk)); got > weixinReplyChunkRunes {
+			t.Fatalf("chunk %d rune count = %d, want <= %d", index, got, weixinReplyChunkRunes)
+		}
+	}
+	if strings.Join(chunks, "") != longText {
+		t.Fatal("splitWeixinReplyText() chunks do not reconstruct original text")
+	}
+}
+
+func TestSplitWeixinReplyTextReturnsNilForBlankText(t *testing.T) {
+	chunks := splitWeixinReplyText(" \n\t ", weixinReplyChunkRunes)
+	if len(chunks) != 0 {
+		t.Fatalf("len(chunks) = %d, want 0", len(chunks))
+	}
+}
+
 func TestWeixinIMBridgeImportsPDFFileAndSelectsPaper(t *testing.T) {
 	svc, _, cfg := newTestService(t)
 	bridge := newTestWeixinBridge(t, svc, &fakeWeixinAIReader{answer: "ok"}, cfg.StorageDir)

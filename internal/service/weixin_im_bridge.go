@@ -27,6 +27,7 @@ const (
 	weixinSyncBufFileName               = "sync_buf"
 	weixinContextFileName               = "im_context.json"
 	weixinReplyMaxRunes                 = 3200
+	weixinReplyChunkRunes               = 1000
 	weixinHistoryLimit                  = 6
 	weixinSearchKeywordLimit            = 6
 	weixinSearchKeywordPerLanguageLimit = 3
@@ -297,7 +298,7 @@ func (b *WeixinIMBridge) runPolling(ctx context.Context, client *weixin.Client, 
 				continue
 			}
 			if reply.Text != "" {
-				if err := client.SendTextMessage(ctx, message.FromUserID, reply.Text, message.ContextToken); err != nil {
+				if err := sendWeixinTextReply(ctx, client, message.FromUserID, reply.Text, message.ContextToken); err != nil {
 					b.logger.Warn("send weixin reply failed", "error", err)
 				}
 			}
@@ -305,7 +306,7 @@ func (b *WeixinIMBridge) runPolling(ctx context.Context, client *weixin.Client, 
 				if err := client.SendFileAttachment(ctx, message.FromUserID, voicePath, message.ContextToken); err != nil {
 					b.logger.Warn("send weixin voice file failed", "error", err, "path", voicePath)
 					if reply.VoiceSendFailureNotice != "" {
-						if err := client.SendTextMessage(ctx, message.FromUserID, reply.VoiceSendFailureNotice, message.ContextToken); err != nil {
+						if err := sendWeixinTextReply(ctx, client, message.FromUserID, reply.VoiceSendFailureNotice, message.ContextToken); err != nil {
 							b.logger.Warn("send weixin voice file failure notice failed", "error", err)
 						}
 					}
@@ -314,7 +315,7 @@ func (b *WeixinIMBridge) runPolling(ctx context.Context, client *weixin.Client, 
 			if previewPath != "" {
 				if err := client.SendImageFile(ctx, message.FromUserID, previewPath, message.ContextToken); err != nil {
 					b.logger.Warn("send weixin preview image failed", "error", err, "path", previewPath)
-					if err := client.SendTextMessage(ctx, message.FromUserID, "图片已选中，但预览发送失败。", message.ContextToken); err != nil {
+					if err := sendWeixinTextReply(ctx, client, message.FromUserID, "图片已选中，但预览发送失败。", message.ContextToken); err != nil {
 						b.logger.Warn("send weixin preview failure notice failed", "error", err)
 					}
 				}
@@ -1833,6 +1834,41 @@ func appendWeixinReplyNotice(text, notice string) string {
 	default:
 		return text + "\n\n" + notice
 	}
+}
+
+func splitWeixinReplyText(text string, maxRunes int) []string {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return nil
+	}
+	if maxRunes <= 0 {
+		return []string{text}
+	}
+
+	runes := []rune(text)
+	if len(runes) <= maxRunes {
+		return []string{text}
+	}
+
+	chunks := make([]string, 0, (len(runes)+maxRunes-1)/maxRunes)
+	for start := 0; start < len(runes); start += maxRunes {
+		end := start + maxRunes
+		if end > len(runes) {
+			end = len(runes)
+		}
+		chunks = append(chunks, string(runes[start:end]))
+	}
+	return chunks
+}
+
+func sendWeixinTextReply(ctx context.Context, client *weixin.Client, toUserID, text, contextToken string) error {
+	chunks := splitWeixinReplyText(text, weixinReplyChunkRunes)
+	for _, chunk := range chunks {
+		if err := client.SendTextMessage(ctx, toUserID, chunk, contextToken); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func clipRunes(text string, max int) string {
