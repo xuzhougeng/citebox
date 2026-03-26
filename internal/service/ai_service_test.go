@@ -74,6 +74,9 @@ func TestAISettingsDefaultsAndPersistence(t *testing.T) {
 	if defaults.SceneModels.IMIntentModelID == "" {
 		t.Fatalf("GetSettings() defaults scene_models = %+v, want IM intent model default", defaults.SceneModels)
 	}
+	if defaults.SceneModels.TTSModelID == "" || strings.TrimSpace(defaults.TTSPrompt) == "" {
+		t.Fatalf("GetSettings() defaults = %+v, want TTS rewrite scene and prompt", defaults)
+	}
 	if len(defaults.RolePrompts) != 0 {
 		t.Fatalf("GetSettings() defaults role_prompts = %+v, want empty list", defaults.RolePrompts)
 	}
@@ -204,6 +207,7 @@ func TestSplitAISettingsUpdatesPreserveOtherSections(t *testing.T) {
 		TagPrompt:       "base tag",
 		GroupPrompt:     "base group",
 		TranslatePrompt: "base translate",
+		TTSPrompt:       "base tts",
 		Translation: model.AITranslationConfig{
 			PrimaryLanguage: "中文",
 			TargetLanguage:  "英文",
@@ -251,6 +255,7 @@ func TestSplitAISettingsUpdatesPreserveOtherSections(t *testing.T) {
 		TagPrompt:       "updated tag",
 		GroupPrompt:     "updated group",
 		TranslatePrompt: "updated translate",
+		TTSPrompt:       "updated tts",
 	}); err != nil {
 		t.Fatalf("UpdatePromptSettings() error = %v", err)
 	}
@@ -265,6 +270,9 @@ func TestSplitAISettingsUpdatesPreserveOtherSections(t *testing.T) {
 	if len(afterPromptUpdate.RolePrompts) != 1 || afterPromptUpdate.RolePrompts[0].Prompt != "你是一名导师。" {
 		t.Fatalf("prompt update should preserve role prompts, got %+v", afterPromptUpdate.RolePrompts)
 	}
+	if afterPromptUpdate.TTSPrompt != "updated tts" {
+		t.Fatalf("prompt update should persist TTS prompt, got %+v", afterPromptUpdate)
+	}
 }
 
 func TestResolveModelForActionUsesSceneSpecificModel(t *testing.T) {
@@ -273,6 +281,7 @@ func TestResolveModelForActionUsesSceneSpecificModel(t *testing.T) {
 		{ID: "default", Name: "Default", Provider: model.AIProviderOpenAI, APIKey: "key-1", BaseURL: "https://api.openai.com", Model: "gpt-4.1-mini"},
 		{ID: "figure", Name: "Figure", Provider: model.AIProviderAnthropic, APIKey: "key-2", BaseURL: "https://api.anthropic.com", Model: "claude-test"},
 		{ID: "translate", Name: "Translate", Provider: model.AIProviderGemini, APIKey: "key-3", BaseURL: "https://generativelanguage.googleapis.com", Model: "gemini-test"},
+		{ID: "tts", Name: "TTS", Provider: model.AIProviderOpenAI, APIKey: "key-4", BaseURL: "https://api.openai.com", Model: "gpt-tts"},
 	}
 	settings.SceneModels = model.AISceneModelSelection{
 		DefaultModelID:   "default",
@@ -281,6 +290,7 @@ func TestResolveModelForActionUsesSceneSpecificModel(t *testing.T) {
 		TagModelID:       "default",
 		GroupModelID:     "default",
 		TranslateModelID: "translate",
+		TTSModelID:       "tts",
 	}
 
 	resolved, err := resolveModelForAction(settings, model.AIActionFigureInterpretation)
@@ -297,6 +307,14 @@ func TestResolveModelForActionUsesSceneSpecificModel(t *testing.T) {
 	}
 	if translated.ID != "translate" || translated.Provider != model.AIProviderGemini {
 		t.Fatalf("resolveModelForAction(translate) = %+v, want translate-scoped model", translated)
+	}
+
+	ttsModel, err := resolveModelForAction(settings, model.AIActionTTSRewrite)
+	if err != nil {
+		t.Fatalf("resolveModelForAction(tts) error = %v", err)
+	}
+	if ttsModel.ID != "tts" || ttsModel.Provider != model.AIProviderOpenAI {
+		t.Fatalf("resolveModelForAction(tts) = %+v, want tts-scoped model", ttsModel)
 	}
 }
 
@@ -423,5 +441,78 @@ func TestTranslateUsesSceneModelAndReturnsTranslation(t *testing.T) {
 	}
 	if result.Translation != "Translated output" {
 		t.Fatalf("Translate() translation = %q, want translated text", result.Translation)
+	}
+}
+
+func TestRewriteTextForTTSUsesSceneModelAndPrompt(t *testing.T) {
+	_, repo, cfg := newTestService(t)
+	aiSvc := NewAIService(repo, cfg, nil)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/responses" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("ReadAll() error = %v", err)
+		}
+		bodyText := string(body)
+		if !strings.Contains(bodyText, "适合中文 TTS 直接朗读的版本") {
+			t.Fatalf("request body missing TTS rewrite instruction: %s", bodyText)
+		}
+		if !strings.Contains(bodyText, "custom tts prompt") {
+			t.Fatalf("request body missing custom TTS prompt: %s", bodyText)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"output_text":"这是整理后的朗读稿。见 Figure 5。"}`))
+	}))
+	defer server.Close()
+
+	if _, err := aiSvc.UpdateSettings(model.AISettings{
+		Models: []model.AIModelConfig{
+			{
+				ID:              "default",
+				Name:            "Default",
+				Provider:        model.AIProviderOpenAI,
+				APIKey:          "default-key",
+				BaseURL:         "https://api.openai.com",
+				Model:           "gpt-default",
+				MaxOutputTokens: 1200,
+			},
+			{
+				ID:              "tts",
+				Name:            "TTS Rewrite",
+				Provider:        model.AIProviderOpenAI,
+				APIKey:          "tts-key",
+				BaseURL:         server.URL,
+				Model:           "gpt-tts",
+				MaxOutputTokens: 900,
+			},
+		},
+		SceneModels: model.AISceneModelSelection{
+			DefaultModelID: "default",
+			TTSModelID:     "tts",
+		},
+		SystemPrompt: "system",
+		TTSPrompt:    "custom tts prompt",
+	}); err != nil {
+		t.Fatalf("UpdateSettings() error = %v", err)
+	}
+
+	rewritten, err := aiSvc.RewriteTextForTTS(context.Background(), "原始内容 **带 Markdown**")
+	if err != nil {
+		t.Fatalf("RewriteTextForTTS() error = %v", err)
+	}
+	if rewritten != "这是整理后的朗读稿。见 Figure 5。" {
+		t.Fatalf("RewriteTextForTTS() = %q, want rewritten text", rewritten)
+	}
+}
+
+func TestSanitizeMarkdownForTTSRemovesFigureSyntax(t *testing.T) {
+	input := "见图形摘要 ![第 1 页图 1](figure://309)\n\n一句话概括：**这篇论文**构建了统一图谱。"
+	got := sanitizeMarkdownForTTS(input)
+	want := "见图形摘要 第 1 页图 1\n\n一句话概括：这篇论文构建了统一图谱。"
+	if got != want {
+		t.Fatalf("sanitizeMarkdownForTTS() = %q, want %q", got, want)
 	}
 }

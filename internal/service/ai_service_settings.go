@@ -121,6 +121,7 @@ func (s *AIService) UpdatePromptSettings(input model.AIPromptSettingsUpdate) (*m
 	next.TagPrompt = input.TagPrompt
 	next.GroupPrompt = input.GroupPrompt
 	next.TranslatePrompt = input.TranslatePrompt
+	next.TTSPrompt = input.TTSPrompt
 	next.RolePrompts = nil
 
 	return s.UpdateSettings(next)
@@ -199,12 +200,16 @@ func normalizeAISettings(input model.AISettings) (model.AISettings, error) {
 	if strings.TrimSpace(settings.TranslatePrompt) == "" {
 		settings.TranslatePrompt = defaults.TranslatePrompt
 	}
+	if strings.TrimSpace(settings.TTSPrompt) == "" {
+		settings.TTSPrompt = defaults.TTSPrompt
+	}
 	settings.SystemPrompt = strings.TrimSpace(settings.SystemPrompt)
 	settings.QAPrompt = strings.TrimSpace(settings.QAPrompt)
 	settings.FigurePrompt = strings.TrimSpace(settings.FigurePrompt)
 	settings.TagPrompt = strings.TrimSpace(settings.TagPrompt)
 	settings.GroupPrompt = strings.TrimSpace(settings.GroupPrompt)
 	settings.TranslatePrompt = strings.TrimSpace(settings.TranslatePrompt)
+	settings.TTSPrompt = strings.TrimSpace(settings.TTSPrompt)
 	if strings.TrimSpace(settings.Translation.PrimaryLanguage) == "" {
 		settings.Translation.PrimaryLanguage = defaults.Translation.PrimaryLanguage
 	}
@@ -407,6 +412,7 @@ func normalizeAISceneModelSelection(input model.AISceneModelSelection, models []
 	selection.TagModelID = normalizeSceneModelID(selection.TagModelID, models, selection.DefaultModelID)
 	selection.GroupModelID = normalizeSceneModelID(selection.GroupModelID, models, selection.DefaultModelID)
 	selection.TranslateModelID = normalizeSceneModelID(selection.TranslateModelID, models, selection.DefaultModelID)
+	selection.TTSModelID = normalizeSceneModelID(selection.TTSModelID, models, selection.DefaultModelID)
 	return selection
 }
 
@@ -441,6 +447,8 @@ func resolveModelForAction(settings model.AISettings, action model.AIAction) (mo
 		modelID = firstNonEmpty(settings.SceneModels.GroupModelID, settings.SceneModels.DefaultModelID)
 	case model.AIActionTranslate:
 		modelID = firstNonEmpty(settings.SceneModels.TranslateModelID, settings.SceneModels.DefaultModelID)
+	case model.AIActionTTSRewrite:
+		modelID = firstNonEmpty(settings.SceneModels.TTSModelID, settings.SceneModels.DefaultModelID)
 	default:
 		modelID = firstNonEmpty(settings.SceneModels.QAModelID, settings.SceneModels.DefaultModelID)
 	}

@@ -47,6 +47,7 @@ type weixinAIReader interface {
 	PlanWeixinSearch(ctx context.Context, query, forcedTarget string) (*weixinSearchPlan, error)
 	ReviewWeixinPaperSearch(ctx context.Context, query string, keywords []string, candidates []model.Paper) (*weixinSearchReview, error)
 	ReviewWeixinFigureSearch(ctx context.Context, query string, keywords []string, candidates []model.FigureListItem) (*weixinSearchReview, error)
+	RewriteTextForTTS(ctx context.Context, text string) (string, error)
 }
 
 type weixinIMContext struct {
@@ -81,7 +82,9 @@ type weixinCommandPlan struct {
 type weixinReplyEnvelope struct {
 	Text                      string
 	TTSText                   string
+	OptimizeTTSText           bool
 	RequireTTS                bool
+	VoicePendingNotice        string
 	VoiceResolveFailureNotice string
 	VoiceSendFailureNotice    string
 }
@@ -277,29 +280,47 @@ func (b *WeixinIMBridge) runPolling(ctx context.Context, client *weixin.Client, 
 			)
 			reply := b.handleIncomingMessageReply(ctx, message)
 			reply.Text = trimWeixinReply(reply.Text)
-			voicePath, cleanupVoice, voiceErr := b.resolveVoiceReply(ctx, message, reply)
-			if cleanupVoice == nil {
-				cleanupVoice = func() {}
-			}
-			if voiceErr != nil {
+			ttsSettings, ttsErr := b.resolveVoiceReplySettings(reply)
+			if ttsErr != nil {
 				if reply.VoiceResolveFailureNotice != "" {
 					reply.Text = trimWeixinReply(appendWeixinReplyNotice(reply.Text, reply.VoiceResolveFailureNotice))
 				}
-				b.logger.Warn("resolve weixin voice reply failed", "error", voiceErr)
+				b.logger.Warn("resolve weixin voice reply settings failed", "error", ttsErr)
 			}
 			previewPath, previewErr := b.selectedFigurePreviewPath(message, reply.Text)
 			if previewErr != nil {
 				reply.Text = trimWeixinReply(appendWeixinReplyNotice(reply.Text, "图片已选中，但原图预览不可用。"))
 				b.logger.Warn("resolve weixin figure preview failed", "error", previewErr)
 			}
-			if reply.Text == "" && previewPath == "" && voicePath == "" {
-				cleanupVoice()
+			if reply.Text == "" && previewPath == "" && ttsSettings == nil {
 				b.logger.Info("skip empty weixin reply", "from_user_id", strings.TrimSpace(message.FromUserID))
 				continue
 			}
 			if reply.Text != "" {
 				if err := sendWeixinTextReply(ctx, client, message.FromUserID, reply.Text, message.ContextToken); err != nil {
 					b.logger.Warn("send weixin reply failed", "error", err)
+				}
+			}
+			if ttsSettings != nil && reply.VoicePendingNotice != "" {
+				if err := sendWeixinTextReply(ctx, client, message.FromUserID, reply.VoicePendingNotice, message.ContextToken); err != nil {
+					b.logger.Warn("send weixin voice pending notice failed", "error", err)
+				}
+			}
+			voicePath := ""
+			cleanupVoice := func() {}
+			if ttsSettings != nil {
+				var voiceErr error
+				voicePath, cleanupVoice, voiceErr = b.resolveVoiceReplyWithSettings(ctx, message, reply, *ttsSettings)
+				if cleanupVoice == nil {
+					cleanupVoice = func() {}
+				}
+				if voiceErr != nil {
+					if reply.VoiceResolveFailureNotice != "" {
+						if err := sendWeixinTextReply(ctx, client, message.FromUserID, reply.VoiceResolveFailureNotice, message.ContextToken); err != nil {
+							b.logger.Warn("send weixin voice resolve failure notice failed", "error", err)
+						}
+					}
+					b.logger.Warn("resolve weixin voice reply failed", "error", voiceErr)
 				}
 			}
 			if voicePath != "" {
@@ -1273,6 +1294,8 @@ func (b *WeixinIMBridge) answerCurrentPaperReply(ctx context.Context, question s
 	reply := weixinReplyEnvelope{Text: replyText}
 	if turn.Answer != "" {
 		reply.TTSText = turn.Answer
+		reply.OptimizeTTSText = true
+		reply.VoicePendingNotice = "语音内容生成中，请稍后。"
 	}
 	return reply
 }
@@ -1474,32 +1497,64 @@ func (b *WeixinIMBridge) selectedFigurePreviewPath(message weixin.Message, reply
 }
 
 func (b *WeixinIMBridge) resolveVoiceReply(ctx context.Context, message weixin.Message, reply weixinReplyEnvelope) (string, func(), error) {
+	settings, err := b.resolveVoiceReplySettings(reply)
+	if err != nil || settings == nil {
+		return "", func() {}, err
+	}
+	return b.resolveVoiceReplyWithSettings(ctx, message, reply, *settings)
+}
+
+func (b *WeixinIMBridge) resolveVoiceReplySettings(reply weixinReplyEnvelope) (*model.TTSSettings, error) {
+	if strings.TrimSpace(reply.TTSText) == "" {
+		return nil, nil
+	}
+
+	settings, err := b.libraryService.GetTTSSettings()
+	if err != nil {
+		return nil, err
+	}
+	if settings == nil {
+		if reply.RequireTTS {
+			return nil, errors.New("weixin tts settings are missing")
+		}
+		return nil, nil
+	}
+	if err := validateTTSSettings(*settings); err != nil {
+		if reply.RequireTTS {
+			return nil, err
+		}
+		return nil, nil
+	}
+	if b.synthesizeTTS == nil {
+		return nil, errors.New("weixin tts synthesizer is nil")
+	}
+	return settings, nil
+}
+
+func (b *WeixinIMBridge) resolveVoiceReplyWithSettings(ctx context.Context, message weixin.Message, reply weixinReplyEnvelope, settings model.TTSSettings) (string, func(), error) {
 	ttsText := strings.TrimSpace(reply.TTSText)
 	if ttsText == "" {
 		return "", func() {}, nil
 	}
 
-	settings, err := b.libraryService.GetTTSSettings()
-	if err != nil {
-		return "", func() {}, err
+	fallbackText := sanitizeMarkdownForTTS(ttsText)
+	if fallbackText == "" {
+		fallbackText = ttsText
 	}
-	if settings == nil {
-		if reply.RequireTTS {
-			return "", func() {}, errors.New("weixin tts settings are missing")
+	if reply.OptimizeTTSText && b.aiService != nil {
+		rewritten, err := b.aiService.RewriteTextForTTS(ctx, ttsText)
+		if err != nil {
+			b.logger.Warn("rewrite weixin tts text failed, fallback to sanitized original", "error", err)
+			ttsText = fallbackText
+		} else if normalized := normalizeTTSReadbackText(rewritten); normalized != "" {
+			ttsText = normalized
+		} else {
+			ttsText = fallbackText
 		}
-		return "", func() {}, nil
+	} else {
+		ttsText = fallbackText
 	}
-	if err := validateTTSSettings(*settings); err != nil {
-		if reply.RequireTTS {
-			return "", func() {}, err
-		}
-		return "", func() {}, nil
-	}
-	if b.synthesizeTTS == nil {
-		return "", func() {}, errors.New("weixin tts synthesizer is nil")
-	}
-
-	return b.synthesizeTTS(ctx, ttsText, strings.TrimSpace(message.FromUserID), *settings)
+	return b.synthesizeTTS(ctx, ttsText, strings.TrimSpace(message.FromUserID), settings)
 }
 
 func (b *WeixinIMBridge) synthesizeReplyVoice(ctx context.Context, text, uid string, settings model.TTSSettings) (string, func(), error) {

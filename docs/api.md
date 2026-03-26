@@ -565,12 +565,13 @@ AI 流式阅读通过：
 - `tag_prompt`
 - `group_prompt`
 - `translate_prompt`
+- `tts_prompt`
 - `translation`
 - `role_prompts`
 
 说明：
 
-- `scene_models` 中支持按场景绑定模型，包括 `translate_model_id` 和 `im_intent_model_id`
+- `scene_models` 中支持按场景绑定模型，包括 `translate_model_id`、`im_intent_model_id` 和 `tts_model_id`
 - `translation` 为翻译规则设置，例如：
 
 ```json
@@ -613,7 +614,8 @@ AI 流式阅读通过：
     "figure_model_id": "default-openai",
     "tag_model_id": "default-openai",
     "group_model_id": "default-openai",
-    "translate_model_id": "default-openai"
+    "translate_model_id": "default-openai",
+    "tts_model_id": "default-openai"
   },
   "temperature": 0.2,
   "max_figures": 0,
@@ -639,7 +641,8 @@ AI 流式阅读通过：
   "figure_prompt": "优先说明图像内容、结论和局限。",
   "tag_prompt": "优先复用已有图片标签。",
   "group_prompt": "优先复用已有分组。",
-  "translate_prompt": "只返回译文正文。"
+  "translate_prompt": "只返回译文正文。",
+  "tts_prompt": "删除 Markdown 和图片引用，把文本整理成适合 TTS 直接朗读的版本。"
 }
 ```
 

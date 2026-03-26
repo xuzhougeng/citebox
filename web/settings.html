@@ -129,6 +129,10 @@
                             <select id="aiGroupModelSelect" class="form-input"></select>
                         </label>
                         <label class="field">
+                            <span data-i18n="settings.ai.tts_model">TTS 优化模型</span>
+                            <select id="aiTTSModelSelect" class="form-input"></select>
+                        </label>
+                        <label class="field">
                             <span>Temperature</span>
                             <input id="aiTemperatureInput" class="form-input" type="number" min="0" max="2" step="0.1">
                         </label>
@@ -442,6 +446,33 @@ User Prompt:
 
 待翻译文本:
 {用户当前选中的文本}</pre>
+                        </details>
+                    </label>
+                    <label class="field prompt-field">
+                        <span class="field-label-row">
+                            <span class="field-label-text" data-i18n="settings.ai.tts_prompt_label">TTS 优化 Prompt</span>
+                            <span class="field-help" tabindex="0" role="note" title="用于把已有回答整理成适合 TTS 直接朗读的版本。系统会自动附带原始文本；这里只需要写朗读风格、清洗规则和保留重点。" data-i18n-title="settings.ai.tts_prompt_help" data-help="用于把已有回答整理成适合 TTS 直接朗读的版本。系统会自动附带原始文本；这里只需要写朗读风格、清洗规则和保留重点。">?</span>
+                        </span>
+                        <textarea id="aiTTSPromptInput" class="form-textarea" rows="4" data-i18n-placeholder="settings.ai.tts_prompt_placeholder" placeholder="例如：删除 Markdown 语法和 figure:// 引用，保留术语、数字和基因名，改写成自然口语"></textarea>
+                        <details class="prompt-template-details">
+                            <summary data-i18n="settings.ai.view_template">查看实际模板</summary>
+                            <pre class="prompt-template-pre">System Prompt:
+{System Prompt}
+
+User Prompt:
+请把下面这段文本改写成适合中文 TTS 直接朗读的版本。
+
+输出要求:
+1. 只返回最终朗读正文，不要解释，不要加标题，不要加 Markdown 代码块。
+2. 删除 Markdown 语法、图片链接、figure:// 资源地址和其他机器格式。
+3. 把图表引用改写成自然、可朗读的说法，例如“见 Figure 5”“见图形摘要”。
+4. 保留结论、术语、基因名、数字、单位和必要英文缩写，不要改写事实。
+
+当前 TTS 优化 Prompt:
+{这里填写的 TTS 优化 Prompt}
+
+待处理文本:
+{待朗读文本}</pre>
                         </details>
                     </label>
 

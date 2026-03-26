@@ -16,6 +16,7 @@ const (
 	AIActionTagSuggestion        AIAction = "tag_suggestion"
 	AIActionGroupSuggestion      AIAction = "group_suggestion"
 	AIActionTranslate            AIAction = "translate"
+	AIActionTTSRewrite           AIAction = "tts_rewrite"
 )
 
 type AIModelConfig struct {
@@ -37,6 +38,7 @@ type AISceneModelSelection struct {
 	TagModelID       string `json:"tag_model_id"`
 	GroupModelID     string `json:"group_model_id"`
 	TranslateModelID string `json:"translate_model_id"`
+	TTSModelID       string `json:"tts_model_id"`
 }
 
 type AITranslationConfig struct {
@@ -68,6 +70,7 @@ type AIPromptSettingsUpdate struct {
 	TagPrompt       string `json:"tag_prompt"`
 	GroupPrompt     string `json:"group_prompt"`
 	TranslatePrompt string `json:"translate_prompt"`
+	TTSPrompt       string `json:"tts_prompt"`
 }
 
 type AISettings struct {
@@ -87,6 +90,7 @@ type AISettings struct {
 	TagPrompt        string                `json:"tag_prompt"`
 	GroupPrompt      string                `json:"group_prompt"`
 	TranslatePrompt  string                `json:"translate_prompt"`
+	TTSPrompt        string                `json:"tts_prompt"`
 	Translation      AITranslationConfig   `json:"translation"`
 	RolePrompts      []AIRolePrompt        `json:"role_prompts"`
 }
@@ -206,6 +210,7 @@ func DefaultAISettings() AISettings {
 			TagModelID:       defaultModel.ID,
 			GroupModelID:     defaultModel.ID,
 			TranslateModelID: defaultModel.ID,
+			TTSModelID:       defaultModel.ID,
 		},
 		Temperature:     0.2,
 		MaxOutputTokens: 1200,
@@ -216,6 +221,7 @@ func DefaultAISettings() AISettings {
 		TagPrompt:       "给出 3 到 8 个适合检索和归档的图片标签，优先复用已有图片标签；避免过泛词，只有在现有标签不够时再补充必要的新标签。",
 		GroupPrompt:     "请根据整篇文献的主题、方法和用途，判断它最适合放入哪个分组，优先复用已有分组；如果没有合适分组，再给出一个新的分组名称。",
 		TranslatePrompt: "你只负责翻译，不做解释、不补充背景、不总结。必须保持原文含义、语气、术语和格式；如果原文里有专有名词、缩写、数字或单位，优先准确保留。",
+		TTSPrompt:       "请把输入内容改写成适合中文 TTS 直接朗读的版本。删除 Markdown 标记、图片引用、链接地址、figure:// 资源、页码截图语法等机器格式；把图表引用改写成自然说法，例如“见 Figure 5”或“见图形摘要”；保留论文结论、术语、基因名、数字、单位和必要英文缩写；句子可以适度拆短，让朗读更自然。只返回最终朗读正文，不要解释、不要补充原文没有的信息。",
 		Translation: AITranslationConfig{
 			PrimaryLanguage: "中文",
 			TargetLanguage:  "英文",

@@ -283,6 +283,35 @@ func buildAITranslatePrompts(settings model.AISettings, sourceLanguage, targetLa
 	return settings.SystemPrompt, userPrompt
 }
 
+func buildAITTSPrompts(settings model.AISettings, text string) (string, string) {
+	systemPrompt := strings.TrimSpace(settings.SystemPrompt)
+	if systemPrompt == "" {
+		systemPrompt = model.DefaultAISettings().SystemPrompt
+	}
+	systemPrompt = strings.TrimSpace(systemPrompt + "\n\n你负责把已有回答整理成适合 TTS 直接朗读的版本。不要回答新问题，不要补充原文没有的信息。")
+
+	userPrompt := fmt.Sprintf(`请把下面这段文本改写成适合中文 TTS 直接朗读的版本。
+
+输出要求：
+1. 只返回最终朗读正文，不要解释，不要加标题，不要加 Markdown 代码块。
+2. 删除 Markdown 语法、加粗标记、图片链接、figure:// 资源地址、页码截图语法和其他机器可读格式。
+3. 如果原文里有图表或图片引用，请改写成自然、可朗读的说法，例如“见 Figure 5”“见图形摘要”“见第 11 页图 1”。
+4. 保留论文结论、术语、基因名、蛋白名、数字、单位和必要英文缩写，不要改写事实。
+5. 句子可以适度拆短，让朗读更自然；可以去掉不影响理解的引用噪音。
+6. 如果原文已经基本适合朗读，只做最小必要修改。
+
+当前 TTS 优化 Prompt：
+%s
+
+待处理文本：
+%s`,
+		strings.TrimSpace(settings.TTSPrompt),
+		text,
+	)
+
+	return systemPrompt, userPrompt
+}
+
 func resolveTranslationDirection(config model.AITranslationConfig, text string) (string, string) {
 	primaryLanguage := strings.TrimSpace(config.PrimaryLanguage)
 	targetLanguage := strings.TrimSpace(config.TargetLanguage)
@@ -438,6 +467,8 @@ func actionPromptFor(settings model.AISettings, action model.AIAction) string {
 		return settings.GroupPrompt
 	case model.AIActionTranslate:
 		return settings.TranslatePrompt
+	case model.AIActionTTSRewrite:
+		return settings.TTSPrompt
 	default:
 		return settings.QAPrompt
 	}
@@ -451,6 +482,8 @@ func actionScopeDescription(action model.AIAction) string {
 		return "只针对当前选中的这张图片生成图片标签；不是整篇文献的文献标签。"
 	case model.AIActionGroupSuggestion:
 		return "针对当前整篇文献进行分组判断。"
+	case model.AIActionTTSRewrite:
+		return "把已有文本整理成适合 TTS 直接朗读的版本。"
 	default:
 		return "针对当前整篇文献回答用户问题。"
 	}
@@ -458,7 +491,7 @@ func actionScopeDescription(action model.AIAction) string {
 
 func normalizeAIAction(action model.AIAction) model.AIAction {
 	switch action {
-	case model.AIActionFigureInterpretation, model.AIActionTagSuggestion, model.AIActionGroupSuggestion, model.AIActionPaperQA, model.AIActionTranslate:
+	case model.AIActionFigureInterpretation, model.AIActionTagSuggestion, model.AIActionGroupSuggestion, model.AIActionPaperQA, model.AIActionTranslate, model.AIActionTTSRewrite:
 		return action
 	default:
 		return model.AIActionPaperQA
@@ -482,6 +515,8 @@ func defaultAIQuestion(action model.AIAction) string {
 		return "当前任务只针对当前选中的这张图片。"
 	case model.AIActionGroupSuggestion:
 		return "请判断这篇文献最适合放到哪个分组。"
+	case model.AIActionTTSRewrite:
+		return "请把这段文本整理成适合 TTS 直接朗读的版本。"
 	default:
 		return "请概括这篇文献的核心问题、方法、主要结论和证据。"
 	}

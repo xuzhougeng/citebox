@@ -14,6 +14,7 @@ const SettingsPage = {
         this.tagModelSelect = document.getElementById('aiTagModelSelect');
         this.groupModelSelect = document.getElementById('aiGroupModelSelect');
         this.translateModelSelect = document.getElementById('aiTranslateModelSelect');
+        this.ttsModelSelect = document.getElementById('aiTTSModelSelect');
         this.temperatureInput = document.getElementById('aiTemperatureInput');
         this.maxFiguresInput = document.getElementById('aiMaxFiguresInput');
         this.translationPrimaryLanguageInput = document.getElementById('aiTranslationPrimaryLanguageInput');
@@ -24,6 +25,7 @@ const SettingsPage = {
         this.tagPromptInput = document.getElementById('aiTagPromptInput');
         this.groupPromptInput = document.getElementById('aiGroupPromptInput');
         this.translatePromptInput = document.getElementById('aiTranslatePromptInput');
+        this.ttsPromptInput = document.getElementById('aiTTSPromptInput');
         this.aiModelAutosaveStatus = document.getElementById('aiModelAutosaveStatus');
         this.aiPromptSaveStatus = document.getElementById('aiPromptSaveStatus');
         this.saveAIPromptsButton = document.getElementById('saveAIPromptsButton');
@@ -184,7 +186,8 @@ const SettingsPage = {
             this.figurePromptInput,
             this.tagPromptInput,
             this.groupPromptInput,
-            this.translatePromptInput
+            this.translatePromptInput,
+            this.ttsPromptInput
         ].forEach((element) => {
             element?.addEventListener('input', () => {
                 if (this.isHydratingAISettings) return;
@@ -277,7 +280,8 @@ const SettingsPage = {
             this.figureModelSelect,
             this.tagModelSelect,
             this.groupModelSelect,
-            this.translateModelSelect
+            this.translateModelSelect,
+            this.ttsModelSelect
         ].forEach((element) => {
             element?.addEventListener('change', () => {
                 this.scheduleAIModelAutosave({ immediate: true });
@@ -405,6 +409,7 @@ const SettingsPage = {
         this.tagPromptInput.value = settings.tag_prompt || '';
         this.groupPromptInput.value = settings.group_prompt || '';
         this.translatePromptInput.value = settings.translate_prompt || '';
+        this.ttsPromptInput.value = settings.tts_prompt || '';
     },
 
     extractPromptSettings(settings = {}) {
@@ -414,7 +419,8 @@ const SettingsPage = {
             figure_prompt: settings.figure_prompt || '',
             tag_prompt: settings.tag_prompt || '',
             group_prompt: settings.group_prompt || '',
-            translate_prompt: settings.translate_prompt || ''
+            translate_prompt: settings.translate_prompt || '',
+            tts_prompt: settings.tts_prompt || ''
         };
     },
 
@@ -439,7 +445,8 @@ const SettingsPage = {
             figure_prompt: this.figurePromptInput.value.trim(),
             tag_prompt: this.tagPromptInput.value.trim(),
             group_prompt: this.groupPromptInput.value.trim(),
-            translate_prompt: this.translatePromptInput.value.trim()
+            translate_prompt: this.translatePromptInput.value.trim(),
+            tts_prompt: this.ttsPromptInput.value.trim()
         };
     },
 
@@ -1639,7 +1646,8 @@ const SettingsPage = {
             figure_model_id: selection.figure_model_id || this.figureModelSelect?.value || '',
             tag_model_id: selection.tag_model_id || this.tagModelSelect?.value || '',
             group_model_id: selection.group_model_id || this.groupModelSelect?.value || '',
-            translate_model_id: selection.translate_model_id || this.translateModelSelect?.value || ''
+            translate_model_id: selection.translate_model_id || this.translateModelSelect?.value || '',
+            tts_model_id: selection.tts_model_id || this.ttsModelSelect?.value || ''
         };
         const options = this.aiModelDraft.map((item) => {
             const label = `${item.name || t('settings.ai.unnamed_model', '未命名模型')} · ${item.provider || 'openai'} / ${item.model || t('settings.ai.unnamed_model_id', '未填写模型名')}`;
@@ -1653,7 +1661,8 @@ const SettingsPage = {
             [this.figureModelSelect, safeSelection.figure_model_id],
             [this.tagModelSelect, safeSelection.tag_model_id],
             [this.groupModelSelect, safeSelection.group_model_id],
-            [this.translateModelSelect, safeSelection.translate_model_id]
+            [this.translateModelSelect, safeSelection.translate_model_id],
+            [this.ttsModelSelect, safeSelection.tts_model_id]
         ].forEach(([element, selectedValue], index) => {
             if (!element) return;
             element.innerHTML = options;
@@ -1674,7 +1683,8 @@ const SettingsPage = {
             figure_model_id: this.figureModelSelect?.value || defaultModelID,
             tag_model_id: this.tagModelSelect?.value || defaultModelID,
             group_model_id: this.groupModelSelect?.value || defaultModelID,
-            translate_model_id: this.translateModelSelect?.value || defaultModelID
+            translate_model_id: this.translateModelSelect?.value || defaultModelID,
+            tts_model_id: this.ttsModelSelect?.value || defaultModelID
         };
     },
 

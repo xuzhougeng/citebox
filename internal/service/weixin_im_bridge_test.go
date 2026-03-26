@@ -23,6 +23,8 @@ type fakeWeixinAIReader struct {
 	mu             sync.Mutex
 	inputs         []model.AIReadRequest
 	answer         string
+	ttsRewrite     string
+	ttsRewriteErr  error
 	commandPlan    *weixinCommandPlan
 	commandPlanErr error
 	searchPlan     *weixinSearchPlan
@@ -132,6 +134,19 @@ func (f *fakeWeixinAIReader) ReviewWeixinFigureSearch(_ context.Context, _ strin
 		Summary:     "已按候选顺序保留最可能结果。",
 		SelectedIDs: ids,
 	}, nil
+}
+
+func (f *fakeWeixinAIReader) RewriteTextForTTS(_ context.Context, text string) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	if f.ttsRewriteErr != nil {
+		return "", f.ttsRewriteErr
+	}
+	if strings.TrimSpace(f.ttsRewrite) != "" {
+		return f.ttsRewrite, nil
+	}
+	return text, nil
 }
 
 func (f *fakeWeixinAIReader) lastInput() model.AIReadRequest {
@@ -619,7 +634,10 @@ func TestWeixinIMBridgeAskReplyReturnsSynthesizedVoiceWhenTTSConfigured(t *testi
 		t.Fatalf("UpdateTTSSettings() error = %v", err)
 	}
 
-	aiReader := &fakeWeixinAIReader{answer: "这是 Ask 的语音内容。"}
+	aiReader := &fakeWeixinAIReader{
+		answer:     "这是 Ask 的语音内容。",
+		ttsRewrite: "这是适合朗读的 Ask 语音内容。",
+	}
 	bridge := newTestWeixinBridge(t, svc, aiReader, cfg.StorageDir)
 	paper := createBridgePaper(t, svc.repo, "Ask TTS Paper", "ask-tts.pdf")
 	bridge.activatePaperContext(paper.ID, true)
@@ -633,8 +651,8 @@ func TestWeixinIMBridgeAskReplyReturnsSynthesizedVoiceWhenTTSConfigured(t *testi
 	synthCalled := false
 	bridge.synthesizeTTS = func(_ context.Context, text, uid string, settings model.TTSSettings) (string, func(), error) {
 		synthCalled = true
-		if text != "这是 Ask 的语音内容。" {
-			t.Fatalf("synthesizeTTS() text = %q, want %q", text, "这是 Ask 的语音内容。")
+		if text != "这是适合朗读的 Ask 语音内容。" {
+			t.Fatalf("synthesizeTTS() text = %q, want %q", text, "这是适合朗读的 Ask 语音内容。")
 		}
 		if uid != "user@im.wechat" {
 			t.Fatalf("synthesizeTTS() uid = %q, want %q", uid, "user@im.wechat")
@@ -657,7 +675,61 @@ func TestWeixinIMBridgeAskReplyReturnsSynthesizedVoiceWhenTTSConfigured(t *testi
 	if !containsAll(reply.Text, "文献问答", "这是 Ask 的语音内容。") {
 		t.Fatalf("handleIncomingMessageReply() = %+v, want ask answer text", reply)
 	}
+	if reply.VoicePendingNotice != "语音内容生成中，请稍后。" {
+		t.Fatalf("handleIncomingMessageReply() pending notice = %q, want %q", reply.VoicePendingNotice, "语音内容生成中，请稍后。")
+	}
 
+	selectedPath, cleanup, err := bridge.resolveVoiceReply(context.Background(), weixin.Message{
+		FromUserID: "user@im.wechat",
+	}, reply)
+	if err != nil {
+		t.Fatalf("resolveVoiceReply() error = %v", err)
+	}
+	cleanup()
+	if !synthCalled {
+		t.Fatal("resolveVoiceReply() did not trigger synthesizeTTS")
+	}
+	if selectedPath != voicePath {
+		t.Fatalf("resolveVoiceReply() path = %q, want %q", selectedPath, voicePath)
+	}
+}
+
+func TestWeixinIMBridgeVoiceRewriteFallbackSanitizesMarkdown(t *testing.T) {
+	svc, _, cfg := newTestService(t)
+	if _, err := svc.UpdateTTSSettings(model.TTSSettings{
+		AppID:     "app-id",
+		AccessKey: "access-key",
+		Speaker:   "speaker-id",
+	}); err != nil {
+		t.Fatalf("UpdateTTSSettings() error = %v", err)
+	}
+
+	aiReader := &fakeWeixinAIReader{
+		answer:        "ok",
+		ttsRewriteErr: context.DeadlineExceeded,
+	}
+	bridge := newTestWeixinBridge(t, svc, aiReader, cfg.StorageDir)
+
+	voiceDir := t.TempDir()
+	voicePath := filepath.Join(voiceDir, "ask-reply.mp3")
+	if err := os.WriteFile(voicePath, []byte("tts-audio"), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	synthCalled := false
+	bridge.synthesizeTTS = func(_ context.Context, text, uid string, settings model.TTSSettings) (string, func(), error) {
+		synthCalled = true
+		want := "见图形摘要 第 1 页图 1\n\n一句话概括：这篇论文构建了首个统一图谱。"
+		if text != want {
+			t.Fatalf("synthesizeTTS() text = %q, want %q", text, want)
+		}
+		return voicePath, func() {}, nil
+	}
+
+	reply := weixinReplyEnvelope{
+		TTSText:         "见图形摘要 ![第 1 页图 1](figure://309)\n\n一句话概括：**这篇论文**构建了首个统一图谱。",
+		OptimizeTTSText: true,
+	}
 	selectedPath, cleanup, err := bridge.resolveVoiceReply(context.Background(), weixin.Message{
 		FromUserID: "user@im.wechat",
 	}, reply)
