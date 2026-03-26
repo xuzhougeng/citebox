@@ -77,6 +77,14 @@ type weixinCommandPlan struct {
 	Arg     string `json:"arg,omitempty"`
 }
 
+type weixinReplyEnvelope struct {
+	Text                      string
+	TTSText                   string
+	RequireTTS                bool
+	VoiceResolveFailureNotice string
+	VoiceSendFailureNotice    string
+}
+
 type weixinPaperSearchCandidate struct {
 	Paper model.Paper
 	Score int
@@ -97,6 +105,7 @@ type WeixinIMBridge struct {
 	aiService      weixinAIReader
 	logger         *slog.Logger
 	downloadFile   func(context.Context, weixin.MessageItem) (*weixin.DownloadedFile, error)
+	synthesizeTTS  func(context.Context, string, string, model.TTSSettings) (string, func(), error)
 	stateDir       string
 	syncBufPath    string
 	contextPath    string
@@ -121,6 +130,7 @@ func NewWeixinIMBridge(libraryService *LibraryService, aiService weixinAIReader,
 	}
 	bridge.syncBufPath = filepath.Join(bridge.stateDir, weixinSyncBufFileName)
 	bridge.contextPath = filepath.Join(bridge.stateDir, weixinContextFileName)
+	bridge.synthesizeTTS = bridge.synthesizeReplyVoice
 	bridge.loadContext()
 	return bridge
 }
@@ -264,19 +274,41 @@ func (b *WeixinIMBridge) runPolling(ctx context.Context, client *weixin.Client, 
 				"message_type", message.MessageType,
 				"message_state", message.MessageState,
 			)
-			reply := trimWeixinReply(b.handleIncomingMessage(ctx, message))
-			previewPath, previewErr := b.selectedFigurePreviewPath(message, reply)
+			reply := b.handleIncomingMessageReply(ctx, message)
+			reply.Text = trimWeixinReply(reply.Text)
+			voicePath, cleanupVoice, voiceErr := b.resolveVoiceReply(ctx, message, reply)
+			if cleanupVoice == nil {
+				cleanupVoice = func() {}
+			}
+			if voiceErr != nil {
+				if reply.VoiceResolveFailureNotice != "" {
+					reply.Text = trimWeixinReply(appendWeixinReplyNotice(reply.Text, reply.VoiceResolveFailureNotice))
+				}
+				b.logger.Warn("resolve weixin voice reply failed", "error", voiceErr)
+			}
+			previewPath, previewErr := b.selectedFigurePreviewPath(message, reply.Text)
 			if previewErr != nil {
-				reply = trimWeixinReply(appendWeixinReplyNotice(reply, "图片已选中，但原图预览不可用。"))
+				reply.Text = trimWeixinReply(appendWeixinReplyNotice(reply.Text, "图片已选中，但原图预览不可用。"))
 				b.logger.Warn("resolve weixin figure preview failed", "error", previewErr)
 			}
-			if reply == "" && previewPath == "" {
+			if reply.Text == "" && previewPath == "" && voicePath == "" {
+				cleanupVoice()
 				b.logger.Info("skip empty weixin reply", "from_user_id", strings.TrimSpace(message.FromUserID))
 				continue
 			}
-			if reply != "" {
-				if err := client.SendTextMessage(ctx, message.FromUserID, reply, message.ContextToken); err != nil {
+			if reply.Text != "" {
+				if err := client.SendTextMessage(ctx, message.FromUserID, reply.Text, message.ContextToken); err != nil {
 					b.logger.Warn("send weixin reply failed", "error", err)
+				}
+			}
+			if voicePath != "" {
+				if err := client.SendFileAttachment(ctx, message.FromUserID, voicePath, message.ContextToken); err != nil {
+					b.logger.Warn("send weixin voice file failed", "error", err, "path", voicePath)
+					if reply.VoiceSendFailureNotice != "" {
+						if err := client.SendTextMessage(ctx, message.FromUserID, reply.VoiceSendFailureNotice, message.ContextToken); err != nil {
+							b.logger.Warn("send weixin voice file failure notice failed", "error", err)
+						}
+					}
 				}
 			}
 			if previewPath != "" {
@@ -287,41 +319,50 @@ func (b *WeixinIMBridge) runPolling(ctx context.Context, client *weixin.Client, 
 					}
 				}
 			}
+			cleanupVoice()
 		}
 	}
 }
 
 func (b *WeixinIMBridge) handleIncomingMessage(ctx context.Context, message weixin.Message) string {
+	return b.handleIncomingMessageReply(ctx, message).Text
+}
+
+func (b *WeixinIMBridge) handleIncomingMessageReply(ctx context.Context, message weixin.Message) weixinReplyEnvelope {
 	if reply, handled := b.handleIncomingFile(ctx, message); handled {
-		return reply
+		return weixinReplyEnvelope{Text: reply}
 	}
 
 	text := extractWeixinText(message)
 	if text == "" {
-		return ""
+		return weixinReplyEnvelope{}
 	}
-	return b.handleIncomingText(ctx, text)
+	return b.handleIncomingTextReply(ctx, text)
 }
 
 func (b *WeixinIMBridge) handleIncomingText(ctx context.Context, text string) string {
+	return b.handleIncomingTextReply(ctx, text).Text
+}
+
+func (b *WeixinIMBridge) handleIncomingTextReply(ctx context.Context, text string) weixinReplyEnvelope {
 	text = strings.TrimSpace(text)
 	if strings.HasPrefix(text, "／") {
 		text = "/" + strings.TrimPrefix(text, "／")
 	}
 	if text == "" {
-		return ""
+		return weixinReplyEnvelope{}
 	}
 
 	command, arg, ok := parseWeixinSlashCommand(text)
 	if !ok {
 		planned := b.planWeixinPlainTextCommand(ctx, text)
 		if planned == nil {
-			return weixinHelpText()
+			return weixinReplyEnvelope{Text: weixinHelpText()}
 		}
-		return b.executeWeixinCommand(ctx, planned.Command, planned.Arg)
+		return b.executeWeixinCommandReply(ctx, planned.Command, planned.Arg)
 	}
 
-	return b.executeWeixinCommand(ctx, command, arg)
+	return b.executeWeixinCommandReply(ctx, command, arg)
 }
 
 func (b *WeixinIMBridge) planWeixinPlainTextCommand(ctx context.Context, text string) *weixinCommandPlan {
@@ -367,36 +408,48 @@ func (b *WeixinIMBridge) buildWeixinIntentContext() weixinIntentContext {
 }
 
 func (b *WeixinIMBridge) executeWeixinCommand(ctx context.Context, command, arg string) string {
+	return b.executeWeixinCommandReply(ctx, command, arg).Text
+}
+
+func (b *WeixinIMBridge) executeWeixinCommandReply(ctx context.Context, command, arg string) weixinReplyEnvelope {
 	switch command {
 	case "/help", "/h":
-		return weixinHelpText()
+		return weixinReplyEnvelope{Text: weixinHelpText()}
 	case "/status":
-		return b.statusText()
+		return weixinReplyEnvelope{Text: b.statusText()}
 	case "/reset":
 		b.setContext(weixinIMContext{})
-		return "已清空微信上下文。发送 `/search 自然语言检索内容` 或 `/recent` 开始。"
+		return weixinReplyEnvelope{Text: "已清空微信上下文。发送 `/search 自然语言检索内容` 或 `/recent` 开始。"}
 	case "/figures":
-		return b.listFigures()
+		return weixinReplyEnvelope{Text: b.listFigures()}
 	case "/recent":
-		return b.listRecentPapers()
+		return weixinReplyEnvelope{Text: b.listRecentPapers()}
 	case "/search":
-		return b.search(ctx, arg, "")
+		return weixinReplyEnvelope{Text: b.search(ctx, arg, "")}
 	case "/search-papers":
-		return b.search(ctx, arg, weixinSearchTargetPaper)
+		return weixinReplyEnvelope{Text: b.search(ctx, arg, weixinSearchTargetPaper)}
 	case "/search-figures":
-		return b.search(ctx, arg, weixinSearchTargetFigure)
+		return weixinReplyEnvelope{Text: b.search(ctx, arg, weixinSearchTargetFigure)}
 	case "/paper":
-		return b.selectPaper(arg)
+		return weixinReplyEnvelope{Text: b.selectPaper(arg)}
 	case "/figure":
-		return b.selectFigure(arg)
+		return weixinReplyEnvelope{Text: b.selectFigure(arg)}
 	case "/note":
-		return b.appendNote(arg)
+		return weixinReplyEnvelope{Text: b.appendNote(arg)}
 	case "/interpret":
-		return b.interpretCurrentFigure(ctx, arg)
+		return weixinReplyEnvelope{Text: b.interpretCurrentFigure(ctx, arg)}
 	case "/ask", "/qa":
-		return b.answerCurrentPaper(ctx, arg)
+		return b.answerCurrentPaperReply(ctx, arg)
+	case "/testvoice":
+		return weixinReplyEnvelope{
+			Text:                      fmt.Sprintf("测试语音：%s", ttsTestDemoText),
+			TTSText:                   ttsTestDemoText,
+			RequireTTS:                true,
+			VoiceResolveFailureNotice: "测试语音生成失败，请先保存可用的 TTS 配置。",
+			VoiceSendFailureNotice:    "测试语音发送失败。",
+		}
 	default:
-		return weixinHelpText()
+		return weixinReplyEnvelope{Text: weixinHelpText()}
 	}
 }
 
@@ -1179,14 +1232,18 @@ func (b *WeixinIMBridge) interpretCurrentFigure(ctx context.Context, question st
 }
 
 func (b *WeixinIMBridge) answerCurrentPaper(ctx context.Context, question string) string {
+	return b.answerCurrentPaperReply(ctx, question).Text
+}
+
+func (b *WeixinIMBridge) answerCurrentPaperReply(ctx context.Context, question string) weixinReplyEnvelope {
 	question = strings.TrimSpace(question)
 	if question == "" {
-		return "用法：`/ask 你的问题`"
+		return weixinReplyEnvelope{Text: "用法：`/ask 你的问题`"}
 	}
 
 	paper, errText := b.requireCurrentPaper()
 	if errText != "" {
-		return errText
+		return weixinReplyEnvelope{Text: errText}
 	}
 
 	state := b.getContext()
@@ -1197,7 +1254,7 @@ func (b *WeixinIMBridge) answerCurrentPaper(ctx context.Context, question string
 		History:  append([]model.AIConversationTurn(nil), state.QAHistory...),
 	})
 	if err != nil {
-		return fmt.Sprintf("问答失败：%v", err)
+		return weixinReplyEnvelope{Text: fmt.Sprintf("问答失败：%v", err)}
 	}
 
 	turn := model.AIConversationTurn{
@@ -1211,7 +1268,12 @@ func (b *WeixinIMBridge) answerCurrentPaper(ctx context.Context, question string
 		}
 	})
 
-	return fmt.Sprintf("文献问答 · %s\n\n%s", clipRunes(paper.Title, 72), turn.Answer)
+	replyText := fmt.Sprintf("文献问答 · %s\n\n%s", clipRunes(paper.Title, 72), turn.Answer)
+	reply := weixinReplyEnvelope{Text: replyText}
+	if turn.Answer != "" {
+		reply.TTSText = turn.Answer
+	}
+	return reply
 }
 
 func (b *WeixinIMBridge) statusText() string {
@@ -1410,6 +1472,39 @@ func (b *WeixinIMBridge) selectedFigurePreviewPath(message weixin.Message, reply
 	return b.figurePreviewPath(figure)
 }
 
+func (b *WeixinIMBridge) resolveVoiceReply(ctx context.Context, message weixin.Message, reply weixinReplyEnvelope) (string, func(), error) {
+	ttsText := strings.TrimSpace(reply.TTSText)
+	if ttsText == "" {
+		return "", func() {}, nil
+	}
+
+	settings, err := b.libraryService.GetTTSSettings()
+	if err != nil {
+		return "", func() {}, err
+	}
+	if settings == nil {
+		if reply.RequireTTS {
+			return "", func() {}, errors.New("weixin tts settings are missing")
+		}
+		return "", func() {}, nil
+	}
+	if err := validateTTSSettings(*settings); err != nil {
+		if reply.RequireTTS {
+			return "", func() {}, err
+		}
+		return "", func() {}, nil
+	}
+	if b.synthesizeTTS == nil {
+		return "", func() {}, errors.New("weixin tts synthesizer is nil")
+	}
+
+	return b.synthesizeTTS(ctx, ttsText, strings.TrimSpace(message.FromUserID), *settings)
+}
+
+func (b *WeixinIMBridge) synthesizeReplyVoice(ctx context.Context, text, uid string, settings model.TTSSettings) (string, func(), error) {
+	return synthesizeDoubaoTTSFile(ctx, b.stateDir, text, uid, newDoubaoTTSSettings(settings))
+}
+
 func (b *WeixinIMBridge) figurePreviewPath(figure *model.Figure) (string, error) {
 	if figure == nil {
 		return "", errors.New("figure is nil")
@@ -1513,6 +1608,7 @@ func weixinHelpText() string {
 		"`/ask 问题` 或 `/qa 问题`：对当前文献提问",
 		"`/note 内容`：追加文献/图片笔记",
 		"`/interpret 问题`：解读当前图片",
+		"`/testvoice`：回一条测试文本，并追加一段基于当前 TTS 配置的 Hello World 语音",
 		"`/status`：查看当前上下文",
 		"`/reset`：清空当前上下文",
 		"`/help`：查看帮助",

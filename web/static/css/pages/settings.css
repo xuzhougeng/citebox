@@ -686,3 +686,21 @@ html[lang^="zh"] .prompt-template-details[open] summary::before {
 .weixin-qr-fallback a {
     color: var(--accent-deep);
 }
+
+.settings-audio-preview {
+    display: grid;
+    gap: 0.75rem;
+    padding: 1rem;
+    border-radius: 18px;
+    border: 1px solid rgba(var(--ink-rgb), 0.08);
+    background: rgba(var(--surface-rgb), 0.84);
+}
+
+.settings-audio-preview strong {
+    font-size: 0.96rem;
+    font-family: var(--font-display);
+}
+
+.settings-audio-preview audio {
+    width: 100%;
+}

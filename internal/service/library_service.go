@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -22,6 +23,7 @@ type LibraryService struct {
 	logger              *slog.Logger
 	startBackground     bool
 	pdfTextExtractor    func(string) (string, error)
+	ttsAudioSynthesizer func(context.Context, string, model.TTSSettings) ([]byte, string, error)
 	weixinClientFactory func(token string) weixinBindingClient
 	wolaiClientFactory  func(settings model.WolaiSettings) (wolaiClient, error)
 }
@@ -186,6 +188,7 @@ func NewLibraryService(repo *repository.LibraryRepository, cfg *config.Config, o
 		logger:              slog.Default().With("component", "library_service"),
 		startBackground:     true,
 		httpClient:          &http.Client{},
+		ttsAudioSynthesizer: synthesizeTTSTestAudio,
 		weixinClientFactory: defaultWeixinBindingClientFactory,
 		wolaiClientFactory:  defaultWolaiClientFactory,
 	}

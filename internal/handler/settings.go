@@ -2,7 +2,9 @@ package handler
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/xuzhougeng/citebox/internal/apperr"
 	"github.com/xuzhougeng/citebox/internal/model"
@@ -167,6 +169,62 @@ func (h *SettingsHandler) UpdateWeixinBridgeSettings(w http.ResponseWriter, r *h
 		"success":  true,
 		"settings": settings,
 	})
+}
+
+func (h *SettingsHandler) GetTTSSettings(w http.ResponseWriter, r *http.Request) {
+	settings, err := h.libraryService.GetTTSSettings()
+	if err != nil {
+		sendError(w, err)
+		return
+	}
+
+	sendJSON(w, http.StatusOK, settings)
+}
+
+func (h *SettingsHandler) UpdateTTSSettings(w http.ResponseWriter, r *http.Request) {
+	var req model.TTSSettings
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		sendError(w, apperr.New(apperr.CodeInvalidArgument, "请求体格式错误"))
+		return
+	}
+
+	settings, err := h.libraryService.UpdateTTSSettings(req)
+	if err != nil {
+		sendError(w, err)
+		return
+	}
+
+	sendJSON(w, http.StatusOK, map[string]interface{}{
+		"success":  true,
+		"settings": settings,
+	})
+}
+
+func (h *SettingsHandler) TestTTS(w http.ResponseWriter, r *http.Request) {
+	var req model.TTSSettings
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		sendError(w, apperr.New(apperr.CodeInvalidArgument, "请求体格式错误"))
+		return
+	}
+
+	audio, filename, contentType, err := h.libraryService.TestTTS(r.Context(), req)
+	if err != nil {
+		sendError(w, err)
+		return
+	}
+
+	if strings.TrimSpace(contentType) == "" {
+		contentType = "audio/mpeg"
+	}
+	if strings.TrimSpace(filename) == "" {
+		filename = "tts-test.mp3"
+	}
+
+	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Content-Disposition", fmt.Sprintf("inline; filename=\"%s\"", filename))
+	w.Header().Set("Content-Length", fmt.Sprintf("%d", len(audio)))
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(audio)
 }
 
 func (h *SettingsHandler) GetVersionStatus(w http.ResponseWriter, r *http.Request) {

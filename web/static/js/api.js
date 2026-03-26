@@ -544,6 +544,30 @@ const API = {
         });
     },
 
+    getTTSSettings() {
+        return requestJSON(`${API_BASE}/settings/tts`);
+    },
+
+    updateTTSSettings(data) {
+        return requestJSON(`${API_BASE}/settings/tts`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        });
+    },
+
+    testTTS(data) {
+        return requestBlob(`${API_BASE}/settings/tts/test`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        });
+    },
+
     getVersionStatus(forceRefresh = false) {
         const suffix = forceRefresh ? '?refresh=1' : '';
         return requestJSON(`${API_BASE}/settings/version${suffix}`);

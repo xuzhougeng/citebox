@@ -97,10 +97,22 @@ const SettingsPage = {
         this.weixinQRCodeLink = document.getElementById('weixinQRCodeLink');
         this.weixinBindingStatus = document.getElementById('weixinBindingStatus');
         this.weixinBridgeEnabledInput = document.getElementById('weixinBridgeEnabledInput');
+        this.ttsSettingsForm = document.getElementById('ttsSettingsForm');
+        this.ttsAppIDInput = document.getElementById('ttsAppIDInput');
+        this.ttsAccessKeyInput = document.getElementById('ttsAccessKeyInput');
+        this.ttsResourceIDInput = document.getElementById('ttsResourceIDInput');
+        this.ttsSpeakerInput = document.getElementById('ttsSpeakerInput');
         this.weixinBridgeSaveStatus = document.getElementById('weixinBridgeSaveStatus');
         this.saveWeixinBridgeButton = document.getElementById('saveWeixinBridgeButton');
+        this.ttsSaveStatus = document.getElementById('ttsSaveStatus');
+        this.ttsTestStatus = document.getElementById('ttsTestStatus');
+        this.ttsAudioPreview = document.getElementById('ttsAudioPreview');
+        this.ttsAudioPlayer = document.getElementById('ttsAudioPlayer');
+        this.saveTTSButton = document.getElementById('saveTTSButton');
+        this.testTTSButton = document.getElementById('testTTSButton');
         this.startWeixinBindingButton = document.getElementById('startWeixinBindingButton');
         this.unbindWeixinButton = document.getElementById('unbindWeixinButton');
+        this.ttsAudioObjectURL = '';
 
         this.bindEvents();
         this.bootstrap();
@@ -217,8 +229,27 @@ const SettingsPage = {
         this.weixinBridgeEnabledInput?.addEventListener('change', () => {
             this.setWeixinBridgeSaveStatus(t('settings.weixin.bridge_modified', '配置已修改，点击”保存微信桥接配置”后生效。'), 'saving');
         });
+        [
+            this.ttsAppIDInput,
+            this.ttsAccessKeyInput,
+            this.ttsResourceIDInput,
+            this.ttsSpeakerInput
+        ].forEach((element) => {
+            element?.addEventListener('input', () => {
+                this.setTTSSaveStatus(t('settings.tts.modified', 'TTS 配置已修改，点击“保存 TTS 配置”后生效。'), 'saving');
+                this.clearTTSAudioPreview();
+                this.setTTSTestStatus(t('settings.tts.test_hint', '测试会直接使用当前表单配置，成功后可在下方试听。'));
+            });
+        });
         this.saveWeixinBridgeButton?.addEventListener('click', async () => {
             await this.saveWeixinBridgeSettings();
+        });
+        this.ttsSettingsForm?.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            await this.saveTTSSettings();
+        });
+        this.testTTSButton?.addEventListener('click', async () => {
+            await this.testTTSSettings();
         });
         this.startWeixinBindingButton.addEventListener('click', async () => {
             await this.startWeixinBinding();
@@ -232,6 +263,9 @@ const SettingsPage = {
                 event.stopPropagation();
                 this.closeAIModelModal();
             }
+        });
+        window.addEventListener('beforeunload', () => {
+            this.clearTTSAudioPreview();
         });
     },
 
@@ -299,7 +333,8 @@ const SettingsPage = {
                 this.loadWolaiSettings(),
                 this.loadDesktopCloseSettings(),
                 this.loadVersionStatus(),
-                this.loadAuthSettings()
+                this.loadAuthSettings(),
+                this.loadTTSSettings()
             ]);
         } catch (error) {
             Utils.showToast(error.message, 'error');
@@ -309,6 +344,11 @@ const SettingsPage = {
     async loadAuthSettings() {
         const settings = await API.getAuthSettings();
         this.renderAuthSettings(settings || {});
+    },
+
+    async loadTTSSettings() {
+        const settings = await API.getTTSSettings();
+        this.renderTTSSettings(settings || {});
     },
 
     async loadAISettings() {
@@ -899,9 +939,7 @@ const SettingsPage = {
         }
 
         try {
-            const response = await API.updateWeixinBridgeSettings({
-                enabled: Boolean(this.weixinBridgeEnabledInput?.checked)
-            });
+            const response = await API.updateWeixinBridgeSettings(this.weixinBridgeSavePayload());
             this.authSettings = {
                 ...(this.authSettings || {}),
                 weixin_bridge: response.settings || {}
@@ -921,6 +959,94 @@ const SettingsPage = {
                 button.textContent = originalLabel;
             }
         }
+    },
+
+    async saveTTSSettings() {
+        const button = this.saveTTSButton;
+        const originalLabel = button?.textContent || t('settings.tts.save_btn', '保存 TTS 配置');
+        if (button) {
+            button.disabled = true;
+            button.textContent = t('settings.tts.saving_btn', '保存中...');
+        }
+
+        try {
+            const response = await API.updateTTSSettings(this.ttsSavePayload());
+            this.renderTTSSettings(response.settings || {});
+            this.setTTSSaveStatus(t('settings.tts.saved', 'TTS 配置已保存。'), 'success');
+            Utils.showToast(t('settings.tts.saved_toast', 'TTS 配置已保存'));
+        } catch (error) {
+            this.setTTSSaveStatus(t('settings.tts.save_failed', '保存失败：{0}').replace('{0}', error.message), 'error');
+            Utils.showToast(error.message, 'error');
+        } finally {
+            if (button) {
+                button.disabled = false;
+                button.textContent = originalLabel;
+            }
+        }
+    },
+
+    async testTTSSettings() {
+        const button = this.testTTSButton;
+        const originalLabel = button?.textContent || t('settings.tts.test_btn', '测试 TTS');
+        if (button) {
+            button.disabled = true;
+            button.textContent = t('settings.tts.testing_btn', '测试中...');
+        }
+
+        this.clearTTSAudioPreview();
+        this.setTTSTestStatus(t('settings.tts.testing_status', '正在调用当前 TTS 配置合成测试音频...'), 'saving');
+
+        try {
+            const result = await API.testTTS(this.ttsSavePayload());
+            this.showTTSAudioPreview(result?.blob, result?.filename || '');
+            this.setTTSTestStatus(t('settings.tts.test_ok', 'TTS 测试成功，可直接试听。'), 'success');
+            Utils.showToast(t('settings.tts.test_ok', 'TTS 测试成功，可直接试听。'));
+        } catch (error) {
+            this.clearTTSAudioPreview();
+            this.setTTSTestStatus(t('settings.tts.test_failed', '测试失败：{0}').replace('{0}', error.message), 'error');
+            Utils.showToast(error.message, 'error');
+        } finally {
+            if (button) {
+                button.disabled = false;
+                button.textContent = originalLabel;
+            }
+        }
+    },
+
+    currentSavedWeixinBridgeSettings() {
+        const settings = this.authSettings?.weixin_bridge || {};
+        return {
+            enabled: Boolean(settings.enabled)
+        };
+    },
+
+    weixinBridgeSavePayload() {
+        const saved = this.currentSavedWeixinBridgeSettings();
+        return {
+            ...saved,
+            enabled: Boolean(this.weixinBridgeEnabledInput?.checked)
+        };
+    },
+
+    currentSavedTTSSettings() {
+        const settings = this.ttsSettings || {};
+        return {
+            app_id: String(settings.app_id || '').trim(),
+            access_key: String(settings.access_key || '').trim(),
+            resource_id: String(settings.resource_id || '').trim(),
+            speaker: String(settings.speaker || '').trim()
+        };
+    },
+
+    ttsSavePayload() {
+        const saved = this.currentSavedTTSSettings();
+        return {
+            ...saved,
+            app_id: String(this.ttsAppIDInput?.value || '').trim(),
+            access_key: String(this.ttsAccessKeyInput?.value || '').trim(),
+            resource_id: String(this.ttsResourceIDInput?.value || '').trim(),
+            speaker: String(this.ttsSpeakerInput?.value || '').trim()
+        };
     },
 
     renderAuthSettings(settings = {}) {
@@ -969,6 +1095,22 @@ const SettingsPage = {
         }
         if (!this.pendingWeixinQRCode) {
             this.setWeixinQRCodeVisible(false);
+        }
+    },
+
+    renderTTSSettings(settings = {}) {
+        this.ttsSettings = settings;
+        if (this.ttsAppIDInput) {
+            this.ttsAppIDInput.value = String(settings.app_id || '');
+        }
+        if (this.ttsAccessKeyInput) {
+            this.ttsAccessKeyInput.value = String(settings.access_key || '');
+        }
+        if (this.ttsResourceIDInput) {
+            this.ttsResourceIDInput.value = String(settings.resource_id || '');
+        }
+        if (this.ttsSpeakerInput) {
+            this.ttsSpeakerInput.value = String(settings.speaker || '');
         }
     },
 
@@ -1110,6 +1252,45 @@ const SettingsPage = {
 
     setWeixinBridgeSaveStatus(message, tone = '') {
         this.setInlineStatus(this.weixinBridgeSaveStatus, message, tone);
+    },
+
+    setTTSSaveStatus(message, tone = '') {
+        this.setInlineStatus(this.ttsSaveStatus, message, tone);
+    },
+
+    setTTSTestStatus(message, tone = '') {
+        this.setInlineStatus(this.ttsTestStatus, message, tone);
+    },
+
+    showTTSAudioPreview(blob, filename = '') {
+        if (!(blob instanceof Blob) || blob.size <= 0) {
+            this.clearTTSAudioPreview();
+            return;
+        }
+
+        this.clearTTSAudioPreview();
+        this.ttsAudioObjectURL = URL.createObjectURL(blob);
+
+        if (this.ttsAudioPlayer) {
+            this.ttsAudioPlayer.src = this.ttsAudioObjectURL;
+            this.ttsAudioPlayer.title = filename || t('settings.tts.preview_title', '测试音频');
+            this.ttsAudioPlayer.load();
+        }
+        this.ttsAudioPreview?.classList.remove('hidden');
+    },
+
+    clearTTSAudioPreview() {
+        if (this.ttsAudioPlayer) {
+            this.ttsAudioPlayer.pause();
+            this.ttsAudioPlayer.removeAttribute('src');
+            this.ttsAudioPlayer.removeAttribute('title');
+            this.ttsAudioPlayer.load();
+        }
+        this.ttsAudioPreview?.classList.add('hidden');
+        if (this.ttsAudioObjectURL) {
+            URL.revokeObjectURL(this.ttsAudioObjectURL);
+            this.ttsAudioObjectURL = '';
+        }
     },
 
     async startWeixinBinding() {

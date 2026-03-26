@@ -16,9 +16,9 @@ func (s *LibraryService) GetWeixinBridgeSettings() (*model.WeixinBridgeSettings,
 		return nil, apperr.Wrap(apperr.CodeInternal, "读取微信桥接配置失败", err)
 	}
 
-	settings := model.WeixinBridgeSettings{
+	settings := normalizeWeixinBridgeSettings(model.WeixinBridgeSettings{
 		Enabled: s.config.WeixinBridgeEnabled,
-	}
+	})
 	if strings.TrimSpace(raw) == "" {
 		return &settings, nil
 	}
@@ -26,13 +26,12 @@ func (s *LibraryService) GetWeixinBridgeSettings() (*model.WeixinBridgeSettings,
 	if err := json.Unmarshal([]byte(raw), &settings); err != nil {
 		return nil, apperr.Wrap(apperr.CodeInternal, "解析微信桥接配置失败", err)
 	}
+	settings = normalizeWeixinBridgeSettings(settings)
 	return &settings, nil
 }
 
 func (s *LibraryService) UpdateWeixinBridgeSettings(input model.WeixinBridgeSettings) (*model.WeixinBridgeSettings, error) {
-	settings := model.WeixinBridgeSettings{
-		Enabled: input.Enabled,
-	}
+	settings := normalizeWeixinBridgeSettings(input)
 
 	payload, err := json.Marshal(settings)
 	if err != nil {
@@ -49,9 +48,9 @@ func (s *LibraryService) getWeixinBridgeSettingsSummary() model.WeixinBridgeSett
 	settings, err := s.GetWeixinBridgeSettings()
 	if err != nil {
 		s.logger.Warn("load weixin bridge settings failed", "error", err)
-		return model.WeixinBridgeSettings{
+		return normalizeWeixinBridgeSettings(model.WeixinBridgeSettings{
 			Enabled: s.config.WeixinBridgeEnabled,
-		}
+		})
 	}
 	return *settings
 }
@@ -62,4 +61,10 @@ func (s *LibraryService) isWeixinBridgeEnabled() (bool, error) {
 		return false, err
 	}
 	return settings.Enabled, nil
+}
+
+func normalizeWeixinBridgeSettings(input model.WeixinBridgeSettings) model.WeixinBridgeSettings {
+	return model.WeixinBridgeSettings{
+		Enabled: input.Enabled,
+	}
 }

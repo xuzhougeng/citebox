@@ -36,6 +36,13 @@ type WeixinBridgeSettings struct {
 	Enabled bool `json:"enabled"`
 }
 
+type TTSSettings struct {
+	AppID      string `json:"app_id"`
+	AccessKey  string `json:"access_key"`
+	ResourceID string `json:"resource_id"`
+	Speaker    string `json:"speaker"`
+}
+
 type ChangePasswordRequest struct {
 	CurrentPassword string `json:"current_password"`
 	NewPassword     string `json:"new_password"`

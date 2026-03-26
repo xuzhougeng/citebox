@@ -538,6 +538,141 @@ func TestWeixinIMBridgeUnknownSlashCommandReturnsHelpWithoutIntentRouting(t *tes
 	}
 }
 
+func TestWeixinIMBridgeTestVoiceReturnsVoiceAttachment(t *testing.T) {
+	svc, _, cfg := newTestService(t)
+	if _, err := svc.UpdateWeixinBridgeSettings(model.WeixinBridgeSettings{Enabled: true}); err != nil {
+		t.Fatalf("UpdateWeixinBridgeSettings() error = %v", err)
+	}
+	if _, err := svc.UpdateTTSSettings(model.TTSSettings{
+		AppID:     "app-id",
+		AccessKey: "access-key",
+		Speaker:   "speaker-id",
+	}); err != nil {
+		t.Fatalf("UpdateTTSSettings() error = %v", err)
+	}
+	bridge := newTestWeixinBridge(t, svc, &fakeWeixinAIReader{answer: "ok"}, cfg.StorageDir)
+
+	voiceDir := t.TempDir()
+	voicePath := filepath.Join(voiceDir, "testvoice.mp3")
+	if err := os.WriteFile(voicePath, []byte("voice-bytes"), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	synthCalled := false
+	bridge.synthesizeTTS = func(_ context.Context, text, uid string, settings model.TTSSettings) (string, func(), error) {
+		synthCalled = true
+		if text != ttsTestDemoText {
+			t.Fatalf("synthesizeTTS() text = %q, want %q", text, ttsTestDemoText)
+		}
+		if uid != "user@im.wechat" {
+			t.Fatalf("synthesizeTTS() uid = %q, want %q", uid, "user@im.wechat")
+		}
+		if settings.AppID != "app-id" || settings.Speaker != "speaker-id" {
+			t.Fatalf("synthesizeTTS() settings = %+v, want persisted TTS config", settings)
+		}
+		return voicePath, func() {}, nil
+	}
+
+	reply := bridge.handleIncomingText(context.Background(), "/testvoice")
+	if !containsAll(reply, "测试语音", "Hello World") {
+		t.Fatalf("testvoice reply = %q, want test voice caption", reply)
+	}
+
+	replyEnvelope := bridge.handleIncomingTextReply(context.Background(), "/testvoice")
+	selectedPath, cleanup, err := bridge.resolveVoiceReply(context.Background(), weixin.Message{
+		FromUserID: "user@im.wechat",
+		ItemList: []weixin.MessageItem{
+			{
+				Type:     weixin.ItemTypeText,
+				TextItem: &weixin.TextItem{Text: "/testvoice"},
+			},
+		},
+	}, replyEnvelope)
+	if err != nil {
+		t.Fatalf("resolveVoiceReply() error = %v", err)
+	}
+	cleanup()
+	if !synthCalled {
+		t.Fatal("resolveVoiceReply() did not trigger synthesizeTTS for /testvoice")
+	}
+	if selectedPath == "" {
+		t.Fatal("resolveVoiceReply() path is empty")
+	}
+	if selectedPath != voicePath {
+		t.Fatalf("resolveVoiceReply() path = %q, want %q", selectedPath, voicePath)
+	}
+	if _, statErr := os.Stat(selectedPath); statErr != nil {
+		t.Fatalf("Stat(%q) error = %v", selectedPath, statErr)
+	}
+}
+
+func TestWeixinIMBridgeAskReplyReturnsSynthesizedVoiceWhenTTSConfigured(t *testing.T) {
+	svc, _, cfg := newTestService(t)
+	if _, err := svc.UpdateWeixinBridgeSettings(model.WeixinBridgeSettings{Enabled: true}); err != nil {
+		t.Fatalf("UpdateWeixinBridgeSettings() error = %v", err)
+	}
+	if _, err := svc.UpdateTTSSettings(model.TTSSettings{
+		AppID:     "app-id",
+		AccessKey: "access-key",
+		Speaker:   "speaker-id",
+	}); err != nil {
+		t.Fatalf("UpdateTTSSettings() error = %v", err)
+	}
+
+	aiReader := &fakeWeixinAIReader{answer: "这是 Ask 的语音内容。"}
+	bridge := newTestWeixinBridge(t, svc, aiReader, cfg.StorageDir)
+	paper := createBridgePaper(t, svc.repo, "Ask TTS Paper", "ask-tts.pdf")
+	bridge.activatePaperContext(paper.ID, true)
+
+	voiceDir := t.TempDir()
+	voicePath := filepath.Join(voiceDir, "ask-reply.mp3")
+	if err := os.WriteFile(voicePath, []byte("tts-audio"), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	synthCalled := false
+	bridge.synthesizeTTS = func(_ context.Context, text, uid string, settings model.TTSSettings) (string, func(), error) {
+		synthCalled = true
+		if text != "这是 Ask 的语音内容。" {
+			t.Fatalf("synthesizeTTS() text = %q, want %q", text, "这是 Ask 的语音内容。")
+		}
+		if uid != "user@im.wechat" {
+			t.Fatalf("synthesizeTTS() uid = %q, want %q", uid, "user@im.wechat")
+		}
+		if settings.AppID != "app-id" || settings.Speaker != "speaker-id" {
+			t.Fatalf("synthesizeTTS() settings = %+v, want persisted TTS config", settings)
+		}
+		return voicePath, func() {}, nil
+	}
+
+	reply := bridge.handleIncomingMessageReply(context.Background(), weixin.Message{
+		FromUserID: "user@im.wechat",
+		ItemList: []weixin.MessageItem{
+			{
+				Type:     weixin.ItemTypeText,
+				TextItem: &weixin.TextItem{Text: "/ask 总结一下这篇文献"},
+			},
+		},
+	})
+	if !containsAll(reply.Text, "文献问答", "这是 Ask 的语音内容。") {
+		t.Fatalf("handleIncomingMessageReply() = %+v, want ask answer text", reply)
+	}
+
+	selectedPath, cleanup, err := bridge.resolveVoiceReply(context.Background(), weixin.Message{
+		FromUserID: "user@im.wechat",
+	}, reply)
+	if err != nil {
+		t.Fatalf("resolveVoiceReply() error = %v", err)
+	}
+	cleanup()
+	if !synthCalled {
+		t.Fatal("resolveVoiceReply() did not trigger synthesizeTTS")
+	}
+	if selectedPath != voicePath {
+		t.Fatalf("resolveVoiceReply() path = %q, want %q", selectedPath, voicePath)
+	}
+}
+
 func TestWeixinIMBridgeImportsPDFFileAndSelectsPaper(t *testing.T) {
 	svc, _, cfg := newTestService(t)
 	bridge := newTestWeixinBridge(t, svc, &fakeWeixinAIReader{answer: "ok"}, cfg.StorageDir)

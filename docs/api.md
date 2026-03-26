@@ -1062,6 +1062,68 @@ AI 流式阅读通过：
 }
 ```
 
+#### `GET /api/settings/tts`
+
+用途：
+
+- 获取当前独立的 TTS 配置
+- `resource_id` 留空时会按默认值 `seed-tts-2.0` 返回
+
+响应示例：
+
+```json
+{
+  "app_id": "1234567890",
+  "access_key": "doubao-access-key",
+  "resource_id": "seed-tts-2.0",
+  "speaker": "zh_female_shuangkuaisisi_moon_bigtts"
+}
+```
+
+#### `PUT /api/settings/tts`
+
+用途：
+
+- 保存独立的 TTS 配置
+- 保存后，微信 `/ask`、`/qa` 会在成功回复后追加 TTS 音频
+- 微信 `/testvoice` 也会直接调用当前已保存的 TTS 配置，合成一段 Hello World 测试音频
+
+请求体：
+
+```json
+{
+  "app_id": "1234567890",
+  "access_key": "doubao-access-key",
+  "resource_id": "seed-tts-2.0",
+  "speaker": "zh_female_shuangkuaisisi_moon_bigtts"
+}
+```
+
+#### `POST /api/settings/tts/test`
+
+用途：
+
+- 使用当前请求里的 TTS 表单配置直接合成一段测试音频
+- 不会保存配置，也不依赖当前微信桥接开关
+- 成功后返回原始音频文件流，供设置页内直接试听
+
+请求体：
+
+```json
+{
+  "app_id": "1234567890",
+  "access_key": "doubao-access-key",
+  "resource_id": "seed-tts-2.0",
+  "speaker": "zh_female_shuangkuaisisi_moon_bigtts"
+}
+```
+
+返回：
+
+- 原始音频文件流，默认是 `audio/mpeg`
+- `Content-Disposition` 会携带类似 `tts-test.mp3` 的文件名
+- 当前测试文本固定为 `Hello World from CiteBox test voice`
+
 ### 数据库导入导出
 
 #### `GET /api/database/export`
@@ -1192,7 +1254,11 @@ AI 流式阅读通过：
   "username": "citebox",
   "password_from_db": false,
   "weixin_bridge": {
-    "enabled": true
+    "enabled": true,
+    "tts_app_id": "1234567890",
+    "tts_access_key": "doubao-access-key",
+    "tts_resource_id": "seed-tts-2.0",
+    "tts_speaker": "zh_female_shuangkuaisisi_moon_bigtts"
   },
   "weixin_binding": {
     "bound": true,

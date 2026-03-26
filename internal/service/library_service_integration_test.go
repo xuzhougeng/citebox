@@ -114,7 +114,9 @@ func TestGetWeixinBridgeSettingsDefaultsToConfig(t *testing.T) {
 func TestUpdateWeixinBridgeSettingsPersistsAndAppearsInAuthSettings(t *testing.T) {
 	svc, repo, _ := newTestService(t)
 
-	settings, err := svc.UpdateWeixinBridgeSettings(model.WeixinBridgeSettings{Enabled: true})
+	settings, err := svc.UpdateWeixinBridgeSettings(model.WeixinBridgeSettings{
+		Enabled: true,
+	})
 	if err != nil {
 		t.Fatalf("UpdateWeixinBridgeSettings() error = %v", err)
 	}
@@ -141,6 +143,70 @@ func TestUpdateWeixinBridgeSettingsPersistsAndAppearsInAuthSettings(t *testing.T
 	}
 	if !strings.Contains(raw, `"enabled":true`) {
 		t.Fatalf("saved weixin bridge settings = %q, want enabled persisted", raw)
+	}
+}
+
+func TestGetTTSSettingsDefaultsResourceID(t *testing.T) {
+	svc, _, _ := newTestService(t)
+
+	settings, err := svc.GetTTSSettings()
+	if err != nil {
+		t.Fatalf("GetTTSSettings() error = %v", err)
+	}
+	if settings.ResourceID != doubaoTTSDefaultResourceID {
+		t.Fatalf("GetTTSSettings() resource_id = %q, want %q", settings.ResourceID, doubaoTTSDefaultResourceID)
+	}
+}
+
+func TestUpdateTTSSettingsPersistsSeparately(t *testing.T) {
+	svc, repo, _ := newTestService(t)
+
+	settings, err := svc.UpdateTTSSettings(model.TTSSettings{
+		AppID:      " app-id ",
+		AccessKey:  " access-key ",
+		ResourceID: " ",
+		Speaker:    " speaker-id ",
+	})
+	if err != nil {
+		t.Fatalf("UpdateTTSSettings() error = %v", err)
+	}
+	if settings.AppID != "app-id" || settings.AccessKey != "access-key" || settings.Speaker != "speaker-id" {
+		t.Fatalf("UpdateTTSSettings() settings = %+v, want trimmed values", settings)
+	}
+	if settings.ResourceID != doubaoTTSDefaultResourceID {
+		t.Fatalf("UpdateTTSSettings() resource_id = %q, want %q", settings.ResourceID, doubaoTTSDefaultResourceID)
+	}
+
+	reloaded, err := svc.GetTTSSettings()
+	if err != nil {
+		t.Fatalf("GetTTSSettings() reload error = %v", err)
+	}
+	if reloaded.AppID != "app-id" || reloaded.AccessKey != "access-key" || reloaded.Speaker != "speaker-id" {
+		t.Fatalf("GetTTSSettings() reload = %+v, want persisted values", reloaded)
+	}
+
+	raw, err := repo.GetAppSetting(ttsSettingsKey)
+	if err != nil {
+		t.Fatalf("GetAppSetting(%q) error = %v", ttsSettingsKey, err)
+	}
+	if !strings.Contains(raw, `"app_id":"app-id"`) || !strings.Contains(raw, `"speaker":"speaker-id"`) {
+		t.Fatalf("saved tts settings = %q, want TTS fields persisted", raw)
+	}
+}
+
+func TestGetTTSSettingsFallsBackToLegacyWeixinBridgeFields(t *testing.T) {
+	svc, repo, _ := newTestService(t)
+
+	if err := repo.UpsertAppSetting(weixinBridgeSettingsKey, `{"enabled":true,"tts_app_id":"legacy-app","tts_access_key":"legacy-key","tts_resource_id":"legacy-resource","tts_speaker":"legacy-speaker"}`); err != nil {
+		t.Fatalf("UpsertAppSetting() error = %v", err)
+	}
+
+	settings, err := svc.GetTTSSettings()
+	if err != nil {
+		t.Fatalf("GetTTSSettings() error = %v", err)
+	}
+	if settings.AppID != "legacy-app" || settings.AccessKey != "legacy-key" || settings.ResourceID != "legacy-resource" || settings.Speaker != "legacy-speaker" {
+		t.Fatalf("GetTTSSettings() = %+v, want legacy values", settings)
 	}
 }
 

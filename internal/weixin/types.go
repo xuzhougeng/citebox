@@ -87,8 +87,12 @@ type ImageItem struct {
 }
 
 type VoiceItem struct {
-	Media *CDNMedia `json:"media,omitempty"`
-	Text  string    `json:"text,omitempty"`
+	Media         *CDNMedia `json:"media,omitempty"`
+	EncodeType    int       `json:"encode_type,omitempty"`
+	BitsPerSample int       `json:"bits_per_sample,omitempty"`
+	SampleRate    int       `json:"sample_rate,omitempty"`
+	PlayTime      int       `json:"playtime,omitempty"`
+	Text          string    `json:"text,omitempty"`
 }
 
 type FileItem struct {

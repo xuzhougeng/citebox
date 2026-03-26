@@ -577,6 +577,44 @@ User Prompt:
 
             <details class="manager-card settings-collapsible" open>
                 <summary class="settings-collapsible-toggle">
+                    <h2 data-i18n="settings.tts.title">TTS 配置</h2>
+                    <p data-i18n="settings.tts.desc">独立维护豆包 TTS 配置；设置页可直接测试，当前实际用于微信 `/ask`、`/qa` 与 `/testvoice`。</p>
+                </summary>
+                <form id="ttsSettingsForm" class="manager-form">
+                    <div class="form-grid">
+                        <label class="field field-span-2">
+                            <span data-i18n="settings.tts.app_id">豆包 TTS App ID</span>
+                            <input id="ttsAppIDInput" class="form-input" type="text" autocomplete="off" data-i18n-placeholder="settings.tts.app_id_placeholder" placeholder="填写火山引擎语音服务 App ID">
+                        </label>
+                        <label class="field field-span-2">
+                            <span data-i18n="settings.tts.access_key">豆包 TTS Access Key</span>
+                            <input id="ttsAccessKeyInput" class="form-input" type="password" autocomplete="off" data-i18n-placeholder="settings.tts.access_key_placeholder" placeholder="填写火山引擎语音服务 Access Key">
+                        </label>
+                        <label class="field">
+                            <span data-i18n="settings.tts.resource_id">豆包 TTS Resource ID</span>
+                            <input id="ttsResourceIDInput" class="form-input" type="text" autocomplete="off" data-i18n-placeholder="settings.tts.resource_id_placeholder" placeholder="默认 seed-tts-2.0">
+                        </label>
+                        <label class="field">
+                            <span data-i18n="settings.tts.speaker">豆包 TTS 音色 Speaker</span>
+                            <input id="ttsSpeakerInput" class="form-input" type="text" autocomplete="off" data-i18n-placeholder="settings.tts.speaker_placeholder" placeholder="填写控制台可用的 speaker 标识">
+                        </label>
+                    </div>
+                    <p class="muted" data-i18n="settings.tts.help">留空则关闭 TTS。保存后，微信 `/ask` 或 `/qa` 成功回复会额外附带一条豆包 TTS 音频文件；`/testvoice` 会用当前已保存配置生成 Hello World 测试音频。</p>
+                    <p id="ttsSaveStatus" class="settings-inline-status" data-i18n="settings.tts.save_hint">修改后点击保存 TTS 配置。</p>
+                    <p id="ttsTestStatus" class="settings-inline-status" data-i18n="settings.tts.test_hint">测试会直接使用当前表单配置，成功后可在下方试听。</p>
+                    <div id="ttsAudioPreview" class="settings-audio-preview hidden">
+                        <strong data-i18n="settings.tts.preview_title">测试音频</strong>
+                        <audio id="ttsAudioPlayer" controls preload="none"></audio>
+                    </div>
+                    <div class="submit-row">
+                        <button id="testTTSButton" class="btn btn-outline" type="button" data-i18n="settings.tts.test_btn">测试 TTS</button>
+                        <button id="saveTTSButton" class="btn btn-primary" type="submit" data-i18n="settings.tts.save_btn">保存 TTS 配置</button>
+                    </div>
+                </form>
+            </details>
+
+            <details class="manager-card settings-collapsible" open>
+                <summary class="settings-collapsible-toggle">
                     <h2 data-i18n="settings.wolai.title">Wolai 配置</h2>
                     <p data-i18n="settings.wolai.desc">配置 Wolai 授权信息和目标页面，将笔记同步到 Wolai。</p>
                 </summary>
