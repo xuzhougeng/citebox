@@ -27,6 +27,12 @@
     font-family: var(--font-display);
 }
 
+.manual-page-figures-head h3 {
+    margin: 0;
+    font-family: var(--font-display);
+    font-size: 1.02rem;
+}
+
 .manual-stage-actions,
 .manual-toolbar-actions,
 .manual-selection-actions,
@@ -38,6 +44,64 @@
     color: var(--muted);
     font-size: 0.94rem;
     line-height: 1.6;
+}
+
+.manual-page-figures {
+    display: grid;
+    gap: 0.75rem;
+    margin-top: 1rem;
+    padding: 1rem;
+    border-radius: 20px;
+    background: rgba(var(--surface-rgb), 0.72);
+    border: 1px solid rgba(var(--ink-rgb), 0.08);
+}
+
+.manual-page-figures-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.manual-page-figure-list {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(180px, 220px);
+    gap: 0.85rem;
+    overflow: auto;
+    padding-bottom: 0.2rem;
+}
+
+.manual-page-figure-empty {
+    min-width: 100%;
+    padding: 0.85rem 0.95rem;
+    border-radius: 14px;
+    border: 1px dashed rgba(var(--ink-rgb), 0.12);
+    background: rgba(var(--bg-rgb), 0.48);
+    color: var(--muted);
+    font-size: 0.9rem;
+    line-height: 1.6;
+}
+
+.manual-page-figure-card {
+    min-width: 0;
+}
+
+.manual-page-figure-media {
+    display: block;
+    aspect-ratio: 4 / 3;
+    border-radius: 16px;
+    overflow: hidden;
+    background:
+        linear-gradient(180deg, rgba(var(--surface-rgb), 0.95), rgba(var(--bg-rgb), 0.88));
+    border: 1px solid rgba(var(--ink-rgb), 0.06);
+}
+
+.manual-page-figure-media img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
 }
 
 .manual-preview-shell {
@@ -127,28 +191,10 @@
     top: 6rem;
 }
 
-.manual-fulltext-card {
-    margin-top: 1.2rem;
-    padding: 1.25rem;
-}
-
-.manual-fulltext-head {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 1rem;
-}
-
-.manual-fulltext-head h2 {
-    margin: 0.3rem 0 0;
-    font-family: var(--font-display);
-}
-
-.manual-fulltext-status {
-    margin: 0.45rem 0 0;
-    color: var(--muted);
-    font-size: 0.92rem;
-    line-height: 1.6;
+.hero-actions {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0.75rem;
 }
 
 .manual-selection-list {

@@ -57,7 +57,8 @@ const ManualPage = {
         this.selectionList = document.getElementById('manualSelectionList');
         this.workspaceHint = document.getElementById('manualWorkspaceHint');
         this.notice = document.getElementById('manualExtractionNotice');
-        this.fullTextStatus = document.getElementById('manualFullTextStatus');
+        this.pageFigureTitle = document.getElementById('manualPageFigureTitle');
+        this.pageFigureList = document.getElementById('manualPageFigureList');
     },
 
     bindEvents() {
@@ -92,9 +93,11 @@ const ManualPage = {
             await this.submitSelections();
         });
 
-        this.extractTextBtn.addEventListener('click', async () => {
-            await this.extractAndSaveFullText();
-        });
+        if (this.extractTextBtn) {
+            this.extractTextBtn.addEventListener('click', async () => {
+                await this.extractAndSaveFullText();
+            });
+        }
 
         this.selectionList.addEventListener('input', (event) => {
             const input = event.target.closest('[data-selection-field]');
@@ -214,8 +217,6 @@ const ManualPage = {
             : t('manual.msg_reading_pdf', '正在读取 PDF...');
         this.prevPageBtn.disabled = this.state.currentPage <= 1;
         this.nextPageBtn.disabled = !this.state.pageCount || this.state.currentPage >= this.state.pageCount;
-        this.submitBtn.disabled = this.state.submitting || this.state.extractingText;
-        this.submitBtn.textContent = this.state.submitting ? t('manual.msg_submitting', '提取中...') : t('manual.submit_btn', '提取并录入图片');
 
         const fullTextDisplay = paper.pdf_text
             ? t('manual.stat_fulltext_chars', '{count} 字').replace('{count}', paper.pdf_text.length.toLocaleString())
@@ -238,7 +239,7 @@ const ManualPage = {
             this.notice.textContent = '';
         }
 
-        this.renderFullTextStatus();
+        this.renderActionButtons();
     },
 
     renderMissingPaper(message) {
@@ -261,12 +262,14 @@ const ManualPage = {
         if (!this.state.pdfDocument || !this.state.pageCount) return;
 
         this.state.currentPage = page;
+        this.syncPageParam(page);
         this.state.loadingPreview = true;
         this.previewFrame.classList.add('is-loading');
         this.workspaceHint.textContent = t('manual.msg_rendering_page', '正在渲染第 {page} 页...').replace('{page}', page);
         this.pageIndicator.textContent = t('manual.page_indicator', '第 {current} / {total} 页').replace('{current}', page).replace('{total}', this.state.pageCount);
         this.prevPageBtn.disabled = page <= 1;
         this.nextPageBtn.disabled = page >= this.state.pageCount;
+        this.renderCurrentPageFigures();
         this.renderSelections();
 
         const renderToken = ++this.state.previewRenderToken;
@@ -277,7 +280,7 @@ const ManualPage = {
             }
             this.state.loadingPreview = false;
             this.previewFrame.classList.remove('is-loading');
-            this.workspaceHint.textContent = t('manual.msg_page_hint', '当前是第 {page} 页。拖拽可新增框选，右侧可补充 caption 并提交。').replace('{page}', page);
+            this.workspaceHint.textContent = this.pageWorkspaceHint(page, this.currentPageFigures().length);
             this.renderSelections();
         } catch (error) {
             if (renderToken !== this.state.previewRenderToken) {
@@ -339,6 +342,20 @@ const ManualPage = {
             this.state.renderCache.delete(oldest);
         }
         return renderPromise;
+    },
+
+    syncPageParam(page) {
+        try {
+            const url = new URL(window.location.href);
+            if (page > 1) {
+                url.searchParams.set('page', String(page));
+            } else {
+                url.searchParams.delete('page');
+            }
+            window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
+        } catch (error) {
+            // Ignore URL sync failures and keep the manual workspace usable.
+        }
     },
 
     startDrawing(event) {
@@ -499,6 +516,69 @@ const ManualPage = {
         `).join('');
     },
 
+    currentPageFigures() {
+        const page = Number(this.state.currentPage || 0);
+        return [...(this.state.paper?.figures || [])]
+            .filter((figure) => Number(figure.page_number) === page && String(figure.image_url || '').trim())
+            .sort((left, right) => {
+                const figureDelta = Number(left.figure_index || 0) - Number(right.figure_index || 0);
+                if (figureDelta) return figureDelta;
+
+                const parentDelta = Number(Boolean(left.parent_figure_id)) - Number(Boolean(right.parent_figure_id));
+                if (parentDelta) return parentDelta;
+
+                const labelDelta = String(left.subfigure_label || '').localeCompare(String(right.subfigure_label || ''), undefined, {
+                    sensitivity: 'base'
+                });
+                if (labelDelta) return labelDelta;
+
+                return Number(left.id || 0) - Number(right.id || 0);
+            });
+    },
+
+    pageWorkspaceHint(page, figureCount) {
+        if (figureCount > 0) {
+            return t('manual.msg_page_hint_with_figures', '当前是第 {page} 页，已显示 {count} 张已有图片，可直接对照后继续补框。')
+                .replace('{page}', page)
+                .replace('{count}', figureCount);
+        }
+
+        return t('manual.msg_page_hint', '当前是第 {page} 页。拖拽可新增框选，右侧可补充 caption 并提交。')
+            .replace('{page}', page);
+    },
+
+    renderCurrentPageFigures() {
+        if (!this.pageFigureList || !this.pageFigureTitle) return;
+
+        const page = Number(this.state.currentPage || 1);
+        const figures = this.currentPageFigures();
+
+        if (!figures.length) {
+            this.pageFigureTitle.textContent = t('manual.page_figures_title', '当前页已有图片');
+            this.pageFigureList.innerHTML = `<div class="manual-page-figure-empty">${t('manual.page_figures_empty', '第 {page} 页还没有已提取图片。').replace('{page}', page)}</div>`;
+            return;
+        }
+
+        this.pageFigureTitle.textContent = t('manual.page_figures_title_count', '当前页已有图片（{count}）')
+            .replace('{page}', page)
+            .replace('{count}', figures.length);
+
+        this.pageFigureList.innerHTML = figures.map((figure) => {
+            const title = String(figure.display_label || '').trim() || t('manual.page_figure_fallback', '图片');
+            const imageURL = Utils.escapeHTML(String(figure.image_url || ''));
+            const openURL = Utils.escapeHTML(Utils.resourceViewerURL('image', figure.image_url));
+            const altText = Utils.escapeHTML(String(figure.caption || title));
+
+            return `
+                <article class="manual-page-figure-card">
+                    <a class="manual-page-figure-media" href="${openURL}" aria-label="${Utils.escapeHTML(title)}">
+                        <img src="${imageURL}" alt="${altText}" loading="lazy">
+                    </a>
+                </article>
+            `;
+        }).join('');
+    },
+
     renderOverlay() {
         const currentPageSelections = this.currentPageSelections();
         this.overlay.innerHTML = currentPageSelections.map((selection, index) => `
@@ -529,7 +609,8 @@ const ManualPage = {
 
         const options = [`<option value="">${t('manual.selection_replace_new', '作为新图片追加')}</option>`];
         figures.forEach((figure) => {
-            const label = t('manual.selection_page', '第 {page} 页').replace('{page}', figure.page_number || '-');
+            const figureTitle = String(figure.display_label || '').trim() || t('manual.page_figure_fallback', '图片');
+            const label = `${figureTitle} · ${t('manual.selection_page', '第 {page} 页').replace('{page}', figure.page_number || '-')}`;
 
             const disabled = selectedElsewhere.has(Number(figure.id));
             const selected = Number(selection.replace_figure_id) === Number(figure.id);
@@ -546,8 +627,17 @@ const ManualPage = {
         this.previewFrame.scrollIntoView({ behavior: 'smooth', block: 'center' });
     },
 
+    renderActionButtons() {
+        if (this.submitBtn) {
+            this.submitBtn.disabled = this.state.submitting || this.state.extractingText;
+            this.submitBtn.textContent = this.state.submitting ? t('manual.msg_submitting', '提取中...') : t('manual.submit_btn', '提取并录入图片');
+        }
+
+        this.renderFullTextStatus();
+    },
+
     renderFullTextStatus() {
-        if (!this.extractTextBtn || !this.fullTextStatus) return;
+        if (!this.extractTextBtn) return;
 
         const paper = this.state.paper;
         const hasText = Boolean(paper?.pdf_text);
@@ -557,28 +647,24 @@ const ManualPage = {
 
         this.extractTextBtn.disabled = extracting || this.state.submitting || !this.state.pdfDocument;
 
+        let statusText = '';
         if (extracting) {
             const progress = pageCount ? `${extractingPage}/${pageCount}` : '';
             this.extractTextBtn.textContent = t('manual.extract_text_progress', '提取全文中 {progress}').replace('{progress}', progress).trim();
-        } else if (hasText) {
-            this.extractTextBtn.textContent = t('manual.extract_text_re', '重新提取全文');
-        } else {
-            this.extractTextBtn.textContent = t('manual.extract_text_btn', '提取全文并保存');
-        }
-
-        if (extracting) {
-            this.fullTextStatus.textContent = pageCount
+            statusText = pageCount
                 ? t('manual.fulltext_extracting_page', '正在读取第 {current} / {total} 页文本并保存到当前文献。').replace('{current}', extractingPage).replace('{total}', pageCount)
                 : t('manual.fulltext_extracting', '正在提取当前 PDF 的全文内容。');
-            return;
+        } else if (hasText) {
+            this.extractTextBtn.textContent = t('manual.extract_text_re', '重新提取全文');
+            statusText = t('manual.fulltext_status_has_text', '当前已保存 {count} 字全文，可重新提取覆盖，供 AI 伴读、检索和后续整理使用。')
+                .replace('{count}', paper.pdf_text.length.toLocaleString());
+        } else {
+            this.extractTextBtn.textContent = t('manual.extract_text_btn', '提取全文并保存');
+            statusText = t('manual.fulltext_status_empty', '当前还没有保存全文。点击右侧按钮即可提取并保存，供 AI 伴读和检索使用。');
         }
 
-        if (hasText) {
-            this.fullTextStatus.textContent = t('manual.fulltext_status_has_text', '当前已保存 {count} 字全文，可重新提取覆盖，供 AI 伴读、检索和后续整理使用。').replace('{count}', paper.pdf_text.length.toLocaleString());
-            return;
-        }
-
-        this.fullTextStatus.textContent = t('manual.fulltext_status_empty', '当前还没有保存全文。点击右侧按钮即可提取并保存，供 AI 伴读和检索使用。');
+        this.extractTextBtn.title = statusText;
+        this.extractTextBtn.setAttribute('aria-label', statusText);
     },
 
     async buildSelectionImageData(selection) {
@@ -612,8 +698,7 @@ const ManualPage = {
         }
 
         this.state.submitting = true;
-        this.submitBtn.disabled = true;
-        this.submitBtn.textContent = t('manual.msg_submitting', '提取中...');
+        this.renderActionButtons();
 
         try {
             const regions = [];
@@ -635,14 +720,14 @@ const ManualPage = {
             this.state.paper = payload.paper;
             this.state.selections = [];
             this.renderWorkspace();
+            this.renderCurrentPageFigures();
             this.renderSelections();
             Utils.showToast(t('manual.msg_added_figures', '已录入 {count} 张图片').replace('{count}', payload.added_count || 0));
         } catch (error) {
             Utils.showToast(error.message, 'error');
         } finally {
             this.state.submitting = false;
-            this.submitBtn.disabled = false;
-            this.submitBtn.textContent = t('manual.submit_btn', '提取并录入图片');
+            this.renderActionButtons();
         }
     },
 
@@ -655,7 +740,7 @@ const ManualPage = {
 
         this.state.extractingText = true;
         this.state.extractingTextPage = 0;
-        this.renderFullTextStatus();
+        this.renderActionButtons();
 
         try {
             const pdfText = await this.extractFullTextFromPDF();
@@ -675,7 +760,7 @@ const ManualPage = {
         } finally {
             this.state.extractingText = false;
             this.state.extractingTextPage = 0;
-            this.renderFullTextStatus();
+            this.renderActionButtons();
         }
     },
 

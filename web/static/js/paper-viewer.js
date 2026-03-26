@@ -563,6 +563,9 @@ const PaperViewer = {
             if (button.dataset.modalAction === 'view-pdf-text') {
                 this.openPdfTextViewer();
             }
+            if (button.dataset.modalAction === 'extract-pdf-text') {
+                await this.extractPDFText();
+            }
             if (button.dataset.modalAction === 'preview-figure') {
                 await this.openFigurePreview(Number(button.dataset.figureIndex));
             }
@@ -602,6 +605,8 @@ const PaperViewer = {
     async open(id, onChanged) {
         this.init();
         this.onChanged = onChanged;
+        this.extractingPDFText = false;
+        this.extractingPDFTextPage = 0;
         try {
             const [paper, groupsPayload] = await Promise.all([API.getPaper(id), API.listGroups()]);
             this.paper = paper;
@@ -639,6 +644,9 @@ const PaperViewer = {
         const figures = (paper.figures || []).filter((figure) => !figure.parent_figure_id);
         const statusClass = Utils.statusTone(paper.extraction_status);
         const paperNotePreview = String(paper.paper_notes_text || '').replace(/\s+/g, ' ').trim();
+        const extractPDFTextLabel = this.extractingPDFText
+            ? t('shared.paper.extract_pdf_texting', '提取中...')
+            : t('shared.paper.extract_pdf_text', '从 PDF 提取');
         
         // 解析框选结果为人类可读格式
         const boxesHtml = this.renderBoxes(paper.boxes);
@@ -765,7 +773,12 @@ const PaperViewer = {
                     ${paper.pdf_text ? `
                         <pre class="pdf-text-snippet" data-native-context-menu="true">${Utils.escapeHTML(paper.pdf_text.substring(0, 1000))}${paper.pdf_text.length > 1000 ? '\n...' : ''}</pre>
                         <p class="pdf-text-meta">共 ${paper.pdf_text.length.toLocaleString()} ${t("shared.paper.characters", "字符")}</p>
-                    ` : `<p class="muted">${t('shared.paper.no_pdf_text_hint', '暂无 PDF 原文，点击上方按钮可补充、编辑或切换 Markdown 预览。')}</p>`}
+                    ` : `
+                        <div class="pdf-text-empty">
+                            <p class="muted">${t('shared.paper.no_pdf_text_hint', '暂无 PDF 原文，可直接从当前 PDF 提取，之后再查看、编辑或切换 Markdown 预览。')}</p>
+                            <button type="button" class="btn btn-small btn-outline" data-modal-action="extract-pdf-text" ${this.extractingPDFText ? 'disabled' : ''}>${extractPDFTextLabel}</button>
+                        </div>
+                    `}
                 </div>
             </section>
         `;
@@ -1004,5 +1017,191 @@ const PaperViewer = {
                 }
             }
         });
+    },
+
+    captureFormDraft() {
+        const form = this.body?.querySelector('#paperViewerForm');
+        if (!form) return null;
+
+        return {
+            title: form.querySelector('#paperViewerTitle')?.value ?? '',
+            groupValue: form.querySelector('#paperViewerGroup')?.value ?? '',
+            tags: form.querySelector('#paperViewerTags')?.value ?? '',
+            abstractText: form.querySelector('#paperViewerAbstract')?.value ?? '',
+            notesText: form.querySelector('#paperViewerNotes')?.value ?? ''
+        };
+    },
+
+    restoreFormDraft(draft) {
+        if (!draft) return;
+
+        const form = this.body?.querySelector('#paperViewerForm');
+        if (!form) return;
+
+        const titleInput = form.querySelector('#paperViewerTitle');
+        const groupInput = form.querySelector('#paperViewerGroup');
+        const tagsInput = form.querySelector('#paperViewerTags');
+        const abstractInput = form.querySelector('#paperViewerAbstract');
+        const notesInput = form.querySelector('#paperViewerNotes');
+
+        if (titleInput) titleInput.value = draft.title;
+        if (groupInput) groupInput.value = draft.groupValue;
+        if (tagsInput) tagsInput.value = draft.tags;
+        if (abstractInput) abstractInput.value = draft.abstractText;
+        if (notesInput) notesInput.value = draft.notesText;
+    },
+
+    syncPDFTextExtractButton() {
+        const button = this.body?.querySelector('[data-modal-action="extract-pdf-text"]');
+        if (!button) return;
+
+        button.disabled = this.extractingPDFText;
+        button.textContent = this.extractingPDFText
+            ? t('shared.paper.extract_pdf_texting', '提取中...')
+            : t('shared.paper.extract_pdf_text', '从 PDF 提取');
+    },
+
+    async ensurePDFJSReady() {
+        if (this.pdfjsLib) {
+            return this.pdfjsLib;
+        }
+
+        const pdfjsLib = await import('/static/vendor/pdfjs/legacy/build/pdf.min.mjs');
+        pdfjsLib.GlobalWorkerOptions.workerSrc = '/static/vendor/pdfjs/legacy/build/pdf.worker.min.mjs';
+        this.pdfjsLib = pdfjsLib;
+        return pdfjsLib;
+    },
+
+    async extractPDFText() {
+        if (this.extractingPDFText || !this.paper) return;
+        if (!this.paper.pdf_url) {
+            Utils.showToast(t('shared.paper.no_pdf_url', '当前文献缺少 PDF 文件地址'), 'error');
+            return;
+        }
+
+        const draft = this.captureFormDraft();
+        this.extractingPDFText = true;
+        this.extractingPDFTextPage = 0;
+        this.syncPDFTextExtractButton();
+
+        try {
+            const pdfText = await this.extractFullTextFromPDF(this.paper.pdf_url);
+            if (!pdfText) {
+                throw new Error(t('shared.paper.no_text_extracted_from_pdf', '没有从当前 PDF 中提取到可用全文'));
+            }
+
+            const payload = await API.updatePaper(
+                this.paper.id,
+                this.buildUpdatePayload(this.paper, {
+                    pdf_text: pdfText
+                })
+            );
+
+            this.paper = payload.paper;
+            this.render();
+            this.restoreFormDraft(draft);
+            Utils.showToast(t('shared.paper.pdf_text_extracted_saved', '已从 PDF 提取并保存原文（{count} 字）').replace('{count}', pdfText.length.toLocaleString()));
+            if (typeof this.onChanged === 'function') {
+                await this.onChanged();
+            }
+        } catch (error) {
+            Utils.showToast(error.message || t('shared.paper.extract_pdf_text_failed', 'PDF 原文提取失败'), 'error');
+        } finally {
+            this.extractingPDFText = false;
+            this.extractingPDFTextPage = 0;
+            this.syncPDFTextExtractButton();
+        }
+    },
+
+    async extractFullTextFromPDF(pdfURL) {
+        const pdfjsLib = await this.ensurePDFJSReady();
+        const loadingTask = pdfjsLib.getDocument({
+            url: pdfURL,
+            cMapUrl: '/static/vendor/pdfjs/cmaps/',
+            cMapPacked: true,
+            standardFontDataUrl: '/static/vendor/pdfjs/standard_fonts/',
+            wasmUrl: '/static/vendor/pdfjs/wasm/'
+        });
+
+        const pdfDocument = await loadingTask.promise;
+        const pages = [];
+
+        for (let pageNumber = 1; pageNumber <= (pdfDocument.numPages || 0); pageNumber += 1) {
+            this.extractingPDFTextPage = pageNumber;
+            const page = await pdfDocument.getPage(pageNumber);
+            const textContent = await page.getTextContent();
+            const pageText = this.extractPageText(textContent);
+            if (pageText) {
+                pages.push(pageText);
+            }
+        }
+
+        return pages.join('\n\n').trim();
+    },
+
+    extractPageText(textContent) {
+        const items = Array.isArray(textContent?.items) ? textContent.items : [];
+        const lines = [];
+        let currentLine = '';
+        let previousItem = null;
+
+        const flushLine = () => {
+            const normalized = currentLine.trimEnd();
+            if (normalized) {
+                lines.push(normalized);
+            }
+            currentLine = '';
+        };
+
+        items.forEach((item) => {
+            const text = String(item?.str || '').replace(/\u00a0/g, ' ');
+            const x = Number(item?.transform?.[4] || 0);
+            const y = Number(item?.transform?.[5] || 0);
+            const width = Number(item?.width || 0);
+
+            if (!text) {
+                if (item?.hasEOL) {
+                    flushLine();
+                    previousItem = null;
+                }
+                return;
+            }
+
+            if (previousItem && Math.abs(y - previousItem.y) > 2) {
+                flushLine();
+                previousItem = null;
+            }
+
+            if (previousItem && this.shouldInsertSpaceBetween(previousItem, { text, x })) {
+                currentLine += ' ';
+            }
+
+            currentLine += text;
+
+            if (item?.hasEOL) {
+                flushLine();
+                previousItem = null;
+                return;
+            }
+
+            previousItem = { text, x, y, width };
+        });
+
+        flushLine();
+        return lines.join('\n').trim();
+    },
+
+    shouldInsertSpaceBetween(previousItem, currentItem) {
+        if (!previousItem || !currentItem) return false;
+        if (!previousItem.text || !currentItem.text) return false;
+        if (/\s$/.test(previousItem.text) || /^\s/.test(currentItem.text)) return false;
+        if (/^[,.;:!?%)\]}]/.test(currentItem.text)) return false;
+        if (/[([{]$/.test(previousItem.text)) return false;
+        if (this.isCJKBoundary(previousItem.text, currentItem.text)) return false;
+        return currentItem.x - (previousItem.x + previousItem.width) > 1;
+    },
+
+    isCJKBoundary(previousText, currentText) {
+        return /[\u3400-\u9fff]$/.test(previousText) && /^[\u3400-\u9fff]/.test(currentText);
     }
 };

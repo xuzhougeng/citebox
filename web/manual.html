@@ -45,19 +45,6 @@
 
         <section id="manualSummaryStrip" class="summary-strip"></section>
 
-        <section class="manager-card manual-fulltext-card">
-            <div class="manual-fulltext-head">
-                <div>
-                    <p class="eyebrow">Full Text Extraction</p>
-                    <h2 data-i18n="manual.fulltext_title">PDF 全文提取</h2>
-                    <p id="manualFullTextStatus" class="manual-fulltext-status" data-i18n="manual.fulltext_status_empty">
-                        当前还没有保存全文。点击右侧按钮即可提取并保存，供 AI 伴读和检索使用。
-                    </p>
-                </div>
-                <button id="manualExtractTextBtn" class="btn btn-outline" type="button" data-i18n="manual.extract_text_btn">提取全文并保存</button>
-            </div>
-        </section>
-
         <section class="manual-layout">
             <section class="result-card manual-stage-card">
                 <div class="manual-stage-head">
@@ -81,6 +68,13 @@
                         <button id="manualClearAllBtn" class="btn btn-outline" type="button" data-i18n="manual.clear_all">清空全部框选</button>
                     </div>
                 </div>
+
+                <section class="manual-page-figures" aria-live="polite">
+                    <div class="manual-page-figures-head">
+                        <h3 id="manualPageFigureTitle" data-i18n="manual.page_figures_title">当前页已有图片</h3>
+                    </div>
+                    <div id="manualPageFigureList" class="manual-page-figure-list"></div>
+                </section>
 
                 <div class="manual-preview-shell">
                     <div class="manual-preview-scroll">
