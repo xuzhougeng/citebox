@@ -1,6 +1,9 @@
 dist
 data
 uploads
+/main
+/test/demo.pdf
+/third_party/go-fitz/libs/
 
 # Go build/test artifacts
 *.exe
