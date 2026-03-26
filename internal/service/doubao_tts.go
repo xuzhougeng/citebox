@@ -145,9 +145,13 @@ func synthesizeDoubaoTTSAudio(ctx context.Context, httpClient *http.Client, sett
 		return nil, "", fmt.Errorf("doubao tts request failed: %w", err)
 	}
 	defer resp.Body.Close()
+	logID := strings.TrimSpace(resp.Header.Get("X-Tt-Logid"))
 
 	if resp.StatusCode != http.StatusOK {
 		responseBody, _ := io.ReadAll(io.LimitReader(resp.Body, 8192))
+		if logID != "" {
+			return nil, "", fmt.Errorf("doubao tts HTTP %d (logid=%s): %s", resp.StatusCode, logID, strings.TrimSpace(string(responseBody)))
+		}
 		return nil, "", fmt.Errorf("doubao tts HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(responseBody)))
 	}
 
@@ -168,10 +172,16 @@ func synthesizeDoubaoTTSAudio(ctx context.Context, httpClient *http.Client, sett
 
 		var event doubaoTTSEvent
 		if err := json.Unmarshal([]byte(rawJSON), &event); err != nil {
+			if logID != "" {
+				return nil, "", fmt.Errorf("parse doubao tts event (logid=%s): %w", logID, err)
+			}
 			return nil, "", fmt.Errorf("parse doubao tts event: %w", err)
 		}
 
 		if event.Code != 0 && event.Code != 20000000 {
+			if logID != "" {
+				return nil, "", fmt.Errorf("doubao tts API %d (logid=%s): %s", event.Code, logID, strings.TrimSpace(event.Message))
+			}
 			return nil, "", fmt.Errorf("doubao tts API %d: %s", event.Code, strings.TrimSpace(event.Message))
 		}
 		if event.Data == nil || strings.TrimSpace(*event.Data) == "" {
@@ -180,14 +190,23 @@ func synthesizeDoubaoTTSAudio(ctx context.Context, httpClient *http.Client, sett
 
 		chunk, err := base64.StdEncoding.DecodeString(*event.Data)
 		if err != nil {
+			if logID != "" {
+				return nil, "", fmt.Errorf("decode doubao tts audio chunk (logid=%s): %w", logID, err)
+			}
 			return nil, "", fmt.Errorf("decode doubao tts audio chunk: %w", err)
 		}
 		audio.Write(chunk)
 	}
 	if err := scanner.Err(); err != nil {
+		if logID != "" {
+			return nil, "", fmt.Errorf("read doubao tts stream (logid=%s): %w", logID, err)
+		}
 		return nil, "", fmt.Errorf("read doubao tts stream: %w", err)
 	}
 	if audio.Len() == 0 {
+		if logID != "" {
+			return nil, "", fmt.Errorf("doubao tts returned no audio chunks (logid=%s)", logID)
+		}
 		return nil, "", fmt.Errorf("doubao tts returned no audio chunks")
 	}
 

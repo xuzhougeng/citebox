@@ -95,7 +95,7 @@ func (s *LibraryService) TestTTS(ctx context.Context, input model.TTSSettings) (
 
 	audio, extension, err := s.ttsAudioSynthesizer(ctx, ttsTestDemoText, settings)
 	if err != nil {
-		return nil, "", "", apperr.Wrap(apperr.CodeUnavailable, "TTS 测试失败", err)
+		return nil, "", "", apperr.New(apperr.CodeUnavailable, fmt.Sprintf("TTS 测试失败：%v", err))
 	}
 	if len(audio) == 0 {
 		return nil, "", "", apperr.New(apperr.CodeUnavailable, "TTS 测试失败：返回了空音频")
