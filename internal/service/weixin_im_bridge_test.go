@@ -864,21 +864,26 @@ func TestWeixinIMBridgeVoiceRewriteFallbackSanitizesMarkdown(t *testing.T) {
 }
 
 func TestSplitWeixinReplyTextSplitsLongReply(t *testing.T) {
-	longText := strings.Repeat("测", 2017)
+	longText := strings.Repeat("测", 5000)
 
 	chunks := splitWeixinReplyText(longText)
-	if len(chunks) != 1 {
-		t.Fatalf("len(chunks) = %d, want %d for uninterrupted text", len(chunks), 1)
+	if len(chunks) != 2 {
+		t.Fatalf("len(chunks) = %d, want %d for oversized uninterrupted text", len(chunks), 2)
+	}
+	for index, chunk := range chunks {
+		if got := len([]rune(chunk)); got > weixinReplyChunkMaxRunes {
+			t.Fatalf("chunk %d rune count = %d, want <= %d", index, got, weixinReplyChunkMaxRunes)
+		}
 	}
 	if strings.Join(chunks, "") != longText {
 		t.Fatal("splitWeixinReplyText() chunks do not reconstruct original text")
 	}
 }
 
-func TestSplitWeixinReplyTextPrefersNaturalBreaks(t *testing.T) {
+func TestSplitWeixinReplyUnitsPrefersNaturalBreaks(t *testing.T) {
 	text := "第一段先把背景交代清楚，也把主要结论说清楚。\n\n第二段先解释方法。第二段再解释结果。"
 
-	chunks := splitWeixinReplyText(text)
+	chunks := splitWeixinReplyUnits(text)
 	if len(chunks) != 3 {
 		t.Fatalf("len(chunks) = %d, want %d", len(chunks), 3)
 	}
@@ -893,6 +898,25 @@ func TestSplitWeixinReplyTextPrefersNaturalBreaks(t *testing.T) {
 	}
 	if strings.Join(chunks, "") != text {
 		t.Fatal("splitWeixinReplyText() chunks do not reconstruct original text")
+	}
+}
+
+func TestSplitWeixinReplyTextPacksNaturalUnitsUpToChunkLimit(t *testing.T) {
+	sentence := strings.Repeat("甲", 900) + "。"
+	text := sentence + sentence + sentence + sentence
+
+	chunks := splitWeixinReplyText(text)
+	if len(chunks) != 2 {
+		t.Fatalf("len(chunks) = %d, want %d packed chunks", len(chunks), 2)
+	}
+	if got := len([]rune(chunks[0])); got > weixinReplyChunkMaxRunes {
+		t.Fatalf("first chunk rune count = %d, want <= %d", got, weixinReplyChunkMaxRunes)
+	}
+	if got := len([]rune(chunks[1])); got > weixinReplyChunkMaxRunes {
+		t.Fatalf("second chunk rune count = %d, want <= %d", got, weixinReplyChunkMaxRunes)
+	}
+	if strings.Join(chunks, "") != text {
+		t.Fatal("splitWeixinReplyText() packed chunks do not reconstruct original text")
 	}
 }
 

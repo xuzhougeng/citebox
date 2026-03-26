@@ -26,6 +26,7 @@ const (
 	weixinBridgeStateDirName            = "weixin-bridge"
 	weixinSyncBufFileName               = "sync_buf"
 	weixinContextFileName               = "im_context.json"
+	weixinReplyChunkMaxRunes            = 3200
 	weixinHistoryLimit                  = 6
 	weixinSearchKeywordLimit            = 6
 	weixinSearchKeywordPerLanguageLimit = 3
@@ -1923,6 +1924,11 @@ func splitWeixinReplyText(text string) []string {
 		return nil
 	}
 
+	units := splitWeixinReplyUnits(text)
+	return packWeixinReplyUnits(units, weixinReplyChunkMaxRunes)
+}
+
+func splitWeixinReplyUnits(text string) []string {
 	runes := []rune(text)
 
 	chunks := make([]string, 0, strings.Count(text, "\n")+1)
@@ -1946,6 +1952,102 @@ func splitWeixinReplyText(text string) []string {
 		chunks = append(chunks, string(runes[start:]))
 	}
 	return chunks
+}
+
+func packWeixinReplyUnits(units []string, maxRunes int) []string {
+	if len(units) == 0 {
+		return nil
+	}
+	if maxRunes <= 0 {
+		return append([]string(nil), units...)
+	}
+
+	chunks := make([]string, 0, len(units))
+	var current strings.Builder
+	currentRunes := 0
+	flush := func() {
+		if currentRunes == 0 {
+			return
+		}
+		chunks = append(chunks, current.String())
+		current.Reset()
+		currentRunes = 0
+	}
+
+	for _, unit := range units {
+		for _, part := range splitWeixinReplyOversizedUnit(unit, maxRunes) {
+			partRunes := len([]rune(part))
+			if currentRunes > 0 && currentRunes+partRunes > maxRunes {
+				flush()
+			}
+			current.WriteString(part)
+			currentRunes += partRunes
+		}
+	}
+
+	flush()
+	return chunks
+}
+
+func splitWeixinReplyOversizedUnit(text string, maxRunes int) []string {
+	if maxRunes <= 0 {
+		return []string{text}
+	}
+
+	runes := []rune(text)
+	if len(runes) <= maxRunes {
+		return []string{text}
+	}
+
+	matchers := []func([]rune, int) int{
+		matchWeixinReplyParagraphBreak,
+		matchWeixinReplyLineBreak,
+		matchWeixinReplySentenceBreak,
+		matchWeixinReplyClauseBreak,
+		matchWeixinReplyWhitespaceBreak,
+	}
+
+	chunks := make([]string, 0, (len(runes)+maxRunes-1)/maxRunes)
+	for start := 0; start < len(runes); {
+		end := findWeixinReplySplitIndex(runes, start, maxRunes, matchers)
+		if end <= start {
+			end = minInt(start+maxRunes, len(runes))
+		}
+		chunks = append(chunks, string(runes[start:end]))
+		start = end
+	}
+	return chunks
+}
+
+func findWeixinReplySplitIndex(runes []rune, start, maxRunes int, matchers []func([]rune, int) int) int {
+	if start >= len(runes) {
+		return len(runes)
+	}
+	endLimit := minInt(start+maxRunes, len(runes))
+	if endLimit >= len(runes) {
+		return len(runes)
+	}
+
+	searchStart := maxInt(start, endLimit-weixinReplySplitLookback(maxRunes))
+	for _, matcher := range matchers {
+		for index := endLimit - 1; index >= searchStart; index-- {
+			if split := matcher(runes, index); split > start {
+				return minInt(split, endLimit)
+			}
+		}
+	}
+	return 0
+}
+
+func weixinReplySplitLookback(maxRunes int) int {
+	if maxRunes <= 1 {
+		return 1
+	}
+	lookback := (maxRunes * 2) / 3
+	if lookback <= 0 {
+		return 1
+	}
+	return lookback
 }
 
 func matchWeixinReplyParagraphBreak(runes []rune, index int) int {
@@ -1978,6 +2080,26 @@ func matchWeixinReplySentenceBreak(runes []rune, index int) int {
 	return 0
 }
 
+func matchWeixinReplyClauseBreak(runes []rune, index int) int {
+	if index < 0 || index >= len(runes) {
+		return 0
+	}
+	if isWeixinReplyClauseBoundaryRune(runes[index]) {
+		return extendWeixinReplySplitIndex(runes, index+1)
+	}
+	if isWeixinReplyClosingRune(runes[index]) && index > 0 && isWeixinReplyClauseBoundaryRune(runes[index-1]) {
+		return extendWeixinReplySplitIndex(runes, index+1)
+	}
+	return 0
+}
+
+func matchWeixinReplyWhitespaceBreak(runes []rune, index int) int {
+	if index < 0 || index >= len(runes) || !isWeixinReplyWhitespaceRune(runes[index]) {
+		return 0
+	}
+	return extendWeixinReplySplitIndex(runes, index+1)
+}
+
 func extendWeixinReplySplitIndex(runes []rune, index int) int {
 	for index < len(runes) {
 		if isWeixinReplyClosingRune(runes[index]) || isWeixinReplyWhitespaceRune(runes[index]) {
@@ -1992,6 +2114,15 @@ func extendWeixinReplySplitIndex(runes []rune, index int) int {
 func isWeixinReplySentenceBoundaryRune(r rune) bool {
 	switch r {
 	case '。', '！', '？', '!', '?', ';', '；':
+		return true
+	default:
+		return false
+	}
+}
+
+func isWeixinReplyClauseBoundaryRune(r rune) bool {
+	switch r {
+	case '，', '、', ',', '：', ':':
 		return true
 	default:
 		return false
