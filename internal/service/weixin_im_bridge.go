@@ -429,6 +429,10 @@ func (b *WeixinIMBridge) handleIncomingTextReply(ctx context.Context, text strin
 		return weixinReplyEnvelope{}
 	}
 
+	if reply, handled := b.tryImportPaperByDOI(ctx, text); handled {
+		return weixinReplyEnvelope{Text: reply}
+	}
+
 	command, arg, ok := parseWeixinSlashCommand(text)
 	if !ok {
 		planned := b.planWeixinPlainTextCommand(ctx, text)
@@ -439,6 +443,42 @@ func (b *WeixinIMBridge) handleIncomingTextReply(ctx context.Context, text strin
 	}
 
 	return b.executeWeixinCommandReply(ctx, command, arg)
+}
+
+func (b *WeixinIMBridge) tryImportPaperByDOI(ctx context.Context, text string) (string, bool) {
+	if !looksLikeWeixinDOIText(text) {
+		return "", false
+	}
+
+	doi, err := normalizeDOIInput(text)
+	if err != nil {
+		return "DOI 格式无效，请直接发送标准 DOI 或 DOI 链接。", true
+	}
+
+	paper, err := b.libraryService.ImportPaperByDOI(ctx, ImportPaperByDOIParams{DOI: doi})
+	if err != nil {
+		var duplicateErr *DuplicatePaperError
+		if errors.As(err, &duplicateErr) && duplicateErr.Paper != nil {
+			b.activatePaperContext(duplicateErr.Paper.ID, true)
+			return "该 DOI 已在文献库中，已切换到现有文献。\n\n" + b.formatPaperSelection(duplicateErr.Paper, false), true
+		}
+		switch apperr.CodeOf(err) {
+		case apperr.CodeNotFound:
+			return "未找到可合法下载的 Open Access PDF，可直接发送 PDF 文件。", true
+		case apperr.CodeUnavailable:
+			return "已找到开放获取记录，但下载失败。请稍后重试，或直接发送 PDF 文件。", true
+		default:
+			return fmt.Sprintf("通过 DOI 导入失败：%v", err), true
+		}
+	}
+
+	b.activatePaperContext(paper.ID, true)
+
+	prefix := "已通过 DOI 导入文献。"
+	if paper.ExtractionStatus == "queued" {
+		prefix = "已通过 DOI 导入文献，正在后台解析。"
+	}
+	return prefix + "\n\n" + b.formatPaperSelection(paper, false), true
 }
 
 func (b *WeixinIMBridge) planWeixinPlainTextCommand(ctx context.Context, text string) *weixinCommandPlan {
@@ -1803,6 +1843,16 @@ func parseWeixinFileSize(value string) (int64, bool) {
 	return size, true
 }
 
+func looksLikeWeixinDOIText(text string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(text))
+	if normalized == "" || strings.ContainsAny(normalized, " \n\r\t") {
+		return false
+	}
+	return strings.HasPrefix(normalized, "10.") ||
+		strings.HasPrefix(normalized, "doi:") ||
+		strings.Contains(normalized, "doi.org/")
+}
+
 func weixinHelpText() string {
 	return strings.Join([]string{
 		"微信 IM 优先响应 slash 命令；普通文字会先通过 LLM 识别成最合适的 slash 操作。可用命令：",
@@ -1815,6 +1865,7 @@ func weixinHelpText() string {
 		"`/figure 1`：选择检索结果中的图片或当前文献中的图片；普通文字如“看看第二张图”也会优先路由到这里，并回发原图预览",
 		"`/random`：随机选中一张图片，并回发原图预览",
 		"直接发送 PDF：自动导入文献并切换上下文",
+		"直接发送 DOI 或 DOI 链接：自动尝试导入可下载的 Open Access PDF",
 		"`/ask 问题` 或 `/qa 问题`：对当前文献提问",
 		"`/note 内容`：追加文献/图片笔记",
 		"`/interpret 问题`：解读当前图片",

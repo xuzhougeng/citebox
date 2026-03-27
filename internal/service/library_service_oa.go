@@ -45,6 +45,19 @@ type remotePDFDownload struct {
 	Body          io.ReadCloser
 }
 
+type cancelOnCloseReadCloser struct {
+	io.ReadCloser
+	cancel context.CancelFunc
+}
+
+func (r *cancelOnCloseReadCloser) Close() error {
+	err := r.ReadCloser.Close()
+	if r.cancel != nil {
+		r.cancel()
+	}
+	return err
+}
+
 type unpaywallResponse struct {
 	DOI            string                `json:"doi"`
 	Title          string                `json:"title"`
@@ -337,10 +350,9 @@ func (s *LibraryService) downloadOpenAccessPDF(ctx context.Context, doi string, 
 	}
 
 	requestCtx, cancel := context.WithTimeout(ctx, oaDownloadTimeout)
-	defer cancel()
-
 	request, err := http.NewRequestWithContext(requestCtx, http.MethodGet, targetURL, nil)
 	if err != nil {
+		cancel()
 		return nil, apperr.Wrap(apperr.CodeInternal, "创建 PDF 下载请求失败", err)
 	}
 	request.Header.Set("Accept", "application/pdf, application/octet-stream;q=0.9, */*;q=0.1")
@@ -348,10 +360,12 @@ func (s *LibraryService) downloadOpenAccessPDF(ctx context.Context, doi string, 
 
 	response, err := s.httpClient.Do(request)
 	if err != nil {
+		cancel()
 		return nil, mapOARequestError(err, "Open Access PDF 下载失败")
 	}
 	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
 		_ = response.Body.Close()
+		cancel()
 		if response.StatusCode == http.StatusNotFound {
 			return nil, apperr.New(apperr.CodeNotFound, "未找到可合法下载的 Open Access PDF")
 		}
@@ -360,6 +374,7 @@ func (s *LibraryService) downloadOpenAccessPDF(ctx context.Context, doi string, 
 
 	if response.ContentLength > s.config.MaxUploadSize && response.ContentLength > 0 {
 		_ = response.Body.Close()
+		cancel()
 		return nil, apperr.New(apperr.CodeResourceExhausted, fmt.Sprintf("PDF 大小超过限制 %s", humanFileSize(s.config.MaxUploadSize)))
 	}
 
@@ -375,7 +390,10 @@ func (s *LibraryService) downloadOpenAccessPDF(ctx context.Context, doi string, 
 		Filename:      filename,
 		ContentType:   response.Header.Get("Content-Type"),
 		ContentLength: response.ContentLength,
-		Body:          response.Body,
+		Body: &cancelOnCloseReadCloser{
+			ReadCloser: response.Body,
+			cancel:     cancel,
+		},
 	}, nil
 }
 

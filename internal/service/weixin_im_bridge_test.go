@@ -3,9 +3,13 @@ package service
 import (
 	"bytes"
 	"context"
+	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"mime/multipart"
+	"net/http"
+	"net/http/httptest"
 	"net/textproto"
 	"os"
 	"path/filepath"
@@ -1055,6 +1059,60 @@ func TestWeixinIMBridgeImportsPDFFileAndSelectsPaper(t *testing.T) {
 	}
 	if got := result.Papers[0].OriginalFilename; got != "wechat-upload.pdf" {
 		t.Fatalf("original filename = %q, want sniffed PDF filename with normalized .pdf suffix", got)
+	}
+}
+
+func TestWeixinIMBridgeImportsPaperFromDOIText(t *testing.T) {
+	svc, _, cfg := newTestService(t)
+	svc.config.OAContactEmail = "ops@example.com"
+	bridge := newTestWeixinBridge(t, svc, &fakeWeixinAIReader{
+		commandPlanErr: errors.New("doi import should bypass command planning"),
+	}, cfg.StorageDir)
+
+	var server *httptest.Server
+	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasPrefix(r.URL.Path, "/unpaywall/v2/"):
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprintf(w, `{"doi":"10.5555/wechat-doi","title":"WeChat DOI Import","best_oa_location":{"url_for_pdf":%q}}`, server.URL+"/files/wechat-doi.pdf")
+		case r.URL.Path == "/files/wechat-doi.pdf":
+			w.Header().Set("Content-Type", "application/pdf")
+			_, _ = w.Write(testPDFBytes())
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	originalUnpaywall := unpaywallAPIBaseURL
+	originalEuropePMC := europePMCSearchURL
+	originalPMCID := pmcIDConvURL
+	unpaywallAPIBaseURL = server.URL + "/unpaywall/v2/"
+	europePMCSearchURL = server.URL + "/europe-pmc/search"
+	pmcIDConvURL = server.URL + "/pmc/idconv"
+	defer func() {
+		unpaywallAPIBaseURL = originalUnpaywall
+		europePMCSearchURL = originalEuropePMC
+		pmcIDConvURL = originalPMCID
+	}()
+
+	reply := bridge.handleIncomingText(context.Background(), "https://doi.org/10.5555/WECHAT-DOI")
+	if !containsAll(reply, "已通过 DOI 导入文献", "已选中文献") {
+		t.Fatalf("doi import reply = %q, want DOI import success message", reply)
+	}
+
+	result, err := svc.ListPapers(model.PaperFilter{})
+	if err != nil {
+		t.Fatalf("ListPapers() error = %v", err)
+	}
+	if result.Total != 1 || len(result.Papers) != 1 {
+		t.Fatalf("paper total = %d papers=%d, want 1", result.Total, len(result.Papers))
+	}
+	if got := result.Papers[0].DOI; got != "10.5555/wechat-doi" {
+		t.Fatalf("paper doi = %q, want %q", got, "10.5555/wechat-doi")
+	}
+	if bridge.getContext().CurrentPaperID != result.Papers[0].ID {
+		t.Fatalf("current paper = %d, want %d", bridge.getContext().CurrentPaperID, result.Papers[0].ID)
 	}
 }
 
