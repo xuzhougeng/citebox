@@ -33,9 +33,9 @@
         <section class="hero compact">
             <div>
                 <p class="eyebrow" data-i18n="settings.eyebrow">Settings</p>
-                <h1 data-i18n="settings.hero_title">设置 AI 模型、提示词与 PDF 解析服务</h1>
+                <h1 data-i18n="settings.hero_title">设置</h1>
                 <p class="hero-text" data-i18n="settings.hero_text">
-                    模型设置会自动保存，提示词需要手动保存——各自独立，互不影响。
+                    管理 AI 模型、提示词、服务集成与账号。模型配置自动保存，提示词需手动保存。
                 </p>
             </div>
         </section>
@@ -142,65 +142,8 @@
 
             <details class="manager-card settings-collapsible">
                 <summary class="settings-collapsible-toggle">
-                    <h2 data-i18n="settings.ai.translate_title">翻译设置</h2>
-                    <p data-i18n="settings.ai.translate_desc">设置划词翻译的语言、模型和提示词。模型和语言自动保存，提示词需手动保存。</p>
-                </summary>
-                <div class="manager-form">
-                    <div class="form-grid">
-                        <label class="field">
-                            <span data-i18n="settings.ai.translate_model">划词翻译模型</span>
-                            <select id="aiTranslateModelSelect" class="form-input"></select>
-                        </label>
-                        <label class="field">
-                            <span data-i18n="settings.ai.primary_language">主要语言</span>
-                            <input id="aiTranslationPrimaryLanguageInput" class="form-input" type="text" data-i18n-placeholder="settings.ai.primary_language_hint" placeholder="例如：中文">
-                        </label>
-                        <label class="field">
-                            <span data-i18n="settings.ai.target_language">目标语言</span>
-                            <input id="aiTranslationTargetLanguageInput" class="form-input" type="text" data-i18n-placeholder="settings.ai.target_language_hint" placeholder="例如：英文">
-                        </label>
-                    </div>
-                    <label class="field prompt-field">
-                        <span class="field-label-row">
-                            <span class="field-label-text" data-i18n="settings.ai.translate_prompt_label">划词翻译 Prompt</span>
-                            <span class="field-help" tabindex="0" role="note" title="用于桌面端划词翻译。系统会自动判断翻译方向，并附带原文和目标语言。" data-i18n-title="settings.ai.translate_prompt_help" data-help="用于桌面端划词翻译。系统会自动判断翻译方向，并附带原文和目标语言。">?</span>
-                        </span>
-                        <textarea id="aiTranslatePromptInput" class="form-textarea" rows="4" data-i18n-placeholder="settings.ai.translate_prompt_placeholder" placeholder="例如：只返回译文正文，保留换行、术语、缩写和数字单位"></textarea>
-                        <details class="prompt-template-details">
-                            <summary data-i18n="settings.ai.view_template">查看实际模板</summary>
-                            <pre class="prompt-template-pre">System Prompt:
-{System Prompt}
-
-User Prompt:
-任务类型: translate
-
-翻译方向:
-- 原文语言: {系统判断后的原文语言}
-- 目标语言: {系统判断后的目标语言}
-
-场景指令:
-{这里填写的划词翻译 Prompt}
-
-输出要求:
-1. 只返回译文正文，不要附加解释、注释、标题、前缀或代码块。
-2. 保留原文中的换行、列表层级、数字、单位、缩写和专有名词。
-3. 如果原文已经是目标语言，也请只做必要润色后输出正文。
-
-待翻译文本:
-{用户当前选中的文本}</pre>
-                        </details>
-                    </label>
-                    <div class="submit-row">
-                        <button id="saveTranslatePromptButton" class="btn btn-primary" type="button" data-i18n="settings.ai.save_translate_prompt">保存翻译 Prompt</button>
-                    </div>
-                    <p id="translatePromptSaveStatus" class="settings-inline-status" data-i18n="settings.ai.translate_prompt_save_hint">翻译 Prompt 修改后需点击保存。</p>
-                </div>
-            </details>
-
-            <details class="manager-card settings-collapsible">
-                <summary class="settings-collapsible-toggle">
-                    <h2 data-i18n="settings.ai.prompt_title">Prompt 设置</h2>
-                    <p data-i18n="settings.ai.prompt_desc">编辑各场景的提示词和可复用的角色提示词。修改后需点击保存。</p>
+                    <h2 data-i18n="settings.ai.global_prompt_title">全局 Prompt 设置</h2>
+                    <p data-i18n="settings.ai.global_prompt_desc">通用角色设定、问答指令与可复用角色 Prompt。修改后需点击保存。</p>
                 </summary>
                 <form id="aiSettingsForm" class="manager-form">
                     <div class="settings-subsection-body">
@@ -287,6 +230,25 @@ User Prompt:
 6. 不要伪造本地文件路径、文件名或外部图片 URL。</pre>
                         </details>
                     </label>
+
+                    </div>
+
+                    <div class="submit-row">
+                        <button id="restoreAIPromptsButton" class="btn btn-outline" type="button" data-i18n="settings.ai.restore_prompts">恢复推荐 Prompt</button>
+                        <button id="saveAIPromptsButton" class="btn btn-primary" type="button" data-i18n="settings.ai.save_prompts">保存 Prompt 配置</button>
+                    </div>
+                    <p id="aiPromptSaveStatus" class="settings-inline-status" data-i18n="settings.ai.prompt_save_hint">提示词修改后需点击保存。</p>
+                </form>
+            </details>
+
+            <details class="manager-card settings-collapsible">
+                <summary class="settings-collapsible-toggle">
+                    <h2 data-i18n="settings.ai.figure_group_prompt_title">图片与分组 Prompt</h2>
+                    <p data-i18n="settings.ai.figure_group_prompt_desc">图片解读、标签建议和分组建议的场景提示词。修改后需点击保存。</p>
+                </summary>
+                <form id="figureGroupPromptForm" class="manager-form">
+                    <div class="settings-subsection-body">
+
                     <label class="field prompt-field">
                         <span class="field-label-row">
                             <span class="field-label-text" data-i18n="settings.ai.figure_prompt_label">当前图片解读 Prompt</span>
@@ -452,11 +414,67 @@ User Prompt:
                     </div>
 
                     <div class="submit-row">
-                        <button id="restoreAIPromptsButton" class="btn btn-outline" type="button" data-i18n="settings.ai.restore_prompts">恢复推荐 Prompt</button>
-                        <button id="saveAIPromptsButton" class="btn btn-primary" type="button" data-i18n="settings.ai.save_prompts">保存 Prompt 配置</button>
+                        <button id="saveFigureGroupPromptsButton" class="btn btn-primary" type="button" data-i18n="settings.ai.save_figure_group_prompts">保存图片与分组 Prompt</button>
                     </div>
-                    <p id="aiPromptSaveStatus" class="settings-inline-status" data-i18n="settings.ai.prompt_save_hint">提示词修改后需点击保存。</p>
+                    <p id="figureGroupPromptSaveStatus" class="settings-inline-status" data-i18n="settings.ai.figure_group_prompt_save_hint">图片与分组 Prompt 修改后需点击保存。</p>
                 </form>
+            </details>
+
+            <details class="manager-card settings-collapsible">
+                <summary class="settings-collapsible-toggle">
+                    <h2 data-i18n="settings.ai.translate_title">翻译设置</h2>
+                    <p data-i18n="settings.ai.translate_desc">设置划词翻译的语言、模型和提示词。模型和语言自动保存，提示词需手动保存。</p>
+                </summary>
+                <div class="manager-form">
+                    <div class="form-grid">
+                        <label class="field">
+                            <span data-i18n="settings.ai.translate_model">划词翻译模型</span>
+                            <select id="aiTranslateModelSelect" class="form-input"></select>
+                        </label>
+                        <label class="field">
+                            <span data-i18n="settings.ai.primary_language">主要语言</span>
+                            <input id="aiTranslationPrimaryLanguageInput" class="form-input" type="text" data-i18n-placeholder="settings.ai.primary_language_hint" placeholder="例如：中文">
+                        </label>
+                        <label class="field">
+                            <span data-i18n="settings.ai.target_language">目标语言</span>
+                            <input id="aiTranslationTargetLanguageInput" class="form-input" type="text" data-i18n-placeholder="settings.ai.target_language_hint" placeholder="例如：英文">
+                        </label>
+                    </div>
+                    <label class="field prompt-field">
+                        <span class="field-label-row">
+                            <span class="field-label-text" data-i18n="settings.ai.translate_prompt_label">划词翻译 Prompt</span>
+                            <span class="field-help" tabindex="0" role="note" title="用于桌面端划词翻译。系统会自动判断翻译方向，并附带原文和目标语言。" data-i18n-title="settings.ai.translate_prompt_help" data-help="用于桌面端划词翻译。系统会自动判断翻译方向，并附带原文和目标语言。">?</span>
+                        </span>
+                        <textarea id="aiTranslatePromptInput" class="form-textarea" rows="4" data-i18n-placeholder="settings.ai.translate_prompt_placeholder" placeholder="例如：只返回译文正文，保留换行、术语、缩写和数字单位"></textarea>
+                        <details class="prompt-template-details">
+                            <summary data-i18n="settings.ai.view_template">查看实际模板</summary>
+                            <pre class="prompt-template-pre">System Prompt:
+{System Prompt}
+
+User Prompt:
+任务类型: translate
+
+翻译方向:
+- 原文语言: {系统判断后的原文语言}
+- 目标语言: {系统判断后的目标语言}
+
+场景指令:
+{这里填写的划词翻译 Prompt}
+
+输出要求:
+1. 只返回译文正文，不要附加解释、注释、标题、前缀或代码块。
+2. 保留原文中的换行、列表层级、数字、单位、缩写和专有名词。
+3. 如果原文已经是目标语言，也请只做必要润色后输出正文。
+
+待翻译文本:
+{用户当前选中的文本}</pre>
+                        </details>
+                    </label>
+                    <div class="submit-row">
+                        <button id="saveTranslatePromptButton" class="btn btn-primary" type="button" data-i18n="settings.ai.save_translate_prompt">保存翻译 Prompt</button>
+                    </div>
+                    <p id="translatePromptSaveStatus" class="settings-inline-status" data-i18n="settings.ai.translate_prompt_save_hint">翻译 Prompt 修改后需点击保存。</p>
+                </div>
             </details>
 
             <details class="manager-card settings-collapsible" open>

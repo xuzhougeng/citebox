@@ -31,6 +31,8 @@ const SettingsPage = {
         this.translatePromptSaveStatus = document.getElementById('translatePromptSaveStatus');
         this.saveTranslatePromptButton = document.getElementById('saveTranslatePromptButton');
         this.saveAIPromptsButton = document.getElementById('saveAIPromptsButton');
+        this.saveFigureGroupPromptsButton = document.getElementById('saveFigureGroupPromptsButton');
+        this.figureGroupPromptSaveStatus = document.getElementById('figureGroupPromptSaveStatus');
         this.rolePromptList = document.getElementById('aiRolePromptList');
         this.addAIRolePromptButton = document.getElementById('addAIRolePromptButton');
         this.restoreAIPromptsButton = document.getElementById('restoreAIPromptsButton');
@@ -190,14 +192,21 @@ const SettingsPage = {
         this.bindAIModelEditorAutoSaveInputs();
         [
             this.systemPromptInput,
-            this.qaPromptInput,
+            this.qaPromptInput
+        ].forEach((element) => {
+            element?.addEventListener('input', () => {
+                if (this.isHydratingAISettings) return;
+                this.setAIPromptSaveStatus(t('settings.ai.prompt_modified', '提示词已修改，点击”保存 Prompt 配置”后生效。'), 'saving');
+            });
+        });
+        [
             this.figurePromptInput,
             this.tagPromptInput,
             this.groupPromptInput
         ].forEach((element) => {
             element?.addEventListener('input', () => {
                 if (this.isHydratingAISettings) return;
-                this.setAIPromptSaveStatus(t('settings.ai.prompt_modified', '提示词已修改，点击”保存 Prompt 配置”后生效。'), 'saving');
+                this.setFigureGroupPromptSaveStatus(t('settings.ai.figure_group_prompt_modified', '图片与分组 Prompt 已修改，点击”保存”后生效。'), 'saving');
             });
         });
         this.translatePromptInput?.addEventListener('input', () => {
@@ -210,6 +219,9 @@ const SettingsPage = {
         });
         this.saveTranslatePromptButton?.addEventListener('click', async () => {
             await this.saveTranslatePromptSettings();
+        });
+        this.saveFigureGroupPromptsButton?.addEventListener('click', async () => {
+            await this.saveFigureGroupPromptSettings();
         });
         this.extractorSettingsForm.addEventListener('submit', async (event) => {
             event.preventDefault();
@@ -395,6 +407,7 @@ const SettingsPage = {
         });
         this.setAIModelAutosaveStatus(t('settings.ai.autosave_hint', '模型配置修改后会自动保存。'));
         this.setAIPromptSaveStatus(t('settings.ai.prompt_save_hint', '提示词修改后需点击保存。'));
+        this.setFigureGroupPromptSaveStatus(t('settings.ai.figure_group_prompt_save_hint', '图片与分组 Prompt 修改后需点击保存。'));
         this.setTranslatePromptSaveStatus(t('settings.ai.translate_prompt_save_hint', '翻译 Prompt 修改后需点击保存。'));
     },
 
@@ -502,6 +515,10 @@ const SettingsPage = {
 
     setTranslatePromptSaveStatus(message, tone = '') {
         this.setInlineStatus(this.translatePromptSaveStatus, message, tone);
+    },
+
+    setFigureGroupPromptSaveStatus(message, tone = '') {
+        this.setInlineStatus(this.figureGroupPromptSaveStatus, message, tone);
     },
 
     setAIModelEditorStatus(message, tone = '') {
@@ -651,6 +668,33 @@ const SettingsPage = {
         }
     },
 
+    async saveFigureGroupPromptSettings() {
+        const button = this.saveFigureGroupPromptsButton;
+        const originalLabel = button?.textContent || '';
+        if (button) {
+            button.disabled = true;
+            button.textContent = t('settings.ai.saving_btn', '保存中...');
+        }
+
+        try {
+            const response = await API.updateAIPromptSettings(this.buildAIPromptSettingsPayload());
+            this.applyAISettings(response.settings || {}, {
+                overwritePromptInputs: true,
+                overwriteRolePrompts: false
+            });
+            this.setFigureGroupPromptSaveStatus(t('settings.ai.figure_group_prompt_saved', '图片与分组 Prompt 已保存。'), 'success');
+            Utils.showToast(t('settings.ai.figure_group_prompt_saved_toast', '图片与分组 Prompt 已保存'));
+        } catch (error) {
+            this.setFigureGroupPromptSaveStatus(t('settings.ai.figure_group_prompt_save_failed', '保存失败：{0}').replace('{0}', error.message), 'error');
+            Utils.showToast(error.message, 'error');
+        } finally {
+            if (button) {
+                button.disabled = false;
+                button.textContent = originalLabel || t('settings.ai.save_figure_group_prompts', '保存图片与分组 Prompt');
+            }
+        }
+    },
+
     async restoreRecommendedPrompts() {
         const button = this.restoreAIPromptsButton;
         const originalLabel = button?.textContent || '';
@@ -661,7 +705,8 @@ const SettingsPage = {
 
         try {
             const defaults = await API.getDefaultAISettings();
-            this.applyPromptSettingsToInputs(defaults || {});
+            this.systemPromptInput.value = defaults?.system_prompt || '';
+            this.qaPromptInput.value = defaults?.qa_prompt || '';
             this.setAIPromptSaveStatus(t('settings.ai.restore_done', '已恢复推荐 Prompt，点击”保存 Prompt 配置”后生效。'), 'saving');
             Utils.showToast(t('settings.ai.restore_done_toast', '已恢复推荐 Prompt，记得点击”保存 Prompt 配置”'));
         } catch (error) {
