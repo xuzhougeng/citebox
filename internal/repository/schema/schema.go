@@ -57,6 +57,7 @@ func (m *Manager) initSchema() error {
 	CREATE TABLE IF NOT EXISTS papers (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		title TEXT NOT NULL,
+		doi TEXT DEFAULT '',
 		original_filename TEXT NOT NULL,
 		stored_pdf_name TEXT NOT NULL,
 		pdf_sha256 TEXT DEFAULT '',
@@ -136,6 +137,7 @@ func (m *Manager) ensureSchemaColumns() error {
 		name       string
 		definition string
 	}{
+		{tableName: "papers", name: "doi", definition: "TEXT DEFAULT ''"},
 		{tableName: "papers", name: "extractor_job_id", definition: "TEXT DEFAULT ''"},
 		{tableName: "papers", name: "abstract_text", definition: "TEXT DEFAULT ''"},
 		{tableName: "papers", name: "notes_text", definition: "TEXT DEFAULT ''"},
@@ -390,6 +392,14 @@ func (m *Manager) ensureIndexes() error {
 		"papers",
 		"pdf_sha256",
 		"数据库中存在重复的 PDF 指纹，无法完成升级，请先清理重复数据",
+	); err != nil {
+		return err
+	}
+	if err := m.ensureUniqueNonEmptyIndex(
+		"idx_papers_doi_unique",
+		"papers",
+		"doi",
+		"数据库中存在重复的 DOI，无法完成升级，请先清理重复数据",
 	); err != nil {
 		return err
 	}

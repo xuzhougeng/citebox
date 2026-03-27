@@ -71,6 +71,7 @@ func (e *DuplicatePaperError) Unwrap() error {
 
 type UploadPaperParams struct {
 	Title          string
+	DOI            string
 	GroupID        *int64
 	Tags           []string
 	ExtractionMode string
@@ -78,12 +79,21 @@ type UploadPaperParams struct {
 
 type UpdatePaperParams struct {
 	Title          string
+	DOI            *string
 	PDFText        *string
 	AbstractText   string
 	NotesText      string
 	PaperNotesText string
 	GroupID        *int64
 	Tags           []string
+}
+
+type ImportPaperByDOIParams struct {
+	DOI            string
+	Title          string
+	GroupID        *int64
+	Tags           []string
+	ExtractionMode string
 }
 
 type UpdateFigureParams struct {

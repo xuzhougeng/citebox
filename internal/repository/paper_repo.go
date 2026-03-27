@@ -45,11 +45,12 @@ func (r *PaperRepository) CreatePaper(input PaperUpsertInput) (*model.Paper, err
 
 	result, err := tx.Exec(`
 		INSERT INTO papers (
-			title, original_filename, stored_pdf_name, pdf_sha256, file_size, content_type,
+			title, doi, original_filename, stored_pdf_name, pdf_sha256, file_size, content_type,
 			pdf_text, abstract_text, notes_text, paper_notes_text, boxes_json, extraction_status, extractor_message, extractor_job_id, group_id
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`,
 		input.Title,
+		strings.TrimSpace(input.DOI),
 		input.OriginalFilename,
 		input.StoredPDFName,
 		input.PDFSHA256,
@@ -119,14 +120,18 @@ func (r *PaperRepository) UpdatePaper(id int64, input PaperUpdateInput) (*model.
 	if input.PDFText != nil {
 		pdfTextValue = *input.PDFText
 	}
+	var doiValue interface{}
+	if input.DOI != nil {
+		doiValue = strings.TrimSpace(*input.DOI)
+	}
 
 	result, err := tx.Exec(`
 		UPDATE papers
-		SET title = ?, pdf_text = COALESCE(?, pdf_text), abstract_text = ?, notes_text = ?, paper_notes_text = ?, group_id = ?, updated_at = CURRENT_TIMESTAMP
+		SET title = ?, doi = COALESCE(?, doi), pdf_text = COALESCE(?, pdf_text), abstract_text = ?, notes_text = ?, paper_notes_text = ?, group_id = ?, updated_at = CURRENT_TIMESTAMP
 		WHERE id = ?
-	`, input.Title, pdfTextValue, input.AbstractText, input.NotesText, input.PaperNotesText, input.GroupID, id)
+	`, input.Title, doiValue, pdfTextValue, input.AbstractText, input.NotesText, input.PaperNotesText, input.GroupID, id)
 	if err != nil {
-		return nil, wrapDBError(err, "更新文献失败")
+		return nil, wrapConflictDBError(err, "文献 DOI 已存在", "更新文献失败")
 	}
 
 	if err := ensureRowsAffected(result, "paper not found"); err != nil {
@@ -196,7 +201,7 @@ func (r *PaperRepository) PurgeLibrary() error {
 func (r *PaperRepository) GetPaperDetail(id int64) (*model.Paper, error) {
 	row := r.db.QueryRow(`
 			SELECT
-				p.id, p.title, p.original_filename, p.stored_pdf_name, p.file_size, p.content_type,
+				p.id, p.title, p.doi, p.original_filename, p.stored_pdf_name, p.file_size, p.content_type,
 				p.pdf_text, p.abstract_text, p.notes_text, p.paper_notes_text, p.boxes_json, p.extraction_status, p.extractor_message, p.extractor_job_id,
 				p.group_id, COALESCE(g.name, ''),
 				p.created_at, p.updated_at,
@@ -320,7 +325,7 @@ func (r *PaperRepository) ListPapers(filter model.PaperFilter) ([]model.Paper, i
 
 	query := `
 			SELECT
-				p.id, p.title, p.original_filename, p.stored_pdf_name, p.file_size, p.content_type,
+				p.id, p.title, p.doi, p.original_filename, p.stored_pdf_name, p.file_size, p.content_type,
 				'', p.abstract_text, p.notes_text, p.paper_notes_text, '', p.extraction_status, p.extractor_message, p.extractor_job_id,
 				p.group_id, COALESCE(g.name, ''),
 				p.created_at, p.updated_at,
@@ -384,7 +389,7 @@ func (r *PaperRepository) ListPapersByExtractionStatuses(statuses []string) ([]m
 
 	rows, err := r.db.Query(`
 		SELECT
-			p.id, p.title, p.original_filename, p.stored_pdf_name, p.file_size, p.content_type,
+			p.id, p.title, p.doi, p.original_filename, p.stored_pdf_name, p.file_size, p.content_type,
 			'', p.abstract_text, p.notes_text, p.paper_notes_text, '', p.extraction_status, p.extractor_message, p.extractor_job_id,
 			p.group_id, COALESCE(g.name, ''),
 			p.created_at, p.updated_at,
@@ -434,6 +439,29 @@ func (r *PaperRepository) FindPaperByPDFSHA256(pdfSHA256 string) (*model.Paper, 
 	}
 	if err != nil {
 		return nil, wrapDBError(err, "查询重复文献失败")
+	}
+
+	return r.GetPaperDetail(paperID)
+}
+
+func (r *PaperRepository) FindPaperByDOI(doi string) (*model.Paper, error) {
+	doi = strings.TrimSpace(doi)
+	if doi == "" {
+		return nil, nil
+	}
+
+	var paperID int64
+	err := r.db.QueryRow(`
+		SELECT id
+		FROM papers
+		WHERE doi = ?
+		LIMIT 1
+	`, doi).Scan(&paperID)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, wrapDBError(err, "查询重复 DOI 失败")
 	}
 
 	return r.GetPaperDetail(paperID)
@@ -568,13 +596,21 @@ func buildPaperWhere(filter model.PaperFilter) (string, []interface{}) {
 
 	if keyword := strings.TrimSpace(filter.Keyword); keyword != "" {
 		ftsKeyword := ftsEscapeKeyword(keyword)
+		keywordConditions := make([]string, 0, 4)
+		keywordArgs := make([]interface{}, 0, 4)
 		if strings.TrimSpace(filter.KeywordScope) == "title_abstract" {
-			conditions = append(conditions, "p.id IN (SELECT rowid FROM papers_fts WHERE papers_fts MATCH '{title abstract_text}: ' || ?)")
-			args = append(args, ftsKeyword)
+			keywordConditions = append(keywordConditions, "p.id IN (SELECT rowid FROM papers_fts WHERE papers_fts MATCH '{title abstract_text}: ' || ?)")
+			keywordArgs = append(keywordArgs, ftsKeyword)
 		} else {
-			conditions = append(conditions, "p.id IN (SELECT rowid FROM papers_fts WHERE papers_fts MATCH ?)")
-			args = append(args, ftsKeyword)
+			keywordConditions = append(keywordConditions, "p.id IN (SELECT rowid FROM papers_fts WHERE papers_fts MATCH ?)")
+			keywordArgs = append(keywordArgs, ftsKeyword)
 		}
+		for _, term := range paperDOISearchTerms(keyword) {
+			keywordConditions = append(keywordConditions, "instr(lower(COALESCE(p.doi, '')), ?) > 0")
+			keywordArgs = append(keywordArgs, term)
+		}
+		conditions = append(conditions, "("+strings.Join(keywordConditions, " OR ")+")")
+		args = append(args, keywordArgs...)
 	}
 	if filter.GroupID != nil && *filter.GroupID > 0 {
 		conditions = append(conditions, "p.group_id = ?")
@@ -596,6 +632,31 @@ func buildPaperWhere(filter model.PaperFilter) (string, []interface{}) {
 		return "", args
 	}
 	return " WHERE " + strings.Join(conditions, " AND "), args
+}
+
+func paperDOISearchTerms(keyword string) []string {
+	raw := strings.ToLower(strings.TrimSpace(keyword))
+	if raw == "" {
+		return nil
+	}
+
+	normalized := raw
+	for _, prefix := range []string{
+		"https://doi.org/",
+		"http://doi.org/",
+		"https://dx.doi.org/",
+		"http://dx.doi.org/",
+		"doi:",
+	} {
+		if strings.HasPrefix(normalized, prefix) {
+			normalized = strings.TrimSpace(normalized[len(prefix):])
+			break
+		}
+	}
+	if normalized == "" || normalized == raw {
+		return []string{raw}
+	}
+	return []string{raw, normalized}
 }
 
 func buildPaperOrderBy(filter model.PaperFilter) string {
@@ -641,6 +702,7 @@ func scanPaper(scanner interface {
 	args := []interface{}{
 		&paper.ID,
 		&paper.Title,
+		&paper.DOI,
 		&paper.OriginalFilename,
 		&paper.StoredPDFName,
 		&paper.FileSize,

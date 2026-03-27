@@ -189,6 +189,10 @@ func writeTestPNGFile(t *testing.T, path string) {
 	}
 }
 
+func testPDFBytes() []byte {
+	return []byte("%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\ntrailer\n<< /Root 1 0 R >>\n%%EOF\n")
+}
+
 func useWeixinBindingTestServer(t *testing.T, svc *LibraryService, handler http.Handler) {
 	t.Helper()
 
@@ -323,9 +327,11 @@ func TestUpdatePaperPersistsMetadata(t *testing.T) {
 	svc, repo, _ := newTestService(t)
 	paper := createTestPaper(t, repo)
 	nextPDFText := "Updated full text"
+	doi := "https://doi.org/10.4000/ATLAS-REVISED"
 
 	updated, err := svc.UpdatePaper(paper.ID, UpdatePaperParams{
 		Title:          "Atlas Study Revised",
+		DOI:            &doi,
 		PDFText:        &nextPDFText,
 		AbstractText:   "Updated abstract",
 		NotesText:      "Updated notes",
@@ -341,6 +347,9 @@ func TestUpdatePaperPersistsMetadata(t *testing.T) {
 	}
 	if updated.PDFText != nextPDFText {
 		t.Fatalf("UpdatePaper() pdf_text = %q, want %q", updated.PDFText, nextPDFText)
+	}
+	if updated.DOI != "10.4000/atlas-revised" {
+		t.Fatalf("UpdatePaper() doi = %q, want %q", updated.DOI, "10.4000/atlas-revised")
 	}
 	if len(updated.Tags) != 2 {
 		t.Fatalf("UpdatePaper() tags = %d, want 2", len(updated.Tags))

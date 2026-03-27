@@ -5,6 +5,7 @@ import "github.com/xuzhougeng/citebox/internal/model"
 // PaperUpsertInput 文献创建/更新输入
 type PaperUpsertInput struct {
 	Title            string
+	DOI              string
 	OriginalFilename string
 	StoredPDFName    string
 	PDFSHA256        string
@@ -26,6 +27,7 @@ type PaperUpsertInput struct {
 // PaperUpdateInput 文献更新输入
 type PaperUpdateInput struct {
 	Title          string
+	DOI            *string
 	PDFText        *string
 	AbstractText   string
 	NotesText      string

@@ -585,6 +585,15 @@ const PaperViewer = {
         return tags.map((tag) => `<span class="chip" style="--chip-color:${tag.color}">${Utils.escapeHTML(tag.name)}</span>`).join('');
     },
 
+    renderDOIValue(doi) {
+        const value = String(doi || '').trim();
+        if (!value) {
+            return Utils.escapeHTML(t('shared.paper.no_doi', '未记录'));
+        }
+        const href = `https://doi.org/${encodeURI(value)}`;
+        return `<a href="${href}" target="_blank" rel="noreferrer">${Utils.escapeHTML(value)}</a>`;
+    },
+
     buildUpdatePayload(paper, overrides = {}) {
         const hasOverride = (key) => Object.prototype.hasOwnProperty.call(overrides, key);
         const tags = hasOverride('tags')
@@ -593,6 +602,7 @@ const PaperViewer = {
 
         return {
             title: hasOverride('title') ? overrides.title : (paper.title || ''),
+            doi: hasOverride('doi') ? overrides.doi : (paper.doi || ''),
             pdf_text: hasOverride('pdf_text') ? overrides.pdf_text : (paper.pdf_text || ''),
             abstract_text: hasOverride('abstract_text') ? overrides.abstract_text : (paper.abstract_text || ''),
             notes_text: hasOverride('notes_text') ? overrides.notes_text : (paper.notes_text || ''),
@@ -697,6 +707,10 @@ const PaperViewer = {
                         <span>${t("shared.paper.title_label", "标题")}</span>
                         <input id="paperViewerTitle" class="form-input" type="text" value="${Utils.escapeHTML(paper.title)}">
                     </label>
+                    <label class="field field-span-2">
+                        <span>${t("shared.paper.doi_label", "DOI")}</span>
+                        <input id="paperViewerDOI" class="form-input" type="text" value="${Utils.escapeHTML(paper.doi || '')}" placeholder="${t('shared.paper.doi_placeholder', '例如：10.1038/nature12373 或 https://doi.org/10.1038/nature12373')}" autocomplete="off" spellcheck="false">
+                    </label>
                     <label class="field">
                         <span>${t("shared.paper.group_label", "分组")}</span>
                         <select id="paperViewerGroup" class="form-input">${groupOptions}</select>
@@ -735,6 +749,7 @@ const PaperViewer = {
             </form>
 
             <div class="detail-meta-panel">
+                <div><span>${t("shared.paper.doi_label", "DOI")}</span><strong>${this.renderDOIValue(paper.doi)}</strong></div>
                 <div><span>${t("shared.paper.original_file", "原始文件")}</span><strong>${Utils.escapeHTML(paper.original_filename)}</strong></div>
                 <div><span>${t("shared.paper.pdf_size", "PDF 大小")}</span><strong>${Utils.formatFileSize(paper.file_size || 0)}</strong></div>
                 <div><span>${t("shared.paper.extracted_figures", "提取图片")}</span><strong>${figures.length}</strong></div>
@@ -834,6 +849,7 @@ const PaperViewer = {
                 this.paper.id,
                 this.buildUpdatePayload(this.paper, {
                     title: document.getElementById('paperViewerTitle').value.trim(),
+                    doi: document.getElementById('paperViewerDOI').value.trim(),
                     abstract_text: document.getElementById('paperViewerAbstract').value.trim(),
                     notes_text: document.getElementById('paperViewerNotes').value.trim(),
                     group_id: document.getElementById('paperViewerGroup').value ? Number(document.getElementById('paperViewerGroup').value) : null,

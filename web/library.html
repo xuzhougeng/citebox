@@ -50,20 +50,20 @@
             <div class="filters-card-head">
                 <div>
                     <h2 data-i18n="library.filter_title">筛选文献</h2>
-                    <p data-i18n="library.filter_desc">按关键词、分组、标签和状态快速定位目标文献。</p>
+                    <p data-i18n="library.filter_desc">按关键词、DOI、分组、标签和状态快速定位目标文献。</p>
                 </div>
                 <a class="btn btn-primary" href="/upload" data-i18n="library.btn_upload">上传新文献</a>
             </div>
             <div class="filters-grid">
                 <label class="field">
                     <span data-i18n="library.filter_keyword">关键词</span>
-                    <input id="keywordInput" class="form-input" type="text" data-i18n-placeholder="library.filter_keyword_placeholder" placeholder="标题、摘要或正文内容">
+                    <input id="keywordInput" class="form-input" type="text" data-i18n-placeholder="library.filter_keyword_placeholder" placeholder="标题、摘要、正文或 DOI">
                 </label>
                 <label class="field">
                     <span data-i18n="library.filter_scope">检索范围</span>
                     <select id="keywordScopeFilter" class="form-input">
-                        <option value="full_text" data-i18n="library.scope_full_text">全文</option>
-                        <option value="title_abstract" data-i18n="library.scope_title_abstract">标题 + 摘要</option>
+                        <option value="full_text" data-i18n="library.scope_full_text">全文 + DOI</option>
+                        <option value="title_abstract" data-i18n="library.scope_title_abstract">标题 + 摘要 + DOI</option>
                     </select>
                 </label>
                 <label class="field">

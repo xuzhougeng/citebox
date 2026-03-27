@@ -34,6 +34,7 @@ type Figure struct {
 type Paper struct {
 	ID               int64           `json:"id"`
 	Title            string          `json:"title"`
+	DOI              string          `json:"doi,omitempty"`
 	OriginalFilename string          `json:"original_filename"`
 	StoredPDFName    string          `json:"stored_pdf_name,omitempty"`
 	PDFURL           string          `json:"pdf_url,omitempty"`

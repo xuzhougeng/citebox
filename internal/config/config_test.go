@@ -90,3 +90,12 @@ func TestLoadReadsDisableAuth(t *testing.T) {
 		t.Fatal("Load() DisableAuth = false, want true")
 	}
 }
+
+func TestLoadReadsOAContactEmail(t *testing.T) {
+	t.Setenv("OA_CONTACT_EMAIL", "ops@example.com")
+
+	cfg := Load()
+	if cfg.OAContactEmail != "ops@example.com" {
+		t.Fatalf("Load() OAContactEmail = %q, want %q", cfg.OAContactEmail, "ops@example.com")
+	}
+}

@@ -278,7 +278,7 @@ const LibraryPage = {
     },
 
     keywordScopeLabel() {
-        return this.state.filters.keyword_scope === 'title_abstract' ? t('library.scope_title_abstract', '标题 + 摘要') : t('library.scope_full_text', '全文');
+        return this.state.filters.keyword_scope === 'title_abstract' ? t('library.scope_title_abstract', '标题 + 摘要 + DOI') : t('library.scope_full_text', '全文 + DOI');
     },
 
     sortLabel() {
@@ -288,8 +288,8 @@ const LibraryPage = {
     updateKeywordPlaceholder() {
         if (!this.keywordInput) return;
         this.keywordInput.placeholder = this.state.filters.keyword_scope === 'title_abstract'
-            ? t('library.filter_keyword_placeholder_title', '仅检索标题和摘要')
-            : t('library.filter_keyword_placeholder', '标题、摘要或正文内容');
+            ? t('library.filter_keyword_placeholder_title', '标题、摘要或 DOI')
+            : t('library.filter_keyword_placeholder', '标题、摘要、正文或 DOI');
     },
 
     renderPaperList() {
@@ -328,6 +328,12 @@ const LibraryPage = {
                                 <span class="paper-list-meta-label">${t('library.meta_group', '分组')}</span>
                                 <span class="paper-list-meta-value">${Utils.escapeHTML(paper.group_name || t('library.meta_no_group', '未分组'))}</span>
                             </span>
+                            ${paper.doi ? `
+                                <span class="paper-list-meta-item">
+                                    <span class="paper-list-meta-label">${t('library.meta_doi', 'DOI')}</span>
+                                    <span class="paper-list-meta-value">${Utils.escapeHTML(paper.doi)}</span>
+                                </span>
+                            ` : ''}
                             <span class="paper-list-meta-item">
                                 <span class="paper-list-meta-label">${t('library.meta_figures', '图片')}</span>
                                 <span class="paper-list-meta-value">${paper.figure_count || 0}</span>

@@ -121,6 +121,11 @@ func (r *LibraryRepository) FindPaperByPDFSHA256(pdfSHA256 string) (*model.Paper
 	return r.Paper.FindPaperByPDFSHA256(pdfSHA256)
 }
 
+// FindPaperByDOI 根据 DOI 查找文献（委托给 Paper 仓库）
+func (r *LibraryRepository) FindPaperByDOI(doi string) (*model.Paper, error) {
+	return r.Paper.FindPaperByDOI(doi)
+}
+
 // ListPapersMissingPDFSHA256 查询缺少 PDF SHA256 的文献（委托给 Paper 仓库）
 func (r *LibraryRepository) ListPapersMissingPDFSHA256() ([]PaperChecksumBackfillItem, error) {
 	return r.Paper.ListPapersMissingPDFSHA256()

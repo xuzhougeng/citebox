@@ -34,6 +34,7 @@ erDiagram
     papers {
         INTEGER id PK
         TEXT title
+        TEXT doi UK
         TEXT original_filename
         TEXT stored_pdf_name UK
         TEXT pdf_sha256 UK
@@ -149,6 +150,7 @@ CREATE TABLE app_settings (
 CREATE TABLE papers (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     title TEXT NOT NULL,
+    doi TEXT DEFAULT '',
     original_filename TEXT NOT NULL,
     stored_pdf_name TEXT NOT NULL,
     pdf_sha256 TEXT DEFAULT '',
@@ -232,6 +234,7 @@ CREATE INDEX idx_papers_group_id ON papers(group_id);
 CREATE INDEX idx_papers_created_at ON papers(created_at);
 CREATE INDEX idx_papers_status ON papers(extraction_status);
 CREATE UNIQUE INDEX idx_papers_stored_pdf_name_unique ON papers(stored_pdf_name);
+CREATE UNIQUE INDEX idx_papers_doi_unique ON papers(doi) WHERE COALESCE(TRIM(doi), '') <> '';
 CREATE UNIQUE INDEX idx_papers_pdf_sha256_unique ON papers(pdf_sha256) WHERE COALESCE(TRIM(pdf_sha256), '') <> '';
 
 CREATE INDEX idx_paper_figures_paper_id ON paper_figures(paper_id);
@@ -289,6 +292,7 @@ CREATE UNIQUE INDEX idx_tags_scope_name ON tags(scope, name);
 | --- | --- |
 | `id` | 文献主键 |
 | `title` | 文献标题 |
+| `doi` | 标准化后的 DOI；支持通过 DOI 导入 Open Access PDF，并对非空值要求唯一 |
 | `original_filename` | 上传时的原始 PDF 文件名 |
 | `stored_pdf_name` | 存储目录里的实际 PDF 文件名，当前要求唯一 |
 | `pdf_sha256` | PDF 内容指纹，用于上传去重；仅对非空值要求唯一 |
@@ -386,6 +390,7 @@ CREATE UNIQUE INDEX idx_tags_scope_name ON tags(scope, name);
 2. 全文搜索
    - `papers_fts` 覆盖：`title`、`original_filename`、`abstract_text`、`notes_text`、`pdf_text`
    - `papers.paper_notes_text` 当前通过普通列匹配参与搜索和筛选，还没有独立 FTS 列
+   - `papers.doi` 当前作为结构化元数据保存，还没有加入 FTS；后续如果需要按 DOI 直接检索，可再扩展
    - `figures_fts` 覆盖：`original_name`、`caption`、`notes_text`
    - 标签名和分组名仍然通过普通表查询完成
 

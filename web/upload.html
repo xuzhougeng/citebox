@@ -44,13 +44,31 @@
             <form id="paperUploadForm" class="upload-form">
                 <input id="pdfInput" type="file" accept="application/pdf,.pdf" hidden>
 
-                <div id="dropArea" class="drop-zone" tabindex="0">
-                    <p class="drop-title" data-i18n="upload.drop_title">拖拽 PDF 到这里</p>
-                    <p class="drop-subtitle" data-i18n="upload.drop_subtitle">或点击选择一篇文献</p>
+                <div class="detail-section upload-source-panel">
+                    <div class="upload-source-switch" role="tablist" aria-label="上传来源切换">
+                        <button class="btn btn-primary" type="button" data-upload-source-mode="file" aria-pressed="true" data-i18n="upload.source_mode_file">本地 PDF</button>
+                        <button class="btn btn-outline" type="button" data-upload-source-mode="doi" aria-pressed="false" data-i18n="upload.source_mode_doi">DOI 导入</button>
+                    </div>
+                    <p id="sourceModeHint" class="muted" data-i18n="upload.source_mode_hint_file">从本地选择 PDF 文件，上传后按当前解析配置入库。</p>
                 </div>
 
-                <div id="selectedFile" class="selected-file empty">
-                    <span data-i18n="upload.no_file_selected">尚未选择 PDF</span>
+                <div id="fileSourceSection" class="upload-source-panel">
+                    <div id="dropArea" class="drop-zone" tabindex="0">
+                        <p class="drop-title" data-i18n="upload.drop_title">拖拽 PDF 到这里</p>
+                        <p class="drop-subtitle" data-i18n="upload.drop_subtitle">或点击选择一篇文献</p>
+                    </div>
+
+                    <div id="selectedFile" class="selected-file empty">
+                        <span data-i18n="upload.no_file_selected">尚未选择 PDF</span>
+                    </div>
+                </div>
+
+                <div id="doiSourceSection" class="detail-section upload-source-panel hidden">
+                    <label class="field">
+                        <span data-i18n="upload.label_doi">DOI</span>
+                        <input id="doiInput" class="form-input" type="text" data-i18n-placeholder="upload.placeholder_doi" placeholder="例如：10.1038/nature12373 或 https://doi.org/10.1038/nature12373" autocomplete="off" spellcheck="false">
+                        <span class="muted" data-i18n="upload.doi_hint">系统会优先从 Open Access 来源检索并自动导入可下载的 PDF。</span>
+                    </label>
                 </div>
 
                 <div class="form-grid">

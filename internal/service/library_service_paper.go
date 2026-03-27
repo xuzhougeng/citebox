@@ -9,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/xuzhougeng/citebox/internal/apperr"
 	"github.com/xuzhougeng/citebox/internal/model"
@@ -67,141 +66,12 @@ func (s *LibraryService) UploadPaper(file multipart.File, header *multipart.File
 		return nil, apperr.New(apperr.CodeUnsupportedMedia, "只支持上传 PDF 文献")
 	}
 
-	if err := s.validateGroup(params.GroupID); err != nil {
-		return nil, err
-	}
-
-	title := strings.TrimSpace(params.Title)
-	if title == "" {
-		title = deriveTitle(header.Filename)
-	}
-
-	storedPDFName := fmt.Sprintf("paper_%d.pdf", time.Now().UnixNano())
-	pdfPath := filepath.Join(s.config.PapersDir(), storedPDFName)
-
-	dst, err := os.Create(pdfPath)
-	if err != nil {
-		return nil, apperr.Wrap(apperr.CodeInternal, "创建 PDF 文件失败", err)
-	}
-	hasher := sha256.New()
-	if _, err := io.Copy(io.MultiWriter(dst, hasher), file); err != nil {
-		dst.Close()
-		os.Remove(pdfPath)
-		return nil, apperr.Wrap(apperr.CodeInternal, "保存 PDF 失败", err)
-	}
-	if err := dst.Close(); err != nil {
-		os.Remove(pdfPath)
-		return nil, apperr.Wrap(apperr.CodeInternal, "关闭 PDF 文件失败", err)
-	}
-	pdfSHA256 := hex.EncodeToString(hasher.Sum(nil))
-
-	if duplicate, err := s.repo.FindPaperByPDFSHA256(pdfSHA256); err != nil {
-		os.Remove(pdfPath)
-		return nil, err
-	} else if duplicate != nil {
-		os.Remove(pdfPath)
-		s.decoratePaper(duplicate)
-		return nil, &DuplicatePaperError{
-			Paper: duplicate,
-			Err:   apperr.New(apperr.CodeConflict, "PDF 已存在，正在跳转到已有文献"),
-		}
-	}
-
-	tagInputs := s.normalizeTagInputs(params.Tags, model.TagScopePaper)
-	extractorSettings, err := s.GetExtractorSettings()
-	if err != nil {
-		os.Remove(pdfPath)
-		return nil, err
-	}
-
-	autoExtractionConfigured, err := s.autoExtractionConfigured()
-	if err != nil {
-		os.Remove(pdfPath)
-		return nil, err
-	}
-	usesManualProfile := usesManualExtractionProfile(*extractorSettings)
-	usesBuiltInLLMExtraction := usesBuiltInLLMCoordinateExtraction(*extractorSettings)
-
-	extractionMode := normalizeExtractionMode(params.ExtractionMode)
-	if extractionMode == "" {
-		if autoExtractionConfigured {
-			extractionMode = extractionModeAuto
-		} else {
-			extractionMode = extractionModeManual
-		}
-	}
-
-	extractionStatus := "completed"
-	extractorMessage := manualWorkflowMessage(!autoExtractionConfigured, usesManualProfile)
-
-	switch extractionMode {
-	case extractionModeAuto:
-		if !autoExtractionConfigured {
-			os.Remove(pdfPath)
-			if usesManualProfile {
-				return nil, apperr.New(apperr.CodeFailedPrecondition, "当前 PDF 提取方案为手工，请改用手工上传")
-			}
-			return nil, apperr.New(apperr.CodeFailedPrecondition, "未配置自动解析服务，请改用手工标注")
-		}
-		if usesBuiltInLLMExtraction {
-			extractionStatus = "queued"
-			extractorMessage = builtInLLMWorkflowMessage()
-		} else {
-			extractionStatus = "queued"
-			extractorMessage = "文献已入库，等待后台解析"
-		}
-	case extractionModeManual:
-	default:
-		os.Remove(pdfPath)
-		return nil, apperr.New(apperr.CodeInvalidArgument, "上传模式无效")
-	}
-
-	paper, err := s.repo.CreatePaper(repository.PaperUpsertInput{
-		Title:            title,
-		OriginalFilename: header.Filename,
-		StoredPDFName:    storedPDFName,
-		PDFSHA256:        pdfSHA256,
-		FileSize:         header.Size,
-		ContentType:      contentTypeOrDefault(header.Header.Get("Content-Type"), "application/pdf"),
-		PDFText:          "",
-		AbstractText:     "",
-		NotesText:        "",
-		PaperNotesText:   "",
-		BoxesJSON:        "",
-		ExtractionStatus: extractionStatus,
-		ExtractorMessage: extractorMessage,
-		ExtractorJobID:   "",
-		GroupID:          params.GroupID,
-		Tags:             tagInputs,
-		Figures:          nil,
-	})
-	if err != nil {
-		os.Remove(pdfPath)
-		if apperr.IsCode(err, apperr.CodeConflict) {
-			duplicate, findErr := s.repo.FindPaperByPDFSHA256(pdfSHA256)
-			if findErr != nil {
-				return nil, findErr
-			}
-			if duplicate != nil {
-				s.decoratePaper(duplicate)
-				return nil, &DuplicatePaperError{
-					Paper: duplicate,
-					Err:   apperr.New(apperr.CodeConflict, "PDF 已存在，正在跳转到已有文献"),
-				}
-			}
-		}
-		return nil, err
-	}
-
-	if extractionMode == extractionModeAuto && s.startBackground {
-		go s.runPaperExtraction(paper.ID, pdfPath, header.Filename)
-	}
-	if s.shouldQueuePaperPDFTextBackfill(extractionMode, *extractorSettings) {
-		s.queuePaperPDFTextBackfill(paper.ID, pdfPath)
-	}
-
-	s.decoratePaper(paper)
-	return paper, nil
+	return s.uploadPaperFromReader(file, paperUploadSource{
+		Filename:     header.Filename,
+		ContentType:  header.Header.Get("Content-Type"),
+		DeclaredSize: header.Size,
+		DOI:          params.DOI,
+	}, params)
 }
 
 func (s *LibraryService) backfillPaperChecksums() error {
@@ -275,8 +145,18 @@ func (s *LibraryService) UpdatePaper(id int64, params UpdatePaperParams) (*model
 		return nil, err
 	}
 
+	var normalizedDOI *string
+	if params.DOI != nil {
+		value, err := normalizeDOIInput(*params.DOI)
+		if err != nil {
+			return nil, err
+		}
+		normalizedDOI = &value
+	}
+
 	paper, err := s.repo.UpdatePaper(id, repository.PaperUpdateInput{
 		Title:          title,
+		DOI:            normalizedDOI,
 		PDFText:        params.PDFText,
 		AbstractText:   strings.TrimSpace(params.AbstractText),
 		NotesText:      strings.TrimSpace(params.NotesText),

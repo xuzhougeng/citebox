@@ -1,5 +1,6 @@
 const UploadPage = {
     file: null,
+    sourceMode: 'file',
     pollTimer: null,
     activePaperId: null,
     pollInFlight: false,
@@ -28,7 +29,12 @@ const UploadPage = {
 
         this.pdfInput = document.getElementById('pdfInput');
         this.dropArea = document.getElementById('dropArea');
+        this.fileSourceSection = document.getElementById('fileSourceSection');
+        this.doiSourceSection = document.getElementById('doiSourceSection');
+        this.sourceModeHint = document.getElementById('sourceModeHint');
+        this.sourceModeButtons = Array.from(document.querySelectorAll('[data-upload-source-mode]'));
         this.selectedFile = document.getElementById('selectedFile');
+        this.doiInput = document.getElementById('doiInput');
         this.titleInput = document.getElementById('titleInput');
         this.groupSelect = document.getElementById('groupSelect');
         this.tagsInput = document.getElementById('tagsInput');
@@ -45,6 +51,7 @@ const UploadPage = {
         }) || null;
 
         this.bindEvents();
+        this.setSourceMode(this.sourceMode);
         await Promise.all([
             this.loadGroups(),
             this.loadExtractionModeOptions()
@@ -52,8 +59,12 @@ const UploadPage = {
     },
 
     bindEvents() {
-        this.dropArea.addEventListener('click', () => this.pdfInput.click());
-        this.dropArea.addEventListener('keydown', (event) => {
+        this.sourceModeButtons.forEach((button) => {
+            button.addEventListener('click', () => this.setSourceMode(button.dataset.uploadSourceMode));
+        });
+
+        this.dropArea?.addEventListener('click', () => this.pdfInput.click());
+        this.dropArea?.addEventListener('keydown', (event) => {
             if (event.key === 'Enter' || event.key === ' ') {
                 event.preventDefault();
                 this.pdfInput.click();
@@ -61,25 +72,25 @@ const UploadPage = {
         });
 
         ['dragenter', 'dragover', 'dragleave', 'drop'].forEach((eventName) => {
-            this.dropArea.addEventListener(eventName, (event) => {
+            this.dropArea?.addEventListener(eventName, (event) => {
                 event.preventDefault();
                 event.stopPropagation();
             });
         });
 
         ['dragenter', 'dragover'].forEach((eventName) => {
-            this.dropArea.addEventListener(eventName, () => {
+            this.dropArea?.addEventListener(eventName, () => {
                 this.dropArea.classList.add('dragover');
             });
         });
 
         ['dragleave', 'drop'].forEach((eventName) => {
-            this.dropArea.addEventListener(eventName, () => {
+            this.dropArea?.addEventListener(eventName, () => {
                 this.dropArea.classList.remove('dragover');
             });
         });
 
-        this.dropArea.addEventListener('drop', (event) => {
+        this.dropArea?.addEventListener('drop', (event) => {
             const file = event.dataTransfer.files[0];
             this.setFile(file);
         });
@@ -102,6 +113,31 @@ const UploadPage = {
         });
 
         window.addEventListener('beforeunload', () => this.stopPolling());
+    },
+
+    setSourceMode(mode) {
+        this.sourceMode = mode === 'doi' ? 'doi' : 'file';
+        this.fileSourceSection?.classList.toggle('hidden', this.sourceMode !== 'file');
+        this.doiSourceSection?.classList.toggle('hidden', this.sourceMode !== 'doi');
+
+        this.sourceModeButtons.forEach((button) => {
+            const active = button.dataset.uploadSourceMode === this.sourceMode;
+            button.classList.toggle('btn-primary', active);
+            button.classList.toggle('btn-outline', !active);
+            button.setAttribute('aria-pressed', active ? 'true' : 'false');
+        });
+
+        if (this.sourceModeHint) {
+            this.sourceModeHint.textContent = this.sourceMode === 'doi'
+                ? t('upload.source_mode_hint_doi', '输入 DOI 后，系统会优先从 Open Access 来源自动检索并导入 PDF。')
+                : t('upload.source_mode_hint_file', '从本地选择 PDF 文件，上传后按当前解析配置入库。');
+        }
+
+        if (this.submitButton) {
+            this.submitButton.textContent = this.sourceMode === 'doi'
+                ? t('upload.btn_import_doi', '查找并导入 DOI')
+                : t('upload.btn_upload', '上传文献');
+        }
     },
 
     async loadGroups() {
@@ -181,6 +217,7 @@ const UploadPage = {
             return;
         }
 
+        this.setSourceMode('file');
         this.file = file;
         this.selectedFile.classList.remove('empty');
         this.selectedFile.innerHTML = `
@@ -194,6 +231,14 @@ const UploadPage = {
     },
 
     async submit() {
+        if (this.sourceMode === 'doi') {
+            await this.submitDOIImport();
+            return;
+        }
+        await this.submitFileUpload();
+    },
+
+    async submitFileUpload() {
         if (!this.file) {
             Utils.showToast(t('upload.err_no_file', '请先选择 PDF'), 'error');
             return;
@@ -251,7 +296,72 @@ const UploadPage = {
             Utils.showToast(error.message, 'error');
         } finally {
             this.submitButton.disabled = false;
-            this.submitButton.textContent = t('upload.btn_upload', '上传文献');
+            this.submitButton.textContent = this.sourceMode === 'doi'
+                ? t('upload.btn_import_doi', '查找并导入 DOI')
+                : t('upload.btn_upload', '上传文献');
+        }
+    },
+
+    async submitDOIImport() {
+        const doi = this.doiInput?.value?.trim() || '';
+        if (!doi) {
+            Utils.showToast(t('upload.err_no_doi', '请先输入 DOI'), 'error');
+            return;
+        }
+
+        const extractorSettings = { ...(this.extractorSettings || {}) };
+        const extractionMode = this.extractionModeSelect?.value || 'manual';
+        const payload = {
+            doi,
+            title: this.titleInput.value.trim(),
+            tags: Utils.splitTags(this.tagsInput.value.trim()),
+            extraction_mode: extractionMode
+        };
+        if (this.groupSelect.value) {
+            payload.group_id = Number(this.groupSelect.value);
+        }
+
+        this.submitButton.disabled = true;
+        this.submitButton.textContent = t('upload.btn_importing_doi', '检索中...');
+
+        try {
+            const response = await API.importPaperByDOI(payload);
+            const paper = response.paper;
+            this.lastUploadedFile = null;
+            this.tagAutocomplete?.mergeTags(paper?.tags || Utils.splitTags(this.tagsInput.value.trim()));
+
+            this.renderResult(paper);
+            this.startPolling(paper);
+
+            let toastMessage = t('upload.toast_imported_doi', 'DOI 文献已入库');
+            if (Utils.isProcessingStatus(paper.extraction_status)) {
+                toastMessage = t('upload.toast_imported_doi_processing', 'DOI 文献已入库，后台开始解析');
+            }
+            Utils.showToast(toastMessage, Utils.statusTone(paper.extraction_status));
+
+            this.form.reset();
+            this.file = null;
+            this.selectedFile.classList.add('empty');
+            this.selectedFile.innerHTML = `<span>${t('upload.no_file_selected', '尚未选择 PDF')}</span>`;
+            this.tagAutocomplete?.refresh?.();
+            await Promise.all([
+                this.loadGroups(),
+                this.loadExtractionModeOptions()
+            ]);
+            this.setSourceMode('doi');
+        } catch (error) {
+            const duplicatePaperId = Number(error?.payload?.paper?.id || 0);
+            if (error?.code === 'CONFLICT' && duplicatePaperId > 0) {
+                Utils.showToast(error.message, 'info');
+                window.location.href = `/library?paper_id=${encodeURIComponent(duplicatePaperId)}&from=duplicate`;
+                return;
+            }
+            Utils.showToast(error.message, 'error');
+        } finally {
+            this.submitButton.disabled = false;
+            this.submitButton.textContent = this.sourceMode === 'doi'
+                ? t('upload.btn_import_doi', '查找并导入 DOI')
+                : t('upload.btn_upload', '上传文献');
         }
     },
 
@@ -778,6 +888,7 @@ const UploadPage = {
                 <span>${t('upload.result_tags', '标签：')}${tags || t('upload.result_no_tags', '无')}</span>
                 <span>${t('upload.result_figures', '提取图片：')}${figures.length}${t('upload.result_figures_unit', ' 张')}</span>
                 <span>${t('upload.result_fulltext', '全文：')}${paper.pdf_text ? `${paper.pdf_text.length.toLocaleString()}${t('upload.result_fulltext_chars', ' 字')}` : t('upload.result_fulltext_none', '未保存')}</span>
+                ${paper.doi ? `<span>${t('upload.result_doi', 'DOI：')}${Utils.escapeHTML(paper.doi)}</span>` : ''}
                 <span>${t('upload.result_pdf', 'PDF：')}${Utils.escapeHTML(paper.original_filename || '')}</span>
             </div>
 

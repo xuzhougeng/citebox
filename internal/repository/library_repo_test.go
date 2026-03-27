@@ -229,6 +229,109 @@ func TestListPapersKeywordScopeTitleAbstract(t *testing.T) {
 	}
 }
 
+func TestListPapersMatchesDOIKeyword(t *testing.T) {
+	repo := newTestRepository(t)
+
+	paper, err := repo.CreatePaper(PaperUpsertInput{
+		Title:            "DOI Search Atlas",
+		DOI:              "10.3000/example-doi",
+		OriginalFilename: "doi-search.pdf",
+		StoredPDFName:    "doi-search.pdf",
+		FileSize:         128,
+		ContentType:      "application/pdf",
+		AbstractText:     "Abstract without doi text.",
+		ExtractionStatus: "completed",
+		Figures: []FigureUpsertInput{
+			{Filename: "doi-search.png", PageNumber: 1, FigureIndex: 1},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreatePaper() error = %v", err)
+	}
+
+	for _, filter := range []model.PaperFilter{
+		{Keyword: "10.3000/example-doi", KeywordScope: "title_abstract"},
+		{Keyword: "https://doi.org/10.3000/EXAMPLE-DOI", KeywordScope: "title_abstract"},
+		{Keyword: "doi:10.3000/example-doi", KeywordScope: "full_text"},
+	} {
+		papers, total, err := repo.ListPapers(filter)
+		if err != nil {
+			t.Fatalf("ListPapers(%+v) error = %v", filter, err)
+		}
+		if total != 1 || len(papers) != 1 {
+			t.Fatalf("ListPapers(%+v) total=%d len=%d, want 1/1", filter, total, len(papers))
+		}
+		if papers[0].ID != paper.ID {
+			t.Fatalf("ListPapers(%+v) paper id = %d, want %d", filter, papers[0].ID, paper.ID)
+		}
+	}
+}
+
+func TestCreatePaperRejectsDuplicateDOI(t *testing.T) {
+	repo := newTestRepository(t)
+
+	if _, err := repo.CreatePaper(PaperUpsertInput{
+		Title:            "First DOI",
+		DOI:              "10.1000/duplicate-doi",
+		OriginalFilename: "first-doi.pdf",
+		StoredPDFName:    "first-doi.pdf",
+		FileSize:         128,
+		ContentType:      "application/pdf",
+		ExtractionStatus: "completed",
+		Figures: []FigureUpsertInput{
+			{Filename: "first-doi-figure.png", PageNumber: 1, FigureIndex: 1},
+		},
+	}); err != nil {
+		t.Fatalf("CreatePaper(first) error = %v", err)
+	}
+
+	if _, err := repo.CreatePaper(PaperUpsertInput{
+		Title:            "Second DOI",
+		DOI:              "10.1000/duplicate-doi",
+		OriginalFilename: "second-doi.pdf",
+		StoredPDFName:    "second-doi.pdf",
+		FileSize:         128,
+		ContentType:      "application/pdf",
+		ExtractionStatus: "completed",
+		Figures: []FigureUpsertInput{
+			{Filename: "second-doi-figure.png", PageNumber: 1, FigureIndex: 1},
+		},
+	}); !apperr.IsCode(err, apperr.CodeConflict) {
+		t.Fatalf("CreatePaper(second) code = %q, want %q", apperr.CodeOf(err), apperr.CodeConflict)
+	}
+}
+
+func TestUpdatePaperPersistsDOI(t *testing.T) {
+	repo := newTestRepository(t)
+
+	paper, err := repo.CreatePaper(PaperUpsertInput{
+		Title:            "Update DOI",
+		OriginalFilename: "update-doi.pdf",
+		StoredPDFName:    "update-doi.pdf",
+		FileSize:         128,
+		ContentType:      "application/pdf",
+		ExtractionStatus: "completed",
+		Figures: []FigureUpsertInput{
+			{Filename: "update-doi-figure.png", PageNumber: 1, FigureIndex: 1},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreatePaper() error = %v", err)
+	}
+
+	doi := "10.2000/update-doi"
+	updated, err := repo.UpdatePaper(paper.ID, PaperUpdateInput{
+		Title: paper.Title,
+		DOI:   &doi,
+	})
+	if err != nil {
+		t.Fatalf("UpdatePaper() error = %v", err)
+	}
+	if updated.DOI != doi {
+		t.Fatalf("UpdatePaper() doi = %q, want %q", updated.DOI, doi)
+	}
+}
+
 func TestListPapersKeywordScopeFullText(t *testing.T) {
 	repo := newTestRepository(t)
 

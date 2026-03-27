@@ -113,8 +113,8 @@ AI 流式阅读通过：
 
 | 参数 | 类型 | 说明 |
 | --- | --- | --- |
-| `keyword` | string | 标题、摘要、全文、笔记、标签、分组等搜索 |
-| `keyword_scope` | string | 可选：`title_abstract` 仅搜索标题和摘要，`full_text` 搜索标题、摘要和正文；默认保留兼容模式 |
+| `keyword` | string | 标题、摘要、全文、DOI、笔记、标签、分组等搜索 |
+| `keyword_scope` | string | 可选：`title_abstract` 搜索标题、摘要和 DOI，`full_text` 搜索标题、摘要、正文和 DOI；默认保留兼容模式 |
 | `group_id` | int | 按分组过滤 |
 | `tag_id` | int | 按文献标签过滤 |
 | `status` | string | 按解析状态过滤 |
@@ -142,6 +142,7 @@ AI 流式阅读通过：
 返回单篇文献详情，包含：
 
 - 基本信息
+- `doi`
 - `pdf_url`
 - `figures`
 - 文献标签
@@ -174,6 +175,37 @@ AI 流式阅读通过：
 - 即便当前没有配置自动解析模型，只要能上传到手工流程，仍会走这条浏览器端全文提取链路
 - 当全局 `extractor_profile` 设为 `manual` 时，前端上传和微信上传都会默认落到这条“只提全文、不自动提图”的流程
 
+#### `POST /api/papers/import-by-doi`
+
+用途：
+
+- 输入 DOI 后，从 Open Access 来源查找并导入 PDF
+
+请求类型：
+
+- `application/json`
+
+常用 JSON 字段：
+
+```json
+{
+  "doi": "10.1038/nature12373",
+  "title": "可选覆盖标题",
+  "group_id": 1,
+  "tags": ["review", "oa"],
+  "extraction_mode": "manual"
+}
+```
+
+说明：
+
+- 当前后端会按顺序尝试 `Unpaywall`、`Europe PMC` 和 `PMC` 相关来源。
+- `doi` 支持直接输入标准 DOI，也支持 `https://doi.org/...` 形式；后端会统一标准化后保存到 `papers.doi`。
+- 导入成功后会走和本地 PDF 上传相同的入库、去重、全文保存与自动解析链路。
+- 若未找到合法可下载的 Open Access PDF，返回 `NOT_FOUND`。
+- 若找到了 OA 记录但实际下载失败，返回 `UNAVAILABLE`。
+- 为了启用更广覆盖的 `Unpaywall` 检索，建议配置环境变量 `OA_CONTACT_EMAIL`。
+
 #### `PUT /api/papers/{id}`
 
 用途：
@@ -188,6 +220,7 @@ AI 流式阅读通过：
 ```json
 {
   "title": "Paper title",
+  "doi": "10.1038/nature12373",
   "pdf_text": "完整 PDF 文本，可为空字符串",
   "abstract_text": "摘要",
   "notes_text": "管理笔记",

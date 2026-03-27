@@ -91,6 +91,37 @@ func (h *PaperHandler) Upload(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (h *PaperHandler) ImportByDOI(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		DOI            string   `json:"doi"`
+		Title          string   `json:"title"`
+		GroupID        *int64   `json:"group_id"`
+		Tags           []string `json:"tags"`
+		ExtractionMode string   `json:"extraction_mode"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		sendError(w, apperr.New(apperr.CodeInvalidArgument, "请求体格式错误"))
+		return
+	}
+
+	paper, err := h.service.ImportPaperByDOI(r.Context(), service.ImportPaperByDOIParams{
+		DOI:            req.DOI,
+		Title:          req.Title,
+		GroupID:        req.GroupID,
+		Tags:           req.Tags,
+		ExtractionMode: req.ExtractionMode,
+	})
+	if err != nil {
+		sendError(w, err)
+		return
+	}
+
+	sendJSON(w, http.StatusAccepted, map[string]interface{}{
+		"success": true,
+		"paper":   paper,
+	})
+}
+
 func (h *PaperHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	id, err := parseIDFromPath(r.URL.Path, "/api/papers/")
 	if err != nil {
@@ -236,6 +267,7 @@ func (h *PaperHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	var req struct {
 		Title          string   `json:"title"`
+		DOI            *string  `json:"doi"`
 		PDFText        *string  `json:"pdf_text"`
 		AbstractText   string   `json:"abstract_text"`
 		NotesText      string   `json:"notes_text"`
@@ -250,6 +282,7 @@ func (h *PaperHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	paper, err := h.service.UpdatePaper(id, service.UpdatePaperParams{
 		Title:          req.Title,
+		DOI:            req.DOI,
 		PDFText:        req.PDFText,
 		AbstractText:   req.AbstractText,
 		NotesText:      req.NotesText,

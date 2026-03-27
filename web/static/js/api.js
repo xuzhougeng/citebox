@@ -120,6 +120,16 @@ const API = {
         });
     },
 
+    importPaperByDOI(data) {
+        return requestJSON(`${API_BASE}/papers/import-by-doi`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        });
+    },
+
     updatePaper(id, data) {
         return requestJSON(`${API_BASE}/papers/${id}`, {
             method: 'PUT',
