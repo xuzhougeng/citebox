@@ -28,6 +28,8 @@ const SettingsPage = {
         this.ttsPromptInput = document.getElementById('aiTTSPromptInput');
         this.aiModelAutosaveStatus = document.getElementById('aiModelAutosaveStatus');
         this.aiPromptSaveStatus = document.getElementById('aiPromptSaveStatus');
+        this.translatePromptSaveStatus = document.getElementById('translatePromptSaveStatus');
+        this.saveTranslatePromptButton = document.getElementById('saveTranslatePromptButton');
         this.saveAIPromptsButton = document.getElementById('saveAIPromptsButton');
         this.rolePromptList = document.getElementById('aiRolePromptList');
         this.addAIRolePromptButton = document.getElementById('addAIRolePromptButton');
@@ -191,14 +193,23 @@ const SettingsPage = {
             this.qaPromptInput,
             this.figurePromptInput,
             this.tagPromptInput,
-            this.groupPromptInput,
-            this.translatePromptInput,
-            this.ttsPromptInput
+            this.groupPromptInput
         ].forEach((element) => {
             element?.addEventListener('input', () => {
                 if (this.isHydratingAISettings) return;
                 this.setAIPromptSaveStatus(t('settings.ai.prompt_modified', '提示词已修改，点击”保存 Prompt 配置”后生效。'), 'saving');
             });
+        });
+        this.translatePromptInput?.addEventListener('input', () => {
+            if (this.isHydratingAISettings) return;
+            this.setTranslatePromptSaveStatus(t('settings.ai.translate_prompt_modified', '翻译 Prompt 已修改，点击”保存翻译 Prompt”后生效。'), 'saving');
+        });
+        this.ttsPromptInput?.addEventListener('input', () => {
+            if (this.isHydratingAISettings) return;
+            this.setTTSSaveStatus(t('settings.tts.modified', 'TTS 配置已修改，点击”保存 TTS 配置”后生效。'), 'saving');
+        });
+        this.saveTranslatePromptButton?.addEventListener('click', async () => {
+            await this.saveTranslatePromptSettings();
         });
         this.extractorSettingsForm.addEventListener('submit', async (event) => {
             event.preventDefault();
@@ -298,12 +309,15 @@ const SettingsPage = {
             this.figureModelSelect,
             this.tagModelSelect,
             this.groupModelSelect,
-            this.translateModelSelect,
-            this.ttsModelSelect
+            this.translateModelSelect
         ].forEach((element) => {
             element?.addEventListener('change', () => {
                 this.scheduleAIModelAutosave({ immediate: true });
             });
+        });
+        this.ttsModelSelect?.addEventListener('change', () => {
+            if (this.isHydratingAISettings) return;
+            this.setTTSSaveStatus(t('settings.tts.modified', 'TTS 配置已修改，点击"保存 TTS 配置"后生效。'), 'saving');
         });
 
         [
@@ -381,6 +395,7 @@ const SettingsPage = {
         });
         this.setAIModelAutosaveStatus(t('settings.ai.autosave_hint', '模型配置修改后会自动保存。'));
         this.setAIPromptSaveStatus(t('settings.ai.prompt_save_hint', '提示词修改后需点击保存。'));
+        this.setTranslatePromptSaveStatus(t('settings.ai.translate_prompt_save_hint', '翻译 Prompt 修改后需点击保存。'));
     },
 
     applyAISettings(settings = {}, options = {}) {
@@ -483,6 +498,10 @@ const SettingsPage = {
 
     setAIPromptSaveStatus(message, tone = '') {
         this.setInlineStatus(this.aiPromptSaveStatus, message, tone);
+    },
+
+    setTranslatePromptSaveStatus(message, tone = '') {
+        this.setInlineStatus(this.translatePromptSaveStatus, message, tone);
     },
 
     setAIModelEditorStatus(message, tone = '') {
@@ -601,6 +620,33 @@ const SettingsPage = {
             if (button) {
                 button.disabled = false;
                 button.textContent = originalLabel || t('settings.ai.save_prompts', '保存 Prompt 配置');
+            }
+        }
+    },
+
+    async saveTranslatePromptSettings() {
+        const button = this.saveTranslatePromptButton;
+        const originalLabel = button?.textContent || '';
+        if (button) {
+            button.disabled = true;
+            button.textContent = t('settings.ai.saving_btn', '保存中...');
+        }
+
+        try {
+            const response = await API.updateAIPromptSettings(this.buildAIPromptSettingsPayload());
+            this.applyAISettings(response.settings || {}, {
+                overwritePromptInputs: true,
+                overwriteRolePrompts: false
+            });
+            this.setTranslatePromptSaveStatus(t('settings.ai.translate_prompt_saved', '翻译 Prompt 已保存。'), 'success');
+            Utils.showToast(t('settings.ai.translate_prompt_saved_toast', '翻译 Prompt 已保存'));
+        } catch (error) {
+            this.setTranslatePromptSaveStatus(t('settings.ai.translate_prompt_save_failed', '保存失败：{0}').replace('{0}', error.message), 'error');
+            Utils.showToast(error.message, 'error');
+        } finally {
+            if (button) {
+                button.disabled = false;
+                button.textContent = originalLabel || t('settings.ai.save_translate_prompt', '保存翻译 Prompt');
             }
         }
     },
@@ -1049,8 +1095,12 @@ const SettingsPage = {
         }
 
         try {
-            const response = await API.updateTTSSettings(this.ttsSavePayload());
-            this.renderTTSSettings(response.settings || {});
+            const [ttsResponse] = await Promise.all([
+                API.updateTTSSettings(this.ttsSavePayload()),
+                API.updateAIModelSettings(this.buildAIModelSettingsPayload()),
+                API.updateAIPromptSettings(this.buildAIPromptSettingsPayload())
+            ]);
+            this.renderTTSSettings(ttsResponse.settings || {});
             this.setTTSSaveStatus(t('settings.tts.saved', 'TTS 配置已保存。'), 'success');
             Utils.showToast(t('settings.tts.saved_toast', 'TTS 配置已保存'));
         } catch (error) {

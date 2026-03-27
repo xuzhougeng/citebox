@@ -129,10 +129,6 @@
                             <select id="aiGroupModelSelect" class="form-input"></select>
                         </label>
                         <label class="field">
-                            <span data-i18n="settings.ai.tts_model">TTS 优化模型</span>
-                            <select id="aiTTSModelSelect" class="form-input"></select>
-                        </label>
-                        <label class="field">
                             <span>Temperature</span>
                             <input id="aiTemperatureInput" class="form-input" type="number" min="0" max="2" step="0.1">
                         </label>
@@ -164,6 +160,40 @@
                             <input id="aiTranslationTargetLanguageInput" class="form-input" type="text" data-i18n-placeholder="settings.ai.target_language_hint" placeholder="例如：英文">
                         </label>
                     </div>
+                    <label class="field prompt-field">
+                        <span class="field-label-row">
+                            <span class="field-label-text" data-i18n="settings.ai.translate_prompt_label">划词翻译 Prompt</span>
+                            <span class="field-help" tabindex="0" role="note" title="用于桌面端划词翻译。系统会自动判断翻译方向，并附带原文和目标语言。" data-i18n-title="settings.ai.translate_prompt_help" data-help="用于桌面端划词翻译。系统会自动判断翻译方向，并附带原文和目标语言。">?</span>
+                        </span>
+                        <textarea id="aiTranslatePromptInput" class="form-textarea" rows="4" data-i18n-placeholder="settings.ai.translate_prompt_placeholder" placeholder="例如：只返回译文正文，保留换行、术语、缩写和数字单位"></textarea>
+                        <details class="prompt-template-details">
+                            <summary data-i18n="settings.ai.view_template">查看实际模板</summary>
+                            <pre class="prompt-template-pre">System Prompt:
+{System Prompt}
+
+User Prompt:
+任务类型: translate
+
+翻译方向:
+- 原文语言: {系统判断后的原文语言}
+- 目标语言: {系统判断后的目标语言}
+
+场景指令:
+{这里填写的划词翻译 Prompt}
+
+输出要求:
+1. 只返回译文正文，不要附加解释、注释、标题、前缀或代码块。
+2. 保留原文中的换行、列表层级、数字、单位、缩写和专有名词。
+3. 如果原文已经是目标语言，也请只做必要润色后输出正文。
+
+待翻译文本:
+{用户当前选中的文本}</pre>
+                        </details>
+                    </label>
+                    <div class="submit-row">
+                        <button id="saveTranslatePromptButton" class="btn btn-primary" type="button" data-i18n="settings.ai.save_translate_prompt">保存翻译 Prompt</button>
+                    </div>
+                    <p id="translatePromptSaveStatus" class="settings-inline-status" data-i18n="settings.ai.translate_prompt_save_hint">翻译 Prompt 修改后需点击保存。</p>
                 </div>
             </details>
 
@@ -418,63 +448,6 @@ User Prompt:
 4. answer 中请直接给出结论、依据和必要的限制说明。</pre>
                         </details>
                     </label>
-                    <label class="field prompt-field">
-                        <span class="field-label-row">
-                            <span class="field-label-text" data-i18n="settings.ai.translate_prompt_label">划词翻译 Prompt</span>
-                            <span class="field-help" tabindex="0" role="note" title="用于桌面端划词翻译。系统会自动判断翻译方向，并附带原文和目标语言。" data-i18n-title="settings.ai.translate_prompt_help" data-help="用于桌面端划词翻译。系统会自动判断翻译方向，并附带原文和目标语言。">?</span>
-                        </span>
-                        <textarea id="aiTranslatePromptInput" class="form-textarea" rows="4" data-i18n-placeholder="settings.ai.translate_prompt_placeholder" placeholder="例如：只返回译文正文，保留换行、术语、缩写和数字单位"></textarea>
-                        <details class="prompt-template-details">
-                            <summary data-i18n="settings.ai.view_template">查看实际模板</summary>
-                            <pre class="prompt-template-pre">System Prompt:
-{System Prompt}
-
-User Prompt:
-任务类型: translate
-
-翻译方向:
-- 原文语言: {系统判断后的原文语言}
-- 目标语言: {系统判断后的目标语言}
-
-场景指令:
-{这里填写的划词翻译 Prompt}
-
-输出要求:
-1. 只返回译文正文，不要附加解释、注释、标题、前缀或代码块。
-2. 保留原文中的换行、列表层级、数字、单位、缩写和专有名词。
-3. 如果原文已经是目标语言，也请只做必要润色后输出正文。
-
-待翻译文本:
-{用户当前选中的文本}</pre>
-                        </details>
-                    </label>
-                    <label class="field prompt-field">
-                        <span class="field-label-row">
-                            <span class="field-label-text" data-i18n="settings.ai.tts_prompt_label">TTS 优化 Prompt</span>
-                            <span class="field-help" tabindex="0" role="note" title="用于把已有回答整理成适合 TTS 直接朗读的版本。系统会自动附带原始文本；这里只需要写朗读风格、清洗规则和保留重点。" data-i18n-title="settings.ai.tts_prompt_help" data-help="用于把已有回答整理成适合 TTS 直接朗读的版本。系统会自动附带原始文本；这里只需要写朗读风格、清洗规则和保留重点。">?</span>
-                        </span>
-                        <textarea id="aiTTSPromptInput" class="form-textarea" rows="4" data-i18n-placeholder="settings.ai.tts_prompt_placeholder" placeholder="例如：删除 Markdown 语法和 figure:// 引用，保留术语、数字和基因名，改写成自然口语"></textarea>
-                        <details class="prompt-template-details">
-                            <summary data-i18n="settings.ai.view_template">查看实际模板</summary>
-                            <pre class="prompt-template-pre">System Prompt:
-{System Prompt}
-
-User Prompt:
-请把下面这段文本改写成适合中文 TTS 直接朗读的版本。
-
-输出要求:
-1. 只返回最终朗读正文，不要解释，不要加标题，不要加 Markdown 代码块。
-2. 删除 Markdown 语法、图片链接、figure:// 资源地址和其他机器格式。
-3. 把图表引用改写成自然、可朗读的说法，例如“见 Figure 5”“见图形摘要”。
-4. 保留结论、术语、基因名、数字、单位和必要英文缩写，不要改写事实。
-
-当前 TTS 优化 Prompt:
-{这里填写的 TTS 优化 Prompt}
-
-待处理文本:
-{待朗读文本}</pre>
-                        </details>
-                    </label>
 
                     </div>
 
@@ -642,6 +615,10 @@ User Prompt:
                 </summary>
                 <form id="ttsSettingsForm" class="manager-form">
                     <div class="form-grid">
+                        <label class="field">
+                            <span data-i18n="settings.ai.tts_model">TTS 优化模型</span>
+                            <select id="aiTTSModelSelect" class="form-input"></select>
+                        </label>
                         <label class="field field-span-2">
                             <span data-i18n="settings.tts.app_id">豆包 TTS App ID</span>
                             <input id="ttsAppIDInput" class="form-input" type="text" autocomplete="off" data-i18n-placeholder="settings.tts.app_id_placeholder" placeholder="填写火山引擎语音服务 App ID">
@@ -659,6 +636,33 @@ User Prompt:
                             <input id="ttsSpeakerInput" class="form-input" type="text" autocomplete="off" data-i18n-placeholder="settings.tts.speaker_placeholder" placeholder="填写控制台可用的 speaker 标识">
                         </label>
                     </div>
+                    <label class="field prompt-field">
+                        <span class="field-label-row">
+                            <span class="field-label-text" data-i18n="settings.ai.tts_prompt_label">TTS 优化 Prompt</span>
+                            <span class="field-help" tabindex="0" role="note" title="用于把已有回答整理成适合 TTS 直接朗读的版本。系统会自动附带原始文本；这里只需要写朗读风格、清洗规则和保留重点。" data-i18n-title="settings.ai.tts_prompt_help" data-help="用于把已有回答整理成适合 TTS 直接朗读的版本。系统会自动附带原始文本；这里只需要写朗读风格、清洗规则和保留重点。">?</span>
+                        </span>
+                        <textarea id="aiTTSPromptInput" class="form-textarea" rows="4" data-i18n-placeholder="settings.ai.tts_prompt_placeholder" placeholder="例如：删除 Markdown 语法和 figure:// 引用，保留术语、数字和基因名，改写成自然口语"></textarea>
+                        <details class="prompt-template-details">
+                            <summary data-i18n="settings.ai.view_template">查看实际模板</summary>
+                            <pre class="prompt-template-pre">System Prompt:
+{System Prompt}
+
+User Prompt:
+请把下面这段文本改写成适合中文 TTS 直接朗读的版本。
+
+输出要求:
+1. 只返回最终朗读正文，不要解释，不要加标题，不要加 Markdown 代码块。
+2. 删除 Markdown 语法、图片链接、figure:// 资源地址和其他机器格式。
+3. 把图表引用改写成自然、可朗读的说法，例如"见 Figure 5""见图形摘要"。
+4. 保留结论、术语、基因名、数字、单位和必要英文缩写，不要改写事实。
+
+当前 TTS 优化 Prompt:
+{这里填写的 TTS 优化 Prompt}
+
+待处理文本:
+{待朗读文本}</pre>
+                        </details>
+                    </label>
                     <p class="muted" data-i18n="settings.tts.help">留空则关闭 TTS。保存后，微信 `/ask` 或 `/qa` 成功回复会额外附带一条豆包 TTS 音频文件；`/testvoice` 会用当前已保存配置生成 Hello World 测试音频。</p>
                     <p id="ttsSaveStatus" class="settings-inline-status" data-i18n="settings.tts.save_hint">修改后点击保存 TTS 配置。</p>
                     <p id="ttsTestStatus" class="settings-inline-status" data-i18n="settings.tts.test_hint">测试会直接使用当前表单配置，成功后可在下方试听。</p>
