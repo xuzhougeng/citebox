@@ -32,3 +32,9 @@ web/static/vendor/pdfjs/
 
 # Distribution archives
 *.zip
+.playwright-mcp
+
+# Local IDE / agent folders
+.claude/
+.vscode/
+.idea/
