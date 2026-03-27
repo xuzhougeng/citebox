@@ -110,7 +110,7 @@
     "settings.ai.translate_prompt_placeholder": "例如：只返回译文正文，保留换行、术语、缩写和数字单位",
     "settings.ai.save_translate_prompt": "保存翻译 Prompt",
     "settings.ai.translate_prompt_save_hint": "翻译 Prompt 修改后需点击保存。",
-    "settings.ai.translate_prompt_modified": "翻译 Prompt 已修改，点击"保存翻译 Prompt"后生效。",
+    "settings.ai.translate_prompt_modified": "翻译 Prompt 已修改，点击「保存翻译 Prompt」后生效。",
     "settings.ai.translate_prompt_saved": "翻译 Prompt 已保存。",
     "settings.ai.translate_prompt_saved_toast": "翻译 Prompt 已保存",
     "settings.ai.translate_prompt_save_failed": "保存失败：{0}",
