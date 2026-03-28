@@ -42,6 +42,8 @@ const (
 	weixinSearchTargetFigure = "figure"
 )
 
+var errWeixinSessionExpired = errors.New("weixin session expired")
+
 type weixinAIReader interface {
 	ReadPaper(ctx context.Context, input model.AIReadRequest) (*model.AIReadResponse, error)
 	PlanWeixinCommand(ctx context.Context, text string, context weixinIntentContext) (*weixinCommandPlan, error)
@@ -111,6 +113,7 @@ type WeixinIMBridge struct {
 	aiService      weixinAIReader
 	logger         *slog.Logger
 	downloadFile   func(context.Context, weixin.MessageItem) (*weixin.DownloadedFile, error)
+	newClient      func(weixinBindingRecord) *weixin.Client
 	synthesizeTTS  func(context.Context, string, string, model.TTSSettings) (string, func(), error)
 	stateDir       string
 	syncBufPath    string
@@ -131,6 +134,9 @@ func NewWeixinIMBridge(libraryService *LibraryService, aiService weixinAIReader,
 		logger:         logger.With("component", "weixin_im_bridge"),
 		downloadFile: func(ctx context.Context, item weixin.MessageItem) (*weixin.DownloadedFile, error) {
 			return weixin.DownloadFileItem(ctx, item, nil, "")
+		},
+		newClient: func(binding weixinBindingRecord) *weixin.Client {
+			return weixin.NewClient(binding.BaseURL, binding.Token, nil)
 		},
 		stateDir: filepath.Join(storageDir, weixinBridgeStateDirName),
 	}
@@ -198,7 +204,10 @@ func (b *WeixinIMBridge) Run(ctx context.Context) error {
 			waitingForBinding = false
 		}
 
-		client := weixin.NewClient(binding.BaseURL, binding.Token, nil)
+		client := b.newClient(binding)
+		if client == nil {
+			client = weixin.NewClient(binding.BaseURL, binding.Token, nil)
+		}
 		b.logger.Info("weixin IM bridge polling", "user_id", binding.UserID)
 
 		pollCtx, cancelPolling := context.WithCancel(ctx)
@@ -208,16 +217,40 @@ func (b *WeixinIMBridge) Run(ctx context.Context) error {
 			b.runDailyRecommendationLoop(pollCtx)
 		}()
 
+		skipBackoff := false
 		if err := b.runPolling(pollCtx, client, binding); err != nil && !errors.Is(err, context.Canceled) {
-			b.logger.Warn("weixin IM bridge polling stopped", "error", err)
+			skipBackoff = b.handlePollingStop(err)
 		}
 		cancelPolling()
 		<-dailyDone
 
+		if skipBackoff {
+			continue
+		}
 		if !sleepContext(ctx, 3*time.Second) {
 			return ctx.Err()
 		}
 	}
+}
+
+func (b *WeixinIMBridge) handlePollingStop(err error) bool {
+	if errors.Is(err, errWeixinSessionExpired) {
+		settings, disableErr := b.libraryService.disableWeixinBridge()
+		if disableErr != nil {
+			b.logger.Warn("auto-disable weixin bridge after session expiry failed", "error", disableErr)
+		} else {
+			b.logger.Warn(
+				"weixin session expired; disabled bridge in settings",
+				"daily_recommendation_enabled", settings.DailyRecommendation.Enabled,
+				"daily_recommendation_send_time", settings.DailyRecommendation.SendTime,
+			)
+			b.logger.Warn("weixin IM bridge polling stopped", "error", err)
+			return true
+		}
+	}
+
+	b.logger.Warn("weixin IM bridge polling stopped", "error", err)
+	return false
 }
 
 func (b *WeixinIMBridge) runDailyRecommendationLoop(ctx context.Context) {
@@ -291,7 +324,7 @@ func (b *WeixinIMBridge) runPolling(ctx context.Context, client *weixin.Client, 
 			return err
 		}
 		if resp.ErrCode == -14 {
-			return fmt.Errorf("weixin session expired")
+			return errWeixinSessionExpired
 		}
 
 		if nextBuf := strings.TrimSpace(resp.GetUpdatesBuf); nextBuf != "" {

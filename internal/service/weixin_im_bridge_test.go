@@ -292,6 +292,101 @@ func TestWeixinIMBridgeRunWarnsWhenBindingMissing(t *testing.T) {
 	}
 }
 
+func TestWeixinIMBridgeRunDisablesBridgeWhenSessionExpires(t *testing.T) {
+	svc, _, cfg := newTestService(t)
+	if _, err := svc.UpdateWeixinBridgeSettings(model.WeixinBridgeSettings{
+		Enabled: true,
+		DailyRecommendation: model.WeixinDailyRecommendationSettings{
+			Enabled:  true,
+			SendTime: "08:30",
+		},
+	}); err != nil {
+		t.Fatalf("UpdateWeixinBridgeSettings() error = %v", err)
+	}
+	if err := svc.saveWeixinBinding(weixinBindingRecord{
+		Token:     "bot-token-123",
+		BaseURL:   "https://weixin.test",
+		UserID:    "user@im.wechat",
+		AccountID: "bot@im.bot",
+	}); err != nil {
+		t.Fatalf("saveWeixinBinding() error = %v", err)
+	}
+
+	var logs bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&logs, nil))
+	bridge := NewWeixinIMBridge(svc, &fakeWeixinAIReader{answer: "ok"}, logger, cfg.StorageDir)
+
+	var pollCalls int
+	var pollCallsMu sync.Mutex
+	bridge.newClient = func(binding weixinBindingRecord) *weixin.Client {
+		return weixin.NewClient(binding.BaseURL, binding.Token, &http.Client{
+			Transport: testRoundTripper(func(req *http.Request) (*http.Response, error) {
+				pollCallsMu.Lock()
+				pollCalls++
+				pollCallsMu.Unlock()
+
+				if req.URL.Path != "/ilink/bot/getupdates" {
+					t.Fatalf("request path = %q, want %q", req.URL.Path, "/ilink/bot/getupdates")
+				}
+				return jsonHTTPResponse(http.StatusOK, `{"ret":0,"errcode":-14}`), nil
+			}),
+		})
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() {
+		done <- bridge.Run(ctx)
+	}()
+
+	deadline := time.Now().Add(2 * time.Second)
+	disabled := false
+	for time.Now().Before(deadline) {
+		settings, err := svc.GetWeixinBridgeSettings()
+		if err != nil {
+			t.Fatalf("GetWeixinBridgeSettings() error = %v", err)
+		}
+		if !settings.Enabled {
+			disabled = true
+			if !settings.DailyRecommendation.Enabled || settings.DailyRecommendation.SendTime != "08:30" {
+				t.Fatalf("GetWeixinBridgeSettings() after expiry = %+v, want disabled bridge with preserved daily recommendation", settings)
+			}
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if !disabled {
+		t.Fatalf("weixin bridge was not auto-disabled after session expiry; logs=%q", logs.String())
+	}
+
+	time.Sleep(100 * time.Millisecond)
+	cancel()
+
+	select {
+	case err := <-done:
+		if err != nil && err != context.Canceled {
+			t.Fatalf("Run() error = %v, want nil or context.Canceled", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Run() did not stop after context cancellation")
+	}
+
+	pollCallsMu.Lock()
+	gotPollCalls := pollCalls
+	pollCallsMu.Unlock()
+	if gotPollCalls != 1 {
+		t.Fatalf("GetUpdates() calls = %d, want 1 before bridge auto-disables", gotPollCalls)
+	}
+
+	logOutput := logs.String()
+	if !strings.Contains(logOutput, "weixin session expired; disabled bridge in settings") {
+		t.Fatalf("Run() logs = %q, want session expiry auto-disable warning", logOutput)
+	}
+	if !strings.Contains(logOutput, "weixin IM bridge polling stopped") {
+		t.Fatalf("Run() logs = %q, want polling stopped warning", logOutput)
+	}
+}
+
 func TestWeixinIMBridgeSearchAndSelectPaperByResultNumber(t *testing.T) {
 	svc, repo, cfg := newTestService(t)
 	createBridgePaper(t, repo, "Atlas Alpha", "atlas-alpha.pdf")

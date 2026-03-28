@@ -63,6 +63,19 @@ func (s *LibraryService) isWeixinBridgeEnabled() (bool, error) {
 	return settings.Enabled, nil
 }
 
+func (s *LibraryService) disableWeixinBridge() (*model.WeixinBridgeSettings, error) {
+	settings, err := s.GetWeixinBridgeSettings()
+	if err != nil {
+		return nil, err
+	}
+	if !settings.Enabled {
+		return settings, nil
+	}
+
+	settings.Enabled = false
+	return s.UpdateWeixinBridgeSettings(*settings)
+}
+
 func validateWeixinBridgeSettings(input model.WeixinBridgeSettings) (model.WeixinBridgeSettings, error) {
 	settings := defaultWeixinBridgeSettings(input.Enabled)
 	settings.Enabled = input.Enabled

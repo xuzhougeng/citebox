@@ -1146,6 +1146,7 @@ AI 流式阅读通过：
 
 - `daily_recommendation.send_time` 使用 `HH:MM` 24 小时格式
 - 留空时会自动回退到默认值 `09:00`
+- 如果后台轮询检测到微信会话已过期，服务会自动把 `enabled` 关闭，避免继续重试轮询；重新绑定后可再手动开启
 
 #### `POST /api/settings/weixin-bridge/daily-recommendation/test`
 
