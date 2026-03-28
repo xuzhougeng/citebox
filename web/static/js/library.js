@@ -7,6 +7,7 @@ const LibraryPage = {
         tags: [],
         filters: {
             keyword: '',
+            author: '',
             keyword_scope: 'full_text',
             group_id: '',
             tag_id: '',
@@ -60,6 +61,7 @@ const LibraryPage = {
 
     cacheElements() {
         this.keywordInput = document.getElementById('keywordInput');
+        this.authorInput = document.getElementById('authorInput');
         this.keywordScopeFilter = document.getElementById('keywordScopeFilter');
         this.groupFilter = document.getElementById('groupFilter');
         this.tagFilter = document.getElementById('tagFilter');
@@ -96,6 +98,14 @@ const LibraryPage = {
         }, 300);
 
         this.keywordInput.addEventListener('input', debouncedSearch);
+
+        const debouncedAuthorFilter = Utils.debounce(async () => {
+            this.state.filters.author = this.authorInput.value.trim();
+            this.state.currentPage = 1;
+            await this.loadPapers();
+        }, 300);
+
+        this.authorInput.addEventListener('input', debouncedAuthorFilter);
 
         this.keywordScopeFilter.addEventListener('change', async () => {
             this.state.filters.keyword_scope = this.keywordScopeFilter.value || 'full_text';
@@ -206,6 +216,7 @@ const LibraryPage = {
                 page: this.state.currentPage,
                 page_size: this.state.pageSize,
                 keyword: this.state.filters.keyword,
+                author: this.state.filters.author,
                 keyword_scope: this.state.filters.keyword_scope,
                 group_id: this.state.filters.group_id,
                 tag_id: this.state.filters.tag_id,
@@ -269,6 +280,7 @@ const LibraryPage = {
             <div class="library-result-meta-tags">
                 <span class="tag-pill neutral">${t('library.result_current_page', '当前页')} ${this.state.papers.length} ${t('library.result_papers_unit', '篇')}</span>
                 ${this.state.filters.keyword ? `<span class="tag-pill neutral">${t('library.result_keyword', '关键词')}：${Utils.escapeHTML(this.state.filters.keyword)}</span>` : ''}
+                ${this.state.filters.author ? `<span class="tag-pill neutral">${t('library.result_author', '作者')}：${Utils.escapeHTML(this.state.filters.author)}</span>` : ''}
                 <span class="tag-pill neutral">${t('library.result_scope_label', '范围')}：${Utils.escapeHTML(scopeLabel)}</span>
                 <span class="tag-pill neutral">${t('library.result_sort', '排序')}：${Utils.escapeHTML(sortLabel)}</span>
                 ${this.state.filters.group_id ? `<span class="tag-pill neutral">${t('library.result_group_limited', '已限定分组')}</span>` : ''}

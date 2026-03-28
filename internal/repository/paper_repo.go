@@ -615,6 +615,10 @@ func buildPaperWhere(filter model.PaperFilter) (string, []interface{}) {
 		conditions = append(conditions, "("+strings.Join(keywordConditions, " OR ")+")")
 		args = append(args, keywordArgs...)
 	}
+	if author := strings.TrimSpace(filter.Author); author != "" {
+		conditions = append(conditions, "instr(lower(COALESCE(p.authors_text, '')), ?) > 0")
+		args = append(args, strings.ToLower(author))
+	}
 	if filter.GroupID != nil && *filter.GroupID > 0 {
 		conditions = append(conditions, "p.group_id = ?")
 		args = append(args, *filter.GroupID)

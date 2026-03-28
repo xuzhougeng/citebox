@@ -273,6 +273,52 @@ func TestListPapersMatchesDOIKeyword(t *testing.T) {
 	}
 }
 
+func TestListPapersFiltersByAuthor(t *testing.T) {
+	repo := newTestRepository(t)
+
+	first, err := repo.CreatePaper(PaperUpsertInput{
+		Title:            "Author Filter Atlas",
+		AuthorsText:      "Ada Lovelace, Alan Turing",
+		OriginalFilename: "author-filter-atlas.pdf",
+		StoredPDFName:    "author-filter-atlas.pdf",
+		FileSize:         128,
+		ContentType:      "application/pdf",
+		ExtractionStatus: "completed",
+		Figures: []FigureUpsertInput{
+			{Filename: "author-filter-atlas.png", PageNumber: 1, FigureIndex: 1},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreatePaper(first) error = %v", err)
+	}
+
+	if _, err := repo.CreatePaper(PaperUpsertInput{
+		Title:            "Other Author Atlas",
+		AuthorsText:      "Grace Hopper",
+		OriginalFilename: "other-author-atlas.pdf",
+		StoredPDFName:    "other-author-atlas.pdf",
+		FileSize:         128,
+		ContentType:      "application/pdf",
+		ExtractionStatus: "completed",
+		Figures: []FigureUpsertInput{
+			{Filename: "other-author-atlas.png", PageNumber: 1, FigureIndex: 1},
+		},
+	}); err != nil {
+		t.Fatalf("CreatePaper(second) error = %v", err)
+	}
+
+	papers, total, err := repo.ListPapers(model.PaperFilter{Author: "alan"})
+	if err != nil {
+		t.Fatalf("ListPapers(author) error = %v", err)
+	}
+	if total != 1 || len(papers) != 1 {
+		t.Fatalf("ListPapers(author) total=%d len=%d, want 1/1", total, len(papers))
+	}
+	if papers[0].ID != first.ID {
+		t.Fatalf("ListPapers(author) paper id = %d, want %d", papers[0].ID, first.ID)
+	}
+}
+
 func TestCreatePaperRejectsDuplicateDOI(t *testing.T) {
 	repo := newTestRepository(t)
 

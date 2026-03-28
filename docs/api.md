@@ -114,6 +114,7 @@ AI 流式阅读通过：
 | 参数 | 类型 | 说明 |
 | --- | --- | --- |
 | `keyword` | string | 标题、摘要、全文、DOI、笔记、标签、分组等搜索 |
+| `author` | string | 按作者字符串过滤，支持部分匹配，不区分大小写 |
 | `keyword_scope` | string | 可选：`title_abstract` 搜索标题、摘要和 DOI，`full_text` 搜索标题、摘要、正文和 DOI；默认保留兼容模式 |
 | `group_id` | int | 按分组过滤 |
 | `tag_id` | int | 按文献标签过滤 |

@@ -40,6 +40,7 @@ func (h *PaperHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	result, err := h.service.ListPapers(model.PaperFilter{
 		Keyword:       strings.TrimSpace(r.URL.Query().Get("keyword")),
+		Author:        strings.TrimSpace(r.URL.Query().Get("author")),
 		KeywordScope:  strings.TrimSpace(r.URL.Query().Get("keyword_scope")),
 		GroupID:       groupID,
 		TagID:         tagID,
