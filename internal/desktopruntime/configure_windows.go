@@ -287,6 +287,15 @@ func Configure(w webview.WebView, appName string, iconAssets desktopicon.Assets,
 	if err := bindExternalOpener(w); err != nil {
 		return err
 	}
+	if err := w.Bind("citeboxDesktopSaveFile", func(filename string, dataBase64 string) (map[string]bool, error) {
+		saved, err := saveFile(filename, dataBase64)
+		if err != nil {
+			return nil, err
+		}
+		return map[string]bool{"saved": saved}, nil
+	}); err != nil {
+		return fmt.Errorf("bind file saver: %w", err)
+	}
 	if err := initDesktopBridge(w); err != nil {
 		return err
 	}

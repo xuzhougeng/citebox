@@ -2347,7 +2347,6 @@ const FigureViewer = {
         const cropModeActive = this.isCropModeEnabled();
         const subfigureWorkspaceOpen = this.isSubfigureWorkspaceOpen();
         const minimalFigureWorkspace = subfigureWorkspaceOpen || Boolean(figure.parent_figure_id);
-        const canUseDesktopSave = Utils.supportsDesktopSave();
         const captionDraft = this.captionDraft ?? (figure.caption || '');
         const notePreview = String(figure.notes_text || '').replace(/\s+/g, ' ').trim();
         const mediaHint = subfigureWorkspaceOpen
@@ -2445,9 +2444,7 @@ const FigureViewer = {
                         <div class="figure-lightbox-actions">
                             <button class="btn btn-primary" type="button" data-figure-action="open-paper">${t("shared.figure.view_source_paper", "查看来源文献")}</button>
                             <a class="btn btn-outline" href="${Utils.resourceViewerURL('image', figure.image_url)}">${t('shared.figure.open_original', '打开原图')}</a>
-                            ${canUseDesktopSave
-                                ? `<button class="btn btn-outline" type="button" data-figure-action="download-image">${t('shared.figure.download_image', '下载图片')}</button>`
-                                : `<a class="btn btn-outline" href="${figure.image_url}" download="${Utils.escapeHTML(figure.filename || 'figure.png')}">${t('shared.figure.download_image', '下载图片')}</a>`}
+                            <button class="btn btn-outline" type="button" data-figure-action="download-image">${t('shared.figure.download_image', '下载图片')}</button>
                         </div>
 
                         <section class="figure-lightbox-ai">
