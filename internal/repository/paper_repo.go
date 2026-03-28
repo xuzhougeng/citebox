@@ -45,12 +45,15 @@ func (r *PaperRepository) CreatePaper(input PaperUpsertInput) (*model.Paper, err
 
 	result, err := tx.Exec(`
 		INSERT INTO papers (
-			title, doi, original_filename, stored_pdf_name, pdf_sha256, file_size, content_type,
+			title, doi, authors_text, journal, published_at, original_filename, stored_pdf_name, pdf_sha256, file_size, content_type,
 			pdf_text, abstract_text, notes_text, paper_notes_text, boxes_json, extraction_status, extractor_message, extractor_job_id, group_id
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`,
 		input.Title,
 		strings.TrimSpace(input.DOI),
+		strings.TrimSpace(input.AuthorsText),
+		strings.TrimSpace(input.Journal),
+		strings.TrimSpace(input.PublishedAt),
 		input.OriginalFilename,
 		input.StoredPDFName,
 		input.PDFSHA256,
@@ -127,9 +130,9 @@ func (r *PaperRepository) UpdatePaper(id int64, input PaperUpdateInput) (*model.
 
 	result, err := tx.Exec(`
 		UPDATE papers
-		SET title = ?, doi = COALESCE(?, doi), pdf_text = COALESCE(?, pdf_text), abstract_text = ?, notes_text = ?, paper_notes_text = ?, group_id = ?, updated_at = CURRENT_TIMESTAMP
+		SET title = ?, doi = COALESCE(?, doi), pdf_text = COALESCE(?, pdf_text), authors_text = ?, journal = ?, published_at = ?, abstract_text = ?, notes_text = ?, paper_notes_text = ?, group_id = ?, updated_at = CURRENT_TIMESTAMP
 		WHERE id = ?
-	`, input.Title, doiValue, pdfTextValue, input.AbstractText, input.NotesText, input.PaperNotesText, input.GroupID, id)
+	`, input.Title, doiValue, pdfTextValue, input.AuthorsText, input.Journal, input.PublishedAt, input.AbstractText, input.NotesText, input.PaperNotesText, input.GroupID, id)
 	if err != nil {
 		return nil, wrapConflictDBError(err, "文献 DOI 已存在", "更新文献失败")
 	}
@@ -201,7 +204,7 @@ func (r *PaperRepository) PurgeLibrary() error {
 func (r *PaperRepository) GetPaperDetail(id int64) (*model.Paper, error) {
 	row := r.db.QueryRow(`
 			SELECT
-				p.id, p.title, p.doi, p.original_filename, p.stored_pdf_name, p.file_size, p.content_type,
+				p.id, p.title, p.doi, p.authors_text, p.journal, p.published_at, p.original_filename, p.stored_pdf_name, p.file_size, p.content_type,
 				p.pdf_text, p.abstract_text, p.notes_text, p.paper_notes_text, p.boxes_json, p.extraction_status, p.extractor_message, p.extractor_job_id,
 				p.group_id, COALESCE(g.name, ''),
 				p.created_at, p.updated_at,
@@ -325,7 +328,7 @@ func (r *PaperRepository) ListPapers(filter model.PaperFilter) ([]model.Paper, i
 
 	query := `
 			SELECT
-				p.id, p.title, p.doi, p.original_filename, p.stored_pdf_name, p.file_size, p.content_type,
+				p.id, p.title, p.doi, p.authors_text, p.journal, p.published_at, p.original_filename, p.stored_pdf_name, p.file_size, p.content_type,
 				'', p.abstract_text, p.notes_text, p.paper_notes_text, '', p.extraction_status, p.extractor_message, p.extractor_job_id,
 				p.group_id, COALESCE(g.name, ''),
 				p.created_at, p.updated_at,
@@ -389,7 +392,7 @@ func (r *PaperRepository) ListPapersByExtractionStatuses(statuses []string) ([]m
 
 	rows, err := r.db.Query(`
 		SELECT
-			p.id, p.title, p.doi, p.original_filename, p.stored_pdf_name, p.file_size, p.content_type,
+			p.id, p.title, p.doi, p.authors_text, p.journal, p.published_at, p.original_filename, p.stored_pdf_name, p.file_size, p.content_type,
 			'', p.abstract_text, p.notes_text, p.paper_notes_text, '', p.extraction_status, p.extractor_message, p.extractor_job_id,
 			p.group_id, COALESCE(g.name, ''),
 			p.created_at, p.updated_at,
@@ -703,6 +706,9 @@ func scanPaper(scanner interface {
 		&paper.ID,
 		&paper.Title,
 		&paper.DOI,
+		&paper.AuthorsText,
+		&paper.Journal,
+		&paper.PublishedAt,
 		&paper.OriginalFilename,
 		&paper.StoredPDFName,
 		&paper.FileSize,

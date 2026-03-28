@@ -35,6 +35,9 @@ erDiagram
         INTEGER id PK
         TEXT title
         TEXT doi UK
+        TEXT authors_text
+        TEXT journal
+        TEXT published_at
         TEXT original_filename
         TEXT stored_pdf_name UK
         TEXT pdf_sha256 UK
@@ -151,6 +154,9 @@ CREATE TABLE papers (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     title TEXT NOT NULL,
     doi TEXT DEFAULT '',
+    authors_text TEXT DEFAULT '',
+    journal TEXT DEFAULT '',
+    published_at TEXT DEFAULT '',
     original_filename TEXT NOT NULL,
     stored_pdf_name TEXT NOT NULL,
     pdf_sha256 TEXT DEFAULT '',
@@ -293,6 +299,9 @@ CREATE UNIQUE INDEX idx_tags_scope_name ON tags(scope, name);
 | `id` | 文献主键 |
 | `title` | 文献标题 |
 | `doi` | 标准化后的 DOI；支持通过 DOI 导入 Open Access PDF，并对非空值要求唯一 |
+| `authors_text` | 结构化作者字符串；优先由 DOI 元数据自动补全，也允许手动修正 |
+| `journal` | 期刊名、会议名或来源名；优先由 DOI 元数据自动补全 |
+| `published_at` | 发表日期字符串；支持保存 `YYYY`、`YYYY-MM` 或 `YYYY-MM-DD` |
 | `original_filename` | 上传时的原始 PDF 文件名 |
 | `stored_pdf_name` | 存储目录里的实际 PDF 文件名，当前要求唯一 |
 | `pdf_sha256` | PDF 内容指纹，用于上传去重；仅对非空值要求唯一 |
@@ -390,7 +399,7 @@ CREATE UNIQUE INDEX idx_tags_scope_name ON tags(scope, name);
 2. 全文搜索
    - `papers_fts` 覆盖：`title`、`original_filename`、`abstract_text`、`notes_text`、`pdf_text`
    - `papers.paper_notes_text` 当前通过普通列匹配参与搜索和筛选，还没有独立 FTS 列
-   - `papers.doi` 当前作为结构化元数据保存，还没有加入 FTS；后续如果需要按 DOI 直接检索，可再扩展
+   - `papers.doi`、`papers.authors_text`、`papers.journal`、`papers.published_at` 当前作为结构化元数据保存，还没有加入 FTS；后续如果需要按这些字段直接检索，可再扩展
    - `figures_fts` 覆盖：`original_name`、`caption`、`notes_text`
    - 标签名和分组名仍然通过普通表查询完成
 

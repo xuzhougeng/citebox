@@ -269,6 +269,9 @@ func (h *PaperHandler) Update(w http.ResponseWriter, r *http.Request) {
 		Title          string   `json:"title"`
 		DOI            *string  `json:"doi"`
 		PDFText        *string  `json:"pdf_text"`
+		AuthorsText    string   `json:"authors_text"`
+		Journal        string   `json:"journal"`
+		PublishedAt    string   `json:"published_at"`
 		AbstractText   string   `json:"abstract_text"`
 		NotesText      string   `json:"notes_text"`
 		PaperNotesText string   `json:"paper_notes_text"`
@@ -284,6 +287,9 @@ func (h *PaperHandler) Update(w http.ResponseWriter, r *http.Request) {
 		Title:          req.Title,
 		DOI:            req.DOI,
 		PDFText:        req.PDFText,
+		AuthorsText:    req.AuthorsText,
+		Journal:        req.Journal,
+		PublishedAt:    req.PublishedAt,
 		AbstractText:   req.AbstractText,
 		NotesText:      req.NotesText,
 		PaperNotesText: req.PaperNotesText,

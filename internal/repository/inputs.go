@@ -6,6 +6,9 @@ import "github.com/xuzhougeng/citebox/internal/model"
 type PaperUpsertInput struct {
 	Title            string
 	DOI              string
+	AuthorsText      string
+	Journal          string
+	PublishedAt      string
 	OriginalFilename string
 	StoredPDFName    string
 	PDFSHA256        string
@@ -29,6 +32,9 @@ type PaperUpdateInput struct {
 	Title          string
 	DOI            *string
 	PDFText        *string
+	AuthorsText    string
+	Journal        string
+	PublishedAt    string
 	AbstractText   string
 	NotesText      string
 	PaperNotesText string

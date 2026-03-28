@@ -77,12 +77,17 @@ type europePMCSearchResponse struct {
 }
 
 type europePMCResult struct {
-	DOI             string `json:"doi"`
-	Title           string `json:"title"`
-	PMCID           string `json:"pmcid"`
-	IsOpenAccess    string `json:"isOpenAccess"`
-	HasPDF          string `json:"hasPDF"`
-	FullTextURLList struct {
+	DOI                  string `json:"doi"`
+	Title                string `json:"title"`
+	AuthorString         string `json:"authorString"`
+	JournalTitle         string `json:"journalTitle"`
+	FirstPublicationDate string `json:"firstPublicationDate"`
+	PubYear              string `json:"pubYear"`
+	AbstractText         string `json:"abstractText"`
+	PMCID                string `json:"pmcid"`
+	IsOpenAccess         string `json:"isOpenAccess"`
+	HasPDF               string `json:"hasPDF"`
+	FullTextURLList      struct {
 		FullTextURL []europePMCFullTextURL `json:"fullTextUrl"`
 	} `json:"fullTextUrlList"`
 }
@@ -117,6 +122,11 @@ func (s *LibraryService) ImportPaperByDOI(ctx context.Context, params ImportPape
 		return nil, duplicate
 	}
 
+	metadata, metadataErr := s.lookupPaperDOIMetadata(ctx, doi)
+	if metadataErr != nil {
+		s.logger.Warn("doi metadata lookup failed", "doi", doi, "error", metadataErr)
+	}
+
 	candidates, titleHint, err := s.resolveOpenAccessPDFCandidates(ctx, doi)
 	if err != nil {
 		return nil, err
@@ -134,8 +144,12 @@ func (s *LibraryService) ImportPaperByDOI(ctx context.Context, params ImportPape
 		}
 
 		uploadParams := UploadPaperParams{
-			Title:          firstNonEmpty(strings.TrimSpace(params.Title), strings.TrimSpace(titleHint), strings.TrimSpace(candidate.Title)),
+			Title:          firstNonEmpty(strings.TrimSpace(params.Title), strings.TrimSpace(metadata.Title), strings.TrimSpace(titleHint), strings.TrimSpace(candidate.Title)),
 			DOI:            doi,
+			AuthorsText:    metadata.AuthorsText,
+			Journal:        metadata.Journal,
+			PublishedAt:    metadata.PublishedAt,
+			AbstractText:   metadata.AbstractText,
 			GroupID:        params.GroupID,
 			Tags:           params.Tags,
 			ExtractionMode: params.ExtractionMode,
@@ -145,7 +159,7 @@ func (s *LibraryService) ImportPaperByDOI(ctx context.Context, params ImportPape
 			ContentType:  download.ContentType,
 			DeclaredSize: download.ContentLength,
 			DOI:          doi,
-			TitleHint:    firstNonEmpty(strings.TrimSpace(candidate.Title), strings.TrimSpace(titleHint)),
+			TitleHint:    firstNonEmpty(strings.TrimSpace(candidate.Title), strings.TrimSpace(metadata.Title), strings.TrimSpace(titleHint)),
 		}, uploadParams)
 		_ = download.Body.Close()
 		if uploadErr != nil {

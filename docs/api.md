@@ -143,6 +143,10 @@ AI 流式阅读通过：
 
 - 基本信息
 - `doi`
+- `authors_text`
+- `journal`
+- `published_at`
+- `abstract_text`
 - `pdf_url`
 - `figures`
 - 文献标签
@@ -201,6 +205,7 @@ AI 流式阅读通过：
 
 - 当前后端会按顺序尝试 `Unpaywall`、`Europe PMC` 和 `PMC` 相关来源。
 - `doi` 支持直接输入标准 DOI，也支持 `https://doi.org/...` 形式；后端会统一标准化后保存到 `papers.doi`。
+- 导入成功后会尽量补全结构化文献信息，当前优先尝试 `Crossref` 和 `Europe PMC`，自动写入标题、摘要、作者、期刊/来源和发表时间等字段。
 - 导入成功后会走和本地 PDF 上传相同的入库、去重、全文保存与自动解析链路。
 - 若未找到合法可下载的 Open Access PDF，返回 `NOT_FOUND`。
 - 若找到了 OA 记录但实际下载失败，返回 `UNAVAILABLE`。
@@ -221,6 +226,9 @@ AI 流式阅读通过：
 {
   "title": "Paper title",
   "doi": "10.1038/nature12373",
+  "authors_text": "Ada Lovelace, Alan Turing",
+  "journal": "Nature Communications",
+  "published_at": "2023-01-18",
   "pdf_text": "完整 PDF 文本，可为空字符串",
   "abstract_text": "摘要",
   "notes_text": "管理笔记",

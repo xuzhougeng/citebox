@@ -84,6 +84,9 @@ func createTestPaper(t *testing.T, repo *repository.LibraryRepository) *model.Pa
 
 	paper, err := repo.CreatePaper(repository.PaperUpsertInput{
 		Title:            "Atlas Study",
+		AuthorsText:      "Ada Lovelace, Alan Turing",
+		Journal:          "Nature Communications",
+		PublishedAt:      "2023-01-18",
 		OriginalFilename: "atlas-study.pdf",
 		StoredPDFName:    "paper_test.pdf",
 		FileSize:         512,
@@ -333,6 +336,9 @@ func TestUpdatePaperPersistsMetadata(t *testing.T) {
 		Title:          "Atlas Study Revised",
 		DOI:            &doi,
 		PDFText:        &nextPDFText,
+		AuthorsText:    "Grace Hopper, Donald Knuth",
+		Journal:        "Journal of Computing",
+		PublishedAt:    "2024-05",
 		AbstractText:   "Updated abstract",
 		NotesText:      "Updated notes",
 		PaperNotesText: "Updated paper notes",
@@ -350,6 +356,9 @@ func TestUpdatePaperPersistsMetadata(t *testing.T) {
 	}
 	if updated.DOI != "10.4000/atlas-revised" {
 		t.Fatalf("UpdatePaper() doi = %q, want %q", updated.DOI, "10.4000/atlas-revised")
+	}
+	if updated.AuthorsText != "Grace Hopper, Donald Knuth" || updated.Journal != "Journal of Computing" || updated.PublishedAt != "2024-05" {
+		t.Fatalf("UpdatePaper() doi metadata = (%q, %q, %q), want updated author/journal/published_at", updated.AuthorsText, updated.Journal, updated.PublishedAt)
 	}
 	if len(updated.Tags) != 2 {
 		t.Fatalf("UpdatePaper() tags = %d, want 2", len(updated.Tags))

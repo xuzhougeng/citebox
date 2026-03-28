@@ -58,6 +58,9 @@ func (m *Manager) initSchema() error {
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		title TEXT NOT NULL,
 		doi TEXT DEFAULT '',
+		authors_text TEXT DEFAULT '',
+		journal TEXT DEFAULT '',
+		published_at TEXT DEFAULT '',
 		original_filename TEXT NOT NULL,
 		stored_pdf_name TEXT NOT NULL,
 		pdf_sha256 TEXT DEFAULT '',
@@ -138,6 +141,9 @@ func (m *Manager) ensureSchemaColumns() error {
 		definition string
 	}{
 		{tableName: "papers", name: "doi", definition: "TEXT DEFAULT ''"},
+		{tableName: "papers", name: "authors_text", definition: "TEXT DEFAULT ''"},
+		{tableName: "papers", name: "journal", definition: "TEXT DEFAULT ''"},
+		{tableName: "papers", name: "published_at", definition: "TEXT DEFAULT ''"},
 		{tableName: "papers", name: "extractor_job_id", definition: "TEXT DEFAULT ''"},
 		{tableName: "papers", name: "abstract_text", definition: "TEXT DEFAULT ''"},
 		{tableName: "papers", name: "notes_text", definition: "TEXT DEFAULT ''"},

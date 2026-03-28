@@ -23,6 +23,9 @@ func TestImportPaperByDOIUsesUnpaywallAndPersistsDOI(t *testing.T) {
 	var server *httptest.Server
 	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
+		case strings.HasPrefix(r.URL.Path, "/crossref/works/"):
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"message":{"title":["Open Access Atlas"],"abstract":"<jats:p>Atlas abstract</jats:p>","author":[{"given":"Ada","family":"Lovelace"},{"given":"Alan","family":"Turing"}],"container-title":["Nature Communications"],"published-online":{"date-parts":[[2023,1,18]]}}}`))
 		case strings.HasPrefix(r.URL.Path, "/unpaywall/v2/"):
 			if r.URL.Query().Get("email") == "" {
 				t.Fatalf("unpaywall email query missing")
@@ -41,13 +44,16 @@ func TestImportPaperByDOIUsesUnpaywallAndPersistsDOI(t *testing.T) {
 	originalUnpaywall := unpaywallAPIBaseURL
 	originalEuropePMC := europePMCSearchURL
 	originalPMCID := pmcIDConvURL
+	originalCrossref := crossrefWorksAPIBaseURL
 	unpaywallAPIBaseURL = server.URL + "/unpaywall/v2/"
 	europePMCSearchURL = server.URL + "/europe-pmc/search"
 	pmcIDConvURL = server.URL + "/pmc/idconv"
+	crossrefWorksAPIBaseURL = server.URL + "/crossref/works/"
 	defer func() {
 		unpaywallAPIBaseURL = originalUnpaywall
 		europePMCSearchURL = originalEuropePMC
 		pmcIDConvURL = originalPMCID
+		crossrefWorksAPIBaseURL = originalCrossref
 	}()
 
 	paper, err := svc.ImportPaperByDOI(context.Background(), ImportPaperByDOIParams{
@@ -64,6 +70,18 @@ func TestImportPaperByDOIUsesUnpaywallAndPersistsDOI(t *testing.T) {
 	}
 	if paper.Title != "Open Access Atlas" {
 		t.Fatalf("paper title = %q, want %q", paper.Title, "Open Access Atlas")
+	}
+	if paper.AbstractText != "Atlas abstract" {
+		t.Fatalf("paper abstract = %q, want %q", paper.AbstractText, "Atlas abstract")
+	}
+	if paper.AuthorsText != "Ada Lovelace, Alan Turing" {
+		t.Fatalf("paper authors = %q, want %q", paper.AuthorsText, "Ada Lovelace, Alan Turing")
+	}
+	if paper.Journal != "Nature Communications" {
+		t.Fatalf("paper journal = %q, want %q", paper.Journal, "Nature Communications")
+	}
+	if paper.PublishedAt != "2023-01-18" {
+		t.Fatalf("paper published_at = %q, want %q", paper.PublishedAt, "2023-01-18")
 	}
 	if paper.OriginalFilename != "test.pdf" {
 		t.Fatalf("paper original filename = %q, want %q", paper.OriginalFilename, "test.pdf")
@@ -100,13 +118,16 @@ func TestImportPaperByDOIFallsBackToEuropePMC(t *testing.T) {
 	originalUnpaywall := unpaywallAPIBaseURL
 	originalEuropePMC := europePMCSearchURL
 	originalPMCID := pmcIDConvURL
+	originalCrossref := crossrefWorksAPIBaseURL
 	unpaywallAPIBaseURL = server.URL + "/unpaywall/v2/"
 	europePMCSearchURL = server.URL + "/europe-pmc/search"
 	pmcIDConvURL = server.URL + "/pmc/idconv"
+	crossrefWorksAPIBaseURL = server.URL + "/crossref/works/"
 	defer func() {
 		unpaywallAPIBaseURL = originalUnpaywall
 		europePMCSearchURL = originalEuropePMC
 		pmcIDConvURL = originalPMCID
+		crossrefWorksAPIBaseURL = originalCrossref
 	}()
 
 	paper, err := svc.ImportPaperByDOI(context.Background(), ImportPaperByDOIParams{
@@ -157,13 +178,16 @@ func TestImportPaperByDOIKeepsDownloadContextUntilBodyClose(t *testing.T) {
 	originalUnpaywall := unpaywallAPIBaseURL
 	originalEuropePMC := europePMCSearchURL
 	originalPMCID := pmcIDConvURL
+	originalCrossref := crossrefWorksAPIBaseURL
 	unpaywallAPIBaseURL = server.URL + "/unpaywall/v2/"
 	europePMCSearchURL = server.URL + "/europe-pmc/search"
 	pmcIDConvURL = server.URL + "/pmc/idconv"
+	crossrefWorksAPIBaseURL = server.URL + "/crossref/works/"
 	defer func() {
 		unpaywallAPIBaseURL = originalUnpaywall
 		europePMCSearchURL = originalEuropePMC
 		pmcIDConvURL = originalPMCID
+		crossrefWorksAPIBaseURL = originalCrossref
 	}()
 
 	paper, err := svc.ImportPaperByDOI(context.Background(), ImportPaperByDOIParams{
@@ -199,13 +223,16 @@ func TestImportPaperByDOIReturnsNotFoundWhenNoOpenAccessPDF(t *testing.T) {
 	originalUnpaywall := unpaywallAPIBaseURL
 	originalEuropePMC := europePMCSearchURL
 	originalPMCID := pmcIDConvURL
+	originalCrossref := crossrefWorksAPIBaseURL
 	unpaywallAPIBaseURL = server.URL + "/unpaywall/v2/"
 	europePMCSearchURL = server.URL + "/europe-pmc/search"
 	pmcIDConvURL = server.URL + "/pmc/idconv"
+	crossrefWorksAPIBaseURL = server.URL + "/crossref/works/"
 	defer func() {
 		unpaywallAPIBaseURL = originalUnpaywall
 		europePMCSearchURL = originalEuropePMC
 		pmcIDConvURL = originalPMCID
+		crossrefWorksAPIBaseURL = originalCrossref
 	}()
 
 	_, err := svc.ImportPaperByDOI(context.Background(), ImportPaperByDOIParams{

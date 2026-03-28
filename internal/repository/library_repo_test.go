@@ -35,6 +35,9 @@ func TestCreatePaperAndListEntities(t *testing.T) {
 
 	paper, err := repo.CreatePaper(PaperUpsertInput{
 		Title:            "Cell Atlas",
+		AuthorsText:      "Ada Lovelace, Alan Turing",
+		Journal:          "Nature Communications",
+		PublishedAt:      "2023-01-18",
 		OriginalFilename: "cell-atlas.pdf",
 		StoredPDFName:    "paper_1.pdf",
 		FileSize:         128,
@@ -86,6 +89,9 @@ func TestCreatePaperAndListEntities(t *testing.T) {
 	}
 	if papers[0].AbstractText != "Cell atlas abstract" || papers[0].NotesText != "Important notes" || papers[0].PaperNotesText != "Paper reading note" {
 		t.Fatalf("ListPapers() metadata = (%q, %q, %q), want abstract/notes/paper notes", papers[0].AbstractText, papers[0].NotesText, papers[0].PaperNotesText)
+	}
+	if papers[0].AuthorsText != "Ada Lovelace, Alan Turing" || papers[0].Journal != "Nature Communications" || papers[0].PublishedAt != "2023-01-18" {
+		t.Fatalf("ListPapers() doi metadata = (%q, %q, %q), want author/journal/published_at", papers[0].AuthorsText, papers[0].Journal, papers[0].PublishedAt)
 	}
 
 	figures, total, err := repo.ListFigures(model.FigureFilter{})
@@ -320,15 +326,22 @@ func TestUpdatePaperPersistsDOI(t *testing.T) {
 	}
 
 	doi := "10.2000/update-doi"
+	authorsText := "Grace Hopper, Donald Knuth"
 	updated, err := repo.UpdatePaper(paper.ID, PaperUpdateInput{
-		Title: paper.Title,
-		DOI:   &doi,
+		Title:       paper.Title,
+		DOI:         &doi,
+		AuthorsText: authorsText,
+		Journal:     "Journal of Computing",
+		PublishedAt: "2024-05",
 	})
 	if err != nil {
 		t.Fatalf("UpdatePaper() error = %v", err)
 	}
 	if updated.DOI != doi {
 		t.Fatalf("UpdatePaper() doi = %q, want %q", updated.DOI, doi)
+	}
+	if updated.AuthorsText != authorsText || updated.Journal != "Journal of Computing" || updated.PublishedAt != "2024-05" {
+		t.Fatalf("UpdatePaper() doi metadata = (%q, %q, %q), want updated author/journal/published_at", updated.AuthorsText, updated.Journal, updated.PublishedAt)
 	}
 }
 
@@ -1244,7 +1257,7 @@ func TestRepositoryMigratesPaperMetadataColumns(t *testing.T) {
 		columns[strings.ToLower(name)] = true
 	}
 
-	for _, column := range []string{"extractor_job_id", "abstract_text", "notes_text", "paper_notes_text"} {
+	for _, column := range []string{"authors_text", "journal", "published_at", "extractor_job_id", "abstract_text", "notes_text", "paper_notes_text"} {
 		if !columns[column] {
 			t.Fatalf("missing migrated column %q", column)
 		}

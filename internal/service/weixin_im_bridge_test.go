@@ -1087,13 +1087,16 @@ func TestWeixinIMBridgeImportsPaperFromDOIText(t *testing.T) {
 	originalUnpaywall := unpaywallAPIBaseURL
 	originalEuropePMC := europePMCSearchURL
 	originalPMCID := pmcIDConvURL
+	originalCrossref := crossrefWorksAPIBaseURL
 	unpaywallAPIBaseURL = server.URL + "/unpaywall/v2/"
 	europePMCSearchURL = server.URL + "/europe-pmc/search"
 	pmcIDConvURL = server.URL + "/pmc/idconv"
+	crossrefWorksAPIBaseURL = server.URL + "/crossref/works/"
 	defer func() {
 		unpaywallAPIBaseURL = originalUnpaywall
 		europePMCSearchURL = originalEuropePMC
 		pmcIDConvURL = originalPMCID
+		crossrefWorksAPIBaseURL = originalCrossref
 	}()
 
 	reply := bridge.handleIncomingText(context.Background(), "https://doi.org/10.5555/WECHAT-DOI")

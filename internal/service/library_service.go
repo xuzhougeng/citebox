@@ -72,6 +72,10 @@ func (e *DuplicatePaperError) Unwrap() error {
 type UploadPaperParams struct {
 	Title          string
 	DOI            string
+	AuthorsText    string
+	Journal        string
+	PublishedAt    string
+	AbstractText   string
 	GroupID        *int64
 	Tags           []string
 	ExtractionMode string
@@ -81,6 +85,9 @@ type UpdatePaperParams struct {
 	Title          string
 	DOI            *string
 	PDFText        *string
+	AuthorsText    string
+	Journal        string
+	PublishedAt    string
 	AbstractText   string
 	NotesText      string
 	PaperNotesText string

@@ -26,6 +26,36 @@ const Utils = {
         });
     },
 
+    formatPartialDate(dateString) {
+        const value = String(dateString || '').trim();
+        if (!value) {
+            return '';
+        }
+
+        const match = value.match(/^(\d{4})(?:-(\d{2})(?:-(\d{2}))?)?$/);
+        if (!match) {
+            return value;
+        }
+
+        const locale = (typeof CiteBoxI18n !== 'undefined' ? CiteBoxI18n.get() : 'zh-CN');
+        if (!match[2]) {
+            return match[1];
+        }
+
+        const year = Number(match[1]);
+        const month = Number(match[2]);
+        const day = match[3] ? Number(match[3]) : 1;
+        if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) {
+            return value;
+        }
+
+        const date = new Date(year, month - 1, day);
+        const options = match[3]
+            ? { year: 'numeric', month: '2-digit', day: '2-digit' }
+            : { year: 'numeric', month: '2-digit' };
+        return date.toLocaleDateString(locale, options);
+    },
+
     showToast(message, type = 'success') {
         const toast = document.createElement('div');
         toast.className = `toast toast-${type}`;

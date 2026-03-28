@@ -594,6 +594,22 @@ const PaperViewer = {
         return `<a href="${href}" target="_blank" rel="noreferrer">${Utils.escapeHTML(value)}</a>`;
     },
 
+    renderMetaValue(value, emptyKey, emptyFallback) {
+        const normalized = String(value || '').trim();
+        if (!normalized) {
+            return Utils.escapeHTML(t(emptyKey, emptyFallback));
+        }
+        return Utils.escapeHTML(normalized);
+    },
+
+    renderPublishedAtValue(value) {
+        const normalized = String(value || '').trim();
+        if (!normalized) {
+            return Utils.escapeHTML(t('shared.paper.no_published_at', '未记录'));
+        }
+        return Utils.escapeHTML(Utils.formatPartialDate(normalized));
+    },
+
     buildUpdatePayload(paper, overrides = {}) {
         const hasOverride = (key) => Object.prototype.hasOwnProperty.call(overrides, key);
         const tags = hasOverride('tags')
@@ -603,6 +619,9 @@ const PaperViewer = {
         return {
             title: hasOverride('title') ? overrides.title : (paper.title || ''),
             doi: hasOverride('doi') ? overrides.doi : (paper.doi || ''),
+            authors_text: hasOverride('authors_text') ? overrides.authors_text : (paper.authors_text || ''),
+            journal: hasOverride('journal') ? overrides.journal : (paper.journal || ''),
+            published_at: hasOverride('published_at') ? overrides.published_at : (paper.published_at || ''),
             pdf_text: hasOverride('pdf_text') ? overrides.pdf_text : (paper.pdf_text || ''),
             abstract_text: hasOverride('abstract_text') ? overrides.abstract_text : (paper.abstract_text || ''),
             notes_text: hasOverride('notes_text') ? overrides.notes_text : (paper.notes_text || ''),
@@ -711,6 +730,18 @@ const PaperViewer = {
                         <span>${t("shared.paper.doi_label", "DOI")}</span>
                         <input id="paperViewerDOI" class="form-input" type="text" value="${Utils.escapeHTML(paper.doi || '')}" placeholder="${t('shared.paper.doi_placeholder', '例如：10.1038/nature12373 或 https://doi.org/10.1038/nature12373')}" autocomplete="off" spellcheck="false">
                     </label>
+                    <label class="field field-span-2">
+                        <span>${t("shared.paper.authors_label", "作者")}</span>
+                        <input id="paperViewerAuthors" class="form-input" type="text" value="${Utils.escapeHTML(paper.authors_text || '')}" placeholder="${t('shared.paper.authors_placeholder', '例如：Ada Lovelace, Alan Turing')}" autocomplete="off" spellcheck="false">
+                    </label>
+                    <label class="field">
+                        <span>${t("shared.paper.journal_label", "期刊 / 来源")}</span>
+                        <input id="paperViewerJournal" class="form-input" type="text" value="${Utils.escapeHTML(paper.journal || '')}" placeholder="${t('shared.paper.journal_placeholder', '例如：Nature Communications')}" autocomplete="off" spellcheck="false">
+                    </label>
+                    <label class="field">
+                        <span>${t("shared.paper.published_at_label", "发表时间")}</span>
+                        <input id="paperViewerPublishedAt" class="form-input" type="text" value="${Utils.escapeHTML(paper.published_at || '')}" placeholder="${t('shared.paper.published_at_placeholder', '例如：2023-01-18 或 2023')}" autocomplete="off" spellcheck="false">
+                    </label>
                     <label class="field">
                         <span>${t("shared.paper.group_label", "分组")}</span>
                         <select id="paperViewerGroup" class="form-input">${groupOptions}</select>
@@ -750,6 +781,9 @@ const PaperViewer = {
 
             <div class="detail-meta-panel">
                 <div><span>${t("shared.paper.doi_label", "DOI")}</span><strong>${this.renderDOIValue(paper.doi)}</strong></div>
+                <div><span>${t("shared.paper.authors_label", "作者")}</span><strong>${this.renderMetaValue(paper.authors_text, 'shared.paper.no_authors', '未记录')}</strong></div>
+                <div><span>${t("shared.paper.journal_label", "期刊 / 来源")}</span><strong>${this.renderMetaValue(paper.journal, 'shared.paper.no_journal', '未记录')}</strong></div>
+                <div><span>${t("shared.paper.published_at_label", "发表时间")}</span><strong>${this.renderPublishedAtValue(paper.published_at)}</strong></div>
                 <div><span>${t("shared.paper.original_file", "原始文件")}</span><strong>${Utils.escapeHTML(paper.original_filename)}</strong></div>
                 <div><span>${t("shared.paper.pdf_size", "PDF 大小")}</span><strong>${Utils.formatFileSize(paper.file_size || 0)}</strong></div>
                 <div><span>${t("shared.paper.extracted_figures", "提取图片")}</span><strong>${figures.length}</strong></div>
@@ -850,6 +884,9 @@ const PaperViewer = {
                 this.buildUpdatePayload(this.paper, {
                     title: document.getElementById('paperViewerTitle').value.trim(),
                     doi: document.getElementById('paperViewerDOI').value.trim(),
+                    authors_text: document.getElementById('paperViewerAuthors').value.trim(),
+                    journal: document.getElementById('paperViewerJournal').value.trim(),
+                    published_at: document.getElementById('paperViewerPublishedAt').value.trim(),
                     abstract_text: document.getElementById('paperViewerAbstract').value.trim(),
                     notes_text: document.getElementById('paperViewerNotes').value.trim(),
                     group_id: document.getElementById('paperViewerGroup').value ? Number(document.getElementById('paperViewerGroup').value) : null,

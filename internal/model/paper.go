@@ -35,6 +35,9 @@ type Paper struct {
 	ID               int64           `json:"id"`
 	Title            string          `json:"title"`
 	DOI              string          `json:"doi,omitempty"`
+	AuthorsText      string          `json:"authors_text,omitempty"`
+	Journal          string          `json:"journal,omitempty"`
+	PublishedAt      string          `json:"published_at,omitempty"`
 	OriginalFilename string          `json:"original_filename"`
 	StoredPDFName    string          `json:"stored_pdf_name,omitempty"`
 	PDFURL           string          `json:"pdf_url,omitempty"`
