@@ -140,6 +140,16 @@ const API = {
         });
     },
 
+    refreshPaperDOIMetadata(id, data = {}) {
+        return requestJSON(`${API_BASE}/papers/${id}/refresh-doi-metadata`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        });
+    },
+
     updatePaperPDFText(id, data) {
         return requestJSON(`${API_BASE}/papers/${id}/pdf-text`, {
             method: 'POST',

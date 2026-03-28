@@ -2,6 +2,8 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -247,6 +249,35 @@ func (h *PaperHandler) UpdatePDFText(w http.ResponseWriter, r *http.Request) {
 	}
 
 	paper, err := h.service.UpdatePaperPDFText(id, req.PDFText)
+	if err != nil {
+		sendError(w, err)
+		return
+	}
+
+	sendJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"paper":   paper,
+	})
+}
+
+func (h *PaperHandler) RefreshDOIMetadata(w http.ResponseWriter, r *http.Request) {
+	id, err := parseIDWithSuffix(r.URL.Path, "/api/papers/", "/refresh-doi-metadata")
+	if err != nil {
+		sendError(w, apperr.New(apperr.CodeInvalidArgument, "paper id 无效"))
+		return
+	}
+
+	var req struct {
+		DOI string `json:"doi"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil && !errors.Is(err, io.EOF) {
+		sendError(w, apperr.New(apperr.CodeInvalidArgument, "请求体格式错误"))
+		return
+	}
+
+	paper, err := h.service.RefreshPaperDOIMetadata(r.Context(), id, service.RefreshPaperDOIMetadataParams{
+		DOI: req.DOI,
+	})
 	if err != nil {
 		sendError(w, err)
 		return

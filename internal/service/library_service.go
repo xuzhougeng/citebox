@@ -103,6 +103,10 @@ type ImportPaperByDOIParams struct {
 	ExtractionMode string
 }
 
+type RefreshPaperDOIMetadataParams struct {
+	DOI string
+}
+
 type UpdateFigureParams struct {
 	Tags      []string
 	Caption   *string

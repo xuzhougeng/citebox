@@ -554,6 +554,9 @@ const PaperViewer = {
         this.body.addEventListener('click', async (event) => {
             const button = event.target.closest('[data-modal-action]');
             if (!button) return;
+            if (button.dataset.modalAction === 'refresh-doi-metadata') {
+                await this.refreshDOIMetadata();
+            }
             if (button.dataset.modalAction === 'reextract-paper') {
                 await this.reextract();
             }
@@ -636,6 +639,7 @@ const PaperViewer = {
         this.onChanged = onChanged;
         this.extractingPDFText = false;
         this.extractingPDFTextPage = 0;
+        this.refreshingDOIMetadata = false;
         try {
             const [paper, groupsPayload] = await Promise.all([API.getPaper(id), API.listGroups()]);
             this.paper = paper;
@@ -676,6 +680,9 @@ const PaperViewer = {
         const extractPDFTextLabel = this.extractingPDFText
             ? t('shared.paper.extract_pdf_texting', '提取中...')
             : t('shared.paper.extract_pdf_text', '从 PDF 提取');
+        const refreshDOIMetadataLabel = this.refreshingDOIMetadata
+            ? t('shared.paper.refreshing_doi_metadata', '补全中...')
+            : t('shared.paper.refresh_doi_metadata', '按 DOI 补元数据');
         
         // 解析框选结果为人类可读格式
         const boxesHtml = this.renderBoxes(paper.boxes);
@@ -720,65 +727,6 @@ const PaperViewer = {
                 </span>
             </div>
 
-            <form id="paperViewerForm" class="detail-form">
-                <div class="form-grid detail-form-grid">
-                    <label class="field field-span-2">
-                        <span>${t("shared.paper.title_label", "标题")}</span>
-                        <input id="paperViewerTitle" class="form-input" type="text" value="${Utils.escapeHTML(paper.title)}">
-                    </label>
-                    <label class="field field-span-2">
-                        <span>${t("shared.paper.doi_label", "DOI")}</span>
-                        <input id="paperViewerDOI" class="form-input" type="text" value="${Utils.escapeHTML(paper.doi || '')}" placeholder="${t('shared.paper.doi_placeholder', '例如：10.1038/nature12373 或 https://doi.org/10.1038/nature12373')}" autocomplete="off" spellcheck="false">
-                    </label>
-                    <label class="field field-span-2">
-                        <span>${t("shared.paper.authors_label", "作者")}</span>
-                        <input id="paperViewerAuthors" class="form-input" type="text" value="${Utils.escapeHTML(paper.authors_text || '')}" placeholder="${t('shared.paper.authors_placeholder', '例如：Ada Lovelace, Alan Turing')}" autocomplete="off" spellcheck="false">
-                    </label>
-                    <label class="field">
-                        <span>${t("shared.paper.journal_label", "期刊 / 来源")}</span>
-                        <input id="paperViewerJournal" class="form-input" type="text" value="${Utils.escapeHTML(paper.journal || '')}" placeholder="${t('shared.paper.journal_placeholder', '例如：Nature Communications')}" autocomplete="off" spellcheck="false">
-                    </label>
-                    <label class="field">
-                        <span>${t("shared.paper.published_at_label", "发表时间")}</span>
-                        <input id="paperViewerPublishedAt" class="form-input" type="text" value="${Utils.escapeHTML(paper.published_at || '')}" placeholder="${t('shared.paper.published_at_placeholder', '例如：2023-01-18 或 2023')}" autocomplete="off" spellcheck="false">
-                    </label>
-                    <label class="field">
-                        <span>${t("shared.paper.group_label", "分组")}</span>
-                        <select id="paperViewerGroup" class="form-input">${groupOptions}</select>
-                    </label>
-                    <label class="field">
-                        <span>${t("shared.paper.tags_label", "标签")}</span>
-                        <div class="tag-autocomplete-field">
-                            <input id="paperViewerTags" class="form-input" type="text" value="${Utils.escapeHTML(Utils.joinTags(paper.tags || []))}" placeholder="${t('shared.paper.comma_separated', '逗号分隔')}" autocomplete="off" spellcheck="false">
-                            <div class="tag-autocomplete-panel hidden" data-paper-tag-suggestions></div>
-                        </div>
-                    </label>
-                    <label class="field field-span-2">
-                        <span>${t("shared.paper.abstract_label", "摘要")}</span>
-                        <textarea id="paperViewerAbstract" class="form-textarea" rows="4" placeholder="${t('shared.paper.abstract_placeholder', '为这篇文献补充摘要或核心结论')}">${Utils.escapeHTML(paper.abstract_text || '')}</textarea>
-                    </label>
-                    <label class="field field-span-2">
-                        <span>${t("shared.paper.management_notes", "管理笔记")}</span>
-                        <textarea id="paperViewerNotes" class="form-textarea" rows="4" placeholder="${t('shared.paper.notes_placeholder', '记录这篇文献的整理备注、迁移说明或管理信息')}">${Utils.escapeHTML(paper.notes_text || '')}</textarea>
-                    </label>
-                    <div class="field field-span-2">
-                        <span>${t("shared.paper.paper_notes_label", "文献笔记")}</span>
-                        <button class="figure-note-inline-trigger ${paperNotePreview ? '' : 'is-empty'}" type="button" data-modal-action="open-paper-notes" aria-label="${t('shared.paper.open_notes', '打开笔记')}">
-                            <span class="figure-note-inline-text">${Utils.escapeHTML(paperNotePreview || t('shared.paper.paper_notes_empty_trigger', '还没有文献笔记，点击后在独立笔记面板中查看和编辑。'))}</span>
-                            <span class="figure-note-inline-action">${t("shared.paper.open_notes", "打开笔记")}</span>
-                        </button>
-                    </div>
-                </div>
-                <div class="detail-actions">
-                    <button class="btn btn-primary" type="submit">${t("shared.paper.save", "保存")}</button>
-                    <a class="btn btn-outline" href="/manual?paper_id=${paper.id}" target="_blank" rel="noreferrer">${t("shared.paper.manual_annotation", "手动标注")}</a>
-                    ${(paper.extraction_status === 'failed' || paper.extraction_status === 'cancelled') ? '<button class="btn btn-outline" type="button" data-modal-action="reextract-paper">${t("shared.paper.reparse", "重新解析")}</button>' : ''}
-                    <button class="btn btn-outline danger" type="button" data-modal-action="delete-paper">${t("shared.paper.delete_paper", "删除文献")}</button>
-                    <a class="btn btn-outline" href="/ai?paper_id=${paper.id}">${t('shared.paper.ai_reading', 'AI伴读')}</a>
-                    <a class="btn btn-outline" href="${Utils.resourceViewerURL('pdf', paper.pdf_url)}">${t('shared.paper.open_pdf', '打开 PDF')}</a>
-                </div>
-            </form>
-
             <div class="detail-meta-panel">
                 <div><span>${t("shared.paper.doi_label", "DOI")}</span><strong>${this.renderDOIValue(paper.doi)}</strong></div>
                 <div><span>${t("shared.paper.authors_label", "作者")}</span><strong>${this.renderMetaValue(paper.authors_text, 'shared.paper.no_authors', '未记录')}</strong></div>
@@ -790,6 +738,72 @@ const PaperViewer = {
                 <div><span>${t("shared.paper.current_tags", "当前标签")}</span><strong>${this.renderTagChips(paper.tags || [])}</strong></div>
                 <div><span>${t("shared.paper.recent_update", "最近更新")}</span><strong>${Utils.formatDate(paper.updated_at || paper.created_at)}</strong></div>
             </div>
+
+            <section class="detail-section detail-editor-section">
+                <div class="section-head">
+                    <h3>${t("shared.paper.edit_info_section", "编辑信息")}</h3>
+                    <span>${t("shared.paper.edit_info_hint", "修改后手动保存")}</span>
+                </div>
+                <form id="paperViewerForm" class="detail-form">
+                    <div class="form-grid detail-form-grid">
+                        <label class="field field-span-2">
+                            <span>${t("shared.paper.title_label", "标题")}</span>
+                            <input id="paperViewerTitle" class="form-input" type="text" value="${Utils.escapeHTML(paper.title)}">
+                        </label>
+                        <label class="field field-span-2">
+                            <span>${t("shared.paper.doi_label", "DOI")}</span>
+                            <input id="paperViewerDOI" class="form-input" type="text" value="${Utils.escapeHTML(paper.doi || '')}" placeholder="${t('shared.paper.doi_placeholder', '例如：10.1038/nature12373 或 https://doi.org/10.1038/nature12373')}" autocomplete="off" spellcheck="false">
+                        </label>
+                        <label class="field field-span-2">
+                            <span>${t("shared.paper.authors_label", "作者")}</span>
+                            <input id="paperViewerAuthors" class="form-input" type="text" value="${Utils.escapeHTML(paper.authors_text || '')}" placeholder="${t('shared.paper.authors_placeholder', '例如：Ada Lovelace, Alan Turing')}" autocomplete="off" spellcheck="false">
+                        </label>
+                        <label class="field">
+                            <span>${t("shared.paper.journal_label", "期刊 / 来源")}</span>
+                            <input id="paperViewerJournal" class="form-input" type="text" value="${Utils.escapeHTML(paper.journal || '')}" placeholder="${t('shared.paper.journal_placeholder', '例如：Nature Communications')}" autocomplete="off" spellcheck="false">
+                        </label>
+                        <label class="field">
+                            <span>${t("shared.paper.published_at_label", "发表时间")}</span>
+                            <input id="paperViewerPublishedAt" class="form-input" type="text" value="${Utils.escapeHTML(paper.published_at || '')}" placeholder="${t('shared.paper.published_at_placeholder', '例如：2023-01-18 或 2023')}" autocomplete="off" spellcheck="false">
+                        </label>
+                        <label class="field">
+                            <span>${t("shared.paper.group_label", "分组")}</span>
+                            <select id="paperViewerGroup" class="form-input">${groupOptions}</select>
+                        </label>
+                        <label class="field">
+                            <span>${t("shared.paper.tags_label", "标签")}</span>
+                            <div class="tag-autocomplete-field">
+                                <input id="paperViewerTags" class="form-input" type="text" value="${Utils.escapeHTML(Utils.joinTags(paper.tags || []))}" placeholder="${t('shared.paper.comma_separated', '逗号分隔')}" autocomplete="off" spellcheck="false">
+                                <div class="tag-autocomplete-panel hidden" data-paper-tag-suggestions></div>
+                            </div>
+                        </label>
+                        <label class="field field-span-2">
+                            <span>${t("shared.paper.abstract_label", "摘要")}</span>
+                            <textarea id="paperViewerAbstract" class="form-textarea" rows="4" placeholder="${t('shared.paper.abstract_placeholder', '为这篇文献补充摘要或核心结论')}">${Utils.escapeHTML(paper.abstract_text || '')}</textarea>
+                        </label>
+                        <label class="field field-span-2">
+                            <span>${t("shared.paper.management_notes", "管理笔记")}</span>
+                            <textarea id="paperViewerNotes" class="form-textarea" rows="4" placeholder="${t('shared.paper.notes_placeholder', '记录这篇文献的整理备注、迁移说明或管理信息')}">${Utils.escapeHTML(paper.notes_text || '')}</textarea>
+                        </label>
+                        <div class="field field-span-2">
+                            <span>${t("shared.paper.paper_notes_label", "文献笔记")}</span>
+                            <button class="figure-note-inline-trigger ${paperNotePreview ? '' : 'is-empty'}" type="button" data-modal-action="open-paper-notes" aria-label="${t('shared.paper.open_notes', '打开笔记')}">
+                                <span class="figure-note-inline-text">${Utils.escapeHTML(paperNotePreview || t('shared.paper.paper_notes_empty_trigger', '还没有文献笔记，点击后在独立笔记面板中查看和编辑。'))}</span>
+                                <span class="figure-note-inline-action">${t("shared.paper.open_notes", "打开笔记")}</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="detail-actions">
+                        <button class="btn btn-primary" type="submit">${t("shared.paper.save", "保存")}</button>
+                        <button class="btn btn-outline" type="button" data-modal-action="refresh-doi-metadata" ${this.refreshingDOIMetadata ? 'disabled' : ''}>${refreshDOIMetadataLabel}</button>
+                        <a class="btn btn-outline" href="/manual?paper_id=${paper.id}" target="_blank" rel="noreferrer">${t("shared.paper.manual_annotation", "手动标注")}</a>
+                        ${(paper.extraction_status === 'failed' || paper.extraction_status === 'cancelled') ? '<button class="btn btn-outline" type="button" data-modal-action="reextract-paper">${t("shared.paper.reparse", "重新解析")}</button>' : ''}
+                        <button class="btn btn-outline danger" type="button" data-modal-action="delete-paper">${t("shared.paper.delete_paper", "删除文献")}</button>
+                        <a class="btn btn-outline" href="/ai?paper_id=${paper.id}">${t('shared.paper.ai_reading', 'AI伴读')}</a>
+                        <a class="btn btn-outline" href="${Utils.resourceViewerURL('pdf', paper.pdf_url)}">${t('shared.paper.open_pdf', '打开 PDF')}</a>
+                    </div>
+                </form>
+            </section>
 
             ${paper.extractor_message ? `<p class="notice ${statusClass}">${Utils.escapeHTML(paper.extractor_message)}</p>` : ''}
 
@@ -1078,6 +1092,10 @@ const PaperViewer = {
 
         return {
             title: form.querySelector('#paperViewerTitle')?.value ?? '',
+            doi: form.querySelector('#paperViewerDOI')?.value ?? '',
+            authorsText: form.querySelector('#paperViewerAuthors')?.value ?? '',
+            journal: form.querySelector('#paperViewerJournal')?.value ?? '',
+            publishedAt: form.querySelector('#paperViewerPublishedAt')?.value ?? '',
             groupValue: form.querySelector('#paperViewerGroup')?.value ?? '',
             tags: form.querySelector('#paperViewerTags')?.value ?? '',
             abstractText: form.querySelector('#paperViewerAbstract')?.value ?? '',
@@ -1085,22 +1103,31 @@ const PaperViewer = {
         };
     },
 
-    restoreFormDraft(draft) {
+    restoreFormDraft(draft, options = {}) {
         if (!draft) return;
+        const { preserveDOIMetadata = true } = options;
 
         const form = this.body?.querySelector('#paperViewerForm');
         if (!form) return;
 
         const titleInput = form.querySelector('#paperViewerTitle');
+        const doiInput = form.querySelector('#paperViewerDOI');
+        const authorsInput = form.querySelector('#paperViewerAuthors');
+        const journalInput = form.querySelector('#paperViewerJournal');
+        const publishedAtInput = form.querySelector('#paperViewerPublishedAt');
         const groupInput = form.querySelector('#paperViewerGroup');
         const tagsInput = form.querySelector('#paperViewerTags');
         const abstractInput = form.querySelector('#paperViewerAbstract');
         const notesInput = form.querySelector('#paperViewerNotes');
 
-        if (titleInput) titleInput.value = draft.title;
+        if (titleInput && preserveDOIMetadata) titleInput.value = draft.title;
+        if (doiInput && preserveDOIMetadata) doiInput.value = draft.doi;
+        if (authorsInput && preserveDOIMetadata) authorsInput.value = draft.authorsText;
+        if (journalInput && preserveDOIMetadata) journalInput.value = draft.journal;
+        if (publishedAtInput && preserveDOIMetadata) publishedAtInput.value = draft.publishedAt;
         if (groupInput) groupInput.value = draft.groupValue;
         if (tagsInput) tagsInput.value = draft.tags;
-        if (abstractInput) abstractInput.value = draft.abstractText;
+        if (abstractInput && preserveDOIMetadata) abstractInput.value = draft.abstractText;
         if (notesInput) notesInput.value = draft.notesText;
     },
 
@@ -1112,6 +1139,46 @@ const PaperViewer = {
         button.textContent = this.extractingPDFText
             ? t('shared.paper.extract_pdf_texting', '提取中...')
             : t('shared.paper.extract_pdf_text', '从 PDF 提取');
+    },
+
+    syncRefreshDOIMetadataButton() {
+        const button = this.body?.querySelector('[data-modal-action="refresh-doi-metadata"]');
+        if (!button) return;
+
+        button.disabled = this.refreshingDOIMetadata;
+        button.textContent = this.refreshingDOIMetadata
+            ? t('shared.paper.refreshing_doi_metadata', '补全中...')
+            : t('shared.paper.refresh_doi_metadata', '按 DOI 补元数据');
+    },
+
+    async refreshDOIMetadata() {
+        if (this.refreshingDOIMetadata || !this.paper) return;
+
+        const doi = this.body?.querySelector('#paperViewerDOI')?.value?.trim() || this.paper.doi || '';
+        if (!doi) {
+            Utils.showToast(t('shared.paper.need_doi_to_refresh', '请先填写 DOI'), 'error');
+            return;
+        }
+
+        const draft = this.captureFormDraft();
+        this.refreshingDOIMetadata = true;
+        this.syncRefreshDOIMetadataButton();
+
+        try {
+            const payload = await API.refreshPaperDOIMetadata(this.paper.id, { doi });
+            this.paper = payload.paper;
+            this.render();
+            this.restoreFormDraft(draft, { preserveDOIMetadata: false });
+            Utils.showToast(t('shared.paper.refresh_doi_metadata_done', '已按 DOI 补全文献信息'));
+            if (typeof this.onChanged === 'function') {
+                await this.onChanged();
+            }
+        } catch (error) {
+            Utils.showToast(error.message, 'error');
+        } finally {
+            this.refreshingDOIMetadata = false;
+            this.syncRefreshDOIMetadataButton();
+        }
     },
 
     async ensurePDFJSReady() {

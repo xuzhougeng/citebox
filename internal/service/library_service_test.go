@@ -2,6 +2,7 @@ package service
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"image"
 	"image/color"
@@ -119,6 +120,22 @@ func createTestPaper(t *testing.T, repo *repository.LibraryRepository) *model.Pa
 
 type testMultipartFile struct {
 	*bytes.Reader
+}
+
+type testRoundTripper func(*http.Request) (*http.Response, error)
+
+func (rt testRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	return rt(req)
+}
+
+func jsonHTTPResponse(status int, body string) *http.Response {
+	header := make(http.Header)
+	header.Set("Content-Type", "application/json")
+	return &http.Response{
+		StatusCode: status,
+		Header:     header,
+		Body:       io.NopCloser(strings.NewReader(body)),
+	}
 }
 
 func wolaiBlockTypes(blocks []map[string]any) []string {
@@ -362,6 +379,74 @@ func TestUpdatePaperPersistsMetadata(t *testing.T) {
 	}
 	if len(updated.Tags) != 2 {
 		t.Fatalf("UpdatePaper() tags = %d, want 2", len(updated.Tags))
+	}
+}
+
+func TestRefreshPaperDOIMetadataUpdatesExistingPaper(t *testing.T) {
+	svc, repo, _ := newTestService(t)
+
+	paper, err := repo.CreatePaper(repository.PaperUpsertInput{
+		Title:            "Imported Placeholder Title",
+		DOI:              "10.1038/s41467-023-35966-7",
+		OriginalFilename: "placeholder.pdf",
+		StoredPDFName:    "placeholder.pdf",
+		FileSize:         512,
+		ContentType:      "application/pdf",
+		NotesText:        "Keep notes",
+		PaperNotesText:   "Keep paper notes",
+		ExtractionStatus: "completed",
+		Tags: []repository.TagUpsertInput{
+			{Name: "Atlas", Color: "#123456"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreatePaper() error = %v", err)
+	}
+
+	originalCrossref := crossrefWorksAPIBaseURL
+	originalEuropePMC := europePMCSearchURL
+	crossrefWorksAPIBaseURL = "https://metadata.test/crossref/works/"
+	europePMCSearchURL = "https://metadata.test/europe-pmc/search"
+	defer func() {
+		crossrefWorksAPIBaseURL = originalCrossref
+		europePMCSearchURL = originalEuropePMC
+	}()
+
+	svc.httpClient = &http.Client{
+		Transport: testRoundTripper(func(req *http.Request) (*http.Response, error) {
+			switch {
+			case req.URL.Host == "metadata.test" && strings.HasPrefix(req.URL.Path, "/crossref/works/"):
+				return jsonHTTPResponse(http.StatusOK, `{"message":{"title":["Common evolutionary trajectory of short life-cycle in Brassicaceae ruderal weeds"],"abstract":"<jats:p>Crossref abstract.</jats:p>","author":[{"given":"Ada","family":"Lovelace"},{"given":"Alan","family":"Turing"}],"container-title":["Nature Communications"],"published-online":{"date-parts":[[2023,1,18]]}}}`), nil
+			case req.URL.Host == "metadata.test" && req.URL.Path == "/europe-pmc/search":
+				return jsonHTTPResponse(http.StatusOK, `{"resultList":{"result":[{"title":"Europe PMC fallback title","authorString":"Ada Lovelace, Alan Turing","journalTitle":"Nature Communications","firstPublicationDate":"2023-01-18","abstractText":"Europe PMC abstract."}]}}`), nil
+			default:
+				return jsonHTTPResponse(http.StatusNotFound, `{}`), nil
+			}
+		}),
+	}
+
+	updated, err := svc.RefreshPaperDOIMetadata(context.Background(), paper.ID, RefreshPaperDOIMetadataParams{})
+	if err != nil {
+		t.Fatalf("RefreshPaperDOIMetadata() error = %v", err)
+	}
+
+	if updated.Title != "Common evolutionary trajectory of short life-cycle in Brassicaceae ruderal weeds" {
+		t.Fatalf("RefreshPaperDOIMetadata() title = %q", updated.Title)
+	}
+	if updated.AbstractText != "Crossref abstract." {
+		t.Fatalf("RefreshPaperDOIMetadata() abstract = %q, want crossref abstract", updated.AbstractText)
+	}
+	if updated.AuthorsText != "Ada Lovelace, Alan Turing" {
+		t.Fatalf("RefreshPaperDOIMetadata() authors = %q, want DOI metadata authors", updated.AuthorsText)
+	}
+	if updated.Journal != "Nature Communications" || updated.PublishedAt != "2023-01-18" {
+		t.Fatalf("RefreshPaperDOIMetadata() journal metadata = (%q, %q), want Nature Communications / 2023-01-18", updated.Journal, updated.PublishedAt)
+	}
+	if updated.NotesText != "Keep notes" || updated.PaperNotesText != "Keep paper notes" {
+		t.Fatalf("RefreshPaperDOIMetadata() mutated notes = (%q, %q)", updated.NotesText, updated.PaperNotesText)
+	}
+	if len(updated.Tags) != 1 || updated.Tags[0].Name != "Atlas" {
+		t.Fatalf("RefreshPaperDOIMetadata() tags = %+v, want preserved Atlas tag", updated.Tags)
 	}
 }
 

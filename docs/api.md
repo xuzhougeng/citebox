@@ -211,6 +211,32 @@ AI 流式阅读通过：
 - 若找到了 OA 记录但实际下载失败，返回 `UNAVAILABLE`。
 - 为了启用更广覆盖的 `Unpaywall` 检索，建议配置环境变量 `OA_CONTACT_EMAIL`。
 
+#### `POST /api/papers/{id}/refresh-doi-metadata`
+
+用途：
+
+- 对已有文献重新按 DOI 拉取结构化元数据
+- 适合历史文献补录标题、摘要、作者、期刊和发表时间
+
+请求类型：
+
+- `application/json`
+
+常用 JSON 字段：
+
+```json
+{
+  "doi": "10.1038/nature12373"
+}
+```
+
+说明：
+
+- `doi` 可选；不传时默认使用当前文献已保存的 `papers.doi`。
+- 成功后会更新 `title`、`abstract_text`、`authors_text`、`journal`、`published_at`，但不会覆盖标签、分组、管理笔记、文献笔记和 PDF 全文。
+- 若没有可用 DOI，返回 `INVALID_ARGUMENT`。
+- 若 DOI 查不到可用元数据，返回 `NOT_FOUND`。
+
 #### `PUT /api/papers/{id}`
 
 用途：

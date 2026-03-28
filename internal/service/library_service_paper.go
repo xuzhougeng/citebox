@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -188,6 +189,59 @@ func (s *LibraryService) UpdatePaperPDFText(id int64, pdfText string) (*model.Pa
 
 	s.decoratePaper(paper)
 	return paper, nil
+}
+
+func (s *LibraryService) RefreshPaperDOIMetadata(ctx context.Context, id int64, params RefreshPaperDOIMetadataParams) (*model.Paper, error) {
+	paper, err := s.repo.GetPaperDetail(id)
+	if err != nil {
+		return nil, err
+	}
+	if paper == nil {
+		return nil, apperr.New(apperr.CodeNotFound, "paper not found")
+	}
+
+	doi, err := normalizeDOIInput(firstNonEmpty(strings.TrimSpace(params.DOI), strings.TrimSpace(paper.DOI)))
+	if err != nil {
+		return nil, err
+	}
+	if doi == "" {
+		return nil, apperr.New(apperr.CodeInvalidArgument, "请先填写 DOI")
+	}
+
+	metadata, err := s.lookupPaperDOIMetadata(ctx, doi)
+	if err != nil {
+		return nil, apperr.Wrap(apperr.CodeUnavailable, "DOI 元数据拉取失败", err)
+	}
+	if !metadata.hasValues() {
+		return nil, apperr.New(apperr.CodeNotFound, "未找到可用 DOI 元数据")
+	}
+
+	tagNames := make([]string, 0, len(paper.Tags))
+	for _, tag := range paper.Tags {
+		name := strings.TrimSpace(tag.Name)
+		if name != "" {
+			tagNames = append(tagNames, name)
+		}
+	}
+
+	updated, err := s.repo.UpdatePaper(id, repository.PaperUpdateInput{
+		Title:          firstNonEmpty(strings.TrimSpace(metadata.Title), strings.TrimSpace(paper.Title)),
+		DOI:            &doi,
+		AuthorsText:    firstNonEmpty(strings.TrimSpace(metadata.AuthorsText), strings.TrimSpace(paper.AuthorsText)),
+		Journal:        firstNonEmpty(strings.TrimSpace(metadata.Journal), strings.TrimSpace(paper.Journal)),
+		PublishedAt:    firstNonEmpty(strings.TrimSpace(metadata.PublishedAt), strings.TrimSpace(paper.PublishedAt)),
+		AbstractText:   firstNonEmpty(strings.TrimSpace(metadata.AbstractText), strings.TrimSpace(paper.AbstractText)),
+		NotesText:      paper.NotesText,
+		PaperNotesText: paper.PaperNotesText,
+		GroupID:        paper.GroupID,
+		Tags:           s.normalizeTagInputs(tagNames, model.TagScopePaper),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	s.decoratePaper(updated)
+	return updated, nil
 }
 
 func (s *LibraryService) PurgeLibrary() error {

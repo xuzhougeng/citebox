@@ -10,6 +10,10 @@
     margin-top: 1rem;
 }
 
+.detail-editor-section .detail-form {
+    margin-top: 0;
+}
+
 .detail-head h2 {
     margin: 0.35rem 0 0;
     font-family: var(--font-display);

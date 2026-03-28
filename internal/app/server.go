@@ -238,6 +238,10 @@ func buildHandler(
 	})
 
 	mux.HandleFunc("/api/papers/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/refresh-doi-metadata") {
+			paperHandler.RefreshDOIMetadata(w, r)
+			return
+		}
 		if r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/reextract") {
 			paperHandler.Reextract(w, r)
 			return
