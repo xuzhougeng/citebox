@@ -17,7 +17,8 @@ const ManualPage = {
         pdfjsLib: null,
         pdfDocument: null,
         renderCache: new Map(),
-        previewRenderToken: 0
+        previewRenderToken: 0,
+        previewRenderTask: null
     },
 
     async init() {
@@ -273,8 +274,30 @@ const ManualPage = {
         this.renderSelections();
 
         const renderToken = ++this.state.previewRenderToken;
+        let previewRenderTask = null;
         try {
-            await this.renderPDFPageToCanvas(page, this.previewScale, this.previewCanvas, window.devicePixelRatio || 1);
+            await this.cancelActivePreviewRender();
+            if (renderToken !== this.state.previewRenderToken) {
+                return;
+            }
+
+            await this.renderPDFPageToCanvas(
+                page,
+                this.previewScale,
+                this.previewCanvas,
+                window.devicePixelRatio || 1,
+                {
+                    shouldAbort: () => renderToken !== this.state.previewRenderToken,
+                    onRenderTask: (renderTask) => {
+                        previewRenderTask = renderTask;
+                        if (renderToken !== this.state.previewRenderToken) {
+                            renderTask.cancel();
+                            return;
+                        }
+                        this.state.previewRenderTask = renderTask;
+                    }
+                }
+            );
             if (renderToken !== this.state.previewRenderToken) {
                 return;
             }
@@ -283,6 +306,9 @@ const ManualPage = {
             this.workspaceHint.textContent = this.pageWorkspaceHint(page, this.currentPageFigures().length);
             this.renderSelections();
         } catch (error) {
+            if (this.isRenderCancelledError(error)) {
+                return;
+            }
             if (renderToken !== this.state.previewRenderToken) {
                 return;
             }
@@ -290,11 +316,19 @@ const ManualPage = {
             this.previewFrame.classList.remove('is-loading');
             this.workspaceHint.textContent = t('manual.err_render_failed', 'PDF 页面渲染失败，请稍后重试。');
             Utils.showToast(error.message || t('manual.err_render_failed_short', 'PDF 页面渲染失败'), 'error');
+        } finally {
+            if (this.state.previewRenderTask && this.state.previewRenderTask === previewRenderTask) {
+                this.state.previewRenderTask = null;
+            }
         }
     },
 
-    async renderPDFPageToCanvas(pageNumber, scale, canvas, outputScale = 1) {
+    async renderPDFPageToCanvas(pageNumber, scale, canvas, outputScale = 1, options = {}) {
         const page = await this.state.pdfDocument.getPage(pageNumber);
+        if (typeof options.shouldAbort === 'function' && options.shouldAbort()) {
+            throw this.createRenderCancelledError();
+        }
+
         const viewport = page.getViewport({ scale });
         const context = canvas.getContext('2d', { alpha: false });
 
@@ -314,14 +348,53 @@ const ManualPage = {
         context.fillRect(0, 0, canvas.width, canvas.height);
         context.restore();
 
-        await page.render({
+        const renderTask = page.render({
             canvasContext: context,
             viewport,
             transform: pixelRatio === 1 ? null : [pixelRatio, 0, 0, pixelRatio, 0, 0],
             background: 'rgba(255,255,255,1)'
-        }).promise;
+        });
+        if (typeof options.onRenderTask === 'function') {
+            options.onRenderTask(renderTask);
+        }
+
+        await renderTask.promise;
 
         return canvas;
+    },
+
+    async cancelActivePreviewRender() {
+        const renderTask = this.state.previewRenderTask;
+        if (!renderTask) {
+            return;
+        }
+
+        this.state.previewRenderTask = null;
+
+        try {
+            renderTask.cancel();
+        } catch (error) {
+            // Ignore render cancellation failures and continue with the next request.
+        }
+
+        try {
+            await renderTask.promise;
+        } catch (error) {
+            // Ignore completion errors from the superseded render task.
+        }
+    },
+
+    createRenderCancelledError() {
+        const error = new Error('PDF preview render cancelled');
+        error.name = 'RenderingCancelledException';
+        return error;
+    },
+
+    isRenderCancelledError(error) {
+        return Boolean(error) && (
+            error.name === 'RenderingCancelledException'
+            || error.code === 'RenderingCancelledException'
+        );
     },
 
     async getExtractionCanvas(pageNumber) {
