@@ -34,11 +34,11 @@ HOST_ARCH="$(go env GOARCH)"
 BUILD_TIME="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
 BUILDINFO_PKG="github.com/xuzhougeng/citebox/internal/buildinfo"
 FITZ_LIB="third_party/go-fitz/libs/libmupdf_${GOOS_VALUE}_${HOST_ARCH}.a"
-BUILD_TAGS=()
+GO_BUILD_CMD=(go build -trimpath)
 
 if [[ "${CITEBOX_FORCE_NOCGO:-}" == "1" ]]; then
     printf '%s\n' "CITEBOX_FORCE_NOCGO=1, building desktop package with -tags nocgo"
-    BUILD_TAGS=(-tags nocgo)
+    GO_BUILD_CMD+=(-tags nocgo)
 elif [[ ! -f "${FITZ_LIB}" ]]; then
     printf '%s\n' "MuPDF static libraries are required at ${FITZ_LIB}." >&2
     printf '%s\n' "Run scripts/prepare-go-fitz-libs.sh before packaging or set CITEBOX_FORCE_NOCGO=1 explicitly." >&2
@@ -48,12 +48,13 @@ fi
 rm -rf "${PACKAGE_DIR}"
 mkdir -p "${PACKAGE_DIR}"
 
-CGO_ENABLED=1 GOOS="${GOOS_VALUE}" go build \
-    -trimpath \
-    "${BUILD_TAGS[@]}" \
+GO_BUILD_CMD+=(
     -ldflags "-s -w -X ${BUILDINFO_PKG}.Version=${VERSION} -X ${BUILDINFO_PKG}.BuildTime=${BUILD_TIME}" \
     -o "${PACKAGE_DIR}/${BINARY_NAME}" \
     ./cmd/desktop
+)
+
+CGO_ENABLED=1 GOOS="${GOOS_VALUE}" "${GO_BUILD_CMD[@]}"
 
 cp -R web "${PACKAGE_DIR}/"
 cp README.md "${PACKAGE_DIR}/"

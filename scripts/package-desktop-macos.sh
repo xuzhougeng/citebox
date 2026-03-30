@@ -26,11 +26,11 @@ PLIST_VERSION="${VERSION#v}"
 MACOS_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-14.0}"
 HOST_ARCH="$(go env GOARCH)"
 FITZ_LIB="third_party/go-fitz/libs/libmupdf_darwin_${HOST_ARCH}.a"
-BUILD_TAGS=()
+GO_BUILD_CMD=(go build -trimpath)
 
 if [[ "${CITEBOX_FORCE_NOCGO:-}" == "1" ]]; then
     printf '%s\n' "CITEBOX_FORCE_NOCGO=1, building macOS desktop package with -tags nocgo"
-    BUILD_TAGS=(-tags nocgo)
+    GO_BUILD_CMD+=(-tags nocgo)
 elif [[ ! -f "${FITZ_LIB}" ]]; then
     printf '%s\n' "MuPDF static libraries are required at ${FITZ_LIB}." >&2
     printf '%s\n' "Run scripts/prepare-go-fitz-libs.sh before packaging or set CITEBOX_FORCE_NOCGO=1 explicitly." >&2
@@ -65,13 +65,14 @@ rm -rf "${PACKAGE_DIR}"
 rm -f "${DMG_PATH}"
 mkdir -p "${MACOS_DIR}" "${RESOURCES_DIR}"
 
-MACOSX_DEPLOYMENT_TARGET="${MACOS_DEPLOYMENT_TARGET}" \
-CGO_ENABLED=1 GOOS=darwin go build \
-    -trimpath \
-    "${BUILD_TAGS[@]}" \
+GO_BUILD_CMD+=(
     -ldflags "-s -w -X ${BUILDINFO_PKG}.Version=${VERSION} -X ${BUILDINFO_PKG}.BuildTime=${BUILD_TIME}" \
     -o "${MACOS_DIR}/${APP_NAME}" \
     ./cmd/desktop
+)
+
+MACOSX_DEPLOYMENT_TARGET="${MACOS_DEPLOYMENT_TARGET}" \
+CGO_ENABLED=1 GOOS=darwin "${GO_BUILD_CMD[@]}"
 
 cp -R web "${RESOURCES_DIR}/"
 cp README.md "${PACKAGE_DIR}/"
