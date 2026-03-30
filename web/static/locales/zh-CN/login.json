@@ -4,6 +4,7 @@
     "login.password": "密码",
     "login.username_placeholder": "请输入用户名",
     "login.password_placeholder": "请输入密码",
+    "login.remember_login": "<strong>记住登录状态</strong><small>下次访问可直接登录，直到你主动关闭</small>",
     "login.submit": "安全登录",
     "login.logging_in": "登录中...",
     "login.err_empty": "请输入用户名和密码",

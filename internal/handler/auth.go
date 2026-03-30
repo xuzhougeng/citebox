@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/xuzhougeng/citebox/internal/apperr"
 	"github.com/xuzhougeng/citebox/internal/model"
@@ -51,7 +50,24 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http.SetCookie(w, buildSessionCookie(r, session, h.sessionManager.TTL()))
+	if rememberToken, ok := rememberLoginTokenFromRequest(r); ok {
+		if err := h.libraryService.RevokeRememberLoginToken(rememberToken); err != nil {
+			sendError(w, err)
+			return
+		}
+		http.SetCookie(w, service.ClearRememberLoginCookie(r))
+	}
+
+	if req.RememberLogin {
+		rememberToken, expiresAt, err := h.libraryService.IssueRememberLoginToken()
+		if err != nil {
+			sendError(w, err)
+			return
+		}
+		http.SetCookie(w, service.BuildRememberLoginCookie(r, rememberToken, expiresAt))
+	}
+
+	http.SetCookie(w, service.BuildSessionCookie(r, session))
 	sendJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"message": "登录成功",
@@ -60,7 +76,51 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 func (h *AuthHandler) GetAuthSettings(w http.ResponseWriter, r *http.Request) {
 	settings := h.libraryService.GetAuthSettings()
+	if rememberToken, ok := rememberLoginTokenFromRequest(r); ok {
+		settings.RememberLoginEnabled = h.libraryService.HasRememberLoginToken(rememberToken)
+		if !settings.RememberLoginEnabled {
+			http.SetCookie(w, service.ClearRememberLoginCookie(r))
+		}
+	}
 	sendJSON(w, http.StatusOK, settings)
+}
+
+func (h *AuthHandler) UpdateRememberLogin(w http.ResponseWriter, r *http.Request) {
+	var req model.RememberLoginRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		sendError(w, apperr.New(apperr.CodeInvalidArgument, "请求体格式错误"))
+		return
+	}
+
+	if currentToken, ok := rememberLoginTokenFromRequest(r); ok {
+		if err := h.libraryService.RevokeRememberLoginToken(currentToken); err != nil {
+			sendError(w, err)
+			return
+		}
+	}
+
+	if !req.Enabled {
+		http.SetCookie(w, service.ClearRememberLoginCookie(r))
+		sendJSON(w, http.StatusOK, map[string]interface{}{
+			"success":                true,
+			"remember_login_enabled": false,
+			"message":                "已关闭记住登录状态",
+		})
+		return
+	}
+
+	token, expiresAt, err := h.libraryService.IssueRememberLoginToken()
+	if err != nil {
+		sendError(w, err)
+		return
+	}
+
+	http.SetCookie(w, service.BuildRememberLoginCookie(r, token, expiresAt))
+	sendJSON(w, http.StatusOK, map[string]interface{}{
+		"success":                true,
+		"remember_login_enabled": true,
+		"message":                "已开启记住登录状态",
+	})
 }
 
 func (h *AuthHandler) StartWeixinBinding(w http.ResponseWriter, r *http.Request) {
@@ -108,7 +168,12 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.sessionManager.DeleteAll()
-	http.SetCookie(w, clearSessionCookie(r))
+	if err := h.libraryService.RevokeAllRememberLoginTokens(); err != nil {
+		sendError(w, err)
+		return
+	}
+	http.SetCookie(w, service.ClearSessionCookie(r))
+	http.SetCookie(w, service.ClearRememberLoginCookie(r))
 	sendJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"message": "密码修改成功，请使用新密码重新登录",
@@ -120,7 +185,15 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 		h.sessionManager.Delete(cookie.Value)
 	}
 
-	http.SetCookie(w, clearSessionCookie(r))
+	if rememberToken, ok := rememberLoginTokenFromRequest(r); ok {
+		if err := h.libraryService.RevokeRememberLoginToken(rememberToken); err != nil {
+			sendError(w, err)
+			return
+		}
+	}
+
+	http.SetCookie(w, service.ClearSessionCookie(r))
+	http.SetCookie(w, service.ClearRememberLoginCookie(r))
 	sendJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"message": "已登出",
@@ -128,36 +201,16 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func buildSessionCookie(r *http.Request, session service.Session, ttl time.Duration) *http.Cookie {
-	return &http.Cookie{
-		Name:     service.SessionCookieName,
-		Value:    session.ID,
-		Path:     "/",
-		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
-		Secure:   isSecureRequest(r),
-		MaxAge:   int(ttl.Seconds()),
-		Expires:  session.ExpiresAt,
-	}
-}
-
-func clearSessionCookie(r *http.Request) *http.Cookie {
-	return &http.Cookie{
-		Name:     service.SessionCookieName,
-		Value:    "",
-		Path:     "/",
-		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
-		Secure:   isSecureRequest(r),
-		MaxAge:   -1,
-		Expires:  time.Unix(0, 0),
-	}
-}
-
-func isSecureRequest(r *http.Request) bool {
-	if r.TLS != nil {
-		return true
+func rememberLoginTokenFromRequest(r *http.Request) (string, bool) {
+	cookie, err := r.Cookie(service.RememberLoginCookieName)
+	if err != nil {
+		return "", false
 	}
 
-	return strings.EqualFold(strings.TrimSpace(r.Header.Get("X-Forwarded-Proto")), "https")
+	token := strings.TrimSpace(cookie.Value)
+	if token == "" {
+		return "", false
+	}
+
+	return token, true
 }

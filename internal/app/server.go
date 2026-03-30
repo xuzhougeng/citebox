@@ -653,6 +653,15 @@ func buildHandler(
 		}
 	})
 
+	mux.HandleFunc("/api/auth/remember-login", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPost:
+			authHandler.UpdateRememberLogin(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
 	mux.HandleFunc("/api/auth/login", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodPost:
@@ -728,7 +737,7 @@ func buildHandler(
 		}
 	})
 
-	authMiddleware := middleware.AuthMiddleware(sessionManager, []middleware.PublicPath{
+	authMiddleware := middleware.AuthMiddleware(sessionManager, librarySvc, []middleware.PublicPath{
 		{Path: "/login", Prefix: false},
 		{Path: "/login.html", Prefix: false},
 		{Path: "/api/auth/login", Prefix: false},

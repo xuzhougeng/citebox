@@ -20,7 +20,7 @@ type PublicPath struct {
 // unauthenticated HTML requests to the login page.
 // When disableAuth is true, all requests pass through and the login page
 // is redirected back to the app root.
-func AuthMiddleware(sessionManager *service.SessionManager, publicPaths []PublicPath, disableAuth bool) func(http.Handler) http.Handler {
+func AuthMiddleware(sessionManager *service.SessionManager, libraryService *service.LibraryService, publicPaths []PublicPath, disableAuth bool) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.Method == http.MethodOptions {
@@ -39,6 +39,9 @@ func AuthMiddleware(sessionManager *service.SessionManager, publicPaths []Public
 
 			isPublic := matchesPublicPath(r.URL.Path, publicPaths)
 			_, authenticated := sessionFromRequest(r, sessionManager)
+			if !authenticated {
+				authenticated = authenticateRememberedSession(w, r, sessionManager, libraryService)
+			}
 
 			if isLoginPath(r.URL.Path) && authenticated {
 				http.Redirect(w, r, "/", http.StatusFound)
@@ -111,6 +114,30 @@ func sessionFromRequest(r *http.Request, sessionManager *service.SessionManager)
 
 func isLoginPath(path string) bool {
 	return path == "/login" || path == "/login.html"
+}
+
+func authenticateRememberedSession(w http.ResponseWriter, r *http.Request, sessionManager *service.SessionManager, libraryService *service.LibraryService) bool {
+	if libraryService == nil {
+		return false
+	}
+
+	cookie, err := r.Cookie(service.RememberLoginCookieName)
+	if err != nil || strings.TrimSpace(cookie.Value) == "" {
+		return false
+	}
+
+	if !libraryService.HasRememberLoginToken(cookie.Value) {
+		http.SetCookie(w, service.ClearRememberLoginCookie(r))
+		return false
+	}
+
+	session, err := sessionManager.Create(libraryService.AdminUsername())
+	if err != nil {
+		return false
+	}
+
+	http.SetCookie(w, service.BuildSessionCookie(r, session))
+	return true
 }
 
 func writeUnauthenticatedJSON(w http.ResponseWriter) {

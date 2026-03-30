@@ -661,6 +661,16 @@ const API = {
         });
     },
 
+    updateRememberLogin(data) {
+        return requestJSON(`${API_BASE}/auth/remember-login`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        });
+    },
+
     logout() {
         return requestJSON(`${API_BASE}/auth/logout`, {
             method: 'POST'

@@ -1346,13 +1346,15 @@ AI 流式阅读通过：
 ```json
 {
   "username": "citebox",
-  "password": "******"
+  "password": "******",
+  "remember_login": true
 }
 ```
 
 成功后：
 
 - 后端写入会话 Cookie
+- 当 `remember_login=true` 时，还会额外写入长期有效的“记住登录状态” Cookie
 - 返回 `{ "success": true, "message": "登录成功" }`
 
 #### `GET /api/auth/settings`
@@ -1368,6 +1370,7 @@ AI 流式阅读通过：
 {
   "username": "citebox",
   "password_from_db": false,
+  "remember_login_enabled": true,
   "weixin_bridge": {
     "enabled": true,
     "daily_recommendation": {
@@ -1384,6 +1387,27 @@ AI 流式阅读通过：
   }
 }
 ```
+
+#### `POST /api/auth/remember-login`
+
+用途：
+
+- 开启或关闭当前浏览器的“记住登录状态”
+- 开启后，即使普通会话 Cookie 因浏览器关闭而消失，后续请求也会自动恢复登录
+
+请求体：
+
+```json
+{
+  "enabled": true
+}
+```
+
+成功后返回：
+
+- `success`
+- `remember_login_enabled`
+- `message`
 
 #### `POST /api/auth/weixin/bind`
 
@@ -1431,6 +1455,7 @@ AI 流式阅读通过：
 成功后：
 
 - 清空所有会话
+- 清空所有“记住登录状态”令牌
 - 当前用户需要重新登录
 
 #### `POST /api/auth/logout`
@@ -1438,6 +1463,7 @@ AI 流式阅读通过：
 用途：
 
 - 登出并清理会话 Cookie
+- 同时清理当前浏览器上的“记住登录状态”
 
 ## 与 API 配套的文件访问 URL
 

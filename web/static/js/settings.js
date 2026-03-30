@@ -95,6 +95,8 @@ const SettingsPage = {
         this.currentPasswordInput = document.getElementById('currentPassword');
         this.newPasswordInput = document.getElementById('newPassword');
         this.confirmPasswordInput = document.getElementById('confirmPassword');
+        this.rememberLoginEnabledInput = document.getElementById('rememberLoginEnabledInput');
+        this.rememberLoginStatus = document.getElementById('rememberLoginStatus');
         this.logoutButton = document.getElementById('logoutButton');
         this.weixinBindingSummary = document.getElementById('weixinBindingSummary');
         this.weixinQRCodePlaceholder = document.getElementById('weixinQRCodePlaceholder');
@@ -256,6 +258,9 @@ const SettingsPage = {
         this.changePasswordForm.addEventListener('submit', async (event) => {
             event.preventDefault();
             await this.changePassword();
+        });
+        this.rememberLoginEnabledInput?.addEventListener('change', async () => {
+            await this.updateRememberLogin();
         });
         this.logoutButton.addEventListener('click', () => this.logout());
         this.weixinBridgeEnabledInput?.addEventListener('change', () => {
@@ -1247,8 +1252,42 @@ const SettingsPage = {
 
     renderAuthSettings(settings = {}) {
         this.authSettings = settings;
+        if (this.rememberLoginEnabledInput) {
+            this.rememberLoginEnabledInput.checked = Boolean(settings.remember_login_enabled);
+        }
+        this.setRememberLoginStatus(Boolean(settings.remember_login_enabled));
+        this.syncRememberLoginPreference(Boolean(settings.remember_login_enabled));
         this.renderWeixinBridgeControls(settings.weixin_bridge || {});
         this.renderWeixinBindingSummary(settings.weixin_binding || {});
+    },
+
+    rememberLoginPreferenceKey() {
+        return 'citebox_remember_login_preference';
+    },
+
+    syncRememberLoginPreference(enabled) {
+        try {
+            localStorage.setItem(this.rememberLoginPreferenceKey(), enabled ? '1' : '0');
+        } catch (error) {
+            // Ignore storage errors and keep server-side auth state as the source of truth.
+        }
+    },
+
+    setRememberLoginStatus(enabled, tone = '') {
+        if (!this.rememberLoginStatus) return;
+
+        let message = t('settings.password.remember_status_disabled', '当前未记住这台设备的登录状态。');
+        let statusTone = tone;
+        if (enabled) {
+            message = t('settings.password.remember_status_enabled', '当前已记住这台设备的登录状态，后续访问会自动登录。');
+            if (!statusTone) statusTone = 'success';
+        }
+
+        this.rememberLoginStatus.textContent = message;
+        this.rememberLoginStatus.classList.remove('success', 'error', 'saving');
+        if (statusTone) {
+            this.rememberLoginStatus.classList.add(statusTone);
+        }
     },
 
     renderWolaiSummary(settings = {}) {
@@ -2209,6 +2248,41 @@ const SettingsPage = {
             }, 2000);
         } catch (error) {
             Utils.showToast(error.message, 'error');
+        }
+    },
+
+    async updateRememberLogin() {
+        if (!this.rememberLoginEnabledInput) return;
+
+        const enabled = Boolean(this.rememberLoginEnabledInput.checked);
+        const previous = Boolean(this.authSettings?.remember_login_enabled);
+
+        this.rememberLoginEnabledInput.disabled = true;
+        this.setRememberLoginStatus(
+            enabled
+                ? t('settings.password.remember_status_enabling', '正在开启记住登录状态...')
+                : t('settings.password.remember_status_disabling', '正在关闭记住登录状态...'),
+            'saving'
+        );
+
+        try {
+            const result = await API.updateRememberLogin({ enabled });
+            this.authSettings = {
+                ...(this.authSettings || {}),
+                remember_login_enabled: Boolean(result.remember_login_enabled)
+            };
+            this.renderAuthSettings(this.authSettings);
+            Utils.showToast(
+                this.authSettings.remember_login_enabled
+                    ? t('settings.password.remember_toast_enabled', '已记住这台设备的登录状态')
+                    : t('settings.password.remember_toast_disabled', '已取消记住这台设备的登录状态')
+            );
+        } catch (error) {
+            this.rememberLoginEnabledInput.checked = previous;
+            this.setRememberLoginStatus(previous);
+            Utils.showToast(error.message, 'error');
+        } finally {
+            this.rememberLoginEnabledInput.disabled = false;
         }
     },
 

@@ -4,6 +4,7 @@
     "login.password": "Password",
     "login.username_placeholder": "Enter username",
     "login.password_placeholder": "Enter password",
+    "login.remember_login": "<strong>Remember this device</strong><small>Sign in automatically next time until you turn it off</small>",
     "login.submit": "Sign In",
     "login.logging_in": "Signing in...",
     "login.err_empty": "Please enter username and password",

@@ -1,8 +1,13 @@
 package model
 
 type LoginRequest struct {
-	Username string `json:"username"`
-	Password string `json:"password"`
+	Username      string `json:"username"`
+	Password      string `json:"password"`
+	RememberLogin bool   `json:"remember_login"`
+}
+
+type RememberLoginRequest struct {
+	Enabled bool `json:"enabled"`
 }
 
 type WeixinBindingSummary struct {

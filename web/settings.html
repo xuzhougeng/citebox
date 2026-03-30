@@ -733,7 +733,7 @@ User Prompt:
             <details class="manager-card settings-collapsible" open>
                 <summary class="settings-collapsible-toggle">
                     <h2 data-i18n="settings.password.account_title">账号管理</h2>
-                    <p data-i18n="settings.password.account_desc">修改密码或退出登录。</p>
+                    <p data-i18n="settings.password.account_desc">修改密码、管理记住登录状态，或退出登录。</p>
                 </summary>
                 <div class="db-actions-grid">
                     <div class="db-action-item">
@@ -745,6 +745,18 @@ User Prompt:
                             <input id="confirmPassword" class="form-input" type="password" data-i18n-placeholder="settings.password.confirm" placeholder="确认新密码" required minlength="6">
                             <button id="changePasswordButton" class="btn btn-secondary" type="submit" data-i18n="settings.password.change_btn">修改密码</button>
                         </form>
+                    </div>
+                    <div class="db-action-item">
+                        <h3 data-i18n="settings.password.remember_title">记住登录状态</h3>
+                        <p data-i18n="settings.password.remember_desc">开启后，这台设备下次访问时会自动恢复登录，无需重新输入密码。</p>
+                        <label class="field checkbox-field">
+                            <input id="rememberLoginEnabledInput" type="checkbox">
+                            <span data-i18n-html="settings.password.remember_checkbox">
+                                <strong>记住这台设备的登录状态</strong><br>
+                                关闭浏览器后再次打开，也会自动恢复登录。取消勾选后会立即失效。
+                            </span>
+                        </label>
+                        <p id="rememberLoginStatus" class="settings-inline-status" data-i18n="settings.password.remember_status_disabled">当前未记住这台设备的登录状态。</p>
                     </div>
                     <div class="db-action-item">
                         <h3 data-i18n="settings.password.logout_title">登出</h3>

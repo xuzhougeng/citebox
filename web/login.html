@@ -356,6 +356,48 @@
             to { transform: rotate(360deg); }
         }
 
+        .remember-row {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 12px;
+            margin-top: -4px;
+        }
+
+        .remember-toggle {
+            display: inline-flex;
+            align-items: flex-start;
+            gap: 10px;
+            cursor: pointer;
+            color: var(--ink-light);
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        .remember-toggle input {
+            width: 16px;
+            height: 16px;
+            margin-top: 2px;
+            accent-color: var(--accent);
+            cursor: pointer;
+            flex-shrink: 0;
+        }
+
+        .remember-copy {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .remember-copy strong {
+            color: var(--ink);
+            font-weight: 600;
+        }
+
+        .remember-copy small {
+            color: var(--muted);
+        }
+
         /* 提示信息 */
         .hint-section {
             margin-top: 24px;
@@ -503,6 +545,16 @@
                     </div>
                 </div>
 
+                <div class="remember-row">
+                    <label class="remember-toggle" for="rememberLoginInput">
+                        <input id="rememberLoginInput" type="checkbox">
+                        <span class="remember-copy" data-i18n-html="login.remember_login">
+                            <strong>记住登录状态</strong>
+                            <small>下次访问可直接登录，直到你主动关闭</small>
+                        </span>
+                    </label>
+                </div>
+
                 <button type="submit" class="login-button" id="loginButton">
                     <span class="button-content">
                         <span data-i18n="login.submit">安全登录</span>
@@ -533,10 +585,12 @@
             const loginForm = document.getElementById('loginForm');
             const usernameInput = document.getElementById('usernameInput');
             const passwordInput = document.getElementById('passwordInput');
+            const rememberLoginInput = document.getElementById('rememberLoginInput');
             const loginButton = document.getElementById('loginButton');
             const errorMessage = document.getElementById('errorMessage');
             const errorText = document.getElementById('errorText');
             const loginCard = document.getElementById('loginCard');
+            const rememberLoginStorageKey = 'citebox_remember_login_preference';
 
             function clearLegacyAuthState() {
                 sessionStorage.removeItem('citebox_auth');
@@ -544,6 +598,22 @@
                 localStorage.removeItem('citebox_logged_in');
                 localStorage.removeItem('citebox_username');
                 localStorage.removeItem('citebox_password');
+            }
+
+            function loadRememberLoginPreference() {
+                try {
+                    return localStorage.getItem(rememberLoginStorageKey) === '1';
+                } catch (error) {
+                    return false;
+                }
+            }
+
+            function saveRememberLoginPreference(enabled) {
+                try {
+                    localStorage.setItem(rememberLoginStorageKey, enabled ? '1' : '0');
+                } catch (error) {
+                    // Ignore storage errors and let cookie-based auth remain the source of truth.
+                }
             }
 
             function showError(message) {
@@ -565,6 +635,7 @@
 
                 const username = usernameInput.value.trim();
                 const password = passwordInput.value;
+                const rememberLogin = Boolean(rememberLoginInput?.checked);
 
                 if (!username || !password) {
                     showError(t('login.err_empty', '请输入用户名和密码'));
@@ -583,13 +654,15 @@
                         },
                         body: JSON.stringify({
                             username,
-                            password
+                            password,
+                            remember_login: rememberLogin
                         })
                     });
                     const payload = await response.json().catch(() => ({}));
 
                     if (response.ok) {
                         clearLegacyAuthState();
+                        saveRememberLoginPreference(rememberLogin);
                         window.location.href = '/';
                     } else if (response.status === 401) {
                         showError(payload.error || t('login.err_credentials', '用户名或密码错误'));
@@ -607,6 +680,12 @@
             }
 
             clearLegacyAuthState();
+            if (rememberLoginInput) {
+                rememberLoginInput.checked = loadRememberLoginPreference();
+                rememberLoginInput.addEventListener('change', () => {
+                    saveRememberLoginPreference(Boolean(rememberLoginInput.checked));
+                });
+            }
             loginForm.addEventListener('submit', handleLogin);
             usernameInput.addEventListener('input', hideError);
             passwordInput.addEventListener('input', hideError);
