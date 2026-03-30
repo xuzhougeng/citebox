@@ -46,101 +46,37 @@ test:
 # Windows Build & Package
 # =============================================================================
 
+ifeq ($(OS),Windows_NT)
+
 build-windows:
 	@echo "Building Windows executable..."
-	@mkdir -p bin/windows
-	GOOS=windows GOARCH=amd64 go build $(LDFLAGS) -o bin/windows/$(BINARY_NAME).exe ./cmd/server
+	@pwsh -File scripts/build-windows.ps1 -Version $(VERSION)
 	@echo "✓ Built: bin/windows/$(BINARY_NAME).exe"
 
-package-windows: build-windows
+package-windows:
 	@echo ""
 	@echo "========================================"
 	@echo "Creating Windows Distribution Package"
 	@echo "Version: $(VERSION)"
 	@echo "========================================"
-	
-	@rm -rf dist/$(BINARY_NAME)-windows-$(VERSION)
-	@mkdir -p dist/$(BINARY_NAME)-windows-$(VERSION)/data/library/papers
-	@mkdir -p dist/$(BINARY_NAME)-windows-$(VERSION)/data/library/figures
-	
-	@cp bin/windows/$(BINARY_NAME).exe dist/$(BINARY_NAME)-windows-$(VERSION)/
-	@cp -r web dist/$(BINARY_NAME)-windows-$(VERSION)/
-	@cp README.md dist/$(BINARY_NAME)-windows-$(VERSION)/
-	
-	@echo "Creating start.bat..."
-	@( \
-		echo '@echo off'; \
-		echo 'chcp 65001 >nul'; \
-		echo 'title CiteBox'; \
-		echo 'cls'; \
-		echo 'echo ========================================'; \
-		echo 'echo  CiteBox'; \
-		echo 'echo  Version: $(VERSION)'; \
-		echo 'echo ========================================'; \
-		echo 'echo.'; \
-		echo 'echo Starting server...'; \
-		echo 'echo.'; \
-		echo 'echo Default URL: http://localhost:8080'; \
-		echo 'echo Username: citebox'; \
-		echo 'echo Password: citebox123'; \
-		echo 'echo.'; \
-		echo 'echo A browser window will open automatically.'; \
-		echo 'echo Close the "CiteBox" window to stop the app.'; \
-		echo 'echo.'; \
-		echo 'start "CiteBox" $(BINARY_NAME).exe'; \
-		echo 'timeout /t 2 /nobreak >nul'; \
-		echo 'start "" http://localhost:8080'; \
-	) > dist/$(BINARY_NAME)-windows-$(VERSION)/start.bat
-	
-	@echo "Creating start-with-config.bat..."
-	@( \
-		echo '@echo off'; \
-		echo 'chcp 65001 >nul'; \
-		echo 'title CiteBox (Custom Config)'; \
-		echo 'cls'; \
-		echo 'echo ========================================'; \
-		echo 'echo  CiteBox - Custom Config'; \
-		echo 'echo ========================================'; \
-		echo 'echo.'; \
-		echo 'rem Customize settings below:'; \
-		echo 'set SERVER_PORT=8080'; \
-		echo 'set ADMIN_USERNAME=citebox'; \
-		echo 'set ADMIN_PASSWORD=citebox123'; \
-		echo 'rem set PDF_EXTRACTOR_URL=http://localhost:8000'; \
-		echo 'rem set STORAGE_DIR=./data/library'; \
-		echo 'rem set DATABASE_PATH=./data/library.db'; \
-		echo 'echo.'; \
-		echo 'echo Starting with custom configuration...'; \
-		echo 'echo Port: %SERVER_PORT%'; \
-		echo 'echo.'; \
-		echo 'start "CiteBox" $(BINARY_NAME).exe'; \
-		echo 'timeout /t 2 /nobreak >nul'; \
-		echo 'start "" http://localhost:%SERVER_PORT%'; \
-	) > dist/$(BINARY_NAME)-windows-$(VERSION)/start-with-config.bat
-	
-	@echo "Creating README.txt..."
-	@( \
-		echo 'CiteBox - Windows 版'; \
-		echo '===================================='; \
-		echo ''; \
-		echo '快速开始:'; \
-		echo '  1. 解压后双击 start.bat'; \
-		echo '  2. 浏览器访问 http://localhost:8080'; \
-		echo '  3. 默认账号: citebox / citebox123'; \
-		echo ''; \
-		echo '自定义配置:'; \
-		echo '  编辑 start-with-config.bat 修改配置'; \
-		echo ''; \
-		echo '数据目录:'; \
-		echo '  data/library.db       - 数据库'; \
-		echo '  data/library/papers/  - PDF 文件'; \
-		echo '  data/library/figures/ - 提取图片'; \
-	) > dist/$(BINARY_NAME)-windows-$(VERSION)/README.txt
-	
-	@cd dist && zip -rq $(BINARY_NAME)-windows-$(VERSION).zip $(BINARY_NAME)-windows-$(VERSION)
+	@pwsh -File scripts/package-windows.ps1 -Version $(VERSION)
 	
 	@echo ""
 	@echo "✓ Created: dist/$(BINARY_NAME)-windows-$(VERSION).zip"
+
+else
+
+build-windows:
+	@echo "Windows server builds require a native Windows host so CGO and MuPDF stay enabled."
+	@echo "Use a Windows runner or the GitHub Actions release workflow."
+	@exit 1
+
+package-windows:
+	@echo "Windows server packaging requires a native Windows host so CGO and MuPDF stay enabled."
+	@echo "Use a Windows runner or the GitHub Actions release workflow."
+	@exit 1
+
+endif
 
 # =============================================================================
 # macOS Build & Package
@@ -358,6 +294,8 @@ package-desktop-darwin:
 	@echo ""
 	@echo "Note: This DMG contains the host-architecture app bundle."
 
+ifeq ($(OS),Windows_NT)
+
 package-desktop-windows:
 	@echo ""
 	@echo "========================================"
@@ -367,6 +305,15 @@ package-desktop-windows:
 	@pwsh -File scripts/package-desktop-windows.ps1 -Version $(VERSION)
 	@echo ""
 	@echo "Note: This installer contains the host-architecture binary."
+
+else
+
+package-desktop-windows:
+	@echo "Windows desktop packaging requires a native Windows host with NSIS and the native CGO toolchain."
+	@echo "Use a Windows runner or the GitHub Actions release workflow."
+	@exit 1
+
+endif
 
 # =============================================================================
 # Build All Packages
@@ -405,9 +352,9 @@ help:
 	@echo "  make test           - Run tests"
 	@echo ""
 	@echo "Windows:"
-	@echo "  make build-windows  - Build Windows executable"
-	@echo "  make package-windows - Create Windows ZIP package"
-	@echo "  make package-desktop-windows - Create Windows desktop installer (.exe)"
+	@echo "  make build-windows  - Build Windows executable (native Windows only)"
+	@echo "  make package-windows - Create Windows ZIP package (native Windows only)"
+	@echo "  make package-desktop-windows - Create Windows desktop installer (.exe, native Windows only)"
 	@echo ""
 	@echo "macOS:"
 	@echo "  make build-darwin   - Build macOS executables (Intel + Apple Silicon)"

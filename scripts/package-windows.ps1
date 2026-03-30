@@ -5,6 +5,10 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+if ($env:OS -ne "Windows_NT") {
+    throw "Windows server packaging must run on native Windows so CGO and MuPDF stay enabled."
+}
+
 $binaryName = "citebox"
 $packageDir = Join-Path "dist" "$binaryName-windows-$Version"
 $archivePath = "$packageDir.zip"

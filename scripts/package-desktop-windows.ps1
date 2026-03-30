@@ -35,6 +35,10 @@ function Resolve-Makensis {
 
 $ErrorActionPreference = "Stop"
 
+if ($env:OS -ne "Windows_NT") {
+    throw "Windows desktop packaging must run on native Windows so CGO, WebView, and NSIS use the native toolchain."
+}
+
 $binaryName = "citebox-desktop"
 $stageDir = Join-Path "dist" "$binaryName-windows-$Version"
 $payloadDir = Join-Path $stageDir "payload"
