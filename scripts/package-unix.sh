@@ -37,9 +37,9 @@ if [[ "${CITEBOX_FORCE_NOCGO:-}" == "1" ]]; then
     BUILD_TAGS=(-tags nocgo)
     CGO_VALUE=0
 elif [[ ! -f "${FITZ_LIB}" ]]; then
-    printf '%s\n' "MuPDF static library not found at ${FITZ_LIB}, building server package with -tags nocgo"
-    BUILD_TAGS=(-tags nocgo)
-    CGO_VALUE=0
+    printf '%s\n' "MuPDF static libraries are required at ${FITZ_LIB}." >&2
+    printf '%s\n' "Run scripts/prepare-go-fitz-libs.sh before packaging or set CITEBOX_FORCE_NOCGO=1 explicitly." >&2
+    exit 1
 fi
 
 rm -rf "${PACKAGE_DIR}"

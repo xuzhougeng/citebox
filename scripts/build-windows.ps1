@@ -22,9 +22,7 @@ if ($env:CITEBOX_FORCE_NOCGO -eq "1") {
     $buildTags = @("-tags", "nocgo")
     $cgoEnabled = "0"
 } elseif (-not (Test-Path $fitzLib)) {
-    Write-Host "MuPDF static library not found at $fitzLib, building Windows server binary with -tags nocgo"
-    $buildTags = @("-tags", "nocgo")
-    $cgoEnabled = "0"
+    throw "MuPDF static libraries are required at $fitzLib. Run scripts/prepare-go-fitz-libs.ps1 before building or set CITEBOX_FORCE_NOCGO=1 explicitly."
 }
 
 New-Item -ItemType Directory -Path $outputDir -Force | Out-Null

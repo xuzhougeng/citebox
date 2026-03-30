@@ -44,6 +44,7 @@ git push origin v0.1.0
 说明：
 
 - `pdf.js` 运行时资源不会提交到仓库。
+- `third_party/go-fitz/libs/*.a` 也不会提交到仓库；GitHub Actions 会在打包前按 vendored `go-fitz` 版本，从固定的 upstream tag 下载对应静态库。
 - 打包脚本会在构建时自动下载并提取最小运行集，再一起打进发布包。
 - 如果你要直接从源码目录运行人工处理页，可先执行 `make prepare-web-assets`。
 - 开发时更推荐直接使用 `make dev`，它会先准备这些资源，再启动源码服务。
@@ -139,11 +140,11 @@ sudo apt install libgtk-3-dev libwebkit2gtk-4.0-dev
 
 ### Windows 说明
 
-Windows 桌面安装包当前按“原生 runner 直接编译 + NSIS 打包”接入 GitHub Actions：
+Windows 桌面安装包当前按“原生 runner + MinGW cgo toolchain + NSIS 打包”接入 GitHub Actions：
 
-- 不额外安装 MSYS2
-- 直接依赖 `windows-latest` runner 现成的本机编译环境
-- Windows 服务端包与桌面包都依赖 `cgo` + 内置 MuPDF 静态库；若在非 Windows 主机上交叉打包，会失去内置 PDF 渲染与全文提取能力
+- GitHub Actions 会安装一套最小的 MinGW64 toolchain，专门给 `cgo` 链接 `go-fitz` 的 Windows 静态库
+- Windows 服务端包与桌面包都依赖 `cgo` + `go-fitz` 静态库；若缺少这些库，打包会直接失败，不再静默降级成 `nocgo`
+- 这些静态库按 vendored `go-fitz` 版本，从固定 upstream tag 下载，不放进当前仓库
 - 通过 `choco install nsis` 提供安装器打包能力
 - 打包时会以 GUI 子系统构建桌面版，因此双击启动默认不弹出终端窗口
 - 安装器默认按用户安装到 `%LocalAppData%\Programs\CiteBox\`
