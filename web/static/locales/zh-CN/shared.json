@@ -225,6 +225,8 @@
     "shared.figure.ai_quick_assist": "快速辅助阅读",
     "shared.figure.free_ask": "自由提问",
     "shared.figure.figure_interpretation": "图片解读",
+    "shared.figure.figure_interpretation_modal_hint": "左侧查看原图，右侧阅读图片解读结果。",
+    "shared.figure.tag_button": "Tag",
     "shared.figure.tag_suggestion": "Tag 建议",
     "shared.figure.ai_result": "AI 结果",
 
@@ -322,12 +324,14 @@
     "shared.figure.ai_preparing": "准备中",
     "shared.figure.ai_in_progress": "进行中",
     "shared.figure.ai_generating": "正在结合全文、摘要、标签和图片生成结果。",
+    "shared.figure.ai_stop": "停止",
     "shared.figure.ai_failed": "失败",
     "shared.figure.ai_stopped": "已停止",
     "shared.figure.ai_stopped_hint": "这次解读已被手动停止。",
     "shared.figure.ai_no_result": "模型没有返回文本结果。",
     "shared.figure.ai_select_action": "选择一个快捷动作",
     "shared.figure.ai_result_hint": "这里会显示图片解读或 Tag 建议的返回结果。",
+    "shared.figure.tag_result_hint": "这里会显示 Tag 建议的返回结果。",
     "shared.figure.ai_loading_suffix": "加载中",
 
     "shared.figure.subfigures_extracted": "已提取 {count} 张子图",

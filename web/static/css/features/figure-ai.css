@@ -14,25 +14,24 @@
     gap: 0.8rem;
 }
 
-.figure-ai-head-actions {
-    display: flex;
-    gap: 0.5rem;
-    flex-wrap: wrap;
-    justify-content: flex-end;
-}
-
 .figure-lightbox-ai-head h3,
 .figure-ai-status,
 .figure-ai-supplement span,
-.figure-ai-supplement strong {
+.figure-ai-supplement strong,
+.figure-ai-modal-head h3,
+.figure-ai-modal-head p {
     margin: 0;
 }
 
 .figure-lightbox-ai-actions {
-    display: flex;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
     gap: 0.7rem;
     margin-top: 1rem;
+}
+
+.figure-lightbox-ai-actions .btn {
+    justify-content: center;
 }
 
 .figure-lightbox-ai-actions .btn.active {
@@ -41,8 +40,22 @@
     border-color: transparent;
 }
 
-.figure-ai-result {
+.figure-lightbox-ai-panel {
     margin-top: 1rem;
+}
+
+.figure-lightbox-ai-panel:empty {
+    display: none;
+}
+
+.figure-ai-head-actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.figure-ai-result {
     padding: 1rem;
     border-radius: 18px;
     background: rgba(var(--surface-rgb), 0.88);
@@ -129,4 +142,164 @@
 
 .figure-ai-tag-button.is-applied {
     opacity: 0.55;
+}
+
+.figure-ai-modal-dialog {
+    width: min(1380px, 100%);
+    padding: 1rem;
+    overflow: hidden;
+}
+
+.figure-ai-modal {
+    display: grid;
+    gap: 1rem;
+    min-height: min(760px, calc(100vh - 6rem));
+}
+
+.figure-ai-modal-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.35rem 3.25rem 0 0.25rem;
+}
+
+.figure-ai-modal-subtitle {
+    margin-top: 0.4rem;
+    max-width: 38rem;
+    color: var(--muted);
+    line-height: 1.65;
+}
+
+.figure-ai-modal-meta {
+    display: grid;
+    gap: 0.35rem;
+    min-width: min(300px, 100%);
+    padding: 0.9rem 1rem;
+    border-radius: 18px;
+    background: rgba(var(--surface-rgb), 0.88);
+    border: 1px solid rgba(var(--ink-rgb), 0.08);
+}
+
+.figure-ai-modal-meta span {
+    color: var(--muted);
+    font-size: 0.78rem;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.figure-ai-modal-meta strong {
+    line-height: 1.55;
+}
+
+.figure-ai-modal-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.05fr) minmax(320px, 0.95fr);
+    gap: 1rem;
+    min-height: 0;
+}
+
+.figure-ai-modal-figure,
+.figure-ai-modal-content {
+    min-height: 0;
+    padding: 1rem;
+    border-radius: 24px;
+    background: rgba(var(--surface-rgb), 0.9);
+    border: 1px solid rgba(var(--ink-rgb), 0.08);
+}
+
+.figure-ai-modal-figure {
+    display: grid;
+    gap: 0.9rem;
+    align-content: start;
+}
+
+.figure-ai-modal-figure-stage {
+    display: grid;
+    place-items: center;
+    min-height: 0;
+    padding: 1rem;
+    border-radius: 20px;
+    background:
+        radial-gradient(circle at top, rgba(var(--accent-rgb), 0.08), transparent 45%),
+        rgba(var(--surface-rgb), 0.72);
+    border: 1px solid rgba(var(--ink-rgb), 0.06);
+}
+
+.figure-ai-modal-figure-stage img {
+    display: block;
+    max-width: 100%;
+    max-height: calc(100vh - 19rem);
+    object-fit: contain;
+}
+
+.figure-ai-modal-figure-meta {
+    display: grid;
+    gap: 0.45rem;
+    margin: 0;
+}
+
+.figure-ai-modal-figure-meta strong,
+.figure-ai-modal-figure-meta p {
+    margin: 0;
+}
+
+.figure-ai-modal-figure-meta p {
+    color: var(--muted);
+    line-height: 1.72;
+}
+
+.figure-ai-modal-content {
+    display: flex;
+    min-height: 0;
+    overflow: auto;
+}
+
+.figure-ai-modal-content .figure-ai-result {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    min-height: 100%;
+}
+
+.figure-ai-modal-content .figure-ai-answer {
+    overflow: auto;
+    padding-right: 0.15rem;
+}
+
+.figure-ai-modal-content .figure-ai-stream-actions {
+    margin-top: auto;
+    padding-top: 0.9rem;
+}
+
+@media (max-width: 1080px) {
+    .figure-ai-modal-dialog {
+        overflow: auto;
+    }
+
+    .figure-ai-modal {
+        min-height: auto;
+    }
+
+    .figure-ai-modal-head {
+        flex-direction: column;
+        padding-right: 3.25rem;
+    }
+
+    .figure-ai-modal-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .figure-ai-modal-content {
+        overflow: visible;
+    }
+
+    .figure-ai-modal-content .figure-ai-answer {
+        overflow: visible;
+    }
+
+    .figure-ai-modal-figure-stage img {
+        max-height: 360px;
+    }
 }

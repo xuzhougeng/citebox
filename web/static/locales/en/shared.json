@@ -225,6 +225,8 @@
     "shared.figure.ai_quick_assist": "Quick AI Assist",
     "shared.figure.free_ask": "Free Ask",
     "shared.figure.figure_interpretation": "Figure Interpretation",
+    "shared.figure.figure_interpretation_modal_hint": "Use the left side for the figure and the right side for the interpretation result.",
+    "shared.figure.tag_button": "Tag",
     "shared.figure.tag_suggestion": "Tag Suggestion",
     "shared.figure.ai_result": "AI Result",
 
@@ -322,12 +324,14 @@
     "shared.figure.ai_preparing": "Preparing",
     "shared.figure.ai_in_progress": "In Progress",
     "shared.figure.ai_generating": "Generating results from full text, abstract, tags, and image.",
+    "shared.figure.ai_stop": "Stop",
     "shared.figure.ai_failed": "Failed",
     "shared.figure.ai_stopped": "Stopped",
     "shared.figure.ai_stopped_hint": "This interpretation was manually stopped.",
     "shared.figure.ai_no_result": "The model returned no text result.",
     "shared.figure.ai_select_action": "Select an action",
     "shared.figure.ai_result_hint": "Figure interpretation or tag suggestion results will appear here.",
+    "shared.figure.tag_result_hint": "Tag suggestion results will appear here.",
     "shared.figure.ai_loading_suffix": "Loading",
 
     "shared.figure.subfigures_extracted": "{count} subfigures extracted",
