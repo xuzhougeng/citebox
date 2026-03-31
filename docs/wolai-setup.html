@@ -1,0 +1,1417 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CiteBox — Wolai 配置教程</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=Noto+Serif+SC:wght@400;600;700&family=DM+Sans:ital,wght@0,400;0,500;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --ink: #1a1a2e;
+      --parchment: #f5f0e8;
+      --gold: #c9a84c;
+      --gold-light: #e8d59a;
+      --deep-blue: #16213e;
+      --accent-blue: #0f3460;
+      --warm-gray: #8a8578;
+      --light-gray: #e8e3da;
+      --cream: #faf7f0;
+      --highlight: #e94560;
+      --success-green: #1a936f;
+      --success-bg: rgba(26, 147, 111, 0.08);
+      --warning-amber: #b7791f;
+      --warning-bg: rgba(201, 168, 76, 0.12);
+      --shadow-soft: rgba(26, 26, 46, 0.08);
+      --shadow-medium: rgba(26, 26, 46, 0.15);
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+      font-size: 16px;
+    }
+
+    body {
+      font-family: 'DM Sans', 'Noto Serif SC', sans-serif;
+      background: var(--parchment);
+      color: var(--ink);
+      overflow-x: hidden;
+      line-height: 1.7;
+    }
+
+    body::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 9999;
+      opacity: 0.03;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    }
+
+    nav {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      padding: 1.2rem 3rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(245, 240, 232, 0.85);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--light-gray);
+      transition: all 0.4s ease;
+    }
+
+    nav.scrolled {
+      padding: 0.8rem 3rem;
+      box-shadow: 0 2px 30px var(--shadow-soft);
+    }
+
+    .nav-logo {
+      font-family: 'Cormorant Garamond', 'Noto Serif SC', serif;
+      font-size: 1.6rem;
+      font-weight: 700;
+      color: var(--deep-blue);
+      text-decoration: none;
+      letter-spacing: -0.02em;
+    }
+
+    .nav-logo span {
+      color: var(--gold);
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 2rem;
+      align-items: center;
+    }
+
+    .nav-links a {
+      text-decoration: none;
+      color: var(--warm-gray);
+      font-size: 0.88rem;
+      font-weight: 500;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      transition: color 0.3s;
+    }
+
+    .nav-links a:hover {
+      color: var(--ink);
+    }
+
+    .nav-cta {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.6rem 1.5rem;
+      background: var(--deep-blue);
+      color: var(--parchment) !important;
+      border-radius: 4px;
+      font-size: 0.82rem !important;
+      letter-spacing: 0.08em;
+      transition: background 0.3s, transform 0.2s !important;
+    }
+
+    .nav-cta:hover {
+      background: var(--accent-blue);
+      transform: translateY(-1px);
+    }
+
+    .lang-toggle {
+      display: inline-flex;
+      align-items: center;
+      background: rgba(201, 168, 76, 0.1);
+      border: 1px solid rgba(201, 168, 76, 0.25);
+      border-radius: 100px;
+      padding: 0.2rem;
+      cursor: pointer;
+      gap: 0;
+      margin-left: -0.4rem;
+    }
+
+    .lang-btn {
+      padding: 0.25rem 0.7rem;
+      border-radius: 100px;
+      border: none;
+      background: transparent;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      color: var(--warm-gray);
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .lang-btn.active {
+      background: var(--gold);
+      color: white;
+      box-shadow: 0 2px 8px rgba(201, 168, 76, 0.3);
+    }
+
+    .lang-btn:hover:not(.active) {
+      color: var(--ink);
+    }
+
+    .page-hero {
+      padding: 9.5rem 3rem 4.5rem;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .page-hero::before {
+      content: '';
+      position: absolute;
+      top: -18%;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 85vw;
+      height: 85vw;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(201, 168, 76, 0.08) 0%, transparent 68%);
+    }
+
+    .page-hero-inner {
+      position: relative;
+      z-index: 2;
+      max-width: 1180px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: minmax(0, 1.05fr) minmax(360px, 0.95fr);
+      gap: 2.5rem;
+      align-items: center;
+    }
+
+    .breadcrumb {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 1.4rem;
+      font-size: 0.82rem;
+      color: var(--warm-gray);
+    }
+
+    .breadcrumb a {
+      color: var(--gold);
+      text-decoration: none;
+      transition: color 0.3s;
+    }
+
+    .breadcrumb a:hover {
+      color: var(--deep-blue);
+    }
+
+    .breadcrumb svg {
+      width: 14px;
+      height: 14px;
+      opacity: 0.4;
+    }
+
+    .section-label {
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--gold);
+      margin-bottom: 1rem;
+    }
+
+    .page-hero h1 {
+      font-family: 'Cormorant Garamond', 'Noto Serif SC', serif;
+      font-size: clamp(2.7rem, 5vw, 4.5rem);
+      font-weight: 700;
+      line-height: 1.12;
+      color: var(--deep-blue);
+      margin-bottom: 1.2rem;
+    }
+
+    .page-hero h1 em {
+      font-style: italic;
+      color: var(--gold);
+      position: relative;
+    }
+
+    .page-hero h1 em::after {
+      content: '';
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0.08em;
+      height: 3px;
+      border-radius: 2px;
+      background: var(--gold-light);
+    }
+
+    .page-hero p {
+      color: var(--warm-gray);
+      font-size: 1.02rem;
+      max-width: 38rem;
+    }
+
+    .hero-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.8rem;
+      margin-top: 1.8rem;
+    }
+
+    .hero-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+      padding: 0.55rem 0.95rem;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.55);
+      border: 1px solid rgba(201, 168, 76, 0.18);
+      color: var(--ink);
+      font-size: 0.8rem;
+      box-shadow: 0 8px 22px rgba(22, 33, 62, 0.06);
+    }
+
+    .hero-pill::before {
+      content: '';
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--gold);
+      flex-shrink: 0;
+    }
+
+    .hero-visual {
+      position: relative;
+    }
+
+    .hero-visual::before {
+      content: '';
+      position: absolute;
+      inset: 8% -4% auto 10%;
+      height: 80%;
+      border-radius: 24px;
+      background: linear-gradient(135deg, rgba(201, 168, 76, 0.14), rgba(15, 52, 96, 0.08));
+      transform: rotate(-5deg);
+    }
+
+    .hero-shot {
+      position: relative;
+      background: rgba(255, 255, 255, 0.72);
+      border: 1px solid rgba(201, 168, 76, 0.2);
+      border-radius: 20px;
+      box-shadow: 0 20px 60px var(--shadow-medium);
+      padding: 1rem;
+      transform: rotate(2deg);
+    }
+
+    .hero-shot img {
+      width: 100%;
+      display: block;
+      border-radius: 14px;
+      border: 1px solid rgba(26, 26, 46, 0.08);
+    }
+
+    .hero-badge {
+      position: absolute;
+      left: 1.3rem;
+      bottom: -1rem;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.7rem 1rem;
+      border-radius: 14px;
+      background: var(--deep-blue);
+      color: var(--parchment);
+      box-shadow: 0 15px 35px rgba(22, 33, 62, 0.28);
+      font-size: 0.82rem;
+      letter-spacing: 0.04em;
+    }
+
+    .hero-badge svg {
+      width: 18px;
+      height: 18px;
+      color: var(--gold);
+    }
+
+    .content-shell {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 0 3rem 5.5rem;
+    }
+
+    .guide-card {
+      background: var(--cream);
+      border: 1px solid var(--light-gray);
+      border-radius: 18px;
+      box-shadow: 0 14px 48px var(--shadow-soft);
+      overflow: hidden;
+    }
+
+    .article-section {
+      padding: 3rem;
+      border-top: 1px solid var(--light-gray);
+    }
+
+    .article-section:first-child {
+      border-top: none;
+    }
+
+    .article-intro {
+      display: grid;
+      grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
+      gap: 1.5rem;
+      align-items: stretch;
+    }
+
+    .intro-lead h2,
+    .section-header h2 {
+      font-family: 'Cormorant Garamond', 'Noto Serif SC', serif;
+      font-size: 2rem;
+      font-weight: 700;
+      line-height: 1.2;
+      color: var(--deep-blue);
+      margin-bottom: 0.9rem;
+    }
+
+    .intro-lead p,
+    .section-header p,
+    .body-copy p {
+      color: var(--warm-gray);
+      font-size: 0.96rem;
+    }
+
+    .callout-card {
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 0.9rem;
+      padding: 1.3rem 1.4rem;
+      border-radius: 16px;
+      background: linear-gradient(180deg, rgba(201, 168, 76, 0.12), rgba(255, 255, 255, 0.7));
+      border: 1px solid rgba(201, 168, 76, 0.22);
+    }
+
+    .callout-card .callout-label {
+      font-size: 0.72rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--gold);
+      font-weight: 700;
+    }
+
+    .callout-card strong {
+      color: var(--deep-blue);
+      font-size: 1rem;
+      line-height: 1.55;
+      font-weight: 600;
+    }
+
+    .callout-card p {
+      font-size: 0.88rem;
+      color: var(--warm-gray);
+    }
+
+    .section-header {
+      max-width: 720px;
+      margin-bottom: 1.8rem;
+    }
+
+    .field-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 1.2rem;
+      margin-bottom: 2rem;
+    }
+
+    .field-card {
+      background: var(--parchment);
+      border: 1px solid var(--light-gray);
+      border-radius: 16px;
+      padding: 1.35rem;
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .field-card:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 12px 34px rgba(22, 33, 62, 0.09);
+    }
+
+    .field-index {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 2.1rem;
+      height: 2.1rem;
+      border-radius: 999px;
+      background: rgba(201, 168, 76, 0.14);
+      color: var(--gold);
+      font-size: 0.8rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      margin-bottom: 0.9rem;
+    }
+
+    .field-card h3 {
+      font-size: 1.05rem;
+      color: var(--deep-blue);
+      margin-bottom: 0.5rem;
+    }
+
+    .field-card p {
+      color: var(--warm-gray);
+      font-size: 0.9rem;
+      line-height: 1.7;
+    }
+
+    .note-box,
+    .tip-box,
+    .success-box {
+      padding: 1rem 1.15rem;
+      border-radius: 14px;
+      border: 1px solid transparent;
+      margin-top: 1.35rem;
+      font-size: 0.92rem;
+    }
+
+    .note-box {
+      background: var(--warning-bg);
+      border-color: rgba(201, 168, 76, 0.2);
+      color: #6b4f1d;
+    }
+
+    .tip-box {
+      background: rgba(15, 52, 96, 0.08);
+      border-color: rgba(15, 52, 96, 0.16);
+      color: var(--accent-blue);
+    }
+
+    .success-box {
+      background: var(--success-bg);
+      border-color: rgba(26, 147, 111, 0.18);
+      color: #145c49;
+    }
+
+    .shot-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 1.2rem;
+      margin-top: 1.8rem;
+    }
+
+    .shot-grid.two-col {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .doc-shot {
+      background: rgba(255, 255, 255, 0.58);
+      border: 1px solid rgba(22, 33, 62, 0.08);
+      border-radius: 18px;
+      padding: 1rem;
+      box-shadow: 0 16px 42px rgba(22, 33, 62, 0.07);
+    }
+
+    .doc-shot img {
+      width: 100%;
+      display: block;
+      border-radius: 12px;
+    }
+
+    .doc-shot figcaption {
+      margin-top: 0.8rem;
+      font-size: 0.84rem;
+      color: var(--warm-gray);
+    }
+
+    .doc-shot.portrait-shot {
+      max-width: 430px;
+      margin: 0 auto;
+    }
+
+    .example-link {
+      margin-top: 1rem;
+      padding: 1rem 1.1rem;
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.6);
+      border: 1px dashed rgba(201, 168, 76, 0.35);
+      color: var(--ink);
+      font-size: 0.92rem;
+      word-break: break-word;
+    }
+
+    .example-link a {
+      color: var(--accent-blue);
+    }
+
+    code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.9em;
+      background: rgba(15, 52, 96, 0.08);
+      color: var(--accent-blue);
+      padding: 0.12rem 0.35rem;
+      border-radius: 6px;
+    }
+
+    .terminal-panel {
+      margin-top: 1.2rem;
+      border-radius: 18px;
+      overflow: hidden;
+      border: 1px solid rgba(15, 52, 96, 0.16);
+      box-shadow: 0 18px 42px rgba(22, 33, 62, 0.12);
+      background: #171f36;
+    }
+
+    .terminal-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      padding: 0.9rem 1rem;
+      background: rgba(255, 255, 255, 0.05);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .terminal-lang {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      color: #dbeafe;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.82rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .terminal-lang::before {
+      content: '';
+      width: 0.55rem;
+      height: 0.55rem;
+      border-radius: 50%;
+      background: #34d399;
+      box-shadow: 0 0 0 4px rgba(52, 211, 153, 0.16);
+    }
+
+    .terminal-copy {
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      background: rgba(255, 255, 255, 0.08);
+      color: #f8fafc;
+      border-radius: 999px;
+      padding: 0.5rem 0.9rem;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
+    }
+
+    .terminal-copy:hover {
+      background: rgba(255, 255, 255, 0.14);
+      border-color: rgba(255, 255, 255, 0.22);
+      transform: translateY(-1px);
+    }
+
+    .terminal-pre {
+      margin: 0;
+      padding: 1.25rem 1.35rem 1.4rem;
+      background: linear-gradient(180deg, #171f36 0%, #11182c 100%);
+      color: #f8fafc;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.96rem;
+      line-height: 1.9;
+      white-space: pre-wrap;
+      word-break: break-word;
+      overflow-x: auto;
+    }
+
+    .terminal-pre code {
+      background: transparent;
+      color: inherit;
+      padding: 0;
+      border-radius: 0;
+      font-size: inherit;
+      white-space: inherit;
+    }
+
+    .terminal-hint {
+      margin-top: 0.9rem;
+      color: var(--warm-gray);
+      font-size: 0.88rem;
+    }
+
+    .step-list {
+      display: grid;
+      gap: 1.2rem;
+      margin-top: 1.4rem;
+    }
+
+    .step-card {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      gap: 1rem;
+      padding: 1.35rem;
+      border-radius: 16px;
+      background: var(--parchment);
+      border: 1px solid var(--light-gray);
+    }
+
+    .step-num {
+      width: 2.4rem;
+      height: 2.4rem;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--deep-blue);
+      color: var(--parchment);
+      font-size: 0.88rem;
+      font-weight: 700;
+      flex-shrink: 0;
+      margin-top: 0.1rem;
+    }
+
+    .step-content h3 {
+      font-size: 1.05rem;
+      color: var(--deep-blue);
+      margin-bottom: 0.35rem;
+    }
+
+    .step-content p {
+      font-size: 0.92rem;
+      color: var(--warm-gray);
+    }
+
+    .step-content .step-note {
+      margin-top: 0.85rem;
+      padding: 0.8rem 0.9rem;
+      border-radius: 12px;
+      background: rgba(201, 168, 76, 0.08);
+      color: #6d5422;
+      font-size: 0.86rem;
+    }
+
+    .verify-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(280px, 0.72fr);
+      gap: 1.3rem;
+      align-items: start;
+    }
+
+    .verify-list {
+      display: grid;
+      gap: 0.95rem;
+      margin-top: 1.25rem;
+    }
+
+    .verify-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.75rem;
+      color: var(--warm-gray);
+      font-size: 0.92rem;
+    }
+
+    .verify-item::before {
+      content: '';
+      width: 0.8rem;
+      height: 0.8rem;
+      border-radius: 50%;
+      margin-top: 0.45rem;
+      background: linear-gradient(135deg, var(--gold), var(--gold-light));
+      flex-shrink: 0;
+    }
+
+    .outro {
+      text-align: center;
+    }
+
+    .outro h2 {
+      font-family: 'Cormorant Garamond', 'Noto Serif SC', serif;
+      font-size: 2rem;
+      color: var(--deep-blue);
+      margin-bottom: 0.9rem;
+    }
+
+    .outro p {
+      max-width: 660px;
+      margin: 0 auto;
+      color: var(--warm-gray);
+    }
+
+    .btn-back {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.6rem;
+      margin-top: 1.8rem;
+      padding: 0.95rem 1.5rem;
+      border-radius: 8px;
+      background: var(--deep-blue);
+      color: var(--parchment);
+      text-decoration: none;
+      font-size: 0.9rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      box-shadow: 0 6px 20px rgba(22, 33, 62, 0.22);
+      transition: background 0.3s ease, transform 0.3s ease;
+    }
+
+    .btn-back:hover {
+      background: var(--accent-blue);
+      transform: translateY(-2px);
+    }
+
+    .btn-back svg {
+      width: 18px;
+      height: 18px;
+    }
+
+    footer {
+      padding: 3.5rem 1.5rem 4rem;
+      text-align: center;
+      color: var(--warm-gray);
+    }
+
+    .footer-logo {
+      font-family: 'Cormorant Garamond', 'Noto Serif SC', serif;
+      font-size: 1.8rem;
+      font-weight: 700;
+      color: var(--deep-blue);
+      margin-bottom: 0.8rem;
+    }
+
+    .footer-logo span {
+      color: var(--gold);
+    }
+
+    .footer-links {
+      display: flex;
+      justify-content: center;
+      gap: 1.5rem;
+      flex-wrap: wrap;
+      margin-top: 1rem;
+    }
+
+    .footer-links a {
+      color: var(--warm-gray);
+      text-decoration: none;
+      transition: color 0.3s;
+    }
+
+    .footer-links a:hover {
+      color: var(--deep-blue);
+    }
+
+    .reveal {
+      opacity: 0;
+      transform: translateY(30px);
+      transition: opacity 0.7s ease, transform 0.7s ease;
+    }
+
+    .reveal.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .reveal-delay-1 { transition-delay: 0.1s; }
+    .reveal-delay-2 { transition-delay: 0.2s; }
+    .reveal-delay-3 { transition-delay: 0.3s; }
+
+    @media (max-width: 960px) {
+      nav {
+        padding: 1rem 1.5rem;
+      }
+
+      nav.scrolled {
+        padding: 0.8rem 1.5rem;
+      }
+
+      .page-hero {
+        padding: 8rem 1.5rem 3.5rem;
+      }
+
+      .page-hero-inner,
+      .article-intro,
+      .verify-grid,
+      .shot-grid.two-col,
+      .field-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .content-shell {
+        padding: 0 1.5rem 4rem;
+      }
+
+      .article-section {
+        padding: 2rem 1.5rem;
+      }
+
+      .hero-shot {
+        transform: none;
+      }
+
+      .hero-badge {
+        position: static;
+        margin-top: 1rem;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .nav-links a:not(.nav-cta):not(.lang-toggle) {
+        display: none;
+      }
+
+      .nav-links .lang-toggle {
+        order: -1;
+      }
+
+      .page-hero h1 {
+        font-size: 2.2rem;
+      }
+
+      .step-card {
+        grid-template-columns: 1fr;
+      }
+
+      .step-num {
+        margin-bottom: 0.1rem;
+      }
+
+      .terminal-head {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      .terminal-copy {
+        width: 100%;
+        justify-content: center;
+      }
+
+      .terminal-pre {
+        font-size: 0.9rem;
+        line-height: 1.8;
+      }
+    }
+  </style>
+</head>
+<body>
+  <nav id="navbar">
+    <a href="index.html" class="nav-logo">Cite<span>Box</span></a>
+    <div class="nav-links">
+      <a href="index.html" data-i18n="nav.home">首页</a>
+      <a href="use-cases.html" data-i18n="nav.cases">案例</a>
+      <div class="lang-toggle" id="langToggle">
+        <button class="lang-btn active" data-lang="zh">中</button>
+        <button class="lang-btn" data-lang="en">EN</button>
+      </div>
+      <a href="index.html#download" class="nav-cta" data-i18n="nav.download">下载</a>
+    </div>
+  </nav>
+
+  <section class="page-hero">
+    <div class="page-hero-inner">
+      <div class="page-hero-copy">
+        <div class="breadcrumb">
+          <a href="index.html" data-i18n="breadcrumb.home">首页</a>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+          <span data-i18n="breadcrumb.guide">Wolai 配置教程</span>
+        </div>
+        <div class="section-label" data-i18n="hero.label">Integration Guide</div>
+        <h1 data-i18n="hero.title" data-i18n-html="true">把 CiteBox 输出结果<br>保存到 <em>Wolai</em></h1>
+        <p data-i18n="hero.desc">如果你的 Wolai 还在有效期内，又不想折腾太复杂的笔记流，这套配置已经够用。把 Token、OpenAPI 地址和目标页面 ID 填好后，CiteBox 就能把部分输出结果继续写回你的 Wolai 页面。</p>
+        <div class="hero-pills">
+          <div class="hero-pill" data-i18n="hero.pill1">3 个字段就能开始</div>
+          <div class="hero-pill" data-i18n="hero.pill2">所有截图已本地保存</div>
+          <div class="hero-pill" data-i18n="hero.pill3">先测试，再保存</div>
+        </div>
+      </div>
+      <div class="hero-visual">
+        <div class="hero-shot">
+          <img src="assets/wolai/settings-overview.png" alt="CiteBox Wolai settings section">
+        </div>
+        <div class="hero-badge">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 1 1 3 3L7 19l-4 1 1-4Z"/></svg>
+          <span data-i18n="hero.badge">对应真实设置界面</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="content-shell">
+    <article class="guide-card">
+      <section class="article-section reveal">
+        <div class="article-intro">
+          <div class="intro-lead">
+            <h2 data-i18n="intro.title">这篇教程适合谁</h2>
+            <p data-i18n="intro.desc">如果你和我一样，对笔记系统没有太高要求，只是想把 CiteBox 里整理出来的一些结果顺手保存到 Wolai，这个配置方式就很合适。它不是一套复杂的知识管理方案，而是一个稳定、够用、维护成本低的同步出口。</p>
+          </div>
+          <div class="callout-card">
+            <div class="callout-label" data-i18n="intro.callout_label">Why This Setup</div>
+            <strong data-i18n="intro.callout_title">先把最小可用链路跑通：拿到 Token，填上页面 ID，确认能写入。</strong>
+            <p data-i18n="intro.callout_desc">后面再决定是否扩展流程，不需要一开始就把笔记系统设计得很重。</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="article-section reveal">
+        <div class="section-header">
+          <div class="section-label" data-i18n="fields.label">Quick Start</div>
+          <h2 data-i18n="fields.title">先准备这 3 个值</h2>
+          <p data-i18n="fields.desc">在 CiteBox 的 Wolai 配置里，你只需要填写三项内容。最容易的是 OpenAPI 地址，最常抄错的是目标页面 ID，最麻烦的是 Wolai Token。</p>
+        </div>
+        <div class="field-grid">
+          <div class="field-card">
+            <div class="field-index">01</div>
+            <h3>Wolai Token</h3>
+            <p data-i18n="fields.token">通过你创建的 Wolai 应用换取，用来让 CiteBox 调用 Wolai OpenAPI。</p>
+          </div>
+          <div class="field-card">
+            <div class="field-index">02</div>
+            <h3 data-i18n="fields.base_url_title">OpenAPI 地址</h3>
+            <p data-i18n="fields.base_url">最简单，直接填写 <code>https://openapi.wolai.com</code>。</p>
+          </div>
+          <div class="field-card">
+            <div class="field-index">03</div>
+            <h3 data-i18n="fields.page_id_title">目标页面 ID</h3>
+            <p data-i18n="fields.page_id">也就是你希望 CiteBox 往哪个 Wolai 页面下面继续插入内容。</p>
+          </div>
+        </div>
+        <figure class="doc-shot">
+          <img src="assets/wolai/settings-overview.png" alt="Wolai settings overview">
+          <figcaption data-i18n="fields.caption">CiteBox 设置页中的 Wolai 配置区域。</figcaption>
+        </figure>
+        <div class="tip-box" data-i18n="fields.tip">界面里这一项叫 <strong>OpenAPI 地址</strong>。如果你平时口头说的是“OpenAI 地址”，这里实际要填的也是 Wolai 的 OpenAPI 网关，而不是 OpenAI 官方地址。</div>
+      </section>
+
+      <section class="article-section reveal">
+        <div class="section-header">
+          <div class="section-label" data-i18n="pageid.label">Target Page</div>
+          <h2 data-i18n="pageid.title">目标页面 ID 怎么取</h2>
+          <p data-i18n="pageid.desc">这一步不复杂。打开你想接收笔记的 Wolai 页面，点击页面右上角复制当前页面链接，然后取链接最后一段即可。</p>
+        </div>
+        <div class="example-link" data-i18n-html="pageid.example">
+          例如页面链接 <a href="https://www.wolai.com/wolai/k1Qgi1J2L9vWBQkkJz8j82" target="_blank" rel="noreferrer">https://www.wolai.com/wolai/k1Qgi1J2L9vWBQkkJz8j82</a>，最后这段 <code>k1Qgi1J2L9vWBQkkJz8j82</code> 就是你要填写的目标页面 ID。
+        </div>
+        <div class="shot-grid">
+          <figure class="doc-shot portrait-shot">
+            <img src="assets/wolai/copy-page-link.png" alt="Copy Wolai page link">
+            <figcaption data-i18n="pageid.caption">每个页面的右上角都可以复制当前页面链接。</figcaption>
+          </figure>
+        </div>
+        <div class="note-box" data-i18n="pageid.note">这个字段对应 CiteBox 内部的 <code>parent_block_id</code>。填对了，后续测试 Token 时也会顺便验证当前 Token 是否有权访问这个页面。</div>
+      </section>
+
+      <section class="article-section reveal">
+        <div class="section-header">
+          <div class="section-label" data-i18n="token.label">Token</div>
+          <h2 data-i18n="token.title">Wolai Token 是最难拿到的部分</h2>
+          <p data-i18n="token.desc">要先在 Wolai 里创建一个应用，拿到 <code>App ID</code> 和 <code>App Secret</code>，然后再用它们调用 Wolai OpenAPI 的创建 Token 接口。</p>
+        </div>
+
+        <div class="step-list">
+          <div class="step-card">
+            <div class="step-num">1</div>
+            <div class="step-content">
+              <h3 data-i18n="token.s1.title">打开个人设置里的应用设置</h3>
+              <p data-i18n="token.s1.desc">先点击左上角自己的头像，进入个人设置，然后选择“应用设置”，再点击“创建和管理应用”。</p>
+            </div>
+          </div>
+        </div>
+        <div class="shot-grid">
+          <figure class="doc-shot">
+            <img src="assets/wolai/open-profile-settings.png" alt="Open profile settings in Wolai">
+            <figcaption data-i18n="token.s1.caption">从个人设置进入 Wolai 的应用管理入口。</figcaption>
+          </figure>
+        </div>
+
+        <div class="step-list">
+          <div class="step-card">
+            <div class="step-num">2</div>
+            <div class="step-content">
+              <h3 data-i18n="token.s2.title">创建一个新应用</h3>
+              <p data-i18n="token.s2.desc">进入应用管理页面后，点击“创建新应用”。</p>
+            </div>
+          </div>
+        </div>
+        <div class="shot-grid">
+          <figure class="doc-shot">
+            <img src="assets/wolai/create-app.png" alt="Create Wolai app">
+            <figcaption data-i18n="token.s2.caption">创建一个专门给 CiteBox 使用的 Wolai 应用。</figcaption>
+          </figure>
+        </div>
+
+        <div class="step-list">
+          <div class="step-card">
+            <div class="step-num">3</div>
+            <div class="step-content">
+              <h3 data-i18n="token.s3.title">把权限全部勾选上</h3>
+              <p data-i18n="token.s3.desc">为了先把集成跑通，权限可以直接全勾。后面如果你想做更细的权限收缩，再回头精简。</p>
+              <div class="step-note" data-i18n="token.s3.note">这篇教程的目标是先确认 CiteBox 能创建页面、写入内容和完成测试，不建议在第一次配置时过早缩权限。</div>
+            </div>
+          </div>
+        </div>
+        <div class="shot-grid">
+          <figure class="doc-shot">
+            <img src="assets/wolai/app-permissions.png" alt="Wolai app permissions">
+            <figcaption data-i18n="token.s3.caption">第一次配置时，直接把权限勾全最省事。</figcaption>
+          </figure>
+        </div>
+
+        <div class="step-list">
+          <div class="step-card">
+            <div class="step-num">4</div>
+            <div class="step-content">
+              <h3 data-i18n="token.s4.title">记下 App ID 和 App Secret</h3>
+              <p data-i18n="token.s4.desc">应用创建成功后，记住这两个值。下一步在终端里换取 Token 时就要用到它们。</p>
+            </div>
+          </div>
+        </div>
+        <div class="shot-grid">
+          <figure class="doc-shot">
+            <img src="assets/wolai/app-id-secret.png" alt="Wolai app id and app secret">
+            <figcaption data-i18n="token.s4.caption">拿到 App ID 和 App Secret 之后，就可以去调用创建 Token 接口了。</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <section class="article-section reveal">
+        <div class="section-header">
+          <div class="section-label" data-i18n="curl.label">Terminal</div>
+          <h2 data-i18n="curl.title">在终端里换取 Wolai Token</h2>
+          <p data-i18n="curl.desc">下面这段命令直接调用 Wolai 的创建 Token 接口。你只需要把自己的应用 ID 和应用密钥填进去即可。</p>
+        </div>
+        <div class="note-box" data-i18n-html="curl.note">接口参考：<a href="https://s.apifox.cn/4ed28073-5c44-4c57-8e23-a29186d699ea/269227722e0" target="_blank" rel="noreferrer">Wolai API / 创建 Token</a>。当前接口地址是 <code>https://openapi.wolai.com/v1/token</code>。</div>
+        <div class="terminal-panel">
+          <div class="terminal-head">
+            <div class="terminal-lang">bash</div>
+            <button type="button" class="terminal-copy" id="copyCurlButton" data-i18n="curl.copy">复制命令</button>
+          </div>
+          <pre class="terminal-pre"><code id="wolaiCurlCommand">curl --location --request POST 'https://openapi.wolai.com/v1/token' \
+--header 'Content-Type: application/json' \
+--data-raw '{
+    "appId": "填入你的应用ID",
+    "appSecret": "填入你的应用密钥"
+}'</code></pre>
+        </div>
+        <p class="terminal-hint" data-i18n="curl.tip">如果你在窄屏上看这页，直接点上面的“复制命令”会更省事；这个代码块现在也支持自动换行。</p>
+        <div class="success-box" data-i18n="curl.success">执行成功后，会返回一段 JSON。把其中可以直接调用 OpenAPI 的 Token 复制出来，填回 CiteBox 的 <code>Wolai Token</code> 输入框即可。</div>
+      </section>
+
+      <section class="article-section reveal">
+        <div class="section-header">
+          <div class="section-label" data-i18n="verify.label">Verification</div>
+          <h2 data-i18n="verify.title">最后一步：测试通过，再保存配置</h2>
+          <p data-i18n="verify.desc">拿到 Token 后，回到 CiteBox 设置页，把三项都填好，先点“测试 Token”。测试通过后，再点击“保存 Wolai 配置”。</p>
+        </div>
+        <div class="verify-grid">
+          <div class="body-copy">
+            <div class="verify-list">
+              <div class="verify-item" data-i18n="verify.item1">Wolai Token：填你刚刚在终端里换到的 Token。</div>
+              <div class="verify-item" data-i18n="verify.item2">OpenAPI 地址：填写 <code>https://openapi.wolai.com</code>。</div>
+              <div class="verify-item" data-i18n="verify.item3">目标页面 ID：填写页面链接最后一段。</div>
+              <div class="verify-item" data-i18n="verify.item4">先点“测试 Token”，确认 Token 可用且当前页面可访问。</div>
+              <div class="verify-item" data-i18n="verify.item5">测试通过后再保存；如果你想再稳一点，可以额外点一次“插入测试页面”。</div>
+            </div>
+            <div class="tip-box" data-i18n="verify.tip">CiteBox 当前的测试逻辑会校验目标页面访问权限，所以“测试 Token”通过，基本就说明这套配置已经通了。</div>
+          </div>
+          <figure class="doc-shot">
+            <img src="assets/wolai/test-token-success.png" alt="Wolai token test success">
+            <figcaption data-i18n="verify.caption">测试通过后，就可以放心保存 Wolai 配置了。</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <section class="article-section reveal outro">
+        <h2 data-i18n="outro.title">这样配置完，就可以开始用了</h2>
+        <p data-i18n="outro.desc">对于“只想把结果稳稳存进笔记里”这个目标来说，这套 Wolai 配置已经足够。先把链路跑通，比一开始追求完美配置更重要。</p>
+        <a href="index.html" class="btn-back">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+          <span data-i18n="outro.cta">返回首页</span>
+        </a>
+      </section>
+    </article>
+  </div>
+
+  <footer>
+    <div class="footer-logo">Cite<span>Box</span></div>
+    <p data-i18n="footer.desc">开源学术文献管理工具 · 本地部署 · 数据自主</p>
+    <div class="footer-links">
+      <a href="https://github.com/xuzhougeng/citebox" target="_blank" rel="noreferrer">GitHub</a>
+      <a href="https://github.com/xuzhougeng/citebox/releases" target="_blank" rel="noreferrer" data-i18n="footer.download">下载</a>
+      <a href="https://github.com/xuzhougeng/citebox/issues" target="_blank" rel="noreferrer" data-i18n="footer.feedback">反馈</a>
+    </div>
+  </footer>
+
+  <script>
+    const i18n = {
+      zh: {
+        'nav.home': '首页',
+        'nav.cases': '案例',
+        'nav.download': '下载',
+        'breadcrumb.home': '首页',
+        'breadcrumb.guide': 'Wolai 配置教程',
+        'hero.label': 'Integration Guide',
+        'hero.title': '把 CiteBox 输出结果<br>保存到 <em>Wolai</em>',
+        'hero.desc': '如果你的 Wolai 还在有效期内，又不想折腾太复杂的笔记流，这套配置已经够用。把 Token、OpenAPI 地址和目标页面 ID 填好后，CiteBox 就能把部分输出结果继续写回你的 Wolai 页面。',
+        'hero.pill1': '3 个字段就能开始',
+        'hero.pill2': '所有截图已本地保存',
+        'hero.pill3': '先测试，再保存',
+        'hero.badge': '对应真实设置界面',
+        'intro.title': '这篇教程适合谁',
+        'intro.desc': '如果你和我一样，对笔记系统没有太高要求，只是想把 CiteBox 里整理出来的一些结果顺手保存到 Wolai，这个配置方式就很合适。它不是一套复杂的知识管理方案，而是一个稳定、够用、维护成本低的同步出口。',
+        'intro.callout_label': 'Why This Setup',
+        'intro.callout_title': '先把最小可用链路跑通：拿到 Token，填上页面 ID，确认能写入。',
+        'intro.callout_desc': '后面再决定是否扩展流程，不需要一开始就把笔记系统设计得很重。',
+        'fields.label': 'Quick Start',
+        'fields.title': '先准备这 3 个值',
+        'fields.desc': '在 CiteBox 的 Wolai 配置里，你只需要填写三项内容。最容易的是 OpenAPI 地址，最常抄错的是目标页面 ID，最麻烦的是 Wolai Token。',
+        'fields.token': '通过你创建的 Wolai 应用换取，用来让 CiteBox 调用 Wolai OpenAPI。',
+        'fields.base_url_title': 'OpenAPI 地址',
+        'fields.base_url': '最简单，直接填写 <code>https://openapi.wolai.com</code>。',
+        'fields.page_id_title': '目标页面 ID',
+        'fields.page_id': '也就是你希望 CiteBox 往哪个 Wolai 页面下面继续插入内容。',
+        'fields.caption': 'CiteBox 设置页中的 Wolai 配置区域。',
+        'fields.tip': '界面里这一项叫 <strong>OpenAPI 地址</strong>。如果你平时口头说的是“OpenAI 地址”，这里实际要填的也是 Wolai 的 OpenAPI 网关，而不是 OpenAI 官方地址。',
+        'pageid.label': 'Target Page',
+        'pageid.title': '目标页面 ID 怎么取',
+        'pageid.desc': '这一步不复杂。打开你想接收笔记的 Wolai 页面，点击页面右上角复制当前页面链接，然后取链接最后一段即可。',
+        'pageid.example': '例如页面链接 <a href="https://www.wolai.com/wolai/k1Qgi1J2L9vWBQkkJz8j82" target="_blank" rel="noreferrer">https://www.wolai.com/wolai/k1Qgi1J2L9vWBQkkJz8j82</a>，最后这段 <code>k1Qgi1J2L9vWBQkkJz8j82</code> 就是你要填写的目标页面 ID。',
+        'pageid.caption': '每个页面的右上角都可以复制当前页面链接。',
+        'pageid.note': '这个字段对应 CiteBox 内部的 <code>parent_block_id</code>。填对了，后续测试 Token 时也会顺便验证当前 Token 是否有权访问这个页面。',
+        'token.label': 'Token',
+        'token.title': 'Wolai Token 是最难拿到的部分',
+        'token.desc': '要先在 Wolai 里创建一个应用，拿到 <code>App ID</code> 和 <code>App Secret</code>，然后再用它们调用 Wolai OpenAPI 的创建 Token 接口。',
+        'token.s1.title': '打开个人设置里的应用设置',
+        'token.s1.desc': '先点击左上角自己的头像，进入个人设置，然后选择“应用设置”，再点击“创建和管理应用”。',
+        'token.s1.caption': '从个人设置进入 Wolai 的应用管理入口。',
+        'token.s2.title': '创建一个新应用',
+        'token.s2.desc': '进入应用管理页面后，点击“创建新应用”。',
+        'token.s2.caption': '创建一个专门给 CiteBox 使用的 Wolai 应用。',
+        'token.s3.title': '把权限全部勾选上',
+        'token.s3.desc': '为了先把集成跑通，权限可以直接全勾。后面如果你想做更细的权限收缩，再回头精简。',
+        'token.s3.note': '这篇教程的目标是先确认 CiteBox 能创建页面、写入内容和完成测试，不建议在第一次配置时过早缩权限。',
+        'token.s3.caption': '第一次配置时，直接把权限勾全最省事。',
+        'token.s4.title': '记下 App ID 和 App Secret',
+        'token.s4.desc': '应用创建成功后，记住这两个值。下一步在终端里换取 Token 时就要用到它们。',
+        'token.s4.caption': '拿到 App ID 和 App Secret 之后，就可以去调用创建 Token 接口了。',
+        'curl.label': 'Terminal',
+        'curl.title': '在终端里换取 Wolai Token',
+        'curl.desc': '下面这段命令直接调用 Wolai 的创建 Token 接口。你只需要把自己的应用 ID 和应用密钥填进去即可。',
+        'curl.note': '接口参考：<a href="https://s.apifox.cn/4ed28073-5c44-4c57-8e23-a29186d699ea/269227722e0" target="_blank" rel="noreferrer">Wolai API / 创建 Token</a>。当前接口地址是 <code>https://openapi.wolai.com/v1/token</code>。',
+        'curl.copy': '复制命令',
+        'curl.copy_done': '已复制',
+        'curl.copy_fail': '复制失败',
+        'curl.tip': '如果你在窄屏上看这页，直接点上面的“复制命令”会更省事；这个代码块现在也支持自动换行。',
+        'curl.success': '执行成功后，会返回一段 JSON。把其中可以直接调用 OpenAPI 的 Token 复制出来，填回 CiteBox 的 <code>Wolai Token</code> 输入框即可。',
+        'verify.label': 'Verification',
+        'verify.title': '最后一步：测试通过，再保存配置',
+        'verify.desc': '拿到 Token 后，回到 CiteBox 设置页，把三项都填好，先点“测试 Token”。测试通过后，再点击“保存 Wolai 配置”。',
+        'verify.item1': 'Wolai Token：填你刚刚在终端里换到的 Token。',
+        'verify.item2': 'OpenAPI 地址：填写 <code>https://openapi.wolai.com</code>。',
+        'verify.item3': '目标页面 ID：填写页面链接最后一段。',
+        'verify.item4': '先点“测试 Token”，确认 Token 可用且当前页面可访问。',
+        'verify.item5': '测试通过后再保存；如果你想再稳一点，可以额外点一次“插入测试页面”。',
+        'verify.tip': 'CiteBox 当前的测试逻辑会校验目标页面访问权限，所以“测试 Token”通过，基本就说明这套配置已经通了。',
+        'verify.caption': '测试通过后，就可以放心保存 Wolai 配置了。',
+        'outro.title': '这样配置完，就可以开始用了',
+        'outro.desc': '对于“只想把结果稳稳存进笔记里”这个目标来说，这套 Wolai 配置已经足够。先把链路跑通，比一开始追求完美配置更重要。',
+        'outro.cta': '返回首页',
+        'footer.desc': '开源学术文献管理工具 · 本地部署 · 数据自主',
+        'footer.download': '下载',
+        'footer.feedback': '反馈',
+        '_title': 'CiteBox — Wolai 配置教程',
+        '_lang': 'zh-CN',
+      },
+      en: {
+        'nav.home': 'Home',
+        'nav.cases': 'Cases',
+        'nav.download': 'Download',
+        'breadcrumb.home': 'Home',
+        'breadcrumb.guide': 'Wolai Setup Guide',
+        'hero.label': 'Integration Guide',
+        'hero.title': 'Save CiteBox outputs<br>back into <em>Wolai</em>',
+        'hero.desc': 'If your Wolai workspace is still active and you do not want an overly heavy note workflow, this setup is enough. Once you fill in the token, OpenAPI base URL, and target page ID, CiteBox can write selected outputs back into Wolai.',
+        'hero.pill1': 'Only 3 fields required',
+        'hero.pill2': 'All screenshots are local',
+        'hero.pill3': 'Test first, then save',
+        'hero.badge': 'Matches the real settings UI',
+        'intro.title': 'Who this guide is for',
+        'intro.desc': 'If you mainly want a low-friction way to keep selected CiteBox outputs in Wolai, this integration is a good fit. It is not a heavyweight knowledge-management system. It is a practical, stable export path with low maintenance cost.',
+        'intro.callout_label': 'Why This Setup',
+        'intro.callout_title': 'Get the smallest working path online first: token, page ID, and write access.',
+        'intro.callout_desc': 'You can always expand the workflow later. There is no need to over-design it on day one.',
+        'fields.label': 'Quick Start',
+        'fields.title': 'Prepare these 3 values first',
+        'fields.desc': 'In CiteBox\'s Wolai settings, you only need three values. The easiest one is the OpenAPI base URL. The easiest one to paste wrong is the target page ID. The most annoying one to obtain is the Wolai token.',
+        'fields.token': 'Issued from the Wolai app you create, and used by CiteBox to call the Wolai OpenAPI.',
+        'fields.base_url_title': 'OpenAPI Base URL',
+        'fields.base_url': 'The simple one: just use <code>https://openapi.wolai.com</code>.',
+        'fields.page_id_title': 'Target Page ID',
+        'fields.page_id': 'This is the Wolai page under which CiteBox will keep inserting content.',
+        'fields.caption': 'The Wolai settings section inside CiteBox.',
+        'fields.tip': 'The field is named <strong>OpenAPI Base URL</strong> in the UI. If you casually call it an "OpenAI URL", the actual value here is still Wolai\'s OpenAPI gateway, not an OpenAI endpoint.',
+        'pageid.label': 'Target Page',
+        'pageid.title': 'How to get the target page ID',
+        'pageid.desc': 'This part is straightforward. Open the Wolai page that should receive the notes, copy the page URL from the top-right corner, and use the last path segment.',
+        'pageid.example': 'For example, from <a href="https://www.wolai.com/wolai/k1Qgi1J2L9vWBQkkJz8j82" target="_blank" rel="noreferrer">https://www.wolai.com/wolai/k1Qgi1J2L9vWBQkkJz8j82</a>, the last segment <code>k1Qgi1J2L9vWBQkkJz8j82</code> is the target page ID.',
+        'pageid.caption': 'You can copy the current page URL from the top-right corner of each page.',
+        'pageid.note': 'Inside CiteBox, this maps to <code>parent_block_id</code>. When you test the token, CiteBox will also verify whether the token can access that page.',
+        'token.label': 'Token',
+        'token.title': 'The Wolai token is the hardest part',
+        'token.desc': 'You first need to create an app in Wolai, obtain the <code>App ID</code> and <code>App Secret</code>, and then call the Wolai OpenAPI token endpoint with those credentials.',
+        'token.s1.title': 'Open app settings from your profile',
+        'token.s1.desc': 'Click your avatar in the top-left corner, open personal settings, choose app settings, then open create/manage applications.',
+        'token.s1.caption': 'Enter Wolai\'s app management page from personal settings.',
+        'token.s2.title': 'Create a new app',
+        'token.s2.desc': 'In the app management page, click create new app.',
+        'token.s2.caption': 'Create a dedicated Wolai app for CiteBox.',
+        'token.s3.title': 'Enable all permissions',
+        'token.s3.desc': 'For the initial setup, the practical move is to grant all permissions first. You can tighten them later if you want.',
+        'token.s3.note': 'The goal of this guide is to get page creation, content writing, and token testing working first. Avoid premature permission tuning on the first pass.',
+        'token.s3.caption': 'For a first-time setup, enabling everything is the fastest path.',
+        'token.s4.title': 'Keep the App ID and App Secret',
+        'token.s4.desc': 'Once the app is created, save both values. You will need them in the terminal command that exchanges them for a token.',
+        'token.s4.caption': 'With the App ID and App Secret in hand, you can call the token endpoint.',
+        'curl.label': 'Terminal',
+        'curl.title': 'Exchange for a Wolai token in the terminal',
+        'curl.desc': 'This command calls Wolai\'s token endpoint directly. Replace the app ID and app secret with your own values.',
+        'curl.note': 'API reference: <a href="https://s.apifox.cn/4ed28073-5c44-4c57-8e23-a29186d699ea/269227722e0" target="_blank" rel="noreferrer">Wolai API / Create Token</a>. The current endpoint is <code>https://openapi.wolai.com/v1/token</code>.',
+        'curl.copy': 'Copy Command',
+        'curl.copy_done': 'Copied',
+        'curl.copy_fail': 'Copy Failed',
+        'curl.tip': 'If you are viewing this page on a narrow screen, the copy button is easier to use. The code block also wraps lines now.',
+        'curl.success': 'If the request succeeds, Wolai returns JSON. Copy the token value that can directly call the OpenAPI and paste it into the <code>Wolai Token</code> field in CiteBox.',
+        'verify.label': 'Verification',
+        'verify.title': 'Final step: test first, then save',
+        'verify.desc': 'After you get the token, go back to CiteBox settings, fill all three fields, click "Test Token" first, and only save the configuration after the test passes.',
+        'verify.item1': 'Wolai Token: paste the token you just obtained in the terminal.',
+        'verify.item2': 'OpenAPI Base URL: use <code>https://openapi.wolai.com</code>.',
+        'verify.item3': 'Target Page ID: use the last segment of the page URL.',
+        'verify.item4': 'Click "Test Token" first to confirm both token validity and page access.',
+        'verify.item5': 'Save only after the test passes. If you want extra certainty, you can also click "Insert Test Page".',
+        'verify.tip': 'CiteBox\'s current test flow validates access to the target page, so a passing token test is usually enough to confirm the setup is working.',
+        'verify.caption': 'Once the test passes, you can safely save the Wolai configuration.',
+        'outro.title': 'That is enough to get started',
+        'outro.desc': 'If your goal is simply to keep useful outputs safely inside Wolai, this setup is already enough. Getting a reliable working path matters more than chasing the perfect setup at the start.',
+        'outro.cta': 'Back to Home',
+        'footer.desc': 'Open-source literature management tool · Local-first · Your data stays yours',
+        'footer.download': 'Download',
+        'footer.feedback': 'Feedback',
+        '_title': 'CiteBox — Wolai Setup Guide',
+        '_lang': 'en',
+      },
+    };
+
+    const langButtons = Array.from(document.querySelectorAll('.lang-btn'));
+    const copyCurlButton = document.getElementById('copyCurlButton');
+    const wolaiCurlCommand = document.getElementById('wolaiCurlCommand');
+    let currentLang = localStorage.getItem('citebox-docs-lang') || 'zh';
+
+    function applyTranslations(lang) {
+      const messages = i18n[lang] || i18n.zh;
+      document.documentElement.lang = messages._lang || (lang === 'en' ? 'en' : 'zh-CN');
+      document.title = messages._title || document.title;
+
+      document.querySelectorAll('[data-i18n]').forEach((node) => {
+        const key = node.getAttribute('data-i18n');
+        if (!(key in messages)) {
+          return;
+        }
+        const value = messages[key];
+        if (node.hasAttribute('data-i18n-html') || (typeof value === 'string' && value.includes('<'))) {
+          node.innerHTML = value;
+        } else {
+          node.textContent = value;
+        }
+      });
+
+      document.querySelectorAll('[data-i18n-html]').forEach((node) => {
+        if (node.hasAttribute('data-i18n')) {
+          return;
+        }
+        const key = node.getAttribute('data-i18n-html');
+        if (!(key in messages)) {
+          return;
+        }
+        node.innerHTML = messages[key];
+      });
+
+      langButtons.forEach((button) => {
+        button.classList.toggle('active', button.dataset.lang === lang);
+      });
+    }
+
+    function setLanguage(lang) {
+      currentLang = lang in i18n ? lang : 'zh';
+      localStorage.setItem('citebox-docs-lang', currentLang);
+      applyTranslations(currentLang);
+    }
+
+    async function copyCurlCommand() {
+      if (!copyCurlButton || !wolaiCurlCommand) {
+        return;
+      }
+
+      const text = wolaiCurlCommand.textContent;
+      const messages = i18n[currentLang] || i18n.zh;
+
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(text);
+        } else {
+          const helper = document.createElement('textarea');
+          helper.value = text;
+          helper.setAttribute('readonly', '');
+          helper.style.position = 'absolute';
+          helper.style.left = '-9999px';
+          document.body.appendChild(helper);
+          helper.select();
+          document.execCommand('copy');
+          document.body.removeChild(helper);
+        }
+        copyCurlButton.textContent = messages['curl.copy_done'];
+      } catch (error) {
+        copyCurlButton.textContent = messages['curl.copy_fail'];
+      }
+
+      window.setTimeout(() => {
+        const latestMessages = i18n[currentLang] || i18n.zh;
+        copyCurlButton.textContent = latestMessages['curl.copy'];
+      }, 1600);
+    }
+
+    langButtons.forEach((button) => {
+      button.addEventListener('click', () => {
+        setLanguage(button.dataset.lang);
+      });
+    });
+
+    if (copyCurlButton) {
+      copyCurlButton.addEventListener('click', copyCurlCommand);
+    }
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('visible');
+          observer.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.14 });
+
+    document.querySelectorAll('.reveal').forEach((el) => observer.observe(el));
+
+    const navbar = document.getElementById('navbar');
+    window.addEventListener('scroll', () => {
+      navbar.classList.toggle('scrolled', window.scrollY > 20);
+    });
+
+    setLanguage(currentLang);
+  </script>
+</body>
+</html>
