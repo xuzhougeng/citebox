@@ -76,6 +76,12 @@
     background: rgba(var(--surface-rgb), 0.72);
 }
 
+.figure-ai-result.is-minimal {
+    padding: 0;
+    border: none;
+    background: transparent;
+}
+
 .figure-ai-status {
     color: var(--muted);
     font-size: 0.84rem;
@@ -87,6 +93,10 @@
     align-items: flex-start;
     justify-content: space-between;
     gap: 0.8rem;
+}
+
+.figure-ai-head.is-actions-only {
+    justify-content: flex-end;
 }
 
 .figure-ai-answer {
@@ -145,132 +155,88 @@
 }
 
 .figure-ai-modal-dialog {
-    width: min(1380px, 100%);
+    width: min(1200px, 100%);
     padding: 1rem;
     overflow: hidden;
 }
 
 .figure-ai-modal {
-    display: grid;
-    gap: 1rem;
-    min-height: min(760px, calc(100vh - 6rem));
-}
-
-.figure-ai-modal-head {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 1rem;
-    padding: 0.35rem 3.25rem 0 0.25rem;
-}
-
-.figure-ai-modal-subtitle {
-    margin-top: 0.4rem;
-    max-width: 38rem;
-    color: var(--muted);
-    line-height: 1.65;
-}
-
-.figure-ai-modal-meta {
-    display: grid;
-    gap: 0.35rem;
-    min-width: min(300px, 100%);
-    padding: 0.9rem 1rem;
-    border-radius: 18px;
-    background: rgba(var(--surface-rgb), 0.88);
-    border: 1px solid rgba(var(--ink-rgb), 0.08);
-}
-
-.figure-ai-modal-meta span {
-    color: var(--muted);
-    font-size: 0.78rem;
-    font-weight: 800;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
-}
-
-.figure-ai-modal-meta strong {
-    line-height: 1.55;
+    height: min(760px, calc(100vh - 6rem));
+    min-height: 0;
 }
 
 .figure-ai-modal-layout {
     display: grid;
-    grid-template-columns: minmax(0, 1.05fr) minmax(320px, 0.95fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 1rem;
+    height: 100%;
     min-height: 0;
-}
-
-.figure-ai-modal-figure,
-.figure-ai-modal-content {
-    min-height: 0;
-    padding: 1rem;
-    border-radius: 24px;
-    background: rgba(var(--surface-rgb), 0.9);
-    border: 1px solid rgba(var(--ink-rgb), 0.08);
+    align-items: stretch;
 }
 
 .figure-ai-modal-figure {
-    display: grid;
-    gap: 0.9rem;
-    align-content: start;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
 }
 
 .figure-ai-modal-figure-stage {
-    display: grid;
-    place-items: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
     min-height: 0;
-    padding: 1rem;
-    border-radius: 20px;
-    background:
-        radial-gradient(circle at top, rgba(var(--accent-rgb), 0.08), transparent 45%),
-        rgba(var(--surface-rgb), 0.72);
-    border: 1px solid rgba(var(--ink-rgb), 0.06);
+    padding: 0;
 }
 
 .figure-ai-modal-figure-stage img {
     display: block;
-    max-width: 100%;
-    max-height: calc(100vh - 19rem);
+    max-width: 88%;
+    max-height: 88%;
     object-fit: contain;
-}
-
-.figure-ai-modal-figure-meta {
-    display: grid;
-    gap: 0.45rem;
-    margin: 0;
-}
-
-.figure-ai-modal-figure-meta strong,
-.figure-ai-modal-figure-meta p {
-    margin: 0;
-}
-
-.figure-ai-modal-figure-meta p {
-    color: var(--muted);
-    line-height: 1.72;
 }
 
 .figure-ai-modal-content {
     display: flex;
+    height: 100%;
     min-height: 0;
-    overflow: auto;
+    overflow: hidden;
+    padding: 1rem 1.1rem;
+    border-radius: 24px;
+    background: rgba(var(--surface-rgb), 0.9);
+    border: 1px solid rgba(var(--ink-rgb), 0.08);
 }
 
 .figure-ai-modal-content .figure-ai-result {
     width: 100%;
     display: flex;
     flex-direction: column;
-    min-height: 100%;
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
 }
 
 .figure-ai-modal-content .figure-ai-answer {
+    flex: 1 1 auto;
+    min-height: 0;
     overflow: auto;
+    overflow-x: hidden;
     padding-right: 0.15rem;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
 }
 
 .figure-ai-modal-content .figure-ai-stream-actions {
     margin-top: auto;
     padding-top: 0.9rem;
+}
+
+.figure-ai-modal-content .figure-ai-result.is-minimal .figure-ai-answer {
+    margin-top: 0;
 }
 
 @media (max-width: 1080px) {
@@ -279,23 +245,21 @@
     }
 
     .figure-ai-modal {
-        min-height: auto;
-    }
-
-    .figure-ai-modal-head {
-        flex-direction: column;
-        padding-right: 3.25rem;
+        height: auto;
     }
 
     .figure-ai-modal-layout {
         grid-template-columns: 1fr;
+        height: auto;
     }
 
     .figure-ai-modal-content {
+        height: auto;
         overflow: visible;
     }
 
     .figure-ai-modal-content .figure-ai-answer {
+        min-height: auto;
         overflow: visible;
     }
 

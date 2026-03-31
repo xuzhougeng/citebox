@@ -2321,7 +2321,8 @@ const FigureViewer = {
         const {
             showSuggestedTags = action === 'tag_suggestion',
             emptyStatus = t('shared.figure.ai_select_action', '选择一个快捷动作'),
-            emptyHint = t('shared.figure.ai_result_hint', '这里会显示图片解读或 Tag 建议的返回结果。')
+            emptyHint = t('shared.figure.ai_result_hint', '这里会显示图片解读或 Tag 建议的返回结果。'),
+            minimal = false
         } = options;
         const requestState = this.currentAIRequestForAction(action);
         const activeLabel = this.aiActionLabel(action);
@@ -2342,9 +2343,9 @@ const FigureViewer = {
                 });
             }
             return `
-                <div class="figure-ai-result loading">
+                <div class="figure-ai-result loading${minimal ? ' is-minimal' : ''}">
                     <div class="figure-ai-head">
-                        <p class="figure-ai-status">${Utils.escapeHTML(activeLabel)}${t('shared.figure.ai_preparing', '准备中')}</p>
+                        <p class="figure-ai-status">${Utils.escapeHTML(minimal ? t('shared.figure.ai_preparing', '准备中') : `${activeLabel}${t('shared.figure.ai_preparing', '准备中')}`)}</p>
                     </div>
                     <div class="figure-ai-answer">${t('shared.figure.ai_generating', '正在结合全文、摘要、标签和图片生成结果。')}</div>
                     ${action === 'figure_interpretation' ? `
@@ -2358,9 +2359,9 @@ const FigureViewer = {
 
         if (requestState?.loading) {
             return `
-                <div class="figure-ai-result loading">
+                <div class="figure-ai-result loading${minimal ? ' is-minimal' : ''}">
                     <div class="figure-ai-head">
-                        <p class="figure-ai-status">${Utils.escapeHTML(activeLabel)}${t('shared.figure.ai_in_progress', '进行中')}</p>
+                        <p class="figure-ai-status">${Utils.escapeHTML(minimal ? t('shared.figure.ai_in_progress', '进行中') : `${activeLabel}${t('shared.figure.ai_in_progress', '进行中')}`)}</p>
                         ${requestState.answer
                             ? this.renderAIHeadActions({
                                 action,
@@ -2381,9 +2382,9 @@ const FigureViewer = {
 
         if (requestState?.error) {
             return `
-                <div class="figure-ai-result error">
+                <div class="figure-ai-result error${minimal ? ' is-minimal' : ''}">
                     <div class="figure-ai-head">
-                        <p class="figure-ai-status">${Utils.escapeHTML(activeLabel)}${t('shared.figure.ai_failed', '失败')}</p>
+                        <p class="figure-ai-status">${Utils.escapeHTML(minimal ? t('shared.figure.ai_failed', '失败') : `${activeLabel}${t('shared.figure.ai_failed', '失败')}`)}</p>
                         ${requestState.error
                             ? this.renderAIHeadActions({
                                 action,
@@ -2398,9 +2399,9 @@ const FigureViewer = {
 
         if (requestState?.stopped) {
             return `
-                <div class="figure-ai-result">
+                <div class="figure-ai-result${minimal ? ' is-minimal' : ''}">
                     <div class="figure-ai-head">
-                        <p class="figure-ai-status">${Utils.escapeHTML(activeLabel)}${t('shared.figure.ai_stopped', '已停止')}</p>
+                        <p class="figure-ai-status">${Utils.escapeHTML(minimal ? t('shared.figure.ai_stopped', '已停止') : `${activeLabel}${t('shared.figure.ai_stopped', '已停止')}`)}</p>
                         ${requestState.answer
                             ? this.renderAIHeadActions({
                                 action,
@@ -2417,8 +2418,8 @@ const FigureViewer = {
         const result = this.currentAIResultForAction(action);
         if (!result) {
             return `
-                <div class="figure-ai-result empty">
-                    <p class="figure-ai-status">${Utils.escapeHTML(emptyStatus)}</p>
+                <div class="figure-ai-result empty${minimal ? ' is-minimal' : ''}">
+                    ${emptyStatus ? `<p class="figure-ai-status">${Utils.escapeHTML(emptyStatus)}</p>` : ''}
                     <div class="figure-ai-answer">${Utils.escapeHTML(emptyHint)}</div>
                 </div>
             `;
@@ -2427,6 +2428,7 @@ const FigureViewer = {
         return this.renderAICachedResult(result, currentTagNames, {
             action,
             showSuggestedTags,
+            minimal,
             disableNote: this.isAINoteWriteDisabled(action, 'answer'),
             noteTitle: this.aiNoteWriteDisabledReason(action, 'answer')
         });
@@ -2447,6 +2449,7 @@ const FigureViewer = {
             action = result?.action || '',
             isWaiting = false,
             showSuggestedTags = true,
+            minimal = false,
             disableNote = false,
             noteTitle = ''
         } = options;
@@ -2455,21 +2458,30 @@ const FigureViewer = {
                 ${Utils.escapeHTML(tag)}
             </button>
         `).join('');
+        const statusText = minimal
+            ? ''
+            : `${this.aiActionLabel(action || result.action)} · ${result.provider} · ${result.model} · ${result.mode}${isWaiting ? ` · ${t('shared.figure.ai_loading_suffix', '加载中')}` : ''}`;
+        const actionsMarkup = result.answer
+            ? this.renderAIHeadActions({
+                action: action || result.action || '',
+                copyKind: 'answer',
+                noteKind: 'answer',
+                disableNote,
+                noteTitle
+            })
+            : '';
+        const headMarkup = statusText || actionsMarkup
+            ? `
+                <div class="figure-ai-head${minimal && !statusText ? ' is-actions-only' : ''}">
+                    ${statusText ? `<p class="figure-ai-status">${Utils.escapeHTML(statusText)}</p>` : ''}
+                    ${actionsMarkup}
+                </div>
+            `
+            : '';
 
         return `
-            <div class="figure-ai-result ${isWaiting ? 'loading' : ''}">
-                <div class="figure-ai-head">
-                    <p class="figure-ai-status">${Utils.escapeHTML(this.aiActionLabel(action || result.action))} · ${Utils.escapeHTML(result.provider)} · ${Utils.escapeHTML(result.model)} · ${Utils.escapeHTML(result.mode)}${isWaiting ? ` · ${t('shared.figure.ai_loading_suffix', '加载中')}` : ''}</p>
-                    ${result.answer
-                        ? this.renderAIHeadActions({
-                            action: action || result.action || '',
-                            copyKind: 'answer',
-                            noteKind: 'answer',
-                            disableNote,
-                            noteTitle
-                        })
-                        : ''}
-                </div>
+            <div class="figure-ai-result ${isWaiting ? 'loading' : ''}${minimal ? ' is-minimal' : ''}">
+                ${headMarkup}
                 <div class="figure-ai-answer">${Utils.escapeHTML(result.answer || t('shared.figure.ai_no_result', '模型没有返回文本结果。'))}</div>
                 ${showSuggestedTags && (result.suggested_tags || []).length ? `
                     <div class="figure-ai-supplement">
@@ -2504,38 +2516,21 @@ const FigureViewer = {
 
         const figure = this.currentFigure;
         const imageAlt = figure.caption || figure.paper_title || '';
-        const caption = String(figure.caption || '').trim();
 
         return `
             <div class="figure-ai-modal">
-                <div class="figure-ai-modal-head">
-                    <div>
-                        <p class="eyebrow">${t('shared.figure.ai_quick_assist', '快速辅助阅读')}</p>
-                        <h3>${t('shared.figure.figure_interpretation', '图片解读')}</h3>
-                        <p class="figure-ai-modal-subtitle">${t('shared.figure.figure_interpretation_modal_hint', '左侧查看原图，右侧阅读图片解读结果。')}</p>
-                    </div>
-                    <div class="figure-ai-modal-meta">
-                        <span>${t('shared.figure.source_paper', '来源文献')}</span>
-                        <strong>${Utils.escapeHTML(figure.paper_title || '')}</strong>
-                        <span>${t('shared.figure.location', '定位')}</span>
-                        <strong>${this.renderFigureLocation(figure)}</strong>
-                    </div>
-                </div>
                 <div class="figure-ai-modal-layout">
-                    <figure class="figure-ai-modal-figure">
+                    <div class="figure-ai-modal-figure">
                         <div class="figure-ai-modal-figure-stage">
                             <img src="${figure.image_url}" alt="${Utils.escapeHTML(imageAlt)}">
                         </div>
-                        <figcaption class="figure-ai-modal-figure-meta">
-                            <strong>${this.renderFigureLocation(figure)}</strong>
-                            ${caption ? `<p>${Utils.escapeHTML(caption)}</p>` : ''}
-                        </figcaption>
-                    </figure>
+                    </div>
                     <section class="figure-ai-modal-content">
                         ${this.renderAIResultForAction('figure_interpretation', {
                             showSuggestedTags: false,
-                            emptyStatus: t('shared.figure.figure_interpretation', '图片解读'),
-                            emptyHint: t('shared.figure.figure_interpretation_modal_hint', '左侧查看原图，右侧阅读图片解读结果。')
+                            emptyStatus: '',
+                            emptyHint: t('shared.figure.figure_interpretation_modal_hint', '左侧查看原图，右侧阅读图片解读结果。'),
+                            minimal: true
                         })}
                     </section>
                 </div>
