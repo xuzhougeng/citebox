@@ -9,6 +9,7 @@ const AIReaderPage = {
         exportingTurnKey: '',
         exportingConversation: false,
         savingNoteTurnKey: '',
+        savingNoteTurnMode: '',
         pendingTurn: null,
         sessions: {}
     },
@@ -93,7 +94,7 @@ const AIReaderPage = {
             const button = event.target.closest('[data-save-turn-note-index]');
             if (!button) return;
             event.preventDefault();
-            await this.saveTurnToPaperNotes(Number(button.dataset.saveTurnNoteIndex));
+            await this.saveTurnToPaperNotes(Number(button.dataset.saveTurnNoteIndex), button.dataset.saveTurnNoteMode);
         });
 
         this.keydownHandler = async (event) => {
@@ -471,6 +472,7 @@ const AIReaderPage = {
             const exporting = this.state.exportingTurnKey === turnKey;
             const noteKey = this.turnNoteKey(index);
             const savingNote = this.state.savingNoteTurnKey === noteKey;
+            const savingNoteMode = savingNote ? this.state.savingNoteTurnMode : '';
             const assistantBody = turn.answer
                 ? Utils.renderMarkdown(turn.answer, {
                     resolveFigureSrc: (figureID) => this.resolveFigureImageURL(figureID, paper)
@@ -498,9 +500,19 @@ const AIReaderPage = {
                                     class="btn btn-outline btn-small"
                                     type="button"
                                     data-save-turn-note-index="${index}"
+                                    data-save-turn-note-mode="overwrite"
                                     ${savingNote ? 'disabled' : ''}
                                 >
-                                    ${savingNote ? t('ai.btn_saving_notes', '写入中...') : t('ai.btn_save_to_notes', '保存到文献笔记')}
+                                    ${savingNoteMode === 'overwrite' ? t('ai.btn_overwriting_notes', '覆盖中...') : t('ai.btn_overwrite_notes', '覆盖到文献笔记')}
+                                </button>
+                                <button
+                                    class="btn btn-outline btn-small"
+                                    type="button"
+                                    data-save-turn-note-index="${index}"
+                                    data-save-turn-note-mode="append"
+                                    ${savingNote ? 'disabled' : ''}
+                                >
+                                    ${savingNoteMode === 'append' ? t('ai.btn_appending_notes', '追加中...') : t('ai.btn_append_notes', '追加到文献笔记')}
                                 </button>
                                 <button
                                     class="btn btn-outline btn-small"
@@ -740,7 +752,7 @@ const AIReaderPage = {
         }
     },
 
-    async saveTurnToPaperNotes(turnIndex) {
+    async saveTurnToPaperNotes(turnIndex, mode = 'append') {
         const paper = this.currentPaper();
         const turns = this.currentConversation();
         const turn = turns[turnIndex];
@@ -749,24 +761,28 @@ const AIReaderPage = {
             return;
         }
 
+        const saveMode = mode === 'overwrite' ? 'overwrite' : 'append';
         const noteKey = this.turnNoteKey(turnIndex);
         if (this.state.savingNoteTurnKey === noteKey) {
             return;
         }
 
         this.state.savingNoteTurnKey = noteKey;
+        this.state.savingNoteTurnMode = saveMode;
         this.renderConversation();
 
         try {
             const latestPaper = await API.getPaper(paper.id);
             const noteBlock = this.buildTurnNoteBlock(turn, turnIndex);
             const currentNotes = String(latestPaper.paper_notes_text || '').trim();
-            if (currentNotes.includes(noteBlock.trim())) {
+            if (saveMode === 'append' && currentNotes.includes(noteBlock.trim())) {
                 Utils.showToast(t('ai.msg_note_already_saved', '这轮 AI 内容已经写入文献笔记'));
                 return;
             }
 
-            const nextNotes = currentNotes ? `${currentNotes}\n\n---\n\n${noteBlock}` : noteBlock;
+            const nextNotes = saveMode === 'overwrite'
+                ? noteBlock
+                : (currentNotes ? `${currentNotes}\n\n---\n\n${noteBlock}` : noteBlock);
             const payload = await API.updatePaper(
                 paper.id,
                 PaperViewer.buildUpdatePayload(latestPaper, {
@@ -774,11 +790,14 @@ const AIReaderPage = {
                 })
             );
             this.syncUpdatedPaper(payload.paper);
-            Utils.showToast(t('ai.msg_note_saved', 'AI 内容已写入文献笔记'));
+            Utils.showToast(saveMode === 'overwrite'
+                ? t('ai.msg_note_overwritten', 'AI 内容已覆盖文献笔记')
+                : t('ai.msg_note_appended', 'AI 内容已追加到文献笔记'));
         } catch (error) {
             Utils.showToast(error.message, 'error');
         } finally {
             this.state.savingNoteTurnKey = '';
+            this.state.savingNoteTurnMode = '';
             this.renderConversation();
         }
     },

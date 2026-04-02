@@ -240,6 +240,10 @@
     "shared.figure.caption_translate_title": "Caption 翻译",
     "shared.figure.caption_translate_empty": "当前没有可翻译的图片说明",
     "shared.figure.notes_saved": "图片笔记已保存",
+    "shared.figure.overwrite_notes": "覆盖笔记",
+    "shared.figure.append_notes": "追加笔记",
+    "shared.figure.ai_content_overwritten": "AI 内容已覆盖图片笔记",
+    "shared.figure.ai_content_appended": "AI 内容已追加到图片笔记",
 
     "shared.figure.no_palette_saved": "还没有保存配色",
     "shared.figure.manual_extraction": "人工提取",

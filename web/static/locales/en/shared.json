@@ -240,6 +240,10 @@
     "shared.figure.caption_translate_title": "Caption Translation",
     "shared.figure.caption_translate_empty": "No caption to translate",
     "shared.figure.notes_saved": "Figure notes saved",
+    "shared.figure.overwrite_notes": "Overwrite Notes",
+    "shared.figure.append_notes": "Append Notes",
+    "shared.figure.ai_content_overwritten": "AI content overwrote figure notes",
+    "shared.figure.ai_content_appended": "AI content appended to figure notes",
 
     "shared.figure.no_palette_saved": "No palette saved",
     "shared.figure.manual_extraction": "Manual",

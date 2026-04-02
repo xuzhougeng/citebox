@@ -245,7 +245,7 @@ const FigureViewer = {
 
             const noteButton = event.target.closest('[data-figure-ai-note]');
             if (noteButton) {
-                await this.appendAIResultToNotes(noteButton.dataset.figureAiNote, noteButton.dataset.figureAiResultAction);
+                await this.writeAIResultToNotes(noteButton.dataset.figureAiNote, noteButton.dataset.figureAiResultAction, noteButton.dataset.figureAiNoteMode);
                 return;
             }
 
@@ -303,7 +303,7 @@ const FigureViewer = {
 
             const noteButton = event.target.closest('[data-figure-ai-note]');
             if (noteButton) {
-                await this.appendAIResultToNotes(noteButton.dataset.figureAiNote, noteButton.dataset.figureAiResultAction);
+                await this.writeAIResultToNotes(noteButton.dataset.figureAiNote, noteButton.dataset.figureAiResultAction, noteButton.dataset.figureAiNoteMode);
             }
         });
         document.addEventListener('pointermove', (event) => {
@@ -2245,14 +2245,15 @@ const FigureViewer = {
         }
         if (noteKind) {
             const titleAttr = noteTitle ? ` title="${Utils.escapeHTML(noteTitle)}"` : '';
-            buttons.push(`<button class="btn btn-outline btn-small" type="button" data-figure-ai-note="${Utils.escapeHTML(noteKind)}"${actionAttr} ${disableNote ? 'disabled' : ''}${titleAttr}>${t('shared.figure.write_to_notes', '写入笔记')}</button>`);
+            buttons.push(`<button class="btn btn-outline btn-small" type="button" data-figure-ai-note="${Utils.escapeHTML(noteKind)}" data-figure-ai-note-mode="overwrite"${actionAttr} ${disableNote ? 'disabled' : ''}${titleAttr}>${t('shared.figure.overwrite_notes', '覆盖笔记')}</button>`);
+            buttons.push(`<button class="btn btn-outline btn-small" type="button" data-figure-ai-note="${Utils.escapeHTML(noteKind)}" data-figure-ai-note-mode="append"${actionAttr} ${disableNote ? 'disabled' : ''}${titleAttr}>${t('shared.figure.append_notes', '追加笔记')}</button>`);
         }
 
         if (!buttons.length) return '';
         return `<div class="figure-ai-head-actions">${buttons.join('')}</div>`;
     },
 
-    async appendAIResultToNotes(kind, action = this.activeAIAction()) {
+    async writeAIResultToNotes(kind, action = this.activeAIAction(), mode = 'append') {
         const disabledReason = this.aiNoteWriteDisabledReason(action, kind);
         if (disabledReason) {
             Utils.showToast(disabledReason, 'info');
@@ -2271,9 +2272,17 @@ const FigureViewer = {
             return;
         }
 
+        const writeMode = mode === 'overwrite' ? 'overwrite' : 'append';
         const currentNotes = this.currentFigureNotesDraft().trim();
-        const nextNotes = currentNotes ? `${currentNotes}\n\n${normalized}` : normalized;
-        await this.updateCurrentFigureNotes(nextNotes, t('shared.figure.ai_content_written', 'AI 内容已写入图片笔记'));
+        const nextNotes = writeMode === 'overwrite'
+            ? normalized
+            : (currentNotes ? `${currentNotes}\n\n${normalized}` : normalized);
+        await this.updateCurrentFigureNotes(
+            nextNotes,
+            writeMode === 'overwrite'
+                ? t('shared.figure.ai_content_overwritten', 'AI 内容已覆盖图片笔记')
+                : t('shared.figure.ai_content_appended', 'AI 内容已追加到图片笔记')
+        );
     },
 
     copyTextForAIResult(action, kind) {
