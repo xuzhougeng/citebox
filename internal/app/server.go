@@ -20,6 +20,7 @@ import (
 	"github.com/xuzhougeng/citebox/internal/model"
 	"github.com/xuzhougeng/citebox/internal/repository"
 	"github.com/xuzhougeng/citebox/internal/service"
+	"github.com/xuzhougeng/citebox/internal/service/research"
 )
 
 type Options struct {
@@ -205,6 +206,19 @@ func buildHandler(
 	databaseHandler := handler.NewDatabaseHandler(librarySvc)
 	sessionManager := service.NewSessionManager(24 * time.Hour)
 	authHandler := handler.NewAuthHandler(librarySvc, sessionManager)
+
+	s2APIKey := strings.TrimSpace(cfg.S2APIKey)
+	if dbKey, _ := repo.GetAppSetting("s2_api_key"); s2APIKey == "" {
+		s2APIKey = strings.TrimSpace(dbKey)
+	}
+	s2Client := research.NewClient(research.Config{
+		APIKey:      s2APIKey,
+		MinInterval: research.RateInterval(s2APIKey),
+	})
+	researchAdapter := &research.RepoAdapter{Repo: repo.Research}
+	researchSvc := research.NewService(s2Client, researchAdapter, research.ServiceConfig{})
+	basket := research.NewBasket(researchAdapter, researchSvc, librarySvcImporterShim{librarySvc})
+	researchHandler := handler.NewResearchHandler(researchSvc, basket, nil)
 
 	mux := http.NewServeMux()
 
@@ -698,6 +712,72 @@ func buildHandler(
 		}
 	})
 
+	mux.HandleFunc("/api/research/search", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		researchHandler.Search(w, r)
+	})
+
+	mux.HandleFunc("/api/research/recommendations", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		researchHandler.RecommendationsForList(w, r)
+	})
+
+	mux.HandleFunc("/api/research/paper/", func(w http.ResponseWriter, r *http.Request) {
+		p := r.URL.Path
+		switch {
+		case strings.HasSuffix(p, "/references"):
+			researchHandler.References(w, r)
+		case strings.HasSuffix(p, "/citations"):
+			researchHandler.Citations(w, r)
+		case strings.HasSuffix(p, "/recommendations"):
+			researchHandler.Recommendations(w, r)
+		default:
+			researchHandler.GetPaper(w, r)
+		}
+	})
+
+	mux.HandleFunc("/api/research/basket", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			researchHandler.BasketList(w, r)
+		case http.MethodPost:
+			researchHandler.BasketAdd(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	mux.HandleFunc("/api/research/basket/", func(w http.ResponseWriter, r *http.Request) {
+		p := r.URL.Path
+		switch {
+		case p == "/api/research/basket/import-to-library" && r.Method == http.MethodPost:
+			researchHandler.BasketImportToLibrary(w, r)
+		case p == "/api/research/basket/export" && r.Method == http.MethodGet:
+			researchHandler.BasketExport(w, r)
+		case r.Method == http.MethodDelete:
+			researchHandler.BasketRemove(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	mux.HandleFunc("/api/settings/research", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			settingsHandler.GetResearchSettings(w, r)
+		case http.MethodPut:
+			settingsHandler.PutResearchSettings(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
 	mux.Handle("/files/papers/", http.StripPrefix("/files/papers/", http.FileServer(http.Dir(cfg.PapersDir()))))
 	mux.Handle("/files/figures/", http.StripPrefix("/files/figures/", http.FileServer(http.Dir(cfg.FiguresDir()))))
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(filepath.Join(webRoot, "static")))))
@@ -732,6 +812,8 @@ func buildHandler(
 			http.ServeFile(w, r, filepath.Join(webRoot, "settings.html"))
 		case "/login", "/login.html":
 			http.ServeFile(w, r, filepath.Join(webRoot, "login.html"))
+		case "/research", "/research.html":
+			http.ServeFile(w, r, filepath.Join(webRoot, "research.html"))
 		default:
 			http.NotFound(w, r)
 		}

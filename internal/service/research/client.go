@@ -302,6 +302,15 @@ func (c *Client) fetchPaperList(ctx context.Context, path string, offset, limit 
 	return out, nil
 }
 
+// RateInterval returns the minimum delay between requests appropriate for the
+// given API key state. With a key, allow ~5 req/s; without, fall back to ~1.
+func RateInterval(apiKey string) time.Duration {
+	if strings.TrimSpace(apiKey) != "" {
+		return 200 * time.Millisecond
+	}
+	return time.Second
+}
+
 // wrapPaperFields prefixes every comma-delimited field with the given parent prefix
 // so the citedPaper / citingPaper sub-objects are projected fully. The S2 API
 // expects e.g. `citedPaper.title,citedPaper.abstract,...`.
