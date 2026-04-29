@@ -119,6 +119,19 @@ func (m *Manager) initSchema() error {
 		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
 
+	CREATE TABLE IF NOT EXISTS s2_paper_cache (
+		cache_key TEXT PRIMARY KEY,
+		payload TEXT NOT NULL DEFAULT '',
+		fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
+
+	CREATE TABLE IF NOT EXISTS research_basket_items (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		s2_paper_id TEXT NOT NULL UNIQUE,
+		notes TEXT DEFAULT '',
+		added_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
+
 	CREATE INDEX IF NOT EXISTS idx_papers_group_id ON papers(group_id);
 	CREATE INDEX IF NOT EXISTS idx_papers_created_at ON papers(created_at);
 	CREATE INDEX IF NOT EXISTS idx_papers_status ON papers(extraction_status);
@@ -126,6 +139,8 @@ func (m *Manager) initSchema() error {
 	CREATE INDEX IF NOT EXISTS idx_color_palettes_paper_id ON color_palettes(paper_id);
 	CREATE INDEX IF NOT EXISTS idx_paper_tags_tag_id ON paper_tags(tag_id);
 	CREATE INDEX IF NOT EXISTS idx_figure_tags_tag_id ON figure_tags(tag_id);
+	CREATE INDEX IF NOT EXISTS idx_s2_cache_fetched_at ON s2_paper_cache(fetched_at);
+	CREATE INDEX IF NOT EXISTS idx_research_basket_added_at ON research_basket_items(added_at DESC);
 	`
 
 	if _, err := m.db.Exec(schema); err != nil {
