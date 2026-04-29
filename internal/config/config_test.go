@@ -99,3 +99,11 @@ func TestLoadReadsOAContactEmail(t *testing.T) {
 		t.Fatalf("Load() OAContactEmail = %q, want %q", cfg.OAContactEmail, "ops@example.com")
 	}
 }
+
+func TestLoadReadsS2APIKey(t *testing.T) {
+	t.Setenv("S2_API_KEY", "test-key-abc")
+	cfg := Load()
+	if cfg.S2APIKey != "test-key-abc" {
+		t.Fatalf("Load() S2APIKey = %q, want %q", cfg.S2APIKey, "test-key-abc")
+	}
+}

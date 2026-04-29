@@ -18,6 +18,7 @@ type Config struct {
 	AdminUsername           string
 	AdminPassword           string
 	OAContactEmail          string
+	S2APIKey                string
 	AllowedTypes            []string
 	ExtractorProfile        string
 	ExtractorPDFTextSource  string
@@ -41,6 +42,7 @@ func Load() *Config {
 		AdminUsername:           getEnv("ADMIN_USERNAME", "citebox"),
 		AdminPassword:           getEnv("ADMIN_PASSWORD", "citebox123"),
 		OAContactEmail:          getEnv("OA_CONTACT_EMAIL", ""),
+		S2APIKey:                getEnv("S2_API_KEY", ""),
 		AllowedTypes:            []string{"application/pdf"},
 		ExtractorProfile:        getEnv("PDF_EXTRACTOR_PROFILE", "pdffigx_v1"),
 		ExtractorPDFTextSource:  getEnv("PDF_EXTRACTOR_PDF_TEXT_SOURCE", "extractor"),
