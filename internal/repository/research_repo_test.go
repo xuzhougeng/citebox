@@ -68,3 +68,51 @@ func TestResearchRepoBasketAddListRemove(t *testing.T) {
 		t.Fatalf("after remove items = %+v", items)
 	}
 }
+
+func TestResearchRepoDeleteExpiredCache(t *testing.T) {
+	repo := newTestResearchRepo(t)
+
+	// Insert two entries.
+	if err := repo.PutCache("paper:fresh", `{}`); err != nil {
+		t.Fatalf("PutCache fresh: %v", err)
+	}
+	if err := repo.PutCache("paper:stale", `{}`); err != nil {
+		t.Fatalf("PutCache stale: %v", err)
+	}
+
+	// Backdate the "stale" row by 2 hours so it falls outside the prune window.
+	now := time.Now()
+	staleTime := now.Add(-2 * time.Hour)
+	if _, err := repo.db.Exec(
+		`UPDATE s2_paper_cache SET fetched_at = ? WHERE cache_key = ?`,
+		staleTime, "paper:stale",
+	); err != nil {
+		t.Fatalf("backdate: %v", err)
+	}
+
+	// Also update the fresh entry to be recent (10 seconds ago) to ensure it's clearly fresh.
+	freshTime := now.Add(-10 * time.Second)
+	if _, err := repo.db.Exec(
+		`UPDATE s2_paper_cache SET fetched_at = ? WHERE cache_key = ?`,
+		freshTime, "paper:fresh",
+	); err != nil {
+		t.Fatalf("update fresh: %v", err)
+	}
+
+	deleted, err := repo.DeleteExpiredCache(time.Hour)
+	if err != nil {
+		t.Fatalf("DeleteExpiredCache: %v", err)
+	}
+	if deleted != 1 {
+		t.Fatalf("deleted = %d, want 1", deleted)
+	}
+
+	// Fresh row still present.
+	if _, _, err := repo.GetCache("paper:fresh"); err != nil {
+		t.Fatalf("fresh row should be retained, got %v", err)
+	}
+	// Stale row gone.
+	if _, _, err := repo.GetCache("paper:stale"); err != ErrCacheMiss {
+		t.Fatalf("stale row should be deleted, got %v", err)
+	}
+}
