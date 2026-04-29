@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -200,7 +201,8 @@ func writeResearchError(w http.ResponseWriter, err error) {
 	case errors.Is(err, research.ErrRateLimited):
 		sendError(w, apperr.New(apperr.CodeUnavailable, "Semantic Scholar 限流，请稍后再试"))
 	default:
-		sendError(w, apperr.New(apperr.CodeUnavailable, "调研服务暂不可用"))
+		slog.Default().Warn("research upstream error", "error", err.Error())
+		sendError(w, apperr.New(apperr.CodeUnavailable, "调研服务暂不可用: "+err.Error()))
 	}
 }
 
