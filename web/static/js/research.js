@@ -92,7 +92,7 @@
                 ${tldrHtml}
                 ${linksHtml}
                 <div class="research-seed-actions">
-                    <button data-action="add-seed-to-basket">+ 篮子</button>
+                    <button data-action="add-seed-to-basket">${escapeHtml(t('research.action.addToBasket', '加入篮子'))}</button>
                 </div>
             </div>
             <div class="research-tabs">
@@ -138,8 +138,8 @@
                 ${tldrHtml}
                 ${linksHtml}
                 <div class="research-list-actions">
-                    <button data-action="add-to-basket" data-id="${escapeHtml(p.paperId)}">+ 篮</button>
-                    <button data-action="set-as-seed" data-id="${escapeHtml(p.paperId)}">设为种子</button>
+                    <button data-action="add-to-basket" data-id="${escapeHtml(p.paperId)}">${escapeHtml(t('research.action.addToBasket', '加入篮子'))}</button>
+                    <button data-action="set-as-seed" data-id="${escapeHtml(p.paperId)}">${escapeHtml(t('research.action.setAsSeed', '顺此展开'))}</button>
                 </div>
             </div>
         `;
