@@ -60,12 +60,12 @@ ID 灵活: 接受 DOI、arXiv id、S2 paperId、ACL、PubMed 等所有 S2 支持
 **新表 `s2_paper_cache`**：
 
 ```sql
-CREATE TABLE s2_paper_cache (
-  paper_id   TEXT PRIMARY KEY,
-  payload    TEXT NOT NULL,        -- JSON
-  fetched_at INTEGER NOT NULL      -- unix seconds
+CREATE TABLE IF NOT EXISTS s2_paper_cache (
+  cache_key  TEXT PRIMARY KEY,                 -- 形如 "paper:DOI:..." 或 "rec:..."
+  payload    TEXT NOT NULL,                    -- JSON
+  fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
-CREATE INDEX idx_s2_cache_fetched_at ON s2_paper_cache(fetched_at);
+CREATE INDEX IF NOT EXISTS idx_s2_cache_fetched_at ON s2_paper_cache(fetched_at);
 ```
 
 - 只缓存 `Get(id)` 返回的元数据；TTL 7 天
@@ -80,23 +80,23 @@ CREATE INDEX idx_s2_cache_fetched_at ON s2_paper_cache(fetched_at);
 **新表 `research_basket_items`**：
 
 ```sql
-CREATE TABLE research_basket_items (
+CREATE TABLE IF NOT EXISTS research_basket_items (
   id           INTEGER PRIMARY KEY AUTOINCREMENT,
-  user_id      INTEGER NOT NULL,
-  s2_paper_id  TEXT    NOT NULL,
+  s2_paper_id  TEXT    NOT NULL UNIQUE,
   notes        TEXT    DEFAULT '',
-  added_at     INTEGER NOT NULL,
-  UNIQUE(user_id, s2_paper_id),
-  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  added_at     DATETIME DEFAULT CURRENT_TIMESTAMP
 );
-CREATE INDEX idx_basket_user ON research_basket_items(user_id, added_at DESC);
+CREATE INDEX IF NOT EXISTS idx_basket_added_at ON research_basket_items(added_at DESC);
 ```
 
-不在 `papers` 表上加字段：篮子是"未承诺加入文献库"的临时收集状态，独立表语义更清晰。
+CiteBox 是单用户应用（无 `users` 表，`papers` 也无 `user_id` 列），所以篮子也无需 `user_id` 隔离。不在 `papers` 表上加字段：篮子是"未承诺加入文献库"的临时收集状态，独立表语义更清晰。
 
-**导入文献库流程**：从 cache 取 S2 元数据 → 若有 DOI 先调 `library_service.findDuplicateByDOI` 去重 → 不重复时调 `repo.CreatePaper(PaperUpsertInput{...})` 直接落库（元数据-only，无 PDF），`source="semantic_scholar"` → 篮子里清掉对应项。
+**导入文献库流程**：从 cache 取 S2 元数据 → 若有 DOI 先用 `findDuplicateByDOI` 去重 → 不重复时调 `repo.CreatePaper(PaperUpsertInput{...})` 直接落库（元数据-only，无 PDF），`source="semantic_scholar"` → 篮子里清掉对应项。
 
-注意：现有 `library_service` 的 ingest 路径（`uploadPaperFromReader`）要求 PDF 流；本 panel 是"先收集元数据，PDF 之后再补"的场景，因此**新增一个 `LibraryService.CreateFromS2Metadata(ctx, paper s2.Paper) (*model.Paper, error)` 方法**，内部封装去重 + `CreatePaper` 调用 + 触发已有的 Unpaywall PDF 候选查询（异步，不阻塞导入），让用户在文献库里看到这条新论文时已经能尝试取 PDF。
+现有 `LibraryService.ImportPaperByDOI` (in `library_service_oa.go`) 走 Unpaywall **要求拿到 PDF**，否则报错；本 panel 是"先收集元数据，PDF 之后再补"的场景，所以**新增一个独立方法 `LibraryService.ImportPaperFromS2(ctx, paper research.S2Paper) (*model.Paper, error)`**（放在新文件 `library_service_research.go`），它：
+1. 用 paper.DOI（如有）查 `findDuplicateByDOI`，已有则返回该条；
+2. 调 `repo.CreatePaper` 创建元数据-only 记录（`stored_pdf_name=""`，`extraction_status="manual_pending"`）；
+3. 异步触发现有的 `lookupOpenAccessCandidates` 流程把 PDF 拉回来（不阻塞导入）。
 
 ### 2.4 API 路由
 
@@ -117,7 +117,7 @@ GET    /api/research/basket/export             # 返回 markdown text/plain
 GET    /api/library/papers/exists?dois=doi1,doi2,...   # 列表渲染时批量"已在库中"判定
 ```
 
-所有路由通过现有 `middleware.RequireAuth` 保护，篮子操作严格按 `user_id` 隔离。
+所有路由通过现有 `AuthMiddleware` 保护（已经覆盖 `/api/*`），篮子是单用户共享的，无需额外 ACL。
 
 ## 3. 前端设计
 
@@ -187,10 +187,10 @@ research.inLibrary
 
 `internal/service/settings.go` 新增字段：
 
-- `s2_api_key TEXT`（可选，与现有 OpenAI key 同级明文存储；后续加密时统一处理）
-- `s2_default_fields TEXT`（高级，留空走默认 fields list）
+- `s2_api_key`（可选）：通过 `LibraryRepository.GetAppSetting / UpsertAppSetting` 存到现有 `app_settings` 表，key = `"s2_api_key"`，明文存储，与现有 AI key 同等级
+- 同时支持 env var `S2_API_KEY`：优先级 env > db setting，便于运维场景
 
-`web/settings.html` 在"外部 API"分组里加一栏，文案 `settings.research.s2.*`，附文案"未填写时使用匿名速率（约 1 req/s）"，链接到 [api.semanticscholar.org](https://api.semanticscholar.org/api-docs)。
+`web/settings.html` 在"外部 API"分组里加一栏，文案 `settings.research.s2.*`，附文案"未填写时使用匿名速率（约 1 req/s）"，链接到 [api.semanticscholar.org](https://api.semanticscholar.org/api-docs)。配套 `GET/PUT /api/settings/research`。
 
 ## 5. 测试
 
