@@ -37,6 +37,7 @@ type Server struct {
 	httpServer   *http.Server
 	bridgeCancel context.CancelFunc
 	bridgeDone   chan struct{}
+	s2Client     *research.Client
 }
 
 func NewServer(opts Options) (*Server, error) {
@@ -83,9 +84,18 @@ func NewServer(opts Options) (*Server, error) {
 
 	aiSvc := service.NewAIService(repo, cfg, logger.With("component", "ai_service"))
 
+	s2APIKey := strings.TrimSpace(cfg.S2APIKey)
+	if dbKey, _ := repo.GetAppSetting("s2_api_key"); s2APIKey == "" {
+		s2APIKey = strings.TrimSpace(dbKey)
+	}
+	s2Client := research.NewClient(research.Config{
+		APIKey:      s2APIKey,
+		MinInterval: research.RateInterval(s2APIKey),
+	})
+
 	httpServer := &http.Server{
 		Addr:    ":" + cfg.ServerPort,
-		Handler: buildHandler(cfg, logger, librarySvc, aiSvc, repo, absoluteWebRoot),
+		Handler: buildHandler(cfg, logger, librarySvc, aiSvc, repo, absoluteWebRoot, s2Client),
 	}
 
 	server := &Server{
@@ -94,6 +104,7 @@ func NewServer(opts Options) (*Server, error) {
 		repo:       repo,
 		librarySvc: librarySvc,
 		httpServer: httpServer,
+		s2Client:   s2Client,
 	}
 
 	logger.Info("resolved web root", "web_root", absoluteWebRoot)
@@ -166,6 +177,10 @@ func (s *Server) Close() error {
 		repoErr = s.repo.Close()
 	}
 
+	if s.s2Client != nil {
+		s.s2Client.Close()
+	}
+
 	return errors.Join(serverErr, repoErr)
 }
 
@@ -193,6 +208,7 @@ func buildHandler(
 	aiSvc *service.AIService,
 	repo *repository.LibraryRepository,
 	webRoot string,
+	s2Client *research.Client,
 ) http.Handler {
 	versionSvc := service.NewVersionService()
 	paperHandler := handler.NewPaperHandler(librarySvc)
@@ -207,14 +223,6 @@ func buildHandler(
 	sessionManager := service.NewSessionManager(24 * time.Hour)
 	authHandler := handler.NewAuthHandler(librarySvc, sessionManager)
 
-	s2APIKey := strings.TrimSpace(cfg.S2APIKey)
-	if dbKey, _ := repo.GetAppSetting("s2_api_key"); s2APIKey == "" {
-		s2APIKey = strings.TrimSpace(dbKey)
-	}
-	s2Client := research.NewClient(research.Config{
-		APIKey:      s2APIKey,
-		MinInterval: research.RateInterval(s2APIKey),
-	})
 	researchAdapter := &research.RepoAdapter{Repo: repo.Research}
 	researchSvc := research.NewService(s2Client, researchAdapter, research.ServiceConfig{})
 	basket := research.NewBasket(researchAdapter, researchSvc, librarySvcImporterShim{librarySvc})
@@ -755,16 +763,27 @@ func buildHandler(
 
 	mux.HandleFunc("/api/research/basket/", func(w http.ResponseWriter, r *http.Request) {
 		p := r.URL.Path
-		switch {
-		case p == "/api/research/basket/import-to-library" && r.Method == http.MethodPost:
+		switch p {
+		case "/api/research/basket/import-to-library":
+			if r.Method != http.MethodPost {
+				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
 			researchHandler.BasketImportToLibrary(w, r)
-		case p == "/api/research/basket/export" && r.Method == http.MethodGet:
+			return
+		case "/api/research/basket/export":
+			if r.Method != http.MethodGet {
+				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
 			researchHandler.BasketExport(w, r)
-		case r.Method == http.MethodDelete:
-			researchHandler.BasketRemove(w, r)
-		default:
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
 		}
+		if r.Method == http.MethodDelete {
+			researchHandler.BasketRemove(w, r)
+			return
+		}
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 	})
 
 	mux.HandleFunc("/api/settings/research", func(w http.ResponseWriter, r *http.Request) {

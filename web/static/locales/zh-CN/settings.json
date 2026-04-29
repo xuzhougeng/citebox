@@ -383,7 +383,7 @@
     "settings.wolai.summary_export_method": "新建页面并写入内容",
 
     "settings.research.s2.label": "Semantic Scholar API key",
-    "settings.research.s2.hint": "未填写时使用匿名速率（约 1 req/s）。",
+    "settings.research.s2.hint": "未填写时使用匿名速率（约 1 req/s）。修改后需要重启应用才能生效。",
 
     "settings.password.account_title": "账号管理",
     "settings.password.account_desc": "修改密码、管理记住登录状态，或退出登录。",
