@@ -38,3 +38,4 @@ web/static/vendor/pdfjs/
 .claude/
 .vscode/
 .idea/
+.superpowers/
