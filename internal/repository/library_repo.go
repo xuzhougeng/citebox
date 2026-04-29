@@ -19,12 +19,13 @@ type LibraryRepository struct {
 	db *sql.DB
 
 	// 子仓库
-	Paper   *PaperRepository
-	Figure  *FigureRepository
-	Palette *PaletteRepository
-	Group   *GroupRepository
-	Tag     *TagRepository
-	Setting *SettingRepository
+	Paper    *PaperRepository
+	Figure   *FigureRepository
+	Palette  *PaletteRepository
+	Group    *GroupRepository
+	Tag      *TagRepository
+	Setting  *SettingRepository
+	Research *ResearchRepository
 }
 
 // NewLibraryRepository 创建图书馆仓库
@@ -60,15 +61,17 @@ func NewLibraryRepository(dbPath string) (*LibraryRepository, error) {
 	figureRepo := NewFigureRepository(db, tagRepo)
 	paletteRepo := NewPaletteRepository(db)
 	settingRepo := NewSettingRepository(db)
+	researchRepo := NewResearchRepository(db)
 
 	repo := &LibraryRepository{
-		db:      db,
-		Paper:   paperRepo,
-		Figure:  figureRepo,
-		Palette: paletteRepo,
-		Group:   groupRepo,
-		Tag:     tagRepo,
-		Setting: settingRepo,
+		db:       db,
+		Paper:    paperRepo,
+		Figure:   figureRepo,
+		Palette:  paletteRepo,
+		Group:    groupRepo,
+		Tag:      tagRepo,
+		Setting:  settingRepo,
+		Research: researchRepo,
 	}
 
 	return repo, nil
