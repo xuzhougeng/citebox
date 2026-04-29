@@ -68,12 +68,29 @@
 
     function buildSeedHeader() {
         const s = state.seed;
-        const tldr = s.tldr ? `<div class="research-seed-tldr">${escapeHtml(s.tldr)}</div>` : '';
+        const ids = s.externalIds || {};
+        const titleHref = s.paperId ? `https://www.semanticscholar.org/paper/${encodeURIComponent(s.paperId)}` : '';
+        const titleHtml = titleHref
+            ? `<a class="research-item-title" href="${escapeHtml(titleHref)}" target="_blank" rel="noopener">${escapeHtml(s.title)}</a>`
+            : `<b>${escapeHtml(s.title)}</b>`;
+        const metaParts = [formatAuthors(s.authors), s.year, s.venue, formatCites(s)].filter(Boolean);
+        const metaHtml = metaParts.length
+            ? `<div class="research-seed-meta">${metaParts.map(escapeHtml).join(' · ')}</div>`
+            : '';
+        const tldr = s.tldr || (s.abstract && truncate(s.abstract, 320));
+        const tldrHtml = tldr ? `<div class="research-seed-tldr">${escapeHtml(tldr)}</div>` : '';
+        const linkBits = [];
+        if (ids.DOI) linkBits.push(`<a href="https://doi.org/${encodeURIComponent(ids.DOI)}" target="_blank" rel="noopener">DOI</a>`);
+        if (ids.ArXiv) linkBits.push(`<a href="https://arxiv.org/abs/${encodeURIComponent(ids.ArXiv)}" target="_blank" rel="noopener">arXiv</a>`);
+        if (ids.PubMed) linkBits.push(`<a href="https://pubmed.ncbi.nlm.nih.gov/${encodeURIComponent(ids.PubMed)}/" target="_blank" rel="noopener">PubMed</a>`);
+        if (s.openAccessPdfUrl) linkBits.push(`<a href="${escapeHtml(s.openAccessPdfUrl)}" target="_blank" rel="noopener">PDF</a>`);
+        const linksHtml = linkBits.length ? `<div class="research-item-links">${linkBits.join(' · ')}</div>` : '';
         return `
             <div class="research-seed-card">
-                <div class="research-seed-title"><b>${escapeHtml(s.title)}</b></div>
-                <div class="research-seed-meta">${escapeHtml(formatAuthors(s.authors))} · ${s.year || ''} · cites ${s.citationCount || 0}</div>
-                ${tldr}
+                <div class="research-seed-title">${titleHtml}</div>
+                ${metaHtml}
+                ${tldrHtml}
+                ${linksHtml}
                 <div class="research-seed-actions">
                     <button data-action="add-seed-to-basket">+ 篮子</button>
                 </div>
@@ -88,22 +105,62 @@
 
     function renderSeedPane(headerHTML, items) {
         state.list = items;
-        const listHTML = items.map(p => `
+        const listHTML = items.map(p => renderListItem(p)).join('');
+        $('research-seed-pane').innerHTML = `${headerHTML}<div class="research-list">${listHTML || '<div class="research-empty">无结果</div>'}</div>`;
+    }
+
+    function renderListItem(p) {
+        const ids = p.externalIds || {};
+        const titleHref = p.paperId ? `https://www.semanticscholar.org/paper/${encodeURIComponent(p.paperId)}` : '';
+        const titleHtml = titleHref
+            ? `<a class="research-item-title" href="${escapeHtml(titleHref)}" target="_blank" rel="noopener">${escapeHtml(p.title)}</a>`
+            : `<b>${escapeHtml(p.title)}</b>`;
+
+        const metaParts = [formatAuthors(p.authors), p.year, p.venue, formatCites(p)].filter(Boolean);
+        const metaHtml = metaParts.length
+            ? `<div class="research-meta">${metaParts.map(escapeHtml).join(' · ')}</div>`
+            : '';
+
+        const tldr = p.tldr || (p.abstract && truncate(p.abstract, 240));
+        const tldrHtml = tldr ? `<div class="research-item-tldr">${escapeHtml(tldr)}</div>` : '';
+
+        const linkBits = [];
+        if (ids.DOI) linkBits.push(`<a href="https://doi.org/${encodeURIComponent(ids.DOI)}" target="_blank" rel="noopener">DOI</a>`);
+        if (ids.ArXiv) linkBits.push(`<a href="https://arxiv.org/abs/${encodeURIComponent(ids.ArXiv)}" target="_blank" rel="noopener">arXiv</a>`);
+        if (ids.PubMed) linkBits.push(`<a href="https://pubmed.ncbi.nlm.nih.gov/${encodeURIComponent(ids.PubMed)}/" target="_blank" rel="noopener">PubMed</a>`);
+        if (p.openAccessPdfUrl) linkBits.push(`<a href="${escapeHtml(p.openAccessPdfUrl)}" target="_blank" rel="noopener">PDF</a>`);
+        const linksHtml = linkBits.length ? `<div class="research-item-links">${linkBits.join(' · ')}</div>` : '';
+
+        return `
             <div class="research-list-item" data-id="${escapeHtml(p.paperId)}">
-                <b>${escapeHtml(p.title)}</b>
-                <span class="research-meta"> · ${escapeHtml(formatAuthors(p.authors))} · ${p.year || ''} · ${p.citationCount || 0} cites</span>
+                ${titleHtml}
+                ${metaHtml}
+                ${tldrHtml}
+                ${linksHtml}
                 <div class="research-list-actions">
                     <button data-action="add-to-basket" data-id="${escapeHtml(p.paperId)}">+ 篮</button>
                     <button data-action="set-as-seed" data-id="${escapeHtml(p.paperId)}">设为种子</button>
                 </div>
             </div>
-        `).join('');
-        $('research-seed-pane').innerHTML = `${headerHTML}<div class="research-list">${listHTML || '<div class="research-empty">无结果</div>'}</div>`;
+        `;
     }
 
     function formatAuthors(authors) {
         if (!authors || !authors.length) return '';
         return authors.slice(0, 3).map(a => a.name).join(', ') + (authors.length > 3 ? ' et al.' : '');
+    }
+
+    function formatCites(p) {
+        const c = p.citationCount || 0;
+        const inf = p.influentialCitationCount || 0;
+        if (!c && !inf) return '';
+        return inf > 0 ? `${c} cites (★ ${inf})` : `${c} cites`;
+    }
+
+    function truncate(s, n) {
+        if (!s) return '';
+        if (s.length <= n) return s;
+        return s.slice(0, n).trimEnd() + '…';
     }
 
     function escapeHtml(s) {

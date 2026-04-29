@@ -144,10 +144,24 @@
     box-shadow: 0 6px 18px rgba(var(--shadow-rgb), 0.08);
 }
 
-.research-list-item b {
+.research-list-item b,
+.research-item-title {
     font-family: var(--font-display);
     color: var(--ink);
     line-height: 1.4;
+    font-weight: 700;
+}
+
+.research-item-title {
+    display: inline;
+    text-decoration: none;
+    border-bottom: 1px dashed transparent;
+    transition: 0.18s ease;
+}
+
+.research-item-title:hover {
+    color: var(--accent-deep);
+    border-bottom-color: rgba(var(--accent-rgb), 0.45);
 }
 
 .research-list-item.in-library {
@@ -156,9 +170,44 @@
 
 .research-meta {
     display: block;
-    margin-top: 0.3rem;
+    margin-top: 0.35rem;
     color: var(--muted);
     font-size: 0.85rem;
+    line-height: 1.45;
+}
+
+.research-item-tldr {
+    margin-top: 0.5rem;
+    padding: 0.55rem 0.7rem;
+    border-left: 3px solid rgba(var(--accent-rgb), 0.45);
+    background: rgba(var(--accent-rgb), 0.05);
+    color: var(--ink);
+    font-size: 0.88rem;
+    line-height: 1.55;
+    border-radius: 6px;
+}
+
+.research-item-links {
+    margin-top: 0.45rem;
+    display: flex;
+    gap: 0.55rem;
+    flex-wrap: wrap;
+    color: var(--muted);
+    font-size: 0.82rem;
+}
+
+.research-item-links a {
+    color: var(--accent-deep);
+    font-weight: 600;
+    text-decoration: none;
+    border-bottom: 1px dashed rgba(var(--accent-rgb), 0.35);
+    padding-bottom: 1px;
+    transition: 0.18s ease;
+}
+
+.research-item-links a:hover {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
 }
 
 .research-list-actions {
