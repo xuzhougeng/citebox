@@ -22,6 +22,12 @@ The project is intentionally optimized around a narrow workflow instead of tryin
 - Integrations for Wolai note export, WeChat IM bridge, TTS settings, and release checks.
 - Web and desktop runtime modes backed by the same SQLite and local-file data model.
 
+### Research panel
+
+The `/research` page provides single-hop literature exploration via the Semantic Scholar Graph API: search by keyword, view references / citations / recommendations, add papers of interest to the "basket", and import them into your library with one click.
+
+A Semantic Scholar API key can be set in Settings → External APIs, or provided via the `S2_API_KEY` environment variable. Without one, anonymous rate limits apply (~1 req/s).
+
 ## Stack
 
 - Go 1.21+

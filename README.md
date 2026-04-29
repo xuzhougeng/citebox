@@ -22,6 +22,12 @@ CiteBox 是一个面向论文整理与图片阅读的本地优先工作台，基
 - 集成能力：支持 Wolai 笔记写回、微信 IM 桥接、TTS 配置和版本检查。
 - 双端运行：既可作为本地 Web 服务运行，也可作为嵌入式桌面应用运行。
 
+### 调研 / Research panel
+
+`/research` 提供基于 Semantic Scholar Graph API 的单跳文献拓展能力：搜索关键词、查看 references / citations / recommendations、把感兴趣的论文加入"调研篮"，再一键导入文献库。
+
+Semantic Scholar API key 可在 设置 → 外部 API 里填写，或通过 `S2_API_KEY` 环境变量提供。未填写时使用匿名速率（约 1 req/s）。
+
 ## 技术栈
 
 - Go 1.21+
