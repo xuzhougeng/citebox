@@ -238,3 +238,149 @@ func (c *Client) Get(ctx context.Context, id string, fields []string) (Paper, er
 	}
 	return rp.toPaper(), nil
 }
+
+type rawListResponse struct {
+	Offset int       `json:"offset"`
+	Next   int       `json:"next"`
+	Data   []rawEdge `json:"data"`
+}
+
+// rawEdge is a row in references / citations responses; one of citedPaper /
+// citingPaper is populated. We unify into a Paper.
+type rawEdge struct {
+	CitedPaper    *rawPaper `json:"citedPaper,omitempty"`
+	CitingPaper   *rawPaper `json:"citingPaper,omitempty"`
+	IsInfluential bool      `json:"isInfluential"`
+	Intents       []string  `json:"intents"`
+}
+
+func (e rawEdge) paper() (Paper, bool) {
+	switch {
+	case e.CitedPaper != nil:
+		return e.CitedPaper.toPaper(), e.IsInfluential
+	case e.CitingPaper != nil:
+		return e.CitingPaper.toPaper(), e.IsInfluential
+	}
+	return Paper{}, false
+}
+
+// References returns papers that the given paper cites.
+func (c *Client) References(ctx context.Context, paperID string, offset, limit int) (PaperList, error) {
+	return c.fetchPaperList(ctx, "/graph/v1/paper/"+url.PathEscape(paperID)+"/references", offset, limit, false)
+}
+
+// Citations returns papers that cite the given paper. If opts.InfluentialOnly,
+// non-influential edges are dropped *after* fetch (S2 has no server-side filter).
+func (c *Client) Citations(ctx context.Context, paperID string, offset, limit int, opts CitationOpts) (PaperList, error) {
+	return c.fetchPaperList(ctx, "/graph/v1/paper/"+url.PathEscape(paperID)+"/citations", offset, limit, opts.InfluentialOnly)
+}
+
+func (c *Client) fetchPaperList(ctx context.Context, path string, offset, limit int, influentialOnly bool) (PaperList, error) {
+	q := url.Values{}
+	q.Set("fields", "isInfluential,intents,"+wrapPaperFields(defaultPaperFields))
+	if offset > 0 {
+		q.Set("offset", strconv.Itoa(offset))
+	}
+	if limit > 0 {
+		q.Set("limit", strconv.Itoa(limit))
+	}
+	var raw rawListResponse
+	if err := c.doJSON(ctx, path, q, &raw); err != nil {
+		return PaperList{}, err
+	}
+	out := PaperList{Offset: raw.Offset, Next: raw.Next, Items: make([]Paper, 0, len(raw.Data))}
+	for _, edge := range raw.Data {
+		paper, influential := edge.paper()
+		if paper.PaperID == "" {
+			continue
+		}
+		if influentialOnly && !influential {
+			continue
+		}
+		out.Items = append(out.Items, paper)
+	}
+	return out, nil
+}
+
+// wrapPaperFields prefixes every comma-delimited field with the given parent prefix
+// so the citedPaper / citingPaper sub-objects are projected fully. The S2 API
+// expects e.g. `citedPaper.title,citedPaper.abstract,...`.
+func wrapPaperFields(fields string) string {
+	parts := strings.Split(fields, ",")
+	out := make([]string, 0, 2*len(parts))
+	for _, p := range parts {
+		out = append(out, "citedPaper."+p, "citingPaper."+p)
+	}
+	return strings.Join(out, ",")
+}
+
+// recommendationsResponse maps both recommendation endpoints (they share shape).
+type recommendationsResponse struct {
+	RecommendedPapers []rawPaper `json:"recommendedPapers"`
+}
+
+// Recommendations returns S2 recommendations for a single seed paper.
+func (c *Client) Recommendations(ctx context.Context, paperID string) ([]Paper, error) {
+	q := url.Values{}
+	q.Set("fields", defaultPaperFields)
+	var raw recommendationsResponse
+	if err := c.doJSON(ctx, "/recommendations/v1/papers/forpaper/"+url.PathEscape(paperID), q, &raw); err != nil {
+		return nil, err
+	}
+	out := make([]Paper, 0, len(raw.RecommendedPapers))
+	for _, rp := range raw.RecommendedPapers {
+		out = append(out, rp.toPaper())
+	}
+	return out, nil
+}
+
+// RecommendationsForList POSTs a positive/negative list of paper IDs and
+// returns recommendations.
+func (c *Client) RecommendationsForList(ctx context.Context, positive, negative []string) ([]Paper, error) {
+	if err := c.takeToken(ctx); err != nil {
+		return nil, err
+	}
+	body := map[string][]string{
+		"positivePaperIds": positive,
+		"negativePaperIds": negative,
+	}
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	q := url.Values{}
+	q.Set("fields", defaultPaperFields)
+	full := c.baseURL + "/recommendations/v1/papers?" + q.Encode()
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, full, strings.NewReader(string(buf)))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if c.apiKey != "" {
+		req.Header.Set("x-api-key", c.apiKey)
+	}
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, ErrPaperNotFound
+	}
+	if resp.StatusCode == http.StatusTooManyRequests {
+		return nil, ErrRateLimited
+	}
+	if resp.StatusCode != http.StatusOK {
+		b, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("research: unexpected status %d: %s", resp.StatusCode, strings.TrimSpace(string(b)))
+	}
+	var raw recommendationsResponse
+	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
+		return nil, err
+	}
+	out := make([]Paper, 0, len(raw.RecommendedPapers))
+	for _, rp := range raw.RecommendedPapers {
+		out = append(out, rp.toPaper())
+	}
+	return out, nil
+}

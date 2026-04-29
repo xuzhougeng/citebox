@@ -135,3 +135,96 @@ func TestClientRateLimit(t *testing.T) {
 		t.Fatalf("expected 3 calls, got %d", calls)
 	}
 }
+
+func TestClientReferencesCitationsRecommendations(t *testing.T) {
+	cases := []struct {
+		name     string
+		path     string
+		invoke   func(c *Client, ctx context.Context) (PaperList, error)
+		respData string
+		listKey  string
+	}{
+		{
+			name: "References",
+			path: "/graph/v1/paper/p1/references",
+			invoke: func(c *Client, ctx context.Context) (PaperList, error) {
+				return c.References(ctx, "p1", 0, 10)
+			},
+			respData: `{"offset":0,"next":10,"data":[{"citedPaper":{"paperId":"r1","title":"Ref 1"}}]}`,
+		},
+		{
+			name: "Citations",
+			path: "/graph/v1/paper/p1/citations",
+			invoke: func(c *Client, ctx context.Context) (PaperList, error) {
+				return c.Citations(ctx, "p1", 0, 10, CitationOpts{})
+			},
+			respData: `{"offset":0,"next":10,"data":[{"citingPaper":{"paperId":"c1","title":"Cite 1"}}]}`,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			srv, stop := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != tc.path {
+					t.Errorf("path = %s, want %s", r.URL.Path, tc.path)
+				}
+				w.Write([]byte(tc.respData))
+			})
+			defer stop()
+			c := newTestClient(srv.URL, "")
+			res, err := tc.invoke(c, context.Background())
+			if err != nil {
+				t.Fatalf("invoke error: %v", err)
+			}
+			if len(res.Items) != 1 {
+				t.Fatalf("got %d items, want 1: %+v", len(res.Items), res.Items)
+			}
+		})
+	}
+}
+
+func TestClientRecommendations(t *testing.T) {
+	srv, stop := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/recommendations/v1/papers/forpaper/p1" {
+			t.Errorf("path = %s", r.URL.Path)
+		}
+		w.Write([]byte(`{"recommendedPapers":[{"paperId":"rec1","title":"Rec"}]}`))
+	})
+	defer stop()
+	c := newTestClient(srv.URL, "")
+	papers, err := c.Recommendations(context.Background(), "p1")
+	if err != nil {
+		t.Fatalf("Recommendations error: %v", err)
+	}
+	if len(papers) != 1 || papers[0].PaperID != "rec1" {
+		t.Fatalf("got %+v", papers)
+	}
+}
+
+func TestClientRecommendationsForList(t *testing.T) {
+	srv, stop := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("method = %s, want POST", r.Method)
+		}
+		if r.URL.Path != "/recommendations/v1/papers" {
+			t.Errorf("path = %s", r.URL.Path)
+		}
+		var body struct {
+			Positive []string `json:"positivePaperIds"`
+			Negative []string `json:"negativePaperIds"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		if len(body.Positive) != 2 {
+			t.Errorf("positive = %v", body.Positive)
+		}
+		w.Write([]byte(`{"recommendedPapers":[{"paperId":"rec1","title":"Rec"}]}`))
+	})
+	defer stop()
+	c := newTestClient(srv.URL, "")
+	papers, err := c.RecommendationsForList(context.Background(), []string{"a", "b"}, nil)
+	if err != nil {
+		t.Fatalf("error: %v", err)
+	}
+	if len(papers) != 1 {
+		t.Fatalf("got %d papers", len(papers))
+	}
+}
