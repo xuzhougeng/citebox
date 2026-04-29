@@ -25,6 +25,35 @@ func newTestClient(baseURL, apiKey string) *Client {
 	})
 }
 
+func TestClientSearchHandlesNumericExternalIDs(t *testing.T) {
+	srv, stop := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		// S2 mixes strings and numbers in externalIds (CorpusId, PubMed often arrive
+		// as JSON numbers). Send a raw JSON body that exercises both shapes.
+		body := `{"total":1,"offset":0,"next":0,"data":[{
+			"paperId":"p1",
+			"title":"Numeric ExternalIDs",
+			"externalIds":{"DOI":"10.1/abc","PubMed":12345,"CorpusId":67890}
+		}]}`
+		_, _ = w.Write([]byte(body))
+	})
+	defer stop()
+
+	c := newTestClient(srv.URL, "")
+	res, err := c.Search(context.Background(), "x", SearchOpts{Limit: 1})
+	if err != nil {
+		t.Fatalf("Search error: %v", err)
+	}
+	if len(res.Items) != 1 {
+		t.Fatalf("got %d items", len(res.Items))
+	}
+	if res.Items[0].ExternalIDs.DOI != "10.1/abc" {
+		t.Fatalf("DOI = %q", res.Items[0].ExternalIDs.DOI)
+	}
+	if res.Items[0].ExternalIDs.PubMed != "12345" {
+		t.Fatalf("PubMed (numeric) = %q, want %q", res.Items[0].ExternalIDs.PubMed, "12345")
+	}
+}
+
 func TestClientSearchHappyPath(t *testing.T) {
 	srv, stop := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/graph/v1/paper/search" {

@@ -159,15 +159,15 @@ type rawSearchResponse struct {
 }
 
 type rawPaper struct {
-	PaperID                  string            `json:"paperId"`
-	ExternalIDs              map[string]string `json:"externalIds"`
-	Title                    string            `json:"title"`
-	Abstract                 string            `json:"abstract"`
-	Year                     int               `json:"year"`
-	Venue                    string            `json:"venue"`
-	Authors                  []Author          `json:"authors"`
-	CitationCount            int               `json:"citationCount"`
-	InfluentialCitationCount int               `json:"influentialCitationCount"`
+	PaperID                  string         `json:"paperId"`
+	ExternalIDs              map[string]any `json:"externalIds"` // S2 mixes strings and numbers (e.g. CorpusId, PubMed)
+	Title                    string         `json:"title"`
+	Abstract                 string         `json:"abstract"`
+	Year                     int            `json:"year"`
+	Venue                    string         `json:"venue"`
+	Authors                  []Author       `json:"authors"`
+	CitationCount            int            `json:"citationCount"`
+	InfluentialCitationCount int            `json:"influentialCitationCount"`
 	OpenAccessPDF            *struct {
 		URL string `json:"url"`
 	} `json:"openAccessPdf"`
@@ -175,6 +175,22 @@ type rawPaper struct {
 		Text string `json:"text"`
 	} `json:"tldr"`
 	FieldsOfStudy []string `json:"fieldsOfStudy"`
+}
+
+// externalIDString coerces a value from S2's externalIds map (which may be a
+// string or number depending on the source ID) into a string.
+func externalIDString(v any) string {
+	switch x := v.(type) {
+	case string:
+		return x
+	case float64:
+		// Use %v so integers don't get a ".000000" suffix from %f.
+		return strconv.FormatFloat(x, 'f', -1, 64)
+	case json.Number:
+		return x.String()
+	default:
+		return ""
+	}
 }
 
 func (rp rawPaper) toPaper() Paper {
@@ -196,13 +212,13 @@ func (rp rawPaper) toPaper() Paper {
 		out.TLDR = rp.TLDR.Text
 	}
 	if v, ok := rp.ExternalIDs["DOI"]; ok {
-		out.ExternalIDs.DOI = v
+		out.ExternalIDs.DOI = externalIDString(v)
 	}
 	if v, ok := rp.ExternalIDs["ArXiv"]; ok {
-		out.ExternalIDs.ArXiv = v
+		out.ExternalIDs.ArXiv = externalIDString(v)
 	}
 	if v, ok := rp.ExternalIDs["PubMed"]; ok {
-		out.ExternalIDs.PubMed = v
+		out.ExternalIDs.PubMed = externalIDString(v)
 	}
 	return out
 }
