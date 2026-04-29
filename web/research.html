@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>调研 - CiteBox</title>
+    <link rel="icon" type="image/svg+xml" href="/static/img/citebox-icon.svg">
+    <script>(function(){var d=document.documentElement;try{var t=localStorage.getItem("citebox_theme");if(t&&t!=="warm")d.setAttribute("data-theme",t);var l=localStorage.getItem("citebox_lang")||"zh-CN";d.lang=l;if(l!=="zh-CN")d.setAttribute("data-lang-loading","1");}catch(e){}})()</script>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="navbar-content">
+            <a href="/" class="logo">CiteBox</a>
+            <ul class="nav-links">
+                <li><a href="/" data-i18n="nav.overview">总览</a></li>
+                <li><a href="/library" data-i18n="nav.library">文献库</a></li>
+                <li><a href="/figures" data-i18n="nav.figures">图片库</a></li>
+                <li><a href="/palettes" data-i18n="nav.palettes">配色库</a></li>
+                <li><a href="/groups" data-i18n="nav.groups">分组</a></li>
+                <li><a href="/tags" data-i18n="nav.tags">标签</a></li>
+                <li><a href="/notes" data-i18n="nav.notes">笔记</a></li>
+                <li><a href="/research" class="active" data-i18n="nav.research">调研</a></li>
+                <li><a href="/ai" data-i18n="nav.ai">AI伴读</a></li>
+                <li><a href="/settings" data-i18n="nav.settings">配置</a></li>
+            </ul>
+            <div class="nav-actions">
+                <a href="/upload" class="nav-cta" data-i18n="nav.upload_pdf">上传 PDF</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="research-page" id="research-root">
+      <section class="research-toolbar">
+        <input id="research-search-input" type="text" data-i18n-placeholder="research.search.placeholder" />
+        <button id="research-search-btn" data-i18n="research.action.search">搜索</button>
+        <button id="research-pick-from-library" data-i18n="research.action.pickFromLibrary">从文献库选种子</button>
+        <span id="research-rate-warning" class="research-rate-warning hidden" data-i18n="research.error.rateLimited"></span>
+      </section>
+
+      <section class="research-main" id="research-main">
+        <aside class="research-seed-pane" id="research-seed-pane">
+          <div id="research-empty-state" class="research-empty">
+            <p data-i18n="research.empty.hint"></p>
+          </div>
+        </aside>
+        <aside class="research-basket-pane" id="research-basket-pane">
+          <h3 data-i18n="research.basket.title">调研篮</h3>
+          <ul id="research-basket-list" class="research-basket-list"></ul>
+          <div class="research-basket-actions">
+            <button id="research-basket-import-all" data-i18n="research.basket.importAll">全部加入文献库</button>
+            <button id="research-basket-export" data-i18n="research.basket.exportMarkdown">导出 Markdown 清单</button>
+            <button id="research-basket-recommend" data-i18n="research.basket.recommendMore">基于篮子推荐更多</button>
+          </div>
+        </aside>
+      </section>
+    </main>
+
+    <script src="/static/js/theme.js"></script>
+    <script src="/static/js/i18n.js"></script>
+    <script src="/static/js/utils.js"></script>
+    <script src="/static/js/api.js"></script>
+    <script src="/static/js/research.js"></script>
+</body>
+</html>
