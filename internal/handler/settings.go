@@ -264,6 +264,32 @@ func (h *SettingsHandler) TestTTS(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(audio)
 }
 
+// GetResearchSettings → GET /api/settings/research
+func (h *SettingsHandler) GetResearchSettings(w http.ResponseWriter, r *http.Request) {
+	key, err := h.libraryService.GetAppSetting("s2_api_key")
+	if err != nil {
+		sendError(w, err)
+		return
+	}
+	sendJSON(w, http.StatusOK, map[string]string{"s2_api_key": key})
+}
+
+// PutResearchSettings → PUT /api/settings/research
+func (h *SettingsHandler) PutResearchSettings(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		S2APIKey string `json:"s2_api_key"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sendError(w, apperr.New(apperr.CodeInvalidArgument, "请求体格式错误"))
+		return
+	}
+	if err := h.libraryService.UpsertAppSetting("s2_api_key", body.S2APIKey); err != nil {
+		sendError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (h *SettingsHandler) GetVersionStatus(w http.ResponseWriter, r *http.Request) {
 	refresh := false
 	switch r.URL.Query().Get("refresh") {

@@ -127,6 +127,8 @@ const SettingsPage = {
         this.startWeixinBindingButton = document.getElementById('startWeixinBindingButton');
         this.unbindWeixinButton = document.getElementById('unbindWeixinButton');
         this.ttsAudioObjectURL = '';
+        this.researchSettingsForm = document.getElementById('researchSettingsForm');
+        this.s2APIKeyInput = document.getElementById('settings-s2-api-key');
 
         this.bindEvents();
         this.bootstrap();
@@ -235,6 +237,10 @@ const SettingsPage = {
         this.wolaiSettingsForm?.addEventListener('submit', async (event) => {
             event.preventDefault();
             await this.saveWolaiSettings();
+        });
+        this.researchSettingsForm?.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            await this.saveResearchSettings();
         });
         this.testWolaiButton?.addEventListener('click', async () => {
             await this.testWolaiSettings();
@@ -387,7 +393,8 @@ const SettingsPage = {
                 this.loadDesktopCloseSettings(),
                 this.loadVersionStatus(),
                 this.loadAuthSettings(),
-                this.loadTTSSettings()
+                this.loadTTSSettings(),
+                this.loadResearchSettings()
             ]);
         } catch (error) {
             Utils.showToast(error.message, 'error');
@@ -890,6 +897,27 @@ const SettingsPage = {
         this.renderWolaiSummary(settings);
         this.setWolaiStatus('');
         this.renderWolaiResultLink('');
+    },
+
+    async loadResearchSettings() {
+        const res = await fetch('/api/settings/research');
+        if (!res.ok) return;
+        const data = await res.json();
+        if (this.s2APIKeyInput) {
+            this.s2APIKeyInput.value = data.s2_api_key || '';
+        }
+    },
+
+    async saveResearchSettings() {
+        if (!this.s2APIKeyInput) return;
+        const res = await fetch('/api/settings/research', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ s2_api_key: this.s2APIKeyInput.value }),
+        });
+        if (res.ok) {
+            Utils.showToast(t('settings.research.saved_toast', '研究数据库配置已保存'));
+        }
     },
 
     async loadVersionStatus(forceRefresh = false) {

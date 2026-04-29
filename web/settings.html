@@ -732,6 +732,25 @@ User Prompt:
 
             <details class="manager-card settings-collapsible" open>
                 <summary class="settings-collapsible-toggle">
+                    <h2 data-i18n="settings.research.title">研究数据库配置</h2>
+                    <p data-i18n="settings.research.desc">配置 Semantic Scholar 等学术数据库的 API 密钥，以提升查询速率和访问权限。</p>
+                </summary>
+                <form id="researchSettingsForm" class="manager-form">
+                    <div class="form-grid">
+                        <label class="field field-span-2">
+                            <span data-i18n="settings.research.s2.label">Semantic Scholar API key</span>
+                            <input id="settings-s2-api-key" class="form-input" type="password" autocomplete="off" placeholder="" />
+                        </label>
+                    </div>
+                    <p class="muted" data-i18n="settings.research.s2.hint">未填写时使用匿名速率（约 1 req/s）。</p>
+                    <div class="submit-row">
+                        <button class="btn btn-primary" type="submit" data-i18n="settings.research.save_btn">保存研究数据库配置</button>
+                    </div>
+                </form>
+            </details>
+
+            <details class="manager-card settings-collapsible" open>
+                <summary class="settings-collapsible-toggle">
                     <h2 data-i18n="settings.password.account_title">账号管理</h2>
                     <p data-i18n="settings.password.account_desc">修改密码、管理记住登录状态，或退出登录。</p>
                 </summary>

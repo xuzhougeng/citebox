@@ -234,3 +234,11 @@ func NewLibraryService(repo *repository.LibraryRepository, cfg *config.Config, o
 
 	return service, nil
 }
+
+func (s *LibraryService) GetAppSetting(key string) (string, error) {
+	return s.repo.GetAppSetting(key)
+}
+
+func (s *LibraryService) UpsertAppSetting(key, value string) error {
+	return s.repo.UpsertAppSetting(key, value)
+}
