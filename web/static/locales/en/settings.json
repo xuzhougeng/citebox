@@ -382,8 +382,11 @@
     "settings.wolai.summary_export": "Export Method",
     "settings.wolai.summary_export_method": "Create page and write content",
 
+    "settings.research.title": "Research (Semantic Scholar)",
+    "settings.research.desc": "Configure Semantic Scholar Graph API credentials for the /research page.",
     "settings.research.s2.label": "Semantic Scholar API key",
     "settings.research.s2.hint": "Leave blank to use anonymous rate (~1 req/s). Changes take effect after restarting the app.",
+    "settings.research.save_btn": "Save research settings",
 
     "settings.password.account_title": "Account",
     "settings.password.account_desc": "Change password, manage remembered sign-in, or sign out.",
