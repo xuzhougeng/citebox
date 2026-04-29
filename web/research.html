@@ -30,30 +30,61 @@
         </div>
     </nav>
 
-    <main class="research-page" id="research-root">
-      <section class="research-toolbar">
-        <input id="research-search-input" type="text" data-i18n-placeholder="research.search.placeholder" />
-        <button id="research-search-btn" data-i18n="research.action.search">搜索</button>
-        <button id="research-pick-from-library" data-i18n="research.action.pickFromLibrary">从文献库选种子</button>
-        <span id="research-rate-warning" class="research-rate-warning hidden" data-i18n="research.error.rateLimited"></span>
-      </section>
+    <main class="page-shell">
+        <section class="hero compact">
+            <div>
+                <p class="eyebrow" data-i18n="research.hero_eyebrow">Research</p>
+                <h1 data-i18n="research.hero_title">基于 Semantic Scholar 的文献调研</h1>
+                <p class="hero-text" data-i18n="research.hero_text">
+                    搜索关键词、查看引用与相似文献，把感兴趣的论文加入调研篮，再一键导入文献库。
+                </p>
+                <p class="hero-inline-links">
+                    <span data-i18n="research.hero_aux_links">辅助入口：</span>
+                    <a href="/settings#research" data-i18n="research.hero_link_settings">设置 API key</a>
+                    <span aria-hidden="true">/</span>
+                    <a href="/library" data-i18n="research.hero_link_library">回到文献库</a>
+                </p>
+            </div>
+        </section>
 
-      <section class="research-main" id="research-main">
-        <aside class="research-seed-pane" id="research-seed-pane">
-          <div id="research-empty-state" class="research-empty">
-            <p data-i18n="research.empty.hint"></p>
-          </div>
-        </aside>
-        <aside class="research-basket-pane" id="research-basket-pane">
-          <h3 data-i18n="research.basket.title">调研篮</h3>
-          <ul id="research-basket-list" class="research-basket-list"></ul>
-          <div class="research-basket-actions">
-            <button id="research-basket-import-all" data-i18n="research.basket.importAll">全部加入文献库</button>
-            <button id="research-basket-export" data-i18n="research.basket.exportMarkdown">导出 Markdown 清单</button>
-            <button id="research-basket-recommend" data-i18n="research.basket.recommendMore">基于篮子推荐更多</button>
-          </div>
-        </aside>
-      </section>
+        <section class="filters-card">
+            <div class="filters-card-head">
+                <div>
+                    <h2 data-i18n="research.toolbar_title">检索 / 设置种子</h2>
+                    <p data-i18n="research.toolbar_desc">输入关键词、DOI、arXiv ID 或 Semantic Scholar paperId 开始调研。</p>
+                </div>
+                <span id="research-rate-warning" class="research-rate-warning hidden" data-i18n="research.error.rateLimited">Semantic Scholar 限流，请稍后重试。</span>
+            </div>
+            <div class="research-toolbar">
+                <label class="field research-search-field">
+                    <span data-i18n="research.search_label">搜索</span>
+                    <input id="research-search-input" class="form-input" type="text" data-i18n-placeholder="research.search.placeholder" placeholder="关键词 / DOI / arXiv ID / S2 paperId">
+                </label>
+                <div class="research-toolbar-actions">
+                    <button id="research-search-btn" class="btn btn-primary" type="button" data-i18n="research.action.search">搜索</button>
+                    <button id="research-pick-from-library" class="btn btn-secondary" type="button" data-i18n="research.action.pickFromLibrary">从文献库选种子</button>
+                </div>
+            </div>
+        </section>
+
+        <section class="research-layout">
+            <article class="research-seed-pane manager-card" id="research-seed-pane">
+                <div id="research-empty-state" class="research-empty">
+                    <p data-i18n="research.empty.hint">在上方搜索框输入关键词或粘贴 DOI / arXiv ID 开始调研。</p>
+                </div>
+            </article>
+            <aside class="research-basket-pane manager-card" id="research-basket-pane">
+                <header class="research-basket-head">
+                    <h3 data-i18n="research.basket.title">调研篮</h3>
+                </header>
+                <ul id="research-basket-list" class="research-basket-list"></ul>
+                <div class="research-basket-actions">
+                    <button id="research-basket-import-all" class="btn btn-primary btn-small" type="button" data-i18n="research.basket.importAll">全部加入文献库</button>
+                    <button id="research-basket-export" class="btn btn-secondary btn-small" type="button" data-i18n="research.basket.exportMarkdown">导出 Markdown 清单</button>
+                    <button id="research-basket-recommend" class="btn btn-outline btn-small" type="button" data-i18n="research.basket.recommendMore">基于篮子推荐更多</button>
+                </div>
+            </aside>
+        </section>
     </main>
 
     <script src="/static/js/theme.js"></script>

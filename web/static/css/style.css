@@ -50,6 +50,7 @@
 @import url('pages/viewer.css');
 @import url('pages/note-editor.css');
 @import url('pages/settings.css');
+@import url('pages/research.css');
 
 /* ===== 7. Responsive ===== */
 @import url('responsive.css');
@@ -58,21 +59,3 @@
 .hidden {
     display: none !important;
 }
-
-/* ===== Research Page ===== */
-.research-page { padding: 16px; }
-.research-toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; }
-.research-toolbar input { flex: 1; }
-.research-rate-warning { color: #b85e00; font-size: 12px; }
-.research-rate-warning.hidden { display: none; }
-.research-main { display: flex; gap: 12px; }
-.research-seed-pane { flex: 2; min-width: 0; border: 1px solid var(--border, #ccc); border-radius: 6px; padding: 12px; }
-.research-basket-pane { flex: 1; min-width: 220px; border: 1px solid var(--border, #ccc); border-radius: 6px; padding: 12px; background: var(--surface-soft, #fafaf6); }
-.research-basket-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; }
-.research-empty { padding: 32px; text-align: center; color: #888; }
-.research-tabs { display: flex; gap: 6px; border-bottom: 1px solid var(--border, #ccc); margin-bottom: 8px; }
-.research-tab { padding: 4px 10px; cursor: pointer; }
-.research-tab.active { border-bottom: 2px solid var(--accent, #b07a3a); font-weight: 600; }
-.research-list { display: flex; flex-direction: column; gap: 6px; }
-.research-list-item { padding: 8px; border: 1px solid var(--border, #e3dccd); border-radius: 4px; }
-.research-list-item.in-library { opacity: 0.6; }
