@@ -25,3 +25,26 @@ func (a *RepoAdapter) GetCache(key string) (string, time.Time, error) {
 	}
 	return payload, fetchedAt, err
 }
+
+// ListBasketItems implements BasketRepo.
+func (a *RepoAdapter) ListBasketItems() ([]BasketRow, error) {
+	rows, err := a.Repo.ListBasketItems()
+	if err != nil {
+		return nil, err
+	}
+	out := make([]BasketRow, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, BasketRow{S2PaperID: r.S2PaperID, Notes: r.Notes, AddedAt: r.AddedAt})
+	}
+	return out, nil
+}
+
+// AddBasketItem implements BasketRepo.
+func (a *RepoAdapter) AddBasketItem(id, notes string) error {
+	return a.Repo.AddBasketItem(id, notes)
+}
+
+// RemoveBasketItem implements BasketRepo.
+func (a *RepoAdapter) RemoveBasketItem(id string) error {
+	return a.Repo.RemoveBasketItem(id)
+}

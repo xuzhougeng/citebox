@@ -203,3 +203,81 @@ func writeResearchError(w http.ResponseWriter, err error) {
 		sendError(w, apperr.New(apperr.CodeUnavailable, "调研服务暂不可用"))
 	}
 }
+
+// BasketList → GET /api/research/basket
+func (h *ResearchHandler) BasketList(w http.ResponseWriter, r *http.Request) {
+	if h.basket == nil {
+		sendError(w, apperr.New(apperr.CodeUnavailable, "basket not configured"))
+		return
+	}
+	items, err := h.basket.List(r.Context())
+	if err != nil {
+		writeResearchError(w, err)
+		return
+	}
+	sendJSON(w, http.StatusOK, map[string]interface{}{"items": items})
+}
+
+// BasketAdd → POST /api/research/basket
+func (h *ResearchHandler) BasketAdd(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		S2PaperID string `json:"s2_paper_id"`
+		Notes     string `json:"notes"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sendError(w, apperr.New(apperr.CodeInvalidArgument, "请求体格式错误"))
+		return
+	}
+	if body.S2PaperID == "" {
+		sendError(w, apperr.New(apperr.CodeInvalidArgument, "s2_paper_id 必填"))
+		return
+	}
+	if err := h.basket.Add(r.Context(), body.S2PaperID, body.Notes); err != nil {
+		writeResearchError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// BasketRemove → DELETE /api/research/basket/:id
+func (h *ResearchHandler) BasketRemove(w http.ResponseWriter, r *http.Request) {
+	id, err := parseResearchID(r.URL.Path, "/api/research/basket/")
+	if err != nil {
+		sendError(w, err)
+		return
+	}
+	if err := h.basket.Remove(r.Context(), id); err != nil {
+		writeResearchError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// BasketImportToLibrary → POST /api/research/basket/import-to-library
+func (h *ResearchHandler) BasketImportToLibrary(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		IDs []string `json:"ids"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sendError(w, apperr.New(apperr.CodeInvalidArgument, "请求体格式错误"))
+		return
+	}
+	n, err := h.basket.ImportToLibrary(r.Context(), body.IDs)
+	if err != nil {
+		writeResearchError(w, err)
+		return
+	}
+	sendJSON(w, http.StatusOK, map[string]interface{}{"imported": n})
+}
+
+// BasketExport → GET /api/research/basket/export
+func (h *ResearchHandler) BasketExport(w http.ResponseWriter, r *http.Request) {
+	md, err := h.basket.ExportMarkdown(r.Context())
+	if err != nil {
+		writeResearchError(w, err)
+		return
+	}
+	w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
+	w.Header().Set("Content-Disposition", `attachment; filename="research-basket.md"`)
+	_, _ = w.Write([]byte(md))
+}

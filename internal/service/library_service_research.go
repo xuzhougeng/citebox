@@ -52,6 +52,18 @@ func (s *LibraryService) ImportPaperFromS2(ctx context.Context, p research.Paper
 	return paper, nil
 }
 
+// ImportPaperFromS2WithID matches research.LibraryImporter.
+func (s *LibraryService) ImportPaperFromS2WithID(ctx context.Context, p research.Paper) (int64, error) {
+	paper, err := s.ImportPaperFromS2(ctx, p)
+	if err != nil {
+		return 0, err
+	}
+	if paper == nil {
+		return 0, nil
+	}
+	return paper.ID, nil
+}
+
 // strconvItoa converts a non-negative integer to its decimal string representation.
 // It is kept here as a local helper to avoid importing strconv solely for this use.
 func strconvItoa(n int) string {
