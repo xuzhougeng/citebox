@@ -385,7 +385,7 @@
     "settings.research.title": "Research (Semantic Scholar)",
     "settings.research.desc": "Configure Semantic Scholar Graph API credentials for the /research page.",
     "settings.research.s2.label": "Semantic Scholar API key",
-    "settings.research.s2.hint": "Leave blank to use anonymous rate (~1 req/s). Changes take effect after restarting the app.",
+    "settings.research.s2.hint": "Leave blank to use anonymous rate (~1 req/s). Changes take effect immediately on save.",
     "settings.research.save_btn": "Save research settings",
 
     "settings.password.account_title": "Account",

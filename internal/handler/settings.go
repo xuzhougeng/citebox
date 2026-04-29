@@ -9,11 +9,13 @@ import (
 	"github.com/xuzhougeng/citebox/internal/apperr"
 	"github.com/xuzhougeng/citebox/internal/model"
 	"github.com/xuzhougeng/citebox/internal/service"
+	"github.com/xuzhougeng/citebox/internal/service/research"
 )
 
 type SettingsHandler struct {
 	libraryService *service.LibraryService
 	versionService *service.VersionService
+	researchClient *research.Client
 }
 
 func NewSettingsHandler(libraryService *service.LibraryService, versionService *service.VersionService) *SettingsHandler {
@@ -21,6 +23,12 @@ func NewSettingsHandler(libraryService *service.LibraryService, versionService *
 		libraryService: libraryService,
 		versionService: versionService,
 	}
+}
+
+// SetResearchClient lets the caller wire in the live S2 client so that
+// PutResearchSettings can hot-reload the API key without a server restart.
+func (h *SettingsHandler) SetResearchClient(client *research.Client) {
+	h.researchClient = client
 }
 
 func (h *SettingsHandler) GetExtractorSettings(w http.ResponseWriter, r *http.Request) {
@@ -286,6 +294,9 @@ func (h *SettingsHandler) PutResearchSettings(w http.ResponseWriter, r *http.Req
 	if err := h.libraryService.UpsertAppSetting("s2_api_key", body.S2APIKey); err != nil {
 		sendError(w, err)
 		return
+	}
+	if h.researchClient != nil {
+		h.researchClient.SetAPIKey(body.S2APIKey)
 	}
 	w.WriteHeader(http.StatusNoContent)
 }

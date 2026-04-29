@@ -218,6 +218,7 @@ func buildHandler(
 	tagHandler := handler.NewTagHandler(librarySvc)
 	aiHandler := handler.NewAIHandler(aiSvc)
 	settingsHandler := handler.NewSettingsHandler(librarySvc, versionSvc)
+	settingsHandler.SetResearchClient(s2Client)
 	wolaiHandler := handler.NewWolaiHandler(librarySvc)
 	databaseHandler := handler.NewDatabaseHandler(librarySvc)
 	sessionManager := service.NewSessionManager(24 * time.Hour)

@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -31,6 +32,7 @@ type Config struct {
 // concurrent use; an internal ticker enforces MinInterval globally.
 type Client struct {
 	baseURL     string
+	apiKeyMu    sync.RWMutex
 	apiKey      string
 	httpClient  *http.Client
 	tokens      chan struct{} // ticker buffer; nil if rate limiting disabled
@@ -63,6 +65,21 @@ func (c *Client) Close() {
 	if c.closeTicker != nil {
 		close(c.closeTicker)
 	}
+}
+
+// SetAPIKey updates the API key used by subsequent requests. Safe for
+// concurrent use. Pass "" to revert to anonymous access.
+func (c *Client) SetAPIKey(key string) {
+	c.apiKeyMu.Lock()
+	c.apiKey = strings.TrimSpace(key)
+	c.apiKeyMu.Unlock()
+}
+
+// currentAPIKey returns the active API key under the read lock.
+func (c *Client) currentAPIKey() string {
+	c.apiKeyMu.RLock()
+	defer c.apiKeyMu.RUnlock()
+	return c.apiKey
 }
 
 func (c *Client) refillTokens(interval time.Duration) {
@@ -111,8 +128,8 @@ func (c *Client) doJSON(ctx context.Context, path string, query url.Values, out 
 	if err != nil {
 		return err
 	}
-	if c.apiKey != "" {
-		req.Header.Set("x-api-key", c.apiKey)
+	if k := c.currentAPIKey(); k != "" {
+		req.Header.Set("x-api-key", k)
 	}
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -365,8 +382,8 @@ func (c *Client) RecommendationsForList(ctx context.Context, positive, negative 
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if c.apiKey != "" {
-		req.Header.Set("x-api-key", c.apiKey)
+	if k := c.currentAPIKey(); k != "" {
+		req.Header.Set("x-api-key", k)
 	}
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
