@@ -93,8 +93,10 @@ type SnippetMatch struct {
 	Score   float64 `json:"score"`
 }
 
-// SnippetList wraps /snippet/search responses.
+// SnippetList wraps /snippet/search responses. The `items` envelope keeps the
+// shape consistent with the rest of /api/research/* (basket, recommendations,
+// autocomplete) so frontend code can iterate uniformly.
 type SnippetList struct {
-	Matches          []SnippetMatch `json:"matches"`
+	Items            []SnippetMatch `json:"items"`
 	RetrievalVersion string         `json:"retrievalVersion,omitempty"`
 }

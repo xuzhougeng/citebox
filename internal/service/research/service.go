@@ -132,7 +132,10 @@ func (s *Service) GetPapers(ctx context.Context, ids []string) ([]Paper, error) 
 					}
 				}
 			}
-			if len(fetched) == 0 {
+			// Surface the error only when we have nothing else to render —
+			// keeping fresh-cache hits visible (a single failed batch should
+			// not blank out the whole basket).
+			if len(fetched) == 0 && len(cached) == 0 {
 				return nil, err
 			}
 		} else {

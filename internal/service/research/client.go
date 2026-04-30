@@ -24,6 +24,13 @@ var ErrRateLimited = errors.New("research: rate limited")
 // paperBatchChunk is the upper bound on ids per /paper/batch call (S2 docs say ≤500).
 const paperBatchChunk = 500
 
+// retryBackoff is the minimum delay before retrying a 429. The token bucket
+// already paces back-to-back calls when MinInterval > 0, but with no rate
+// limiter (tests, fresh client without an API key on a single ad-hoc call)
+// the retry would otherwise be instant and just burn another request.
+// Declared as a var so tests can shorten it.
+var retryBackoff = 500 * time.Millisecond
+
 // Config configures the Semantic Scholar client.
 type Config struct {
 	BaseURL     string        // default https://api.semanticscholar.org
@@ -119,15 +126,21 @@ func (c *Client) takeToken(ctx context.Context) error {
 	}
 }
 
-// doJSON performs a GET request, retrying once on a 429 response. The retry
-// re-acquires a token first, so when MinInterval > 0 the second attempt is
-// naturally spaced.
+// doJSON performs a GET request, retrying once on a 429 response after a
+// retryBackoff delay (cancellable via ctx). When MinInterval > 0, the token
+// bucket spaces the second attempt as well; the explicit sleep guards the
+// no-rate-limiter case from immediately re-firing the same request.
 func (c *Client) doJSON(ctx context.Context, path string, query url.Values, out interface{}) error {
 	err := c.doJSONOnce(ctx, path, query, out)
-	if errors.Is(err, ErrRateLimited) {
-		err = c.doJSONOnce(ctx, path, query, out)
+	if !errors.Is(err, ErrRateLimited) {
+		return err
 	}
-	return err
+	select {
+	case <-time.After(retryBackoff):
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	return c.doJSONOnce(ctx, path, query, out)
 }
 
 func (c *Client) doJSONOnce(ctx context.Context, path string, query url.Values, out interface{}) error {
@@ -585,12 +598,12 @@ func (c *Client) SnippetSearch(ctx context.Context, query string, opts SnippetSe
 		return SnippetList{}, err
 	}
 	out := SnippetList{
-		Matches:          make([]SnippetMatch, 0, len(raw.Data)),
+		Items:            make([]SnippetMatch, 0, len(raw.Data)),
 		RetrievalVersion: raw.RetrievalVersion,
 	}
 	for _, row := range raw.Data {
 		paper := row.Paper.toPaper()
-		out.Matches = append(out.Matches, SnippetMatch{
+		out.Items = append(out.Items, SnippetMatch{
 			PaperID: paper.PaperID,
 			Paper:   paper,
 			Snippet: row.Snippet,

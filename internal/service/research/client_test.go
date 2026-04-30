@@ -3,6 +3,7 @@ package research
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -24,6 +25,9 @@ func newTestClient(baseURL, apiKey string) *Client {
 		MinInterval: 0,
 	})
 }
+
+// Speed up the 429-retry tests; production default is 500ms.
+func init() { retryBackoff = time.Millisecond }
 
 func TestClientSearchHandlesNumericExternalIDs(t *testing.T) {
 	srv, stop := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
@@ -353,10 +357,10 @@ func TestClientSnippetSearch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SnippetSearch: %v", err)
 	}
-	if res.RetrievalVersion != "v3" || len(res.Matches) != 1 {
+	if res.RetrievalVersion != "v3" || len(res.Items) != 1 {
 		t.Fatalf("res = %+v", res)
 	}
-	m := res.Matches[0]
+	m := res.Items[0]
 	if m.PaperID != "p1" || m.Snippet.Text != "GNNs work..." || m.Snippet.SnippetOffset.End != 42 || m.Score < 0.86 {
 		t.Fatalf("match = %+v", m)
 	}
@@ -379,6 +383,81 @@ func TestClientRetriesOn429(t *testing.T) {
 	}
 	if calls != 2 {
 		t.Fatalf("expected 2 calls (1 + retry), got %d", calls)
+	}
+}
+
+func TestClientPersistent429Surfaces(t *testing.T) {
+	calls := 0
+	srv, stop := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		http.Error(w, "rate limited", http.StatusTooManyRequests)
+	})
+	defer stop()
+	c := newTestClient(srv.URL, "")
+	_, err := c.Get(context.Background(), "DOI:x", nil)
+	if err != ErrRateLimited {
+		t.Fatalf("err = %v, want ErrRateLimited", err)
+	}
+	if calls != 2 {
+		t.Fatalf("expected exactly 2 calls (initial + 1 retry), got %d", calls)
+	}
+}
+
+func TestClientGetBatchEmpty(t *testing.T) {
+	hit := false
+	srv, stop := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		hit = true
+		w.WriteHeader(http.StatusInternalServerError)
+	})
+	defer stop()
+	c := newTestClient(srv.URL, "")
+	papers, err := c.GetBatch(context.Background(), nil, nil)
+	if err != nil {
+		t.Fatalf("err = %v", err)
+	}
+	if papers != nil {
+		t.Fatalf("expected nil slice, got %+v", papers)
+	}
+	if hit {
+		t.Fatalf("upstream must not be called for empty input")
+	}
+}
+
+func TestClientGetBatchChunksLargeInput(t *testing.T) {
+	calls := 0
+	idsPerCall := []int{}
+	srv, stop := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		var body struct {
+			IDs []string `json:"ids"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		idsPerCall = append(idsPerCall, len(body.IDs))
+		out := make([]map[string]string, len(body.IDs))
+		for i, id := range body.IDs {
+			out[i] = map[string]string{"paperId": id, "title": "T-" + id}
+		}
+		_ = json.NewEncoder(w).Encode(out)
+	})
+	defer stop()
+	c := newTestClient(srv.URL, "")
+
+	ids := make([]string, 750) // forces 2 chunks: 500 + 250
+	for i := range ids {
+		ids[i] = fmt.Sprintf("p%d", i)
+	}
+	papers, err := c.GetBatch(context.Background(), ids, nil)
+	if err != nil {
+		t.Fatalf("GetBatch: %v", err)
+	}
+	if len(papers) != 750 {
+		t.Fatalf("len(papers) = %d, want 750", len(papers))
+	}
+	if calls != 2 || idsPerCall[0] != 500 || idsPerCall[1] != 250 {
+		t.Fatalf("expected 2 chunks of 500+250, got calls=%d sizes=%v", calls, idsPerCall)
+	}
+	if papers[0].PaperID != "p0" || papers[749].PaperID != "p749" {
+		t.Fatalf("alignment broken: first=%q last=%q", papers[0].PaperID, papers[749].PaperID)
 	}
 }
 
