@@ -139,6 +139,14 @@
                             <span data-i18n="settings.ai.max_figures">图像数量上限</span>
                             <input id="aiMaxFiguresInput" class="form-input" type="number" min="0" step="1" data-i18n-placeholder="settings.ai.max_figures_hint" placeholder="0 表示全部">
                         </label>
+                        <label class="field">
+                            <span data-i18n="settings.ai.pin_papers_limit_label">单会话最多 pin 文献数</span>
+                            <input id="aiPinPapersLimitInput" class="form-input" type="number" min="1" max="20" step="1">
+                        </label>
+                        <label class="field">
+                            <span data-i18n="settings.ai.context_budget_tokens_label">上下文 token 预算</span>
+                            <input id="aiContextBudgetTokensInput" class="form-input" type="number" min="2000" step="1000" data-i18n-placeholder="settings.ai.context_budget_tokens_hint" placeholder="默认 32000">
+                        </label>
                     </div>
                 </div>
             </details>

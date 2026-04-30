@@ -56,11 +56,13 @@ type AIRolePromptCollection struct {
 }
 
 type AIModelSettingsUpdate struct {
-	Models      []AIModelConfig       `json:"models"`
-	SceneModels AISceneModelSelection `json:"scene_models"`
-	Temperature float64               `json:"temperature"`
-	MaxFigures  int                   `json:"max_figures"`
-	Translation AITranslationConfig   `json:"translation"`
+	Models              []AIModelConfig       `json:"models"`
+	SceneModels         AISceneModelSelection `json:"scene_models"`
+	Temperature         float64               `json:"temperature"`
+	MaxFigures          int                   `json:"max_figures"`
+	Translation         AITranslationConfig   `json:"translation"`
+	PinPapersLimit      int                   `json:"pin_papers_limit"`
+	ContextBudgetTokens int                   `json:"context_budget_tokens"`
 }
 
 type AIPromptSettingsUpdate struct {
