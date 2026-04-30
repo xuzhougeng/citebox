@@ -63,7 +63,7 @@ func (t *FigureLookupTool) Run(ctx context.Context, in ToolInput) (ToolResult, e
 		return figureLookupFailedResult(inputJSON, errors.New("figure searcher is not configured")), nil
 	}
 
-	items, total, err := t.figures.SearchFigures(in.Query, in.Context.PaperID, limit)
+	items, total, err := t.searchFigures(ctx, in.Query, in.Context.PaperID, limit)
 	if err != nil {
 		return figureLookupFailedResult(inputJSON, err), nil
 	}
@@ -94,6 +94,46 @@ func (t *FigureLookupTool) Run(ctx context.Context, in ToolInput) (ToolResult, e
 			Status:            "completed",
 		}},
 	}, nil
+}
+
+func (t *FigureLookupTool) searchFigures(ctx context.Context, query string, paperID int64, limit int) ([]FigureRecord, int, error) {
+	items, total, err := t.figures.SearchFigures(query, paperID, limit)
+	if err != nil || len(items) > 0 || total > 0 {
+		return items, total, err
+	}
+	for _, term := range FigureSearchTerms(query) {
+		if err := ctx.Err(); err != nil {
+			return nil, 0, err
+		}
+		if strings.EqualFold(strings.TrimSpace(term), strings.TrimSpace(query)) {
+			continue
+		}
+		items, total, err = t.figures.SearchFigures(term, paperID, limit)
+		if err != nil || len(items) > 0 || total > 0 {
+			return items, total, err
+		}
+	}
+	return items, total, err
+}
+
+func FigureSearchTerms(query string) []string {
+	q := strings.TrimSpace(query)
+	if q == "" {
+		return nil
+	}
+	lower := strings.ToLower(q)
+	terms := make([]string, 0, 12)
+	if containsAnyEvidenceText(lower, "chip-seq", "chip seq", "chipseq", "chip", "染色质免疫沉淀") {
+		terms = append(terms,
+			"ChIP-seq",
+			"ChIP seq",
+			"chromatin immunoprecipitation",
+			"H3K27ac ChIP-seq",
+			"H3K4me3 ChIP-seq",
+		)
+	}
+	terms = append(terms, EvidenceSearchTerms(q)...)
+	return sanitizeEvidenceTerms(terms)
 }
 
 func clampFigureLookupLimit(limit int) int {

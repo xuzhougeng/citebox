@@ -188,6 +188,31 @@ func (s *limitCapturingFigureStore) SearchFigures(query string, paperID int64, l
 	return nil, 0, nil
 }
 
+type termSensitiveFigureStore struct {
+	queries []string
+}
+
+func (s *termSensitiveFigureStore) SearchFigures(query string, paperID int64, limit int) ([]FigureRecord, int, error) {
+	s.queries = append(s.queries, query)
+	if strings.EqualFold(strings.TrimSpace(query), "ChIP-seq") {
+		figures := []FigureRecord{{
+			FigureID: 8, PaperID: 2, PaperTitle: "ChIP Paper", DisplayLabel: "Fig 3",
+			ImageURL: "/api/figures/8/image", Caption: "H3K27ac ChIP-seq tracks.",
+		}}
+		return figures, len(figures), nil
+	}
+	return nil, 0, nil
+}
+
+func containsStringFold(values []string, want string) bool {
+	for _, value := range values {
+		if strings.EqualFold(strings.TrimSpace(value), want) {
+			return true
+		}
+	}
+	return false
+}
+
 func TestFigureLookupToolReturnsFigureCards(t *testing.T) {
 	tool := NewFigureLookupTool(stubFigureStore{
 		figures: []FigureRecord{{
@@ -203,6 +228,25 @@ func TestFigureLookupToolReturnsFigureCards(t *testing.T) {
 		t.Fatalf("cards = %+v", res.Cards)
 	}
 	if !strings.Contains(res.AnswerContext, "ATAC-seq overview") {
+		t.Fatalf("answer context = %s", res.AnswerContext)
+	}
+}
+
+func TestFigureLookupToolExtractsSearchTermFromNaturalLanguage(t *testing.T) {
+	store := &termSensitiveFigureStore{}
+	tool := NewFigureLookupTool(store)
+
+	res, err := tool.Run(context.Background(), ToolInput{Query: "在文献库中找一张ChIP-seq相关的图"})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(res.Cards) != 1 || res.Cards[0].Type != "figure_result" {
+		t.Fatalf("cards = %+v, queries = %v, want ChIP-seq figure hit", res.Cards, store.queries)
+	}
+	if !containsStringFold(store.queries, "ChIP-seq") {
+		t.Fatalf("queries = %v, want extracted ChIP-seq search", store.queries)
+	}
+	if !strings.Contains(res.AnswerContext, "H3K27ac ChIP-seq tracks") {
 		t.Fatalf("answer context = %s", res.AnswerContext)
 	}
 }
