@@ -19,9 +19,10 @@ const AIReaderPage = {
         this.initialized = true;
 
         this.configSummary = document.getElementById('aiConfigSummary');
-        this.paperSearchInput = document.getElementById('aiPaperSearchInput');
-        this.paperList = document.getElementById('aiPaperList');
-        this.paperSummary = document.getElementById('aiPaperSummary');
+        this.currentPaperBar = document.getElementById('aiCurrentPaperBar');
+        this.mentionPopover = document.getElementById('aiMentionPopover');
+        this.questionMirror = document.getElementById('aiQuestionMirror');
+        this.paperMentionLabels = new Set();
         this.conversation = document.getElementById('aiConversation');
         this.roundBadge = document.getElementById('aiRoundBadge');
         this.sessionHint = document.getElementById('aiSessionHint');
@@ -39,27 +40,52 @@ const AIReaderPage = {
     },
 
     bindEvents() {
-        this.paperSearchInput.addEventListener('input', Utils.debounce(() => this.loadPapers(), 250));
-
-        this.paperList.addEventListener('click', (event) => {
-            const button = event.target.closest('[data-paper-id]');
-            if (!button) return;
-            if (this.state.loading) return;
-            this.state.selectedPaperID = Number(button.dataset.paperId);
-            this.renderPaperList();
-            this.renderPaperSummary();
-            this.renderConversation();
-            this.syncURL();
-            this.ensurePaperDetail(this.state.selectedPaperID).catch((error) => {
-                Utils.showToast(error.message, 'error');
+        if (this.currentPaperBar) {
+            this.currentPaperBar.addEventListener('click', async (event) => {
+                const action = event.target.closest('[data-ai-paper-action]');
+                if (!action) return;
+                event.preventDefault();
+                if (action.dataset.aiPaperAction === 'open-paper') {
+                    await this.openPaperDetail();
+                } else if (action.dataset.aiPaperAction === 'switch-paper') {
+                    this.triggerMentionFromButton();
+                }
             });
-        });
+        }
 
-        this.paperSummary.addEventListener('click', async (event) => {
-            const button = event.target.closest('[data-ai-paper-action="open-paper"]');
-            if (!button) return;
-            await this.openPaperDetail();
-        });
+        if (this.questionInput) {
+            this.questionInput.addEventListener('input', () => {
+                this.handleQuestionInput();
+                this.renderQuestionMirror();
+            });
+            this.questionInput.addEventListener('scroll', () => this.syncQuestionMirrorScroll());
+            this.questionInput.addEventListener('keydown', (event) => this.handleMentionKeydown(event));
+            this.questionInput.addEventListener('blur', () => {
+                this._mentionBlurTimer = window.setTimeout(() => this.closeMention(), 150);
+            });
+            this.questionInput.addEventListener('focus', () => {
+                if (this._mentionBlurTimer) {
+                    window.clearTimeout(this._mentionBlurTimer);
+                    this._mentionBlurTimer = 0;
+                }
+            });
+            this.renderQuestionMirror();
+        }
+
+        if (this.mentionPopover) {
+            this.mentionPopover.addEventListener('mousedown', (event) => {
+                event.preventDefault();
+            });
+            this.mentionPopover.addEventListener('click', (event) => {
+                const item = event.target.closest('.ai-mention-item');
+                if (!item) return;
+                this.applyMentionItem({
+                    type: item.dataset.mentionType,
+                    id: Number(item.dataset.paperId || 0),
+                    name: item.dataset.roleName || '',
+                });
+            });
+        }
 
         this.runButton.addEventListener('click', async () => {
             await this.run();
@@ -179,12 +205,12 @@ const AIReaderPage = {
         `).join('');
     },
 
-    async loadPapers() {
+    async loadPapers(keyword = '') {
         const payload = await API.listPapers({
             status: 'completed',
             page: 1,
-            page_size: 100,
-            keyword: this.paperSearchInput.value.trim()
+            page_size: 200,
+            keyword: String(keyword || '').trim()
         });
 
         this.state.papers = payload.papers || [];
@@ -209,8 +235,7 @@ const AIReaderPage = {
             this.state.selectedPaperID = this.state.papers[0]?.id || null;
         }
 
-        this.renderPaperList();
-        this.renderPaperSummary();
+        this.renderCurrentPaperBar();
         this.renderConversation();
         this.syncURL();
         if (this.state.selectedPaperID) {
@@ -220,79 +245,40 @@ const AIReaderPage = {
         }
     },
 
-    renderPaperList() {
-        if (this.state.papers.length === 0) {
-            this.paperList.innerHTML = `
-                <div class="empty-state">
-                    <p>${t('ai.empty_no_papers', '没有找到可用于 AI伴读的文献。')}</p>
-                </div>
-            `;
-            return;
-        }
-
-        this.paperList.innerHTML = this.state.papers.map((paper) => {
-            const active = paper.id === this.state.selectedPaperID;
-            const tags = (paper.tags || []).slice(0, 3).map((tag) => `
-                <span class="tag-pill" style="background:${tag.color || '#A45C40'}22;color:${tag.color || '#A45C40'};">
-                    ${Utils.escapeHTML(tag.name)}
-                </span>
-            `).join('');
-
-            return `
-                <button class="ai-paper-item ${active ? 'active' : ''}" type="button" data-paper-id="${paper.id}" aria-pressed="${active ? 'true' : 'false'}">
-                    <div class="ai-paper-item-head">
-                        <strong>${Utils.escapeHTML(paper.title)}</strong>
-                        <div class="ai-paper-item-state">
-                            ${active ? `<span class="ai-paper-active-badge">${t('ai.paper_active_badge', '当前文献')}</span>` : ''}
-                            <span class="status-badge tone-${Utils.statusTone(paper.extraction_status)}">${Utils.escapeHTML(Utils.statusLabel(paper.extraction_status))}</span>
-                        </div>
-                    </div>
-                    <div class="ai-paper-item-meta">
-                        <span>${Utils.escapeHTML(paper.original_filename)}</span>
-                        <span>${paper.group_name ? t('ai.paper_group', '分组：${name}').replace('${name}', Utils.escapeHTML(paper.group_name)) : t('ai.paper_no_group', '未分组')}</span>
-                        <span>${t('ai.paper_figures', '图片 ${count}').replace('${count}', paper.figure_count || 0)}</span>
-                    </div>
-                    ${tags ? `<div class="ai-paper-item-tags">${tags}</div>` : ''}
-                </button>
-            `;
-        }).join('');
-    },
-
-    renderPaperSummary() {
+    renderCurrentPaperBar() {
+        if (!this.currentPaperBar) return;
         const paper = this.currentPaper();
+
         if (!paper) {
-            this.paperSummary.innerHTML = `
-                <div class="empty-state">
-                    <p>${t('ai.empty_select_paper', '请选择一篇文献。')}</p>
+            this.currentPaperBar.classList.add('empty');
+            this.currentPaperBar.innerHTML = `
+                <span class="ai-current-paper-icon" aria-hidden="true">@</span>
+                <div class="ai-current-paper-body">
+                    <span class="ai-current-paper-meta">${Utils.escapeHTML(t('ai.current_paper_empty', '尚未选中文献。在下方输入 @ 即可搜索切换。'))}</span>
+                </div>
+                <div class="ai-current-paper-actions">
+                    <button class="btn btn-outline" type="button" data-ai-paper-action="switch-paper">${Utils.escapeHTML(t('ai.btn_pick_paper', '选择文献'))}</button>
                 </div>
             `;
             return;
         }
 
-        const summaryText = paper.abstract_text || paper.paper_notes_text || paper.notes_text || t('ai.no_summary', '当前文献还没有摘要或笔记。');
-        const tags = (paper.tags || []).map((tag) => `
-            <span class="tag-pill" style="background:${tag.color || '#A45C40'}22;color:${tag.color || '#A45C40'};">
-                ${Utils.escapeHTML(tag.name)}
-            </span>
-        `).join('');
+        this.currentPaperBar.classList.remove('empty');
+        const meta = [
+            paper.original_filename,
+            paper.group_name ? t('ai.paper_group', '分组：${name}').replace('${name}', paper.group_name) : t('ai.paper_no_group', '未分组'),
+            t('ai.paper_figures', '图片 ${count}').replace('${count}', paper.figure_count || 0),
+        ].filter(Boolean).join(' · ');
 
-        this.paperSummary.innerHTML = `
-            <div class="ai-paper-summary-card">
-                <div class="manager-head">
-                    <h2>${Utils.escapeHTML(paper.title)}</h2>
-                    <p>${Utils.escapeHTML(paper.original_filename)}</p>
-                </div>
-                <div class="paper-list-meta">
-                    <span>${paper.group_name ? t('ai.paper_group', '分组：${name}').replace('${name}', Utils.escapeHTML(paper.group_name)) : t('ai.paper_no_group', '未分组')}</span>
-                    <span>${t('ai.paper_figures', '图片 ${count}').replace('${count}', paper.figure_count || 0)}</span>
-                    <span>${Utils.escapeHTML(Utils.formatDate(paper.updated_at))}</span>
-                </div>
-                <p class="paper-list-summary">${Utils.escapeHTML(summaryText)}</p>
-                ${tags ? `<div class="paper-list-tags">${tags}</div>` : ''}
-                <div class="card-actions ai-paper-summary-actions">
-                    <button class="btn btn-outline" type="button" data-ai-paper-action="open-paper">${t('ai.btn_paper_detail', '文献详情')}</button>
-                    <a class="btn btn-outline" href="${Utils.resourceViewerURL('pdf', paper.pdf_url)}">${t('ai.btn_open_pdf', '打开 PDF')}</a>
-                </div>
+        this.currentPaperBar.innerHTML = `
+            <span class="ai-current-paper-icon" aria-hidden="true">📄</span>
+            <div class="ai-current-paper-body">
+                <span class="ai-current-paper-title">${Utils.escapeHTML(paper.title)}</span>
+                <span class="ai-current-paper-meta">${Utils.escapeHTML(meta)}</span>
+            </div>
+            <div class="ai-current-paper-actions">
+                <button class="btn btn-outline" type="button" data-ai-paper-action="switch-paper">${Utils.escapeHTML(t('ai.btn_switch_paper', '切换文献'))}</button>
+                <button class="btn btn-outline" type="button" data-ai-paper-action="open-paper">${Utils.escapeHTML(t('ai.btn_paper_detail', '文献详情'))}</button>
             </div>
         `;
     },
@@ -391,6 +377,7 @@ const AIReaderPage = {
                         this.pushConversationTurn(event.result, paperID);
                         this.state.pendingTurn = null;
                         this.questionInput.value = '';
+                        this.renderQuestionMirror();
                         this.renderConversation();
                     }
                 }
@@ -612,7 +599,7 @@ const AIReaderPage = {
             .then((paper) => {
                 this.state.paperDetails[paperID] = paper;
                 if (paperID === this.state.selectedPaperID) {
-                    this.renderPaperSummary();
+                    this.renderCurrentPaperBar();
                     this.renderConversation();
                 }
                 return paper;
@@ -838,6 +825,356 @@ const AIReaderPage = {
         const caret = `${prefix}${needsLeadingSpace ? ' ' : ''}${mention} `.length;
         input.focus();
         input.setSelectionRange(caret, caret);
+        this.renderQuestionMirror();
+    },
+
+    shortPaperMention(title) {
+        const text = String(title || '').trim();
+        if (!text) return 'paper';
+        const head = Array.from(text).slice(0, 5).join('');
+        return text.length > head.length ? `${head}…` : head;
+    },
+
+    classifyMention(name) {
+        const trimmed = String(name || '').trim();
+        if (!trimmed) return 'paper';
+        const roleSet = new Set(this.availableRolePrompts().map((r) => String(r.name || '').trim()).filter(Boolean));
+        if (roleSet.has(trimmed)) return 'role';
+        if (this.paperMentionLabels && this.paperMentionLabels.has(trimmed)) return 'paper';
+        return 'paper';
+    },
+
+    parseQuestionTokens(text) {
+        const value = String(text || '');
+        const tokens = [];
+        const roleNames = this.availableRolePrompts()
+            .map((r) => String(r.name || '').trim())
+            .filter(Boolean)
+            .sort((a, b) => b.length - a.length);
+
+        let i = 0;
+        let lastIndex = 0;
+        while (i < value.length) {
+            const ch = value[i];
+            if (ch === '@' && (i === 0 || /\s/.test(value[i - 1]))) {
+                const after = value.slice(i + 1);
+                let matched = null;
+
+                for (const name of roleNames) {
+                    if (after.startsWith(name)) {
+                        const nextChar = after[name.length];
+                        if (!nextChar || /[\s@\n]/.test(nextChar)) {
+                            matched = { name, type: 'role' };
+                            break;
+                        }
+                    }
+                }
+
+                if (!matched) {
+                    const single = after.match(/^([^\s@\n]+)/);
+                    if (single) {
+                        matched = { name: single[1], type: 'paper' };
+                    }
+                }
+
+                if (matched) {
+                    if (i > lastIndex) {
+                        tokens.push({ type: 'text', text: value.slice(lastIndex, i) });
+                    }
+                    tokens.push({
+                        type: 'mention',
+                        text: `@${matched.name}`,
+                        mentionType: matched.type,
+                    });
+                    i += 1 + matched.name.length;
+                    lastIndex = i;
+                    continue;
+                }
+            }
+            i++;
+        }
+        if (lastIndex < value.length) {
+            tokens.push({ type: 'text', text: value.slice(lastIndex) });
+        }
+        return tokens;
+    },
+
+    renderQuestionMirror() {
+        if (!this.questionMirror || !this.questionInput) return;
+        const value = this.questionInput.value;
+        const tokens = this.parseQuestionTokens(value);
+        const html = tokens.map((token) => {
+            const safe = Utils.escapeHTML(token.text);
+            if (token.type === 'mention') {
+                const cls = token.mentionType === 'role' ? 'ai-token-role' : 'ai-token-paper';
+                return `<span class="ai-token-mention ${cls}">${safe}</span>`;
+            }
+            return safe;
+        }).join('');
+        this.questionMirror.innerHTML = html || '&nbsp;';
+        this.syncQuestionMirrorScroll();
+    },
+
+    syncQuestionMirrorScroll() {
+        if (!this.questionMirror || !this.questionInput) return;
+        this.questionMirror.scrollTop = this.questionInput.scrollTop;
+        this.questionMirror.scrollLeft = this.questionInput.scrollLeft;
+    },
+
+    // ===== Mention popover (@ palette) =====
+
+    handleQuestionInput() {
+        if (!this.questionInput || !this.mentionPopover) return;
+        const value = this.questionInput.value;
+        const caret = this.questionInput.selectionStart;
+        const before = value.slice(0, caret);
+        const match = before.match(/(^|[\s\n])@([^\s@\n]*)$/);
+        if (!match) {
+            this.closeMention();
+            return;
+        }
+        const queryLen = match[2].length;
+        const atIndex = before.length - queryLen - 1;
+        this.openMention(atIndex, match[2]);
+    },
+
+    handleMentionKeydown(event) {
+        if (!this._mentionState || !this._mentionState.open) {
+            return;
+        }
+        const items = this._mentionState.items;
+        if (!items.length && event.key !== 'Escape') {
+            return;
+        }
+        if (event.key === 'ArrowDown') {
+            event.preventDefault();
+            this._mentionState.activeIndex = (this._mentionState.activeIndex + 1) % Math.max(items.length, 1);
+            this.refreshMentionActive();
+            return;
+        }
+        if (event.key === 'ArrowUp') {
+            event.preventDefault();
+            this._mentionState.activeIndex = (this._mentionState.activeIndex - 1 + items.length) % Math.max(items.length, 1);
+            this.refreshMentionActive();
+            return;
+        }
+        if (event.key === 'Enter' || event.key === 'Tab') {
+            const item = items[this._mentionState.activeIndex];
+            if (item) {
+                event.preventDefault();
+                this.applyMentionItem(item);
+            }
+            return;
+        }
+        if (event.key === 'Escape') {
+            event.preventDefault();
+            this.closeMention();
+        }
+    },
+
+    triggerMentionFromButton() {
+        if (!this.questionInput) return;
+        const input = this.questionInput;
+        input.focus();
+        const caret = Number.isFinite(input.selectionStart) ? input.selectionStart : input.value.length;
+        const before = input.value.slice(0, caret);
+        const after = input.value.slice(caret);
+        const needsLeadingSpace = before && !/\s$/.test(before);
+        const insertion = `${needsLeadingSpace ? ' ' : ''}@`;
+        input.value = `${before}${insertion}${after}`;
+        const newCaret = before.length + insertion.length;
+        input.setSelectionRange(newCaret, newCaret);
+        this.handleQuestionInput();
+        this.renderQuestionMirror();
+    },
+
+    openMention(atIndex, query) {
+        const items = this.buildMentionItems(query);
+        this._mentionState = {
+            open: true,
+            atIndex,
+            query,
+            items,
+            activeIndex: 0,
+        };
+        this.renderMentionPopover();
+    },
+
+    closeMention() {
+        if (!this._mentionState || !this._mentionState.open) {
+            this._mentionState = { open: false };
+            if (this.mentionPopover) this.mentionPopover.hidden = true;
+            return;
+        }
+        this._mentionState = { open: false };
+        if (this.mentionPopover) {
+            this.mentionPopover.hidden = true;
+            this.mentionPopover.innerHTML = '';
+        }
+    },
+
+    buildMentionItems(query) {
+        const q = String(query || '').trim().toLowerCase();
+        const items = [];
+
+        const roles = this.availableRolePrompts();
+        const matchedRoles = roles.filter((role) => {
+            if (!q) return true;
+            return String(role.name || '').toLowerCase().includes(q);
+        }).slice(0, 6);
+        matchedRoles.forEach((role) => {
+            items.push({
+                type: 'role',
+                name: role.name,
+                title: `@${role.name}`,
+                meta: String(role.description || role.prompt || '').slice(0, 80),
+            });
+        });
+
+        const papers = this.state.papers || [];
+        const matchedPapers = papers.filter((paper) => {
+            if (!q) return true;
+            const haystack = [
+                paper.title,
+                paper.original_filename,
+                paper.group_name,
+                paper.doi,
+            ].filter(Boolean).join(' ').toLowerCase();
+            return haystack.includes(q);
+        }).slice(0, 8);
+        matchedPapers.forEach((paper) => {
+            const metaParts = [
+                paper.original_filename,
+                paper.group_name || t('ai.paper_no_group', '未分组'),
+                t('ai.paper_figures', '图片 ${count}').replace('${count}', paper.figure_count || 0),
+            ].filter(Boolean);
+            items.push({
+                type: 'paper',
+                id: paper.id,
+                title: paper.title,
+                meta: metaParts.join(' · '),
+                isCurrent: paper.id === this.state.selectedPaperID,
+            });
+        });
+
+        return items;
+    },
+
+    renderMentionPopover() {
+        if (!this.mentionPopover || !this._mentionState) return;
+        const { items, activeIndex } = this._mentionState;
+
+        if (!items.length) {
+            this.mentionPopover.hidden = false;
+            this.mentionPopover.innerHTML = `
+                <div class="ai-mention-empty">${Utils.escapeHTML(t('ai.mention_empty', '没有匹配的文献或角色。'))}</div>
+            `;
+            return;
+        }
+
+        const sections = [];
+        const roleItems = items.filter((it) => it.type === 'role');
+        const paperItems = items.filter((it) => it.type === 'paper');
+
+        const renderItem = (item, globalIndex) => {
+            const active = globalIndex === activeIndex ? ' active' : '';
+            const current = item.isCurrent ? ' is-current' : '';
+            const badge = item.isCurrent
+                ? `<span class="ai-mention-item-badge">${Utils.escapeHTML(t('ai.paper_active_badge', '当前文献'))}</span>`
+                : '';
+            const icon = item.type === 'role' ? '@' : '📄';
+            const dataset = item.type === 'role'
+                ? `data-mention-type="role" data-role-name="${Utils.escapeHTML(item.name)}"`
+                : `data-mention-type="paper" data-paper-id="${item.id}"`;
+            return `
+                <li class="ai-mention-item${active}${current}" role="option" data-mention-index="${globalIndex}" ${dataset}>
+                    <span class="ai-mention-item-icon" aria-hidden="true">${icon}</span>
+                    <div class="ai-mention-item-body">
+                        <span class="ai-mention-item-title">${Utils.escapeHTML(item.title)}</span>
+                        ${item.meta ? `<span class="ai-mention-item-meta">${Utils.escapeHTML(item.meta)}</span>` : ''}
+                    </div>
+                    ${badge}
+                </li>
+            `;
+        };
+
+        let cursor = 0;
+        if (roleItems.length) {
+            const roleHTML = roleItems.map((item) => renderItem(item, cursor++)).join('');
+            sections.push(`
+                <div class="ai-mention-section" data-section="roles">
+                    <div class="ai-mention-section-title">${Utils.escapeHTML(t('ai.mention_section_roles', '角色 Prompt'))}</div>
+                    <ul class="ai-mention-list" role="presentation">${roleHTML}</ul>
+                </div>
+            `);
+        }
+        if (paperItems.length) {
+            const paperHTML = paperItems.map((item) => renderItem(item, cursor++)).join('');
+            sections.push(`
+                <div class="ai-mention-section" data-section="papers">
+                    <div class="ai-mention-section-title">${Utils.escapeHTML(t('ai.mention_section_papers', '文献'))}</div>
+                    <ul class="ai-mention-list" role="presentation">${paperHTML}</ul>
+                </div>
+            `);
+        }
+
+        this.mentionPopover.hidden = false;
+        this.mentionPopover.innerHTML = sections.join('');
+        this.scrollMentionActiveIntoView();
+    },
+
+    refreshMentionActive() {
+        if (!this.mentionPopover || !this._mentionState) return;
+        const items = this.mentionPopover.querySelectorAll('.ai-mention-item');
+        items.forEach((el) => el.classList.remove('active'));
+        const target = this.mentionPopover.querySelector(`[data-mention-index="${this._mentionState.activeIndex}"]`);
+        if (target) target.classList.add('active');
+        this.scrollMentionActiveIntoView();
+    },
+
+    scrollMentionActiveIntoView() {
+        if (!this.mentionPopover) return;
+        const target = this.mentionPopover.querySelector('.ai-mention-item.active');
+        if (target) target.scrollIntoView({ block: 'nearest' });
+    },
+
+    applyMentionItem(item) {
+        if (!item || !this.questionInput) return;
+
+        const state = this._mentionState;
+        const input = this.questionInput;
+        const caret = input.selectionStart;
+        const beforeAt = (state && Number.isFinite(state.atIndex)) ? input.value.slice(0, state.atIndex) : input.value.slice(0, caret);
+        const after = input.value.slice(caret);
+
+        if (item.type === 'role') {
+            const mention = `@${item.name} `;
+            input.value = `${beforeAt}${mention}${after}`;
+            const newCaret = beforeAt.length + mention.length;
+            input.setSelectionRange(newCaret, newCaret);
+        } else if (item.type === 'paper') {
+            const paper = this.state.papers.find((p) => p.id === item.id) || this.state.paperDetails[item.id];
+            const title = item.title || paper?.title || '';
+            const shortLabel = this.shortPaperMention(title);
+            this.paperMentionLabels.add(shortLabel);
+            const mention = `@${shortLabel} `;
+            input.value = `${beforeAt}${mention}${after}`;
+            const newCaret = beforeAt.length + mention.length;
+            input.setSelectionRange(newCaret, newCaret);
+            if (item.id && item.id !== this.state.selectedPaperID && !this.state.loading) {
+                this.state.selectedPaperID = item.id;
+                this.renderCurrentPaperBar();
+                this.renderConversation();
+                this.syncURL();
+                this.ensurePaperDetail(item.id).catch((error) => {
+                    Utils.showToast(error.message, 'error');
+                });
+            }
+        }
+
+        this.closeMention();
+        this.renderQuestionMirror();
+        input.focus();
     },
 
     questionPlaceholder() {
@@ -929,8 +1266,7 @@ const AIReaderPage = {
                 }
                 : paper
         ));
-        this.renderPaperList();
-        this.renderPaperSummary();
+        this.renderCurrentPaperBar();
     },
 
     queryPaperID() {

@@ -77,21 +77,8 @@
                 <div id="aiConfigSummary" class="ai-config-summary-grid"></div>
             </details>
 
-            <section class="filters-card ai-workspace-card">
-                <div class="manager-head">
-                    <h2 data-i18n="ai.select_paper_heading">选择文献</h2>
-                </div>
-                <div class="form-grid compact-grid-form">
-                    <label class="field field-span-2">
-                        <span data-i18n="ai.search_label">检索文献</span>
-                        <input id="aiPaperSearchInput" class="form-input" type="text" placeholder="按标题、文件名、摘要、备注或标签过滤" data-i18n-placeholder="ai.search_placeholder">
-                    </label>
-                </div>
-                <div id="aiPaperList" class="ai-paper-list"></div>
-                <div id="aiPaperSummary" class="ai-paper-summary"></div>
-            </section>
-
             <section class="result-card ai-query-card">
+                <div id="aiCurrentPaperBar" class="ai-current-paper-bar"></div>
                 <div class="ai-action-head">
                     <span class="ai-section-kicker" data-i18n="ai.free_ask">自由提问</span>
                     <span class="ai-section-rule" aria-hidden="true"></span>
@@ -107,11 +94,15 @@
                 <div id="aiConversation" class="ai-conversation"></div>
                 <label class="field ai-question-field">
                     <span class="ai-question-label" data-i18n="ai.question_label">想让 AI 帮你什么？</span>
+                    <div class="ai-question-input-wrap">
+                        <div id="aiQuestionMirror" class="ai-question-mirror" aria-hidden="true"></div>
+                        <textarea id="aiQuestionInput" class="form-textarea ai-question-input" rows="4" placeholder="输入 @ 切换文献或调用角色，例如 @严格证据模式 请解释这篇文章的核心结论。" data-i18n-placeholder="ai.question_placeholder" spellcheck="false"></textarea>
+                        <div id="aiMentionPopover" class="ai-mention-popover" role="listbox" aria-label="@ 选项" hidden></div>
+                    </div>
                     <div class="ai-role-prompt-bar">
-                        <p id="aiRolePromptHint" class="ai-role-prompt-hint" data-i18n="ai.role_prompt_hint">输入 @角色名 直接调用角色 Prompt，也可以点击下面的快捷项插入。</p>
+                        <p id="aiRolePromptHint" class="ai-role-prompt-hint" data-i18n="ai.role_prompt_hint">输入 @ 唤起选择面板：可切换文献或调用角色 Prompt。</p>
                         <div id="aiRolePromptQuickList" class="ai-role-prompt-list"></div>
                     </div>
-                    <textarea id="aiQuestionInput" class="form-textarea ai-question-input" rows="5" placeholder="例如：@严格证据模式 请解释这篇文章的核心结论，以及哪些图片最关键。" data-i18n-placeholder="ai.question_placeholder"></textarea>
                 </label>
                 <div class="submit-row">
                     <button id="runAIReaderButton" class="btn btn-primary" type="button" data-i18n="ai.btn_send">发送问题</button>

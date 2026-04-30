@@ -196,6 +196,29 @@ func TestClientReferencesCitationsRecommendations(t *testing.T) {
 				if r.URL.Path != tc.path {
 					t.Errorf("path = %s, want %s", r.URL.Path, tc.path)
 				}
+				fields := r.URL.Query().Get("fields")
+				if !strings.Contains(fields, "isInfluential") || !strings.Contains(fields, "intents") {
+					t.Errorf("fields = %q, want edge metadata", fields)
+				}
+				if strings.Contains(fields, ".tldr") || strings.Contains(fields, ",tldr") {
+					t.Errorf("fields = %q, must not request nested tldr", fields)
+				}
+				if tc.name == "References" {
+					if !strings.Contains(fields, "citedPaper.paperId") {
+						t.Errorf("fields = %q, want citedPaper fields", fields)
+					}
+					if strings.Contains(fields, "citingPaper.") {
+						t.Errorf("fields = %q, references must not request citingPaper fields", fields)
+					}
+				}
+				if tc.name == "Citations" {
+					if !strings.Contains(fields, "citingPaper.paperId") {
+						t.Errorf("fields = %q, want citingPaper fields", fields)
+					}
+					if strings.Contains(fields, "citedPaper.") {
+						t.Errorf("fields = %q, citations must not request citedPaper fields", fields)
+					}
+				}
 				w.Write([]byte(tc.respData))
 			})
 			defer stop()
@@ -215,6 +238,13 @@ func TestClientRecommendations(t *testing.T) {
 	srv, stop := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/recommendations/v1/papers/forpaper/p1" {
 			t.Errorf("path = %s", r.URL.Path)
+		}
+		fields := r.URL.Query().Get("fields")
+		if !strings.Contains(fields, "paperId") || !strings.Contains(fields, "title") {
+			t.Errorf("fields = %q, want paper metadata", fields)
+		}
+		if strings.Contains(fields, "tldr") {
+			t.Errorf("fields = %q, recommendations must not request tldr", fields)
 		}
 		w.Write([]byte(`{"recommendedPapers":[{"paperId":"rec1","title":"Rec"}]}`))
 	})
@@ -236,6 +266,13 @@ func TestClientRecommendationsForList(t *testing.T) {
 		}
 		if r.URL.Path != "/recommendations/v1/papers" {
 			t.Errorf("path = %s", r.URL.Path)
+		}
+		fields := r.URL.Query().Get("fields")
+		if !strings.Contains(fields, "paperId") || !strings.Contains(fields, "title") {
+			t.Errorf("fields = %q, want paper metadata", fields)
+		}
+		if strings.Contains(fields, "tldr") {
+			t.Errorf("fields = %q, recommendations must not request tldr", fields)
 		}
 		var body struct {
 			Positive []string `json:"positivePaperIds"`

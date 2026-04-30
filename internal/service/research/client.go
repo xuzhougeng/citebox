@@ -223,8 +223,13 @@ func (rp rawPaper) toPaper() Paper {
 	return out
 }
 
-// defaultPaperFields is the field selection used by Get/Search/References/Citations.
+// defaultPaperFields is the field selection used by Get/Search.
 const defaultPaperFields = "paperId,externalIds,title,abstract,year,venue,authors,citationCount,influentialCitationCount,openAccessPdf,tldr,fieldsOfStudy"
+
+// paperFieldsWithoutTLDR is used for references/citations and recommendations.
+// Semantic Scholar accepts tldr on direct Graph paper responses, but rejects it
+// on edge-list and recommendation endpoints.
+const paperFieldsWithoutTLDR = "paperId,externalIds,title,abstract,year,venue,authors,citationCount,influentialCitationCount,openAccessPdf,fieldsOfStudy"
 
 // Search executes a paper/search query.
 func (c *Client) Search(ctx context.Context, query string, opts SearchOpts) (PaperList, error) {
@@ -299,18 +304,18 @@ func (e rawEdge) paper() (Paper, bool) {
 
 // References returns papers that the given paper cites.
 func (c *Client) References(ctx context.Context, paperID string, offset, limit int) (PaperList, error) {
-	return c.fetchPaperList(ctx, "/graph/v1/paper/"+url.PathEscape(paperID)+"/references", offset, limit, false)
+	return c.fetchPaperList(ctx, "/graph/v1/paper/"+url.PathEscape(paperID)+"/references", "citedPaper", offset, limit, false)
 }
 
 // Citations returns papers that cite the given paper. If opts.InfluentialOnly,
 // non-influential edges are dropped *after* fetch (S2 has no server-side filter).
 func (c *Client) Citations(ctx context.Context, paperID string, offset, limit int, opts CitationOpts) (PaperList, error) {
-	return c.fetchPaperList(ctx, "/graph/v1/paper/"+url.PathEscape(paperID)+"/citations", offset, limit, opts.InfluentialOnly)
+	return c.fetchPaperList(ctx, "/graph/v1/paper/"+url.PathEscape(paperID)+"/citations", "citingPaper", offset, limit, opts.InfluentialOnly)
 }
 
-func (c *Client) fetchPaperList(ctx context.Context, path string, offset, limit int, influentialOnly bool) (PaperList, error) {
+func (c *Client) fetchPaperList(ctx context.Context, path, paperPrefix string, offset, limit int, influentialOnly bool) (PaperList, error) {
 	q := url.Values{}
-	q.Set("fields", "isInfluential,intents,"+wrapPaperFields(defaultPaperFields))
+	q.Set("fields", "isInfluential,intents,"+prefixPaperFields(paperFieldsWithoutTLDR, paperPrefix))
 	if offset > 0 {
 		q.Set("offset", strconv.Itoa(offset))
 	}
@@ -344,14 +349,14 @@ func RateInterval(apiKey string) time.Duration {
 	return time.Second
 }
 
-// wrapPaperFields prefixes every comma-delimited field with the given parent prefix
-// so the citedPaper / citingPaper sub-objects are projected fully. The S2 API
-// expects e.g. `citedPaper.title,citedPaper.abstract,...`.
-func wrapPaperFields(fields string) string {
+// prefixPaperFields prefixes every comma-delimited field with the given edge
+// paper object name. The S2 API expects endpoint-specific fields, e.g.
+// `citedPaper.title` for references and `citingPaper.title` for citations.
+func prefixPaperFields(fields, prefix string) string {
 	parts := strings.Split(fields, ",")
-	out := make([]string, 0, 2*len(parts))
+	out := make([]string, 0, len(parts))
 	for _, p := range parts {
-		out = append(out, "citedPaper."+p, "citingPaper."+p)
+		out = append(out, prefix+"."+p)
 	}
 	return strings.Join(out, ",")
 }
@@ -364,7 +369,7 @@ type recommendationsResponse struct {
 // Recommendations returns S2 recommendations for a single seed paper.
 func (c *Client) Recommendations(ctx context.Context, paperID string) ([]Paper, error) {
 	q := url.Values{}
-	q.Set("fields", defaultPaperFields)
+	q.Set("fields", paperFieldsWithoutTLDR)
 	var raw recommendationsResponse
 	if err := c.doJSON(ctx, "/recommendations/v1/papers/forpaper/"+url.PathEscape(paperID), q, &raw); err != nil {
 		return nil, err
@@ -391,7 +396,7 @@ func (c *Client) RecommendationsForList(ctx context.Context, positive, negative 
 		return nil, err
 	}
 	q := url.Values{}
-	q.Set("fields", defaultPaperFields)
+	q.Set("fields", paperFieldsWithoutTLDR)
 	full := c.baseURL + "/recommendations/v1/papers?" + q.Encode()
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, full, strings.NewReader(string(buf)))
 	if err != nil {

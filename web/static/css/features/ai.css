@@ -524,5 +524,263 @@ html[lang^="zh"] .ai-config-details[open] .ai-collapsible-toggle::before {
 
 .ai-question-input {
     margin-top: 0.2rem;
-    min-height: 9rem;
+    min-height: 8rem;
+}
+
+/* ===== Current paper bar ===== */
+.ai-current-paper-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    padding: 0.7rem 0.95rem;
+    margin-bottom: 0.9rem;
+    border-radius: 14px;
+    border: 1px solid rgba(var(--ink-rgb), 0.08);
+    background: rgba(var(--surface-rgb), 0.7);
+    min-height: 2.85rem;
+}
+
+.ai-current-paper-bar.empty {
+    color: var(--muted);
+    border-style: dashed;
+    background: transparent;
+}
+
+.ai-current-paper-icon {
+    flex: 0 0 auto;
+    width: 28px;
+    height: 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    background: rgba(var(--accent-rgb), 0.12);
+    color: var(--accent-deep);
+    font-size: 0.95rem;
+}
+
+.ai-current-paper-body {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    align-items: baseline;
+    gap: 0.55rem;
+    flex-wrap: wrap;
+}
+
+.ai-current-paper-title {
+    font-weight: 600;
+    color: var(--ink);
+    font-size: 0.98rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 100%;
+}
+
+.ai-current-paper-meta {
+    color: var(--muted);
+    font-size: 0.82rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ai-current-paper-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex: 0 0 auto;
+}
+
+.ai-current-paper-actions .btn {
+    padding: 0.32rem 0.85rem;
+    font-size: 0.85rem;
+}
+
+/* ===== Mention popover & mirror overlay ===== */
+.ai-question-input-wrap {
+    position: relative;
+}
+
+.ai-question-input-wrap .ai-question-input,
+.ai-question-input-wrap .ai-question-mirror {
+    box-sizing: border-box;
+    width: 100%;
+    margin: 0;
+    padding: 0.85rem 1rem;
+    border-radius: 14px;
+    border: 1px solid rgba(var(--ink-rgb), 0.16);
+    font-family: inherit;
+    font-size: 0.96rem;
+    line-height: 1.55;
+    letter-spacing: normal;
+    word-break: normal;
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+}
+
+.ai-question-input-wrap .ai-question-input {
+    position: relative;
+    z-index: 2;
+    background: transparent;
+    color: transparent;
+    caret-color: var(--ink);
+    resize: vertical;
+}
+
+.ai-question-input-wrap .ai-question-input::placeholder {
+    color: var(--muted);
+}
+
+.ai-question-input-wrap .ai-question-input::selection {
+    background: rgba(var(--accent-rgb), 0.28);
+    color: var(--ink);
+}
+
+.ai-question-mirror {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    color: var(--ink);
+    background: var(--panel-strong, #fffaf4);
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+/* Highlights must NOT affect character width, otherwise the textarea
+   caret drifts away from the visible mirror text. No padding, border,
+   or font-weight changes — only background + text color. */
+.ai-token-mention {
+    border-radius: 4px;
+}
+
+.ai-token-mention.ai-token-role {
+    background: rgba(var(--accent-rgb), 0.18);
+    color: var(--accent-deep);
+}
+
+.ai-token-mention.ai-token-paper {
+    background: rgba(65, 103, 136, 0.18);
+    color: var(--info);
+}
+
+.ai-mention-popover {
+    position: absolute;
+    left: 0;
+    bottom: calc(100% + 6px);
+    z-index: 30;
+    width: 100%;
+    max-height: 22rem;
+    overflow-y: auto;
+    padding: 0.4rem;
+    border-radius: 14px;
+    background: var(--bg, #fff);
+    border: 1px solid rgba(var(--ink-rgb), 0.12);
+    box-shadow: 0 18px 40px -18px rgba(0, 0, 0, 0.32),
+                0 6px 14px -8px rgba(0, 0, 0, 0.16);
+}
+
+.ai-mention-popover[hidden] {
+    display: none;
+}
+
+.ai-mention-section + .ai-mention-section {
+    margin-top: 0.35rem;
+    padding-top: 0.35rem;
+    border-top: 1px solid rgba(var(--ink-rgb), 0.06);
+}
+
+.ai-mention-section-title {
+    padding: 0.3rem 0.55rem 0.2rem;
+    font-size: 0.7rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--muted);
+}
+
+.ai-mention-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+}
+
+.ai-mention-item {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    padding: 0.5rem 0.6rem;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.ai-mention-item:hover,
+.ai-mention-item.active {
+    background: rgba(var(--accent-rgb), 0.1);
+}
+
+.ai-mention-item-icon {
+    flex: 0 0 auto;
+    width: 26px;
+    height: 26px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 7px;
+    background: rgba(var(--ink-rgb), 0.06);
+    font-size: 0.85rem;
+    color: var(--muted);
+}
+
+.ai-mention-item.is-current .ai-mention-item-icon,
+.ai-mention-item[data-mention-type="role"] .ai-mention-item-icon {
+    background: rgba(var(--accent-rgb), 0.14);
+    color: var(--accent-deep);
+}
+
+.ai-mention-item-body {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+}
+
+.ai-mention-item-title {
+    color: var(--ink);
+    font-size: 0.92rem;
+    line-height: 1.35;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 500;
+}
+
+.ai-mention-item-meta {
+    color: var(--muted);
+    font-size: 0.78rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ai-mention-item-badge {
+    flex: 0 0 auto;
+    font-size: 0.7rem;
+    padding: 0.12rem 0.45rem;
+    border-radius: 999px;
+    background: rgba(var(--accent-rgb), 0.18);
+    color: var(--accent-deep);
+}
+
+.ai-mention-empty {
+    padding: 1rem 0.6rem;
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.88rem;
 }

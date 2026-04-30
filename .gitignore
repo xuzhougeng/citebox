@@ -35,7 +35,11 @@ web/static/vendor/pdfjs/
 .playwright-mcp
 
 # Local IDE / agent folders
+.codex
 .claude/
 .vscode/
 .idea/
 .superpowers/
+
+server
+.database
