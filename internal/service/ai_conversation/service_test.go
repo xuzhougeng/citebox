@@ -193,3 +193,39 @@ func (s *stubNonStreamCaller) CallProviderGeneric(ctx context.Context, settings 
 	systemPrompt, userPrompt string) (string, string, error) {
 	return s.staticReply, "test", nil
 }
+
+func TestSendMessageTriggersSummaryWhenOverBudget(t *testing.T) {
+	svc, libRepo, caller := newServiceForTest(t)
+	titleCaller := &stubNonStreamCaller{staticReply: "压缩 / 标题"}
+	svc.titleCaller = titleCaller
+	svc.summaryCaller = titleCaller
+
+	convID, _ := svc.CreateDraft()
+	// Seed many messages so we exceed budget.
+	bigText := strings.Repeat("一段很长的内容。", 800)
+	for i := 0; i < 6; i++ {
+		_, _ = libRepo.AIConversation.AddMessage(convID, "user", bigText, repository.AIMessageMeta{})
+		_, _ = libRepo.AIConversation.AddMessage(convID, "assistant", bigText, repository.AIMessageMeta{})
+	}
+
+	// Force a tiny budget so summarization fires.
+	smallSettings := model.DefaultAISettings()
+	smallSettings.APIKey = "fake"
+	smallSettings.PinPapersLimit = 5
+	smallSettings.ContextBudgetTokens = 500
+	svc.settings = &stubSettingsProvider{settings: smallSettings}
+
+	caller.staticReply = "答案"
+	_, err := svc.SendMessage(context.Background(), SendMessageInput{
+		ConversationID: convID,
+		Content:        "新问题",
+	}, func(string) error { return nil })
+	if err != nil {
+		t.Fatalf("SendMessage: %v", err)
+	}
+
+	conv, _ := libRepo.AIConversation.GetConversation(convID)
+	if conv.SummaryText == "" {
+		t.Fatalf("expected summary to be persisted")
+	}
+}
