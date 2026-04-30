@@ -1,7 +1,7 @@
 if (typeof window.t !== 'function') window.t = function(k,f){return f||k};
 
 const AppNav = {
-    SECONDARY_HREFS: ['/palettes', '/groups', '/tags', '/research'],
+    SECONDARY_HREFS: ['/palettes', '/groups', '/tags', '/settings'],
 
     init() {
         const navLinks = document.querySelector('.nav-links');
@@ -9,23 +9,37 @@ const AppNav = {
         if (navLinks.dataset.navEnhanced === '1') return;
         navLinks.dataset.navEnhanced = '1';
 
+        this.reorderPrimary(navLinks);
         this.buildDropdown(navLinks);
         this.buildMobileToggle(navLinks);
         this.bindGlobalDismiss();
     },
 
+    // Place "调研" (/research) immediately after "AI 伴读" (/ai). The shared HTML
+    // template lists them in the opposite order; doing the move here keeps every
+    // page's <nav> in sync without touching 13 separate files.
+    reorderPrimary(navLinks) {
+        const researchLink = navLinks.querySelector('a[href="/research"]');
+        const aiLink = navLinks.querySelector('a[href="/ai"]');
+        if (!researchLink || !aiLink) return;
+        const researchLi = researchLink.closest('li');
+        const aiLi = aiLink.closest('li');
+        if (!researchLi || !aiLi) return;
+        if (aiLi.nextElementSibling !== researchLi) {
+            aiLi.after(researchLi);
+        }
+    },
+
     buildDropdown(navLinks) {
         const items = Array.from(navLinks.children).filter((el) => el.tagName === 'LI');
         const secondary = [];
-        let firstIdx = -1;
 
-        items.forEach((li, i) => {
+        items.forEach((li) => {
             const a = li.querySelector('a[href]');
             if (!a) return;
             const href = a.getAttribute('href');
             if (this.SECONDARY_HREFS.includes(href)) {
                 secondary.push(li);
-                if (firstIdx === -1) firstIdx = i;
             }
         });
 
@@ -60,7 +74,7 @@ const AppNav = {
         menu.className = 'nav-dropdown-menu';
         menu.setAttribute('role', 'menu');
 
-        navLinks.insertBefore(dropdown, items[firstIdx]);
+        navLinks.appendChild(dropdown);
         secondary.forEach((li) => {
             li.setAttribute('role', 'none');
             const link = li.querySelector('a');
