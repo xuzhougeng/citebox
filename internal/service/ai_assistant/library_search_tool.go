@@ -25,6 +25,11 @@ type LibrarySearchTool struct {
 	papers PaperGetter
 }
 
+const (
+	defaultLibrarySearchLimit = 12
+	maxLibrarySearchLimit     = 50
+)
+
 func NewLibrarySearchTool(papers PaperGetter) *LibrarySearchTool {
 	return &LibrarySearchTool{papers: papers}
 }
@@ -32,12 +37,36 @@ func NewLibrarySearchTool(papers PaperGetter) *LibrarySearchTool {
 func (t *LibrarySearchTool) Run(ctx context.Context, in ToolInput) (ToolResult, error) {
 	limit := in.Limit
 	if limit <= 0 {
-		limit = 12
+		limit = defaultLibrarySearchLimit
+	}
+	if limit > maxLibrarySearchLimit {
+		limit = maxLibrarySearchLimit
 	}
 	terms := EvidenceSearchTerms(in.Query)
-	ids := candidateIDs(t.papers, terms, 120)
+	inputJSON, _ := json.Marshal(struct {
+		Query string `json:"query"`
+		Limit int    `json:"limit"`
+	}{Query: in.Query, Limit: limit})
+	ids, candidateErr := candidateIDs(t.papers, terms, 120)
+	if candidateErr != nil {
+		return ToolResult{
+			Process: ProcessSummary{
+				Intent: IntentLibrarySearch,
+				Stages: []ProcessStage{
+					{Label: "全库检索", Status: "failed"},
+				},
+			},
+			ToolCalls: []ToolCallSummary{{
+				ToolName:  "library_search",
+				InputJSON: string(inputJSON),
+				Status:    "failed",
+				Error:     candidateErr.Error(),
+			}},
+		}, nil
+	}
 	cards := make([]ResultCard, 0, limit)
 	citations := make([]Citation, 0, limit*3)
+	skipped := 0
 
 	for _, id := range ids {
 		if len(cards) >= limit {
@@ -48,6 +77,7 @@ func (t *LibrarySearchTool) Run(ctx context.Context, in ToolInput) (ToolResult, 
 		}
 		paper, err := t.papers.GetPaperDetail(id)
 		if err != nil || paper == nil {
+			skipped++
 			continue
 		}
 		matches := FindLocalEvidenceMatches(*paper, terms, 3)
@@ -84,14 +114,11 @@ func (t *LibrarySearchTool) Run(ctx context.Context, in ToolInput) (ToolResult, 
 		cards = append(cards, ResultCard{Type: "paper_hit", Payload: card})
 	}
 
-	inputJSON, _ := json.Marshal(struct {
-		Query string `json:"query"`
-		Limit int    `json:"limit"`
-	}{Query: in.Query, Limit: limit})
 	outputJSON, _ := json.Marshal(struct {
 		Candidates int `json:"candidates"`
 		Hits       int `json:"hits"`
-	}{Candidates: len(ids), Hits: len(cards)})
+		Skipped    int `json:"skipped,omitempty"`
+	}{Candidates: len(ids), Hits: len(cards), Skipped: skipped})
 
 	return ToolResult{
 		Process: ProcessSummary{
@@ -226,17 +253,17 @@ func FindLocalEvidenceMatches(paper model.Paper, terms []string, limit int) []Lo
 	return out
 }
 
-func candidateIDs(papers PaperGetter, terms []string, limit int) []int64 {
+func candidateIDs(papers PaperGetter, terms []string, limit int) ([]int64, error) {
 	if papers == nil || len(terms) == 0 || limit <= 0 {
-		return nil
+		return nil, nil
 	}
 	lister, ok := papers.(EvidenceCandidateLister)
 	if !ok {
-		return nil
+		return nil, nil
 	}
 	found, err := lister.ListEvidenceCandidatePaperIDs(terms, limit)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 	seen := map[int64]bool{}
 	ids := make([]int64, 0, len(found))
@@ -250,7 +277,7 @@ func candidateIDs(papers PaperGetter, terms []string, limit int) []int64 {
 			break
 		}
 	}
-	return ids
+	return ids, nil
 }
 
 func matchedLocations(snippets []PaperHitSnippet) []string {

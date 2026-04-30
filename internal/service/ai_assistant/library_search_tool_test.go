@@ -2,6 +2,8 @@ package ai_assistant
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -11,6 +13,7 @@ import (
 type stubPaperStore struct {
 	papers map[int64]*model.Paper
 	ids    []int64
+	err    error
 }
 
 func (s stubPaperStore) GetPaperDetail(id int64) (*model.Paper, error) {
@@ -18,6 +21,9 @@ func (s stubPaperStore) GetPaperDetail(id int64) (*model.Paper, error) {
 }
 
 func (s stubPaperStore) ListEvidenceCandidatePaperIDs(terms []string, limit int) ([]int64, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
 	return append([]int64(nil), s.ids...), nil
 }
 
@@ -61,6 +67,59 @@ func TestLibrarySearchToolReturnsPaperHitCards(t *testing.T) {
 		t.Fatalf("answer context = %s", res.AnswerContext)
 	}
 	if len(res.Process.Stages) == 0 || res.Process.Stages[0].Label != "全库检索" {
+		t.Fatalf("process = %+v", res.Process)
+	}
+}
+
+func TestLibrarySearchToolReportsCandidateListerFailure(t *testing.T) {
+	tool := NewLibrarySearchTool(stubPaperStore{err: errors.New("candidate query failed")})
+
+	res, err := tool.Run(context.Background(), ToolInput{Query: "ATAC"})
+	if err != nil {
+		t.Fatalf("Run error = %v, want nil", err)
+	}
+	if res.Process.Intent != IntentLibrarySearch {
+		t.Fatalf("process intent = %q", res.Process.Intent)
+	}
+	if len(res.Process.Stages) == 0 || res.Process.Stages[0].Label != "全库检索" || res.Process.Stages[0].Status != "failed" {
+		t.Fatalf("process = %+v", res.Process)
+	}
+	if len(res.ToolCalls) != 1 || res.ToolCalls[0].ToolName != "library_search" || res.ToolCalls[0].Status != "failed" {
+		t.Fatalf("tool calls = %+v", res.ToolCalls)
+	}
+	if !strings.Contains(res.ToolCalls[0].Error, "candidate query failed") {
+		t.Fatalf("tool call error = %q", res.ToolCalls[0].Error)
+	}
+	if len(res.Cards) != 0 || len(res.Citations) != 0 {
+		t.Fatalf("cards=%+v citations=%+v, want empty", res.Cards, res.Citations)
+	}
+}
+
+func TestLibrarySearchToolClampsLargeLimit(t *testing.T) {
+	store := stubPaperStore{
+		papers: make(map[int64]*model.Paper),
+	}
+	for i := int64(1); i <= 60; i++ {
+		store.ids = append(store.ids, i)
+		store.papers[i] = &model.Paper{
+			ID:      i,
+			Title:   fmt.Sprintf("Paper %d", i),
+			PDFText: "This paper discusses chromatin accessibility.",
+		}
+	}
+	tool := NewLibrarySearchTool(store)
+
+	res, err := tool.Run(context.Background(), ToolInput{Query: "ATAC", Limit: 1000})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(res.Cards) != 50 {
+		t.Fatalf("card count = %d, want 50", len(res.Cards))
+	}
+	if len(res.Citations) != 50 {
+		t.Fatalf("citation count = %d, want 50", len(res.Citations))
+	}
+	if len(res.Process.Stages) < 2 || res.Process.Stages[1].Count != 50 {
 		t.Fatalf("process = %+v", res.Process)
 	}
 }
