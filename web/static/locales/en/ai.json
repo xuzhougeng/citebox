@@ -98,6 +98,7 @@
     "ai.turn_label": "Turn ${n}",
     "ai.turn_user": "You",
     "ai.turn_sending": "Sending",
+    "ai.streaming_thinking": "Thinking…",
     "ai.turn_stopped": "Stopped",
     "ai.turn_processing": "Processing",
     "ai.turn_no_text": "The model returned no text.",

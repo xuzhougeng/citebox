@@ -37,6 +37,80 @@ function fakeInput(value) {
     };
 }
 
+class FakeElement {
+    constructor(tagName) {
+        this.tagName = tagName;
+        this.children = [];
+        this.parentNode = null;
+        this.dataset = {};
+        this._className = '';
+        this._textContent = '';
+        this._innerHTML = '';
+        this.scrollTop = 0;
+        this.scrollHeight = 0;
+        this.classList = {
+            add: (...names) => {
+                const current = new Set(this._className.split(/\s+/).filter(Boolean));
+                names.forEach((name) => current.add(name));
+                this._className = Array.from(current).join(' ');
+            },
+            remove: (...names) => {
+                const remove = new Set(names);
+                this._className = this._className.split(/\s+/).filter((name) => name && !remove.has(name)).join(' ');
+            },
+            contains: (name) => this._className.split(/\s+/).includes(name),
+        };
+    }
+
+    get className() {
+        return this._className;
+    }
+
+    set className(value) {
+        this._className = String(value || '');
+    }
+
+    get textContent() {
+        if (this.children.length === 0) return this._textContent;
+        return this.children.map((child) => child.textContent).join('');
+    }
+
+    set textContent(value) {
+        this._textContent = String(value || '');
+        this._innerHTML = '';
+        this.children = [];
+    }
+
+    get innerHTML() {
+        return this._innerHTML;
+    }
+
+    set innerHTML(value) {
+        this._innerHTML = String(value || '');
+        this._textContent = '';
+        this.children = [];
+    }
+
+    get firstChild() {
+        return this.children[0] || null;
+    }
+
+    appendChild(child) {
+        child.parentNode = this;
+        this.children.push(child);
+        this.scrollHeight = this.children.length;
+        return child;
+    }
+
+    querySelector(selector) {
+        const className = selector.includes('.ai-message-text') ? 'ai-message-text'
+            : selector.includes('.ai-message-artifacts') ? 'ai-message-artifacts'
+                : '';
+        if (!className) return null;
+        return this.children.find((child) => child.classList && child.classList.contains(className)) || null;
+    }
+}
+
 test('keyboard send delegates to composer so selected intent is preserved', () => {
     const loaded = loadView();
     const view = loaded.view;
@@ -103,4 +177,27 @@ test('loading an existing conversation clears draft paper id', async () => {
 
     assert.equal(view._state.conversationId, 99);
     assert.equal(view._state._draftPaperId, 0);
+});
+
+test('streaming assistant bubble shows thinking state until first delta', () => {
+    const loaded = loadView();
+    const view = loaded.view;
+    const conversation = new FakeElement('div');
+    loaded.context.document = {
+        createElement(tagName) {
+            return new FakeElement(tagName);
+        },
+    };
+    view._state.els = { conversation };
+
+    const bubble = view._appendMessageBubble({ role: 'assistant', content: '', streaming: true });
+    const text = bubble.querySelector(':scope > .ai-message-text');
+
+    assert.equal(text.textContent, '思考中…');
+    assert.equal(bubble.classList.contains('has-streaming-status'), true);
+
+    view._setAssistantText(bubble, '真实回答', false);
+
+    assert.equal(text.textContent, '真实回答');
+    assert.equal(bubble.classList.contains('has-streaming-status'), false);
 });

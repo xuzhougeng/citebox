@@ -289,6 +289,35 @@ html[lang^="zh"] .ai-config-details[open] .ai-collapsible-toggle::before {
     white-space: normal;
 }
 
+.ai-message.has-streaming-status .ai-message-text {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    color: var(--muted);
+}
+
+.ai-message.has-streaming-status .ai-message-text::after {
+    content: "";
+    width: 0.42rem;
+    height: 0.42rem;
+    border-radius: 999px;
+    background: currentColor;
+    animation: ai-thinking-pulse 1.1s ease-in-out infinite;
+}
+
+@keyframes ai-thinking-pulse {
+    0%,
+    100% {
+        opacity: 0.32;
+        transform: scale(0.82);
+    }
+
+    50% {
+        opacity: 0.9;
+        transform: scale(1);
+    }
+}
+
 .ai-message-artifacts {
     display: grid;
     gap: 0.65rem;

@@ -15,6 +15,16 @@
             .replace(/'/g, '&#39;');
     }
 
+    function translate(key, fallback) {
+        if (window.CiteBoxI18n && typeof window.CiteBoxI18n.t === 'function') {
+            return window.CiteBoxI18n.t(key, fallback);
+        }
+        if (typeof t === 'function') {
+            return t(key, fallback);
+        }
+        return fallback || key;
+    }
+
     function inlineMarkdown(text) {
         return escapeHtml(text)
             .replace(/\*\*([^*\n]*?)\*([^*\n]+?)\*\*\*/g, '<strong>$1<em>$2</em></strong>')
@@ -373,8 +383,12 @@
             if (!el) return;
             const parts = this._ensureMessageParts(el);
             if (message && message.role === 'assistant' && !message.streaming) {
+                this._clearStreamingStatus(el);
                 parts.text.innerHTML = renderAssistantMarkdown(message.content || '');
+            } else if (message && message.role === 'assistant' && message.streaming && !String(message.content || '').trim()) {
+                this._setStreamingStatus(el, translate('ai.streaming_thinking', '思考中…'));
             } else {
+                this._clearStreamingStatus(el);
                 parts.text.textContent = (message && message.content) || '';
             }
         },
@@ -398,11 +412,23 @@
 
         _setAssistantText(el, content, markdown) {
             const parts = this._ensureMessageParts(el);
+            this._clearStreamingStatus(el);
             if (markdown) {
                 parts.text.innerHTML = renderAssistantMarkdown(content || '');
             } else {
                 parts.text.textContent = content || '';
             }
+        },
+
+        _setStreamingStatus(el, label) {
+            const parts = this._ensureMessageParts(el);
+            el.classList.add('has-streaming-status');
+            parts.text.textContent = label || translate('ai.streaming_thinking', '思考中…');
+        },
+
+        _clearStreamingStatus(el) {
+            if (!el || !el.classList) return;
+            el.classList.remove('has-streaming-status');
         },
 
         _attachTurnRunArtifacts(assistantByID) {

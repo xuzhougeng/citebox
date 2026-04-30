@@ -98,6 +98,7 @@
     "ai.turn_label": "第 ${n} 轮",
     "ai.turn_user": "你",
     "ai.turn_sending": "发送中",
+    "ai.streaming_thinking": "思考中…",
     "ai.turn_stopped": "已停止",
     "ai.turn_processing": "处理中",
     "ai.turn_no_text": "模型没有返回文本结果。",
