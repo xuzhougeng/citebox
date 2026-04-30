@@ -2,7 +2,9 @@ package repository
 
 import (
 	"database/sql"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 )
@@ -282,6 +284,14 @@ func (r *AIConversationRepository) CreateTurnRun(run AITurnRun) (int64, error) {
 	if status == "" {
 		status = "completed"
 	}
+	if err := r.ensureMessageInConversation(run.UserMessageID, run.ConversationID); err != nil {
+		return 0, fmt.Errorf("user_message_id: %w", err)
+	}
+	if run.AssistantMessageID.Valid {
+		if err := r.ensureMessageInConversation(run.AssistantMessageID.Int64, run.ConversationID); err != nil {
+			return 0, fmt.Errorf("assistant_message_id: %w", err)
+		}
+	}
 	res, err := r.db.Exec(`
 		INSERT INTO ai_turn_runs (
 			conversation_id, user_message_id, assistant_message_id,
@@ -296,7 +306,8 @@ func (r *AIConversationRepository) CreateTurnRun(run AITurnRun) (int64, error) {
 }
 
 func (r *AIConversationRepository) UpdateTurnRunAssistant(runID, assistantMessageID int64, status string) error {
-	if strings.TrimSpace(status) == "" {
+	status = strings.TrimSpace(status)
+	if status == "" {
 		status = "completed"
 	}
 	_, err := r.db.Exec(`
@@ -308,6 +319,9 @@ func (r *AIConversationRepository) UpdateTurnRunAssistant(runID, assistantMessag
 }
 
 func (r *AIConversationRepository) AddToolCall(call AIToolCall) (int64, error) {
+	if call.DurationMS < 0 {
+		return 0, fmt.Errorf("duration_ms must be non-negative")
+	}
 	status := strings.TrimSpace(call.Status)
 	if status == "" {
 		status = "completed"
@@ -329,6 +343,9 @@ func (r *AIConversationRepository) AddResultCard(card AIResultCard) (int64, erro
 	payload := card.PayloadJSON
 	if payload == "" {
 		payload = "{}"
+	}
+	if !json.Valid([]byte(payload)) {
+		return 0, fmt.Errorf("payload_json must be valid JSON")
 	}
 	res, err := r.db.Exec(`
 		INSERT INTO ai_result_cards (turn_run_id, card_type, sort_order, payload_json)
@@ -409,6 +426,22 @@ func (r *AIConversationRepository) ListResultCards(turnRunID int64) ([]AIResultC
 		out = append(out, card)
 	}
 	return out, rows.Err()
+}
+
+func (r *AIConversationRepository) ensureMessageInConversation(messageID, conversationID int64) error {
+	row := r.db.QueryRow(`
+		SELECT COUNT(*)
+		FROM ai_messages
+		WHERE id = ? AND conversation_id = ?
+	`, messageID, conversationID)
+	var count int
+	if err := row.Scan(&count); err != nil {
+		return err
+	}
+	if count == 0 {
+		return fmt.Errorf("message does not belong to conversation")
+	}
+	return nil
 }
 
 // PinPaper attaches a paper to a conversation. Idempotent (PRIMARY KEY).

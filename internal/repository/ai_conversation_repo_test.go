@@ -177,6 +177,9 @@ func TestAIConversationRunArtifactsRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("AddResultCard: %v", err)
 	}
+	if err := repo.UpdateTurnRunAssistant(runID, assistantID, " completed "); err != nil {
+		t.Fatalf("UpdateTurnRunAssistant: %v", err)
+	}
 
 	runs, err := repo.ListTurnRuns(convID)
 	if err != nil {
@@ -225,6 +228,135 @@ func TestAIConversationRunArtifactsRoundTrip(t *testing.T) {
 	card := cards[0]
 	if card.ID != cardID || card.TurnRunID != runID || card.PayloadJSON != payloadJSON || card.CreatedAt.IsZero() {
 		t.Fatalf("card = %+v", card)
+	}
+}
+
+func TestAIConversationCreateTurnRunRejectsCrossConversationUserMessage(t *testing.T) {
+	repo := newAIConversationRepoForTest(t)
+	convID, err := repo.CreateConversation()
+	if err != nil {
+		t.Fatalf("CreateConversation convID: %v", err)
+	}
+	otherConvID, err := repo.CreateConversation()
+	if err != nil {
+		t.Fatalf("CreateConversation otherConvID: %v", err)
+	}
+	userID, err := repo.AddMessage(otherConvID, "user", "q", AIMessageMeta{})
+	if err != nil {
+		t.Fatalf("AddMessage user: %v", err)
+	}
+
+	if _, err := repo.CreateTurnRun(AITurnRun{
+		ConversationID: convID,
+		UserMessageID:  userID,
+		Intent:         "library_search",
+		Status:         "completed",
+	}); err == nil {
+		t.Fatal("CreateTurnRun accepted user message from another conversation")
+	}
+}
+
+func TestAIConversationCreateTurnRunRejectsCrossConversationAssistantMessage(t *testing.T) {
+	repo := newAIConversationRepoForTest(t)
+	convID, err := repo.CreateConversation()
+	if err != nil {
+		t.Fatalf("CreateConversation convID: %v", err)
+	}
+	otherConvID, err := repo.CreateConversation()
+	if err != nil {
+		t.Fatalf("CreateConversation otherConvID: %v", err)
+	}
+	userID, err := repo.AddMessage(convID, "user", "q", AIMessageMeta{})
+	if err != nil {
+		t.Fatalf("AddMessage user: %v", err)
+	}
+	assistantID, err := repo.AddMessage(otherConvID, "assistant", "a", AIMessageMeta{})
+	if err != nil {
+		t.Fatalf("AddMessage assistant: %v", err)
+	}
+
+	if _, err := repo.CreateTurnRun(AITurnRun{
+		ConversationID:     convID,
+		UserMessageID:      userID,
+		AssistantMessageID: sql.NullInt64{Int64: assistantID, Valid: true},
+		Intent:             "library_search",
+		Status:             "completed",
+	}); err == nil {
+		t.Fatal("CreateTurnRun accepted assistant message from another conversation")
+	}
+}
+
+func TestAIConversationResultCardPayloadValidation(t *testing.T) {
+	repo := newAIConversationRepoForTest(t)
+	convID, err := repo.CreateConversation()
+	if err != nil {
+		t.Fatalf("CreateConversation: %v", err)
+	}
+	userID, err := repo.AddMessage(convID, "user", "q", AIMessageMeta{})
+	if err != nil {
+		t.Fatalf("AddMessage user: %v", err)
+	}
+	runID, err := repo.CreateTurnRun(AITurnRun{
+		ConversationID: convID,
+		UserMessageID:  userID,
+		Intent:         "library_search",
+		Status:         "completed",
+	})
+	if err != nil {
+		t.Fatalf("CreateTurnRun: %v", err)
+	}
+
+	if _, err := repo.AddResultCard(AIResultCard{TurnRunID: runID, CardType: "empty_payload", PayloadJSON: ""}); err != nil {
+		t.Fatalf("AddResultCard empty payload: %v", err)
+	}
+	payloadJSON := ` {"ok":true} `
+	if _, err := repo.AddResultCard(AIResultCard{TurnRunID: runID, CardType: "spaced_payload", SortOrder: 1, PayloadJSON: payloadJSON}); err != nil {
+		t.Fatalf("AddResultCard spaced payload: %v", err)
+	}
+	if _, err := repo.AddResultCard(AIResultCard{TurnRunID: runID, CardType: "blank_payload", PayloadJSON: "   "}); err == nil {
+		t.Fatal("AddResultCard accepted whitespace-only payload")
+	}
+	if _, err := repo.AddResultCard(AIResultCard{TurnRunID: runID, CardType: "invalid_payload", PayloadJSON: `{"bad"`}); err == nil {
+		t.Fatal("AddResultCard accepted invalid JSON payload")
+	}
+
+	cards, err := repo.ListResultCards(runID)
+	if err != nil {
+		t.Fatalf("ListResultCards: %v", err)
+	}
+	if len(cards) != 2 {
+		t.Fatalf("cards = %+v", cards)
+	}
+	if cards[0].PayloadJSON != "{}" {
+		t.Fatalf("empty payload card = %+v", cards[0])
+	}
+	if cards[1].PayloadJSON != payloadJSON {
+		t.Fatalf("spaced payload card = %+v", cards[1])
+	}
+}
+
+func TestAIConversationAddToolCallRejectsNegativeDuration(t *testing.T) {
+	repo := newAIConversationRepoForTest(t)
+	convID, err := repo.CreateConversation()
+	if err != nil {
+		t.Fatalf("CreateConversation: %v", err)
+	}
+	userID, err := repo.AddMessage(convID, "user", "q", AIMessageMeta{})
+	if err != nil {
+		t.Fatalf("AddMessage user: %v", err)
+	}
+	runID, err := repo.CreateTurnRun(AITurnRun{
+		ConversationID: convID,
+		UserMessageID:  userID,
+		Intent:         "library_search",
+		Status:         "completed",
+	})
+	if err != nil {
+		t.Fatalf("CreateTurnRun: %v", err)
+	}
+
+	if _, err := repo.AddToolCall(AIToolCall{TurnRunID: runID, ToolName: "library_search", DurationMS: -1}); err == nil {
+		t.Fatal("AddToolCall accepted negative duration")
 	}
 }
 
