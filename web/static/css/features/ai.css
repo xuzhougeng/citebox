@@ -385,6 +385,26 @@ html[lang^="zh"] .ai-config-details[open] .ai-collapsible-toggle::before {
     color: var(--muted);
     font-size: 0.86rem;
     line-height: 1.5;
+    max-height: 8.25rem;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(var(--ink-rgb), 0.22) rgba(var(--ink-rgb), 0.05);
+}
+
+.ai-result-card blockquote::-webkit-scrollbar {
+    width: 0.55rem;
+}
+
+.ai-result-card blockquote::-webkit-scrollbar-track {
+    background: rgba(var(--ink-rgb), 0.04);
+    border-radius: 999px;
+}
+
+.ai-result-card blockquote::-webkit-scrollbar-thumb {
+    border: 2px solid transparent;
+    border-radius: 999px;
+    background: rgba(var(--ink-rgb), 0.24);
+    background-clip: padding-box;
 }
 
 .ai-result-card blockquote p {

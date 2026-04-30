@@ -6,7 +6,7 @@
     <title>AI 助手 - CiteBox</title>
     <link rel="icon" type="image/svg+xml" href="/static/img/citebox-icon.svg">
     <script>(function(){var d=document.documentElement;try{var t=localStorage.getItem("citebox_theme");if(t&&t!=="warm")d.setAttribute("data-theme",t);var l=localStorage.getItem("citebox_lang")||"zh-CN";d.lang=l;if(l!=="zh-CN")d.setAttribute("data-lang-loading","1");}catch(e){}})()</script>
-    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="/static/css/style.css?v=ai-20260430-2">
 </head>
 <body>
     <nav class="navbar">
@@ -75,7 +75,7 @@
                     <span class="ai-question-label" data-i18n="ai.question_label">想让 AI 帮你什么？</span>
                     <div class="ai-question-input-wrap">
                         <div id="aiQuestionMirror" class="ai-question-mirror" aria-hidden="true"></div>
-                        <textarea id="aiQuestionInput" class="form-textarea ai-question-input" rows="3" data-i18n-placeholder="ai.question_placeholder" placeholder="输入 @ 切换文献或调用角色…" spellcheck="false"></textarea>
+                        <textarea id="aiQuestionInput" class="form-textarea ai-question-input" rows="2" data-i18n-placeholder="ai.question_placeholder" placeholder="输入 @ 切换文献或调用角色…" spellcheck="false"></textarea>
                         <div id="aiMentionPopover" class="ai-mention-popover" role="listbox" aria-label="@ 选项" hidden></div>
                     </div>
                 </label>

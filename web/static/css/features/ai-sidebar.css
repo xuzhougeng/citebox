@@ -10,7 +10,7 @@
 
 .ai-page-shell {
     display: grid;
-    grid-template-columns: 300px minmax(0, 1fr);
+    grid-template-columns: minmax(248px, 280px) minmax(0, 1fr);
     gap: 0;
     align-items: stretch;
     max-width: 1280px;
@@ -513,7 +513,7 @@
 .ai-composer {
     border-top: 1px solid rgba(var(--ink-rgb), 0.08);
     background: rgba(var(--bg-rgb), 0.82);
-    padding: 0.75rem 1.75rem 1rem;
+    padding: 0.65rem 1.5rem 0.85rem;
 }
 
 .ai-composer-tools,
@@ -528,8 +528,8 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 0.75rem;
-    margin-bottom: 0.5rem;
+    gap: 0.6rem;
+    margin-bottom: 0.42rem;
 }
 
 .ai-mode-toggles {
@@ -587,9 +587,9 @@
 
 .ai-composer .ai-question-input-wrap .ai-question-input,
 .ai-composer .ai-question-input-wrap .ai-question-mirror {
-    min-height: 5.3rem;
-    max-height: 14rem;
-    padding: 0.85rem 1rem;
+    min-height: 3.65rem;
+    max-height: 10rem;
+    padding: 0.72rem 0.9rem;
     border: 0;
     border-radius: 12px;
     background: transparent;
@@ -612,8 +612,8 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 0.75rem;
-    margin-top: 0.55rem;
+    gap: 0.65rem;
+    margin-top: 0.45rem;
 }
 
 .ai-composer .ai-role-prompt-list {
@@ -630,6 +630,11 @@
     flex: 0 0 auto;
 }
 
+.ai-composer .submit-row .btn {
+    min-height: 2.35rem;
+    padding: 0.58rem 0.95rem;
+}
+
 .ai-composer button[hidden] {
     display: none !important;
 }
@@ -637,17 +642,21 @@
 .ai-composer .ai-model-summary {
     font-size: 0.82rem;
     color: var(--muted);
+    max-width: min(36ch, 34vw);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 /* ------------------------------------------------------------------
    10. Responsive fallback — mobile
    ------------------------------------------------------------------ */
 
-@media (max-width: 720px) {
+@media (max-width: 900px) {
     .ai-page-shell {
         grid-template-columns: 1fr;
         height: calc(100vh - 121px);
-        min-height: 520px;
+        min-height: 0;
         padding: 0;
     }
 
@@ -678,19 +687,12 @@
         padding: 0.65rem 1rem 0.85rem;
     }
 
-    .ai-composer-tools,
-    .ai-composer-bottom {
-        align-items: flex-start;
-        flex-direction: column;
-    }
-
     .ai-composer .ai-role-prompt-hint {
-        text-align: left;
+        display: none;
     }
 
-    .ai-composer .submit-row {
-        width: 100%;
-        justify-content: flex-end;
+    .ai-composer .ai-model-summary {
+        max-width: min(44ch, 64vw);
     }
 
     .ai-composer .ai-mention-popover {
@@ -698,9 +700,16 @@
     }
 }
 
-@media (min-width: 721px) and (max-width: 900px) {
-    .ai-page-shell {
-        height: calc(100vh - 121px);
+@media (max-width: 720px) {
+    .ai-composer-tools,
+    .ai-composer-bottom {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .ai-composer .submit-row {
+        width: 100%;
+        justify-content: flex-end;
     }
 }
 
