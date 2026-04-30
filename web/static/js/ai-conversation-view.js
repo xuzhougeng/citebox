@@ -124,6 +124,7 @@
             s.messages = conv.recent_messages || [];
             s.turnRuns = conv.turn_runs || [];
             s.pendingCitations = [];
+            s._draftPaperId = 0;
             this._renderAll();
         },
 
@@ -517,7 +518,7 @@
             const s = this._state;
             const context = { source: 'ai' };
             const draftPaperID = Number(s._draftPaperId || 0);
-            if (Number.isFinite(draftPaperID) && draftPaperID > 0) {
+            if (!s.conversationId && Number.isFinite(draftPaperID) && draftPaperID > 0) {
                 context.paper_id = draftPaperID;
                 return context;
             }

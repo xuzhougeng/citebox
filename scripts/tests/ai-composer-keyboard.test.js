@@ -20,7 +20,7 @@ function loadView() {
     };
     vm.createContext(context);
     vm.runInContext(source, context, { filename: 'ai-conversation-view.js' });
-    return { view: context.window.AIReader.view, window: context.window };
+    return { context, view: context.window.AIReader.view, window: context.window };
 }
 
 function fakeInput(value) {
@@ -68,4 +68,39 @@ test('keyboard send delegates to composer so selected intent is preserved', () =
     assert.equal(prevented, true);
     assert.equal(submitCalled, true);
     assert.equal(directSendCalled, false);
+});
+
+test('existing conversation context ignores stale draft paper id', () => {
+    const loaded = loadView();
+    const view = loaded.view;
+
+    view._state.conversationId = 99;
+    view._state._draftPaperId = 123;
+    view._state.pinnedPapers = [];
+
+    const context = view._currentContext();
+    assert.equal(context.source, 'ai');
+    assert.equal(Object.hasOwn(context, 'paper_id'), false);
+});
+
+test('loading an existing conversation clears draft paper id', async () => {
+    const loaded = loadView();
+    const view = loaded.view;
+    view._state._draftPaperId = 123;
+    view._renderAll = () => {};
+    loaded.context.fetch = async () => ({
+        ok: true,
+        async json() {
+            return {
+                pinned_papers: [],
+                recent_messages: [],
+                turn_runs: [],
+            };
+        },
+    });
+
+    await view.load(99);
+
+    assert.equal(view._state.conversationId, 99);
+    assert.equal(view._state._draftPaperId, 0);
 });
