@@ -24,6 +24,13 @@ type RouteInput struct {
 	Context    RequestContext `json:"context,omitempty"`
 }
 
+type ToolInput struct {
+	Query      string         `json:"query"`
+	Context    RequestContext `json:"context,omitempty"`
+	Limit      int            `json:"limit,omitempty"`
+	IntentHint string         `json:"intent_hint,omitempty"`
+}
+
 type RouteDecision struct {
 	Intent     string `json:"intent"`
 	Confidence string `json:"confidence"`
@@ -47,6 +54,21 @@ type ProcessSummary struct {
 type ResultCard struct {
 	Type    string `json:"type"`
 	Payload any    `json:"payload"`
+}
+
+type PaperHitCard struct {
+	PaperID  int64             `json:"paper_id"`
+	Title    string            `json:"title"`
+	DOI      string            `json:"doi,omitempty"`
+	Year     string            `json:"year,omitempty"`
+	Reason   string            `json:"reason"`
+	Snippets []PaperHitSnippet `json:"snippets"`
+}
+
+type PaperHitSnippet struct {
+	CitationIndex int    `json:"citation_index"`
+	Location      string `json:"location"`
+	Text          string `json:"text"`
 }
 
 type ToolCallSummary struct {
