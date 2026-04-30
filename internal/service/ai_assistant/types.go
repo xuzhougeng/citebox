@@ -19,15 +19,15 @@ type RequestContext struct {
 }
 
 type RouteInput struct {
-	Content    string
-	IntentHint string
-	Context    RequestContext
+	Content    string         `json:"content"`
+	IntentHint string         `json:"intent_hint,omitempty"`
+	Context    RequestContext `json:"context,omitempty"`
 }
 
 type RouteDecision struct {
-	Intent     string
-	Confidence string
-	Reason     string
+	Intent     string `json:"intent"`
+	Confidence string `json:"confidence"`
+	Reason     string `json:"reason,omitempty"`
 }
 
 type ProcessStage struct {
@@ -50,12 +50,12 @@ type ResultCard struct {
 }
 
 type ToolCallSummary struct {
-	ToolName          string
-	InputJSON         string
-	OutputSummaryJSON string
-	Status            string
-	DurationMS        int
-	Error             string
+	ToolName          string `json:"tool_name"`
+	InputJSON         string `json:"input_json,omitempty"`
+	OutputSummaryJSON string `json:"output_summary_json,omitempty"`
+	Status            string `json:"status,omitempty"`
+	DurationMS        int    `json:"duration_ms,omitempty"`
+	Error             string `json:"error,omitempty"`
 }
 
 type Citation struct {
@@ -70,9 +70,9 @@ type Citation struct {
 }
 
 type ToolResult struct {
-	Process       ProcessSummary
-	Cards         []ResultCard
-	Citations     []Citation
-	AnswerContext string
-	ToolCalls     []ToolCallSummary
+	Process       ProcessSummary    `json:"process"`
+	Cards         []ResultCard      `json:"cards,omitempty"`
+	Citations     []Citation        `json:"citations,omitempty"`
+	AnswerContext string            `json:"answer_context,omitempty"`
+	ToolCalls     []ToolCallSummary `json:"tool_calls,omitempty"`
 }
