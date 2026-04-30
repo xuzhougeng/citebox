@@ -35,6 +35,12 @@ func (s *stubResearchService) Recommendations(ctx context.Context, id string) ([
 func (s *stubResearchService) RecommendationsForList(ctx context.Context, pos, neg []string) ([]research.Paper, error) {
 	return nil, nil
 }
+func (s *stubResearchService) Autocomplete(ctx context.Context, q string) ([]research.AutocompleteItem, error) {
+	return nil, nil
+}
+func (s *stubResearchService) SnippetSearch(ctx context.Context, q string, opts research.SnippetSearchOpts) (research.SnippetList, error) {
+	return research.SnippetList{}, nil
+}
 
 func TestResearchHandlerSearch(t *testing.T) {
 	stub := &stubResearchService{

@@ -729,6 +729,22 @@ func buildHandler(
 		researchHandler.Search(w, r)
 	})
 
+	mux.HandleFunc("/api/research/autocomplete", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		researchHandler.Autocomplete(w, r)
+	})
+
+	mux.HandleFunc("/api/research/snippets", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		researchHandler.SnippetSearch(w, r)
+	})
+
 	mux.HandleFunc("/api/research/recommendations", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
