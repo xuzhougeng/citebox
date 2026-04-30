@@ -28,12 +28,13 @@ type StreamCaller interface {
 
 // Service is the conversation lifecycle manager.
 type Service struct {
-	repo        *repository.AIConversationRepository
-	papers      *repository.PaperRepository
-	settings    AISettingsProvider
-	caller      StreamCaller
-	titleCaller NonStreamCaller
-	logger      *slog.Logger
+	repo           *repository.AIConversationRepository
+	papers         *repository.PaperRepository
+	settings       AISettingsProvider
+	caller         StreamCaller
+	titleCaller    NonStreamCaller
+	summaryCaller  NonStreamCaller
+	logger         *slog.Logger
 }
 
 // New builds the service. All deps required.
@@ -45,6 +46,7 @@ func New(repo *repository.AIConversationRepository, papers *repository.PaperRepo
 	s := &Service{repo: repo, papers: papers, settings: settings, caller: caller, logger: logger}
 	if tc, ok := caller.(NonStreamCaller); ok {
 		s.titleCaller = tc
+		s.summaryCaller = tc
 	}
 	return s
 }
@@ -226,6 +228,8 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput, onDelta 
 		history = history[:len(history)-1]
 	}
 
+	s.maybeSummarize(ctx, &conv, &history, *settings)
+
 	asm, err := s.assembleForTurn(conv, pinned, history, in.Content, *settings)
 	if err != nil {
 		return SendMessageResult{}, err
@@ -278,6 +282,48 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput, onDelta 
 		AssistantMessage: Message{ID: asstID, Role: "assistant", Content: rawText, Provider: string(settings.Provider), Model: settings.Model, Mode: mode},
 	}
 	return res, nil
+}
+
+// maybeSummarize compresses old history when the projected prompt estimate
+// exceeds the budget. Mutates conv.SummaryText / SummaryThroughMessageID and
+// strips summarized rows from history. Up to 3 attempts; falls back silently
+// (truncation in assembleForTurn) on summarizer failure.
+func (s *Service) maybeSummarize(ctx context.Context, conv *repository.AIConversation,
+	history *[]repository.AIMessage, settings model.AISettings) {
+	if s.summaryCaller == nil {
+		return
+	}
+	for attempt := 0; attempt < 3; attempt++ {
+		total := estimateTokens(conv.SummaryText)
+		for _, m := range *history {
+			total += estimateTokens(m.Content)
+		}
+		if total <= settings.ContextBudgetTokens {
+			return
+		}
+		newSummary, through, err := summarize(ctx, s.summaryCaller, settings, conv.SummaryText, *history)
+		if err != nil {
+			s.logger.Warn("ai_conversation: summarize failed; falling back to truncation", "error", err)
+			return
+		}
+		if through == 0 {
+			return
+		}
+		if err := s.repo.UpdateSummary(conv.ID, newSummary, through); err != nil {
+			s.logger.Warn("ai_conversation: persist summary failed", "error", err)
+			return
+		}
+		conv.SummaryText = newSummary
+		conv.SummaryThroughMessageID.Int64 = through
+		conv.SummaryThroughMessageID.Valid = true
+		filtered := (*history)[:0]
+		for _, m := range *history {
+			if m.ID > through {
+				filtered = append(filtered, m)
+			}
+		}
+		*history = filtered
+	}
 }
 
 func mapRepoErr(err error) error {
