@@ -25,7 +25,8 @@ type LibraryRepository struct {
 	Group    *GroupRepository
 	Tag      *TagRepository
 	Setting  *SettingRepository
-	Research *ResearchRepository
+	Research       *ResearchRepository
+	AIConversation *AIConversationRepository
 }
 
 // NewLibraryRepository 创建图书馆仓库
@@ -62,16 +63,18 @@ func NewLibraryRepository(dbPath string) (*LibraryRepository, error) {
 	paletteRepo := NewPaletteRepository(db)
 	settingRepo := NewSettingRepository(db)
 	researchRepo := NewResearchRepository(db)
+	aiConversationRepo := NewAIConversationRepository(db)
 
 	repo := &LibraryRepository{
-		db:       db,
-		Paper:    paperRepo,
-		Figure:   figureRepo,
-		Palette:  paletteRepo,
-		Group:    groupRepo,
-		Tag:      tagRepo,
-		Setting:  settingRepo,
-		Research: researchRepo,
+		db:             db,
+		Paper:          paperRepo,
+		Figure:         figureRepo,
+		Palette:        paletteRepo,
+		Group:          groupRepo,
+		Tag:            tagRepo,
+		Setting:        settingRepo,
+		Research:       researchRepo,
+		AIConversation: aiConversationRepo,
 	}
 
 	return repo, nil
