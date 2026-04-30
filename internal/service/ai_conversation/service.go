@@ -172,6 +172,94 @@ func (s *Service) UnpinPaper(conversationID, paperID int64) error {
 	return s.repo.UnpinPaper(conversationID, paperID)
 }
 
+// SendMessage runs one turn: optional auto-pin → INSERT user message → assemble
+// prompt → stream LLM → INSERT assistant message → bump updated_at. The onDelta
+// callback receives streamed chunks; the caller is responsible for forwarding
+// them to the HTTP client. On context cancellation any partial text already
+// streamed is persisted as an assistant message with mode="stopped".
+func (s *Service) SendMessage(ctx context.Context, in SendMessageInput, onDelta func(string) error) (SendMessageResult, error) {
+	if in.ConversationID <= 0 {
+		return SendMessageResult{}, apperr.New(apperr.CodeInvalidArgument, "conversation_id 无效")
+	}
+	if strings.TrimSpace(in.Content) == "" {
+		return SendMessageResult{}, apperr.New(apperr.CodeInvalidArgument, "消息内容为空")
+	}
+
+	conv, err := s.repo.GetConversation(in.ConversationID)
+	if err != nil {
+		return SendMessageResult{}, mapRepoErr(err)
+	}
+
+	// Auto-pin (β/γ flow). Pin-limit may reject here.
+	if in.PaperID > 0 {
+		if err := s.PinPaper(in.ConversationID, in.PaperID); err != nil {
+			return SendMessageResult{}, err
+		}
+	}
+
+	// Persist user message immediately so it survives provider failures.
+	userMsgID, err := s.repo.AddMessage(in.ConversationID, "user", in.Content, repository.AIMessageMeta{})
+	if err != nil {
+		return SendMessageResult{}, err
+	}
+
+	settings, err := s.settings.GetSettings()
+	if err != nil {
+		return SendMessageResult{}, err
+	}
+	pinned, err := s.repo.ListPinnedPapers(in.ConversationID)
+	if err != nil {
+		return SendMessageResult{}, err
+	}
+	history, err := s.repo.ListMessages(in.ConversationID, conv.SummaryThroughMessageID.Int64, 1000)
+	if err != nil {
+		return SendMessageResult{}, err
+	}
+	// Drop the just-inserted user msg from history (we're about to append it explicitly).
+	if len(history) > 0 {
+		history = history[:len(history)-1]
+	}
+
+	asm, err := s.assembleForTurn(conv, pinned, history, in.Content, *settings)
+	if err != nil {
+		return SendMessageResult{}, err
+	}
+
+	rawText, mode, err := s.caller.CallProviderStreamGeneric(ctx, *settings, asm.systemPrompt, asm.userPrompt, asm.images, onDelta)
+	if err != nil {
+		// User-cancelled stream: persist whatever was already streamed with mode="stopped".
+		if errors.Is(err, context.Canceled) && rawText != "" {
+			_, persistErr := s.repo.AddMessage(in.ConversationID, "assistant", rawText, repository.AIMessageMeta{
+				Provider: string(settings.Provider),
+				Model:    settings.Model,
+				Mode:     "stopped",
+			})
+			if persistErr != nil {
+				s.logger.Warn("ai_conversation: persist stopped message failed", "error", persistErr)
+			}
+			_ = s.repo.TouchConversation(in.ConversationID)
+		}
+		return SendMessageResult{}, err
+	}
+
+	asstID, err := s.repo.AddMessage(in.ConversationID, "assistant", rawText, repository.AIMessageMeta{
+		Provider: string(settings.Provider),
+		Model:    settings.Model,
+		Mode:     mode,
+	})
+	if err != nil {
+		return SendMessageResult{}, err
+	}
+	_ = s.repo.TouchConversation(in.ConversationID)
+
+	res := SendMessageResult{
+		ConversationID:   in.ConversationID,
+		UserMessage:      Message{ID: userMsgID, Role: "user", Content: in.Content},
+		AssistantMessage: Message{ID: asstID, Role: "assistant", Content: rawText, Provider: string(settings.Provider), Model: settings.Model, Mode: mode},
+	}
+	return res, nil
+}
+
 func mapRepoErr(err error) error {
 	if errors.Is(err, repository.ErrAIConversationNotFound) {
 		return apperr.New(apperr.CodeNotFound, "会话不存在")
