@@ -5,19 +5,39 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
+	"sort"
 	"strings"
+	"unicode/utf8"
 
+	"github.com/xuzhougeng/citebox/internal/model"
 	"github.com/xuzhougeng/citebox/internal/repository"
 	"github.com/xuzhougeng/citebox/internal/service/research"
 )
 
 // ErrNoExternalIDs signals that none of the pinned papers had a DOI/arXiv id we
-// could pass to /snippet/search.
+// could pass to Semantic Scholar /snippet/search.
 var ErrNoExternalIDs = errors.New("ai_conversation: no usable external ids")
 
-// SnippetSearcher is the surface we depend on. Satisfied by *research.Service.
+const (
+	evidenceSourceLocal    = "local"
+	evidenceSourceExternal = "external"
+)
+
+// SnippetSearcher is the external evidence surface we depend on. Satisfied by
+// *research.Service.
 type SnippetSearcher interface {
 	SnippetSearch(ctx context.Context, query string, opts research.SnippetSearchOpts) (research.SnippetList, error)
+}
+
+// PaperDetailGetter is the local library surface used by strict evidence mode.
+type PaperDetailGetter interface {
+	GetPaperDetail(id int64) (*model.Paper, error)
+}
+
+// EvidenceOptions controls which evidence sources are used for one turn.
+type EvidenceOptions struct {
+	IncludeExternal bool
 }
 
 // Citation is one entry in the persisted citations_json array.
@@ -26,27 +46,271 @@ type Citation struct {
 	PaperID    int64            `json:"paper_id"`
 	ExternalID string           `json:"external_id"`
 	S2PaperID  string           `json:"s2_paper_id,omitempty"`
+	Title      string           `json:"title,omitempty"`
+	Source     string           `json:"source,omitempty"`
 	Snippet    research.Snippet `json:"snippet"`
 	Score      float64          `json:"score"`
 }
 
-// injectEvidence runs SnippetSearch over the pinned papers' external ids and
-// returns (evidence-block prompt fragment, citations array, err).
-func injectEvidence(ctx context.Context, searcher SnippetSearcher,
-	userText string, pinned []repository.AIPinnedPaper) (string, []Citation, error) {
+// injectEvidence builds a strict-evidence prompt fragment from local pinned
+// paper text first, and optionally augments it with Semantic Scholar snippets.
+// It deliberately never uses embeddings or vector retrieval.
+func injectEvidence(ctx context.Context, papers PaperDetailGetter, searcher SnippetSearcher,
+	userText string, pinned []repository.AIPinnedPaper, opts EvidenceOptions) (string, []Citation, error) {
 
-	idMap := map[string]int64{}
+	citations := localEvidence(papers, userText, pinned, 10)
+	var externalErr error
+	if opts.IncludeExternal && searcher != nil {
+		externalLimit := 8
+		if len(citations) < 8 {
+			externalLimit = 8 - len(citations)
+		}
+		external, err := externalEvidence(ctx, searcher, userText, pinned, externalLimit)
+		if err != nil && !errors.Is(err, ErrNoExternalIDs) {
+			externalErr = err
+		}
+		citations = append(citations, external...)
+	}
+
+	for i := range citations {
+		citations[i].I = i + 1
+	}
+	return buildEvidencePrompt(userText, citations, len(pinned), opts.IncludeExternal, externalErr), citations, nil
+}
+
+func buildEvidencePrompt(userText string, citations []Citation, pinnedCount int, includeExternal bool, externalErr error) string {
+	var b strings.Builder
+	b.WriteString("你处于严格证据模式。你必须只基于以下证据片段回答；每个由证据支撑的论断后用 [n] 标注引用。")
+	b.WriteString("如果证据不足以回答或支持用户说法，请明确说明\"证据不足\"，不要凭常识补全。\n\n")
+	b.WriteString("证据来源：本地已钉文献全文")
+	if includeExternal {
+		b.WriteString("；外部 Semantic Scholar 片段")
+	}
+	b.WriteString("。\n")
+	if externalErr != nil {
+		b.WriteString("外部证据检索失败，本次仅使用可用的本地证据。\n")
+	}
+	if pinnedCount == 0 {
+		b.WriteString("当前没有已钉文献，因此没有可用的本地证据。\n")
+	}
+
+	b.WriteString("\n证据：\n")
+	if len(citations) == 0 {
+		b.WriteString("（未从当前证据来源找到匹配片段。请回答证据不足，不要按普通问答模式发挥。）\n")
+	} else {
+		for _, c := range citations {
+			section := c.Snippet.Section
+			if section == "" {
+				section = c.Snippet.SnippetKind
+			}
+			source := "本地全文"
+			if c.Source == evidenceSourceExternal {
+				source = "外部 Semantic Scholar"
+			}
+			title := strings.TrimSpace(c.Title)
+			if title == "" {
+				title = fmt.Sprintf("paper %d", c.PaperID)
+			}
+			fmt.Fprintf(&b, "[%d] 来源: %s | 文献: %s | 位置: %s\n%s\n\n", c.I, source, title, section, c.Snippet.Text)
+		}
+	}
+	b.WriteString("用户问题：\n")
+	b.WriteString(userText)
+	return b.String()
+}
+
+type localCandidate struct {
+	paperID int64
+	title   string
+	source  string
+	field   string
+	text    string
+	start   int
+	end     int
+	score   float64
+}
+
+func localEvidence(papers PaperDetailGetter, userText string, pinned []repository.AIPinnedPaper, limit int) []Citation {
+	if papers == nil || len(pinned) == 0 || limit <= 0 {
+		return nil
+	}
+	terms := evidenceSearchTerms(userText)
+	if len(terms) == 0 {
+		return nil
+	}
+
+	candidates := make([]localCandidate, 0)
+	for _, pin := range pinned {
+		paper, err := papers.GetPaperDetail(pin.PaperID)
+		if err != nil || paper == nil {
+			continue
+		}
+		candidates = append(candidates, findLocalCandidates(*paper, terms)...)
+	}
+	sort.SliceStable(candidates, func(i, j int) bool {
+		if candidates[i].score != candidates[j].score {
+			return candidates[i].score > candidates[j].score
+		}
+		if candidates[i].paperID != candidates[j].paperID {
+			return candidates[i].paperID < candidates[j].paperID
+		}
+		return candidates[i].start < candidates[j].start
+	})
+
+	out := make([]Citation, 0, limit)
+	seen := map[string]bool{}
+	perPaper := map[int64]int{}
+	for _, cand := range candidates {
+		if len(out) >= limit {
+			break
+		}
+		if perPaper[cand.paperID] >= 4 {
+			continue
+		}
+		key := fmt.Sprintf("%d:%s:%d", cand.paperID, cand.field, cand.start/300)
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		perPaper[cand.paperID]++
+		out = append(out, Citation{
+			PaperID: cand.paperID,
+			Title:   cand.title,
+			Source:  evidenceSourceLocal,
+			Snippet: research.Snippet{
+				Text:          cand.text,
+				SnippetKind:   cand.field,
+				Section:       localSectionLabel(cand.field),
+				SnippetOffset: research.SnippetOffset{Start: cand.start, End: cand.end},
+			},
+			Score: cand.score,
+		})
+	}
+	return out
+}
+
+func findLocalCandidates(paper model.Paper, terms []string) []localCandidate {
+	fields := []struct {
+		name  string
+		text  string
+		boost float64
+	}{
+		{name: "title", text: paper.Title, boost: 1.4},
+		{name: "abstract", text: paper.AbstractText, boost: 1.25},
+		{name: "notes", text: paper.NotesText + "\n" + paper.PaperNotesText, boost: 1.15},
+		{name: "body", text: paper.PDFText, boost: 1.0},
+	}
+
+	candidates := make([]localCandidate, 0)
+	for _, field := range fields {
+		text := strings.TrimSpace(field.text)
+		if text == "" {
+			continue
+		}
+		lowerText := strings.ToLower(text)
+		for _, term := range terms {
+			lowerTerm := strings.ToLower(term)
+			if lowerTerm == "" {
+				continue
+			}
+			pos := 0
+			keptForTerm := 0
+			for keptForTerm < 6 {
+				idx := strings.Index(lowerText[pos:], lowerTerm)
+				if idx < 0 {
+					break
+				}
+				start := pos + idx
+				end := start + len(lowerTerm)
+				snippet, runeStart, runeEnd := snippetAround(text, start, end, 420)
+				candidates = append(candidates, localCandidate{
+					paperID: paper.ID,
+					title:   paper.Title,
+					source:  evidenceSourceLocal,
+					field:   field.name,
+					text:    snippet,
+					start:   runeStart,
+					end:     runeEnd,
+					score:   localScore(term, field.boost),
+				})
+				pos = end
+				keptForTerm++
+			}
+		}
+	}
+	return candidates
+}
+
+func localScore(term string, boost float64) float64 {
+	runes := utf8.RuneCountInString(term)
+	score := 0.45 + float64(runes)/40
+	if strings.Contains(term, "-") || strings.Contains(term, " ") {
+		score += 0.18
+	}
+	if score > 0.98 {
+		score = 0.98
+	}
+	return score * boost
+}
+
+func localSectionLabel(field string) string {
+	switch field {
+	case "title":
+		return "标题"
+	case "abstract":
+		return "摘要"
+	case "notes":
+		return "笔记"
+	default:
+		return "本地全文"
+	}
+}
+
+func snippetAround(text string, startByte, endByte, windowRunes int) (string, int, int) {
+	startRune := utf8.RuneCountInString(text[:startByte])
+	endRune := utf8.RuneCountInString(text[:endByte])
+	runes := []rune(text)
+	left := startRune - windowRunes
+	if left < 0 {
+		left = 0
+	}
+	right := endRune + windowRunes
+	if right > len(runes) {
+		right = len(runes)
+	}
+	prefix := ""
+	if left > 0 {
+		prefix = "..."
+	}
+	suffix := ""
+	if right < len(runes) {
+		suffix = "..."
+	}
+	return prefix + normalizeEvidenceWhitespace(string(runes[left:right])) + suffix, startRune, endRune
+}
+
+func normalizeEvidenceWhitespace(s string) string {
+	return strings.Join(strings.Fields(s), " ")
+}
+
+func externalEvidence(ctx context.Context, searcher SnippetSearcher, userText string,
+	pinned []repository.AIPinnedPaper, limit int) ([]Citation, error) {
+
+	if searcher == nil || limit <= 0 {
+		return nil, nil
+	}
+	idMap := map[string]repository.AIPinnedPaper{}
 	idList := make([]string, 0, len(pinned))
 	for _, p := range pinned {
 		ext := externalIDFor(p)
 		if ext == "" {
 			continue
 		}
-		idMap[ext] = p.PaperID
+		idMap[ext] = p
 		idList = append(idList, ext)
 	}
 	if len(idList) == 0 {
-		return "", nil, ErrNoExternalIDs
+		return nil, ErrNoExternalIDs
 	}
 
 	q := userText
@@ -55,42 +319,34 @@ func injectEvidence(ctx context.Context, searcher SnippetSearcher,
 	}
 	res, err := searcher.SnippetSearch(ctx, q, research.SnippetSearchOpts{
 		PaperIDs: idList,
-		Limit:    8,
+		Limit:    limit,
 	})
 	if err != nil {
-		return "", nil, err
+		return nil, err
 	}
 
 	citations := make([]Citation, 0, len(res.Items))
-	var b strings.Builder
-	b.WriteString("你必须基于以下从已钉文献中检索到的证据片段回答。每个论断后用 [n] 标注引用。如果证据不足以支撑回答，请明确说明\"证据不足\"。\n\n证据：\n")
-	for i, m := range res.Items {
-		idx := i + 1
+	for _, m := range res.Items {
 		ext := ""
-		var paperID int64
-		// Prefer DOI from the snippet's paper, fall back to ArXiv. Map back to
-		// our local paper id via the idMap (built from pinned papers above).
 		if m.Paper.ExternalIDs.DOI != "" {
 			ext = "DOI:" + m.Paper.ExternalIDs.DOI
 		} else if m.Paper.ExternalIDs.ArXiv != "" {
 			ext = "ARXIV:" + m.Paper.ExternalIDs.ArXiv
 		}
-		if id, ok := idMap[ext]; ok {
-			paperID = id
+		var paperID int64
+		title := m.Paper.Title
+		if pin, ok := idMap[ext]; ok {
+			paperID = pin.PaperID
+			if title == "" {
+				title = pin.Title
+			}
 		}
 		citations = append(citations, Citation{
-			I: idx, PaperID: paperID, ExternalID: ext, S2PaperID: m.PaperID,
-			Snippet: m.Snippet, Score: m.Score,
+			PaperID: paperID, ExternalID: ext, S2PaperID: m.PaperID, Title: title,
+			Source: evidenceSourceExternal, Snippet: m.Snippet, Score: m.Score,
 		})
-		section := m.Snippet.Section
-		if section == "" {
-			section = m.Snippet.SnippetKind
-		}
-		fmt.Fprintf(&b, "[%d] (%s) %s\n", idx, section, m.Snippet.Text)
 	}
-	b.WriteString("\n用户问题：\n")
-	b.WriteString(userText)
-	return b.String(), citations, nil
+	return citations, nil
 }
 
 func externalIDFor(p repository.AIPinnedPaper) string {
@@ -98,6 +354,97 @@ func externalIDFor(p repository.AIPinnedPaper) string {
 		return "DOI:" + p.DOI
 	}
 	return ""
+}
+
+var asciiTermRe = regexp.MustCompile(`[A-Za-z][A-Za-z0-9+&./-]{2,}`)
+
+func evidenceSearchTerms(query string) []string {
+	q := strings.TrimSpace(query)
+	if q == "" {
+		return nil
+	}
+	lower := strings.ToLower(q)
+	terms := make([]string, 0, 32)
+	add := func(values ...string) {
+		for _, value := range values {
+			value = strings.TrimSpace(value)
+			if value == "" {
+				continue
+			}
+			terms = append(terms, value)
+		}
+	}
+
+	if containsAnyText(lower, "单细胞", "single-cell", "single cell", "scrna", "scatac") {
+		add("single-cell", "single cell", "scRNA-seq", "single-cell RNA-seq", "single-cell RNA sequencing",
+			"scATAC-seq", "single-cell ATAC-seq", "single-cell multiomics", "10x Genomics", "Seurat", "Scanpy")
+	}
+	if containsAnyText(lower, "测序", "sequenc", "rna-seq", "genome", "transcriptome") {
+		add("sequencing", "RNA-seq", "RNA sequencing", "transcriptome", "genome sequencing",
+			"whole-genome sequencing", "whole-exome sequencing", "resequencing", "ATAC-seq",
+			"ChIP-seq", "long-read sequencing", "PacBio", "Nanopore", "Illumina")
+	}
+	if containsAnyText(lower, "表皮", "epiderm") {
+		add("epidermis", "epidermal")
+	}
+	if containsAnyText(lower, "发育", "development") {
+		add("development", "developmental")
+	}
+	if containsAnyText(lower, "轨迹", "trajectory", "pseudotime") {
+		add("trajectory", "trajectories", "pseudotime")
+	}
+	if containsAnyText(lower, "染色质", "chromatin") {
+		add("chromatin", "chromatin accessibility", "ATAC-seq")
+	}
+	if containsAnyText(lower, "表达", "expression") {
+		add("gene expression", "expression")
+	}
+
+	for _, match := range asciiTermRe.FindAllString(q, -1) {
+		if isEvidenceStopWord(match) {
+			continue
+		}
+		add(match)
+	}
+	return dedupeTerms(terms)
+}
+
+func isEvidenceStopWord(term string) bool {
+	switch strings.ToLower(strings.Trim(term, ".,;:!?()[]{}")) {
+	case "the", "and", "for", "with", "that", "this", "from", "into", "about", "paper", "papers", "article", "articles", "related", "find", "search":
+		return true
+	default:
+		return false
+	}
+}
+
+func dedupeTerms(terms []string) []string {
+	seen := map[string]bool{}
+	out := make([]string, 0, len(terms))
+	for _, term := range terms {
+		key := strings.ToLower(strings.TrimSpace(term))
+		if key == "" || seen[key] {
+			continue
+		}
+		seen[key] = true
+		out = append(out, term)
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		return utf8.RuneCountInString(out[i]) > utf8.RuneCountInString(out[j])
+	})
+	if len(out) > 40 {
+		return out[:40]
+	}
+	return out
+}
+
+func containsAnyText(s string, needles ...string) bool {
+	for _, needle := range needles {
+		if strings.Contains(s, needle) {
+			return true
+		}
+	}
+	return false
 }
 
 // MarshalCitations is a tiny convenience wrapper.

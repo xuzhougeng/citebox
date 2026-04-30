@@ -25,6 +25,7 @@
     "ai.sidebar_empty": "No conversations yet. Click + New Conversation to start.",
     "ai.active_title_default": "New Conversation",
     "ai.strict_evidence": "Strict Evidence",
+    "ai.external_evidence": "External Evidence",
     "ai.btn_delete_conversation": "Delete",
 
     "ai.free_ask": "Free Ask",

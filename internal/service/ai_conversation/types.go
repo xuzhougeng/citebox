@@ -7,14 +7,14 @@ import "time"
 
 // Conversation is the read view returned by GetConversation.
 type Conversation struct {
-	ID                int64           `json:"id"`
-	Title             string          `json:"title"`
-	TitleLocked       bool            `json:"title_locked"`
-	StrictEvidence    bool            `json:"strict_evidence"`
-	CreatedAt         time.Time       `json:"created_at"`
-	UpdatedAt         time.Time       `json:"updated_at"`
-	PinnedPapers      []PinnedPaper   `json:"pinned_papers"`
-	RecentMessages    []Message       `json:"recent_messages"`
+	ID             int64         `json:"id"`
+	Title          string        `json:"title"`
+	TitleLocked    bool          `json:"title_locked"`
+	StrictEvidence bool          `json:"strict_evidence"`
+	CreatedAt      time.Time     `json:"created_at"`
+	UpdatedAt      time.Time     `json:"updated_at"`
+	PinnedPapers   []PinnedPaper `json:"pinned_papers"`
+	RecentMessages []Message     `json:"recent_messages"`
 }
 
 // PinnedPaper mirrors AIPinnedPaper from the repo layer.
@@ -40,9 +40,10 @@ type Message struct {
 
 // SendMessageInput is the body for POST .../messages.
 type SendMessageInput struct {
-	ConversationID int64  // 0 means "create new"
-	Content        string
-	PaperID        int64  // optional auto-pin
+	ConversationID          int64 // 0 means "create new"
+	Content                 string
+	PaperID                 int64 // optional auto-pin
+	IncludeExternalEvidence bool
 }
 
 // SendMessageResult is the metadata returned to the handler when the stream is done.

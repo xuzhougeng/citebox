@@ -759,6 +759,52 @@ AI 流式阅读通过：
 - AI 伴读聊天框支持通过 `@角色名` 直接调用已保存的角色 Prompt。
 - 旧的 `/api/ai/prompt-presets` 仍作为兼容别名保留，但语义已与 `role-prompts` 一致。
 
+#### AI 伴读会话接口
+
+会话接口统一位于 `/api/ai/conversations`，用于 AI 页面侧边栏、已钉文献、严格证据模式和流式对话。
+
+常用接口：
+
+- `GET /api/ai/conversations?q=&limit=&offset=`：列出会话。
+- `GET /api/ai/conversations/{id}`：读取会话详情、已钉文献和最近消息。
+- `PATCH /api/ai/conversations/{id}`：更新标题或严格证据开关。
+- `POST /api/ai/conversations/{id}/papers`：给会话 pin 文献。
+- `DELETE /api/ai/conversations/{id}/papers/{paper_id}`：移除 pin。
+- `POST /api/ai/conversations/{id}/messages`：发送消息，返回 `application/x-ndjson` 流。
+- `POST /api/ai/conversations/new/messages`：创建新会话并发送第一条消息。
+
+更新会话请求体示例：
+
+```json
+{
+  "title": "单细胞证据检索",
+  "strict_evidence": true
+}
+```
+
+发送消息请求体示例：
+
+```json
+{
+  "content": "这些文献是否支持单细胞 RNA-seq 可以解析植物表皮发育轨迹？",
+  "paper_id": 42,
+  "include_external_evidence": false
+}
+```
+
+字段说明：
+
+- `content`：用户问题或主张。
+- `paper_id`：可选，仅用于新会话或发送时自动 pin 当前文献。
+- `include_external_evidence`：可选，仅在该会话已开启 `strict_evidence` 时生效；`false` 时只检索本地已钉文献全文，`true` 时在本地证据之外补充 Semantic Scholar snippet search。
+
+严格证据模式说明：
+
+- 默认证据来源是本地已钉文献的标题、摘要、笔记和 `pdf_text`，不依赖 DOI 或网络。
+- 不使用 embedding，不使用向量数据库。
+- 外部证据只作为可选补充；Semantic Scholar 限流或失败时，本地证据仍可继续用于回答。
+- 助手消息的 `citations_json` 会保存本地或外部证据片段，前端用 `[n]` 脚注展示。
+
 #### `POST /api/ai/settings/check-model`
 
 用途：

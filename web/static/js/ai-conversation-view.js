@@ -4,6 +4,8 @@
 (function () {
     'use strict';
 
+    const EXTERNAL_EVIDENCE_KEY = 'citebox_ai_external_evidence';
+
     const View = {
         _state: {
             els: null,
@@ -29,6 +31,13 @@
             }
             if (els.strictEvidence) {
                 els.strictEvidence.addEventListener('change', function () { self.setStrictEvidence(els.strictEvidence.checked); });
+            }
+            if (els.externalEvidence) {
+                els.externalEvidence.checked = this._loadExternalEvidencePreference();
+                els.externalEvidence.addEventListener('change', function () {
+                    self._saveExternalEvidencePreference(els.externalEvidence.checked);
+                    self._syncEvidenceControls();
+                });
             }
             if (els.exportBtn) {
                 els.exportBtn.addEventListener('click', function () {
@@ -86,6 +95,9 @@
 
             const body = { content: content };
             if (!s.conversationId && s._draftPaperId) body.paper_id = s._draftPaperId;
+            if (s.els.strictEvidence && s.els.strictEvidence.checked) {
+                body.include_external_evidence = !!(s.els.externalEvidence && s.els.externalEvidence.checked);
+            }
 
             s.els.questionInput.value = '';
             this._toggleSendingState(true);
@@ -123,6 +135,7 @@
                 body: JSON.stringify({ strict_evidence: !!on }),
             });
             if (s.meta) s.meta.strict_evidence = !!on;
+            this._syncEvidenceControls();
         },
 
         async rename(newTitle) {
@@ -162,6 +175,7 @@
             const meta = s.meta || {};
             if (s.els.title) s.els.title.textContent = meta.title || '新对话';
             if (s.els.strictEvidence) s.els.strictEvidence.checked = !!meta.strict_evidence;
+            this._syncEvidenceControls();
             if (window.AIReader && window.AIReader.pin && typeof window.AIReader.pin.setPinned === 'function') {
                 window.AIReader.pin.setPinned(s.pinnedPapers);
             }
@@ -276,6 +290,28 @@
             if (typeof Utils !== 'undefined' && typeof Utils.showToast === 'function') {
                 Utils.showToast(msg, 'error');
             }
+        },
+
+        _syncEvidenceControls() {
+            const s = this._state;
+            if (!s.els || !s.els.externalEvidence) return;
+            const strictOn = !!(s.els.strictEvidence && s.els.strictEvidence.checked);
+            s.els.externalEvidence.disabled = !strictOn;
+            s.els.externalEvidence.closest('label')?.classList.toggle('is-disabled', !strictOn);
+        },
+
+        _loadExternalEvidencePreference() {
+            try {
+                return localStorage.getItem(EXTERNAL_EVIDENCE_KEY) === '1';
+            } catch (e) {
+                return false;
+            }
+        },
+
+        _saveExternalEvidencePreference(on) {
+            try {
+                localStorage.setItem(EXTERNAL_EVIDENCE_KEY, on ? '1' : '0');
+            } catch (e) { /* ignore */ }
         },
     };
 

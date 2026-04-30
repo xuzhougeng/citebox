@@ -272,6 +272,15 @@
     cursor: pointer;
 }
 
+.ai-strict-toggle.is-disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.ai-strict-toggle.is-disabled input[type="checkbox"] {
+    cursor: not-allowed;
+}
+
 /* ------------------------------------------------------------------
    6. Pin chip strip
    ------------------------------------------------------------------ */

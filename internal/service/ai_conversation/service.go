@@ -28,14 +28,14 @@ type StreamCaller interface {
 
 // Service is the conversation lifecycle manager.
 type Service struct {
-	repo           *repository.AIConversationRepository
-	papers         *repository.PaperRepository
-	settings       AISettingsProvider
-	caller         StreamCaller
-	searcher       SnippetSearcher
-	titleCaller    NonStreamCaller
-	summaryCaller  NonStreamCaller
-	logger         *slog.Logger
+	repo          *repository.AIConversationRepository
+	papers        *repository.PaperRepository
+	settings      AISettingsProvider
+	caller        StreamCaller
+	searcher      SnippetSearcher
+	titleCaller   NonStreamCaller
+	summaryCaller NonStreamCaller
+	logger        *slog.Logger
 }
 
 // New builds the service. All deps required.
@@ -246,8 +246,10 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput, onDelta 
 
 	var citations []Citation
 	var citationsJSON string
-	if conv.StrictEvidence && s.searcher != nil {
-		enrichedUser, cites, evErr := injectEvidence(ctx, s.searcher, in.Content, pinned)
+	if conv.StrictEvidence {
+		enrichedUser, cites, evErr := injectEvidence(ctx, s.papers, s.searcher, in.Content, pinned, EvidenceOptions{
+			IncludeExternal: in.IncludeExternalEvidence,
+		})
 		if evErr != nil {
 			if !errors.Is(evErr, ErrNoExternalIDs) {
 				s.logger.Warn("ai_conversation: evidence search failed", "error", evErr)

@@ -25,6 +25,7 @@
     "ai.sidebar_empty": "还没有对话。点 ＋ 新对话开始。",
     "ai.active_title_default": "新对话",
     "ai.strict_evidence": "严格证据",
+    "ai.external_evidence": "外部证据",
     "ai.btn_delete_conversation": "删除",
 
     "ai.free_ask": "自由提问",

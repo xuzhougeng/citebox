@@ -137,8 +137,9 @@ func (h *AIConversationHandler) PostMessage(w http.ResponseWriter, r *http.Reque
 	}
 
 	var body struct {
-		Content string `json:"content"`
-		PaperID int64  `json:"paper_id,omitempty"`
+		Content                 string `json:"content"`
+		PaperID                 int64  `json:"paper_id,omitempty"`
+		IncludeExternalEvidence bool   `json:"include_external_evidence,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		sendError(w, apperr.New(apperr.CodeInvalidArgument, "请求体格式错误"))
@@ -165,9 +166,10 @@ func (h *AIConversationHandler) PostMessage(w http.ResponseWriter, r *http.Reque
 	}
 
 	res, err := h.svc.SendMessage(r.Context(), ai_conversation.SendMessageInput{
-		ConversationID: conversationID,
-		Content:        body.Content,
-		PaperID:        body.PaperID,
+		ConversationID:          conversationID,
+		Content:                 body.Content,
+		PaperID:                 body.PaperID,
+		IncludeExternalEvidence: body.IncludeExternalEvidence,
 	}, func(delta string) error {
 		return send(map[string]interface{}{"type": "delta", "delta": delta})
 	})

@@ -114,6 +114,40 @@ func TestSendMessageAutoPinsPaper(t *testing.T) {
 	}
 }
 
+func TestStrictEvidenceUsesRetrievedSnippetsNotPinnedFullText(t *testing.T) {
+	svc, libRepo, caller := newServiceForTest(t)
+	paperID := mustInsertPaperForTest(t, libRepo, "Strict Paper", "")
+	_, err := libRepo.DB().Exec(
+		`UPDATE papers SET pdf_text = ? WHERE id = ?`,
+		"FULL_CONTEXT_SHOULD_NOT_LEAK "+strings.Repeat("background filler ", 160)+"The study uses scRNA-seq evidence for trajectory analysis.",
+		paperID,
+	)
+	if err != nil {
+		t.Fatalf("update pdf_text: %v", err)
+	}
+	convID, _ := svc.CreateDraft()
+	if err := svc.PinPaper(convID, paperID); err != nil {
+		t.Fatalf("PinPaper: %v", err)
+	}
+	if err := svc.UpdateStrictEvidence(convID, true); err != nil {
+		t.Fatalf("UpdateStrictEvidence: %v", err)
+	}
+
+	_, err = svc.SendMessage(context.Background(), SendMessageInput{
+		ConversationID: convID,
+		Content:        "查找单细胞测序证据",
+	}, func(string) error { return nil })
+	if err != nil {
+		t.Fatalf("SendMessage: %v", err)
+	}
+	if strings.Contains(caller.userSeen, "FULL_CONTEXT_SHOULD_NOT_LEAK") {
+		t.Fatalf("strict prompt leaked broad pinned context: %s", caller.userSeen)
+	}
+	if !strings.Contains(caller.userSeen, "scRNA-seq") || !strings.Contains(caller.userSeen, "严格证据模式") {
+		t.Fatalf("strict prompt missing retrieved evidence: %s", caller.userSeen)
+	}
+}
+
 func TestSendMessagePinLimit(t *testing.T) {
 	svc, libRepo, _ := newServiceForTest(t)
 	convID, _ := svc.CreateDraft()

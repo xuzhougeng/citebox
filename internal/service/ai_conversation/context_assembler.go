@@ -25,23 +25,25 @@ func (s *Service) assembleForTurn(conv repository.AIConversation,
 	pinned []repository.AIPinnedPaper, history []repository.AIMessage,
 	userText string, settings model.AISettings) (assembledContext, error) {
 
-	var paperBlocks []string
-	for _, pp := range pinned {
-		paper, err := s.papers.GetPaperDetail(pp.PaperID)
-		if err != nil {
-			s.logger.Warn("ai_conversation: pinned paper missing", "paper_id", pp.PaperID, "error", err)
-			continue
-		}
-		body := truncateRunes(paper.PDFText, 6000)
-		paperBlocks = append(paperBlocks, fmt.Sprintf(
-			"### %s\nDOI: %s\n摘要: %s\n正文片段:\n%s",
-			paper.Title, paper.DOI,
-			truncateRunes(paper.AbstractText, 800),
-			body))
-	}
 	pinnedBlock := ""
-	if len(paperBlocks) > 0 {
-		pinnedBlock = "已钉文献：\n\n" + strings.Join(paperBlocks, "\n\n---\n\n") + "\n\n"
+	if !conv.StrictEvidence {
+		var paperBlocks []string
+		for _, pp := range pinned {
+			paper, err := s.papers.GetPaperDetail(pp.PaperID)
+			if err != nil {
+				s.logger.Warn("ai_conversation: pinned paper missing", "paper_id", pp.PaperID, "error", err)
+				continue
+			}
+			body := truncateRunes(paper.PDFText, 6000)
+			paperBlocks = append(paperBlocks, fmt.Sprintf(
+				"### %s\nDOI: %s\n摘要: %s\n正文片段:\n%s",
+				paper.Title, paper.DOI,
+				truncateRunes(paper.AbstractText, 800),
+				body))
+		}
+		if len(paperBlocks) > 0 {
+			pinnedBlock = "已钉文献：\n\n" + strings.Join(paperBlocks, "\n\n---\n\n") + "\n\n"
+		}
 	}
 
 	// Sliding-window: keep newest history while estimated total stays within budget.
