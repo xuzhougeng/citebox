@@ -227,7 +227,7 @@ func buildHandler(
 		LibrarySearch:  ai_assistant.NewLibrarySearchToolWithAgents(repo.Paper, libraryPlanner, libraryClassifier),
 		ExternalSearch: ai_assistant.NewExternalSearchTool(researchSvc),
 		PaperRead:      ai_assistant.NewPaperReadTool(repo.Paper),
-		FigureLookup:   ai_assistant.NewFigureLookupTool(ai_assistant.NewRepositoryFigureSearcher(repo.Figure)),
+		FigureLookup:   ai_assistant.NewFigureLookupToolWithPapers(ai_assistant.NewRepositoryFigureSearcher(repo.Figure), repo.Paper),
 	})
 	aiConvService := ai_conversation.New(repo.AIConversation, repo.Paper, aiSvc, aiSvc, researchSvc, logger.With("component", "ai_conversation"), assistantOrchestrator)
 	aiConversationHandler := handler.NewAIConversationHandler(aiConvService)

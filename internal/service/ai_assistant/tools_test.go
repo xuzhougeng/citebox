@@ -204,9 +204,62 @@ func (s *termSensitiveFigureStore) SearchFigures(query string, paperID int64, li
 	return nil, 0, nil
 }
 
+type figureSearchCall struct {
+	query   string
+	paperID int64
+}
+
+type paperFallbackFigureStore struct {
+	calls []figureSearchCall
+}
+
+func (s *paperFallbackFigureStore) SearchFigures(query string, paperID int64, limit int) ([]FigureRecord, int, error) {
+	s.calls = append(s.calls, figureSearchCall{query: query, paperID: paperID})
+	if strings.TrimSpace(query) == "" && paperID == 5 {
+		figures := []FigureRecord{{
+			FigureID: 11, PaperID: 5, PaperTitle: "Enhancer Paper", DisplayLabel: "Fig 2",
+			ImageURL: "/api/figures/11/image", Caption: "Genome browser tracks around enhancer loci.",
+		}}
+		return figures, len(figures), nil
+	}
+	return nil, 0, nil
+}
+
+type figurePaperFallbackStore struct {
+	terms []string
+}
+
+func (s *figurePaperFallbackStore) GetPaperDetail(id int64) (*model.Paper, error) {
+	if id != 5 {
+		return nil, nil
+	}
+	return &model.Paper{
+		ID:      5,
+		Title:   "Enhancer Paper",
+		PDFText: "The results include H3K27ac ChIP-seq signal tracks across enhancer loci.",
+	}, nil
+}
+
+func (s *figurePaperFallbackStore) ListEvidenceCandidatePaperIDs(terms []string, limit int) ([]int64, error) {
+	s.terms = append([]string(nil), terms...)
+	if containsStringFold(terms, "ChIP-seq") {
+		return []int64{5}, nil
+	}
+	return nil, nil
+}
+
 func containsStringFold(values []string, want string) bool {
 	for _, value := range values {
 		if strings.EqualFold(strings.TrimSpace(value), want) {
+			return true
+		}
+	}
+	return false
+}
+
+func containsFigureSearchCall(calls []figureSearchCall, query string, paperID int64) bool {
+	for _, call := range calls {
+		if strings.TrimSpace(call.query) == strings.TrimSpace(query) && call.paperID == paperID {
 			return true
 		}
 	}
@@ -247,6 +300,36 @@ func TestFigureLookupToolExtractsSearchTermFromNaturalLanguage(t *testing.T) {
 		t.Fatalf("queries = %v, want extracted ChIP-seq search", store.queries)
 	}
 	if !strings.Contains(res.AnswerContext, "H3K27ac ChIP-seq tracks") {
+		t.Fatalf("answer context = %s", res.AnswerContext)
+	}
+}
+
+func TestFigureLookupToolFallsBackToFullTextCandidatePapers(t *testing.T) {
+	figures := &paperFallbackFigureStore{}
+	papers := &figurePaperFallbackStore{}
+	tool := NewFigureLookupToolWithPapers(figures, papers)
+
+	res, err := tool.Run(context.Background(), ToolInput{Query: "在文献库中找一张ChIP-seq相关的图"})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(res.Cards) != 1 || res.Cards[0].Type != "figure_result" {
+		t.Fatalf("cards = %+v, figure calls = %+v, terms = %v", res.Cards, figures.calls, papers.terms)
+	}
+	card, ok := res.Cards[0].Payload.(FigureResultCard)
+	if !ok {
+		t.Fatalf("payload = %T, want FigureResultCard", res.Cards[0].Payload)
+	}
+	if card.FigureID != 11 || card.PaperID != 5 {
+		t.Fatalf("card = %+v, want candidate paper figure", card)
+	}
+	if card.EvidenceText == "" || !strings.Contains(card.EvidenceText, "H3K27ac ChIP-seq") {
+		t.Fatalf("card evidence = %+v, want full-text ChIP-seq evidence", card)
+	}
+	if !containsFigureSearchCall(figures.calls, "", 5) {
+		t.Fatalf("figure calls = %+v, want unfiltered figure listing for candidate paper", figures.calls)
+	}
+	if !strings.Contains(res.AnswerContext, "Full-text evidence") || !strings.Contains(res.AnswerContext, "H3K27ac ChIP-seq") {
 		t.Fatalf("answer context = %s", res.AnswerContext)
 	}
 }
