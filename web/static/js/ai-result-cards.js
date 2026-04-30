@@ -10,13 +10,19 @@
             .replace(/'/g, '&#39;');
     }
 
-    function safeUrl(value) {
+    function safeUrl(value, opts) {
+        opts = opts || {};
         const raw = String(value == null ? '' : value).trim();
         if (!raw) return '';
-        if (raw.charAt(0) === '/') return raw.replace(/"/g, '%22').replace(/</g, '%3C').replace(/>/g, '%3E');
+        if (raw.charAt(0) === '/') {
+            if (raw.charAt(1) === '/') return '';
+            return raw.replace(/"/g, '%22').replace(/</g, '%3C').replace(/>/g, '%3E');
+        }
         try {
             const url = new URL(raw, window.location.origin);
-            if (url.protocol === 'http:' || url.protocol === 'https:') return url.href;
+            if ((url.protocol === 'http:' || url.protocol === 'https:') && (opts.allowExternal || url.origin === window.location.origin)) {
+                return url.href;
+            }
         } catch (e) { /* invalid URL */ }
         return '';
     }
@@ -103,7 +109,7 @@
 
     function renderExternalPaper(p) {
         const meta = metaLine([p.venue, p.year, p.doi]);
-        const s2 = safeUrl(p.s2_paper_id ? 'https://www.semanticscholar.org/paper/' + encodeURIComponent(p.s2_paper_id) : '');
+        const s2 = safeUrl(p.s2_paper_id ? 'https://www.semanticscholar.org/paper/' + encodeURIComponent(p.s2_paper_id) : '', { allowExternal: true });
         return '<article class="ai-result-card ai-result-card-external">' +
             '<div class="ai-result-card-head">' +
                 '<h4>' + escapeHtml(p.title || translate('ai.result_external_paper_fallback', '外部文献')) + '</h4>' +

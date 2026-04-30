@@ -23,12 +23,6 @@
             return bubble;
         },
 
-        appendHTML(target, html) {
-            if (!target || !html) return;
-            target.insertAdjacentHTML('beforeend', html);
-            this.scrollToBottom();
-        },
-
         scrollToBottom() {
             if (!this.container) return;
             this.container.scrollTop = this.container.scrollHeight;

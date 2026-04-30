@@ -2,6 +2,12 @@
     'use strict';
 
     const intents = ['library_search', 'external_search', 'paper_read', 'figure_lookup'];
+    const intentI18nKeys = {
+        library_search: 'ai.intent_library_search',
+        external_search: 'ai.intent_external_search',
+        paper_read: 'ai.intent_paper_read',
+        figure_lookup: 'ai.intent_figure_lookup',
+    };
 
     function translate(key, fallback) {
         if (window.CiteBoxI18n && typeof window.CiteBoxI18n.t === 'function') {
@@ -44,13 +50,13 @@
         _renderShortcuts() {
             if (!this.shortcutRoot) return;
             const labels = {
-                library_search: translate('ai.intent_library_search', '查全库'),
-                external_search: translate('ai.intent_external_search', '查外部'),
-                paper_read: translate('ai.intent_paper_read', '读文献'),
-                figure_lookup: translate('ai.intent_figure_lookup', '看图/图文'),
+                library_search: translate(intentI18nKeys.library_search, '查全库'),
+                external_search: translate(intentI18nKeys.external_search, '查外部'),
+                paper_read: translate(intentI18nKeys.paper_read, '读文献'),
+                figure_lookup: translate(intentI18nKeys.figure_lookup, '看图/图文'),
             };
             this.shortcutRoot.innerHTML = intents.map((intent) => (
-                '<button class="ai-intent-shortcut" type="button" data-intent="' + escapeHtml(intent) + '">' +
+                '<button class="ai-intent-shortcut" type="button" data-intent="' + escapeHtml(intent) + '" data-i18n="' + escapeHtml(intentI18nKeys[intent]) + '">' +
                     escapeHtml(labels[intent]) +
                 '</button>'
             )).join('');
