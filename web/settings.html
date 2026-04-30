@@ -41,7 +41,9 @@
             </div>
         </section>
 
-        <section class="section-stack">
+        <div class="settings-layout">
+            <aside id="settingsAnchorSidebar" class="settings-anchor-sidebar" data-i18n-aria-label="settings.anchor_sidebar_aria" aria-label="设置导航"></aside>
+            <section class="section-stack settings-content">
             <details class="manager-card settings-collapsible" open>
                 <summary class="settings-collapsible-toggle">
                     <h2 data-i18n="settings.version.title">版本信息</h2>
@@ -812,7 +814,8 @@ User Prompt:
                     </div>
                 </div>
             </details>
-        </section>
+            </section>
+        </div>
     </main>
 
     <div id="aiModelModal" class="modal-shell hidden">

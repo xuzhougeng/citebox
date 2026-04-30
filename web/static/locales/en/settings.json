@@ -3,6 +3,7 @@
     "settings.eyebrow": "Settings",
     "settings.hero_title": "Settings",
     "settings.hero_text": "Manage AI models, prompts, integrations and account. Model config auto-saves; prompts require manual save.",
+    "settings.anchor_sidebar_aria": "Settings navigation",
 
     "settings.version.title": "Version",
     "settings.version.desc": "Check whether a newer version is available.",

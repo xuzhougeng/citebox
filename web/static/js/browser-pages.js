@@ -1744,12 +1744,13 @@ const NotesPage = {
         this.state.page = totalPages ? Math.min(page, totalPages) : 1;
         this.papers = papers;
         this.state.totalPages = totalPages;
+        const totalChars = papers.reduce((sum, p) => sum + String(p.paper_notes_text || '').trim().length, 0);
+        const avgChars = papers.length ? Math.round(totalChars / papers.length) : 0;
         this.summaryStrip.innerHTML = `
             <div class="stat-card"><span>${Utils.escapeHTML(t('notes.stat_papers_with_notes', '带笔记文献'))}</span><strong>${payload.total || 0}</strong></div>
-            <div class="stat-card"><span>${Utils.escapeHTML(t('notes.stat_current_page', '当前页'))}</span><strong>${papers.length}</strong></div>
-            <div class="stat-card"><span>${Utils.escapeHTML(t('notes.stat_group', '来源分组'))}</span><strong>${Utils.escapeHTML(this.groupFilter.selectedOptions[0]?.textContent || t('notes.filter_all_groups', '全部分组'))}</strong></div>
-            <div class="stat-card"><span>${Utils.escapeHTML(t('notes.stat_paper_tag', '文献标签'))}</span><strong>${Utils.escapeHTML(this.tagFilter.selectedOptions[0]?.textContent || t('notes.filter_all_paper_tags', '全部文献标签'))}</strong></div>
-            <div class="stat-card"><span>${Utils.escapeHTML(t('notes.stat_sort', '排序方式'))}</span><strong>${Utils.escapeHTML(this.currentSortLabel())}</strong></div>
+            <div class="stat-card"><span>${Utils.escapeHTML(t('notes.stat_current_page', '本页条目'))}</span><strong>${papers.length}</strong></div>
+            <div class="stat-card"><span>${Utils.escapeHTML(t('notes.stat_chars_on_page', '本页字数'))}</span><strong>${totalChars.toLocaleString()}</strong></div>
+            <div class="stat-card"><span>${Utils.escapeHTML(t('notes.stat_avg_chars', '平均字数'))}</span><strong>${avgChars.toLocaleString()}</strong></div>
         `;
         this.renderPageControls();
         this.grid.innerHTML = papers.length
@@ -1790,12 +1791,13 @@ const NotesPage = {
         this.state.page = totalPages ? Math.min(page, totalPages) : 1;
         this.figures = figures;
         this.state.totalPages = totalPages;
+        const totalChars = figures.reduce((sum, f) => sum + String(f.notes_text || '').trim().length, 0);
+        const avgChars = figures.length ? Math.round(totalChars / figures.length) : 0;
         this.summaryStrip.innerHTML = `
             <div class="stat-card"><span>${Utils.escapeHTML(t('notes.stat_figures_with_notes', '带笔记图片'))}</span><strong>${payload.total || 0}</strong></div>
-            <div class="stat-card"><span>${Utils.escapeHTML(t('notes.stat_current_page', '当前页'))}</span><strong>${figures.length}</strong></div>
-            <div class="stat-card"><span>${Utils.escapeHTML(t('notes.stat_group', '来源分组'))}</span><strong>${Utils.escapeHTML(this.groupFilter.selectedOptions[0]?.textContent || t('notes.filter_all_groups', '全部分组'))}</strong></div>
-            <div class="stat-card"><span>${Utils.escapeHTML(t('notes.stat_figure_tag', '图片标签'))}</span><strong>${Utils.escapeHTML(this.tagFilter.selectedOptions[0]?.textContent || t('notes.filter_all_figure_tags', '全部图片标签'))}</strong></div>
-            <div class="stat-card"><span>${Utils.escapeHTML(t('notes.stat_sort', '排序方式'))}</span><strong>${Utils.escapeHTML(this.currentSortLabel())}</strong></div>
+            <div class="stat-card"><span>${Utils.escapeHTML(t('notes.stat_current_page', '本页条目'))}</span><strong>${figures.length}</strong></div>
+            <div class="stat-card"><span>${Utils.escapeHTML(t('notes.stat_chars_on_page', '本页字数'))}</span><strong>${totalChars.toLocaleString()}</strong></div>
+            <div class="stat-card"><span>${Utils.escapeHTML(t('notes.stat_avg_chars', '平均字数'))}</span><strong>${avgChars.toLocaleString()}</strong></div>
         `;
         this.renderPageControls();
         this.grid.innerHTML = figures.length

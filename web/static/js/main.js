@@ -1,4 +1,178 @@
 if (typeof window.t !== 'function') window.t = function(k,f){return f||k};
+
+const AppNav = {
+    SECONDARY_HREFS: ['/palettes', '/groups', '/tags', '/research'],
+
+    init() {
+        const navLinks = document.querySelector('.nav-links');
+        if (!navLinks) return;
+        if (navLinks.dataset.navEnhanced === '1') return;
+        navLinks.dataset.navEnhanced = '1';
+
+        this.buildDropdown(navLinks);
+        this.buildMobileToggle(navLinks);
+        this.bindGlobalDismiss();
+    },
+
+    buildDropdown(navLinks) {
+        const items = Array.from(navLinks.children).filter((el) => el.tagName === 'LI');
+        const secondary = [];
+        let firstIdx = -1;
+
+        items.forEach((li, i) => {
+            const a = li.querySelector('a[href]');
+            if (!a) return;
+            const href = a.getAttribute('href');
+            if (this.SECONDARY_HREFS.includes(href)) {
+                secondary.push(li);
+                if (firstIdx === -1) firstIdx = i;
+            }
+        });
+
+        if (secondary.length === 0) return;
+
+        const isActive = secondary.some((li) => li.querySelector('a.active'));
+
+        const dropdown = document.createElement('li');
+        dropdown.className = 'nav-dropdown' + (isActive ? ' is-active' : '');
+
+        const toggle = document.createElement('button');
+        toggle.type = 'button';
+        toggle.className = 'nav-dropdown-toggle' + (isActive ? ' active' : '');
+        toggle.setAttribute('aria-haspopup', 'true');
+        toggle.setAttribute('aria-expanded', 'false');
+        toggle.setAttribute('data-i18n-aria-label', 'nav.more_aria');
+        toggle.setAttribute('aria-label', '更多');
+
+        const labelSpan = document.createElement('span');
+        labelSpan.className = 'nav-dropdown-label';
+        labelSpan.setAttribute('data-i18n', 'nav.more');
+        labelSpan.textContent = '更多';
+        toggle.appendChild(labelSpan);
+
+        const caret = document.createElement('span');
+        caret.className = 'nav-dropdown-caret';
+        caret.setAttribute('aria-hidden', 'true');
+        caret.textContent = '▾';
+        toggle.appendChild(caret);
+
+        const menu = document.createElement('ul');
+        menu.className = 'nav-dropdown-menu';
+        menu.setAttribute('role', 'menu');
+
+        navLinks.insertBefore(dropdown, items[firstIdx]);
+        secondary.forEach((li) => {
+            li.setAttribute('role', 'none');
+            const link = li.querySelector('a');
+            if (link) link.setAttribute('role', 'menuitem');
+            menu.appendChild(li);
+        });
+
+        dropdown.appendChild(toggle);
+        dropdown.appendChild(menu);
+
+        toggle.addEventListener('click', (event) => {
+            event.stopPropagation();
+            this.toggleDropdown(dropdown);
+        });
+
+        menu.addEventListener('click', (event) => {
+            if (event.target.closest('a[href]')) {
+                this.closeDropdown(dropdown);
+            }
+        });
+
+        this._dropdown = dropdown;
+    },
+
+    buildMobileToggle(navLinks) {
+        const navbar = document.querySelector('.navbar-content');
+        if (!navbar) return;
+        const logo = navbar.querySelector('.logo');
+        if (!logo) return;
+        if (navbar.querySelector('.nav-toggle')) return;
+
+        const toggle = document.createElement('button');
+        toggle.type = 'button';
+        toggle.className = 'nav-toggle';
+        toggle.setAttribute('aria-controls', 'primary-nav');
+        toggle.setAttribute('aria-expanded', 'false');
+        toggle.setAttribute('aria-label', '菜单');
+        toggle.setAttribute('data-i18n-aria-label', 'nav.toggle_menu');
+        toggle.innerHTML = '<span class="nav-toggle-bar" aria-hidden="true"></span>';
+
+        navLinks.id = navLinks.id || 'primary-nav';
+
+        navbar.insertBefore(toggle, logo.nextSibling);
+
+        toggle.addEventListener('click', (event) => {
+            event.stopPropagation();
+            this.toggleMobile(toggle, navLinks);
+        });
+
+        navLinks.addEventListener('click', (event) => {
+            if (event.target.closest('a[href]')) {
+                this.closeMobile(toggle, navLinks);
+            }
+        });
+
+        this._mobileToggle = toggle;
+        this._mobileNav = navLinks;
+    },
+
+    bindGlobalDismiss() {
+        document.addEventListener('click', (event) => {
+            if (this._dropdown && this._dropdown.classList.contains('is-open')
+                && !this._dropdown.contains(event.target)) {
+                this.closeDropdown(this._dropdown);
+            }
+            if (this._mobileToggle && this._mobileToggle.getAttribute('aria-expanded') === 'true'
+                && !this._mobileNav.contains(event.target)
+                && !this._mobileToggle.contains(event.target)) {
+                this.closeMobile(this._mobileToggle, this._mobileNav);
+            }
+        });
+
+        document.addEventListener('keydown', (event) => {
+            if (event.key !== 'Escape') return;
+            if (this._dropdown && this._dropdown.classList.contains('is-open')) {
+                this.closeDropdown(this._dropdown);
+                const t = this._dropdown.querySelector('.nav-dropdown-toggle');
+                if (t) t.focus();
+            }
+            if (this._mobileToggle && this._mobileToggle.getAttribute('aria-expanded') === 'true') {
+                this.closeMobile(this._mobileToggle, this._mobileNav);
+                this._mobileToggle.focus();
+            }
+        });
+    },
+
+    toggleDropdown(dropdown) {
+        const open = dropdown.classList.toggle('is-open');
+        const t = dropdown.querySelector('.nav-dropdown-toggle');
+        if (t) t.setAttribute('aria-expanded', open ? 'true' : 'false');
+    },
+
+    closeDropdown(dropdown) {
+        dropdown.classList.remove('is-open');
+        const t = dropdown.querySelector('.nav-dropdown-toggle');
+        if (t) t.setAttribute('aria-expanded', 'false');
+    },
+
+    toggleMobile(toggle, navLinks) {
+        const open = toggle.getAttribute('aria-expanded') !== 'true';
+        toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+        navLinks.classList.toggle('is-open', open);
+        document.body.classList.toggle('nav-open', open);
+    },
+
+    closeMobile(toggle, navLinks) {
+        toggle.setAttribute('aria-expanded', 'false');
+        navLinks.classList.remove('is-open');
+        document.body.classList.remove('nav-open');
+    }
+};
+
 const AppNavigationHotkeys = {
     routes: [
         { key: '1', path: '/', i18n: 'nav.overview', fallback: '总览' },
@@ -222,6 +396,7 @@ function restorePendingModalState() {
 
 document.addEventListener('DOMContentLoaded', () => {
     const path = window.location.pathname;
+    AppNav.init();
     AppNavigationHotkeys.init();
     if (typeof Utils !== 'undefined' && typeof Utils.bindResourceViewerLinks === 'function') {
         Utils.bindResourceViewerLinks();

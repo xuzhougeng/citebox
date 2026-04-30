@@ -26,6 +26,9 @@
     "nav.ai": "AI Reader",
     "nav.settings": "Settings",
     "nav.upload_pdf": "Upload PDF",
+    "nav.more": "More",
+    "nav.more_aria": "Show more navigation",
+    "nav.toggle_menu": "Menu",
 
     "btn.confirm": "Confirm",
     "btn.cancel": "Cancel",

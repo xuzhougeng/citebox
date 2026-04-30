@@ -21,11 +21,44 @@
 }
 
 .hero.compact {
+    flex-direction: row;
     align-items: flex-start;
+    gap: 1rem;
+    padding: 1.1rem 1.5rem;
+    margin-bottom: 1rem;
+}
+
+.hero.compact > :first-child {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.hero.compact .eyebrow {
+    display: inline-block;
+    margin: 0 0.55rem 0 0;
+    font-size: 0.65rem;
+    color: var(--muted);
+    vertical-align: 0.18em;
+}
+
+.hero.compact h1 {
+    display: inline;
+    font-family: var(--font-display);
+    font-size: clamp(1.05rem, 1.4vw, 1.4rem);
+    line-height: 1.4;
+    font-weight: 700;
 }
 
 .hero.compact .hero-text {
+    margin: 0.3rem 0 0;
     max-width: 68rem;
+    font-size: 0.9rem;
+    line-height: 1.5;
+}
+
+.hero.compact .hero-inline-links {
+    margin: 0.4rem 0 0;
+    font-size: 0.88rem;
 }
 
 .eyebrow {

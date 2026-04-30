@@ -713,3 +713,93 @@ html[lang^="zh"] .prompt-template-details[open] summary::before {
 .settings-audio-preview audio {
     width: 100%;
 }
+
+/* ===== Anchor sidebar layout ===== */
+.settings-layout {
+    display: grid;
+    grid-template-columns: 220px minmax(0, 1fr);
+    gap: 1.5rem;
+    align-items: start;
+}
+
+.settings-anchor-sidebar {
+    position: sticky;
+    top: calc(72px + 1rem);
+    align-self: start;
+    max-height: calc(100vh - 96px);
+    overflow-y: auto;
+    padding: 0.75rem;
+    border-radius: calc(var(--radius) - 4px);
+    background: rgba(var(--surface-rgb), 0.7);
+    border: 1px solid rgba(var(--ink-rgb), 0.08);
+    box-shadow: var(--shadow);
+}
+
+.settings-anchor-sidebar > p.eyebrow {
+    margin: 0.2rem 0 0.55rem;
+    padding: 0 0.5rem;
+}
+
+.settings-anchor-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.settings-anchor-list a {
+    display: block;
+    padding: 0.45rem 0.6rem;
+    border-radius: 8px;
+    color: var(--muted);
+    font-size: 0.9rem;
+    line-height: 1.4;
+    border-left: 2px solid transparent;
+    transition: 0.15s ease;
+}
+
+.settings-anchor-list a:hover {
+    color: var(--ink);
+    background: rgba(var(--ink-rgb), 0.05);
+}
+
+.settings-anchor-list a.active {
+    color: var(--accent-deep);
+    background: rgba(var(--accent-rgb), 0.1);
+    border-left-color: var(--accent-deep);
+    font-weight: 600;
+}
+
+.settings-content {
+    min-width: 0;
+}
+
+@media (max-width: 960px) {
+    .settings-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .settings-anchor-sidebar {
+        position: static;
+        max-height: none;
+    }
+
+    .settings-anchor-list {
+        flex-direction: row;
+        flex-wrap: wrap;
+        gap: 0.3rem;
+    }
+
+    .settings-anchor-list a {
+        border-left: none;
+        border-bottom: 2px solid transparent;
+        padding: 0.35rem 0.7rem;
+    }
+
+    .settings-anchor-list a.active {
+        border-left: none;
+        border-bottom-color: var(--accent-deep);
+    }
+}

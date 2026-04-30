@@ -41,6 +41,9 @@
     "library.result_scope_label": "范围",
     "library.result_group_limited": "已限定分组",
     "library.result_tag_limited": "已限定标签",
+    "library.view_mode_aria": "视图模式",
+    "library.view_detailed": "详细",
+    "library.view_compact": "紧凑",
 
     "library.empty_title": "还没有符合条件的文献",
     "library.empty_completed": "当前还没有完成解析的文献，先上传 PDF 或把状态切回全部。",

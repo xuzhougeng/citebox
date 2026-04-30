@@ -1,11 +1,25 @@
 /* ===== Responsive Styles ===== */
 
-@media (max-width: 1240px) and (min-width: 721px) {
+/* Tablet/laptop range — tighten nav padding so 7 visible items + actions fit */
+@media (max-width: 1180px) and (min-width: 1041px) {
+    .nav-links a,
+    .nav-dropdown-toggle {
+        padding: 0.5rem 0.7rem;
+        font-size: 0.95rem;
+    }
+
+    .navbar-content {
+        gap: 0.6rem;
+    }
+}
+
+/* Narrow desktop — wrap nav links to a second row gracefully */
+@media (max-width: 1040px) and (min-width: 721px) {
     .navbar-content {
         flex-wrap: wrap;
         align-items: flex-start;
         justify-content: flex-start;
-        row-gap: 0.85rem;
+        row-gap: 0.7rem;
     }
 
     .nav-actions {
@@ -21,13 +35,44 @@
         gap: 0.3rem;
     }
 
-    .nav-links a {
+    .nav-links a,
+    .nav-dropdown-toggle {
         padding: 0.5rem 0.72rem;
-        font-size: 0.97rem;
+        font-size: 0.95rem;
     }
 }
 
-@media (max-width: 1080px) {
+/* Mid-desktop range — keep 2-column layouts but shrink the sidebar */
+@media (max-width: 1280px) and (min-width: 961px) {
+    .overview-grid {
+        grid-template-columns: minmax(0, 1.7fr) minmax(280px, 0.75fr);
+        gap: 1.2rem;
+    }
+
+    .content-layout {
+        grid-template-columns: minmax(0, 2.1fr) minmax(280px, 0.7fr);
+        gap: 1.2rem;
+    }
+
+    .manual-layout {
+        grid-template-columns: minmax(0, 1.85fr) minmax(280px, 0.7fr);
+    }
+
+    .ai-layout {
+        grid-template-columns: minmax(280px, 320px) minmax(0, 1fr);
+    }
+
+    .summary-strip {
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    }
+
+    .filters-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+/* Narrow desktop / large tablet — collapse 2-column to single, halve dense grids */
+@media (max-width: 960px) {
     .shortcut-grid,
     .overview-grid,
     .content-layout,
@@ -60,7 +105,12 @@
         padding-right: 1rem;
     }
 
-    .navbar-content,
+    .navbar-content {
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.6rem;
+    }
+
     .hero,
     .filters-card-head,
     .library-result-meta,
@@ -76,22 +126,88 @@
         align-items: flex-start;
     }
 
-    .nav-links {
-        width: 100%;
-        justify-content: flex-start;
-        flex-wrap: wrap;
-        overflow-x: visible;
-        row-gap: 0.45rem;
+    .nav-toggle {
+        display: inline-flex;
+        order: 1;
+    }
+
+    .navbar-content .logo {
+        order: 0;
+        flex: 1 1 auto;
     }
 
     .nav-actions {
-        width: 100%;
-        flex-wrap: wrap;
-        row-gap: 0.65rem;
+        order: 2;
+        margin-left: auto;
+        flex-wrap: nowrap;
+        gap: 0.5rem;
+    }
+
+    .nav-actions .lang-switcher,
+    .nav-actions .theme-switcher {
+        margin-right: 0;
+    }
+
+    .nav-links {
+        order: 3;
+        flex: 1 1 100%;
+        flex-direction: column;
+        align-items: stretch;
+        background: var(--bg, #fff);
+        border: 1px solid rgba(var(--ink-rgb), 0.08);
+        border-radius: 14px;
+        padding: 0.5rem;
+        margin-top: 0.4rem;
+        box-shadow: 0 14px 36px -22px rgba(0, 0, 0, 0.3);
+        gap: 0.15rem;
+        max-height: 0;
+        overflow: hidden;
+        opacity: 0;
+        padding-top: 0;
+        padding-bottom: 0;
+        border-width: 0;
+        margin-top: 0;
+        transition: max-height 0.25s ease, opacity 0.2s ease,
+                    padding 0.2s ease, margin 0.2s ease, border-width 0.2s ease;
+    }
+
+    .nav-links.is-open {
+        max-height: 70vh;
+        overflow-y: auto;
+        opacity: 1;
+        padding: 0.5rem;
+        margin-top: 0.4rem;
+        border-width: 1px;
     }
 
     .nav-links a {
-        padding: 0.55rem 0.8rem;
+        padding: 0.7rem 0.9rem;
+        border-radius: 10px;
+        width: 100%;
+    }
+
+    /* On mobile, expand "更多" dropdown items inline rather than as floating menu */
+    .nav-dropdown {
+        width: 100%;
+    }
+
+    .nav-dropdown-toggle {
+        width: 100%;
+        justify-content: space-between;
+        padding: 0.7rem 0.9rem;
+        border-radius: 10px;
+    }
+
+    .nav-dropdown-menu {
+        position: static;
+        width: 100%;
+        margin: 0.2rem 0 0.2rem 0.5rem;
+        padding: 0.2rem 0.4rem;
+        border: none;
+        box-shadow: none;
+        background: transparent;
+        border-left: 2px solid rgba(var(--ink-rgb), 0.08);
+        border-radius: 0;
     }
 
     .summary-strip,

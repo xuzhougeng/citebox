@@ -3,6 +3,7 @@
     "settings.eyebrow": "Settings",
     "settings.hero_title": "设置",
     "settings.hero_text": "管理 AI 模型、提示词、服务集成与账号。模型配置自动保存，提示词需手动保存。",
+    "settings.anchor_sidebar_aria": "设置导航",
 
     "settings.version.title": "版本信息",
     "settings.version.desc": "检查是否有新版本可用。",

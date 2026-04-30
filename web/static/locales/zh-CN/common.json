@@ -26,6 +26,9 @@
     "nav.ai": "AI伴读",
     "nav.settings": "配置",
     "nav.upload_pdf": "上传 PDF",
+    "nav.more": "更多",
+    "nav.more_aria": "展开更多导航",
+    "nav.toggle_menu": "菜单",
 
     "btn.confirm": "确认",
     "btn.cancel": "取消",

@@ -132,6 +132,109 @@ const SettingsPage = {
 
         this.bindEvents();
         this.bootstrap();
+        this.buildAnchorSidebar();
+    },
+
+    buildAnchorSidebar() {
+        const sidebar = document.getElementById('settingsAnchorSidebar');
+        const stack = document.querySelector('.settings-content');
+        if (!sidebar || !stack) return;
+
+        const sections = Array.from(stack.querySelectorAll(':scope > details.settings-collapsible'));
+        const items = sections
+            .filter((section) => !section.classList.contains('hidden'))
+            .map((section, index) => {
+                const titleEl = section.querySelector('summary h2');
+                if (!titleEl) return null;
+                if (!section.id) section.id = `settings-section-${index + 1}`;
+                return {
+                    id: section.id,
+                    titleEl,
+                    section,
+                };
+            })
+            .filter(Boolean);
+
+        if (items.length === 0) return;
+
+        const eyebrow = document.createElement('p');
+        eyebrow.className = 'eyebrow';
+        eyebrow.textContent = 'On this page';
+
+        const list = document.createElement('ul');
+        list.className = 'settings-anchor-list';
+        list.setAttribute('role', 'list');
+
+        items.forEach((item) => {
+            const li = document.createElement('li');
+            const a = document.createElement('a');
+            a.href = `#${item.id}`;
+            a.textContent = item.titleEl.textContent.trim();
+            a.dataset.targetId = item.id;
+            a.addEventListener('click', (event) => {
+                event.preventDefault();
+                this.scrollToSection(item.id);
+            });
+            li.appendChild(a);
+            list.appendChild(li);
+        });
+
+        sidebar.innerHTML = '';
+        sidebar.appendChild(eyebrow);
+        sidebar.appendChild(list);
+
+        this.anchorItems = items;
+        this.anchorLinks = Array.from(list.querySelectorAll('a'));
+
+        // Re-sync labels after i18n loads (since titles use data-i18n)
+        const refreshLabels = () => {
+            this.anchorLinks.forEach((link) => {
+                const item = items.find((it) => it.id === link.dataset.targetId);
+                if (item && item.titleEl) {
+                    link.textContent = item.titleEl.textContent.trim();
+                }
+            });
+        };
+        window.setTimeout(refreshLabels, 50);
+        window.setTimeout(refreshLabels, 400);
+        window.setTimeout(refreshLabels, 1200);
+
+        this.bindAnchorScrollSpy();
+    },
+
+    scrollToSection(id) {
+        const section = document.getElementById(id);
+        if (!section) return;
+        if (section.tagName === 'DETAILS' && !section.open) section.open = true;
+        const top = section.getBoundingClientRect().top + window.scrollY - 80;
+        window.scrollTo({ top, behavior: 'smooth' });
+    },
+
+    bindAnchorScrollSpy() {
+        if (!this.anchorItems || !this.anchorLinks) return;
+        if (this._anchorObserver) this._anchorObserver.disconnect();
+
+        const linkById = new Map();
+        this.anchorLinks.forEach((link) => linkById.set(link.dataset.targetId, link));
+
+        const setActive = (id) => {
+            this.anchorLinks.forEach((link) => link.classList.remove('active'));
+            const link = linkById.get(id);
+            if (link) link.classList.add('active');
+        };
+
+        const observer = new IntersectionObserver((entries) => {
+            const visible = entries
+                .filter((e) => e.isIntersecting)
+                .sort((a, b) => a.target.getBoundingClientRect().top - b.target.getBoundingClientRect().top);
+            if (visible.length > 0) setActive(visible[0].target.id);
+        }, {
+            rootMargin: '-100px 0px -60% 0px',
+            threshold: 0,
+        });
+
+        this.anchorItems.forEach((item) => observer.observe(item.section));
+        this._anchorObserver = observer;
     },
 
     bindEvents() {

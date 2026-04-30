@@ -41,6 +41,9 @@
     "library.result_scope_label": "Scope",
     "library.result_group_limited": "Group filtered",
     "library.result_tag_limited": "Tag filtered",
+    "library.view_mode_aria": "View mode",
+    "library.view_detailed": "Detailed",
+    "library.view_compact": "Compact",
 
     "library.empty_title": "No matching papers found",
     "library.empty_completed": "No completed papers yet. Upload a PDF or switch the status filter to All.",

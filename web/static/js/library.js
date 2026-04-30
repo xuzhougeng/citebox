@@ -1,10 +1,12 @@
 if (typeof window.t !== 'function') window.t = function(k,f){return f||k};
 const LibraryPage = {
+    VIEW_MODE_KEY: 'citebox.libraryViewMode',
     state: {
         currentPage: 1,
         pageSize: 12,
         groups: [],
         tags: [],
+        viewMode: 'detailed',
         filters: {
             keyword: '',
             author: '',
@@ -16,11 +18,29 @@ const LibraryPage = {
         }
     },
 
+    readViewMode() {
+        try {
+            const v = window.localStorage.getItem(this.VIEW_MODE_KEY);
+            if (v === 'compact' || v === 'detailed') this.state.viewMode = v;
+        } catch (e) { /* ignore */ }
+    },
+
+    saveViewMode(mode) {
+        try { window.localStorage.setItem(this.VIEW_MODE_KEY, mode); } catch (e) { /* ignore */ }
+    },
+
+    applyViewMode() {
+        if (!this.paperList) return;
+        this.paperList.classList.toggle('compact', this.state.viewMode === 'compact');
+    },
+
     async init() {
         this.autoRefreshTimer = null;
         this.loadingPapers = false;
+        this.readViewMode();
         this.readLaunchState();
         this.cacheElements();
+        this.applyViewMode();
         this.bindEvents();
         await Promise.all([
             this.loadGroups(),
@@ -157,6 +177,14 @@ const LibraryPage = {
             }
         });
 
+        if (this.resultMeta) {
+            this.resultMeta.addEventListener('click', (event) => {
+                const btn = event.target.closest('[data-view-mode]');
+                if (!btn) return;
+                this.setViewMode(btn.dataset.viewMode);
+            });
+        }
+
         Utils.bindPagination(this.pagination, async (page) => {
             this.state.currentPage = page;
             await this.loadPapers();
@@ -271,6 +299,7 @@ const LibraryPage = {
         const scopeLabel = this.keywordScopeLabel();
         const sortLabel = this.sortLabel();
 
+        const vm = this.state.viewMode;
         this.resultMeta.innerHTML = `
             <div>
                 <p class="eyebrow">Result Set</p>
@@ -285,8 +314,21 @@ const LibraryPage = {
                 <span class="tag-pill neutral">${t('library.result_sort', '排序')}：${Utils.escapeHTML(sortLabel)}</span>
                 ${this.state.filters.group_id ? `<span class="tag-pill neutral">${t('library.result_group_limited', '已限定分组')}</span>` : ''}
                 ${this.state.filters.tag_id ? `<span class="tag-pill neutral">${t('library.result_tag_limited', '已限定标签')}</span>` : ''}
+                <span class="library-view-toggle" role="group" aria-label="${t('library.view_mode_aria', '视图模式')}">
+                    <button type="button" class="view-toggle-btn ${vm === 'detailed' ? 'active' : ''}" data-view-mode="detailed">${t('library.view_detailed', '详细')}</button>
+                    <button type="button" class="view-toggle-btn ${vm === 'compact' ? 'active' : ''}" data-view-mode="compact">${t('library.view_compact', '紧凑')}</button>
+                </span>
             </div>
         `;
+    },
+
+    setViewMode(mode) {
+        if (mode !== 'compact' && mode !== 'detailed') return;
+        if (this.state.viewMode === mode) return;
+        this.state.viewMode = mode;
+        this.saveViewMode(mode);
+        this.applyViewMode();
+        this.renderResultMeta();
     },
 
     keywordScopeLabel() {
