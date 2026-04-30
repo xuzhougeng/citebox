@@ -6,6 +6,59 @@
 
     const EXTERNAL_EVIDENCE_KEY = 'citebox_ai_external_evidence';
 
+    function escapeHtml(value) {
+        return String(value == null ? '' : value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    function inlineMarkdown(text) {
+        return escapeHtml(text)
+            .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+            .replace(/`([^`]+)`/g, '<code>$1</code>');
+    }
+
+    function renderAssistantMarkdown(text) {
+        const lines = String(text || '').split(/\r?\n/);
+        const html = [];
+        let listOpen = false;
+        const closeList = () => {
+            if (listOpen) {
+                html.push('</ul>');
+                listOpen = false;
+            }
+        };
+        lines.forEach((line) => {
+            const trimmed = line.trim();
+            if (!trimmed) {
+                closeList();
+                return;
+            }
+            const heading = trimmed.match(/^(#{1,4})\s+(.+)$/);
+            if (heading) {
+                closeList();
+                html.push('<h3>' + inlineMarkdown(heading[2]) + '</h3>');
+                return;
+            }
+            const item = trimmed.match(/^[-*]\s+(.+)$/);
+            if (item) {
+                if (!listOpen) {
+                    html.push('<ul>');
+                    listOpen = true;
+                }
+                html.push('<li>' + inlineMarkdown(item[1]) + '</li>');
+                return;
+            }
+            closeList();
+            html.push('<p>' + inlineMarkdown(trimmed) + '</p>');
+        });
+        closeList();
+        return html.join('');
+    }
+
     const View = {
         _state: {
             els: null,
@@ -95,11 +148,15 @@
 
             const body = { content: content };
             if (!s.conversationId && s._draftPaperId) body.paper_id = s._draftPaperId;
-            if (s.els.strictEvidence && s.els.strictEvidence.checked) {
-                body.include_external_evidence = !!(s.els.externalEvidence && s.els.externalEvidence.checked);
+            if (s.els.strictEvidence) {
+                body.strict_evidence = !!s.els.strictEvidence.checked;
+            }
+            if (s.els.externalEvidence) {
+                body.include_external_evidence = !!s.els.externalEvidence.checked;
             }
 
             s.els.questionInput.value = '';
+            s.els.questionInput.dispatchEvent(new Event('input', { bubbles: true }));
             this._toggleSendingState(true);
 
             try {
@@ -157,7 +214,12 @@
         async _handleDelete() {
             const s = this._state;
             if (!s.conversationId) return;
-            if (!window.confirm('确认删除当前会话？')) return;
+            if (typeof Utils === 'undefined' || typeof Utils.confirm !== 'function') return;
+            const confirmed = await Utils.confirm(
+                t('ai.confirm_delete_conversation', '删除后会移除当前会话及其消息记录。'),
+                t('ai.confirm_delete_conversation_title', '删除对话')
+            );
+            if (!confirmed) return;
             await fetch('/api/ai/conversations/' + s.conversationId, { method: 'DELETE' });
             s.conversationId = null;
             s.meta = null;
@@ -193,11 +255,20 @@
             if (!s.els || !s.els.conversation) return null;
             const div = document.createElement('div');
             div.className = 'ai-message ai-message-' + (message.role === 'assistant' ? 'assistant' : 'user');
-            div.textContent = message.content || '';
+            this._renderMessageContent(div, message);
             if (message.streaming) div.classList.add('is-streaming');
             s.els.conversation.appendChild(div);
             s.els.conversation.scrollTop = s.els.conversation.scrollHeight;
             return div;
+        },
+
+        _renderMessageContent(el, message) {
+            if (!el) return;
+            if (message && message.role === 'assistant' && !message.streaming) {
+                el.innerHTML = renderAssistantMarkdown(message.content || '');
+            } else {
+                el.textContent = (message && message.content) || '';
+            }
         },
 
         async _consumeNdjson(body, assistantBubble) {
@@ -246,7 +317,7 @@
                 if (assistantBubble) {
                     assistantBubble.classList.remove('is-streaming');
                     if (evt.assistant_message && evt.assistant_message.content) {
-                        assistantBubble.textContent = evt.assistant_message.content;
+                        this._renderMessageContent(assistantBubble, evt.assistant_message);
                     }
                     if (evt.assistant_message && evt.assistant_message.citations_json) {
                         document.dispatchEvent(new CustomEvent('ai-reader:message-rendered', {
@@ -295,9 +366,8 @@
         _syncEvidenceControls() {
             const s = this._state;
             if (!s.els || !s.els.externalEvidence) return;
-            const strictOn = !!(s.els.strictEvidence && s.els.strictEvidence.checked);
-            s.els.externalEvidence.disabled = !strictOn;
-            s.els.externalEvidence.closest('label')?.classList.toggle('is-disabled', !strictOn);
+            s.els.externalEvidence.disabled = false;
+            s.els.externalEvidence.closest('label')?.classList.remove('is-disabled');
         },
 
         _loadExternalEvidencePreference() {

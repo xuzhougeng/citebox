@@ -3,7 +3,6 @@ package ai_conversation
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"regexp"
 	"sort"
@@ -15,29 +14,34 @@ import (
 	"github.com/xuzhougeng/citebox/internal/service/research"
 )
 
-// ErrNoExternalIDs signals that none of the pinned papers had a DOI/arXiv id we
-// could pass to Semantic Scholar /snippet/search.
-var ErrNoExternalIDs = errors.New("ai_conversation: no usable external ids")
-
 const (
 	evidenceSourceLocal    = "local"
 	evidenceSourceExternal = "external"
 )
 
-// SnippetSearcher is the external evidence surface we depend on. Satisfied by
+// ExternalEvidenceSearcher is the external search surface we depend on. Satisfied by
 // *research.Service.
-type SnippetSearcher interface {
+type ExternalEvidenceSearcher interface {
 	SnippetSearch(ctx context.Context, query string, opts research.SnippetSearchOpts) (research.SnippetList, error)
+	Search(ctx context.Context, query string, opts research.SearchOpts) (research.PaperList, error)
 }
 
-// PaperDetailGetter is the local library surface used by strict evidence mode.
+// PaperDetailGetter is the local library surface used by internal search.
 type PaperDetailGetter interface {
 	GetPaperDetail(id int64) (*model.Paper, error)
+}
+
+// PaperEvidenceLister is optionally implemented by the local paper repository.
+// It returns library-wide candidate IDs for literal term matching; no embeddings
+// or vector search are involved.
+type PaperEvidenceLister interface {
+	ListEvidenceCandidatePaperIDs(terms []string, limit int) ([]int64, error)
 }
 
 // EvidenceOptions controls which evidence sources are used for one turn.
 type EvidenceOptions struct {
 	IncludeExternal bool
+	DisableLocal    bool
 }
 
 // Citation is one entry in the persisted citations_json array.
@@ -52,21 +56,25 @@ type Citation struct {
 	Score      float64          `json:"score"`
 }
 
-// injectEvidence builds a strict-evidence prompt fragment from local pinned
-// paper text first, and optionally augments it with Semantic Scholar snippets.
-// It deliberately never uses embeddings or vector retrieval.
-func injectEvidence(ctx context.Context, papers PaperDetailGetter, searcher SnippetSearcher,
+// injectEvidence builds an evidence prompt fragment from local library text
+// first (with pinned papers prioritized), and optionally augments it with
+// Semantic Scholar snippets. It deliberately never uses embeddings or vector
+// retrieval.
+func injectEvidence(ctx context.Context, papers PaperDetailGetter, searcher ExternalEvidenceSearcher,
 	userText string, pinned []repository.AIPinnedPaper, opts EvidenceOptions) (string, []Citation, error) {
 
-	citations := localEvidence(papers, userText, pinned, 10)
+	var citations []Citation
+	if !opts.DisableLocal {
+		citations = localEvidence(papers, userText, pinned, 12)
+	}
 	var externalErr error
 	if opts.IncludeExternal && searcher != nil {
 		externalLimit := 8
-		if len(citations) < 8 {
+		if !opts.DisableLocal && len(citations) < 8 {
 			externalLimit = 8 - len(citations)
 		}
 		external, err := externalEvidence(ctx, searcher, userText, pinned, externalLimit)
-		if err != nil && !errors.Is(err, ErrNoExternalIDs) {
+		if err != nil {
 			externalErr = err
 		}
 		citations = append(citations, external...)
@@ -75,23 +83,39 @@ func injectEvidence(ctx context.Context, papers PaperDetailGetter, searcher Snip
 	for i := range citations {
 		citations[i].I = i + 1
 	}
-	return buildEvidencePrompt(userText, citations, len(pinned), opts.IncludeExternal, externalErr), citations, nil
+	return buildEvidencePrompt(userText, citations, len(pinned), !opts.DisableLocal, opts.IncludeExternal, externalErr), citations, nil
 }
 
-func buildEvidencePrompt(userText string, citations []Citation, pinnedCount int, includeExternal bool, externalErr error) string {
+func buildEvidencePrompt(userText string, citations []Citation, pinnedCount int, includeLocal, includeExternal bool, externalErr error) string {
 	var b strings.Builder
-	b.WriteString("你处于严格证据模式。你必须只基于以下证据片段回答；每个由证据支撑的论断后用 [n] 标注引用。")
-	b.WriteString("如果证据不足以回答或支持用户说法，请明确说明\"证据不足\"，不要凭常识补全。\n\n")
-	b.WriteString("证据来源：本地已钉文献全文")
-	if includeExternal {
-		b.WriteString("；外部 Semantic Scholar 片段")
+	if includeLocal {
+		b.WriteString("你处于内部搜索模式。")
+	} else {
+		b.WriteString("你处于外部搜索模式。")
 	}
+	b.WriteString("你必须只基于以下证据片段回答；每个由证据支撑的论断后用 [n] 标注引用。")
+	b.WriteString("如果证据不足以回答或支持用户说法，请明确说明\"证据不足\"，不要凭常识补全。\n\n")
+	sources := make([]string, 0, 2)
+	if includeLocal {
+		sources = append(sources, "本地文献库（已钉文献优先，包含本地已钉文献全文、标题、摘要、笔记和 PDF 全文）")
+	}
+	if includeExternal {
+		sources = append(sources, "外部 Semantic Scholar 片段")
+	}
+	if len(sources) == 0 {
+		sources = append(sources, "当前证据来源")
+	}
+	b.WriteString("证据来源：" + strings.Join(sources, "；"))
 	b.WriteString("。\n")
 	if externalErr != nil {
-		b.WriteString("外部证据检索失败，本次仅使用可用的本地证据。\n")
+		if includeLocal {
+			b.WriteString("外部搜索失败，本次仅使用可用的本地证据。\n")
+		} else {
+			b.WriteString("外部搜索失败，本次没有可用的外部搜索结果。\n")
+		}
 	}
-	if pinnedCount == 0 {
-		b.WriteString("当前没有已钉文献，因此没有可用的本地证据。\n")
+	if includeLocal && pinnedCount == 0 {
+		b.WriteString("当前没有已钉文献；本次会扫描本地文献库中的可匹配证据片段。\n")
 	}
 
 	b.WriteString("\n证据：\n")
@@ -131,7 +155,7 @@ type localCandidate struct {
 }
 
 func localEvidence(papers PaperDetailGetter, userText string, pinned []repository.AIPinnedPaper, limit int) []Citation {
-	if papers == nil || len(pinned) == 0 || limit <= 0 {
+	if papers == nil || limit <= 0 {
 		return nil
 	}
 	terms := evidenceSearchTerms(userText)
@@ -140,12 +164,22 @@ func localEvidence(papers PaperDetailGetter, userText string, pinned []repositor
 	}
 
 	candidates := make([]localCandidate, 0)
+	pinnedIDs := make(map[int64]bool, len(pinned))
 	for _, pin := range pinned {
-		paper, err := papers.GetPaperDetail(pin.PaperID)
+		pinnedIDs[pin.PaperID] = true
+	}
+	for _, paperID := range localEvidenceCandidateIDs(papers, terms, pinned, 120) {
+		paper, err := papers.GetPaperDetail(paperID)
 		if err != nil || paper == nil {
 			continue
 		}
-		candidates = append(candidates, findLocalCandidates(*paper, terms)...)
+		found := findLocalCandidates(*paper, terms)
+		if pinnedIDs[paperID] {
+			for i := range found {
+				found[i].score += 0.25
+			}
+		}
+		candidates = append(candidates, found...)
 	}
 	sort.SliceStable(candidates, func(i, j int) bool {
 		if candidates[i].score != candidates[j].score {
@@ -187,6 +221,34 @@ func localEvidence(papers PaperDetailGetter, userText string, pinned []repositor
 		})
 	}
 	return out
+}
+
+func localEvidenceCandidateIDs(papers PaperDetailGetter, terms []string, pinned []repository.AIPinnedPaper, limit int) []int64 {
+	seen := map[int64]bool{}
+	ids := make([]int64, 0, limit)
+	add := func(id int64) {
+		if id <= 0 || seen[id] {
+			return
+		}
+		if limit > 0 && len(ids) >= limit {
+			return
+		}
+		seen[id] = true
+		ids = append(ids, id)
+	}
+
+	for _, pin := range pinned {
+		add(pin.PaperID)
+	}
+	if lister, ok := papers.(PaperEvidenceLister); ok {
+		found, err := lister.ListEvidenceCandidatePaperIDs(terms, limit)
+		if err == nil {
+			for _, id := range found {
+				add(id)
+			}
+		}
+	}
+	return ids
 }
 
 func findLocalCandidates(paper model.Paper, terms []string) []localCandidate {
@@ -293,48 +355,54 @@ func normalizeEvidenceWhitespace(s string) string {
 	return strings.Join(strings.Fields(s), " ")
 }
 
-func externalEvidence(ctx context.Context, searcher SnippetSearcher, userText string,
+func externalEvidence(ctx context.Context, searcher ExternalEvidenceSearcher, userText string,
 	pinned []repository.AIPinnedPaper, limit int) ([]Citation, error) {
 
 	if searcher == nil || limit <= 0 {
 		return nil, nil
 	}
 	idMap := map[string]repository.AIPinnedPaper{}
-	idList := make([]string, 0, len(pinned))
 	for _, p := range pinned {
 		ext := externalIDFor(p)
 		if ext == "" {
 			continue
 		}
 		idMap[ext] = p
-		idList = append(idList, ext)
-	}
-	if len(idList) == 0 {
-		return nil, ErrNoExternalIDs
 	}
 
-	q := userText
+	q := externalEvidenceQuery(userText)
 	if len([]rune(q)) > 200 {
 		q = string([]rune(q)[:200])
 	}
 	res, err := searcher.SnippetSearch(ctx, q, research.SnippetSearchOpts{
-		PaperIDs: idList,
-		Limit:    limit,
+		Limit: limit,
 	})
-	if err != nil {
-		return nil, err
+	if err == nil {
+		citations := citationsFromSnippetMatches(res.Items, idMap)
+		if len(citations) > 0 {
+			return citations, nil
+		}
 	}
 
-	citations := make([]Citation, 0, len(res.Items))
-	for _, m := range res.Items {
-		ext := ""
-		if m.Paper.ExternalIDs.DOI != "" {
-			ext = "DOI:" + m.Paper.ExternalIDs.DOI
-		} else if m.Paper.ExternalIDs.ArXiv != "" {
-			ext = "ARXIV:" + m.Paper.ExternalIDs.ArXiv
+	fallback, fallbackErr := externalPaperSearchEvidence(ctx, searcher, q, idMap, limit)
+	if fallbackErr != nil {
+		if err != nil {
+			return nil, fallbackErr
 		}
+		return nil, nil
+	}
+	return fallback, nil
+}
+
+func citationsFromSnippetMatches(items []research.SnippetMatch, idMap map[string]repository.AIPinnedPaper) []Citation {
+	citations := make([]Citation, 0, len(items))
+	for _, m := range items {
+		ext := externalIDForResearchPaper(m.Paper)
 		var paperID int64
 		title := m.Paper.Title
+		if title == "" {
+			title = m.PaperID
+		}
 		if pin, ok := idMap[ext]; ok {
 			paperID = pin.PaperID
 			if title == "" {
@@ -346,7 +414,138 @@ func externalEvidence(ctx context.Context, searcher SnippetSearcher, userText st
 			Source: evidenceSourceExternal, Snippet: m.Snippet, Score: m.Score,
 		})
 	}
+	return citations
+}
+
+func externalPaperSearchEvidence(ctx context.Context, searcher ExternalEvidenceSearcher, query string,
+	idMap map[string]repository.AIPinnedPaper, limit int) ([]Citation, error) {
+
+	res, err := searcher.Search(ctx, query, research.SearchOpts{Limit: limit})
+	if err != nil {
+		return nil, err
+	}
+	citations := make([]Citation, 0, len(res.Items))
+	for i, p := range res.Items {
+		snippet, kind := evidenceSnippetFromSearchPaper(p)
+		if snippet == "" {
+			continue
+		}
+		ext := externalIDForResearchPaper(p)
+		var paperID int64
+		title := p.Title
+		if title == "" {
+			title = p.PaperID
+		}
+		if pin, ok := idMap[ext]; ok {
+			paperID = pin.PaperID
+			if title == "" {
+				title = pin.Title
+			}
+		}
+		score := 0.7
+		if i < 10 {
+			score -= float64(i) * 0.03
+		}
+		citations = append(citations, Citation{
+			PaperID: paperID, ExternalID: ext, S2PaperID: p.PaperID, Title: title,
+			Source: evidenceSourceExternal,
+			Snippet: research.Snippet{
+				Text:        snippet,
+				SnippetKind: kind,
+				Section:     externalSearchSectionLabel(kind, p),
+			},
+			Score: score,
+		})
+	}
 	return citations, nil
+}
+
+func evidenceSnippetFromSearchPaper(p research.Paper) (string, string) {
+	parts := make([]string, 0, 3)
+	if p.Title != "" {
+		parts = append(parts, "Title: "+p.Title)
+	}
+	kind := "title"
+	if p.TLDR != "" {
+		parts = append(parts, "TLDR: "+p.TLDR)
+		kind = "tldr"
+	}
+	if p.Abstract != "" {
+		parts = append(parts, "Abstract: "+p.Abstract)
+		kind = "abstract"
+	}
+	text := normalizeEvidenceWhitespace(strings.Join(parts, " "))
+	if len([]rune(text)) > 900 {
+		text = string([]rune(text)[:900]) + "..."
+	}
+	return text, kind
+}
+
+func externalSearchSectionLabel(kind string, p research.Paper) string {
+	switch kind {
+	case "abstract":
+		return "Semantic Scholar 摘要"
+	case "tldr":
+		return "Semantic Scholar TLDR"
+	default:
+		if p.Year > 0 && p.Venue != "" {
+			return fmt.Sprintf("Semantic Scholar 搜索结果（%s, %d）", p.Venue, p.Year)
+		}
+		return "Semantic Scholar 搜索结果"
+	}
+}
+
+func externalIDForResearchPaper(p research.Paper) string {
+	if p.ExternalIDs.DOI != "" {
+		return "DOI:" + p.ExternalIDs.DOI
+	}
+	if p.ExternalIDs.ArXiv != "" {
+		return "ARXIV:" + p.ExternalIDs.ArXiv
+	}
+	if p.ExternalIDs.PubMed != "" {
+		return "PMID:" + p.ExternalIDs.PubMed
+	}
+	return ""
+}
+
+func externalEvidenceQuery(userText string) string {
+	terms := evidenceSearchTerms(userText)
+	selected := make([]string, 0, 12)
+	seen := map[string]bool{}
+	add := func(term string) {
+		term = strings.TrimSpace(term)
+		if term == "" {
+			return
+		}
+		key := strings.ToLower(term)
+		if seen[key] {
+			return
+		}
+		seen[key] = true
+		selected = append(selected, term)
+	}
+
+	for _, term := range terms {
+		if len(selected) >= 12 {
+			break
+		}
+		if containsASCIIWord(term) {
+			add(term)
+		}
+	}
+	if len(selected) == 0 {
+		add(userText)
+	}
+	return strings.Join(selected, " ")
+}
+
+func containsASCIIWord(s string) bool {
+	for _, r := range s {
+		if (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') {
+			return true
+		}
+	}
+	return false
 }
 
 func externalIDFor(p repository.AIPinnedPaper) string {
@@ -378,6 +577,11 @@ func evidenceSearchTerms(query string) []string {
 	if containsAnyText(lower, "单细胞", "single-cell", "single cell", "scrna", "scatac") {
 		add("single-cell", "single cell", "scRNA-seq", "single-cell RNA-seq", "single-cell RNA sequencing",
 			"scATAC-seq", "single-cell ATAC-seq", "single-cell multiomics", "10x Genomics", "Seurat", "Scanpy")
+	}
+	if containsAnyText(lower, "atac", "开放染色质", "染色质可及", "转座酶", "multiome", "multi-ome") {
+		add("ATAC-seq", "ATAC seq", "ATAC sequencing", "assay for transposase-accessible chromatin",
+			"chromatin accessibility", "accessible chromatin", "scATAC-seq", "single-cell ATAC-seq",
+			"10x Multiome", "multiome", "multi-ome")
 	}
 	if containsAnyText(lower, "测序", "sequenc", "rna-seq", "genome", "transcriptome") {
 		add("sequencing", "RNA-seq", "RNA sequencing", "transcriptome", "genome sequencing",

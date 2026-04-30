@@ -5,7 +5,7 @@
     "manual.page_subtitle": "When auto-parsing is unavailable, fails, or misses figures, you can select regions directly on PDF pages.",
     "manual.open_pdf": "Open PDF",
     "manual.fulltext_title": "PDF Full Text Extraction",
-    "manual.fulltext_status_empty": "No full text saved yet. Click the button to extract and save for AI Reader and search.",
+    "manual.fulltext_status_empty": "No full text saved yet. Click the button to extract and save for AI Assistant and search.",
     "manual.extract_text_btn": "Extract & Save Full Text",
     "manual.canvas_title": "Drag to select figure regions",
     "manual.prev_page": "Previous",
@@ -60,7 +60,7 @@
     "manual.stat_fulltext_none": "Not saved",
     "manual.stat_status": "Status",
 
-    "manual.fulltext_status_has_text": "Full text saved ({count} characters). You can re-extract to overwrite. Used for AI Reader, search, and organization.",
+    "manual.fulltext_status_has_text": "Full text saved ({count} characters). You can re-extract to overwrite. Used for AI Assistant, search, and organization.",
     "manual.fulltext_extracting_page": "Reading page {current} / {total} and saving to this paper.",
     "manual.fulltext_extracting": "Extracting full text from this PDF.",
     "manual.extract_text_progress": "Extracting {progress}",

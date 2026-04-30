@@ -470,6 +470,80 @@ func (r *PaperRepository) FindPaperByDOI(doi string) (*model.Paper, error) {
 	return r.GetPaperDetail(paperID)
 }
 
+// ListEvidenceCandidatePaperIDs returns candidate papers whose local text
+// contains any of the supplied terms. It is intentionally literal SQL scanning,
+// not embedding/vector retrieval.
+func (r *PaperRepository) ListEvidenceCandidatePaperIDs(terms []string, limit int) ([]int64, error) {
+	if limit <= 0 || limit > 200 {
+		limit = 120
+	}
+	normalizedTerms := make([]string, 0, len(terms))
+	seenTerms := map[string]bool{}
+	for _, term := range terms {
+		term = strings.ToLower(strings.TrimSpace(term))
+		if term == "" || seenTerms[term] {
+			continue
+		}
+		seenTerms[term] = true
+		normalizedTerms = append(normalizedTerms, term)
+	}
+	if len(normalizedTerms) == 0 {
+		return []int64{}, nil
+	}
+
+	ids := make([]int64, 0, limit)
+	seenIDs := map[int64]bool{}
+	for _, term := range normalizedTerms {
+		if len(ids) >= limit {
+			break
+		}
+		rows, err := r.db.Query(`
+			SELECT p.id
+			FROM papers p
+			WHERE instr(lower(COALESCE(p.title, '')), ?) > 0
+			   OR instr(lower(COALESCE(p.abstract_text, '')), ?) > 0
+			   OR instr(lower(COALESCE(p.notes_text, '')), ?) > 0
+			   OR instr(lower(COALESCE(p.paper_notes_text, '')), ?) > 0
+			   OR instr(lower(COALESCE(p.pdf_text, '')), ?) > 0
+			ORDER BY
+				CASE
+					WHEN instr(lower(COALESCE(p.title, '')), ?) > 0 THEN 0
+					WHEN instr(lower(COALESCE(p.abstract_text, '')), ?) > 0 THEN 1
+					WHEN instr(lower(COALESCE(p.notes_text, '')), ?) > 0
+					  OR instr(lower(COALESCE(p.paper_notes_text, '')), ?) > 0 THEN 2
+					ELSE 3
+				END,
+				p.updated_at DESC,
+				p.id DESC
+			LIMIT ?
+		`, term, term, term, term, term, term, term, term, term, limit)
+		if err != nil {
+			return nil, wrapDBError(err, "查询证据候选文献失败")
+		}
+		for rows.Next() {
+			var id int64
+			if err := rows.Scan(&id); err != nil {
+				_ = rows.Close()
+				return nil, wrapDBError(err, "查询证据候选文献失败")
+			}
+			if seenIDs[id] {
+				continue
+			}
+			seenIDs[id] = true
+			ids = append(ids, id)
+			if len(ids) >= limit {
+				break
+			}
+		}
+		if err := rows.Err(); err != nil {
+			_ = rows.Close()
+			return nil, wrapDBError(err, "查询证据候选文献失败")
+		}
+		_ = rows.Close()
+	}
+	return ids, nil
+}
+
 // ListPapersMissingPDFSHA256 查询缺少 PDF SHA256 的文献
 func (r *PaperRepository) ListPapersMissingPDFSHA256() ([]PaperChecksumBackfillItem, error) {
 	rows, err := r.db.Query(`

@@ -106,7 +106,7 @@ AI 流式阅读通过：
 用途：
 
 - 文献库列表
-- AI 伴读左侧文献列表
+- AI 助手左侧文献列表
 - 文献笔记列表
 
 常用查询参数：
@@ -137,7 +137,7 @@ AI 流式阅读通过：
 用途：
 
 - 文献详情弹窗
-- AI 伴读选中文献详情
+- AI 助手选中文献详情
 - 文献笔记编辑面板
 
 返回单篇文献详情，包含：
@@ -728,7 +728,7 @@ AI 流式阅读通过：
 {
   "role_prompts": [
     {
-      "name": "严格证据模式",
+      "name": "证据审查",
       "prompt": "你是一名严格的论文审稿人，优先指出证据链、方法缺口和结论边界。"
     }
   ]
@@ -747,7 +747,7 @@ AI 流式阅读通过：
 {
   "role_prompts": [
     {
-      "name": "严格证据模式",
+      "name": "证据审查",
       "prompt": "你是一名严格的论文审稿人，优先指出证据链、方法缺口和结论边界。"
     }
   ]
@@ -756,18 +756,18 @@ AI 流式阅读通过：
 
 说明：
 
-- AI 伴读聊天框支持通过 `@角色名` 直接调用已保存的角色 Prompt。
+- AI 助手聊天框支持通过 `@角色名` 直接调用已保存的角色 Prompt。
 - 旧的 `/api/ai/prompt-presets` 仍作为兼容别名保留，但语义已与 `role-prompts` 一致。
 
-#### AI 伴读会话接口
+#### AI 助手会话接口
 
-会话接口统一位于 `/api/ai/conversations`，用于 AI 页面侧边栏、已钉文献、严格证据模式和流式对话。
+会话接口统一位于 `/api/ai/conversations`，用于 AI 页面侧边栏、已钉文献、内部搜索、外部搜索和流式对话。
 
 常用接口：
 
 - `GET /api/ai/conversations?q=&limit=&offset=`：列出会话。
 - `GET /api/ai/conversations/{id}`：读取会话详情、已钉文献和最近消息。
-- `PATCH /api/ai/conversations/{id}`：更新标题或严格证据开关。
+- `PATCH /api/ai/conversations/{id}`：更新标题或内部搜索开关。
 - `POST /api/ai/conversations/{id}/papers`：给会话 pin 文献。
 - `DELETE /api/ai/conversations/{id}/papers/{paper_id}`：移除 pin。
 - `POST /api/ai/conversations/{id}/messages`：发送消息，返回 `application/x-ndjson` 流。
@@ -788,6 +788,7 @@ AI 流式阅读通过：
 {
   "content": "这些文献是否支持单细胞 RNA-seq 可以解析植物表皮发育轨迹？",
   "paper_id": 42,
+  "strict_evidence": true,
   "include_external_evidence": false
 }
 ```
@@ -796,14 +797,16 @@ AI 流式阅读通过：
 
 - `content`：用户问题或主张。
 - `paper_id`：可选，仅用于新会话或发送时自动 pin 当前文献。
-- `include_external_evidence`：可选，仅在该会话已开启 `strict_evidence` 时生效；`false` 时只检索本地已钉文献全文，`true` 时在本地证据之外补充 Semantic Scholar snippet search。
+- `strict_evidence`：可选；历史字段名，当前对应 AI 页面里的“内部搜索”开关。发送消息时同步当前内部搜索状态，尤其用于新会话第一条消息。
+- `include_external_evidence`：可选，当前对应 AI 页面里的“外部搜索”开关。`true` 时启用外部 Semantic Scholar snippet search，并使用用户问题和扩展关键词做广域外部搜索；当 snippet 端点不可用或无命中时，会退回到调研页同源的 Semantic Scholar paper search，并把标题、TLDR 和摘要整理为外部证据。若同时开启内部搜索，则在本地文献库证据之外补充外部搜索结果；若只开启外部搜索，则仅使用外部搜索证据片段。
 
-严格证据模式说明：
+搜索模式说明：
 
-- 默认证据来源是本地已钉文献的标题、摘要、笔记和 `pdf_text`，不依赖 DOI 或网络。
+- 默认证据来源是本地文献库的标题、摘要、笔记和 `pdf_text`；已钉文献会优先参与检索，但未 pin 的入库文献也可被命中。
+- 本地证据检索使用关键词扩展和字面全文扫描，例如 `ATAC 数据` 会扩展匹配 `ATAC-seq`、`chromatin accessibility`、`scATAC-seq` 等表述。
 - 不使用 embedding，不使用向量数据库。
-- 外部证据只作为可选补充；Semantic Scholar 限流或失败时，本地证据仍可继续用于回答。
-- 助手消息的 `citations_json` 会保存本地或外部证据片段，前端用 `[n]` 脚注展示。
+- 外部搜索可以独立开启；在同时开启内部搜索时作为本地证据的补充。Semantic Scholar 限流或失败时，本地证据仍可继续用于回答。
+- 助手消息的 `citations_json` 会保存本地或外部搜索证据片段，前端用 `[n]` 脚注展示。
 
 #### `POST /api/ai/settings/check-model`
 

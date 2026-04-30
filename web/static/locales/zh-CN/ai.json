@@ -1,9 +1,9 @@
 {
-    "_title": "AI伴读 - CiteBox",
+    "_title": "AI 助手 - CiteBox",
 
-    "ai.hero_eyebrow": "AI Reader",
-    "ai.hero_title": "AI 结合全文和图片帮你读文献",
-    "ai.hero_text": "选择一篇文献，向 AI 提问——AI 会结合全文和图片帮你理解论文内容。",
+    "ai.hero_eyebrow": "AI Assistant",
+    "ai.hero_title": "AI 帮你查文献、读文献和整理证据",
+    "ai.hero_text": "向 AI 提问，调用本地文献库、全文、图片和证据模式来完成检索、解释与归纳。",
 
     "ai.help_label": "快捷键帮助",
     "ai.help_heading": "快捷键",
@@ -24,9 +24,11 @@
     "ai.sidebar_search_placeholder": "搜索对话…",
     "ai.sidebar_empty": "还没有对话。点 ＋ 新对话开始。",
     "ai.active_title_default": "新对话",
-    "ai.strict_evidence": "严格证据",
-    "ai.external_evidence": "外部证据",
+    "ai.strict_evidence": "内部搜索",
+    "ai.external_evidence": "外部搜索",
     "ai.btn_delete_conversation": "删除",
+    "ai.confirm_delete_conversation_title": "删除对话",
+    "ai.confirm_delete_conversation": "删除后会移除当前会话及其消息记录。",
 
     "ai.free_ask": "自由提问",
     "ai.round_badge": "${current} / 5 轮",
@@ -36,7 +38,7 @@
     "ai.question_label": "想让 AI 帮你什么？",
     "ai.role_prompt_hint": "输入 @ 唤起选择面板：可切换文献或调用角色 Prompt。",
     "ai.role_prompt_hint_empty": "还没有配置角色 Prompt。到配置页新增后，可以在这里用 @ 调用。",
-    "ai.question_placeholder": "输入 @ 切换文献或调用角色，例如 @严格证据模式 请解释这篇文章的核心结论。",
+    "ai.question_placeholder": "输入 @ 切换文献或调用角色，例如 @证据审查 请解释这篇文章的核心结论。",
     "ai.mention_section_papers": "文献",
     "ai.mention_section_roles": "角色 Prompt",
     "ai.mention_empty": "没有匹配的文献或角色。",
@@ -59,7 +61,7 @@
     "ai.config_go_settings": "前往配置页",
     "ai.config_entry_desc": "在配置页统一设置 AI 模型和 PDF 解析服务。",
 
-    "ai.empty_no_papers": "没有找到可用于 AI伴读的文献。",
+    "ai.empty_no_papers": "没有找到可用于 AI 助手的文献。",
     "ai.empty_select_paper": "请选择一篇文献。",
     "ai.no_summary": "当前文献还没有摘要或笔记。",
     "ai.paper_group": "分组：${name}",
@@ -69,7 +71,7 @@
     "ai.btn_paper_detail": "文献详情",
     "ai.btn_open_pdf": "打开 PDF",
 
-    "ai.session_hint_no_paper": "先选择一篇可用于 AI伴读的文献，再开始连续提问。",
+    "ai.session_hint_no_paper": "先选择一篇可用于 AI 助手的文献，再开始连续提问。",
     "ai.empty_no_conversation": "当前还没有选中文献。",
     "ai.session_hint_generating": "正在生成第 ${round} 轮回答，输出会实时显示。",
     "ai.session_hint_stopped": "本次生成已停止；当前片段未计入对话历史。",
@@ -110,7 +112,7 @@
     "ai.msg_note_overwritten": "AI 内容已覆盖文献笔记",
     "ai.msg_note_appended": "AI 内容已追加到文献笔记",
 
-    "ai.export_title": "AI伴读对话导出",
+    "ai.export_title": "AI 助手对话导出",
     "ai.export_paper": "文献：${title}",
     "ai.export_file": "原始文件：${filename}",
     "ai.export_time": "导出时间：${time}",
@@ -119,7 +121,7 @@
     "ai.export_user_question": "用户提问",
     "ai.export_ai_answer": "AI 回答",
 
-    "ai.note_heading": "AI伴读 · 第 ${n} 轮",
+    "ai.note_heading": "AI 助手 · 第 ${n} 轮",
     "ai.note_question": "问题：${text}",
     "ai.note_time": "记录时间：${time}",
     "ai.note_model": "模型：${meta}"

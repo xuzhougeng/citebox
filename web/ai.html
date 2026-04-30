@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI伴读 - CiteBox</title>
+    <title>AI 助手 - CiteBox</title>
     <link rel="icon" type="image/svg+xml" href="/static/img/citebox-icon.svg">
     <script>(function(){var d=document.documentElement;try{var t=localStorage.getItem("citebox_theme");if(t&&t!=="warm")d.setAttribute("data-theme",t);var l=localStorage.getItem("citebox_lang")||"zh-CN";d.lang=l;if(l!=="zh-CN")d.setAttribute("data-lang-loading","1");}catch(e){}})()</script>
     <link rel="stylesheet" href="/static/css/style.css">
@@ -21,7 +21,7 @@
                 <li><a href="/tags" data-i18n="nav.tags">标签</a></li>
                 <li><a href="/notes" data-i18n="nav.notes">笔记</a></li>
                 <li><a href="/research" data-i18n="nav.research">调研</a></li>
-                <li><a href="/ai" class="active" data-i18n="nav.ai">AI伴读</a></li>
+                <li><a href="/ai" class="active" data-i18n="nav.ai">AI 助手</a></li>
                 <li><a href="/settings" data-i18n="nav.settings">配置</a></li>
             </ul>
             <div class="nav-actions">
@@ -44,42 +44,49 @@
 
         <section class="ai-main">
             <header class="ai-main-head">
-                <h2 id="aiActiveTitle" class="ai-active-title" data-i18n="ai.active_title_default">新对话</h2>
+                <div class="ai-main-title-group">
+                    <h2 id="aiActiveTitle" class="ai-active-title" data-i18n="ai.active_title_default">新对话</h2>
+                    <div id="aiPinChips" class="ai-pin-chips"></div>
+                </div>
                 <div class="ai-main-actions">
-                    <label class="ai-strict-toggle">
-                        <input id="aiStrictEvidenceToggle" type="checkbox">
-                        <span data-i18n="ai.strict_evidence">严格证据</span>
-                    </label>
-                    <label class="ai-strict-toggle">
-                        <input id="aiExternalEvidenceToggle" type="checkbox">
-                        <span data-i18n="ai.external_evidence">外部证据</span>
-                    </label>
                     <button id="aiExportConversation" class="btn btn-outline btn-small" type="button" data-i18n="ai.btn_export_conversation">对话导出</button>
                     <button id="aiDeleteConversation" class="btn btn-outline btn-small" type="button" data-i18n="ai.btn_delete_conversation">删除</button>
                 </div>
             </header>
 
-            <div id="aiPinChips" class="ai-pin-chips"></div>
-
             <div id="aiConversation" class="ai-conversation"></div>
 
-            <label class="field ai-question-field">
-                <span class="ai-question-label" data-i18n="ai.question_label">想让 AI 帮你什么？</span>
-                <div class="ai-question-input-wrap">
-                    <div id="aiQuestionMirror" class="ai-question-mirror" aria-hidden="true"></div>
-                    <textarea id="aiQuestionInput" class="form-textarea ai-question-input" rows="4" data-i18n-placeholder="ai.question_placeholder" placeholder="输入 @ 切换文献或调用角色…" spellcheck="false"></textarea>
-                    <div id="aiMentionPopover" class="ai-mention-popover" role="listbox" aria-label="@ 选项" hidden></div>
-                </div>
-                <div class="ai-role-prompt-bar">
+            <footer class="ai-composer">
+                <div class="ai-composer-tools">
+                    <div class="ai-mode-toggles">
+                        <label class="ai-strict-toggle">
+                            <input id="aiStrictEvidenceToggle" type="checkbox">
+                            <span data-i18n="ai.strict_evidence">内部搜索</span>
+                        </label>
+                        <label class="ai-strict-toggle">
+                            <input id="aiExternalEvidenceToggle" type="checkbox">
+                            <span data-i18n="ai.external_evidence">外部搜索</span>
+                        </label>
+                    </div>
                     <p id="aiRolePromptHint" class="ai-role-prompt-hint" data-i18n="ai.role_prompt_hint">输入 @ 唤起选择面板。</p>
-                    <div id="aiRolePromptQuickList" class="ai-role-prompt-list"></div>
                 </div>
-            </label>
-            <div class="submit-row">
-                <button id="runAIReaderButton" class="btn btn-primary" type="button" data-i18n="ai.btn_send">发送问题</button>
-                <button id="stopAIReaderButton" class="btn btn-outline" type="button" hidden data-i18n="ai.btn_stop">停止生成</button>
-                <div id="aiModelSummary" class="ai-model-summary"></div>
-            </div>
+                <label class="field ai-question-field">
+                    <span class="ai-question-label" data-i18n="ai.question_label">想让 AI 帮你什么？</span>
+                    <div class="ai-question-input-wrap">
+                        <div id="aiQuestionMirror" class="ai-question-mirror" aria-hidden="true"></div>
+                        <textarea id="aiQuestionInput" class="form-textarea ai-question-input" rows="3" data-i18n-placeholder="ai.question_placeholder" placeholder="输入 @ 切换文献或调用角色…" spellcheck="false"></textarea>
+                        <div id="aiMentionPopover" class="ai-mention-popover" role="listbox" aria-label="@ 选项" hidden></div>
+                    </div>
+                </label>
+                <div class="ai-composer-bottom">
+                    <div id="aiRolePromptQuickList" class="ai-role-prompt-list"></div>
+                    <div class="submit-row">
+                        <div id="aiModelSummary" class="ai-model-summary"></div>
+                        <button id="stopAIReaderButton" class="btn btn-outline" type="button" hidden data-i18n="ai.btn_stop">停止生成</button>
+                        <button id="runAIReaderButton" class="btn btn-primary" type="button" data-i18n="ai.btn_send">发送问题</button>
+                    </div>
+                </div>
+            </footer>
         </section>
     </main>
 

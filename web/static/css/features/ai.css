@@ -626,7 +626,8 @@ html[lang^="zh"] .ai-config-details[open] .ai-collapsible-toggle::before {
     background: transparent;
     color: transparent;
     caret-color: var(--ink);
-    resize: vertical;
+    resize: none;
+    overflow-y: hidden;
 }
 
 .ai-question-input-wrap .ai-question-input::placeholder {

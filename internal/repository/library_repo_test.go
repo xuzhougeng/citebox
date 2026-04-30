@@ -145,6 +145,42 @@ func TestListPapersSearchesPDFTextWithFTS(t *testing.T) {
 	}
 }
 
+func TestListEvidenceCandidatePaperIDsSearchesLocalText(t *testing.T) {
+	repo := newTestRepository(t)
+
+	atacPaper, err := repo.CreatePaper(PaperUpsertInput{
+		Title:            "Regulatory Atlas",
+		OriginalFilename: "regulatory-atlas.pdf",
+		StoredPDFName:    "regulatory-atlas.pdf",
+		FileSize:         128,
+		ContentType:      "application/pdf",
+		PDFText:          "The study maps chromatin accessibility in single cells.",
+		ExtractionStatus: "completed",
+	})
+	if err != nil {
+		t.Fatalf("CreatePaper(atac) error = %v", err)
+	}
+	if _, err := repo.CreatePaper(PaperUpsertInput{
+		Title:            "Protein Localization",
+		OriginalFilename: "protein-localization.pdf",
+		StoredPDFName:    "protein-localization.pdf",
+		FileSize:         128,
+		ContentType:      "application/pdf",
+		PDFText:          "The study maps protein localization by microscopy.",
+		ExtractionStatus: "completed",
+	}); err != nil {
+		t.Fatalf("CreatePaper(other) error = %v", err)
+	}
+
+	ids, err := repo.Paper.ListEvidenceCandidatePaperIDs([]string{"chromatin accessibility"}, 20)
+	if err != nil {
+		t.Fatalf("ListEvidenceCandidatePaperIDs() error = %v", err)
+	}
+	if len(ids) != 1 || ids[0] != atacPaper.ID {
+		t.Fatalf("ids = %v, want [%d]", ids, atacPaper.ID)
+	}
+}
+
 func TestListPapersFiltersByPaperTag(t *testing.T) {
 	repo := newTestRepository(t)
 

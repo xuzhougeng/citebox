@@ -87,7 +87,7 @@
     "shared.paper.management_notes": "管理笔记",
     "shared.paper.no_management_notes": "当前没有管理笔记。",
     "shared.paper.view_paper_detail": "查看文献详情",
-    "shared.paper.go_ai_reading": "去 AI伴读",
+    "shared.paper.go_ai_reading": "去 AI 助手",
     "shared.paper.open_pdf": "打开 PDF",
 
     "shared.paper.pdf_text_saved": "PDF 原文已保存",
@@ -132,7 +132,7 @@
     "shared.paper.manual_annotation": "手动标注",
     "shared.paper.reparse": "重新解析",
     "shared.paper.delete_paper": "删除文献",
-    "shared.paper.ai_reading": "AI伴读",
+    "shared.paper.ai_reading": "AI 助手",
     "shared.paper.pdf_size": "PDF 大小",
     "shared.paper.current_tags": "当前标签",
     "shared.paper.no_doi": "未记录",

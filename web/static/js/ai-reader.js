@@ -53,10 +53,21 @@
             const input = $('aiQuestionInput');
             const mirror = $('aiQuestionMirror');
             if (!input || !mirror) return;
+            const resizeToContent = () => {
+                input.style.height = 'auto';
+                const maxHeight = parseFloat(window.getComputedStyle(input).maxHeight);
+                const contentHeight = input.scrollHeight;
+                const hasMaxHeight = Number.isFinite(maxHeight) && maxHeight > 0;
+                const nextHeight = hasMaxHeight ? Math.min(contentHeight, maxHeight) : contentHeight;
+                input.style.height = nextHeight + 'px';
+                input.style.overflowY = hasMaxHeight && contentHeight > maxHeight ? 'auto' : 'hidden';
+                mirror.style.overflowY = input.style.overflowY;
+            };
             const sync = () => {
                 // Trailing space avoids the last visible line collapsing when the
                 // textarea ends with a newline.
                 mirror.textContent = input.value + ' ';
+                resizeToContent();
                 mirror.scrollTop = input.scrollTop;
             };
             input.addEventListener('input', sync);

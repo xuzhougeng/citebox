@@ -193,7 +193,7 @@ type rawPaper struct {
 	Abstract                 string         `json:"abstract"`
 	Year                     int            `json:"year"`
 	Venue                    string         `json:"venue"`
-	Authors                  []Author       `json:"authors"`
+	Authors                  rawAuthors     `json:"authors"`
 	CitationCount            int            `json:"citationCount"`
 	ReferenceCount           int            `json:"referenceCount"`
 	InfluentialCitationCount int            `json:"influentialCitationCount"`
@@ -204,6 +204,33 @@ type rawPaper struct {
 		Text string `json:"text"`
 	} `json:"tldr"`
 	FieldsOfStudy []string `json:"fieldsOfStudy"`
+}
+
+type rawAuthors []Author
+
+func (a *rawAuthors) UnmarshalJSON(data []byte) error {
+	if string(data) == "null" {
+		*a = nil
+		return nil
+	}
+	var structured []Author
+	if err := json.Unmarshal(data, &structured); err == nil {
+		*a = structured
+		return nil
+	}
+	var names []string
+	if err := json.Unmarshal(data, &names); err != nil {
+		return err
+	}
+	out := make([]Author, 0, len(names))
+	for _, name := range names {
+		if strings.TrimSpace(name) == "" {
+			continue
+		}
+		out = append(out, Author{Name: name})
+	}
+	*a = out
+	return nil
 }
 
 // externalIDString coerces a value from S2's externalIds map (which may be a
@@ -229,7 +256,7 @@ func (rp rawPaper) toPaper() Paper {
 		Abstract:         rp.Abstract,
 		Year:             rp.Year,
 		Venue:            rp.Venue,
-		Authors:          rp.Authors,
+		Authors:          []Author(rp.Authors),
 		CitationCount:    rp.CitationCount,
 		ReferenceCount:   rp.ReferenceCount,
 		InfluentialCount: rp.InfluentialCitationCount,
@@ -562,6 +589,7 @@ func (c *Client) Autocomplete(ctx context.Context, query string) ([]Autocomplete
 // rawSnippetResponse maps /snippet/search; matches the swagger SnippetMatch wrapper.
 type rawSnippetResponse struct {
 	Data []struct {
+		PaperID string   `json:"paperId"`
 		Paper   rawPaper `json:"paper"`
 		Snippet Snippet  `json:"snippet"`
 		Score   float64  `json:"score"`
@@ -592,7 +620,7 @@ func (c *Client) SnippetSearch(ctx context.Context, query string, opts SnippetSe
 	if opts.Limit > 0 {
 		q.Set("limit", strconv.Itoa(opts.Limit))
 	}
-	q.Set("fields", "snippet,paper.title,paper.year,paper.authors,paper.externalIds,paper.openAccessPdf")
+	q.Set("fields", "snippet")
 
 	var raw rawSnippetResponse
 	if err := c.doJSON(ctx, "/graph/v1/snippet/search", q, &raw); err != nil {
@@ -604,6 +632,9 @@ func (c *Client) SnippetSearch(ctx context.Context, query string, opts SnippetSe
 	}
 	for _, row := range raw.Data {
 		paper := row.Paper.toPaper()
+		if paper.PaperID == "" {
+			paper.PaperID = row.PaperID
+		}
 		out.Items = append(out.Items, SnippetMatch{
 			PaperID: paper.PaperID,
 			Paper:   paper,

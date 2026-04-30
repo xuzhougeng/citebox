@@ -56,6 +56,9 @@
                 s.container.addEventListener('click', function (e) {
                     self._onContainerClick(e);
                 });
+                s.container.addEventListener('dblclick', function (e) {
+                    self._onContainerDoubleClick(e);
+                });
             }
 
             if (s.searchEl) {
@@ -133,6 +136,7 @@
             if (rowEl.querySelector('input.ai-conv-rename-input')) return;
 
             const originalText = titleEl.textContent;
+            rowEl.classList.add('is-renaming');
             const input = document.createElement('input');
             input.type = 'text';
             input.className = 'ai-conv-rename-input';
@@ -146,6 +150,8 @@
 
             input.focus();
             input.select();
+            input.addEventListener('click', function (e) { e.stopPropagation(); });
+            input.addEventListener('dblclick', function (e) { e.stopPropagation(); });
 
             let committed = false;
             const self = this;
@@ -156,6 +162,7 @@
                 const newTitle = input.value.trim();
                 // Restore display immediately (optimistic)
                 titleEl.textContent = newTitle || '新对话';
+                rowEl.classList.remove('is-renaming');
                 if (newTitle && newTitle !== originalText) {
                     self._commitRename(id, newTitle);
                 }
@@ -165,6 +172,7 @@
                 if (committed) return;
                 committed = true;
                 titleEl.textContent = originalText;
+                rowEl.classList.remove('is-renaming');
             }
 
             input.addEventListener('blur', commit);
@@ -233,8 +241,8 @@
                 '<div class="ai-conversation-row-title">' + display + '</div>' +
                 '<div class="ai-conversation-row-meta">' + meta + '</div>' +
                 '<div class="ai-conversation-row-actions">' +
-                    '<button data-action="rename" aria-label="重命名">✎</button>' +
-                    '<button data-action="delete" aria-label="删除">×</button>' +
+                    '<button class="ai-conversation-row-action" data-action="rename" aria-label="重命名" type="button">✎</button>' +
+                    '<button class="ai-conversation-row-action" data-action="delete" aria-label="删除" type="button">×</button>' +
                 '</div>'
             );
         },
@@ -259,7 +267,7 @@
         // -----------------------------------------------------------------------
         // Private: _onContainerClick — delegated event dispatch
         // -----------------------------------------------------------------------
-        _onContainerClick(e) {
+        async _onContainerClick(e) {
             const s = this._state;
             const btn = e.target.closest('[data-action]');
             if (btn) {
@@ -271,7 +279,12 @@
                 if (action === 'rename') {
                     this.openInlineRename(rowEl);
                 } else if (action === 'delete') {
-                    if (window.confirm('确认删除？')) {
+                    if (typeof Utils !== 'undefined' && typeof Utils.confirm === 'function') {
+                        const confirmed = await Utils.confirm(
+                            t('ai.confirm_delete_conversation', '删除后会移除当前会话及其消息记录。'),
+                            t('ai.confirm_delete_conversation_title', '删除对话')
+                        );
+                        if (!confirmed) return;
                         this._deleteConversation(id);
                     }
                 }
@@ -281,10 +294,25 @@
             // Row click (anywhere except action buttons)
             const rowEl = e.target.closest('.ai-conversation-row');
             if (rowEl) {
+                if (e.detail >= 2) {
+                    this.openInlineRename(rowEl);
+                    return;
+                }
                 const id = rowEl.dataset.id;
                 this.setActive(id);
                 s.onSelect(id);
             }
+        },
+
+        // -----------------------------------------------------------------------
+        // Private: _onContainerDoubleClick — enter inline rename from the row
+        // -----------------------------------------------------------------------
+        _onContainerDoubleClick(e) {
+            if (e.target.closest('[data-action], input.ai-conv-rename-input')) return;
+            const rowEl = e.target.closest('.ai-conversation-row');
+            if (!rowEl) return;
+            e.preventDefault();
+            this.openInlineRename(rowEl);
         },
 
         // -----------------------------------------------------------------------
@@ -325,6 +353,15 @@
             const s = this._state;
             const item = s.items.find(function (x) { return String(x.id) === String(id); });
             if (item) item.title = newTitle;
+            if (String(id) === String(s.activeID)) {
+                const view = window.AIReader && window.AIReader.view;
+                if (view && view._state) {
+                    if (view._state.meta) view._state.meta.title = newTitle;
+                    if (view._state.els && view._state.els.title) {
+                        view._state.els.title.textContent = newTitle;
+                    }
+                }
+            }
         },
     };
 

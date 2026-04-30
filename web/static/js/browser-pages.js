@@ -1769,7 +1769,7 @@ const NotesPage = {
         this.renderPageControls();
         this.grid.innerHTML = papers.length
             ? papers.map((paper) => this.renderPaperNoteRow(paper)).join('')
-            : `<div class="empty-state"><h3>${Utils.escapeHTML(t('notes.empty_paper_title', '还没有文献笔记'))}</h3><p>${Utils.escapeHTML(t('notes.empty_paper_text', '先在 AI 伴读或文献详情里写笔记，再回到这里统一查看。'))}</p></div>`;
+            : `<div class="empty-state"><h3>${Utils.escapeHTML(t('notes.empty_paper_title', '还没有文献笔记'))}</h3><p>${Utils.escapeHTML(t('notes.empty_paper_text', '先在 AI 助手或文献详情里写笔记，再回到这里统一查看。'))}</p></div>`;
         BrowserUI.renderPagination(this.pagination, this.state.page, this.state.totalPages);
     },
 
@@ -1791,7 +1791,7 @@ const NotesPage = {
                         <div class="note-row-actions">
                             <button class="btn btn-small btn-primary" type="button" data-action="note">${Utils.escapeHTML(t('notes.btn_edit_note', '编辑笔记'))}</button>
                             <button class="btn btn-small btn-outline" type="button" data-action="paper">${Utils.escapeHTML(t('notes.btn_paper_detail', '文献详情'))}</button>
-                            <button class="btn btn-small btn-outline" type="button" data-action="ai">${Utils.escapeHTML(t('notes.btn_ai_reader', 'AI伴读'))}</button>
+                            <button class="btn btn-small btn-outline" type="button" data-action="ai">${Utils.escapeHTML(t('notes.btn_ai_reader', 'AI 助手'))}</button>
                         </div>
                     </div>
                 </div>

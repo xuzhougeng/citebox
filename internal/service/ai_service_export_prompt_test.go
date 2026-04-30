@@ -307,23 +307,23 @@ func TestBuildAIPromptsIncludeActiveRolePromptsForPaperQA(t *testing.T) {
 		nil,
 		nil,
 		model.AIActionPaperQA,
-		"@严格证据模式 请总结结论。",
+		"@证据审查 请总结结论。",
 		"请总结结论。",
 		nil,
 		nil,
 		0,
 		[]model.AIRolePrompt{
-			{Name: "严格证据模式", Prompt: "优先引用原文证据，并明确不确定性。"},
+			{Name: "证据审查", Prompt: "优先引用原文证据，并明确不确定性。"},
 		},
 		true,
 	)
 
-	for _, want := range []string{"@严格证据模式", "角色调用:", "请总结结论。"} {
+	for _, want := range []string{"@证据审查", "角色调用:", "请总结结论。"} {
 		if !strings.Contains(userPrompt, want) {
 			t.Fatalf("userPrompt missing %q\n%s", want, userPrompt)
 		}
 	}
-	for _, want := range []string{"当前用户通过 @ 调用的角色 Prompt", "严格证据模式", "优先引用原文证据"} {
+	for _, want := range []string{"当前用户通过 @ 调用的角色 Prompt", "证据审查", "优先引用原文证据"} {
 		if !strings.Contains(systemPrompt, want) {
 			t.Fatalf("systemPrompt missing %q\n%s", want, systemPrompt)
 		}

@@ -15,7 +15,7 @@ const AppNav = {
         this.bindGlobalDismiss();
     },
 
-    // Place "调研" (/research) immediately after "AI 伴读" (/ai). The shared HTML
+    // Place "调研" (/research) immediately after "AI 助手" (/ai). The shared HTML
     // template lists them in the opposite order; doing the move here keeps every
     // page's <nav> in sync without touching 13 separate files.
     reorderPrimary(navLinks) {
@@ -196,7 +196,7 @@ const AppNavigationHotkeys = {
         { key: '5', path: '/groups', i18n: 'nav.groups', fallback: '分组' },
         { key: '6', path: '/tags', i18n: 'nav.tags', fallback: '标签' },
         { key: '7', path: '/notes', i18n: 'nav.notes', fallback: '笔记' },
-        { key: '8', path: '/ai', i18n: 'nav.ai', fallback: 'AI伴读' },
+        { key: '8', path: '/ai', i18n: 'nav.ai', fallback: 'AI 助手' },
         { key: '9', path: '/settings', i18n: 'nav.settings', fallback: '配置' }
     ],
 

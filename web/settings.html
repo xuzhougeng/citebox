@@ -21,7 +21,7 @@
                 <li><a href="/tags" data-i18n="nav.tags">标签</a></li>
                 <li><a href="/notes" data-i18n="nav.notes">笔记</a></li>
                 <li><a href="/research" data-i18n="nav.research">调研</a></li>
-                <li><a href="/ai" data-i18n="nav.ai">AI伴读</a></li>
+                <li><a href="/ai" data-i18n="nav.ai">AI 助手</a></li>
                 <li><a href="/settings" class="active" data-i18n="nav.settings">配置</a></li>
             </ul>
             <div class="nav-actions">
@@ -163,12 +163,12 @@
                         <div class="prompt-preset-head">
                             <div>
                                 <h4 data-i18n="settings.ai.role_prompt">角色 Prompt</h4>
-                                <p data-i18n-html="settings.ai.role_prompt_desc">这里保存的是可复用的角色设定，保存后可在 AI 伴读聊天框中通过 <code>@角色名</code> 直接调用。</p>
+                                <p data-i18n-html="settings.ai.role_prompt_desc">这里保存的是可复用的角色设定，保存后可在 AI 助手聊天框中通过 <code>@角色名</code> 直接调用。</p>
                             </div>
                             <button id="addAIRolePromptButton" class="btn btn-outline" type="button" data-i18n="settings.ai.add_role_prompt">新增角色 Prompt</button>
                         </div>
                         <div id="aiRolePromptList" class="prompt-preset-list">
-                            <div class="prompt-preset-empty" data-i18n-html="settings.ai.role_prompt_empty">还没有保存角色 Prompt。新增一个角色后，就可以在 AI 伴读聊天框中通过 <code>@角色名</code> 直接调用。</div>
+                            <div class="prompt-preset-empty" data-i18n-html="settings.ai.role_prompt_empty">还没有保存角色 Prompt。新增一个角色后，就可以在 AI 助手聊天框中通过 <code>@角色名</code> 直接调用。</div>
                         </div>
                     </section>
 
@@ -188,7 +188,7 @@
                     <label class="field prompt-field">
                         <span class="field-label-row">
                             <span class="field-label-text" data-i18n="settings.ai.qa_prompt_label">通用问答 Prompt</span>
-                            <span class="field-help" tabindex="0" role="note" title="面向 AI伴读页的单篇文献问答。系统会自动附带全文、摘要、笔记、图片摘要和历史对话。" data-i18n-title="settings.ai.qa_prompt_help" data-help="面向 AI伴读页的单篇文献问答。系统会自动附带全文、摘要、笔记、图片摘要和历史对话。">?</span>
+                            <span class="field-help" tabindex="0" role="note" title="面向 AI 助手页的单篇文献问答。系统会自动附带全文、摘要、笔记、图片摘要和历史对话。" data-i18n-title="settings.ai.qa_prompt_help" data-help="面向 AI 助手页的单篇文献问答。系统会自动附带全文、摘要、笔记、图片摘要和历史对话。">?</span>
                         </span>
                         <textarea id="aiQAPromptInput" class="form-textarea" rows="4" data-i18n-placeholder="settings.ai.qa_prompt_placeholder" placeholder="用于单篇文献问答的补充要求，例如：优先回答结论、证据链和局限"></textarea>
                         <details class="prompt-template-details">

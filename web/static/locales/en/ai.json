@@ -1,9 +1,9 @@
 {
-    "_title": "AI Reader - CiteBox",
+    "_title": "AI Assistant - CiteBox",
 
-    "ai.hero_eyebrow": "AI Reader",
-    "ai.hero_title": "AI reads papers with full text and figures",
-    "ai.hero_text": "Select a paper and ask AI — it combines full text and figures to help you understand the content.",
+    "ai.hero_eyebrow": "AI Assistant",
+    "ai.hero_title": "AI helps you search papers, read papers, and organize evidence",
+    "ai.hero_text": "Ask AI to use your local library, full text, figures, and evidence modes for retrieval, explanation, and synthesis.",
 
     "ai.help_label": "Hotkey help",
     "ai.help_heading": "Hotkeys",
@@ -24,9 +24,11 @@
     "ai.sidebar_search_placeholder": "Search conversations…",
     "ai.sidebar_empty": "No conversations yet. Click + New Conversation to start.",
     "ai.active_title_default": "New Conversation",
-    "ai.strict_evidence": "Strict Evidence",
-    "ai.external_evidence": "External Evidence",
+    "ai.strict_evidence": "Internal Search",
+    "ai.external_evidence": "External Search",
     "ai.btn_delete_conversation": "Delete",
+    "ai.confirm_delete_conversation_title": "Delete Conversation",
+    "ai.confirm_delete_conversation": "This will remove the conversation and its message history.",
 
     "ai.free_ask": "Free Ask",
     "ai.round_badge": "${current} / 5 turns",
@@ -36,7 +38,7 @@
     "ai.question_label": "What would you like AI to help with?",
     "ai.role_prompt_hint": "Type @ to open the picker — switch papers or insert a role prompt.",
     "ai.role_prompt_hint_empty": "No role prompts configured. Add one in Settings, then use @ here.",
-    "ai.question_placeholder": "Type @ to switch paper or invoke a role, e.g. @StrictEvidence explain the core conclusions.",
+    "ai.question_placeholder": "Type @ to switch paper or invoke a role, e.g. @EvidenceReview explain the core conclusions.",
     "ai.mention_section_papers": "Papers",
     "ai.mention_section_roles": "Role Prompts",
     "ai.mention_empty": "No matching paper or role.",
@@ -59,7 +61,7 @@
     "ai.config_go_settings": "Go to Settings",
     "ai.config_entry_desc": "Configure AI models and PDF extraction service in Settings.",
 
-    "ai.empty_no_papers": "No papers available for AI Reader.",
+    "ai.empty_no_papers": "No papers available for AI Assistant.",
     "ai.empty_select_paper": "Please select a paper.",
     "ai.no_summary": "This paper has no abstract or notes yet.",
     "ai.paper_group": "Group: ${name}",
@@ -69,7 +71,7 @@
     "ai.btn_paper_detail": "Paper Details",
     "ai.btn_open_pdf": "Open PDF",
 
-    "ai.session_hint_no_paper": "Select a paper for AI Reader before starting a conversation.",
+    "ai.session_hint_no_paper": "Select a paper for AI Assistant before starting a conversation.",
     "ai.empty_no_conversation": "No paper selected yet.",
     "ai.session_hint_generating": "Generating turn ${round} response. Output streams in real time.",
     "ai.session_hint_stopped": "Generation stopped. This segment is not included in conversation history.",
@@ -110,7 +112,7 @@
     "ai.msg_note_overwritten": "AI content overwrote paper notes",
     "ai.msg_note_appended": "AI content appended to paper notes",
 
-    "ai.export_title": "AI Reader Conversation Export",
+    "ai.export_title": "AI Assistant Conversation Export",
     "ai.export_paper": "Paper: ${title}",
     "ai.export_file": "Original file: ${filename}",
     "ai.export_time": "Export time: ${time}",
@@ -119,7 +121,7 @@
     "ai.export_user_question": "User Question",
     "ai.export_ai_answer": "AI Answer",
 
-    "ai.note_heading": "AI Reader - Turn ${n}",
+    "ai.note_heading": "AI Assistant - Turn ${n}",
     "ai.note_question": "Question: ${text}",
     "ai.note_time": "Recorded: ${time}",
     "ai.note_model": "Model: ${meta}"

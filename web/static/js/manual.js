@@ -729,11 +729,11 @@ const ManualPage = {
                 : t('manual.fulltext_extracting', '正在提取当前 PDF 的全文内容。');
         } else if (hasText) {
             this.extractTextBtn.textContent = t('manual.extract_text_re', '重新提取全文');
-            statusText = t('manual.fulltext_status_has_text', '当前已保存 {count} 字全文，可重新提取覆盖，供 AI 伴读、检索和后续整理使用。')
+            statusText = t('manual.fulltext_status_has_text', '当前已保存 {count} 字全文，可重新提取覆盖，供 AI 助手、检索和后续整理使用。')
                 .replace('{count}', paper.pdf_text.length.toLocaleString());
         } else {
             this.extractTextBtn.textContent = t('manual.extract_text_btn', '提取全文并保存');
-            statusText = t('manual.fulltext_status_empty', '当前还没有保存全文。点击右侧按钮即可提取并保存，供 AI 伴读和检索使用。');
+            statusText = t('manual.fulltext_status_empty', '当前还没有保存全文。点击右侧按钮即可提取并保存，供 AI 助手和检索使用。');
         }
 
         this.extractTextBtn.title = statusText;

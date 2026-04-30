@@ -366,6 +366,66 @@ func TestClientSnippetSearch(t *testing.T) {
 	}
 }
 
+func TestClientSnippetSearchDoesNotSendUnsupportedNestedPaperFields(t *testing.T) {
+	srv, stop := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if fields := r.URL.Query().Get("fields"); strings.Contains(fields, "paper.") {
+			t.Fatalf("fields = %q, snippet/search rejects nested paper fields", fields)
+		}
+		_, _ = w.Write([]byte(`{"data":[]}`))
+	})
+	defer stop()
+
+	c := newTestClient(srv.URL, "")
+	if _, err := c.SnippetSearch(context.Background(), "ATAC-seq", SnippetSearchOpts{Limit: 2}); err != nil {
+		t.Fatalf("SnippetSearch: %v", err)
+	}
+}
+
+func TestClientSnippetSearchAcceptsStringAuthorLists(t *testing.T) {
+	srv, stop := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{
+			"data":[{
+				"paper":{"paperId":"p1","title":"GNN paper","authors":["Ada Lovelace","Grace Hopper"]},
+				"snippet":{"text":"GNNs work...","snippetKind":"body"},
+				"score":0.87
+			}]
+		}`))
+	})
+	defer stop()
+
+	c := newTestClient(srv.URL, "")
+	res, err := c.SnippetSearch(context.Background(), "graph neural network", SnippetSearchOpts{Limit: 1})
+	if err != nil {
+		t.Fatalf("SnippetSearch: %v", err)
+	}
+	if got := res.Items[0].Paper.Authors[0].Name; got != "Ada Lovelace" {
+		t.Fatalf("first author = %q", got)
+	}
+}
+
+func TestClientSnippetSearchUsesTopLevelPaperID(t *testing.T) {
+	srv, stop := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{
+			"data":[{
+				"paperId":"p-top",
+				"paper":{"title":"GNN paper"},
+				"snippet":{"text":"GNNs work...","snippetKind":"body"},
+				"score":0.87
+			}]
+		}`))
+	})
+	defer stop()
+
+	c := newTestClient(srv.URL, "")
+	res, err := c.SnippetSearch(context.Background(), "graph neural network", SnippetSearchOpts{Limit: 1})
+	if err != nil {
+		t.Fatalf("SnippetSearch: %v", err)
+	}
+	if got := res.Items[0].PaperID; got != "p-top" {
+		t.Fatalf("PaperID = %q, want top-level paperId", got)
+	}
+}
+
 func TestClientRetriesOn429(t *testing.T) {
 	calls := 0
 	srv, stop := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {

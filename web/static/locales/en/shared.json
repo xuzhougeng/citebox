@@ -87,7 +87,7 @@
     "shared.paper.management_notes": "Management Notes",
     "shared.paper.no_management_notes": "No management notes.",
     "shared.paper.view_paper_detail": "View Paper Details",
-    "shared.paper.go_ai_reading": "AI Reader",
+    "shared.paper.go_ai_reading": "AI Assistant",
     "shared.paper.open_pdf": "Open PDF",
 
     "shared.paper.pdf_text_saved": "PDF text saved",
@@ -132,7 +132,7 @@
     "shared.paper.manual_annotation": "Manual Annotation",
     "shared.paper.reparse": "Re-parse",
     "shared.paper.delete_paper": "Delete Paper",
-    "shared.paper.ai_reading": "AI Reader",
+    "shared.paper.ai_reading": "AI Assistant",
     "shared.paper.pdf_size": "PDF Size",
     "shared.paper.current_tags": "Tags",
     "shared.paper.no_doi": "Not recorded",

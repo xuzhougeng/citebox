@@ -137,14 +137,14 @@ func TestAIRolePromptsPersistence(t *testing.T) {
 
 	saved, err := aiSvc.UpdateRolePrompts([]model.AIRolePrompt{
 		{
-			Name:   "严格证据模式",
+			Name:   "证据审查",
 			Prompt: "你是一名严格审稿人，优先检查证据链和结论边界。",
 		},
 	})
 	if err != nil {
 		t.Fatalf("UpdateRolePrompts() error = %v", err)
 	}
-	if len(saved) != 1 || saved[0].Name != "严格证据模式" {
+	if len(saved) != 1 || saved[0].Name != "证据审查" {
 		t.Fatalf("UpdateRolePrompts() = %+v, want single normalized role prompt", saved)
 	}
 
@@ -169,7 +169,7 @@ func TestGetRolePromptsMigratesLegacyPromptPresets(t *testing.T) {
 	_, repo, cfg := newTestService(t)
 	aiSvc := NewAIService(repo, cfg, nil)
 
-	if err := repo.UpsertAppSetting(aiRolePromptsKey, `[{"name":"严格证据模式","system_prompt":"优先引用原文","qa_prompt":"先回答结论","translate_prompt":"只返回译文"}]`); err != nil {
+	if err := repo.UpsertAppSetting(aiRolePromptsKey, `[{"name":"证据审查","system_prompt":"优先引用原文","qa_prompt":"先回答结论","translate_prompt":"只返回译文"}]`); err != nil {
 		t.Fatalf("UpsertAppSetting() error = %v", err)
 	}
 
@@ -177,7 +177,7 @@ func TestGetRolePromptsMigratesLegacyPromptPresets(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetRolePrompts() error = %v", err)
 	}
-	if len(rolePrompts) != 1 || rolePrompts[0].Name != "严格证据模式" {
+	if len(rolePrompts) != 1 || rolePrompts[0].Name != "证据审查" {
 		t.Fatalf("GetRolePrompts() = %+v, want migrated legacy role prompt", rolePrompts)
 	}
 	for _, want := range []string{"System Prompt", "优先引用原文", "通用问答 Prompt", "只返回译文"} {

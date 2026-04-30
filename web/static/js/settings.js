@@ -864,7 +864,7 @@ const SettingsPage = {
 
         const rolePrompts = Array.isArray(this.rolePromptDraft) ? this.rolePromptDraft : [];
         if (!rolePrompts.length) {
-            this.rolePromptList.innerHTML = `<div class="prompt-preset-empty">${t('settings.ai.role_prompt_empty', '还没有保存角色 Prompt。新增一个角色后，就可以在 AI 伴读聊天框里通过 <code>@角色名</code> 直接调用。')}</div>`;
+            this.rolePromptList.innerHTML = `<div class="prompt-preset-empty">${t('settings.ai.role_prompt_empty', '还没有保存角色 Prompt。新增一个角色后，就可以在 AI 助手聊天框里通过 <code>@角色名</code> 直接调用。')}</div>`;
             return;
         }
 
@@ -896,13 +896,13 @@ const SettingsPage = {
         const current = index >= 0 ? this.rolePromptDraft?.[index] : null;
         const values = await Utils.promptFields({
             title: current ? t('settings.ai.role_editor_title_edit', '编辑角色 Prompt · {0}').replace('{0}', current.name) : t('settings.ai.role_editor_title_new', '新建角色 Prompt'),
-            description: t('settings.ai.role_editor_desc', '角色 Prompt 只保存角色信息。保存后可在 AI 伴读聊天框中输入 @角色名 直接调用。'),
+            description: t('settings.ai.role_editor_desc', '角色 Prompt 只保存角色信息。保存后可在 AI 助手聊天框中输入 @角色名 直接调用。'),
             confirmLabel: current ? t('settings.ai.role_editor_confirm_edit', '保存角色') : t('settings.ai.role_editor_confirm_new', '创建角色'),
             fields: [
                 {
                     name: 'name',
                     label: t('settings.ai.role_editor_name_label', '角色名称'),
-                    placeholder: t('settings.ai.role_editor_name_placeholder', '例如：严格证据模式'),
+                    placeholder: t('settings.ai.role_editor_name_placeholder', '例如：证据审查'),
                     value: current?.name || '',
                     required: true
                 },

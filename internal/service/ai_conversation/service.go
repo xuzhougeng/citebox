@@ -32,7 +32,7 @@ type Service struct {
 	papers        *repository.PaperRepository
 	settings      AISettingsProvider
 	caller        StreamCaller
-	searcher      SnippetSearcher
+	searcher      ExternalEvidenceSearcher
 	titleCaller   NonStreamCaller
 	summaryCaller NonStreamCaller
 	logger        *slog.Logger
@@ -40,7 +40,7 @@ type Service struct {
 
 // New builds the service. All deps required.
 func New(repo *repository.AIConversationRepository, papers *repository.PaperRepository,
-	settings AISettingsProvider, caller StreamCaller, searcher SnippetSearcher,
+	settings AISettingsProvider, caller StreamCaller, searcher ExternalEvidenceSearcher,
 	logger *slog.Logger) *Service {
 	if logger == nil {
 		logger = slog.Default().With("component", "ai_conversation")
@@ -246,16 +246,15 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput, onDelta 
 
 	var citations []Citation
 	var citationsJSON string
-	if conv.StrictEvidence {
+	if conv.StrictEvidence || in.IncludeExternalEvidence {
 		enrichedUser, cites, evErr := injectEvidence(ctx, s.papers, s.searcher, in.Content, pinned, EvidenceOptions{
 			IncludeExternal: in.IncludeExternalEvidence,
+			DisableLocal:    !conv.StrictEvidence,
 		})
 		if evErr != nil {
-			if !errors.Is(evErr, ErrNoExternalIDs) {
-				s.logger.Warn("ai_conversation: evidence search failed", "error", evErr)
-			}
+			s.logger.Warn("ai_conversation: evidence search failed", "error", evErr)
 			// Surface a single warning line through the stream so the UI can toast.
-			_ = onDelta("\n\n_(证据检索失败或无外部标识，本次按普通模式作答)_\n\n")
+			_ = onDelta("\n\n_(证据检索失败，本次按普通模式作答)_\n\n")
 		} else {
 			// Replace the trailing "用户问题：\n<userText>" portion of asm.userPrompt
 			// with the enriched evidence block (which already ends with the same).

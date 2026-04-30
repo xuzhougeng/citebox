@@ -16,6 +16,9 @@ type stubAIConversationService struct {
 	getResult  ai_conversation.Conversation
 	getErr     error
 	deleted    int64
+	strictID   int64
+	strictOn   bool
+	sentInput  ai_conversation.SendMessageInput
 }
 
 func (s *stubAIConversationService) ListConversations(q string, limit, offset int) ([]ai_conversation.Conversation, error) {
@@ -31,11 +34,16 @@ func (s *stubAIConversationService) CreateDraft() (int64, error) { return 99, ni
 func (s *stubAIConversationService) UpdateTitle(id int64, title string, lock bool) error {
 	return nil
 }
-func (s *stubAIConversationService) UpdateStrictEvidence(id int64, on bool) error { return nil }
-func (s *stubAIConversationService) DeleteConversation(id int64) error            { s.deleted = id; return nil }
-func (s *stubAIConversationService) PinPaper(c, p int64) error                    { return nil }
-func (s *stubAIConversationService) UnpinPaper(c, p int64) error                  { return nil }
+func (s *stubAIConversationService) UpdateStrictEvidence(id int64, on bool) error {
+	s.strictID = id
+	s.strictOn = on
+	return nil
+}
+func (s *stubAIConversationService) DeleteConversation(id int64) error { s.deleted = id; return nil }
+func (s *stubAIConversationService) PinPaper(c, p int64) error         { return nil }
+func (s *stubAIConversationService) UnpinPaper(c, p int64) error       { return nil }
 func (s *stubAIConversationService) SendMessage(ctx context.Context, in ai_conversation.SendMessageInput, onDelta func(string) error) (ai_conversation.SendMessageResult, error) {
+	s.sentInput = in
 	_ = onDelta("hi")
 	return ai_conversation.SendMessageResult{
 		ConversationID:   in.ConversationID,
@@ -67,6 +75,25 @@ func TestAIConversationListEndpoint(t *testing.T) {
 	}
 	if len(body.Items) != 1 || body.Items[0].Title != "Test" {
 		t.Fatalf("body = %+v", body)
+	}
+}
+
+func TestAIConversationNewMessageAppliesStrictEvidenceBeforeSend(t *testing.T) {
+	stub := &stubAIConversationService{}
+	h := NewAIConversationHandler(stub)
+	body := strings.NewReader(`{"content":"hi","strict_evidence":true,"include_external_evidence":true}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/conversations/new/messages", body)
+	rec := httptest.NewRecorder()
+	h.PostMessage(rec, req)
+
+	if rec.Code != 200 {
+		t.Fatalf("status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	if stub.strictID != 99 || !stub.strictOn {
+		t.Fatalf("strict update = (%d, %v), want (99, true)", stub.strictID, stub.strictOn)
+	}
+	if stub.sentInput.ConversationID != 99 || !stub.sentInput.IncludeExternalEvidence {
+		t.Fatalf("sent input = %+v", stub.sentInput)
 	}
 }
 

@@ -11,6 +11,7 @@ import (
 
 	"github.com/xuzhougeng/citebox/internal/model"
 	"github.com/xuzhougeng/citebox/internal/repository"
+	"github.com/xuzhougeng/citebox/internal/service/research"
 )
 
 type stubSettingsProvider struct {
@@ -143,8 +144,85 @@ func TestStrictEvidenceUsesRetrievedSnippetsNotPinnedFullText(t *testing.T) {
 	if strings.Contains(caller.userSeen, "FULL_CONTEXT_SHOULD_NOT_LEAK") {
 		t.Fatalf("strict prompt leaked broad pinned context: %s", caller.userSeen)
 	}
-	if !strings.Contains(caller.userSeen, "scRNA-seq") || !strings.Contains(caller.userSeen, "严格证据模式") {
+	if !strings.Contains(caller.userSeen, "scRNA-seq") || !strings.Contains(caller.userSeen, "内部搜索模式") {
 		t.Fatalf("strict prompt missing retrieved evidence: %s", caller.userSeen)
+	}
+}
+
+func TestStrictEvidenceSearchesLocalLibraryWithoutPinnedPapers(t *testing.T) {
+	svc, libRepo, caller := newServiceForTest(t)
+	atacID := mustInsertPaperForTest(t, libRepo, "ATAC Candidate", "")
+	unrelatedID := mustInsertPaperForTest(t, libRepo, "Unrelated Candidate", "")
+	_, err := libRepo.DB().Exec(
+		`UPDATE papers SET pdf_text = CASE id WHEN ? THEN ? WHEN ? THEN ? ELSE pdf_text END WHERE id IN (?, ?)`,
+		atacID,
+		"We performed single-cell chromatin accessibility profiling to identify regulatory elements.",
+		unrelatedID,
+		"This manuscript studies protein localization without sequencing data.",
+		atacID,
+		unrelatedID,
+	)
+	if err != nil {
+		t.Fatalf("update pdf_text: %v", err)
+	}
+	convID, _ := svc.CreateDraft()
+	if err := svc.UpdateStrictEvidence(convID, true); err != nil {
+		t.Fatalf("UpdateStrictEvidence: %v", err)
+	}
+
+	_, err = svc.SendMessage(context.Background(), SendMessageInput{
+		ConversationID: convID,
+		Content:        "帮我查找包括 ATAC 数据的文章",
+	}, func(string) error { return nil })
+	if err != nil {
+		t.Fatalf("SendMessage: %v", err)
+	}
+	if !strings.Contains(caller.userSeen, "ATAC Candidate") || !strings.Contains(caller.userSeen, "chromatin accessibility") {
+		t.Fatalf("strict prompt missing local library ATAC evidence: %s", caller.userSeen)
+	}
+	if strings.Contains(caller.userSeen, "Unrelated Candidate") {
+		t.Fatalf("strict prompt included unrelated library paper: %s", caller.userSeen)
+	}
+}
+
+func TestExternalEvidenceCanRunWithoutStrictEvidence(t *testing.T) {
+	svc, libRepo, caller := newServiceForTest(t)
+	paperID := mustInsertPaperForTest(t, libRepo, "External Candidate", "10.1/external")
+	_, err := libRepo.DB().Exec(
+		`UPDATE papers SET pdf_text = ? WHERE id = ?`,
+		"LOCAL_CONTEXT_SHOULD_NOT_APPEAR chromatin accessibility text.",
+		paperID,
+	)
+	if err != nil {
+		t.Fatalf("update pdf_text: %v", err)
+	}
+	convID, _ := svc.CreateDraft()
+	if err := svc.PinPaper(convID, paperID); err != nil {
+		t.Fatalf("PinPaper: %v", err)
+	}
+	svc.searcher = &stubSnippetSearcher{
+		res: research.SnippetList{
+			Items: []research.SnippetMatch{
+				{
+					PaperID: "s2-external",
+					Paper:   research.Paper{PaperID: "s2-external", Title: "External Candidate", ExternalIDs: research.IDs{DOI: "10.1/external"}},
+					Snippet: research.Snippet{Text: "external independent evidence snippet", SnippetKind: "body", Section: "Results"},
+					Score:   0.88,
+				},
+			},
+		},
+	}
+
+	_, err = svc.SendMessage(context.Background(), SendMessageInput{
+		ConversationID:          convID,
+		Content:                 "帮我查找包括 ATAC 数据的文章",
+		IncludeExternalEvidence: true,
+	}, func(string) error { return nil })
+	if err != nil {
+		t.Fatalf("SendMessage: %v", err)
+	}
+	if !strings.Contains(caller.userSeen, "外部 Semantic Scholar") || !strings.Contains(caller.userSeen, "external independent evidence snippet") {
+		t.Fatalf("prompt missing independent external evidence: %s", caller.userSeen)
 	}
 }
 

@@ -15,7 +15,7 @@
     "guide.step_3_desc": "Browse figures from all papers, add tags or write notes for each figure.",
     "guide.step_4_title": "Take Notes",
     "guide.step_4_desc": "Write down your reading insights for easy searching and review later.",
-    "guide.step_5_title": "AI Reader",
+    "guide.step_5_title": "AI Assistant",
     "guide.step_5_desc": "Ask AI questions about the full text and figures to deepen understanding.",
 
     "guide.feature_overview_title": "Overview",
@@ -28,6 +28,6 @@
     "guide.feature_notes_desc": "View paper notes and figure notes in one place, with searchable descriptions and AI analysis results.",
     "guide.feature_tags_groups_title": "Groups & Tags",
     "guide.feature_tags_groups_desc": "Groups categorize items (e.g. by project), tags provide multi-dimensional labels (e.g. by method); paper tags and figure tags are independent.",
-    "guide.feature_ai_title": "AI Reader",
+    "guide.feature_ai_title": "AI Assistant",
     "guide.feature_ai_desc": "Feed full text and figures to AI to summarize, explain, and record key points."
 }
