@@ -91,3 +91,40 @@ func TestFigureLookupToolReturnsFigureCards(t *testing.T) {
 		t.Fatalf("answer context = %s", res.AnswerContext)
 	}
 }
+
+type capturingFigureListProvider struct {
+	filter model.FigureFilter
+}
+
+func (p *capturingFigureListProvider) ListFigures(filter model.FigureFilter) ([]model.FigureListItem, int, error) {
+	p.filter = filter
+	return []model.FigureListItem{{
+		ID:           9,
+		PaperID:      42,
+		PaperTitle:   "Scoped Paper",
+		DisplayLabel: "Fig 2",
+		Caption:      "Scoped caption",
+	}}, 1, nil
+}
+
+func TestRepositoryFigureSearcherPassesPaperFilter(t *testing.T) {
+	provider := &capturingFigureListProvider{}
+	searcher := NewRepositoryFigureSearcher(provider)
+
+	figures, total, err := searcher.SearchFigures("chromatin", 42, 7)
+	if err != nil {
+		t.Fatalf("SearchFigures: %v", err)
+	}
+	if total != 1 || len(figures) != 1 {
+		t.Fatalf("total=%d len=%d, want 1/1", total, len(figures))
+	}
+	if provider.filter.Keyword != "chromatin" {
+		t.Fatalf("keyword = %q, want chromatin", provider.filter.Keyword)
+	}
+	if provider.filter.Page != 1 || provider.filter.PageSize != 7 {
+		t.Fatalf("page=%d page_size=%d, want 1/7", provider.filter.Page, provider.filter.PageSize)
+	}
+	if provider.filter.PaperID == nil || *provider.filter.PaperID != 42 {
+		t.Fatalf("paper_id = %v, want 42", provider.filter.PaperID)
+	}
+}

@@ -40,6 +40,7 @@ type SubfigureExtractionRegion struct {
 
 type FigureFilter struct {
 	Keyword  string `json:"keyword"`
+	PaperID  *int64 `json:"paper_id,omitempty"`
 	GroupID  *int64 `json:"group_id,omitempty"`
 	TagID    *int64 `json:"tag_id,omitempty"`
 	HasNotes bool   `json:"has_notes,omitempty"`

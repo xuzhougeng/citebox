@@ -908,6 +908,54 @@ func TestListFiguresFiltersHasNotes(t *testing.T) {
 	}
 }
 
+func TestListFiguresFiltersByPaperID(t *testing.T) {
+	repo := newTestRepository(t)
+
+	first, err := repo.CreatePaper(PaperUpsertInput{
+		Title:            "First Figure Paper",
+		OriginalFilename: "first-figure-paper.pdf",
+		StoredPDFName:    "first-figure-paper.pdf",
+		FileSize:         128,
+		ContentType:      "application/pdf",
+		ExtractionStatus: "completed",
+		Figures: []FigureUpsertInput{
+			{Filename: "first_figure.png", PageNumber: 1, FigureIndex: 1, Caption: "First paper figure"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreatePaper first error = %v", err)
+	}
+	second, err := repo.CreatePaper(PaperUpsertInput{
+		Title:            "Second Figure Paper",
+		OriginalFilename: "second-figure-paper.pdf",
+		StoredPDFName:    "second-figure-paper.pdf",
+		FileSize:         128,
+		ContentType:      "application/pdf",
+		ExtractionStatus: "completed",
+		Figures: []FigureUpsertInput{
+			{Filename: "second_figure_1.png", PageNumber: 1, FigureIndex: 1, Caption: "Second paper figure one"},
+			{Filename: "second_figure_2.png", PageNumber: 2, FigureIndex: 2, Caption: "Second paper figure two"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreatePaper second error = %v", err)
+	}
+
+	figures, total, err := repo.ListFigures(model.FigureFilter{PaperID: &second.ID, Page: 1, PageSize: 1})
+	if err != nil {
+		t.Fatalf("ListFigures(paper id) error = %v", err)
+	}
+	if total != 2 || len(figures) != 1 {
+		t.Fatalf("ListFigures(paper id) total=%d len=%d, want 2/1", total, len(figures))
+	}
+	if figures[0].PaperID != second.ID {
+		t.Fatalf("ListFigures(paper id) paper id = %d, want %d", figures[0].PaperID, second.ID)
+	}
+	if figures[0].PaperID == first.ID {
+		t.Fatalf("ListFigures(paper id) returned figure from unselected paper %d", first.ID)
+	}
+}
+
 func TestUpdateFigureCaptionBecomesSearchable(t *testing.T) {
 	repo := newTestRepository(t)
 

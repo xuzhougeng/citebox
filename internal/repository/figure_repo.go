@@ -408,6 +408,10 @@ func buildFigureWhere(filter model.FigureFilter) (string, []interface{}) {
 		conditions = append(conditions, "p.group_id = ?")
 		args = append(args, *filter.GroupID)
 	}
+	if filter.PaperID != nil && *filter.PaperID > 0 {
+		conditions = append(conditions, "pf.paper_id = ?")
+		args = append(args, *filter.PaperID)
+	}
 	if filter.TagID != nil && *filter.TagID > 0 {
 		conditions = append(conditions, "EXISTS (SELECT 1 FROM figure_tags ft WHERE ft.figure_id = pf.id AND ft.tag_id = ?)")
 		args = append(args, *filter.TagID)

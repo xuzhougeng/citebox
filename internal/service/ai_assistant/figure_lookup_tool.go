@@ -110,19 +110,16 @@ func (s *RepositoryFigureSearcher) SearchFigures(query string, paperID int64, li
 		limit = 12
 	}
 	filter := model.FigureFilter{Keyword: query, Page: 1, PageSize: limit}
+	if paperID > 0 {
+		filter.PaperID = &paperID
+	}
 	figures, total, err := s.repo.ListFigures(filter)
 	if err != nil {
 		return nil, 0, err
 	}
 	out := make([]FigureRecord, 0, len(figures))
 	for _, figure := range figures {
-		if paperID > 0 && figure.PaperID != paperID {
-			continue
-		}
 		out = append(out, FigureRecordFromListItem(figure))
-	}
-	if paperID > 0 {
-		total = len(out)
 	}
 	return out, total, nil
 }
