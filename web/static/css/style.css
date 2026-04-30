@@ -34,6 +34,7 @@
 @import url('features/modal.css');
 @import url('features/lightbox.css');
 @import url('features/ai.css');
+@import url("features/ai-sidebar.css");
 @import url('features/figure-ai.css');
 @import url('features/manual.css');
 @import url('features/markdown.css');
