@@ -20,6 +20,7 @@ import (
 	"github.com/xuzhougeng/citebox/internal/model"
 	"github.com/xuzhougeng/citebox/internal/repository"
 	"github.com/xuzhougeng/citebox/internal/service"
+	"github.com/xuzhougeng/citebox/internal/service/ai_conversation"
 	"github.com/xuzhougeng/citebox/internal/service/research"
 )
 
@@ -217,6 +218,8 @@ func buildHandler(
 	groupHandler := handler.NewGroupHandler(librarySvc)
 	tagHandler := handler.NewTagHandler(librarySvc)
 	aiHandler := handler.NewAIHandler(aiSvc)
+	aiConvService := ai_conversation.New(repo.AIConversation, repo.Paper, aiSvc, aiSvc, logger.With("component", "ai_conversation"))
+	aiConversationHandler := handler.NewAIConversationHandler(aiConvService)
 	settingsHandler := handler.NewSettingsHandler(librarySvc, versionSvc)
 	settingsHandler.SetResearchClient(s2Client)
 	wolaiHandler := handler.NewWolaiHandler(librarySvc)
@@ -522,6 +525,39 @@ func buildHandler(
 			aiHandler.ExportReadMarkdown(w, r)
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	mux.HandleFunc("/api/ai/conversations", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		aiConversationHandler.List(w, r)
+	})
+
+	mux.HandleFunc("/api/ai/conversations/", func(w http.ResponseWriter, r *http.Request) {
+		p := r.URL.Path
+		switch {
+		case strings.HasSuffix(p, "/messages"):
+			switch r.Method {
+			case http.MethodGet:
+				aiConversationHandler.Messages(w, r)
+			case http.MethodPost:
+				aiConversationHandler.PostMessage(w, r)
+			default:
+				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			}
+		case strings.HasSuffix(p, "/export"):
+			if r.Method != http.MethodGet {
+				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			aiConversationHandler.Export(w, r)
+		case strings.Contains(p, "/papers"):
+			aiConversationHandler.Pins(w, r)
+		default:
+			aiConversationHandler.Detail(w, r)
 		}
 	})
 
