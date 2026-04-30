@@ -169,6 +169,10 @@
    4. Sidebar empty state
    ------------------------------------------------------------------ */
 
+.ai-sidebar-empty[hidden] {
+    display: none;
+}
+
 .ai-sidebar-empty {
     display: flex;
     flex-direction: column;

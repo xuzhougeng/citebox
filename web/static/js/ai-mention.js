@@ -307,6 +307,13 @@
 
             const items = s.items;
             if (!items.length) {
+                // No matches AND user hasn't typed anything → just stay closed
+                // (avoids the popover popping up on stray "@" alone, including
+                // when the browser autofills a leftover textarea value on load).
+                if (!s.query) {
+                    this.dismiss();
+                    return;
+                }
                 s.popover.hidden = false;
                 s.popover.innerHTML =
                     '<div class="ai-mention-empty">' +

@@ -20,6 +20,13 @@
     "ai.search_label": "Search papers",
     "ai.search_placeholder": "Filter by title, filename, abstract, notes, or tags",
 
+    "ai.btn_new_conversation": "+ New Conversation",
+    "ai.sidebar_search_placeholder": "Search conversations…",
+    "ai.sidebar_empty": "No conversations yet. Click + New Conversation to start.",
+    "ai.active_title_default": "New Conversation",
+    "ai.strict_evidence": "Strict Evidence",
+    "ai.btn_delete_conversation": "Delete",
+
     "ai.free_ask": "Free Ask",
     "ai.round_badge": "${current} / 5 turns",
     "ai.session_hint_empty": "No conversation yet. Select a paper to start asking.",
