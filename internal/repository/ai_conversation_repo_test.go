@@ -89,3 +89,52 @@ func TestAIConversationDeleteCascadesMessages(t *testing.T) {
 		t.Fatalf("messages should be cascaded; got %d", len(msgs))
 	}
 }
+
+func TestAIConversationPinPaper(t *testing.T) {
+	libRepo, err := NewLibraryRepository(filepath.Join(t.TempDir(), "library.db"))
+	if err != nil {
+		t.Fatalf("NewLibraryRepository: %v", err)
+	}
+	t.Cleanup(func() { _ = libRepo.Close() })
+	repo := libRepo.AIConversation
+
+	// Need a real paper row to satisfy the FK.
+	paperID := mustInsertTestPaper(t, libRepo, "Pinned Test", "10.1/abc")
+
+	convID, _ := repo.CreateConversation()
+	if err := repo.PinPaper(convID, paperID); err != nil {
+		t.Fatalf("PinPaper: %v", err)
+	}
+	// idempotent: pinning twice does not error
+	if err := repo.PinPaper(convID, paperID); err != nil {
+		t.Fatalf("PinPaper second time: %v", err)
+	}
+	pinned, err := repo.ListPinnedPapers(convID)
+	if err != nil {
+		t.Fatalf("ListPinnedPapers: %v", err)
+	}
+	if len(pinned) != 1 || pinned[0].PaperID != paperID || pinned[0].Title != "Pinned Test" {
+		t.Fatalf("pinned = %+v", pinned)
+	}
+	if err := repo.UnpinPaper(convID, paperID); err != nil {
+		t.Fatalf("UnpinPaper: %v", err)
+	}
+	pinned, _ = repo.ListPinnedPapers(convID)
+	if len(pinned) != 0 {
+		t.Fatalf("expected unpin to clear; got %+v", pinned)
+	}
+}
+
+// mustInsertTestPaper inserts a minimal papers row (FK target for pin test).
+func mustInsertTestPaper(t *testing.T, libRepo *LibraryRepository, title, doi string) int64 {
+	t.Helper()
+	res, err := libRepo.db.Exec(`
+		INSERT INTO papers (title, doi, original_filename, stored_pdf_name)
+		VALUES (?, ?, 'test.pdf', 'test.pdf')
+	`, title, doi)
+	if err != nil {
+		t.Fatalf("insert paper: %v", err)
+	}
+	id, _ := res.LastInsertId()
+	return id
+}

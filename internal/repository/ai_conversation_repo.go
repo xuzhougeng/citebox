@@ -243,6 +243,62 @@ func (r *AIConversationRepository) ListMessages(conversationID int64, afterID in
 	return out, rows.Err()
 }
 
+// PinPaper attaches a paper to a conversation. Idempotent (PRIMARY KEY).
+func (r *AIConversationRepository) PinPaper(conversationID, paperID int64) error {
+	_, err := r.db.Exec(`
+		INSERT INTO ai_conversation_papers (conversation_id, paper_id)
+		VALUES (?, ?)
+		ON CONFLICT(conversation_id, paper_id) DO NOTHING
+	`, conversationID, paperID)
+	if err == nil {
+		_ = r.TouchConversation(conversationID)
+	}
+	return err
+}
+
+// UnpinPaper removes the pin. Not-found is silent.
+func (r *AIConversationRepository) UnpinPaper(conversationID, paperID int64) error {
+	_, err := r.db.Exec(
+		`DELETE FROM ai_conversation_papers WHERE conversation_id = ? AND paper_id = ?`,
+		conversationID, paperID)
+	if err == nil {
+		_ = r.TouchConversation(conversationID)
+	}
+	return err
+}
+
+// CountPinnedPapers returns the current pin count (for limit checks).
+func (r *AIConversationRepository) CountPinnedPapers(conversationID int64) (int, error) {
+	row := r.db.QueryRow(`SELECT COUNT(*) FROM ai_conversation_papers WHERE conversation_id = ?`, conversationID)
+	var n int
+	err := row.Scan(&n)
+	return n, err
+}
+
+// ListPinnedPapers returns pinned papers (with paper.title / doi) ordered by pin time.
+func (r *AIConversationRepository) ListPinnedPapers(conversationID int64) ([]AIPinnedPaper, error) {
+	rows, err := r.db.Query(`
+		SELECT p.id, p.title, COALESCE(p.doi, ''), cp.pinned_at
+		FROM ai_conversation_papers cp
+		JOIN papers p ON p.id = cp.paper_id
+		WHERE cp.conversation_id = ?
+		ORDER BY cp.pinned_at ASC, p.id ASC
+	`, conversationID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make([]AIPinnedPaper, 0)
+	for rows.Next() {
+		var p AIPinnedPaper
+		if err := rows.Scan(&p.PaperID, &p.Title, &p.DOI, &p.PinnedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
 func nullableString(s string) interface{} {
 	if s == "" {
 		return nil
