@@ -91,8 +91,10 @@ type AISettings struct {
 	GroupPrompt      string                `json:"group_prompt"`
 	TranslatePrompt  string                `json:"translate_prompt"`
 	TTSPrompt        string                `json:"tts_prompt"`
-	Translation      AITranslationConfig   `json:"translation"`
-	RolePrompts      []AIRolePrompt        `json:"role_prompts"`
+	Translation         AITranslationConfig   `json:"translation"`
+	RolePrompts         []AIRolePrompt        `json:"role_prompts"`
+	PinPapersLimit      int                   `json:"pin_papers_limit"`
+	ContextBudgetTokens int                   `json:"context_budget_tokens"`
 }
 
 type AIReadRequest struct {
@@ -226,6 +228,8 @@ func DefaultAISettings() AISettings {
 			PrimaryLanguage: "中文",
 			TargetLanguage:  "英文",
 		},
-		RolePrompts: []AIRolePrompt{},
+		PinPapersLimit:      5,
+		ContextBudgetTokens: 32000,
+		RolePrompts:         []AIRolePrompt{},
 	}
 }
