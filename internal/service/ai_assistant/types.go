@@ -57,12 +57,13 @@ type ResultCard struct {
 }
 
 type PaperHitCard struct {
-	PaperID  int64             `json:"paper_id"`
-	Title    string            `json:"title"`
-	DOI      string            `json:"doi,omitempty"`
-	Year     string            `json:"year,omitempty"`
-	Reason   string            `json:"reason"`
-	Snippets []PaperHitSnippet `json:"snippets"`
+	PaperID        int64             `json:"paper_id"`
+	Title          string            `json:"title"`
+	DOI            string            `json:"doi,omitempty"`
+	Year           string            `json:"year,omitempty"`
+	Reason         string            `json:"reason"`
+	HighlightTerms []string          `json:"highlight_terms,omitempty"`
+	Snippets       []PaperHitSnippet `json:"snippets"`
 }
 
 type PaperHitSnippet struct {

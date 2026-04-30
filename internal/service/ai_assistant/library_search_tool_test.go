@@ -2,6 +2,7 @@ package ai_assistant
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -62,6 +63,14 @@ func TestLibrarySearchToolReturnsPaperHitCards(t *testing.T) {
 	}
 	if len(card.Snippets) != 3 {
 		t.Fatalf("snippets = %+v", card.Snippets)
+	}
+	encoded, err := json.Marshal(card)
+	if err != nil {
+		t.Fatalf("marshal card: %v", err)
+	}
+	encodedCard := string(encoded)
+	if !strings.Contains(encodedCard, `"highlight_terms"`) || !strings.Contains(encodedCard, "ATAC-seq") {
+		t.Fatalf("card json = %s, want highlight_terms with search terms", encodedCard)
 	}
 	if !strings.Contains(res.AnswerContext, "ATAC Atlas") || !strings.Contains(res.AnswerContext, "chromatin accessibility") {
 		t.Fatalf("answer context = %s", res.AnswerContext)

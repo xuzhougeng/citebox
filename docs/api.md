@@ -812,6 +812,7 @@ AI 流式阅读通过：
 
 - `process`：紧凑流程摘要，用于展示扫描阶段、命中数和状态。
 - `cards`：结构化结果卡片，例如 `paper_hit`、`external_paper`、`paper_read`、`paper_compare`、`figure_result`。
+  - `paper_hit.payload.highlight_terms`：本地全文扫描实际使用的检索词数组，前端用于在证据片段中高亮命中词；旧消息可能没有该字段。
 - `citations`：证据引用数组，用于脚注和结果卡片引用。
 
 搜索模式说明：

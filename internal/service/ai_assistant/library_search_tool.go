@@ -180,12 +180,13 @@ func (t *LibrarySearchTool) Run(ctx context.Context, in ToolInput) (ToolResult, 
 			reason = "Sub-Agent判定：" + strings.TrimSpace(hit.ClassifierReason)
 		}
 		card := PaperHitCard{
-			PaperID:  hit.Paper.ID,
-			Title:    hit.Paper.Title,
-			DOI:      hit.Paper.DOI,
-			Year:     hit.Paper.PublishedAt,
-			Reason:   reason,
-			Snippets: snippets,
+			PaperID:        hit.Paper.ID,
+			Title:          hit.Paper.Title,
+			DOI:            hit.Paper.DOI,
+			Year:           hit.Paper.PublishedAt,
+			Reason:         reason,
+			HighlightTerms: terms,
+			Snippets:       snippets,
 		}
 		cards = append(cards, ResultCard{Type: "paper_hit", Payload: card})
 	}

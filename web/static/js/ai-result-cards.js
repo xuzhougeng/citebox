@@ -63,12 +63,48 @@
         return index ? ' [' + escapeHtml(index) + ']' : '';
     }
 
-    function renderSnippets(snippets) {
+    function escapeRegExp(value) {
+        return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
+    function highlightTerms(terms) {
+        if (!Array.isArray(terms)) return [];
+        const seen = new Set();
+        return terms
+            .map((term) => String(term == null ? '' : term).trim())
+            .filter((term) => term !== '')
+            .sort((a, b) => b.length - a.length)
+            .filter((term) => {
+                const key = term.toLowerCase();
+                if (seen.has(key)) return false;
+                seen.add(key);
+                return true;
+            });
+    }
+
+    function renderHighlightedText(value, terms) {
+        const text = String(value == null ? '' : value);
+        const normalized = highlightTerms(terms);
+        if (normalized.length === 0) return escapeHtml(text);
+        const matcher = new RegExp(normalized.map(escapeRegExp).join('|'), 'gi');
+        let html = '';
+        let lastIndex = 0;
+        text.replace(matcher, (match, offset) => {
+            html += escapeHtml(text.slice(lastIndex, offset));
+            html += '<mark class="ai-result-highlight">' + escapeHtml(match) + '</mark>';
+            lastIndex = offset + match.length;
+            return match;
+        });
+        html += escapeHtml(text.slice(lastIndex));
+        return html;
+    }
+
+    function renderSnippets(snippets, terms) {
         if (!Array.isArray(snippets) || snippets.length === 0) return '';
         return '<div class="ai-result-snippets">' + snippets.slice(0, 3).map((snippet) => {
             const location = snippet.location ? '<span>' + escapeHtml(snippet.location) + '</span>' : '';
             return '<blockquote>' +
-                '<p>' + escapeHtml(snippet.text || '') + citation(snippet.citation_index) + '</p>' +
+                '<p>' + renderHighlightedText(snippet.text || '', terms) + citation(snippet.citation_index) + '</p>' +
                 location +
             '</blockquote>';
         }).join('') + '</div>';
@@ -96,7 +132,7 @@
     function renderPaperHit(p) {
         const href = p.paper_id ? '/library?paper=' + encodeURIComponent(p.paper_id) : '';
         const meta = metaLine([p.year, p.doi]);
-        const snippets = renderSnippets(p.snippets);
+        const snippets = renderSnippets(p.snippets, p.highlight_terms);
         const hasEvidence = snippets !== '';
         const expandLabel = translate('ai.result_expand_evidence', '展开证据');
         const collapseLabel = translate('ai.result_collapse_evidence', '收起证据');

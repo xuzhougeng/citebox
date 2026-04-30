@@ -99,6 +99,23 @@ test('result cards leave citation tokens unwrapped for single hydration', () => 
     assert.doesNotMatch(html, /<sup>\[1\]<\/sup>/);
 });
 
+test('paper hit snippets highlight backend search terms safely', () => {
+    const render = loadResultCardsRenderer();
+    const html = render([{
+        type: 'paper_hit',
+        payload: {
+            paper_id: 1,
+            title: 'ChIP-seq paper',
+            highlight_terms: ['ChIP-seq', '<unsafe>'],
+            snippets: [{ text: 'Uses ChIP-seq and <unsafe> marker.', citation_index: 1 }],
+        },
+    }]);
+
+    assert.match(html, /Uses <mark class="ai-result-highlight">ChIP-seq<\/mark> and <mark class="ai-result-highlight">&lt;unsafe&gt;<\/mark> marker\. \[1\]/);
+    assert.doesNotMatch(html, /<unsafe>/);
+    assert.doesNotMatch(html, /<sup>\[1\]<\/sup>/);
+});
+
 test('paper hit result cards render collapsed evidence by default', () => {
     const render = loadResultCardsRenderer();
     const html = render([{

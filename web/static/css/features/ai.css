@@ -477,6 +477,13 @@ html[lang^="zh"] .ai-config-details[open] .ai-collapsible-toggle::before {
     margin: 0;
 }
 
+.ai-result-highlight {
+    border-radius: 3px;
+    background: rgba(var(--accent-rgb), 0.18);
+    color: var(--ink);
+    padding: 0 0.08rem;
+}
+
 .ai-result-card blockquote span {
     display: block;
     margin-top: 0.25rem;
