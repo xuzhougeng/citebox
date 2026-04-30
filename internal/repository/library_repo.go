@@ -85,6 +85,10 @@ func (r *LibraryRepository) Close() error {
 	return r.db.Close()
 }
 
+// DB returns the underlying *sql.DB. Test-only helper; production code must
+// use the typed repository methods.
+func (r *LibraryRepository) DB() *sql.DB { return r.db }
+
 // ========== 兼容旧接口的委托方法 ==========
 // 以下方法为了保持向后兼容，委托给相应的子仓库
 
