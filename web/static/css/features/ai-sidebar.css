@@ -390,3 +390,60 @@
         display: none;
     }
 }
+
+/* ------------------------------------------------------------------
+   10. Citation footnotes (ai-evidence.js)
+   ------------------------------------------------------------------ */
+
+.ai-citation {
+    color: var(--accent);
+    cursor: pointer;
+    margin: 0 0.05rem;
+    font-size: 0.78em;
+    font-weight: 600;
+}
+.ai-citation:hover, .ai-citation:focus {
+    color: var(--accent-deep);
+    text-decoration: underline;
+    outline: none;
+}
+
+.ai-citation-tooltip {
+    position: absolute;
+    z-index: 60;
+    max-width: 360px;
+    padding: 0.7rem 0.85rem;
+    background: var(--panel-strong);
+    border: 1px solid rgba(var(--ink-rgb), 0.1);
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow);
+    color: var(--ink);
+    font-size: 0.85rem;
+    line-height: 1.5;
+    pointer-events: auto;
+}
+.ai-citation-tooltip[hidden] { display: none; }
+.ai-citation-tooltip h4 {
+    margin: 0 0 0.3rem;
+    font-size: 0.9rem;
+}
+.ai-citation-tooltip .meta {
+    color: var(--muted);
+    font-size: 0.78rem;
+    margin-bottom: 0.4rem;
+}
+.ai-citation-tooltip .snippet {
+    color: var(--ink);
+    white-space: pre-wrap;
+}
+.ai-citation-tooltip .src {
+    display: block;
+    margin-top: 0.5rem;
+    color: var(--accent);
+    font-size: 0.8rem;
+    text-decoration: none;
+}
+.ai-citation-tooltip .src:hover {
+    color: var(--accent-deep);
+    text-decoration: underline;
+}
