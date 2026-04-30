@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"unicode"
 	"unicode/utf8"
 
@@ -23,16 +24,50 @@ type EvidenceCandidateLister interface {
 }
 
 type LibrarySearchTool struct {
-	papers PaperGetter
+	papers     PaperGetter
+	planner    LibrarySearchPlanner
+	classifier LibraryPaperClassifier
 }
 
 const (
 	defaultLibrarySearchLimit = 12
 	maxLibrarySearchLimit     = 50
+	libraryClassifierParallel = 8
 )
 
 func NewLibrarySearchTool(papers PaperGetter) *LibrarySearchTool {
 	return &LibrarySearchTool{papers: papers}
+}
+
+func NewLibrarySearchToolWithAgents(papers PaperGetter, planner LibrarySearchPlanner, classifier LibraryPaperClassifier) *LibrarySearchTool {
+	return &LibrarySearchTool{papers: papers, planner: planner, classifier: classifier}
+}
+
+type LibrarySearchPlanner interface {
+	PlanLibrarySearch(ctx context.Context, query string) (LibrarySearchPlan, error)
+}
+
+type LibrarySearchPlan struct {
+	SearchTerms []string `json:"search_terms"`
+	Rationale   string   `json:"rationale,omitempty"`
+}
+
+type LibraryPaperClassifier interface {
+	ClassifyLibraryPaper(ctx context.Context, in LibraryPaperClassificationInput) (LibraryPaperClassificationResult, error)
+}
+
+type LibraryPaperClassificationInput struct {
+	Query       string
+	Plan        LibrarySearchPlan
+	Terms       []string
+	Paper       model.Paper
+	Matches     []LocalEvidenceMatch
+	MaxSnippets int
+}
+
+type LibraryPaperClassificationResult struct {
+	Relevant bool
+	Reason   string
 }
 
 func (t *LibrarySearchTool) Run(ctx context.Context, in ToolInput) (ToolResult, error) {
@@ -44,18 +79,33 @@ func (t *LibrarySearchTool) Run(ctx context.Context, in ToolInput) (ToolResult, 
 		limit = maxLibrarySearchLimit
 	}
 	terms := EvidenceSearchTerms(in.Query)
+	plan := LibrarySearchPlan{}
+	processStages := make([]ProcessStage, 0, 4)
+	if t.planner != nil {
+		planned, planErr := t.planner.PlanLibrarySearch(ctx, in.Query)
+		if planErr == nil {
+			plan = planned
+			plannedTerms := sanitizeEvidenceTerms(planned.SearchTerms)
+			if len(plannedTerms) > 0 {
+				terms = plannedTerms
+			}
+			processStages = append(processStages, ProcessStage{Label: "Master规划", Count: len(terms), Unit: "词", Status: "completed"})
+		} else {
+			processStages = append(processStages, ProcessStage{Label: "Master规划", Status: "failed"})
+		}
+	}
 	inputJSON, _ := json.Marshal(struct {
-		Query string `json:"query"`
-		Limit int    `json:"limit"`
-	}{Query: in.Query, Limit: limit})
+		Query string   `json:"query"`
+		Terms []string `json:"terms,omitempty"`
+		Limit int      `json:"limit"`
+	}{Query: in.Query, Terms: terms, Limit: limit})
 	ids, candidateErr := candidateIDs(t.papers, terms, 120)
 	if candidateErr != nil {
+		processStages = append(processStages, ProcessStage{Label: "全文扫描", Status: "failed"})
 		return ToolResult{
 			Process: ProcessSummary{
 				Intent: IntentLibrarySearch,
-				Stages: []ProcessStage{
-					{Label: "全库检索", Status: "failed"},
-				},
+				Stages: processStages,
 			},
 			ToolCalls: []ToolCallSummary{{
 				ToolName:  "library_search",
@@ -65,12 +115,19 @@ func (t *LibrarySearchTool) Run(ctx context.Context, in ToolInput) (ToolResult, 
 			}},
 		}, nil
 	}
-	cards := make([]ResultCard, 0, limit)
-	citations := make([]Citation, 0, limit*3)
+	processStages = append(processStages, ProcessStage{Label: "全文扫描", Count: len(ids), Unit: "篇", Status: "completed"})
+	rawHitLimit := limit
+	if t.classifier != nil {
+		rawHitLimit = limit * 4
+		if rawHitLimit > maxLibrarySearchLimit {
+			rawHitLimit = maxLibrarySearchLimit
+		}
+	}
+	hits := make([]librarySearchHit, 0, rawHitLimit)
 	skipped := 0
 
 	for _, id := range ids {
-		if len(cards) >= limit {
+		if len(hits) >= rawHitLimit {
 			break
 		}
 		if err := ctx.Err(); err != nil {
@@ -85,13 +142,27 @@ func (t *LibrarySearchTool) Run(ctx context.Context, in ToolInput) (ToolResult, 
 		if len(matches) == 0 {
 			continue
 		}
+		hits = append(hits, librarySearchHit{Paper: *paper, Matches: matches})
+	}
 
-		snippets := make([]PaperHitSnippet, 0, len(matches))
-		for _, match := range matches {
+	classified := 0
+	if t.classifier != nil && len(hits) > 0 {
+		hits, classified = t.classifyHits(ctx, in.Query, plan, terms, hits)
+		processStages = append(processStages, ProcessStage{Label: "Sub-Agent判定", Count: classified, Unit: "篇", Status: "completed"})
+	}
+
+	cards := make([]ResultCard, 0, limit)
+	citations := make([]Citation, 0, limit*3)
+	for _, hit := range hits {
+		if len(cards) >= limit {
+			break
+		}
+		snippets := make([]PaperHitSnippet, 0, len(hit.Matches))
+		for _, match := range hit.Matches {
 			citation := Citation{
 				I:       len(citations) + 1,
-				PaperID: paper.ID,
-				Title:   paper.Title,
+				PaperID: hit.Paper.ID,
+				Title:   hit.Paper.Title,
 				Source:  "local",
 				Snippet: match.Snippet,
 				Score:   match.Score,
@@ -104,30 +175,33 @@ func (t *LibrarySearchTool) Run(ctx context.Context, in ToolInput) (ToolResult, 
 			})
 		}
 
+		reason := "命中 " + strings.Join(matchedLocations(snippets), "、")
+		if strings.TrimSpace(hit.ClassifierReason) != "" {
+			reason = "Sub-Agent判定：" + strings.TrimSpace(hit.ClassifierReason)
+		}
 		card := PaperHitCard{
-			PaperID:  paper.ID,
-			Title:    paper.Title,
-			DOI:      paper.DOI,
-			Year:     paper.PublishedAt,
-			Reason:   "命中 " + strings.Join(matchedLocations(snippets), "、"),
+			PaperID:  hit.Paper.ID,
+			Title:    hit.Paper.Title,
+			DOI:      hit.Paper.DOI,
+			Year:     hit.Paper.PublishedAt,
+			Reason:   reason,
 			Snippets: snippets,
 		}
 		cards = append(cards, ResultCard{Type: "paper_hit", Payload: card})
 	}
+	processStages = append(processStages, ProcessStage{Label: "命中", Count: len(cards), Unit: "篇", Status: "completed"})
 
 	outputJSON, _ := json.Marshal(struct {
 		Candidates int `json:"candidates"`
 		Hits       int `json:"hits"`
 		Skipped    int `json:"skipped,omitempty"`
-	}{Candidates: len(ids), Hits: len(cards), Skipped: skipped})
+		Classified int `json:"classified,omitempty"`
+	}{Candidates: len(ids), Hits: len(cards), Skipped: skipped, Classified: classified})
 
 	return ToolResult{
 		Process: ProcessSummary{
 			Intent: IntentLibrarySearch,
-			Stages: []ProcessStage{
-				{Label: "全库检索", Count: len(ids), Unit: "篇", Status: "completed"},
-				{Label: "命中", Count: len(cards), Unit: "篇", Status: "completed"},
-			},
+			Stages: processStages,
 		},
 		Cards:         cards,
 		Citations:     citations,
@@ -139,6 +213,12 @@ func (t *LibrarySearchTool) Run(ctx context.Context, in ToolInput) (ToolResult, 
 			Status:            "completed",
 		}},
 	}, nil
+}
+
+type librarySearchHit struct {
+	Paper            model.Paper
+	Matches          []LocalEvidenceMatch
+	ClassifierReason string
 }
 
 type LocalEvidenceMatch struct {
@@ -211,7 +291,69 @@ func EvidenceSearchTerms(query string) []string {
 		add(match)
 	}
 	add(chineseLiteralEvidenceTerms(q)...)
-	return dedupeEvidenceTerms(terms)
+	return sanitizeEvidenceTerms(terms)
+}
+
+func (t *LibrarySearchTool) classifyHits(ctx context.Context, query string, plan LibrarySearchPlan, terms []string, hits []librarySearchHit) ([]librarySearchHit, int) {
+	if t.classifier == nil || len(hits) == 0 {
+		return hits, 0
+	}
+	type result struct {
+		index int
+		ok    bool
+		res   LibraryPaperClassificationResult
+	}
+	parallel := libraryClassifierParallel
+	if parallel > len(hits) {
+		parallel = len(hits)
+	}
+	sem := make(chan struct{}, parallel)
+	out := make(chan result, len(hits))
+	var wg sync.WaitGroup
+	for i, hit := range hits {
+		if err := ctx.Err(); err != nil {
+			break
+		}
+		sem <- struct{}{}
+		wg.Add(1)
+		go func(index int, candidate librarySearchHit) {
+			defer wg.Done()
+			defer func() { <-sem }()
+			res, err := t.classifier.ClassifyLibraryPaper(ctx, LibraryPaperClassificationInput{
+				Query:       query,
+				Plan:        plan,
+				Terms:       terms,
+				Paper:       candidate.Paper,
+				Matches:     candidate.Matches,
+				MaxSnippets: 3,
+			})
+			out <- result{index: index, ok: err == nil, res: res}
+		}(i, hit)
+	}
+	wg.Wait()
+	close(out)
+
+	accepted := make([]bool, len(hits))
+	reasons := make([]string, len(hits))
+	classified := 0
+	for res := range out {
+		if !res.ok {
+			accepted[res.index] = true
+			continue
+		}
+		classified++
+		accepted[res.index] = res.res.Relevant
+		reasons[res.index] = res.res.Reason
+	}
+	filtered := make([]librarySearchHit, 0, len(hits))
+	for i, hit := range hits {
+		if !accepted[i] {
+			continue
+		}
+		hit.ClassifierReason = reasons[i]
+		filtered = append(filtered, hit)
+	}
+	return filtered, classified
 }
 
 func FindLocalEvidenceMatches(paper model.Paper, terms []string, limit int) []LocalEvidenceMatch {
@@ -452,6 +594,26 @@ func dedupeEvidenceTerms(terms []string) []string {
 		return out[:40]
 	}
 	return out
+}
+
+func sanitizeEvidenceTerms(terms []string) []string {
+	cleaned := make([]string, 0, len(terms))
+	for _, term := range terms {
+		if isGenericEvidenceTerm(term) {
+			continue
+		}
+		cleaned = append(cleaned, term)
+	}
+	return dedupeEvidenceTerms(cleaned)
+}
+
+func isGenericEvidenceTerm(term string) bool {
+	switch strings.ToLower(strings.TrimSpace(term)) {
+	case "", "数据", "文章", "论文", "文献", "资料", "信息", "内容", "data", "dataset", "paper", "papers", "article", "articles":
+		return true
+	default:
+		return false
+	}
 }
 
 func containsAnyEvidenceText(s string, needles ...string) bool {

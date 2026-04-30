@@ -66,7 +66,7 @@ func TestLibrarySearchToolReturnsPaperHitCards(t *testing.T) {
 	if !strings.Contains(res.AnswerContext, "ATAC Atlas") || !strings.Contains(res.AnswerContext, "chromatin accessibility") {
 		t.Fatalf("answer context = %s", res.AnswerContext)
 	}
-	if len(res.Process.Stages) == 0 || res.Process.Stages[0].Label != "全库检索" {
+	if len(res.Process.Stages) == 0 || res.Process.Stages[0].Label != "全文扫描" {
 		t.Fatalf("process = %+v", res.Process)
 	}
 }
@@ -118,6 +118,104 @@ func TestLibrarySearchToolUsesChineseLiteralFallback(t *testing.T) {
 	}
 }
 
+func TestEvidenceSearchTermsKeepsAssayQuerySpecific(t *testing.T) {
+	terms := EvidenceSearchTerms("查找包括ChiP-seq数据的文章")
+	if !containsTestTermFold(terms, "chip-seq") {
+		t.Fatalf("terms = %v, want ChIP-seq assay term", terms)
+	}
+	if containsTestTerm(terms, "数据") {
+		t.Fatalf("terms = %v, should not include generic Chinese data term", terms)
+	}
+}
+
+type stubLibraryPlanner struct {
+	query string
+	plan  LibrarySearchPlan
+}
+
+func (s *stubLibraryPlanner) PlanLibrarySearch(ctx context.Context, query string) (LibrarySearchPlan, error) {
+	s.query = query
+	return s.plan, nil
+}
+
+type stubLibraryClassifier struct {
+	seen    []LibraryPaperClassificationInput
+	results map[int64]LibraryPaperClassificationResult
+}
+
+func (s *stubLibraryClassifier) ClassifyLibraryPaper(ctx context.Context, in LibraryPaperClassificationInput) (LibraryPaperClassificationResult, error) {
+	s.seen = append(s.seen, in)
+	if s.results != nil {
+		if res, ok := s.results[in.Paper.ID]; ok {
+			return res, nil
+		}
+	}
+	return LibraryPaperClassificationResult{Relevant: true, Reason: "accepted"}, nil
+}
+
+type planningPaperStore struct {
+	papers map[int64]*model.Paper
+	terms  []string
+}
+
+func (s *planningPaperStore) GetPaperDetail(id int64) (*model.Paper, error) {
+	return s.papers[id], nil
+}
+
+func (s *planningPaperStore) ListEvidenceCandidatePaperIDs(terms []string, limit int) ([]int64, error) {
+	s.terms = append([]string(nil), terms...)
+	return []int64{1, 2}, nil
+}
+
+func TestLibrarySearchToolUsesPlannerAndClassifier(t *testing.T) {
+	store := &planningPaperStore{
+		papers: map[int64]*model.Paper{
+			1: {ID: 1, Title: "ChIP-seq Paper", PDFText: "This study uses H3K27ac ChIP-seq data."},
+			2: {ID: 2, Title: "Mention Only", PDFText: "The supplement mentions ChIP-seq only as a comparison window."},
+		},
+	}
+	planner := &stubLibraryPlanner{plan: LibrarySearchPlan{
+		SearchTerms: []string{"ChIP-seq"},
+		Rationale:   "exact assay query",
+	}}
+	classifier := &stubLibraryClassifier{results: map[int64]LibraryPaperClassificationResult{
+		1: {Relevant: true, Reason: "uses ChIP-seq data"},
+		2: {Relevant: false, Reason: "only compares against prior data"},
+	}}
+	tool := NewLibrarySearchToolWithAgents(store, planner, classifier)
+
+	res, err := tool.Run(context.Background(), ToolInput{Query: "查找包括ChiP-seq数据的文章"})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	if planner.query == "" {
+		t.Fatalf("planner was not called")
+	}
+	if !containsTestTerm(store.terms, "ChIP-seq") || containsTestTerm(store.terms, "数据") {
+		t.Fatalf("candidate terms = %v, want planner terms without generic data term", store.terms)
+	}
+	if len(classifier.seen) != 2 {
+		t.Fatalf("classifier calls = %d, want 2", len(classifier.seen))
+	}
+	if len(res.Cards) != 1 {
+		t.Fatalf("cards = %+v, want only classifier-approved hit", res.Cards)
+	}
+	card, ok := res.Cards[0].Payload.(PaperHitCard)
+	if !ok || card.PaperID != 1 || !strings.Contains(card.Reason, "Sub-Agent") {
+		t.Fatalf("card = %+v, want Sub-Agent accepted paper 1", res.Cards[0].Payload)
+	}
+	labels := make([]string, 0, len(res.Process.Stages))
+	for _, stage := range res.Process.Stages {
+		labels = append(labels, stage.Label)
+	}
+	for _, want := range []string{"Master规划", "全文扫描", "Sub-Agent判定", "命中"} {
+		if !containsTestTerm(labels, want) {
+			t.Fatalf("process labels = %v, missing %s", labels, want)
+		}
+	}
+}
+
 func TestLibrarySearchToolReportsCandidateListerFailure(t *testing.T) {
 	tool := NewLibrarySearchTool(stubPaperStore{err: errors.New("candidate query failed")})
 
@@ -128,7 +226,7 @@ func TestLibrarySearchToolReportsCandidateListerFailure(t *testing.T) {
 	if res.Process.Intent != IntentLibrarySearch {
 		t.Fatalf("process intent = %q", res.Process.Intent)
 	}
-	if len(res.Process.Stages) == 0 || res.Process.Stages[0].Label != "全库检索" || res.Process.Stages[0].Status != "failed" {
+	if len(res.Process.Stages) == 0 || res.Process.Stages[0].Label != "全文扫描" || res.Process.Stages[0].Status != "failed" {
 		t.Fatalf("process = %+v", res.Process)
 	}
 	if len(res.ToolCalls) != 1 || res.ToolCalls[0].ToolName != "library_search" || res.ToolCalls[0].Status != "failed" {
@@ -145,6 +243,16 @@ func TestLibrarySearchToolReportsCandidateListerFailure(t *testing.T) {
 func containsTestTerm(terms []string, want string) bool {
 	for _, term := range terms {
 		if term == want {
+			return true
+		}
+	}
+	return false
+}
+
+func containsTestTermFold(terms []string, want string) bool {
+	want = strings.ToLower(want)
+	for _, term := range terms {
+		if strings.ToLower(term) == want {
 			return true
 		}
 	}

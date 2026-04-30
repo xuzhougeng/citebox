@@ -817,7 +817,8 @@ AI 流式阅读通过：
 搜索模式说明：
 
 - 默认证据来源是本地文献库的标题、摘要、笔记和 `pdf_text`；已钉文献会优先参与检索，但未 pin 的入库文献也可被命中。
-- 本地证据检索使用关键词扩展和字面全文扫描，例如 `ATAC 数据` 会扩展匹配 `ATAC-seq`、`chromatin accessibility`、`scATAC-seq` 等表述。
+- 本地证据检索现在按 Master/Sub-Agent 流程执行：Master 模型先把用户请求改写成精确全文扫描词，Sub-Agent 模型再逐篇判定候选文献是否真正符合需求，最后由 Master 基于判定结果生成回答。
+- 本地候选召回仍使用关键词扩展和字面全文扫描，例如 `ATAC 数据` 会扩展匹配 `ATAC-seq`、`chromatin accessibility`、`scATAC-seq` 等表述；泛词（如“数据”“文章”）不会单独作为召回词。
 - 不使用 embedding，不使用向量数据库。
 - 外部搜索可以独立开启；在同时开启内部搜索时作为本地证据的补充。Semantic Scholar 限流或失败时，本地证据仍可继续用于回答。
 - 助手消息的 `citations_json` 会保存本地或外部搜索证据片段，前端用 `[n]` 脚注展示。

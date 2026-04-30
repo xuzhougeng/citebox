@@ -221,8 +221,10 @@ func buildHandler(
 	aiHandler := handler.NewAIHandler(aiSvc)
 	researchAdapter := &research.RepoAdapter{Repo: repo.Research}
 	researchSvc := research.NewService(s2Client, researchAdapter, research.ServiceConfig{})
+	libraryPlanner := ai_assistant.NewLLMLibrarySearchPlanner(aiSvc, aiSvc)
+	libraryClassifier := ai_assistant.NewLLMLibraryPaperClassifier(aiSvc, aiSvc)
 	assistantOrchestrator := ai_assistant.NewOrchestrator(ai_assistant.ToolSet{
-		LibrarySearch:  ai_assistant.NewLibrarySearchTool(repo.Paper),
+		LibrarySearch:  ai_assistant.NewLibrarySearchToolWithAgents(repo.Paper, libraryPlanner, libraryClassifier),
 		ExternalSearch: ai_assistant.NewExternalSearchTool(researchSvc),
 		PaperRead:      ai_assistant.NewPaperReadTool(repo.Paper),
 		FigureLookup:   ai_assistant.NewFigureLookupTool(ai_assistant.NewRepositoryFigureSearcher(repo.Figure)),
