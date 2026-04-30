@@ -11,6 +11,7 @@ import (
 	"github.com/xuzhougeng/citebox/internal/apperr"
 	"github.com/xuzhougeng/citebox/internal/model"
 	"github.com/xuzhougeng/citebox/internal/repository"
+	"github.com/xuzhougeng/citebox/internal/service/ai_assistant"
 )
 
 // AISettingsProvider exposes the parts of *service.AIService we depend on.
@@ -26,6 +27,10 @@ type StreamCaller interface {
 		images []model.AIImageInput, onDelta func(string) error) (string, string, error)
 }
 
+type orchestrator interface {
+	Run(ctx context.Context, in ai_assistant.RunInput) (ai_assistant.RunOutput, error)
+}
+
 // Service is the conversation lifecycle manager.
 type Service struct {
 	repo          *repository.AIConversationRepository
@@ -33,6 +38,7 @@ type Service struct {
 	settings      AISettingsProvider
 	caller        StreamCaller
 	searcher      ExternalEvidenceSearcher
+	orchestrator  orchestrator
 	titleCaller   NonStreamCaller
 	summaryCaller NonStreamCaller
 	logger        *slog.Logger
@@ -41,11 +47,11 @@ type Service struct {
 // New builds the service. All deps required.
 func New(repo *repository.AIConversationRepository, papers *repository.PaperRepository,
 	settings AISettingsProvider, caller StreamCaller, searcher ExternalEvidenceSearcher,
-	logger *slog.Logger) *Service {
+	logger *slog.Logger, orchestrator orchestrator) *Service {
 	if logger == nil {
 		logger = slog.Default().With("component", "ai_conversation")
 	}
-	s := &Service{repo: repo, papers: papers, settings: settings, caller: caller, searcher: searcher, logger: logger}
+	s := &Service{repo: repo, papers: papers, settings: settings, caller: caller, searcher: searcher, orchestrator: orchestrator, logger: logger}
 	if tc, ok := caller.(NonStreamCaller); ok {
 		s.titleCaller = tc
 		s.summaryCaller = tc
@@ -73,6 +79,31 @@ func (s *Service) GetConversation(id int64) (Conversation, error) {
 	if err != nil {
 		return Conversation{}, err
 	}
+	turnRuns, err := s.repo.ListTurnRuns(id)
+	if err != nil {
+		return Conversation{}, err
+	}
+	runs := make([]TurnRun, 0, len(turnRuns))
+	for _, run := range turnRuns {
+		cards, err := s.repo.ListResultCards(run.ID)
+		if err != nil {
+			return Conversation{}, err
+		}
+		assistantMessageID := int64(0)
+		if run.AssistantMessageID.Valid {
+			assistantMessageID = run.AssistantMessageID.Int64
+		}
+		runs = append(runs, TurnRun{
+			ID:                 run.ID,
+			UserMessageID:      run.UserMessageID,
+			AssistantMessageID: assistantMessageID,
+			Intent:             run.Intent,
+			IntentHint:         run.IntentHint,
+			ProcessSummaryJSON: run.ProcessSummaryJSON,
+			Status:             run.Status,
+			Cards:              toResultCards(cards),
+		})
+	}
 	return Conversation{
 		ID:             row.ID,
 		Title:          row.Title,
@@ -82,6 +113,7 @@ func (s *Service) GetConversation(id int64) (Conversation, error) {
 		UpdatedAt:      row.UpdatedAt,
 		PinnedPapers:   toPinnedPapers(pinned),
 		RecentMessages: toMessages(msgs),
+		TurnRuns:       runs,
 	}, nil
 }
 
@@ -246,7 +278,34 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput, onDelta 
 
 	var citations []Citation
 	var citationsJSON string
-	if conv.StrictEvidence || in.IncludeExternalEvidence {
+	var runOut ai_assistant.RunOutput
+	var runUsed bool
+	if s.orchestrator != nil {
+		out, orchErr := s.orchestrator.Run(ctx, ai_assistant.RunInput{
+			Content:    in.Content,
+			IntentHint: in.IntentHint,
+			Context:    in.Context,
+		})
+		if orchErr != nil {
+			s.logger.Warn("ai_conversation: orchestrator failed", "error", orchErr)
+		} else {
+			runOut = out
+			runUsed = true
+			if strings.TrimSpace(out.AnswerContext) != "" {
+				suffix := "用户问题：\n" + in.Content
+				if strings.HasSuffix(asm.userPrompt, suffix) {
+					asm.userPrompt = strings.TrimSuffix(asm.userPrompt, suffix) + out.AnswerContext
+				} else {
+					asm.userPrompt += "\n\n" + out.AnswerContext
+				}
+			}
+			citationsJSON = marshalAssistantCitations(out.Citations)
+			s.emitStreamEvent(in, StreamEvent{Type: "process", Data: out.Process})
+			s.emitStreamEvent(in, StreamEvent{Type: "cards", Data: out.Cards})
+			s.emitStreamEvent(in, StreamEvent{Type: "citations", Data: out.Citations})
+		}
+	}
+	if !runUsed && (conv.StrictEvidence || in.IncludeExternalEvidence) {
 		enrichedUser, cites, evErr := injectEvidence(ctx, s.papers, s.searcher, in.Content, pinned, EvidenceOptions{
 			IncludeExternal: in.IncludeExternalEvidence,
 			DisableLocal:    !conv.StrictEvidence,
@@ -298,6 +357,9 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput, onDelta 
 		return SendMessageResult{}, err
 	}
 	_ = s.repo.TouchConversation(in.ConversationID)
+	if runUsed {
+		s.persistRunArtifacts(in.ConversationID, userMsgID, asstID, mode, runOut)
+	}
 
 	if conv.Title == "" && !conv.TitleLocked && s.titleCaller != nil {
 		go func(convID int64, settings model.AISettings, userText, asstText string) {

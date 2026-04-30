@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/xuzhougeng/citebox/internal/apperr"
+	"github.com/xuzhougeng/citebox/internal/service/ai_assistant"
 	"github.com/xuzhougeng/citebox/internal/service/ai_conversation"
 )
 
@@ -137,10 +138,12 @@ func (h *AIConversationHandler) PostMessage(w http.ResponseWriter, r *http.Reque
 	}
 
 	var body struct {
-		Content                 string `json:"content"`
-		PaperID                 int64  `json:"paper_id,omitempty"`
-		StrictEvidence          *bool  `json:"strict_evidence,omitempty"`
-		IncludeExternalEvidence bool   `json:"include_external_evidence,omitempty"`
+		Content                 string                      `json:"content"`
+		PaperID                 int64                       `json:"paper_id,omitempty"`
+		StrictEvidence          *bool                       `json:"strict_evidence,omitempty"`
+		IncludeExternalEvidence bool                        `json:"include_external_evidence,omitempty"`
+		IntentHint              string                      `json:"intent_hint,omitempty"`
+		Context                 ai_assistant.RequestContext `json:"context,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		sendError(w, apperr.New(apperr.CodeInvalidArgument, "请求体格式错误"))
@@ -177,6 +180,11 @@ func (h *AIConversationHandler) PostMessage(w http.ResponseWriter, r *http.Reque
 		Content:                 body.Content,
 		PaperID:                 body.PaperID,
 		IncludeExternalEvidence: body.IncludeExternalEvidence,
+		IntentHint:              body.IntentHint,
+		Context:                 body.Context,
+		OnEvent: func(event ai_conversation.StreamEvent) error {
+			return send(map[string]interface{}{"type": event.Type, "data": event.Data})
+		},
 	}, func(delta string) error {
 		return send(map[string]interface{}{"type": "delta", "delta": delta})
 	})

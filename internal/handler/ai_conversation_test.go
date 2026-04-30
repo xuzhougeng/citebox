@@ -44,6 +44,9 @@ func (s *stubAIConversationService) PinPaper(c, p int64) error         { return 
 func (s *stubAIConversationService) UnpinPaper(c, p int64) error       { return nil }
 func (s *stubAIConversationService) SendMessage(ctx context.Context, in ai_conversation.SendMessageInput, onDelta func(string) error) (ai_conversation.SendMessageResult, error) {
 	s.sentInput = in
+	if in.OnEvent != nil {
+		_ = in.OnEvent(ai_conversation.StreamEvent{Type: "process", Data: map[string]string{"status": "ok"}})
+	}
 	_ = onDelta("hi")
 	return ai_conversation.SendMessageResult{
 		ConversationID:   in.ConversationID,
@@ -97,6 +100,23 @@ func TestAIConversationNewMessageAppliesStrictEvidenceBeforeSend(t *testing.T) {
 	}
 }
 
+func TestAIConversationPostMessageAcceptsIntentHintAndContext(t *testing.T) {
+	stub := &stubAIConversationService{}
+	h := NewAIConversationHandler(stub)
+	body := strings.NewReader(`{"content":"看图 1","intent_hint":"figure_lookup","context":{"source":"paper","paper_id":7,"figure_id":3}}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/conversations/new/messages", body)
+	rr := httptest.NewRecorder()
+
+	h.PostMessage(rr, req)
+
+	if stub.sentInput.IntentHint != "figure_lookup" {
+		t.Fatalf("IntentHint = %q", stub.sentInput.IntentHint)
+	}
+	if stub.sentInput.Context.PaperID != 7 || stub.sentInput.Context.FigureID != 3 || stub.sentInput.Context.Source != "paper" {
+		t.Fatalf("Context = %+v", stub.sentInput.Context)
+	}
+}
+
 func TestAIConversationDeleteEndpoint(t *testing.T) {
 	stub := &stubAIConversationService{}
 	h := NewAIConversationHandler(stub)
@@ -124,6 +144,9 @@ func TestAIConversationSendMessageStreams(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), "\"delta\":\"hi\"") {
 		t.Fatalf("expected NDJSON delta, got %s", rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "\"type\":\"process\"") {
+		t.Fatalf("expected process event, got %s", rec.Body.String())
 	}
 	if !strings.Contains(rec.Body.String(), "\"type\":\"final\"") {
 		t.Fatalf("expected final event, got %s", rec.Body.String())

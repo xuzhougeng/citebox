@@ -3,7 +3,11 @@
 // management. Strict-evidence and summarization live in sibling files.
 package ai_conversation
 
-import "time"
+import (
+	"time"
+
+	"github.com/xuzhougeng/citebox/internal/service/ai_assistant"
+)
 
 // Conversation is the read view returned by GetConversation.
 type Conversation struct {
@@ -15,6 +19,7 @@ type Conversation struct {
 	UpdatedAt      time.Time     `json:"updated_at"`
 	PinnedPapers   []PinnedPaper `json:"pinned_papers"`
 	RecentMessages []Message     `json:"recent_messages"`
+	TurnRuns       []TurnRun     `json:"turn_runs,omitempty"`
 }
 
 // PinnedPaper mirrors AIPinnedPaper from the repo layer.
@@ -38,12 +43,39 @@ type Message struct {
 	CreatedAt       time.Time `json:"created_at"`
 }
 
+type TurnRun struct {
+	ID                 int64        `json:"id"`
+	UserMessageID      int64        `json:"user_message_id"`
+	AssistantMessageID int64        `json:"assistant_message_id,omitempty"`
+	Intent             string       `json:"intent"`
+	IntentHint         string       `json:"intent_hint,omitempty"`
+	ProcessSummaryJSON string       `json:"process_summary_json,omitempty"`
+	Status             string       `json:"status"`
+	Cards              []ResultCard `json:"cards,omitempty"`
+}
+
+type ResultCard struct {
+	ID          int64  `json:"id"`
+	TurnRunID   int64  `json:"turn_run_id"`
+	CardType    string `json:"card_type"`
+	SortOrder   int    `json:"sort_order"`
+	PayloadJSON string `json:"payload_json"`
+}
+
+type StreamEvent struct {
+	Type string
+	Data any
+}
+
 // SendMessageInput is the body for POST .../messages.
 type SendMessageInput struct {
 	ConversationID          int64 // 0 means "create new"
 	Content                 string
 	PaperID                 int64 // optional auto-pin
 	IncludeExternalEvidence bool
+	IntentHint              string
+	Context                 ai_assistant.RequestContext
+	OnEvent                 func(StreamEvent) error
 }
 
 // SendMessageResult is the metadata returned to the handler when the stream is done.

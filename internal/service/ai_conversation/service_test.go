@@ -11,6 +11,7 @@ import (
 
 	"github.com/xuzhougeng/citebox/internal/model"
 	"github.com/xuzhougeng/citebox/internal/repository"
+	"github.com/xuzhougeng/citebox/internal/service/ai_assistant"
 	"github.com/xuzhougeng/citebox/internal/service/research"
 )
 
@@ -56,7 +57,7 @@ func newServiceForTest(t *testing.T) (*Service, *repository.LibraryRepository, *
 	caller := &stubStreamCaller{staticReply: "AI 回答正文"}
 	svc := New(libRepo.AIConversation, libRepo.Paper,
 		&stubSettingsProvider{settings: settings},
-		caller, nil, nil)
+		caller, nil, nil, nil)
 	return svc, libRepo, caller
 }
 
@@ -223,6 +224,125 @@ func TestExternalEvidenceCanRunWithoutStrictEvidence(t *testing.T) {
 	}
 	if !strings.Contains(caller.userSeen, "外部 Semantic Scholar") || !strings.Contains(caller.userSeen, "external independent evidence snippet") {
 		t.Fatalf("prompt missing independent external evidence: %s", caller.userSeen)
+	}
+}
+
+type stubOrchestrator struct {
+	in  ai_assistant.RunInput
+	out ai_assistant.RunOutput
+	err error
+}
+
+func (s *stubOrchestrator) Run(ctx context.Context, in ai_assistant.RunInput) (ai_assistant.RunOutput, error) {
+	s.in = in
+	return s.out, s.err
+}
+
+func TestSendMessageUsesOrchestratorEventsAndPersistsArtifacts(t *testing.T) {
+	svc, libRepo, caller := newServiceForTest(t)
+	orch := &stubOrchestrator{
+		out: ai_assistant.RunOutput{
+			Intent:     ai_assistant.IntentFigureLookup,
+			IntentHint: ai_assistant.IntentFigureLookup,
+			Process: ai_assistant.ProcessSummary{
+				Intent: ai_assistant.IntentFigureLookup,
+				Stages: []ai_assistant.ProcessStage{{
+					Label:  "图表检索",
+					Count:  1,
+					Status: "completed",
+				}},
+			},
+			Cards: []ai_assistant.ResultCard{{
+				Type:    "figure_result",
+				Payload: map[string]any{"figure_id": int64(3), "title": "Figure 1"},
+			}},
+			Citations: []ai_assistant.Citation{{
+				I:       1,
+				PaperID: 7,
+				Title:   "Paper A",
+				Source:  "local",
+				Snippet: research.Snippet{Text: "caption evidence", SnippetKind: "figure"},
+			}},
+			AnswerContext: "工具结果：\nORCH_CONTEXT\n\n用户问题：\n看图 1",
+			ToolCalls: []ai_assistant.ToolCallSummary{{
+				ToolName:          "figure_lookup",
+				InputJSON:         `{"query":"看图 1"}`,
+				OutputSummaryJSON: `{"hits":1}`,
+				Status:            "completed",
+				DurationMS:        12,
+			}},
+		},
+	}
+	svc.orchestrator = orch
+
+	convID, err := svc.CreateDraft()
+	if err != nil {
+		t.Fatalf("CreateDraft: %v", err)
+	}
+
+	var events []StreamEvent
+	_, err = svc.SendMessage(context.Background(), SendMessageInput{
+		ConversationID: convID,
+		Content:        "看图 1",
+		IntentHint:     ai_assistant.IntentFigureLookup,
+		Context: ai_assistant.RequestContext{
+			Source:   "paper",
+			PaperID:  7,
+			FigureID: 3,
+		},
+		OnEvent: func(event StreamEvent) error {
+			events = append(events, event)
+			return nil
+		},
+	}, func(string) error { return nil })
+	if err != nil {
+		t.Fatalf("SendMessage: %v", err)
+	}
+
+	if orch.in.IntentHint != ai_assistant.IntentFigureLookup || orch.in.Context.PaperID != 7 || orch.in.Context.FigureID != 3 {
+		t.Fatalf("orchestrator input = %+v", orch.in)
+	}
+	if !strings.Contains(caller.userSeen, "ORCH_CONTEXT") {
+		t.Fatalf("provider prompt missing orchestrator context: %s", caller.userSeen)
+	}
+	if len(events) != 3 || events[0].Type != "process" || events[1].Type != "cards" || events[2].Type != "citations" {
+		t.Fatalf("events = %+v", events)
+	}
+
+	msgs, err := libRepo.AIConversation.ListMessages(convID, 0, 10)
+	if err != nil {
+		t.Fatalf("ListMessages: %v", err)
+	}
+	if len(msgs) != 2 || !strings.Contains(msgs[1].CitationsJSON, "Paper A") {
+		t.Fatalf("messages = %+v", msgs)
+	}
+	runs, err := libRepo.AIConversation.ListTurnRuns(convID)
+	if err != nil {
+		t.Fatalf("ListTurnRuns: %v", err)
+	}
+	if len(runs) != 1 || runs[0].Intent != ai_assistant.IntentFigureLookup || runs[0].Status != "completed" {
+		t.Fatalf("runs = %+v", runs)
+	}
+	calls, err := libRepo.AIConversation.ListToolCalls(runs[0].ID)
+	if err != nil {
+		t.Fatalf("ListToolCalls: %v", err)
+	}
+	if len(calls) != 1 || calls[0].ToolName != "figure_lookup" || calls[0].DurationMS != 12 {
+		t.Fatalf("calls = %+v", calls)
+	}
+	cards, err := libRepo.AIConversation.ListResultCards(runs[0].ID)
+	if err != nil {
+		t.Fatalf("ListResultCards: %v", err)
+	}
+	if len(cards) != 1 || cards[0].CardType != "figure_result" || !strings.Contains(cards[0].PayloadJSON, "Figure 1") {
+		t.Fatalf("cards = %+v", cards)
+	}
+	conv, err := svc.GetConversation(convID)
+	if err != nil {
+		t.Fatalf("GetConversation: %v", err)
+	}
+	if len(conv.TurnRuns) != 1 || len(conv.TurnRuns[0].Cards) != 1 {
+		t.Fatalf("conversation turn runs = %+v", conv.TurnRuns)
 	}
 }
 

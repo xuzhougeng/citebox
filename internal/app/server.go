@@ -20,6 +20,7 @@ import (
 	"github.com/xuzhougeng/citebox/internal/model"
 	"github.com/xuzhougeng/citebox/internal/repository"
 	"github.com/xuzhougeng/citebox/internal/service"
+	"github.com/xuzhougeng/citebox/internal/service/ai_assistant"
 	"github.com/xuzhougeng/citebox/internal/service/ai_conversation"
 	"github.com/xuzhougeng/citebox/internal/service/research"
 )
@@ -220,7 +221,13 @@ func buildHandler(
 	aiHandler := handler.NewAIHandler(aiSvc)
 	researchAdapter := &research.RepoAdapter{Repo: repo.Research}
 	researchSvc := research.NewService(s2Client, researchAdapter, research.ServiceConfig{})
-	aiConvService := ai_conversation.New(repo.AIConversation, repo.Paper, aiSvc, aiSvc, researchSvc, logger.With("component", "ai_conversation"))
+	assistantOrchestrator := ai_assistant.NewOrchestrator(ai_assistant.ToolSet{
+		LibrarySearch:  ai_assistant.NewLibrarySearchTool(repo.Paper),
+		ExternalSearch: ai_assistant.NewExternalSearchTool(researchSvc),
+		PaperRead:      ai_assistant.NewPaperReadTool(repo.Paper),
+		FigureLookup:   ai_assistant.NewFigureLookupTool(ai_assistant.NewRepositoryFigureSearcher(repo.Figure)),
+	})
+	aiConvService := ai_conversation.New(repo.AIConversation, repo.Paper, aiSvc, aiSvc, researchSvc, logger.With("component", "ai_conversation"), assistantOrchestrator)
 	aiConversationHandler := handler.NewAIConversationHandler(aiConvService)
 	settingsHandler := handler.NewSettingsHandler(librarySvc, versionSvc)
 	settingsHandler.SetResearchClient(s2Client)
