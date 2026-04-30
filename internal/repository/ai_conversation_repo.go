@@ -1,0 +1,251 @@
+package repository
+
+import (
+	"database/sql"
+	"errors"
+	"strings"
+	"time"
+)
+
+// ErrAIConversationNotFound is returned when a conversation id has no row.
+var ErrAIConversationNotFound = errors.New("ai_conversation: not found")
+
+// AIConversation is one persisted chat session.
+type AIConversation struct {
+	ID                      int64
+	Title                   string
+	TitleLocked             bool
+	StrictEvidence          bool
+	SummaryText             string
+	SummaryThroughMessageID sql.NullInt64
+	CreatedAt               time.Time
+	UpdatedAt               time.Time
+}
+
+// AIMessage is one persisted message (user or assistant).
+type AIMessage struct {
+	ID              int64
+	ConversationID  int64
+	Role            string // "user" | "assistant"
+	Content         string
+	Provider        string
+	Model           string
+	Mode            string
+	IncludedFigures int
+	CitationsJSON   string
+	CreatedAt       time.Time
+}
+
+// AIMessageMeta carries assistant-specific fields when persisting a message.
+type AIMessageMeta struct {
+	Provider        string
+	Model           string
+	Mode            string
+	IncludedFigures int
+	CitationsJSON   string
+}
+
+// AIPinnedPaper joins ai_conversation_papers and papers for sidebar / pin chips.
+type AIPinnedPaper struct {
+	PaperID  int64
+	Title    string
+	DOI      string
+	PinnedAt time.Time
+}
+
+// AIConversationRepository owns all three new tables.
+type AIConversationRepository struct {
+	db *sql.DB
+}
+
+// NewAIConversationRepository wires the repo around an open db handle.
+func NewAIConversationRepository(db *sql.DB) *AIConversationRepository {
+	return &AIConversationRepository{db: db}
+}
+
+// CreateConversation inserts a blank row and returns its id.
+func (r *AIConversationRepository) CreateConversation() (int64, error) {
+	res, err := r.db.Exec(`INSERT INTO ai_conversations DEFAULT VALUES`)
+	if err != nil {
+		return 0, err
+	}
+	return res.LastInsertId()
+}
+
+// GetConversation returns a single conversation row.
+func (r *AIConversationRepository) GetConversation(id int64) (AIConversation, error) {
+	row := r.db.QueryRow(`
+		SELECT id, title, title_locked, strict_evidence,
+		       summary_text, summary_through_message_id,
+		       created_at, updated_at
+		FROM ai_conversations WHERE id = ?
+	`, id)
+	var c AIConversation
+	var titleLocked, strict int
+	if err := row.Scan(&c.ID, &c.Title, &titleLocked, &strict,
+		&c.SummaryText, &c.SummaryThroughMessageID,
+		&c.CreatedAt, &c.UpdatedAt); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return AIConversation{}, ErrAIConversationNotFound
+		}
+		return AIConversation{}, err
+	}
+	c.TitleLocked = titleLocked != 0
+	c.StrictEvidence = strict != 0
+	return c, nil
+}
+
+// ListConversations returns conversations matching the optional query string,
+// sorted by updated_at DESC, with offset / limit pagination.
+func (r *AIConversationRepository) ListConversations(q string, limit, offset int) ([]AIConversation, error) {
+	if limit <= 0 || limit > 200 {
+		limit = 50
+	}
+	q = strings.TrimSpace(q)
+
+	var rows *sql.Rows
+	var err error
+	if q == "" {
+		rows, err = r.db.Query(`
+			SELECT id, title, title_locked, strict_evidence,
+			       summary_text, summary_through_message_id,
+			       created_at, updated_at
+			FROM ai_conversations
+			ORDER BY updated_at DESC, id DESC
+			LIMIT ? OFFSET ?
+		`, limit, offset)
+	} else {
+		// Match title OR any message body OR any pinned paper title.
+		like := "%" + strings.ToLower(q) + "%"
+		rows, err = r.db.Query(`
+			SELECT DISTINCT c.id, c.title, c.title_locked, c.strict_evidence,
+			                c.summary_text, c.summary_through_message_id,
+			                c.created_at, c.updated_at
+			FROM ai_conversations c
+			LEFT JOIN ai_messages m ON m.conversation_id = c.id
+			LEFT JOIN ai_conversation_papers cp ON cp.conversation_id = c.id
+			LEFT JOIN papers p ON p.id = cp.paper_id
+			WHERE LOWER(c.title) LIKE ?
+			   OR LOWER(m.content) LIKE ?
+			   OR LOWER(p.title) LIKE ?
+			ORDER BY c.updated_at DESC, c.id DESC
+			LIMIT ? OFFSET ?
+		`, like, like, like, limit, offset)
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := make([]AIConversation, 0)
+	for rows.Next() {
+		var c AIConversation
+		var titleLocked, strict int
+		if err := rows.Scan(&c.ID, &c.Title, &titleLocked, &strict,
+			&c.SummaryText, &c.SummaryThroughMessageID,
+			&c.CreatedAt, &c.UpdatedAt); err != nil {
+			return nil, err
+		}
+		c.TitleLocked = titleLocked != 0
+		c.StrictEvidence = strict != 0
+		out = append(out, c)
+	}
+	return out, rows.Err()
+}
+
+// TouchConversation bumps updated_at to now (millisecond precision so ordering
+// within the same second is stable).
+func (r *AIConversationRepository) TouchConversation(id int64) error {
+	_, err := r.db.Exec(`UPDATE ai_conversations SET updated_at = strftime('%Y-%m-%d %H:%M:%f', 'now') WHERE id = ?`, id)
+	return err
+}
+
+// UpdateTitle sets title (and optionally locks it so the auto-titler skips).
+func (r *AIConversationRepository) UpdateTitle(id int64, title string, lock bool) error {
+	lockVal := 0
+	if lock {
+		lockVal = 1
+	}
+	_, err := r.db.Exec(
+		`UPDATE ai_conversations SET title = ?, title_locked = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+		title, lockVal, id)
+	return err
+}
+
+// UpdateStrictEvidence flips the strict_evidence boolean.
+func (r *AIConversationRepository) UpdateStrictEvidence(id int64, on bool) error {
+	v := 0
+	if on {
+		v = 1
+	}
+	_, err := r.db.Exec(
+		`UPDATE ai_conversations SET strict_evidence = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+		v, id)
+	return err
+}
+
+// UpdateSummary writes the new summary text and the message id it includes.
+func (r *AIConversationRepository) UpdateSummary(id int64, summary string, throughMessageID int64) error {
+	_, err := r.db.Exec(
+		`UPDATE ai_conversations
+		 SET summary_text = ?, summary_through_message_id = ?, updated_at = CURRENT_TIMESTAMP
+		 WHERE id = ?`,
+		summary, throughMessageID, id)
+	return err
+}
+
+// DeleteConversation hard-deletes the conversation; cascade removes messages and pins.
+func (r *AIConversationRepository) DeleteConversation(id int64) error {
+	_, err := r.db.Exec(`DELETE FROM ai_conversations WHERE id = ?`, id)
+	return err
+}
+
+// AddMessage inserts a message; returns its id. Implemented in Task 1.3.
+func (r *AIConversationRepository) AddMessage(conversationID int64, role, content string, meta AIMessageMeta) (int64, error) {
+	res, err := r.db.Exec(`
+		INSERT INTO ai_messages (conversation_id, role, content, provider, model, mode, included_figures, citations_json)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+	`, conversationID, role, content, nullableString(meta.Provider), nullableString(meta.Model),
+		nullableString(meta.Mode), meta.IncludedFigures, nullableString(meta.CitationsJSON))
+	if err != nil {
+		return 0, err
+	}
+	return res.LastInsertId()
+}
+
+// ListMessages returns messages with id > afterID, oldest first, up to limit.
+func (r *AIConversationRepository) ListMessages(conversationID int64, afterID int64, limit int) ([]AIMessage, error) {
+	if limit <= 0 || limit > 1000 {
+		limit = 200
+	}
+	rows, err := r.db.Query(`
+		SELECT id, conversation_id, role, content,
+		       COALESCE(provider, ''), COALESCE(model, ''), COALESCE(mode, ''),
+		       COALESCE(included_figures, 0), COALESCE(citations_json, ''), created_at
+		FROM ai_messages
+		WHERE conversation_id = ? AND id > ?
+		ORDER BY id ASC
+		LIMIT ?
+	`, conversationID, afterID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make([]AIMessage, 0)
+	for rows.Next() {
+		var m AIMessage
+		if err := rows.Scan(&m.ID, &m.ConversationID, &m.Role, &m.Content,
+			&m.Provider, &m.Model, &m.Mode, &m.IncludedFigures, &m.CitationsJSON, &m.CreatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, m)
+	}
+	return out, rows.Err()
+}
+
+func nullableString(s string) interface{} {
+	if s == "" {
+		return nil
+	}
+	return s
+}
