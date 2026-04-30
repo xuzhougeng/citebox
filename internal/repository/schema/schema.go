@@ -132,6 +132,37 @@ func (m *Manager) initSchema() error {
 		added_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
 
+	CREATE TABLE IF NOT EXISTS ai_conversations (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		title TEXT NOT NULL DEFAULT '',
+		title_locked INTEGER NOT NULL DEFAULT 0,
+		strict_evidence INTEGER NOT NULL DEFAULT 0,
+		summary_text TEXT NOT NULL DEFAULT '',
+		summary_through_message_id INTEGER,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
+
+	CREATE TABLE IF NOT EXISTS ai_messages (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		conversation_id INTEGER NOT NULL REFERENCES ai_conversations(id) ON DELETE CASCADE,
+		role TEXT NOT NULL CHECK(role IN ('user','assistant')),
+		content TEXT NOT NULL,
+		provider TEXT,
+		model TEXT,
+		mode TEXT,
+		included_figures INTEGER,
+		citations_json TEXT,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
+
+	CREATE TABLE IF NOT EXISTS ai_conversation_papers (
+		conversation_id INTEGER NOT NULL REFERENCES ai_conversations(id) ON DELETE CASCADE,
+		paper_id INTEGER NOT NULL REFERENCES papers(id) ON DELETE CASCADE,
+		pinned_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		PRIMARY KEY (conversation_id, paper_id)
+	);
+
 	CREATE INDEX IF NOT EXISTS idx_papers_group_id ON papers(group_id);
 	CREATE INDEX IF NOT EXISTS idx_papers_created_at ON papers(created_at);
 	CREATE INDEX IF NOT EXISTS idx_papers_status ON papers(extraction_status);
@@ -141,6 +172,9 @@ func (m *Manager) initSchema() error {
 	CREATE INDEX IF NOT EXISTS idx_figure_tags_tag_id ON figure_tags(tag_id);
 	CREATE INDEX IF NOT EXISTS idx_s2_cache_fetched_at ON s2_paper_cache(fetched_at);
 	CREATE INDEX IF NOT EXISTS idx_research_basket_added_at ON research_basket_items(added_at DESC);
+	CREATE INDEX IF NOT EXISTS idx_ai_messages_conv     ON ai_messages(conversation_id, id);
+	CREATE INDEX IF NOT EXISTS idx_ai_conv_papers_paper ON ai_conversation_papers(paper_id);
+	CREATE INDEX IF NOT EXISTS idx_ai_conv_updated      ON ai_conversations(updated_at DESC);
 	`
 
 	if _, err := m.db.Exec(schema); err != nil {
