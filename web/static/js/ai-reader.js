@@ -192,5 +192,8 @@
     if (typeof window !== 'undefined') {
         window.AIReader = window.AIReader || {};
         window.AIReader.boot = Reader;
+        // Back-compat shim: main.js still calls AIReaderPage.init() on /ai. The
+        // bootstrap already runs from DOMContentLoaded above, so this is a no-op.
+        window.AIReaderPage = { init: function () {} };
     }
 })();
