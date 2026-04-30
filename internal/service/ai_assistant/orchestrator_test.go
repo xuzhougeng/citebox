@@ -125,7 +125,9 @@ func TestOrchestratorPreservesRecoverableFailedToolResult(t *testing.T) {
 	if len(out.ToolCalls) != 1 || out.ToolCalls[0].Status != "failed" || out.ToolCalls[0].Error != "timeout" {
 		t.Fatalf("tool calls = %+v", out.ToolCalls)
 	}
-	if out.AnswerContext == "" || !strings.Contains(out.AnswerContext, "查一下外部有没有 ATAC 综述") {
+	if out.AnswerContext == "" ||
+		!strings.Contains(out.AnswerContext, "查一下外部有没有 ATAC 综述") ||
+		!strings.Contains(out.AnswerContext, "外部检索暂时不可用") {
 		t.Fatalf("answer context = %q", out.AnswerContext)
 	}
 }
