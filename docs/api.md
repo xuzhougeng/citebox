@@ -641,7 +641,8 @@ AI 流式阅读通过：
 
 说明：
 
-- `scene_models` 中支持按场景绑定模型，包括 `translate_model_id`、`im_intent_model_id` 和 `tts_model_id`
+- `scene_models` 中支持按场景绑定模型，包括 `assistant_master_model_id`、`assistant_subagent_model_id`、`translate_model_id`、`im_intent_model_id` 和 `tts_model_id`
+- AI 助手对话最终回答使用 `assistant_master_model_id`；会话标题、历史摘要等轻量后台任务使用 `assistant_subagent_model_id`。当前全文检索工具本身不调用 LLM，后续查询改写/任务拆解会复用 Sub-Agent 绑定。
 - `translation` 为翻译规则设置，例如：
 
 ```json
@@ -679,6 +680,8 @@ AI 流式阅读通过：
   ],
   "scene_models": {
     "default_model_id": "default-openai",
+    "assistant_master_model_id": "default-openai",
+    "assistant_subagent_model_id": "default-openai",
     "qa_model_id": "default-openai",
     "im_intent_model_id": "default-openai",
     "figure_model_id": "default-openai",

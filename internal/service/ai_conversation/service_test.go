@@ -25,10 +25,11 @@ func (s *stubSettingsProvider) GetSettings() (*model.AISettings, error) {
 }
 
 type stubStreamCaller struct {
-	calls       int32
-	systemSeen  string
-	userSeen    string
-	staticReply string
+	calls        int32
+	systemSeen   string
+	userSeen     string
+	settingsSeen model.AISettings
+	staticReply  string
 }
 
 func (s *stubStreamCaller) CallProviderStreamGeneric(ctx context.Context, settings model.AISettings,
@@ -36,6 +37,7 @@ func (s *stubStreamCaller) CallProviderStreamGeneric(ctx context.Context, settin
 	atomic.AddInt32(&s.calls, 1)
 	s.systemSeen = systemPrompt
 	s.userSeen = userPrompt
+	s.settingsSeen = settings
 	if err := onDelta(s.staticReply); err != nil {
 		return "", "", err
 	}
@@ -114,6 +116,38 @@ func TestSendMessageAutoPinsPaper(t *testing.T) {
 	pinned, _ := libRepo.AIConversation.ListPinnedPapers(convID)
 	if len(pinned) != 1 || pinned[0].PaperID != paperID {
 		t.Fatalf("expected paper auto-pinned, got %+v", pinned)
+	}
+}
+
+func TestSendMessageUsesAssistantMasterModel(t *testing.T) {
+	svc, _, caller := newServiceForTest(t)
+	settings := model.DefaultAISettings()
+	settings.Models = []model.AIModelConfig{
+		{ID: "master", Name: "Master", Provider: model.AIProviderOpenAI, APIKey: "master-key", BaseURL: "https://api.openai.com", Model: "gpt-5.5", MaxOutputTokens: 4096, ThinkingEnabled: true, ReasoningEffort: "xhigh"},
+		{ID: "subagent", Name: "Sub-Agent", Provider: model.AIProviderOpenAI, APIKey: "sub-key", BaseURL: "https://api.deepseek.com", Model: "deepseek-v4-flash", MaxOutputTokens: 1200, OpenAILegacyMode: true},
+	}
+	settings.SceneModels = model.AISceneModelSelection{
+		DefaultModelID:           "subagent",
+		AssistantMasterModelID:   "master",
+		AssistantSubagentModelID: "subagent",
+	}
+	settings.ContextBudgetTokens = 32000
+	svc.settings = &stubSettingsProvider{settings: settings}
+
+	convID, _ := svc.CreateDraft()
+	res, err := svc.SendMessage(context.Background(), SendMessageInput{
+		ConversationID: convID,
+		Content:        "帮我查找 ATAC 文献",
+	}, func(string) error { return nil })
+	if err != nil {
+		t.Fatalf("SendMessage: %v", err)
+	}
+
+	if caller.settingsSeen.Model != "gpt-5.5" || caller.settingsSeen.ReasoningEffort != "xhigh" || !caller.settingsSeen.ThinkingEnabled {
+		t.Fatalf("stream settings = %+v, want assistant master model", caller.settingsSeen)
+	}
+	if res.AssistantMessage.Model != "gpt-5.5" || res.AssistantMessage.Provider != string(model.AIProviderOpenAI) {
+		t.Fatalf("assistant metadata = %+v, want master model metadata", res.AssistantMessage)
 	}
 }
 
@@ -656,12 +690,55 @@ func TestTitleGeneratedOnFirstTurn(t *testing.T) {
 	t.Fatalf("title was not generated within 1s")
 }
 
+func TestTitleGenerationUsesAssistantSubagentModel(t *testing.T) {
+	svc, libRepo, caller := newServiceForTest(t)
+	caller.staticReply = "回答内容"
+	settings := model.DefaultAISettings()
+	settings.Models = []model.AIModelConfig{
+		{ID: "master", Name: "Master", Provider: model.AIProviderOpenAI, APIKey: "master-key", BaseURL: "https://api.openai.com", Model: "gpt-5.5", MaxOutputTokens: 4096},
+		{ID: "subagent", Name: "Sub-Agent", Provider: model.AIProviderOpenAI, APIKey: "sub-key", BaseURL: "https://api.deepseek.com", Model: "deepseek-v4-flash", MaxOutputTokens: 1200, OpenAILegacyMode: true},
+	}
+	settings.SceneModels = model.AISceneModelSelection{
+		DefaultModelID:           "subagent",
+		AssistantMasterModelID:   "master",
+		AssistantSubagentModelID: "subagent",
+	}
+	settings.ContextBudgetTokens = 32000
+	svc.settings = &stubSettingsProvider{settings: settings}
+
+	titleCaller := &stubNonStreamCaller{staticReply: "  对话标题  "}
+	svc.titleCaller = titleCaller
+
+	convID, _ := svc.CreateDraft()
+	_, err := svc.SendMessage(context.Background(), SendMessageInput{
+		ConversationID: convID,
+		Content:        "第一条消息",
+	}, func(string) error { return nil })
+	if err != nil {
+		t.Fatalf("SendMessage: %v", err)
+	}
+
+	for i := 0; i < 50; i++ {
+		c, _ := libRepo.AIConversation.GetConversation(convID)
+		if c.Title != "" {
+			if titleCaller.settingsSeen.Model != "deepseek-v4-flash" || !titleCaller.settingsSeen.OpenAILegacyMode {
+				t.Fatalf("title settings = %+v, want assistant subagent model", titleCaller.settingsSeen)
+			}
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatalf("title was not generated within 1s")
+}
+
 type stubNonStreamCaller struct {
-	staticReply string
+	staticReply  string
+	settingsSeen model.AISettings
 }
 
 func (s *stubNonStreamCaller) CallProviderGeneric(ctx context.Context, settings model.AISettings,
 	systemPrompt, userPrompt string) (string, string, error) {
+	s.settingsSeen = settings
 	return s.staticReply, "test", nil
 }
 

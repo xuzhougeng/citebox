@@ -34,14 +34,16 @@ type AIModelConfig struct {
 }
 
 type AISceneModelSelection struct {
-	DefaultModelID   string `json:"default_model_id"`
-	QAModelID        string `json:"qa_model_id"`
-	IMIntentModelID  string `json:"im_intent_model_id"`
-	FigureModelID    string `json:"figure_model_id"`
-	TagModelID       string `json:"tag_model_id"`
-	GroupModelID     string `json:"group_model_id"`
-	TranslateModelID string `json:"translate_model_id"`
-	TTSModelID       string `json:"tts_model_id"`
+	DefaultModelID           string `json:"default_model_id"`
+	AssistantMasterModelID   string `json:"assistant_master_model_id"`
+	AssistantSubagentModelID string `json:"assistant_subagent_model_id"`
+	QAModelID                string `json:"qa_model_id"`
+	IMIntentModelID          string `json:"im_intent_model_id"`
+	FigureModelID            string `json:"figure_model_id"`
+	TagModelID               string `json:"tag_model_id"`
+	GroupModelID             string `json:"group_model_id"`
+	TranslateModelID         string `json:"translate_model_id"`
+	TTSModelID               string `json:"tts_model_id"`
 }
 
 type AITranslationConfig struct {
@@ -213,14 +215,16 @@ func DefaultAISettings() AISettings {
 		OpenAILegacyMode: defaultModel.OpenAILegacyMode,
 		Models:           []AIModelConfig{defaultModel},
 		SceneModels: AISceneModelSelection{
-			DefaultModelID:   defaultModel.ID,
-			QAModelID:        defaultModel.ID,
-			IMIntentModelID:  defaultModel.ID,
-			FigureModelID:    defaultModel.ID,
-			TagModelID:       defaultModel.ID,
-			GroupModelID:     defaultModel.ID,
-			TranslateModelID: defaultModel.ID,
-			TTSModelID:       defaultModel.ID,
+			DefaultModelID:           defaultModel.ID,
+			AssistantMasterModelID:   defaultModel.ID,
+			AssistantSubagentModelID: defaultModel.ID,
+			QAModelID:                defaultModel.ID,
+			IMIntentModelID:          defaultModel.ID,
+			FigureModelID:            defaultModel.ID,
+			TagModelID:               defaultModel.ID,
+			GroupModelID:             defaultModel.ID,
+			TranslateModelID:         defaultModel.ID,
+			TTSModelID:               defaultModel.ID,
 		},
 		Temperature:     0.2,
 		MaxOutputTokens: 1200,

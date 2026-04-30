@@ -74,6 +74,9 @@ func TestAISettingsDefaultsAndPersistence(t *testing.T) {
 	if defaults.SceneModels.IMIntentModelID == "" {
 		t.Fatalf("GetSettings() defaults scene_models = %+v, want IM intent model default", defaults.SceneModels)
 	}
+	if defaults.SceneModels.AssistantMasterModelID == "" || defaults.SceneModels.AssistantSubagentModelID == "" {
+		t.Fatalf("GetSettings() defaults scene_models = %+v, want AI assistant master/sub-agent defaults", defaults.SceneModels)
+	}
 	if defaults.SceneModels.TTSModelID == "" || strings.TrimSpace(defaults.TTSPrompt) == "" {
 		t.Fatalf("GetSettings() defaults = %+v, want TTS rewrite scene and prompt", defaults)
 	}
@@ -279,18 +282,22 @@ func TestResolveModelForActionUsesSceneSpecificModel(t *testing.T) {
 	settings := model.DefaultAISettings()
 	settings.Models = []model.AIModelConfig{
 		{ID: "default", Name: "Default", Provider: model.AIProviderOpenAI, APIKey: "key-1", BaseURL: "https://api.openai.com", Model: "gpt-4.1-mini"},
+		{ID: "master", Name: "Master", Provider: model.AIProviderOpenAI, APIKey: "key-master", BaseURL: "https://api.openai.com", Model: "gpt-5.5"},
+		{ID: "subagent", Name: "Sub-Agent", Provider: model.AIProviderOpenAI, APIKey: "key-sub", BaseURL: "https://api.deepseek.com", Model: "deepseek-v4-flash", OpenAILegacyMode: true},
 		{ID: "figure", Name: "Figure", Provider: model.AIProviderAnthropic, APIKey: "key-2", BaseURL: "https://api.anthropic.com", Model: "claude-test"},
 		{ID: "translate", Name: "Translate", Provider: model.AIProviderGemini, APIKey: "key-3", BaseURL: "https://generativelanguage.googleapis.com", Model: "gemini-test"},
 		{ID: "tts", Name: "TTS", Provider: model.AIProviderOpenAI, APIKey: "key-4", BaseURL: "https://api.openai.com", Model: "gpt-tts"},
 	}
 	settings.SceneModels = model.AISceneModelSelection{
-		DefaultModelID:   "default",
-		QAModelID:        "default",
-		FigureModelID:    "figure",
-		TagModelID:       "default",
-		GroupModelID:     "default",
-		TranslateModelID: "translate",
-		TTSModelID:       "tts",
+		DefaultModelID:           "default",
+		AssistantMasterModelID:   "master",
+		AssistantSubagentModelID: "subagent",
+		QAModelID:                "default",
+		FigureModelID:            "figure",
+		TagModelID:               "default",
+		GroupModelID:             "default",
+		TranslateModelID:         "translate",
+		TTSModelID:               "tts",
 	}
 
 	resolved, err := resolveModelForAction(settings, model.AIActionFigureInterpretation)
@@ -316,6 +323,14 @@ func TestResolveModelForActionUsesSceneSpecificModel(t *testing.T) {
 	if ttsModel.ID != "tts" || ttsModel.Provider != model.AIProviderOpenAI {
 		t.Fatalf("resolveModelForAction(tts) = %+v, want tts-scoped model", ttsModel)
 	}
+
+	normalized, err := normalizeAISettings(settings)
+	if err != nil {
+		t.Fatalf("normalizeAISettings() error = %v", err)
+	}
+	if normalized.SceneModels.AssistantMasterModelID != "master" || normalized.SceneModels.AssistantSubagentModelID != "subagent" {
+		t.Fatalf("normalizeAISettings() scene_models = %+v, want assistant master/sub-agent preserved", normalized.SceneModels)
+	}
 }
 
 func TestUpdateModelSettingsPersistsIMIntentModelSelection(t *testing.T) {
@@ -328,9 +343,11 @@ func TestUpdateModelSettingsPersistsIMIntentModelSelection(t *testing.T) {
 			{ID: "intent", Name: "Intent", Provider: model.AIProviderAnthropic, APIKey: "key-2", BaseURL: "https://api.anthropic.com", Model: "claude-test", MaxOutputTokens: 800},
 		},
 		SceneModels: model.AISceneModelSelection{
-			DefaultModelID:  "default",
-			QAModelID:       "default",
-			IMIntentModelID: "intent",
+			DefaultModelID:           "default",
+			AssistantMasterModelID:   "default",
+			AssistantSubagentModelID: "intent",
+			QAModelID:                "default",
+			IMIntentModelID:          "intent",
 		},
 		Temperature: 0.2,
 		MaxFigures:  0,
@@ -346,8 +363,8 @@ func TestUpdateModelSettingsPersistsIMIntentModelSelection(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetSettings() error = %v", err)
 	}
-	if settings.SceneModels.IMIntentModelID != "intent" {
-		t.Fatalf("GetSettings() scene_models = %+v, want im_intent_model_id persisted", settings.SceneModels)
+	if settings.SceneModels.IMIntentModelID != "intent" || settings.SceneModels.AssistantSubagentModelID != "intent" {
+		t.Fatalf("GetSettings() scene_models = %+v, want IM and assistant subagent model IDs persisted", settings.SceneModels)
 	}
 }
 

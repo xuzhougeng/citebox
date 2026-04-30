@@ -9,6 +9,8 @@ const SettingsPage = {
         this.addAIModelButton = document.getElementById('addAIModelButton');
         this.defaultModelSelect = document.getElementById('aiDefaultModelSelect');
         this.qaModelSelect = document.getElementById('aiQAModelSelect');
+        this.assistantMasterModelSelect = document.getElementById('aiAssistantMasterModelSelect');
+        this.assistantSubagentModelSelect = document.getElementById('aiAssistantSubagentModelSelect');
         this.imIntentModelSelect = document.getElementById('aiIMIntentModelSelect');
         this.figureModelSelect = document.getElementById('aiFigureModelSelect');
         this.tagModelSelect = document.getElementById('aiTagModelSelect');
@@ -439,6 +441,8 @@ const SettingsPage = {
         [
             this.defaultModelSelect,
             this.qaModelSelect,
+            this.assistantMasterModelSelect,
+            this.assistantSubagentModelSelect,
             this.imIntentModelSelect,
             this.figureModelSelect,
             this.tagModelSelect,
@@ -2096,6 +2100,8 @@ const SettingsPage = {
     renderSceneModelSelectors(selection = {}) {
         const safeSelection = {
             default_model_id: selection.default_model_id || this.defaultModelSelect?.value || '',
+            assistant_master_model_id: selection.assistant_master_model_id || this.assistantMasterModelSelect?.value || '',
+            assistant_subagent_model_id: selection.assistant_subagent_model_id || this.assistantSubagentModelSelect?.value || '',
             qa_model_id: selection.qa_model_id || this.qaModelSelect?.value || '',
             im_intent_model_id: selection.im_intent_model_id || this.imIntentModelSelect?.value || '',
             figure_model_id: selection.figure_model_id || this.figureModelSelect?.value || '',
@@ -2112,6 +2118,8 @@ const SettingsPage = {
         [
             [this.defaultModelSelect, safeSelection.default_model_id],
             [this.qaModelSelect, safeSelection.qa_model_id],
+            [this.assistantMasterModelSelect, safeSelection.assistant_master_model_id],
+            [this.assistantSubagentModelSelect, safeSelection.assistant_subagent_model_id],
             [this.imIntentModelSelect, safeSelection.im_intent_model_id],
             [this.figureModelSelect, safeSelection.figure_model_id],
             [this.tagModelSelect, safeSelection.tag_model_id],
@@ -2134,6 +2142,8 @@ const SettingsPage = {
         return {
             default_model_id: defaultModelID,
             qa_model_id: this.qaModelSelect?.value || defaultModelID,
+            assistant_master_model_id: this.assistantMasterModelSelect?.value || this.qaModelSelect?.value || defaultModelID,
+            assistant_subagent_model_id: this.assistantSubagentModelSelect?.value || this.imIntentModelSelect?.value || defaultModelID,
             im_intent_model_id: this.imIntentModelSelect?.value || defaultModelID,
             figure_model_id: this.figureModelSelect?.value || defaultModelID,
             tag_model_id: this.tagModelSelect?.value || defaultModelID,

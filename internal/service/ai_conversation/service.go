@@ -249,6 +249,8 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput, onDelta 
 	if err != nil {
 		return SendMessageResult{}, err
 	}
+	masterSettings := assistantMasterSettings(*settings)
+	subagentSettings := assistantSubagentSettings(*settings)
 	pinned, err := s.repo.ListPinnedPapers(in.ConversationID)
 	if err != nil {
 		return SendMessageResult{}, err
@@ -262,7 +264,7 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput, onDelta 
 		history = history[:len(history)-1]
 	}
 
-	s.maybeSummarize(ctx, &conv, &history, *settings)
+	s.maybeSummarize(ctx, &conv, &history, subagentSettings)
 
 	// Re-read StrictEvidence from DB so a PATCH between turns is honoured
 	// immediately. We only refresh that flag to avoid clobbering the summary
@@ -271,7 +273,7 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput, onDelta 
 		conv.StrictEvidence = fresh.StrictEvidence
 	}
 
-	asm, err := s.assembleForTurn(conv, pinned, history, in.Content, *settings)
+	asm, err := s.assembleForTurn(conv, pinned, history, in.Content, masterSettings)
 	if err != nil {
 		return SendMessageResult{}, err
 	}
@@ -337,13 +339,13 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput, onDelta 
 		}
 	}
 
-	rawText, mode, err := s.caller.CallProviderStreamGeneric(ctx, *settings, asm.systemPrompt, asm.userPrompt, asm.images, onDelta)
+	rawText, mode, err := s.caller.CallProviderStreamGeneric(ctx, masterSettings, asm.systemPrompt, asm.userPrompt, asm.images, onDelta)
 	if err != nil {
 		// User-cancelled stream: persist whatever was already streamed with mode="stopped".
 		if errors.Is(err, context.Canceled) && rawText != "" {
 			asstID, persistErr := s.repo.AddMessage(in.ConversationID, "assistant", rawText, repository.AIMessageMeta{
-				Provider:      string(settings.Provider),
-				Model:         settings.Model,
+				Provider:      string(masterSettings.Provider),
+				Model:         masterSettings.Model,
 				Mode:          "stopped",
 				CitationsJSON: citationsJSON,
 			})
@@ -358,8 +360,8 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput, onDelta 
 	}
 
 	asstID, err := s.repo.AddMessage(in.ConversationID, "assistant", rawText, repository.AIMessageMeta{
-		Provider:      string(settings.Provider),
-		Model:         settings.Model,
+		Provider:      string(masterSettings.Provider),
+		Model:         masterSettings.Model,
 		Mode:          mode,
 		CitationsJSON: citationsJSON,
 	})
@@ -382,13 +384,13 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput, onDelta 
 			if err := s.repo.UpdateTitle(convID, title, false); err != nil {
 				s.logger.Warn("ai_conversation: title persist failed", "error", err)
 			}
-		}(in.ConversationID, *settings, in.Content, rawText)
+		}(in.ConversationID, subagentSettings, in.Content, rawText)
 	}
 
 	res := SendMessageResult{
 		ConversationID:   in.ConversationID,
 		UserMessage:      Message{ID: userMsgID, Role: "user", Content: in.Content},
-		AssistantMessage: Message{ID: asstID, Role: "assistant", Content: rawText, Provider: string(settings.Provider), Model: settings.Model, Mode: mode},
+		AssistantMessage: Message{ID: asstID, Role: "assistant", Content: rawText, Provider: string(masterSettings.Provider), Model: masterSettings.Model, Mode: mode},
 	}
 	return res, nil
 }
