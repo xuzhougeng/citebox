@@ -79,7 +79,12 @@
                 els.questionInput.addEventListener('keydown', function (e) {
                     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
                         e.preventDefault();
-                        self.sendCurrentInput();
+                        const composer = window.AIReader && window.AIReader.composer;
+                        if (composer && typeof composer.submit === 'function') {
+                            composer.submit();
+                        } else {
+                            self.sendCurrentInput();
+                        }
                     }
                 });
             }

@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 
 	"github.com/xuzhougeng/citebox/internal/model"
@@ -209,6 +210,7 @@ func EvidenceSearchTerms(query string) []string {
 		}
 		add(match)
 	}
+	add(chineseLiteralEvidenceTerms(q)...)
 	return dedupeEvidenceTerms(terms)
 }
 
@@ -459,6 +461,84 @@ func containsAnyEvidenceText(s string, needles ...string) bool {
 		}
 	}
 	return false
+}
+
+func chineseLiteralEvidenceTerms(query string) []string {
+	cleaned := strings.TrimSpace(query)
+	if cleaned == "" {
+		return nil
+	}
+	for _, phrase := range evidenceQueryPhrases {
+		cleaned = strings.ReplaceAll(cleaned, phrase, " ")
+	}
+
+	terms := make([]string, 0, 16)
+	var runes []rune
+	flush := func() {
+		if len(runes) < 2 {
+			runes = runes[:0]
+			return
+		}
+		terms = append(terms, string(runes))
+		for n := 4; n >= 2; n-- {
+			if len(runes) <= n {
+				continue
+			}
+			for i := 0; i+n <= len(runes); i++ {
+				terms = append(terms, string(runes[i:i+n]))
+			}
+		}
+		runes = runes[:0]
+	}
+	for _, r := range cleaned {
+		if unicode.Is(unicode.Han, r) {
+			runes = append(runes, r)
+			continue
+		}
+		flush()
+	}
+	flush()
+	return terms
+}
+
+var evidenceQueryPhrases = []string{
+	"相关的文章",
+	"相关文献",
+	"相关论文",
+	"的文章",
+	"的文献",
+	"的论文",
+	"帮我查找",
+	"帮我查询",
+	"帮我搜索",
+	"帮我寻找",
+	"帮忙查找",
+	"帮忙查询",
+	"帮忙搜索",
+	"帮忙寻找",
+	"查找",
+	"查询",
+	"搜索",
+	"寻找",
+	"关于",
+	"有关",
+	"相关",
+	"包括",
+	"包含",
+	"用到",
+	"使用",
+	"涉及",
+	"是否",
+	"有没有",
+	"哪些",
+	"文章",
+	"论文",
+	"文献",
+	"信息",
+	"内容",
+	"资料",
+	"帮我",
+	"帮忙",
 }
 
 var assistantASCIITermRe = regexp.MustCompile(`[A-Za-z][A-Za-z0-9+&./-]{2,}`)

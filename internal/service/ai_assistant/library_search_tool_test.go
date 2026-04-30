@@ -71,6 +71,53 @@ func TestLibrarySearchToolReturnsPaperHitCards(t *testing.T) {
 	}
 }
 
+type termSensitivePaperStore struct {
+	paper *model.Paper
+	terms []string
+}
+
+func (s *termSensitivePaperStore) GetPaperDetail(id int64) (*model.Paper, error) {
+	if s.paper != nil && s.paper.ID == id {
+		return s.paper, nil
+	}
+	return nil, nil
+}
+
+func (s *termSensitivePaperStore) ListEvidenceCandidatePaperIDs(terms []string, limit int) ([]int64, error) {
+	s.terms = append([]string(nil), terms...)
+	for _, term := range terms {
+		if term == "叶绿体定位" {
+			return []int64{s.paper.ID}, nil
+		}
+	}
+	return nil, nil
+}
+
+func TestLibrarySearchToolUsesChineseLiteralFallback(t *testing.T) {
+	store := &termSensitivePaperStore{
+		paper: &model.Paper{
+			ID:      9,
+			Title:   "叶绿体定位研究",
+			PDFText: "本研究分析叶绿体定位信号及相关调控机制。",
+		},
+	}
+	tool := NewLibrarySearchTool(store)
+
+	res, err := tool.Run(context.Background(), ToolInput{Query: "帮我查找叶绿体定位的文章"})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(res.Cards) != 1 {
+		t.Fatalf("cards = %+v, terms = %v, want one Chinese literal hit", res.Cards, store.terms)
+	}
+	if !containsTestTerm(store.terms, "叶绿体定位") {
+		t.Fatalf("terms = %v, want Chinese literal term", store.terms)
+	}
+	if len(res.Citations) == 0 || !strings.Contains(res.Citations[0].Snippet.Text, "叶绿体定位") {
+		t.Fatalf("citations = %+v, want Chinese literal snippet", res.Citations)
+	}
+}
+
 func TestLibrarySearchToolReportsCandidateListerFailure(t *testing.T) {
 	tool := NewLibrarySearchTool(stubPaperStore{err: errors.New("candidate query failed")})
 
@@ -93,6 +140,15 @@ func TestLibrarySearchToolReportsCandidateListerFailure(t *testing.T) {
 	if len(res.Cards) != 0 || len(res.Citations) != 0 {
 		t.Fatalf("cards=%+v citations=%+v, want empty", res.Cards, res.Citations)
 	}
+}
+
+func containsTestTerm(terms []string, want string) bool {
+	for _, term := range terms {
+		if term == want {
+			return true
+		}
+	}
+	return false
 }
 
 func TestLibrarySearchToolClampsLargeLimit(t *testing.T) {
