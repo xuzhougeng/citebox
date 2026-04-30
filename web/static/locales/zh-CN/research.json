@@ -35,5 +35,7 @@
     "research.error.unknown": "调研服务暂不可用。",
     "research.empty.hint": "在上方搜索框输入关键词或粘贴 DOI / arXiv ID 开始调研。",
     "research.history.back": "返回上一种子",
+    "research.history.recent": "最近搜索",
+    "research.history.clear": "清空",
     "research.inLibrary": "已在文献库"
 }

@@ -10,9 +10,71 @@
         filters: { yearMin: null, yearMax: null, minCites: 0, influentialOnly: false },
         basket: [],
         history: [],
+        searchHistory: [],
     };
 
+    const STORAGE_KEY = 'citebox_research_state';
+    const SEARCH_HISTORY_LIMIT = 5;
+
     function $(id) { return document.getElementById(id); }
+
+    function loadPersistedState() {
+        try {
+            const raw = localStorage.getItem(STORAGE_KEY);
+            if (!raw) return null;
+            return JSON.parse(raw);
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function savePersistedState() {
+        try {
+            const snap = {
+                seed: state.seed,
+                activeTab: state.activeTab,
+                searchHistory: state.searchHistory,
+            };
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(snap));
+        } catch (e) {
+            // localStorage disabled or full — silently ignore
+        }
+    }
+
+    function pushSearchHistory(query) {
+        const q = (query || '').trim();
+        if (!q) return;
+        const list = (state.searchHistory || []).filter(x => x.toLowerCase() !== q.toLowerCase());
+        list.unshift(q);
+        state.searchHistory = list.slice(0, SEARCH_HISTORY_LIMIT);
+        savePersistedState();
+        renderSearchHistory();
+    }
+
+    function clearSearchHistory() {
+        state.searchHistory = [];
+        savePersistedState();
+        renderSearchHistory();
+    }
+
+    function renderSearchHistory() {
+        const el = $('research-search-history');
+        if (!el) return;
+        const list = state.searchHistory || [];
+        if (!list.length) {
+            el.innerHTML = '';
+            el.hidden = true;
+            return;
+        }
+        const labelTxt = t('research.history.recent', '最近搜索');
+        const clearTxt = t('research.history.clear', '清空');
+        el.innerHTML = `
+            <span class="research-history-label">${escapeHtml(labelTxt)}</span>
+            ${list.map(q => `<button class="research-history-chip" type="button" data-q="${escapeHtml(q)}">${escapeHtml(q)}</button>`).join('')}
+            <button class="research-history-clear" type="button">${escapeHtml(clearTxt)}</button>
+        `;
+        el.hidden = false;
+    }
 
     async function api(path, opts = {}) {
         const res = await fetch(path, {
@@ -31,6 +93,7 @@
     }
 
     async function searchSeed(query) {
+        pushSearchHistory(query);
         const data = await api(`/api/research/search?q=${encodeURIComponent(query)}&limit=20`);
         renderSearchResults(data.items || []);
     }
@@ -45,6 +108,7 @@
         const paper = await api(`/api/research/paper/${encodeURIComponent(s2PaperID)}`);
         state.seed = paper;
         state.activeTab = 'references';
+        savePersistedState();
         await loadActiveTab();
     }
 
@@ -249,6 +313,7 @@
             const tab = e.target.dataset.tab;
             if (tab) {
                 state.activeTab = tab;
+                savePersistedState();
                 await loadActiveTab();
                 return;
             }
@@ -264,11 +329,43 @@
             const id = e.target.dataset.id;
             if (action === 'remove-from-basket' && id) await removeFromBasket(id);
         });
+
+        $('research-search-history').addEventListener('click', async (e) => {
+            const chip = e.target.closest('button.research-history-chip');
+            if (chip && chip.dataset.q) {
+                $('research-search-input').value = chip.dataset.q;
+                await searchSeed(chip.dataset.q);
+                return;
+            }
+            if (e.target.closest('button.research-history-clear')) {
+                clearSearchHistory();
+            }
+        });
     }
 
     async function init() {
         bindEvents();
+
+        const persisted = loadPersistedState();
+        if (persisted) {
+            state.searchHistory = Array.isArray(persisted.searchHistory) ? persisted.searchHistory : [];
+            if (persisted.seed && persisted.seed.paperId) {
+                state.seed = persisted.seed;
+                state.activeTab = persisted.activeTab || 'references';
+            }
+        }
+        renderSearchHistory();
+
         await refreshBasket();
+
+        if (state.seed) {
+            try {
+                await loadActiveTab();
+            } catch (e) {
+                // upstream / network errors on resume — show cached seed only
+                renderSeedPane(buildSeedHeader(), []);
+            }
+        }
     }
 
     document.addEventListener('DOMContentLoaded', init);

@@ -35,5 +35,7 @@
     "research.error.unknown": "Research service unavailable.",
     "research.empty.hint": "Enter a keyword or paste a DOI / arXiv ID above to start researching.",
     "research.history.back": "Back to previous seed",
+    "research.history.recent": "Recent searches",
+    "research.history.clear": "Clear",
     "research.inLibrary": "Already in library"
 }
