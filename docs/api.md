@@ -788,8 +788,11 @@ AI 流式阅读通过：
 {
   "content": "这些文献是否支持单细胞 RNA-seq 可以解析植物表皮发育轨迹？",
   "paper_id": 42,
-  "strict_evidence": true,
-  "include_external_evidence": false
+  "intent_hint": "library_search",
+  "context": {
+    "source": "ai",
+    "paper_id": 42
+  }
 }
 ```
 
@@ -797,8 +800,16 @@ AI 流式阅读通过：
 
 - `content`：用户问题或主张。
 - `paper_id`：可选，仅用于新会话或发送时自动 pin 当前文献。
-- `strict_evidence`：可选；历史字段名，当前对应 AI 页面里的“内部搜索”开关。发送消息时同步当前内部搜索状态，尤其用于新会话第一条消息。
-- `include_external_evidence`：可选，当前对应 AI 页面里的“外部搜索”开关。`true` 时启用外部 Semantic Scholar snippet search，并使用用户问题和扩展关键词做广域外部搜索；当 snippet 端点不可用或无命中时，会退回到调研页同源的 Semantic Scholar paper search，并把标题、TLDR 和摘要整理为外部证据。若同时开启内部搜索，则在本地文献库证据之外补充外部搜索结果；若只开启外部搜索，则仅使用外部搜索证据片段。
+- `intent_hint`：可选的一次性路由提示。支持 `library_search`（查全库）、`external_search`（查外部）、`paper_read`（读文献）、`figure_lookup`（看图/图文）。省略时由后端按内容和上下文自动判断。
+- `context`：可选上下文对象，支持 `source`、`paper_id`、`paper_ids`、`figure_id`。用于指定当前文献、对比文献或图片上下文。
+- `strict_evidence`：兼容字段；历史上对应“内部搜索”开关。当前主 UI 使用 `intent_hint` 和 `context` 调度工具。没有显式 `intent_hint`/`context` 时，旧内部搜索语义仍保留。
+- `include_external_evidence`：兼容字段；历史上对应“外部搜索”开关。没有显式 `intent_hint`/`context` 时，仍使用旧外部 Semantic Scholar 证据检索语义。
+
+消息流返回 `application/x-ndjson`。除既有 `meta`、`delta`、`final`、`error` 外，AI 助手工具调度还可能返回：
+
+- `process`：紧凑流程摘要，用于展示扫描阶段、命中数和状态。
+- `cards`：结构化结果卡片，例如 `paper_hit`、`external_paper`、`paper_read`、`paper_compare`、`figure_result`。
+- `citations`：证据引用数组，用于脚注和结果卡片引用。
 
 搜索模式说明：
 
