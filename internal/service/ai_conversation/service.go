@@ -232,12 +232,20 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput, onDelta 
 
 	s.maybeSummarize(ctx, &conv, &history, *settings)
 
+	// Re-read StrictEvidence from DB so a PATCH between turns is honoured
+	// immediately. We only refresh that flag to avoid clobbering the summary
+	// state that maybeSummarize just wrote into conv.
+	if fresh, freshErr := s.repo.GetConversation(in.ConversationID); freshErr == nil {
+		conv.StrictEvidence = fresh.StrictEvidence
+	}
+
 	asm, err := s.assembleForTurn(conv, pinned, history, in.Content, *settings)
 	if err != nil {
 		return SendMessageResult{}, err
 	}
 
 	var citations []Citation
+	var citationsJSON string
 	if conv.StrictEvidence && s.searcher != nil {
 		enrichedUser, cites, evErr := injectEvidence(ctx, s.searcher, in.Content, pinned)
 		if evErr != nil {
@@ -257,6 +265,7 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput, onDelta 
 				asm.userPrompt = asm.userPrompt + "\n\n" + enrichedUser
 			}
 			citations = cites
+			citationsJSON = MarshalCitations(citations)
 		}
 	}
 
@@ -265,9 +274,10 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput, onDelta 
 		// User-cancelled stream: persist whatever was already streamed with mode="stopped".
 		if errors.Is(err, context.Canceled) && rawText != "" {
 			_, persistErr := s.repo.AddMessage(in.ConversationID, "assistant", rawText, repository.AIMessageMeta{
-				Provider: string(settings.Provider),
-				Model:    settings.Model,
-				Mode:     "stopped",
+				Provider:      string(settings.Provider),
+				Model:         settings.Model,
+				Mode:          "stopped",
+				CitationsJSON: citationsJSON,
 			})
 			if persistErr != nil {
 				s.logger.Warn("ai_conversation: persist stopped message failed", "error", persistErr)
@@ -281,7 +291,7 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput, onDelta 
 		Provider:      string(settings.Provider),
 		Model:         settings.Model,
 		Mode:          mode,
-		CitationsJSON: MarshalCitations(citations),
+		CitationsJSON: citationsJSON,
 	})
 	if err != nil {
 		return SendMessageResult{}, err
