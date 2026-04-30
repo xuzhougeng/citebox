@@ -1,5 +1,5 @@
 // ai-conversation-view.js — main pane: messages, streaming, pin/strict-evidence/export/delete actions.
-// Public API: window.AIReader.view.{init, load, loadDraft, sendCurrentInput, stop, setStrictEvidence, rename}
+// Public API: window.AIReader.view.{init, load, loadDraft, sendCurrentInput, sendPayload, stop, setStrictEvidence, rename}
 
 (function () {
     'use strict';
@@ -66,13 +66,14 @@
             meta: null,              // {title, strict_evidence, ...}
             pinnedPapers: [],
             messages: [],
+            turnRuns: [],
+            pendingCitations: [],
             streaming: null,         // { abortController, assistantBubbleEl, accText: '', userBubbleEl }
         },
 
         init(els) {
             this._state.els = els;
             const self = this;
-            if (els.runBtn) els.runBtn.addEventListener('click', function () { self.sendCurrentInput(); });
             if (els.stopBtn) els.stopBtn.addEventListener('click', function () { self.stop(); });
             if (els.questionInput) {
                 els.questionInput.addEventListener('keydown', function (e) {
@@ -116,6 +117,8 @@
             s.meta = conv;
             s.pinnedPapers = conv.pinned_papers || [];
             s.messages = conv.recent_messages || [];
+            s.turnRuns = conv.turn_runs || [];
+            s.pendingCitations = [];
             this._renderAll();
         },
 
@@ -125,6 +128,8 @@
             s.meta = { title: '', strict_evidence: false, title_locked: false };
             s.pinnedPapers = [];
             s.messages = [];
+            s.turnRuns = [];
+            s.pendingCitations = [];
             s._draftPaperId = prefilledPaperId || 0;
             this._renderAll();
         },
@@ -135,7 +140,22 @@
             if (!s.els || !s.els.questionInput) return;
             const content = s.els.questionInput.value.trim();
             if (!content) return;
+            await this.sendPayload({ content: content });
+        },
 
+        async sendPayload(payload) {
+            const content = (payload && payload.content || '').trim();
+            if (!content) return;
+            const body = { content: content, context: this._currentContext() };
+            if (payload && payload.intent_hint) body.intent_hint = payload.intent_hint;
+            await this._sendBody(body);
+        },
+
+        async _sendBody(body) {
+            const s = this._state;
+            if (s.streaming) return;
+            if (!body || !String(body.content || '').trim()) return;
+            const content = String(body.content || '').trim();
             // optimistic user bubble
             const userBubble = this._appendMessageBubble({ role: 'user', content: content });
             const assistantBubble = this._appendMessageBubble({ role: 'assistant', content: '', streaming: true });
@@ -144,9 +164,17 @@
                 ? ('/api/ai/conversations/' + s.conversationId + '/messages')
                 : '/api/ai/conversations/new/messages';
             const ctrl = new AbortController();
-            s.streaming = { abortController: ctrl, userBubbleEl: userBubble, assistantBubbleEl: assistantBubble, accText: '' };
+            s.pendingCitations = [];
+            s.streaming = {
+                abortController: ctrl,
+                userBubbleEl: userBubble,
+                assistantBubbleEl: assistantBubble,
+                accText: '',
+                process: null,
+                cards: [],
+                pendingCitations: [],
+            };
 
-            const body = { content: content };
             if (!s.conversationId && s._draftPaperId) body.paper_id = s._draftPaperId;
             if (s.els.strictEvidence) {
                 body.strict_evidence = !!s.els.strictEvidence.checked;
@@ -225,6 +253,8 @@
             s.meta = null;
             s.pinnedPapers = [];
             s.messages = [];
+            s.turnRuns = [];
+            s.pendingCitations = [];
             this._renderAll();
             document.dispatchEvent(new CustomEvent('ai-reader:conversation-changed'));
         },
@@ -243,9 +273,19 @@
             }
             if (s.els.conversation) {
                 s.els.conversation.innerHTML = '';
+                const assistantByID = {};
+                const citationsByID = {};
                 for (const m of s.messages) {
-                    this._appendMessageBubble(m);
+                    const bubble = this._appendMessageBubble(m);
+                    if (bubble && m.role === 'assistant' && m.id) {
+                        assistantByID[String(m.id)] = bubble;
+                        if (m.citations_json) citationsByID[String(m.id)] = m.citations_json;
+                    }
                 }
+                this._attachTurnRunArtifacts(assistantByID);
+                Object.keys(citationsByID).forEach((id) => {
+                    this._dispatchCitationHydration(assistantByID[id], citationsByID[id]);
+                });
             }
         },
 
@@ -255,6 +295,7 @@
             if (!s.els || !s.els.conversation) return null;
             const div = document.createElement('div');
             div.className = 'ai-message ai-message-' + (message.role === 'assistant' ? 'assistant' : 'user');
+            if (message.id) div.dataset.messageId = String(message.id);
             this._renderMessageContent(div, message);
             if (message.streaming) div.classList.add('is-streaming');
             s.els.conversation.appendChild(div);
@@ -264,11 +305,51 @@
 
         _renderMessageContent(el, message) {
             if (!el) return;
+            const parts = this._ensureMessageParts(el);
             if (message && message.role === 'assistant' && !message.streaming) {
-                el.innerHTML = renderAssistantMarkdown(message.content || '');
+                parts.text.innerHTML = renderAssistantMarkdown(message.content || '');
             } else {
-                el.textContent = (message && message.content) || '';
+                parts.text.textContent = (message && message.content) || '';
             }
+        },
+
+        _ensureMessageParts(el) {
+            let text = el.querySelector(':scope > .ai-message-text');
+            let artifacts = el.querySelector(':scope > .ai-message-artifacts');
+            if (!text) {
+                text = document.createElement('div');
+                text.className = 'ai-message-text';
+                while (el.firstChild) text.appendChild(el.firstChild);
+                el.appendChild(text);
+            }
+            if (!artifacts) {
+                artifacts = document.createElement('div');
+                artifacts.className = 'ai-message-artifacts';
+                el.appendChild(artifacts);
+            }
+            return { text: text, artifacts: artifacts };
+        },
+
+        _setAssistantText(el, content, markdown) {
+            const parts = this._ensureMessageParts(el);
+            if (markdown) {
+                parts.text.innerHTML = renderAssistantMarkdown(content || '');
+            } else {
+                parts.text.textContent = content || '';
+            }
+        },
+
+        _attachTurnRunArtifacts(assistantByID) {
+            const s = this._state;
+            if (!assistantByID || !Array.isArray(s.turnRuns)) return;
+            s.turnRuns.forEach((run) => {
+                const id = run && run.assistant_message_id;
+                const bubble = id ? assistantByID[String(id)] : null;
+                if (!bubble) return;
+                const process = this._parseJSON(run.process_summary_json);
+                if (process) this._renderProcessInto(bubble, process);
+                if (Array.isArray(run.cards) && run.cards.length) this._renderCardsInto(bubble, run.cards);
+            });
         },
 
         async _consumeNdjson(body, assistantBubble) {
@@ -310,28 +391,100 @@
             } else if (evt.type === 'delta' && evt.delta) {
                 if (s.streaming) {
                     s.streaming.accText += evt.delta;
-                    if (assistantBubble) assistantBubble.textContent = s.streaming.accText;
+                    if (assistantBubble) this._setAssistantText(assistantBubble, s.streaming.accText, false);
                     if (s.els && s.els.conversation) s.els.conversation.scrollTop = s.els.conversation.scrollHeight;
                 }
+            } else if (evt.type === 'process') {
+                const summary = evt.process || evt.data;
+                if (s.streaming) s.streaming.process = summary;
+                this._appendProcess(summary);
+            } else if (evt.type === 'cards') {
+                const cards = evt.cards || evt.data || [];
+                if (s.streaming) s.streaming.cards = cards;
+                this._appendCards(cards);
+            } else if (evt.type === 'citations') {
+                const citations = evt.citations || evt.data || [];
+                s.pendingCitations = citations;
+                if (s.streaming) s.streaming.pendingCitations = citations;
             } else if (evt.type === 'final') {
                 if (assistantBubble) {
                     assistantBubble.classList.remove('is-streaming');
                     if (evt.assistant_message && evt.assistant_message.content) {
                         this._renderMessageContent(assistantBubble, evt.assistant_message);
+                    } else if (s.streaming && s.streaming.accText) {
+                        this._setAssistantText(assistantBubble, s.streaming.accText, true);
                     }
-                    if (evt.assistant_message && evt.assistant_message.citations_json) {
-                        document.dispatchEvent(new CustomEvent('ai-reader:message-rendered', {
-                            detail: { element: assistantBubble, citations: evt.assistant_message.citations_json },
-                        }));
+                    if (s.streaming && s.streaming.process) this._renderProcessInto(assistantBubble, s.streaming.process);
+                    if (s.streaming && Array.isArray(s.streaming.cards) && s.streaming.cards.length) {
+                        this._renderCardsInto(assistantBubble, s.streaming.cards);
                     }
+                    this._hydrateFinalCitations(assistantBubble, evt.assistant_message);
                 }
             } else if (evt.type === 'error') {
                 if (assistantBubble) {
                     assistantBubble.classList.remove('is-streaming');
-                    assistantBubble.textContent = '⚠ ' + (evt.error || evt.message || '生成失败');
+                    this._setAssistantText(assistantBubble, '⚠ ' + (evt.error || evt.message || '生成失败'), false);
                     assistantBubble.classList.add('ai-message-error');
                 }
             }
+        },
+
+        _appendProcess(summary) {
+            const s = this._state;
+            const bubble = s.streaming && s.streaming.assistantBubbleEl;
+            if (bubble) this._renderProcessInto(bubble, summary);
+        },
+
+        _appendCards(cards) {
+            const s = this._state;
+            const bubble = s.streaming && s.streaming.assistantBubbleEl;
+            if (bubble) this._renderCardsInto(bubble, cards);
+        },
+
+        _renderProcessInto(bubble, summary) {
+            if (!bubble || !window.AIReader || !window.AIReader.processStrip) return;
+            const html = window.AIReader.processStrip.render(summary);
+            const artifacts = this._ensureMessageParts(bubble).artifacts;
+            let slot = artifacts.querySelector(':scope > .ai-message-process-slot');
+            if (!slot) {
+                slot = document.createElement('div');
+                slot.className = 'ai-message-process-slot';
+                artifacts.prepend(slot);
+            }
+            slot.innerHTML = html || '';
+            this._scrollConversationToBottom();
+        },
+
+        _renderCardsInto(bubble, cards) {
+            if (!bubble || !window.AIReader || !window.AIReader.resultCards) return;
+            const html = window.AIReader.resultCards.render(cards);
+            const artifacts = this._ensureMessageParts(bubble).artifacts;
+            let slot = artifacts.querySelector(':scope > .ai-message-cards-slot');
+            if (!slot) {
+                slot = document.createElement('div');
+                slot.className = 'ai-message-cards-slot';
+                artifacts.appendChild(slot);
+            }
+            slot.innerHTML = html || '';
+            this._scrollConversationToBottom();
+        },
+
+        _hydrateFinalCitations(bubble, assistantMessage) {
+            const s = this._state;
+            const citations = assistantMessage && assistantMessage.citations_json ||
+                s.pendingCitations ||
+                (s.streaming && s.streaming.pendingCitations) ||
+                [];
+            this._dispatchCitationHydration(bubble, citations);
+        },
+
+        _dispatchCitationHydration(element, citations) {
+            if (!element || !citations) return;
+            if (typeof citations === 'string' && !citations.trim()) return;
+            if (Array.isArray(citations) && !citations.length) return;
+            document.dispatchEvent(new CustomEvent('ai-reader:message-rendered', {
+                detail: { element: element, citations: citations },
+            }));
         },
 
         _toggleSendingState(on) {
@@ -341,15 +494,48 @@
             if (s.els.stopBtn) s.els.stopBtn.hidden = !on;
         },
 
+        _scrollConversationToBottom() {
+            const s = this._state;
+            if (s.els && s.els.conversation) {
+                s.els.conversation.scrollTop = s.els.conversation.scrollHeight;
+            }
+        },
+
+        _parseJSON(value) {
+            if (!value) return null;
+            if (typeof value === 'object') return value;
+            if (typeof value !== 'string') return null;
+            try { return JSON.parse(value); } catch (e) { return null; }
+        },
+
+        _currentContext() {
+            const s = this._state;
+            const context = { source: 'ai' };
+            const draftPaperID = Number(s._draftPaperId || 0);
+            if (Number.isFinite(draftPaperID) && draftPaperID > 0) {
+                context.paper_id = draftPaperID;
+                return context;
+            }
+            const pinned = Array.isArray(s.pinnedPapers) ? s.pinnedPapers : [];
+            const ids = pinned.map((paper) => Number(paper && paper.paper_id || 0)).filter((id) => Number.isFinite(id) && id > 0);
+            if (ids.length === 1) {
+                context.paper_id = ids[0];
+            } else if (ids.length > 1) {
+                context.paper_id = ids[0];
+                context.paper_ids = ids;
+            }
+            return context;
+        },
+
         _handleStreamError(err) {
             const s = this._state;
             if (s.streaming && s.streaming.assistantBubbleEl) {
                 s.streaming.assistantBubbleEl.classList.remove('is-streaming');
                 if (err && err.name === 'AbortError') {
-                    s.streaming.assistantBubbleEl.textContent = (s.streaming.accText || '') + '\n[已停止]';
+                    this._setAssistantText(s.streaming.assistantBubbleEl, (s.streaming.accText || '') + '\n[已停止]', false);
                     s.streaming.assistantBubbleEl.classList.add('ai-message-stopped');
                 } else {
-                    s.streaming.assistantBubbleEl.textContent = '⚠ ' + (err && err.message ? err.message : '生成失败');
+                    this._setAssistantText(s.streaming.assistantBubbleEl, '⚠ ' + (err && err.message ? err.message : '生成失败'), false);
                     s.streaming.assistantBubbleEl.classList.add('ai-message-error');
                 }
             }

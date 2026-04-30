@@ -116,6 +116,16 @@
                 questionInput: $('aiQuestionInput'),
             });
 
+            if (window.AIReader.composer) {
+                window.AIReader.composer.init({
+                    input: $('aiQuestionInput'),
+                    sendBtn: $('runAIReaderButton'),
+                    stopBtn: $('stopAIReaderButton'),
+                    shortcutRoot: $('aiIntentShortcuts'),
+                    onSend: (payload) => view.sendPayload(payload),
+                });
+            }
+
             // pin chips — read state from the view module
             pin.init({
                 container: $('aiPinChips'),

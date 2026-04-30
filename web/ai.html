@@ -58,7 +58,7 @@
 
             <footer class="ai-composer">
                 <div class="ai-composer-tools">
-                    <div class="ai-mode-toggles">
+                    <div class="ai-mode-toggles" hidden>
                         <label class="ai-strict-toggle">
                             <input id="aiStrictEvidenceToggle" type="checkbox">
                             <span data-i18n="ai.strict_evidence">内部搜索</span>
@@ -68,6 +68,7 @@
                             <span data-i18n="ai.external_evidence">外部搜索</span>
                         </label>
                     </div>
+                    <div id="aiIntentShortcuts" class="ai-intent-shortcuts" aria-label="AI 任务快捷入口" data-i18n-aria-label="ai.intent_shortcuts_label"></div>
                     <p id="aiRolePromptHint" class="ai-role-prompt-hint" data-i18n="ai.role_prompt_hint">输入 @ 唤起选择面板。</p>
                 </div>
                 <label class="field ai-question-field">
@@ -108,6 +109,10 @@
     <script src="/static/js/ai-mention.js"></script>
     <script src="/static/js/ai-pin.js"></script>
     <script src="/static/js/ai-conversations.js"></script>
+    <script src="/static/js/ai-composer.js"></script>
+    <script src="/static/js/ai-message-list.js"></script>
+    <script src="/static/js/ai-process-strip.js"></script>
+    <script src="/static/js/ai-result-cards.js"></script>
     <script src="/static/js/ai-conversation-view.js"></script>
     <script src="/static/js/ai-evidence.js"></script>
     <script src="/static/js/ai-reader.js"></script>

@@ -234,6 +234,210 @@ html[lang^="zh"] .ai-config-details[open] .ai-collapsible-toggle::before {
     font-size: 0.95rem;
 }
 
+/* ===== AI Command Center ===== */
+
+.ai-intent-shortcuts {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    min-width: 0;
+}
+
+.ai-mode-toggles[hidden] {
+    display: none !important;
+}
+
+.ai-intent-shortcut {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 1.9rem;
+    padding: 0.28rem 0.68rem;
+    border-radius: 999px;
+    border: 1px solid rgba(var(--ink-rgb), 0.12);
+    background: rgba(var(--surface-rgb), 0.58);
+    color: var(--ink);
+    font: inherit;
+    font-size: 0.82rem;
+    font-weight: 700;
+    line-height: 1.2;
+    cursor: pointer;
+    transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease;
+}
+
+.ai-intent-shortcut:hover,
+.ai-intent-shortcut:focus-visible {
+    border-color: rgba(var(--accent-rgb), 0.34);
+    color: var(--accent-deep);
+    background: rgba(var(--accent-rgb), 0.08);
+    outline: none;
+}
+
+.ai-intent-shortcut.is-active {
+    border-color: rgba(var(--accent-rgb), 0.48);
+    color: var(--accent-deep);
+    background: rgba(var(--accent-rgb), 0.14);
+}
+
+.ai-message-text {
+    min-width: 0;
+    white-space: pre-wrap;
+}
+
+.ai-message-assistant .ai-message-text {
+    white-space: normal;
+}
+
+.ai-message-artifacts {
+    display: grid;
+    gap: 0.65rem;
+    margin-top: 0.65rem;
+    white-space: normal;
+}
+
+.ai-message-artifacts:empty {
+    display: none;
+}
+
+.ai-process-strip {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.32rem;
+    color: var(--muted);
+    font-size: 0.82rem;
+    line-height: 1.35;
+}
+
+.ai-process-stage {
+    display: inline-flex;
+    align-items: center;
+    min-height: 1.55rem;
+    padding: 0.16rem 0.48rem;
+    border-radius: 999px;
+    border: 1px solid rgba(var(--ink-rgb), 0.08);
+    background: rgba(var(--surface-rgb), 0.62);
+}
+
+.ai-process-stage[data-status="failed"] {
+    color: var(--error);
+    border-color: rgba(var(--error-rgb), 0.24);
+    background: rgba(var(--error-rgb), 0.08);
+}
+
+.ai-process-sep,
+.ai-process-note {
+    color: var(--muted);
+}
+
+.ai-result-cards {
+    display: grid;
+    gap: 0.65rem;
+}
+
+.ai-result-card {
+    display: grid;
+    gap: 0.55rem;
+    padding: 0.78rem;
+    border-radius: 8px;
+    border: 1px solid rgba(var(--ink-rgb), 0.1);
+    background: rgba(var(--surface-rgb), 0.72);
+}
+
+.ai-result-card h4,
+.ai-result-card p {
+    margin: 0;
+}
+
+.ai-result-card h4 {
+    font-size: 0.95rem;
+    line-height: 1.42;
+}
+
+.ai-result-card-head {
+    display: grid;
+    gap: 0.22rem;
+}
+
+.ai-result-card-head p,
+.ai-result-note,
+.ai-result-reason {
+    color: var(--muted);
+    font-size: 0.86rem;
+    line-height: 1.55;
+}
+
+.ai-result-reason {
+    color: var(--ink);
+}
+
+.ai-result-snippets {
+    display: grid;
+    gap: 0.42rem;
+}
+
+.ai-result-card blockquote {
+    margin: 0;
+    padding: 0.46rem 0.62rem;
+    border-left: 3px solid rgba(var(--accent-rgb), 0.26);
+    background: rgba(var(--ink-rgb), 0.035);
+    color: var(--muted);
+    font-size: 0.86rem;
+    line-height: 1.5;
+}
+
+.ai-result-card blockquote p {
+    margin: 0;
+}
+
+.ai-result-card blockquote span {
+    display: block;
+    margin-top: 0.25rem;
+    font-size: 0.76rem;
+    color: var(--muted);
+}
+
+.ai-result-paper-section {
+    display: grid;
+    gap: 0.42rem;
+}
+
+.ai-result-paper-section strong {
+    font-size: 0.88rem;
+    line-height: 1.4;
+}
+
+.ai-figure-result-card img {
+    display: block;
+    width: 100%;
+    max-width: 28rem;
+    max-height: 18rem;
+    object-fit: contain;
+    border-radius: 6px;
+    border: 1px solid rgba(var(--ink-rgb), 0.1);
+    background: rgba(var(--ink-rgb), 0.04);
+}
+
+.ai-figure-missing {
+    display: grid;
+    place-items: center;
+    min-height: 7rem;
+    border-radius: 6px;
+    border: 1px dashed rgba(var(--ink-rgb), 0.18);
+    color: var(--muted);
+    background: rgba(var(--ink-rgb), 0.035);
+    font-size: 0.86rem;
+}
+
+.ai-result-card-fallback pre {
+    margin: 0;
+    max-height: 14rem;
+    overflow: auto;
+    white-space: pre-wrap;
+    font-size: 0.78rem;
+}
+
 /* ===== AI Paper List ===== */
 
 .ai-paper-list {
