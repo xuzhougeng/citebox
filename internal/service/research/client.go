@@ -127,9 +127,10 @@ func (c *Client) takeToken(ctx context.Context) error {
 }
 
 // doJSON performs a GET request, retrying once on a 429 response after a
-// retryBackoff delay (cancellable via ctx). When MinInterval > 0, the token
-// bucket spaces the second attempt as well; the explicit sleep guards the
-// no-rate-limiter case from immediately re-firing the same request.
+// retryBackoff delay (cancellable via ctx). The sleep and the token bucket
+// are additive, not overlapping — when MinInterval > 0 the second attempt
+// waits roughly retryBackoff + MinInterval. The explicit sleep is what
+// keeps the retry from being instant when no rate limiter is configured.
 func (c *Client) doJSON(ctx context.Context, path string, query url.Values, out interface{}) error {
 	err := c.doJSONOnce(ctx, path, query, out)
 	if !errors.Is(err, ErrRateLimited) {
