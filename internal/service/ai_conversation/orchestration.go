@@ -10,13 +10,15 @@ import (
 	"github.com/xuzhougeng/citebox/internal/service/ai_assistant"
 )
 
-func (s *Service) emitStreamEvent(in SendMessageInput, event StreamEvent) {
+func (s *Service) emitStreamEvent(in SendMessageInput, event StreamEvent) error {
 	if in.OnEvent == nil {
-		return
+		return nil
 	}
 	if err := in.OnEvent(event); err != nil {
 		s.logger.Warn("ai_conversation: stream event callback failed", "type", event.Type, "error", err)
+		return err
 	}
+	return nil
 }
 
 func (s *Service) persistRunArtifacts(conversationID, userMsgID, assistantMsgID int64, mode string, out ai_assistant.RunOutput) {
@@ -103,6 +105,13 @@ func toolCallStatusOrCompleted(status string) string {
 	default:
 		return "completed"
 	}
+}
+
+func requestContextEmpty(ctx ai_assistant.RequestContext) bool {
+	return strings.TrimSpace(ctx.Source) == "" &&
+		ctx.PaperID == 0 &&
+		ctx.FigureID == 0 &&
+		len(ctx.PaperIDs) == 0
 }
 
 func toResultCards(rows []repository.AIResultCard) []ResultCard {

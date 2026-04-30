@@ -2,6 +2,7 @@ package ai_conversation
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -228,14 +229,104 @@ func TestExternalEvidenceCanRunWithoutStrictEvidence(t *testing.T) {
 }
 
 type stubOrchestrator struct {
-	in  ai_assistant.RunInput
-	out ai_assistant.RunOutput
-	err error
+	calls int32
+	in    ai_assistant.RunInput
+	out   ai_assistant.RunOutput
+	err   error
 }
 
 func (s *stubOrchestrator) Run(ctx context.Context, in ai_assistant.RunInput) (ai_assistant.RunOutput, error) {
+	atomic.AddInt32(&s.calls, 1)
 	s.in = in
 	return s.out, s.err
+}
+
+func TestStrictEvidenceUsesLegacyPathWhenOrchestratorConfiguredWithoutExplicitIntent(t *testing.T) {
+	svc, libRepo, caller := newServiceForTest(t)
+	orch := &stubOrchestrator{
+		out: ai_assistant.RunOutput{
+			Intent:        ai_assistant.IntentChat,
+			AnswerContext: "ORCH_CONTEXT_SHOULD_NOT_APPEAR\n\n用户问题：\n查找单细胞测序证据",
+		},
+	}
+	svc.orchestrator = orch
+	paperID := mustInsertPaperForTest(t, libRepo, "Strict Paper", "")
+	_, err := libRepo.DB().Exec(
+		`UPDATE papers SET pdf_text = ? WHERE id = ?`,
+		"The study uses scRNA-seq evidence for trajectory analysis.",
+		paperID,
+	)
+	if err != nil {
+		t.Fatalf("update pdf_text: %v", err)
+	}
+	convID, _ := svc.CreateDraft()
+	if err := svc.PinPaper(convID, paperID); err != nil {
+		t.Fatalf("PinPaper: %v", err)
+	}
+	if err := svc.UpdateStrictEvidence(convID, true); err != nil {
+		t.Fatalf("UpdateStrictEvidence: %v", err)
+	}
+
+	_, err = svc.SendMessage(context.Background(), SendMessageInput{
+		ConversationID: convID,
+		Content:        "查找单细胞测序证据",
+	}, func(string) error { return nil })
+	if err != nil {
+		t.Fatalf("SendMessage: %v", err)
+	}
+	if orch.calls != 0 {
+		t.Fatalf("orchestrator calls = %d, want 0", orch.calls)
+	}
+	if strings.Contains(caller.userSeen, "ORCH_CONTEXT_SHOULD_NOT_APPEAR") {
+		t.Fatalf("prompt used orchestrator context: %s", caller.userSeen)
+	}
+	if !strings.Contains(caller.userSeen, "内部搜索模式") || !strings.Contains(caller.userSeen, "scRNA-seq") {
+		t.Fatalf("prompt missing legacy strict evidence: %s", caller.userSeen)
+	}
+}
+
+func TestExternalEvidenceUsesLegacyPathWhenOrchestratorConfiguredWithoutExplicitIntent(t *testing.T) {
+	svc, libRepo, caller := newServiceForTest(t)
+	orch := &stubOrchestrator{
+		out: ai_assistant.RunOutput{
+			Intent:        ai_assistant.IntentChat,
+			AnswerContext: "ORCH_CONTEXT_SHOULD_NOT_APPEAR\n\n用户问题：\n帮我查找包括 ATAC 数据的文章",
+		},
+	}
+	svc.orchestrator = orch
+	paperID := mustInsertPaperForTest(t, libRepo, "External Candidate", "10.1/external")
+	convID, _ := svc.CreateDraft()
+	if err := svc.PinPaper(convID, paperID); err != nil {
+		t.Fatalf("PinPaper: %v", err)
+	}
+	svc.searcher = &stubSnippetSearcher{
+		res: research.SnippetList{
+			Items: []research.SnippetMatch{{
+				PaperID: "s2-external",
+				Paper:   research.Paper{PaperID: "s2-external", Title: "External Candidate", ExternalIDs: research.IDs{DOI: "10.1/external"}},
+				Snippet: research.Snippet{Text: "external independent evidence snippet", SnippetKind: "body", Section: "Results"},
+				Score:   0.88,
+			}},
+		},
+	}
+
+	_, err := svc.SendMessage(context.Background(), SendMessageInput{
+		ConversationID:          convID,
+		Content:                 "帮我查找包括 ATAC 数据的文章",
+		IncludeExternalEvidence: true,
+	}, func(string) error { return nil })
+	if err != nil {
+		t.Fatalf("SendMessage: %v", err)
+	}
+	if orch.calls != 0 {
+		t.Fatalf("orchestrator calls = %d, want 0", orch.calls)
+	}
+	if strings.Contains(caller.userSeen, "ORCH_CONTEXT_SHOULD_NOT_APPEAR") {
+		t.Fatalf("prompt used orchestrator context: %s", caller.userSeen)
+	}
+	if !strings.Contains(caller.userSeen, "外部 Semantic Scholar") || !strings.Contains(caller.userSeen, "external independent evidence snippet") {
+		t.Fatalf("prompt missing legacy external evidence: %s", caller.userSeen)
+	}
 }
 
 func TestSendMessageUsesOrchestratorEventsAndPersistsArtifacts(t *testing.T) {
@@ -343,6 +434,107 @@ func TestSendMessageUsesOrchestratorEventsAndPersistsArtifacts(t *testing.T) {
 	}
 	if len(conv.TurnRuns) != 1 || len(conv.TurnRuns[0].Cards) != 1 {
 		t.Fatalf("conversation turn runs = %+v", conv.TurnRuns)
+	}
+}
+
+func TestSendMessageReturnsOnEventErrorBeforeProviderCall(t *testing.T) {
+	svc, _, caller := newServiceForTest(t)
+	svc.orchestrator = &stubOrchestrator{
+		out: ai_assistant.RunOutput{
+			Intent:  ai_assistant.IntentFigureLookup,
+			Process: ai_assistant.ProcessSummary{Intent: ai_assistant.IntentFigureLookup},
+		},
+	}
+	convID, _ := svc.CreateDraft()
+	eventErr := errors.New("client stream closed")
+
+	_, err := svc.SendMessage(context.Background(), SendMessageInput{
+		ConversationID: convID,
+		Content:        "看图",
+		IntentHint:     ai_assistant.IntentFigureLookup,
+		OnEvent: func(StreamEvent) error {
+			return eventErr
+		},
+	}, func(string) error { return nil })
+	if !errors.Is(err, eventErr) {
+		t.Fatalf("SendMessage error = %v, want %v", err, eventErr)
+	}
+	if caller.calls != 0 {
+		t.Fatalf("provider calls = %d, want 0", caller.calls)
+	}
+}
+
+type cancelingStreamCaller struct {
+	calls   int32
+	rawText string
+}
+
+func (s *cancelingStreamCaller) CallProviderStreamGeneric(ctx context.Context, settings model.AISettings,
+	systemPrompt, userPrompt string, images []model.AIImageInput, onDelta func(string) error) (string, string, error) {
+	atomic.AddInt32(&s.calls, 1)
+	return s.rawText, "", context.Canceled
+}
+
+func TestSendMessagePersistsOrchestratorArtifactsForStoppedStream(t *testing.T) {
+	svc, libRepo, _ := newServiceForTest(t)
+	cancelingCaller := &cancelingStreamCaller{rawText: "partial assistant text"}
+	svc.caller = cancelingCaller
+	svc.titleCaller = nil
+	svc.summaryCaller = nil
+	svc.orchestrator = &stubOrchestrator{
+		out: ai_assistant.RunOutput{
+			Intent:     ai_assistant.IntentFigureLookup,
+			IntentHint: ai_assistant.IntentFigureLookup,
+			Process:    ai_assistant.ProcessSummary{Intent: ai_assistant.IntentFigureLookup},
+			Cards: []ai_assistant.ResultCard{{
+				Type:    "figure_result",
+				Payload: map[string]any{"figure_id": int64(3)},
+			}},
+			ToolCalls: []ai_assistant.ToolCallSummary{{
+				ToolName:          "figure_lookup",
+				InputJSON:         `{"query":"看图"}`,
+				OutputSummaryJSON: `{"hits":1}`,
+				Status:            "completed",
+			}},
+		},
+	}
+	convID, _ := svc.CreateDraft()
+
+	_, err := svc.SendMessage(context.Background(), SendMessageInput{
+		ConversationID: convID,
+		Content:        "看图",
+		IntentHint:     ai_assistant.IntentFigureLookup,
+	}, func(string) error { return nil })
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("SendMessage error = %v, want context.Canceled", err)
+	}
+	msgs, err := libRepo.AIConversation.ListMessages(convID, 0, 10)
+	if err != nil {
+		t.Fatalf("ListMessages: %v", err)
+	}
+	if len(msgs) != 2 || msgs[1].Role != "assistant" || msgs[1].Content != "partial assistant text" || msgs[1].Mode != "stopped" {
+		t.Fatalf("messages = %+v", msgs)
+	}
+	runs, err := libRepo.AIConversation.ListTurnRuns(convID)
+	if err != nil {
+		t.Fatalf("ListTurnRuns: %v", err)
+	}
+	if len(runs) != 1 || runs[0].Status != "stopped" || !runs[0].AssistantMessageID.Valid || runs[0].AssistantMessageID.Int64 != msgs[1].ID {
+		t.Fatalf("runs = %+v", runs)
+	}
+	calls, err := libRepo.AIConversation.ListToolCalls(runs[0].ID)
+	if err != nil {
+		t.Fatalf("ListToolCalls: %v", err)
+	}
+	if len(calls) != 1 || calls[0].ToolName != "figure_lookup" || calls[0].Status != "completed" {
+		t.Fatalf("calls = %+v", calls)
+	}
+	cards, err := libRepo.AIConversation.ListResultCards(runs[0].ID)
+	if err != nil {
+		t.Fatalf("ListResultCards: %v", err)
+	}
+	if len(cards) != 1 || cards[0].CardType != "figure_result" {
+		t.Fatalf("cards = %+v", cards)
 	}
 }
 

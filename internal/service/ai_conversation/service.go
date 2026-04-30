@@ -280,7 +280,9 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput, onDelta 
 	var citationsJSON string
 	var runOut ai_assistant.RunOutput
 	var runUsed bool
-	if s.orchestrator != nil {
+	legacyEvidenceRequested := conv.StrictEvidence || in.IncludeExternalEvidence
+	explicitAssistantRequest := strings.TrimSpace(in.IntentHint) != "" || !requestContextEmpty(in.Context)
+	if s.orchestrator != nil && (!legacyEvidenceRequested || explicitAssistantRequest) {
 		out, orchErr := s.orchestrator.Run(ctx, ai_assistant.RunInput{
 			Content:    in.Content,
 			IntentHint: in.IntentHint,
@@ -300,12 +302,18 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput, onDelta 
 				}
 			}
 			citationsJSON = marshalAssistantCitations(out.Citations)
-			s.emitStreamEvent(in, StreamEvent{Type: "process", Data: out.Process})
-			s.emitStreamEvent(in, StreamEvent{Type: "cards", Data: out.Cards})
-			s.emitStreamEvent(in, StreamEvent{Type: "citations", Data: out.Citations})
+			if err := s.emitStreamEvent(in, StreamEvent{Type: "process", Data: out.Process}); err != nil {
+				return SendMessageResult{}, err
+			}
+			if err := s.emitStreamEvent(in, StreamEvent{Type: "cards", Data: out.Cards}); err != nil {
+				return SendMessageResult{}, err
+			}
+			if err := s.emitStreamEvent(in, StreamEvent{Type: "citations", Data: out.Citations}); err != nil {
+				return SendMessageResult{}, err
+			}
 		}
 	}
-	if !runUsed && (conv.StrictEvidence || in.IncludeExternalEvidence) {
+	if !runUsed && legacyEvidenceRequested {
 		enrichedUser, cites, evErr := injectEvidence(ctx, s.papers, s.searcher, in.Content, pinned, EvidenceOptions{
 			IncludeExternal: in.IncludeExternalEvidence,
 			DisableLocal:    !conv.StrictEvidence,
@@ -333,7 +341,7 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput, onDelta 
 	if err != nil {
 		// User-cancelled stream: persist whatever was already streamed with mode="stopped".
 		if errors.Is(err, context.Canceled) && rawText != "" {
-			_, persistErr := s.repo.AddMessage(in.ConversationID, "assistant", rawText, repository.AIMessageMeta{
+			asstID, persistErr := s.repo.AddMessage(in.ConversationID, "assistant", rawText, repository.AIMessageMeta{
 				Provider:      string(settings.Provider),
 				Model:         settings.Model,
 				Mode:          "stopped",
@@ -341,6 +349,8 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput, onDelta 
 			})
 			if persistErr != nil {
 				s.logger.Warn("ai_conversation: persist stopped message failed", "error", persistErr)
+			} else if runUsed {
+				s.persistRunArtifacts(in.ConversationID, userMsgID, asstID, "stopped", runOut)
 			}
 			_ = s.repo.TouchConversation(in.ConversationID)
 		}
