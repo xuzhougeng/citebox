@@ -156,23 +156,25 @@ func TestAIConversationRunArtifactsRoundTrip(t *testing.T) {
 	}
 	inputJSON := `{"query":"ATAC"}`
 	outputSummaryJSON := `{"scanned":184,"hits":12}`
-	if _, err := repo.AddToolCall(AIToolCall{
+	toolCallID, err := repo.AddToolCall(AIToolCall{
 		TurnRunID:         runID,
 		ToolName:          "library_search",
 		InputJSON:         inputJSON,
 		OutputSummaryJSON: outputSummaryJSON,
 		Status:            "completed",
 		DurationMS:        17,
-	}); err != nil {
+	})
+	if err != nil {
 		t.Fatalf("AddToolCall: %v", err)
 	}
 	payloadJSON := `{"paper_id":42,"title":"ATAC Paper"}`
-	if _, err := repo.AddResultCard(AIResultCard{
+	cardID, err := repo.AddResultCard(AIResultCard{
 		TurnRunID:   runID,
 		CardType:    "paper_hit",
 		SortOrder:   1,
 		PayloadJSON: payloadJSON,
-	}); err != nil {
+	})
+	if err != nil {
 		t.Fatalf("AddResultCard: %v", err)
 	}
 
@@ -202,7 +204,8 @@ func TestAIConversationRunArtifactsRoundTrip(t *testing.T) {
 		t.Fatalf("calls = %+v", calls)
 	}
 	call := calls[0]
-	if call.TurnRunID != runID ||
+	if call.ID != toolCallID ||
+		call.TurnRunID != runID ||
 		call.InputJSON != inputJSON ||
 		call.OutputSummaryJSON != outputSummaryJSON ||
 		call.Status != "completed" ||
@@ -217,16 +220,25 @@ func TestAIConversationRunArtifactsRoundTrip(t *testing.T) {
 		t.Fatalf("cards = %+v", cards)
 	}
 	card := cards[0]
-	if card.TurnRunID != runID || card.PayloadJSON != payloadJSON {
+	if card.ID != cardID || card.TurnRunID != runID || card.PayloadJSON != payloadJSON {
 		t.Fatalf("card = %+v", card)
 	}
 }
 
 func TestAIConversationRunArtifactsCascadeWithConversation(t *testing.T) {
 	repo := newAIConversationRepoForTest(t)
-	convID, _ := repo.CreateConversation()
-	userID, _ := repo.AddMessage(convID, "user", "q", AIMessageMeta{})
-	assistantID, _ := repo.AddMessage(convID, "assistant", "a", AIMessageMeta{})
+	convID, err := repo.CreateConversation()
+	if err != nil {
+		t.Fatalf("CreateConversation: %v", err)
+	}
+	userID, err := repo.AddMessage(convID, "user", "q", AIMessageMeta{})
+	if err != nil {
+		t.Fatalf("AddMessage user: %v", err)
+	}
+	assistantID, err := repo.AddMessage(convID, "assistant", "a", AIMessageMeta{})
+	if err != nil {
+		t.Fatalf("AddMessage assistant: %v", err)
+	}
 	runID, err := repo.CreateTurnRun(AITurnRun{
 		ConversationID:     convID,
 		UserMessageID:      userID,
