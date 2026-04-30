@@ -360,6 +360,67 @@ func TestAIConversationAddToolCallRejectsNegativeDuration(t *testing.T) {
 	}
 }
 
+func TestAIConversationRunArtifactsUpdateTurnRunAssistantRejectsCrossConversationMessage(t *testing.T) {
+	repo := newAIConversationRepoForTest(t)
+	convID, err := repo.CreateConversation()
+	if err != nil {
+		t.Fatalf("CreateConversation convID: %v", err)
+	}
+	otherConvID, err := repo.CreateConversation()
+	if err != nil {
+		t.Fatalf("CreateConversation otherConvID: %v", err)
+	}
+	userID, err := repo.AddMessage(convID, "user", "q", AIMessageMeta{})
+	if err != nil {
+		t.Fatalf("AddMessage user: %v", err)
+	}
+	assistantID, err := repo.AddMessage(convID, "assistant", "a", AIMessageMeta{})
+	if err != nil {
+		t.Fatalf("AddMessage assistant: %v", err)
+	}
+	otherAssistantID, err := repo.AddMessage(otherConvID, "assistant", "other", AIMessageMeta{})
+	if err != nil {
+		t.Fatalf("AddMessage other assistant: %v", err)
+	}
+	runID, err := repo.CreateTurnRun(AITurnRun{
+		ConversationID:     convID,
+		UserMessageID:      userID,
+		AssistantMessageID: sql.NullInt64{Int64: assistantID, Valid: true},
+		Intent:             "library_search",
+		Status:             "running",
+	})
+	if err != nil {
+		t.Fatalf("CreateTurnRun: %v", err)
+	}
+
+	if err := repo.UpdateTurnRunAssistant(runID, otherAssistantID, "completed"); err == nil {
+		t.Fatal("UpdateTurnRunAssistant accepted assistant message from another conversation")
+	}
+	runs, err := repo.ListTurnRuns(convID)
+	if err != nil {
+		t.Fatalf("ListTurnRuns: %v", err)
+	}
+	if len(runs) != 1 || !runs[0].AssistantMessageID.Valid || runs[0].AssistantMessageID.Int64 != assistantID || runs[0].Status != "running" {
+		t.Fatalf("runs after rejected update = %+v", runs)
+	}
+}
+
+func TestAIConversationRunArtifactsUpdateTurnRunAssistantRejectsMissingRun(t *testing.T) {
+	repo := newAIConversationRepoForTest(t)
+	convID, err := repo.CreateConversation()
+	if err != nil {
+		t.Fatalf("CreateConversation: %v", err)
+	}
+	assistantID, err := repo.AddMessage(convID, "assistant", "a", AIMessageMeta{})
+	if err != nil {
+		t.Fatalf("AddMessage assistant: %v", err)
+	}
+
+	if err := repo.UpdateTurnRunAssistant(999, assistantID, "completed"); err == nil {
+		t.Fatal("UpdateTurnRunAssistant accepted missing run")
+	}
+}
+
 func TestAIConversationRunArtifactsCascadeWithConversation(t *testing.T) {
 	repo := newAIConversationRepoForTest(t)
 	convID, err := repo.CreateConversation()

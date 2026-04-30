@@ -310,6 +310,16 @@ func (r *AIConversationRepository) UpdateTurnRunAssistant(runID, assistantMessag
 	if status == "" {
 		status = "completed"
 	}
+	var conversationID int64
+	if err := r.db.QueryRow(`SELECT conversation_id FROM ai_turn_runs WHERE id = ?`, runID).Scan(&conversationID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("turn run not found")
+		}
+		return err
+	}
+	if err := r.ensureMessageInConversation(assistantMessageID, conversationID); err != nil {
+		return fmt.Errorf("assistant_message_id: %w", err)
+	}
 	_, err := r.db.Exec(`
 		UPDATE ai_turn_runs
 		SET assistant_message_id = ?, status = ?, updated_at = CURRENT_TIMESTAMP
