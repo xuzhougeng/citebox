@@ -38,6 +38,8 @@
     "ai.result_figure_fallback": "Figure",
     "ai.result_open_paper": "Open Paper",
     "ai.result_open_external": "View Source",
+    "ai.result_expand_evidence": "Show Evidence",
+    "ai.result_collapse_evidence": "Hide Evidence",
     "ai.result_image_unavailable": "Image unavailable",
     "ai.btn_delete_conversation": "Delete",
     "ai.confirm_delete_conversation_title": "Delete Conversation",

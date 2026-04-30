@@ -98,3 +98,23 @@ test('result cards leave citation tokens unwrapped for single hydration', () => 
     assert.match(html, /Uses ChIP-seq data\. \[1\]/);
     assert.doesNotMatch(html, /<sup>\[1\]<\/sup>/);
 });
+
+test('paper hit result cards render collapsed evidence by default', () => {
+    const render = loadResultCardsRenderer();
+    const html = render([{
+        type: 'paper_hit',
+        payload: {
+            paper_id: 1,
+            title: 'ChIP-seq paper',
+            reason: 'Sub-Agent accepted this paper.',
+            snippets: [{ text: 'Uses ChIP-seq data.', citation_index: 1 }],
+        },
+    }]);
+
+    assert.match(html, /ai-result-card-paper/);
+    assert.match(html, /data-ai-result-collapsible="paper"/);
+    assert.match(html, /aria-expanded="false"/);
+    assert.match(html, /class="ai-result-card-collapsible-body" hidden/);
+    assert.match(html, /Sub-Agent accepted this paper\./);
+    assert.match(html, /打开文献/);
+});

@@ -360,6 +360,18 @@ html[lang^="zh"] .ai-config-details[open] .ai-collapsible-toggle::before {
     gap: 0.22rem;
 }
 
+.ai-result-card-paper .ai-result-card-head {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+    column-gap: 0.75rem;
+}
+
+.ai-result-card-title-group {
+    display: grid;
+    gap: 0.22rem;
+    min-width: 0;
+}
+
 .ai-result-card-head p,
 .ai-result-note,
 .ai-result-reason {
@@ -370,6 +382,60 @@ html[lang^="zh"] .ai-config-details[open] .ai-collapsible-toggle::before {
 
 .ai-result-reason {
     color: var(--ink);
+}
+
+.ai-result-card-toggle {
+    appearance: none;
+    border: 1px solid rgba(var(--ink-rgb), 0.13);
+    border-radius: 6px;
+    background: rgba(var(--surface-rgb), 0.88);
+    color: var(--ink);
+    cursor: pointer;
+    font: inherit;
+    font-size: 0.78rem;
+    line-height: 1;
+    min-height: 1.9rem;
+    padding: 0 0.62rem;
+    transition:
+        background-color 0.16s ease,
+        border-color 0.16s ease,
+        color 0.16s ease;
+    white-space: nowrap;
+}
+
+.ai-result-card-toggle:hover,
+.ai-result-card-toggle:focus-visible {
+    border-color: rgba(var(--accent-rgb), 0.38);
+    background: rgba(var(--accent-rgb), 0.08);
+    color: var(--accent);
+    outline: none;
+}
+
+.ai-result-card-toggle-expanded {
+    display: none;
+}
+
+.ai-result-card-paper:not(.is-collapsed) .ai-result-card-toggle-collapsed {
+    display: none;
+}
+
+.ai-result-card-paper:not(.is-collapsed) .ai-result-card-toggle-expanded {
+    display: inline;
+}
+
+.ai-result-card-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+}
+
+.ai-result-card-collapsible-body {
+    display: grid;
+    gap: 0.5rem;
+}
+
+.ai-result-card-collapsible-body[hidden] {
+    display: none;
 }
 
 .ai-result-snippets {

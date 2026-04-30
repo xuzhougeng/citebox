@@ -96,14 +96,27 @@
     function renderPaperHit(p) {
         const href = p.paper_id ? '/library?paper=' + encodeURIComponent(p.paper_id) : '';
         const meta = metaLine([p.year, p.doi]);
-        return '<article class="ai-result-card ai-result-card-paper">' +
+        const snippets = renderSnippets(p.snippets);
+        const hasEvidence = snippets !== '';
+        const expandLabel = translate('ai.result_expand_evidence', '展开证据');
+        const collapseLabel = translate('ai.result_collapse_evidence', '收起证据');
+        return '<article class="ai-result-card ai-result-card-paper' + (hasEvidence ? ' ai-result-card-collapsible is-collapsed' : '') + '"' +
+            (hasEvidence ? ' data-ai-result-collapsible="paper"' : '') + '>' +
             '<div class="ai-result-card-head">' +
-                '<h4>' + escapeHtml(p.title || translate('ai.result_paper_fallback', '文献')) + '</h4>' +
-                (meta ? '<p>' + escapeHtml(meta) + '</p>' : '') +
+                '<div class="ai-result-card-title-group">' +
+                    '<h4>' + escapeHtml(p.title || translate('ai.result_paper_fallback', '文献')) + '</h4>' +
+                    (meta ? '<p>' + escapeHtml(meta) + '</p>' : '') +
+                '</div>' +
+                (hasEvidence
+                    ? '<button class="ai-result-card-toggle" type="button" data-ai-result-toggle aria-expanded="false">' +
+                        '<span class="ai-result-card-toggle-collapsed">' + escapeHtml(expandLabel) + '</span>' +
+                        '<span class="ai-result-card-toggle-expanded">' + escapeHtml(collapseLabel) + '</span>' +
+                    '</button>'
+                    : '') +
             '</div>' +
             (p.reason ? '<p class="ai-result-reason">' + escapeHtml(p.reason) + '</p>' : '') +
-            renderSnippets(p.snippets) +
-            (href ? '<a class="btn btn-small btn-outline" href="' + escapeHtml(href) + '">' + escapeHtml(translate('ai.result_open_paper', '打开文献')) + '</a>' : '') +
+            (hasEvidence ? '<div class="ai-result-card-collapsible-body" hidden>' + snippets + '</div>' : '') +
+            (href ? '<div class="ai-result-card-actions"><a class="btn btn-small btn-outline" href="' + escapeHtml(href) + '">' + escapeHtml(translate('ai.result_open_paper', '打开文献')) + '</a></div>' : '') +
         '</article>';
     }
 
@@ -153,8 +166,25 @@
         '</article>';
     }
 
+    function bindCollapsibleCards() {
+        if (typeof document === 'undefined' || document.__citeboxAIResultCardsBound) return;
+        document.__citeboxAIResultCardsBound = true;
+        document.addEventListener('click', (event) => {
+            const button = event.target.closest('[data-ai-result-toggle]');
+            if (!button) return;
+            const card = button.closest('[data-ai-result-collapsible="paper"]');
+            if (!card) return;
+            const body = card.querySelector('.ai-result-card-collapsible-body');
+            const isExpanded = button.getAttribute('aria-expanded') === 'true';
+            button.setAttribute('aria-expanded', isExpanded ? 'false' : 'true');
+            card.classList.toggle('is-collapsed', isExpanded);
+            if (body) body.hidden = isExpanded;
+        });
+    }
+
     if (typeof window !== 'undefined') {
         window.AIReader = window.AIReader || {};
         window.AIReader.resultCards = { render: render };
+        bindCollapsibleCards();
     }
 })();

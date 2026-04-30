@@ -33,8 +33,8 @@
 /* ===== 5. Features ===== */
 @import url('features/modal.css');
 @import url('features/lightbox.css');
-@import url('features/ai.css?v=20260430-3');
-@import url("features/ai-sidebar.css?v=20260430-3");
+@import url('features/ai.css?v=20260430-4');
+@import url("features/ai-sidebar.css?v=20260430-4");
 @import url('features/figure-ai.css');
 @import url('features/manual.css');
 @import url('features/markdown.css');

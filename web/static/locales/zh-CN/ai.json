@@ -38,6 +38,8 @@
     "ai.result_figure_fallback": "图",
     "ai.result_open_paper": "打开文献",
     "ai.result_open_external": "查看来源",
+    "ai.result_expand_evidence": "展开证据",
+    "ai.result_collapse_evidence": "收起证据",
     "ai.result_image_unavailable": "图片不可用",
     "ai.btn_delete_conversation": "删除",
     "ai.confirm_delete_conversation_title": "删除对话",
