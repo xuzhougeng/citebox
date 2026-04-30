@@ -5,18 +5,19 @@ package research
 // Paper is a normalised view of a Semantic Scholar paper. We only keep
 // fields the panel actually renders; raw responses live in the cache.
 type Paper struct {
-	PaperID              string   `json:"paperId"`
-	ExternalIDs          IDs      `json:"externalIds"`
-	Title                string   `json:"title"`
-	Abstract             string   `json:"abstract"`
-	TLDR                 string   `json:"tldr,omitempty"`
-	Year                 int      `json:"year"`
-	Venue                string   `json:"venue"`
-	Authors              []Author `json:"authors"`
-	CitationCount        int      `json:"citationCount"`
-	InfluentialCount     int      `json:"influentialCitationCount"`
-	OpenAccessPDFURL     string   `json:"openAccessPdfUrl,omitempty"`
-	FieldsOfStudy        []string `json:"fieldsOfStudy,omitempty"`
+	PaperID          string   `json:"paperId"`
+	ExternalIDs      IDs      `json:"externalIds"`
+	Title            string   `json:"title"`
+	Abstract         string   `json:"abstract"`
+	TLDR             string   `json:"tldr,omitempty"`
+	Year             int      `json:"year"`
+	Venue            string   `json:"venue"`
+	Authors          []Author `json:"authors"`
+	CitationCount    int      `json:"citationCount"`
+	ReferenceCount   int      `json:"referenceCount"`
+	InfluentialCount int      `json:"influentialCitationCount"`
+	OpenAccessPDFURL string   `json:"openAccessPdfUrl,omitempty"`
+	FieldsOfStudy    []string `json:"fieldsOfStudy,omitempty"`
 }
 
 // IDs holds the cross-source identifiers S2 attaches to a paper.
@@ -44,7 +45,7 @@ type SearchOpts struct {
 type PaperList struct {
 	Items  []Paper `json:"items"`
 	Offset int     `json:"offset"`
-	Next   int     `json:"next"`  // 0 means no more
+	Next   int     `json:"next"` // 0 means no more
 	Total  int     `json:"total,omitempty"`
 }
 

@@ -95,49 +95,57 @@
     async function searchSeed(query) {
         pushSearchHistory(query);
         const data = await api(`/api/research/search?q=${encodeURIComponent(query)}&limit=20`);
+        state.history = [];
+        state.seed = null;
         renderSearchResults(data.items || []);
+        savePersistedState();
     }
 
     function renderSearchResults(items) {
         state.activeTab = 'search';
-        renderSeedPane(`<h4 data-i18n="research.tab.search">搜索结果</h4>`, items);
+        renderSeedPane(`<h4>${escapeHtml(t('research.tab.search', '搜索结果'))}</h4>`, items);
     }
 
     async function setSeed(s2PaperID) {
-        if (state.seed) state.history.push(state.seed.paperId);
+        const previousView = currentViewSnapshot();
         const paper = await api(`/api/research/paper/${encodeURIComponent(s2PaperID)}`);
+        if (!paper || !paper.paperId) return;
+        pushHistory(previousView);
         state.seed = paper;
         state.activeTab = 'references';
         savePersistedState();
         await loadActiveTab();
+        $('research-seed-pane')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
     async function loadActiveTab() {
-        if (!state.seed) return;
-        const id = encodeURIComponent(state.seed.paperId);
+        const seed = state.seed;
+        const activeTab = state.activeTab;
+        if (!seed || !seed.paperId) return;
+        const id = encodeURIComponent(seed.paperId);
         let items = [];
-        if (state.activeTab === 'references') {
+        if (activeTab === 'references') {
             const data = await api(`/api/research/paper/${id}/references?offset=0&limit=20`);
             items = data.items || [];
-        } else if (state.activeTab === 'citations') {
+        } else if (activeTab === 'citations') {
             const params = state.filters.influentialOnly ? '&influential_only=true' : '';
             const data = await api(`/api/research/paper/${id}/citations?offset=0&limit=20${params}`);
             items = data.items || [];
-        } else if (state.activeTab === 'recommendations') {
+        } else if (activeTab === 'recommendations') {
             const data = await api(`/api/research/paper/${id}/recommendations`);
             items = data.items || [];
         }
-        renderSeedPane(buildSeedHeader(), items);
+        if (!state.seed || state.seed.paperId !== seed.paperId || state.activeTab !== activeTab) return;
+        renderSeedPane(buildSeedHeader(seed, activeTab), items);
     }
 
-    function buildSeedHeader() {
-        const s = state.seed;
+    function buildSeedHeader(seed, activeTab) {
+        const s = seed || state.seed;
+        if (!s) return '';
+        const currentTab = activeTab || state.activeTab;
         const ids = s.externalIds || {};
-        const titleHref = s.paperId ? `https://www.semanticscholar.org/paper/${encodeURIComponent(s.paperId)}` : '';
-        const titleHtml = titleHref
-            ? `<a class="research-item-title" href="${escapeHtml(titleHref)}" target="_blank" rel="noopener">${escapeHtml(s.title)}</a>`
-            : `<b>${escapeHtml(s.title)}</b>`;
-        const metaParts = [formatAuthors(s.authors), s.year, s.venue, formatCites(s)].filter(Boolean);
+        const titleHtml = `<b>${escapeHtml(paperTitle(s))}</b>`;
+        const metaParts = [formatAuthors(s.authors), s.year, s.venue, formatPaperStats(s)].filter(Boolean);
         const metaHtml = metaParts.length
             ? `<div class="research-seed-meta">${metaParts.map(escapeHtml).join(' · ')}</div>`
             : '';
@@ -151,18 +159,18 @@
         const linksHtml = linkBits.length ? `<div class="research-item-links">${linkBits.join(' · ')}</div>` : '';
         return `
             <div class="research-seed-card">
-                <div class="research-seed-title">${titleHtml}</div>
+                <div class="research-seed-title-row">
+                    <div class="research-seed-title">${titleHtml}</div>
+                    ${s.paperId ? renderCandidateButton('add-seed-to-basket', '') : ''}
+                </div>
                 ${metaHtml}
                 ${tldrHtml}
                 ${linksHtml}
-                <div class="research-seed-actions">
-                    <button data-action="add-seed-to-basket">${escapeHtml(t('research.action.addToBasket', '加入篮子'))}</button>
-                </div>
             </div>
             <div class="research-tabs">
-                <span class="research-tab ${state.activeTab === 'references' ? 'active' : ''}" data-tab="references" data-i18n="research.tab.references">引用了</span>
-                <span class="research-tab ${state.activeTab === 'citations' ? 'active' : ''}" data-tab="citations" data-i18n="research.tab.citations">被引用</span>
-                <span class="research-tab ${state.activeTab === 'recommendations' ? 'active' : ''}" data-tab="recommendations" data-i18n="research.tab.recommendations">相似</span>
+                <span class="research-tab ${currentTab === 'references' ? 'active' : ''}" data-tab="references">${escapeHtml(t('research.tab.references', '引用了'))}</span>
+                <span class="research-tab ${currentTab === 'citations' ? 'active' : ''}" data-tab="citations">${escapeHtml(t('research.tab.citations', '被引用'))}</span>
+                <span class="research-tab ${currentTab === 'recommendations' ? 'active' : ''}" data-tab="recommendations">${escapeHtml(t('research.tab.recommendations', '相似'))}</span>
             </div>
         `;
     }
@@ -170,17 +178,99 @@
     function renderSeedPane(headerHTML, items) {
         state.list = items;
         const listHTML = items.map(p => renderListItem(p)).join('');
-        $('research-seed-pane').innerHTML = `${headerHTML}<div class="research-list">${listHTML || '<div class="research-empty">无结果</div>'}</div>`;
+        const emptyHTML = `<div class="research-empty">${escapeHtml(emptyMessageForCurrentView())}</div>`;
+        $('research-seed-pane').innerHTML = `${renderBackBar()}${headerHTML}<div class="research-list">${listHTML || emptyHTML}</div>`;
+    }
+
+    function emptyMessageForCurrentView() {
+        const seed = state.seed;
+        if (state.activeTab === 'search') {
+            return t('research.empty.searchNoResults', '暂无搜索结果');
+        }
+        if (state.activeTab === 'basketRec') {
+            return t('research.empty.basketRecNoResults', '暂无候选推荐');
+        }
+        if (state.activeTab === 'references') {
+            if (seed && seed.referenceCount > 0) {
+                return formatI18n(
+                    'research.empty.referencesUnavailableWithCount',
+                    'Semantic Scholar 显示这篇文章有 {count} 篇参考文献，但当前没有返回可展示的引用列表。',
+                    { count: seed.referenceCount },
+                );
+            }
+            return t('research.empty.referencesUnavailable', 'Semantic Scholar 暂未返回这篇文章的参考文献列表。');
+        }
+        if (state.activeTab === 'citations') {
+            if (seed && seed.citationCount > 0) {
+                return formatI18n(
+                    'research.empty.citationsUnavailableWithCount',
+                    'Semantic Scholar 显示这篇文章有 {count} 次被引，但当前没有返回可展示的被引列表。',
+                    { count: seed.citationCount },
+                );
+            }
+            return t('research.empty.citationsNone', 'Semantic Scholar 暂无被引记录。');
+        }
+        if (state.activeTab === 'recommendations') {
+            return t('research.empty.recommendationsNone', 'Semantic Scholar 暂未返回相似文献。');
+        }
+        return t('research.empty.noResults', '暂无结果');
+    }
+
+    function renderBackBar() {
+        if (!state.history.length) return '';
+        const label = t('research.history.back', '返回上一级');
+        return `
+            <div class="research-back-row">
+                <button class="research-back-button" type="button" data-action="go-back" aria-label="${escapeHtml(label)}">
+                    <span aria-hidden="true">←</span>
+                    <span>${escapeHtml(label)}</span>
+                </button>
+            </div>
+        `;
+    }
+
+    function currentViewSnapshot() {
+        return {
+            seed: state.seed,
+            activeTab: state.activeTab,
+            list: Array.isArray(state.list) ? state.list.slice() : [],
+        };
+    }
+
+    function pushHistory(snapshot) {
+        state.history.push(snapshot);
+        if (state.history.length > 20) state.history.shift();
+    }
+
+    function restorePreviousView() {
+        const snapshot = state.history.pop();
+        if (!snapshot) return;
+        state.seed = snapshot.seed || null;
+        state.activeTab = snapshot.activeTab || 'references';
+
+        if (state.activeTab === 'search') {
+            renderSearchResults(snapshot.list || []);
+        } else if (state.activeTab === 'basketRec') {
+            renderSeedPane(`<h4>${escapeHtml(t('research.tab.basketRec', '候选推荐'))}</h4>`, snapshot.list || []);
+        } else if (state.seed) {
+            renderSeedPane(buildSeedHeader(state.seed, state.activeTab), snapshot.list || []);
+        } else {
+            renderSeedPane(`<h4>${escapeHtml(t('research.tab.search', '搜索结果'))}</h4>`, snapshot.list || []);
+        }
+
+        savePersistedState();
+        $('research-seed-pane')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
     function renderListItem(p) {
         const ids = p.externalIds || {};
-        const titleHref = p.paperId ? `https://www.semanticscholar.org/paper/${encodeURIComponent(p.paperId)}` : '';
-        const titleHtml = titleHref
-            ? `<a class="research-item-title" href="${escapeHtml(titleHref)}" target="_blank" rel="noopener">${escapeHtml(p.title)}</a>`
-            : `<b>${escapeHtml(p.title)}</b>`;
+        const paperID = p.paperId || '';
+        const detailLabel = t('research.action.openPaperDetail', '查看文献详情');
+        const titleHtml = paperID
+            ? `<button class="research-item-title research-title-button" type="button" data-action="set-as-seed" data-id="${escapeHtml(paperID)}" aria-label="${escapeHtml(detailLabel)}" title="${escapeHtml(detailLabel)}">${escapeHtml(paperTitle(p))}</button>`
+            : `<b class="research-item-title">${escapeHtml(paperTitle(p))}</b>`;
 
-        const metaParts = [formatAuthors(p.authors), p.year, p.venue, formatCites(p)].filter(Boolean);
+        const metaParts = [formatAuthors(p.authors), p.year, p.venue, formatPaperStats(p)].filter(Boolean);
         const metaHtml = metaParts.length
             ? `<div class="research-meta">${metaParts.map(escapeHtml).join(' · ')}</div>`
             : '';
@@ -196,16 +286,29 @@
         const linksHtml = linkBits.length ? `<div class="research-item-links">${linkBits.join(' · ')}</div>` : '';
 
         return `
-            <div class="research-list-item" data-id="${escapeHtml(p.paperId)}">
-                ${titleHtml}
+            <div class="research-list-item" data-id="${escapeHtml(paperID)}">
+                <div class="research-item-head">
+                    ${titleHtml}
+                    ${paperID ? renderCandidateButton('add-to-basket', paperID) : ''}
+                </div>
                 ${metaHtml}
                 ${tldrHtml}
                 ${linksHtml}
-                <div class="research-list-actions">
-                    <button data-action="add-to-basket" data-id="${escapeHtml(p.paperId)}">${escapeHtml(t('research.action.addToBasket', '加入篮子'))}</button>
-                    <button data-action="set-as-seed" data-id="${escapeHtml(p.paperId)}">${escapeHtml(t('research.action.setAsSeed', '顺此展开'))}</button>
-                </div>
             </div>
+        `;
+    }
+
+    function paperTitle(p) {
+        return p.title || t('research.paper.untitled', '未命名文献');
+    }
+
+    function renderCandidateButton(action, paperID) {
+        const label = t('research.action.addToBasket', '加入候选');
+        const idAttr = paperID ? ` data-id="${escapeHtml(paperID)}"` : '';
+        return `
+            <button class="research-icon-button research-add-candidate" type="button" data-action="${escapeHtml(action)}"${idAttr} aria-label="${escapeHtml(label)}" title="${escapeHtml(label)}">
+                <span aria-hidden="true">+</span>
+            </button>
         `;
     }
 
@@ -214,11 +317,27 @@
         return authors.slice(0, 3).map(a => a.name).join(', ') + (authors.length > 3 ? ' et al.' : '');
     }
 
-    function formatCites(p) {
+    function formatPaperStats(p) {
+        const parts = [];
+        const refs = p.referenceCount || 0;
         const c = p.citationCount || 0;
         const inf = p.influentialCitationCount || 0;
-        if (!c && !inf) return '';
-        return inf > 0 ? `${c} cites (★ ${inf})` : `${c} cites`;
+        if (refs > 0) {
+            parts.push(formatI18n('research.metric.references', '{count} references', { count: refs }));
+        }
+        if (c > 0 || inf > 0) {
+            const citationText = formatI18n('research.metric.citations', '{count} citations', { count: c });
+            parts.push(inf > 0 ? `${citationText} (★ ${inf})` : citationText);
+        }
+        return parts.join(' / ');
+    }
+
+    function formatI18n(key, fallback, values) {
+        let text = t(key, fallback);
+        Object.entries(values || {}).forEach(([name, value]) => {
+            text = text.split(`{${name}}`).join(value);
+        });
+        return text;
     }
 
     function truncate(s, n) {
@@ -243,10 +362,15 @@
     }
 
     function renderBasket() {
+        if (!state.basket.length) {
+            $('research-basket-list').innerHTML = `<li class="research-basket-empty">${escapeHtml(t('research.basket.empty', '暂无候选文献'))}</li>`;
+            return;
+        }
+        const removeLabel = t('research.action.removeFromBasket', '移出候选');
         $('research-basket-list').innerHTML = state.basket.map(p => `
             <li class="research-basket-item" data-id="${escapeHtml(p.paperId)}">
-                <span>${escapeHtml(p.title)}</span>
-                <button data-action="remove-from-basket" data-id="${escapeHtml(p.paperId)}">×</button>
+                <span>${escapeHtml(paperTitle(p))}</span>
+                <button data-action="remove-from-basket" data-id="${escapeHtml(p.paperId)}" aria-label="${escapeHtml(removeLabel)}" title="${escapeHtml(removeLabel)}">×</button>
             </li>
         `).join('');
     }
@@ -280,7 +404,7 @@
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = 'research-basket.md';
+        a.download = 'research-shortlist.md';
         a.click();
         URL.revokeObjectURL(url);
     }
@@ -292,8 +416,9 @@
             method: 'POST',
             body: JSON.stringify({ positive: ids, negative: [] }),
         });
+        pushHistory(currentViewSnapshot());
         state.activeTab = 'basketRec';
-        renderSeedPane(`<h4 data-i18n="research.tab.basketRec">基于篮子推荐</h4>`, data.items || []);
+        renderSeedPane(`<h4>${escapeHtml(t('research.tab.basketRec', '候选推荐'))}</h4>`, data.items || []);
     }
 
     function bindEvents() {
@@ -308,25 +433,32 @@
         $('research-basket-export').addEventListener('click', exportBasket);
         $('research-basket-recommend').addEventListener('click', recommendFromBasket);
 
-        // Event delegation for the seed pane (set-as-seed, add-to-basket, tab switches)
+        // Event delegation for title drill-down, candidate actions, and tab switches.
         $('research-seed-pane').addEventListener('click', async (e) => {
-            const tab = e.target.dataset.tab;
+            const tabEl = e.target.closest('[data-tab]');
+            const tab = tabEl && tabEl.dataset.tab;
             if (tab) {
                 state.activeTab = tab;
                 savePersistedState();
                 await loadActiveTab();
                 return;
             }
-            const action = e.target.dataset.action;
-            const id = e.target.dataset.id;
+            const actionEl = e.target.closest('[data-action]');
+            const action = actionEl && actionEl.dataset.action;
+            const id = actionEl && actionEl.dataset.id;
+            if (action === 'go-back') {
+                restorePreviousView();
+                return;
+            }
             if (action === 'set-as-seed' && id) await setSeed(id);
             if (action === 'add-to-basket' && id) await addToBasket(id);
             if (action === 'add-seed-to-basket' && state.seed) await addToBasket(state.seed.paperId);
         });
 
         $('research-basket-list').addEventListener('click', async (e) => {
-            const action = e.target.dataset.action;
-            const id = e.target.dataset.id;
+            const actionEl = e.target.closest('[data-action]');
+            const action = actionEl && actionEl.dataset.action;
+            const id = actionEl && actionEl.dataset.id;
             if (action === 'remove-from-basket' && id) await removeFromBasket(id);
         });
 
@@ -363,7 +495,7 @@
                 await loadActiveTab();
             } catch (e) {
                 // upstream / network errors on resume — show cached seed only
-                renderSeedPane(buildSeedHeader(), []);
+                renderSeedPane(buildSeedHeader(state.seed, state.activeTab), []);
             }
         }
     }

@@ -167,6 +167,7 @@ type rawPaper struct {
 	Venue                    string         `json:"venue"`
 	Authors                  []Author       `json:"authors"`
 	CitationCount            int            `json:"citationCount"`
+	ReferenceCount           int            `json:"referenceCount"`
 	InfluentialCitationCount int            `json:"influentialCitationCount"`
 	OpenAccessPDF            *struct {
 		URL string `json:"url"`
@@ -202,6 +203,7 @@ func (rp rawPaper) toPaper() Paper {
 		Venue:            rp.Venue,
 		Authors:          rp.Authors,
 		CitationCount:    rp.CitationCount,
+		ReferenceCount:   rp.ReferenceCount,
 		InfluentialCount: rp.InfluentialCitationCount,
 		FieldsOfStudy:    rp.FieldsOfStudy,
 	}
@@ -224,12 +226,12 @@ func (rp rawPaper) toPaper() Paper {
 }
 
 // defaultPaperFields is the field selection used by Get/Search.
-const defaultPaperFields = "paperId,externalIds,title,abstract,year,venue,authors,citationCount,influentialCitationCount,openAccessPdf,tldr,fieldsOfStudy"
+const defaultPaperFields = "paperId,externalIds,title,abstract,year,venue,authors,citationCount,referenceCount,influentialCitationCount,openAccessPdf,tldr,fieldsOfStudy"
 
 // paperFieldsWithoutTLDR is used for references/citations and recommendations.
 // Semantic Scholar accepts tldr on direct Graph paper responses, but rejects it
 // on edge-list and recommendation endpoints.
-const paperFieldsWithoutTLDR = "paperId,externalIds,title,abstract,year,venue,authors,citationCount,influentialCitationCount,openAccessPdf,fieldsOfStudy"
+const paperFieldsWithoutTLDR = "paperId,externalIds,title,abstract,year,venue,authors,citationCount,referenceCount,influentialCitationCount,openAccessPdf,fieldsOfStudy"
 
 // Search executes a paper/search query.
 func (c *Client) Search(ctx context.Context, query string, opts SearchOpts) (PaperList, error) {

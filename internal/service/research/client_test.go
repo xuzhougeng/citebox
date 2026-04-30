@@ -68,7 +68,8 @@ func TestClientSearchHappyPath(t *testing.T) {
 			"next":   10,
 			"data": []map[string]interface{}{
 				{"paperId": "p1", "title": "Attention Is All You Need", "year": 2017,
-					"externalIds": map[string]string{"DOI": "10.1/abc"}},
+					"referenceCount": 31,
+					"externalIds":    map[string]string{"DOI": "10.1/abc"}},
 			},
 		})
 	})
@@ -84,6 +85,9 @@ func TestClientSearchHappyPath(t *testing.T) {
 	}
 	if res.Items[0].ExternalIDs.DOI != "10.1/abc" {
 		t.Fatalf("DOI = %q", res.Items[0].ExternalIDs.DOI)
+	}
+	if res.Items[0].ReferenceCount != 31 {
+		t.Fatalf("ReferenceCount = %d, want 31", res.Items[0].ReferenceCount)
 	}
 }
 
