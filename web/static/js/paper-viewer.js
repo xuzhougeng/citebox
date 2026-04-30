@@ -799,7 +799,7 @@ const PaperViewer = {
                         <a class="btn btn-outline" href="/manual?paper_id=${paper.id}" target="_blank" rel="noreferrer">${t("shared.paper.manual_annotation", "手动标注")}</a>
                         ${(paper.extraction_status === 'failed' || paper.extraction_status === 'cancelled') ? '<button class="btn btn-outline" type="button" data-modal-action="reextract-paper">${t("shared.paper.reparse", "重新解析")}</button>' : ''}
                         <button class="btn btn-outline danger" type="button" data-modal-action="delete-paper">${t("shared.paper.delete_paper", "删除文献")}</button>
-                        <a class="btn btn-outline" href="/ai?paper_id=${paper.id}">${t('shared.paper.ai_reading', 'AI伴读')}</a>
+                        <a class="btn btn-outline" href="/ai?paper_id=${paper.id}">${t('shared.paper.ask_ai', '在 AI 中追问 →')}</a>
                         <a class="btn btn-outline" href="${Utils.resourceViewerURL('pdf', paper.pdf_url)}">${t('shared.paper.open_pdf', '打开 PDF')}</a>
                     </div>
                 </form>

@@ -63,6 +63,10 @@ const BrowserUI = {
                 </div>
                 <div class="paper-list-footer">
                     <div class="paper-list-tags">${tags}</div>
+                    <div class="paper-list-actions">
+                        <button class="btn btn-small btn-outline" type="button" data-action="open">${Utils.escapeHTML(t('library.btn_paper_detail', '文献详情'))}</button>
+                        <button class="btn btn-small btn-outline" type="button" data-action="ask-ai" data-paper-id="${paper.id}">${Utils.escapeHTML(t('library.btn_ask_ai', '在 AI 中追问 →'))}</button>
+                    </div>
                 </div>
             </article>
         `;
@@ -853,6 +857,11 @@ const GroupsPage = {
             const action = event.target.closest('[data-action]');
             const card = event.target.closest('[data-paper-id]');
             if (!action || !card) return;
+            if (action.dataset.action === 'ask-ai') {
+                const id = action.dataset.paperId || card.dataset.paperId;
+                if (id) window.location.href = '/ai?paper_id=' + encodeURIComponent(id);
+                return;
+            }
             await PaperViewer.open(Number(card.dataset.paperId), async () => await this.reload());
         });
 
@@ -1141,6 +1150,11 @@ const TagsPage = {
                 const action = event.target.closest('[data-action]');
                 const card = event.target.closest('[data-paper-id]');
                 if (!action || !card) return;
+                if (action.dataset.action === 'ask-ai') {
+                    const id = action.dataset.paperId || card.dataset.paperId;
+                    if (id) window.location.href = '/ai?paper_id=' + encodeURIComponent(id);
+                    return;
+                }
                 await PaperViewer.open(Number(card.dataset.paperId), async () => await this.reload());
                 return;
             }
