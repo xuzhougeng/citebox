@@ -23,6 +23,8 @@ type ResearchService interface {
 	Citations(ctx context.Context, paperID string, offset, limit int, opts research.CitationOpts) (research.PaperList, error)
 	Recommendations(ctx context.Context, paperID string) ([]research.Paper, error)
 	RecommendationsForList(ctx context.Context, positive, negative []string) ([]research.Paper, error)
+	Autocomplete(ctx context.Context, query string) ([]research.AutocompleteItem, error)
+	SnippetSearch(ctx context.Context, query string, opts research.SnippetSearchOpts) (research.SnippetList, error)
 }
 
 // BasketStore is the basket-side interface; defined here so we can stub in tests.
@@ -136,6 +138,57 @@ func (h *ResearchHandler) Recommendations(w http.ResponseWriter, r *http.Request
 		return
 	}
 	sendJSON(w, http.StatusOK, map[string]interface{}{"items": res})
+}
+
+// Autocomplete → GET /api/research/autocomplete?q=...
+func (h *ResearchHandler) Autocomplete(w http.ResponseWriter, r *http.Request) {
+	q := strings.TrimSpace(r.URL.Query().Get("q"))
+	if q == "" {
+		sendJSON(w, http.StatusOK, map[string]interface{}{"items": []research.AutocompleteItem{}})
+		return
+	}
+	items, err := h.service.Autocomplete(r.Context(), q)
+	if err != nil {
+		writeResearchError(w, err)
+		return
+	}
+	sendJSON(w, http.StatusOK, map[string]interface{}{"items": items})
+}
+
+// SnippetSearch → GET /api/research/snippets?q=...&paper_ids=...
+func (h *ResearchHandler) SnippetSearch(w http.ResponseWriter, r *http.Request) {
+	q := strings.TrimSpace(r.URL.Query().Get("q"))
+	if q == "" {
+		sendError(w, apperr.New(apperr.CodeInvalidArgument, "缺少查询参数 q"))
+		return
+	}
+	opts := research.SnippetSearchOpts{
+		Year:          r.URL.Query().Get("year"),
+		Venue:         r.URL.Query().Get("venue"),
+		FieldsOfStudy: r.URL.Query().Get("fields_of_study"),
+	}
+	if v := r.URL.Query().Get("paper_ids"); v != "" {
+		ids := strings.Split(v, ",")
+		clean := make([]string, 0, len(ids))
+		for _, id := range ids {
+			if id = strings.TrimSpace(id); id != "" {
+				clean = append(clean, id)
+			}
+		}
+		opts.PaperIDs = clean
+	}
+	if v := r.URL.Query().Get("min_citation_count"); v != "" {
+		opts.MinCitationCount, _ = strconv.Atoi(v)
+	}
+	if v := r.URL.Query().Get("limit"); v != "" {
+		opts.Limit, _ = strconv.Atoi(v)
+	}
+	res, err := h.service.SnippetSearch(r.Context(), q, opts)
+	if err != nil {
+		writeResearchError(w, err)
+		return
+	}
+	sendJSON(w, http.StatusOK, res)
 }
 
 // RecommendationsForList → POST /api/research/recommendations

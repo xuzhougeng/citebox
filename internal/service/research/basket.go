@@ -24,6 +24,7 @@ type BasketRepo interface {
 // PaperLookup hydrates an item to a full Paper via the cache/service.
 type PaperLookup interface {
 	GetPaper(ctx context.Context, id string) (Paper, error)
+	GetPapers(ctx context.Context, ids []string) ([]Paper, error)
 }
 
 // LibraryImporter persists a Paper into the local library and returns the new
@@ -59,20 +60,21 @@ func (b *Basket) Remove(ctx context.Context, s2PaperID string) error {
 
 // List returns all basket items hydrated with Paper metadata. Items whose
 // metadata can't be fetched are skipped (logged at the caller level if needed).
+// Hydration goes through the cache-aware batch lookup, so a basket of N items
+// costs at most one /paper/batch call regardless of N.
 func (b *Basket) List(ctx context.Context) ([]Paper, error) {
 	rows, err := b.repo.ListBasketItems()
 	if err != nil {
 		return nil, err
 	}
-	out := make([]Paper, 0, len(rows))
-	for _, row := range rows {
-		paper, err := b.lookup.GetPaper(ctx, row.S2PaperID)
-		if err != nil {
-			continue
-		}
-		out = append(out, paper)
+	if len(rows) == 0 {
+		return nil, nil
 	}
-	return out, nil
+	ids := make([]string, 0, len(rows))
+	for _, row := range rows {
+		ids = append(ids, row.S2PaperID)
+	}
+	return b.lookup.GetPapers(ctx, ids)
 }
 
 // ImportToLibrary creates papers in the library for the requested ids and

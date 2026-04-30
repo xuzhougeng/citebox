@@ -263,6 +263,125 @@ func TestClientRecommendations(t *testing.T) {
 	}
 }
 
+func TestClientGetBatch(t *testing.T) {
+	srv, stop := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("method = %s, want POST", r.Method)
+		}
+		if r.URL.Path != "/graph/v1/paper/batch" {
+			t.Errorf("path = %s", r.URL.Path)
+		}
+		if !strings.Contains(r.URL.Query().Get("fields"), "title") {
+			t.Errorf("fields query missing")
+		}
+		var body struct {
+			IDs []string `json:"ids"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		if len(body.IDs) != 3 {
+			t.Errorf("ids = %v", body.IDs)
+		}
+		// middle entry is missing → null
+		_, _ = w.Write([]byte(`[
+			{"paperId":"p1","title":"First"},
+			null,
+			{"paperId":"p3","title":"Third"}
+		]`))
+	})
+	defer stop()
+	c := newTestClient(srv.URL, "")
+	papers, err := c.GetBatch(context.Background(), []string{"p1", "p2", "p3"}, nil)
+	if err != nil {
+		t.Fatalf("GetBatch: %v", err)
+	}
+	if len(papers) != 3 {
+		t.Fatalf("len = %d", len(papers))
+	}
+	if papers[0].PaperID != "p1" || papers[1].PaperID != "" || papers[2].PaperID != "p3" {
+		t.Fatalf("got %+v", papers)
+	}
+}
+
+func TestClientAutocomplete(t *testing.T) {
+	srv, stop := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/graph/v1/paper/autocomplete" {
+			t.Errorf("path = %s", r.URL.Path)
+		}
+		if r.URL.Query().Get("query") != "scib" {
+			t.Errorf("query = %q", r.URL.Query().Get("query"))
+		}
+		_, _ = w.Write([]byte(`{"matches":[
+			{"id":"p1","title":"SciBERT","authorsYear":"Beltagy et al., 2019"}
+		]}`))
+	})
+	defer stop()
+	c := newTestClient(srv.URL, "")
+	items, err := c.Autocomplete(context.Background(), "scib")
+	if err != nil {
+		t.Fatalf("Autocomplete: %v", err)
+	}
+	if len(items) != 1 || items[0].PaperID != "p1" || items[0].Title != "SciBERT" || items[0].AuthorsYear == "" {
+		t.Fatalf("items = %+v", items)
+	}
+}
+
+func TestClientSnippetSearch(t *testing.T) {
+	srv, stop := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/graph/v1/snippet/search" {
+			t.Errorf("path = %s", r.URL.Path)
+		}
+		if r.URL.Query().Get("query") != "graph neural network" {
+			t.Errorf("query = %q", r.URL.Query().Get("query"))
+		}
+		if r.URL.Query().Get("paperIds") != "p1,p2" {
+			t.Errorf("paperIds = %q", r.URL.Query().Get("paperIds"))
+		}
+		_, _ = w.Write([]byte(`{
+			"data":[{
+				"paper":{"paperId":"p1","title":"GNN paper"},
+				"snippet":{"text":"GNNs work...","snippetKind":"body","section":"Intro","snippetOffset":{"start":10,"end":42}},
+				"score":0.87
+			}],
+			"retrievalVersion":"v3"
+		}`))
+	})
+	defer stop()
+	c := newTestClient(srv.URL, "")
+	res, err := c.SnippetSearch(context.Background(), "graph neural network", SnippetSearchOpts{
+		PaperIDs: []string{"p1", "p2"},
+	})
+	if err != nil {
+		t.Fatalf("SnippetSearch: %v", err)
+	}
+	if res.RetrievalVersion != "v3" || len(res.Matches) != 1 {
+		t.Fatalf("res = %+v", res)
+	}
+	m := res.Matches[0]
+	if m.PaperID != "p1" || m.Snippet.Text != "GNNs work..." || m.Snippet.SnippetOffset.End != 42 || m.Score < 0.86 {
+		t.Fatalf("match = %+v", m)
+	}
+}
+
+func TestClientRetriesOn429(t *testing.T) {
+	calls := 0
+	srv, stop := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		if calls == 1 {
+			http.Error(w, "rate limited", http.StatusTooManyRequests)
+			return
+		}
+		_, _ = w.Write([]byte(`{"paperId":"p1","title":"x"}`))
+	})
+	defer stop()
+	c := newTestClient(srv.URL, "")
+	if _, err := c.Get(context.Background(), "DOI:x", nil); err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if calls != 2 {
+		t.Fatalf("expected 2 calls (1 + retry), got %d", calls)
+	}
+}
+
 func TestClientRecommendationsForList(t *testing.T) {
 	srv, stop := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {

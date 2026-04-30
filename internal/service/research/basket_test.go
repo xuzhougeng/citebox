@@ -34,6 +34,16 @@ func (f *fakePaperLookup) GetPaper(ctx context.Context, id string) (Paper, error
 	return Paper{}, ErrPaperNotFound
 }
 
+func (f *fakePaperLookup) GetPapers(ctx context.Context, ids []string) ([]Paper, error) {
+	out := make([]Paper, 0, len(ids))
+	for _, id := range ids {
+		if p, ok := f.store[id]; ok {
+			out = append(out, p)
+		}
+	}
+	return out, nil
+}
+
 func TestBasketAddListExport(t *testing.T) {
 	repo := newFakeBasketRepo()
 	lookup := &fakePaperLookup{store: map[string]Paper{

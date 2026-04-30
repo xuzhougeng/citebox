@@ -52,6 +52,19 @@ func (s *stubClient) Get(ctx context.Context, id string, fields []string) (Paper
 	return s.getFn(ctx, id, fields)
 }
 
+func (s *stubClient) GetBatch(ctx context.Context, ids []string, fields []string) ([]Paper, error) {
+	out := make([]Paper, 0, len(ids))
+	for _, id := range ids {
+		p, err := s.getFn(ctx, id, fields)
+		if err != nil {
+			out = append(out, Paper{})
+			continue
+		}
+		out = append(out, p)
+	}
+	return out, nil
+}
+
 func (s *stubClient) Search(ctx context.Context, q string, o SearchOpts) (PaperList, error) {
 	return PaperList{}, nil
 }
@@ -67,6 +80,12 @@ func (s *stubClient) Recommendations(ctx context.Context, id string) ([]Paper, e
 }
 func (s *stubClient) RecommendationsForList(ctx context.Context, pos, neg []string) ([]Paper, error) {
 	return nil, nil
+}
+func (s *stubClient) Autocomplete(ctx context.Context, q string) ([]AutocompleteItem, error) {
+	return nil, nil
+}
+func (s *stubClient) SnippetSearch(ctx context.Context, q string, o SnippetSearchOpts) (SnippetList, error) {
+	return SnippetList{}, nil
 }
 
 func TestServiceGetCacheMissThenHit(t *testing.T) {

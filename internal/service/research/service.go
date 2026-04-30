@@ -26,10 +26,13 @@ type CacheRepo interface {
 type PaperFetcher interface {
 	Search(ctx context.Context, query string, opts SearchOpts) (PaperList, error)
 	Get(ctx context.Context, id string, fields []string) (Paper, error)
+	GetBatch(ctx context.Context, ids []string, fields []string) ([]Paper, error)
 	References(ctx context.Context, paperID string, offset, limit int) (PaperList, error)
 	Citations(ctx context.Context, paperID string, offset, limit int, opts CitationOpts) (PaperList, error)
 	Recommendations(ctx context.Context, paperID string) ([]Paper, error)
 	RecommendationsForList(ctx context.Context, positive, negative []string) ([]Paper, error)
+	Autocomplete(ctx context.Context, query string) ([]AutocompleteItem, error)
+	SnippetSearch(ctx context.Context, query string, opts SnippetSearchOpts) (SnippetList, error)
 }
 
 // ServiceConfig sets cache TTLs.
@@ -92,9 +95,91 @@ func (s *Service) GetPaper(ctx context.Context, id string) (Paper, error) {
 	return v.(Paper), nil
 }
 
+// GetPapers hydrates many ids at once, preferring cached entries and folding
+// the remaining ids into a single /paper/batch call (chunked at 500 by the
+// client). Output order matches the input slice; ids that resolve to neither
+// cache nor upstream are dropped from the result.
+func (s *Service) GetPapers(ctx context.Context, ids []string) ([]Paper, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+
+	cached := make(map[string]Paper, len(ids))
+	missing := make([]string, 0, len(ids))
+	for _, id := range ids {
+		key := paperCacheKey(id)
+		payload, fetchedAt, err := s.cache.GetCache(key)
+		if err == nil && time.Since(fetchedAt) <= s.cfg.PaperTTL {
+			var p Paper
+			if jsonErr := json.Unmarshal([]byte(payload), &p); jsonErr == nil {
+				cached[id] = p
+				continue
+			}
+		}
+		missing = append(missing, id)
+	}
+
+	fetched := make(map[string]Paper, len(missing))
+	if len(missing) > 0 {
+		papers, err := s.client.GetBatch(ctx, missing, nil)
+		if err != nil {
+			// On upstream failure, fall back to whatever stale cache we have.
+			for _, id := range missing {
+				if payload, _, cacheErr := s.cache.GetCache(paperCacheKey(id)); cacheErr == nil {
+					var p Paper
+					if jsonErr := json.Unmarshal([]byte(payload), &p); jsonErr == nil {
+						fetched[id] = p
+					}
+				}
+			}
+			if len(fetched) == 0 {
+				return nil, err
+			}
+		} else {
+			// /paper/batch preserves the request order; align by index.
+			for i, id := range missing {
+				if i >= len(papers) {
+					break
+				}
+				p := papers[i]
+				if p.PaperID == "" {
+					continue
+				}
+				fetched[id] = p
+				if buf, mErr := json.Marshal(p); mErr == nil {
+					_ = s.cache.PutCache(paperCacheKey(id), string(buf))
+				}
+			}
+		}
+	}
+
+	out := make([]Paper, 0, len(ids))
+	for _, id := range ids {
+		if p, ok := cached[id]; ok {
+			out = append(out, p)
+			continue
+		}
+		if p, ok := fetched[id]; ok {
+			out = append(out, p)
+		}
+	}
+	return out, nil
+}
+
 // Search is a passthrough; not cached.
 func (s *Service) Search(ctx context.Context, query string, opts SearchOpts) (PaperList, error) {
 	return s.client.Search(ctx, query, opts)
+}
+
+// Autocomplete is a passthrough; results change too fast to be worth caching.
+func (s *Service) Autocomplete(ctx context.Context, query string) ([]AutocompleteItem, error) {
+	return s.client.Autocomplete(ctx, query)
+}
+
+// SnippetSearch is a passthrough; the result set depends on too many parameters
+// to make caching meaningful here.
+func (s *Service) SnippetSearch(ctx context.Context, query string, opts SnippetSearchOpts) (SnippetList, error) {
+	return s.client.SnippetSearch(ctx, query, opts)
 }
 
 // References / Citations: not cached, passthrough.
