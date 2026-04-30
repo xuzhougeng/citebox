@@ -3,7 +3,9 @@ package ai_assistant
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"net/url"
 	"strings"
 
 	"github.com/xuzhougeng/citebox/internal/model"
@@ -27,6 +29,11 @@ type FigureLookupTool struct {
 	figures FigureSearcher
 }
 
+const (
+	defaultFigureLookupLimit = 12
+	maxFigureLookupLimit     = 50
+)
+
 type FigureResultCard FigureRecord
 
 type FigureListProvider interface {
@@ -45,32 +52,20 @@ func (t *FigureLookupTool) Run(ctx context.Context, in ToolInput) (ToolResult, e
 	if err := ctx.Err(); err != nil {
 		return ToolResult{}, err
 	}
-	limit := in.Limit
-	if limit <= 0 {
-		limit = 12
-	}
+	limit := clampFigureLookupLimit(in.Limit)
 	inputJSON, _ := json.Marshal(struct {
 		Query   string `json:"query"`
 		PaperID int64  `json:"paper_id,omitempty"`
 		Limit   int    `json:"limit"`
 	}{Query: in.Query, PaperID: in.Context.PaperID, Limit: limit})
 
+	if t == nil || t.figures == nil {
+		return figureLookupFailedResult(inputJSON, errors.New("figure searcher is not configured")), nil
+	}
+
 	items, total, err := t.figures.SearchFigures(in.Query, in.Context.PaperID, limit)
 	if err != nil {
-		return ToolResult{
-			Process: ProcessSummary{
-				Intent: IntentFigureLookup,
-				Stages: []ProcessStage{
-					{Label: "图文检索", Status: "failed"},
-				},
-			},
-			ToolCalls: []ToolCallSummary{{
-				ToolName:  "figure_lookup",
-				InputJSON: string(inputJSON),
-				Status:    "failed",
-				Error:     err.Error(),
-			}},
-		}, nil
+		return figureLookupFailedResult(inputJSON, err), nil
 	}
 
 	cards := make([]ResultCard, 0, len(items))
@@ -101,14 +96,42 @@ func (t *FigureLookupTool) Run(ctx context.Context, in ToolInput) (ToolResult, e
 	}, nil
 }
 
+func clampFigureLookupLimit(limit int) int {
+	if limit <= 0 {
+		return defaultFigureLookupLimit
+	}
+	if limit > maxFigureLookupLimit {
+		return maxFigureLookupLimit
+	}
+	return limit
+}
+
+func figureLookupFailedResult(inputJSON []byte, err error) ToolResult {
+	return ToolResult{
+		Process: ProcessSummary{
+			Intent: IntentFigureLookup,
+			Stages: []ProcessStage{
+				{Label: "图文检索", Status: "failed"},
+			},
+		},
+		ToolCalls: []ToolCallSummary{{
+			ToolName:  "figure_lookup",
+			InputJSON: string(inputJSON),
+			Status:    "failed",
+			Error:     err.Error(),
+		}},
+	}
+}
+
 func NewRepositoryFigureSearcher(repo FigureListProvider) *RepositoryFigureSearcher {
 	return &RepositoryFigureSearcher{repo: repo}
 }
 
 func (s *RepositoryFigureSearcher) SearchFigures(query string, paperID int64, limit int) ([]FigureRecord, int, error) {
-	if limit <= 0 {
-		limit = 12
+	if s == nil || s.repo == nil {
+		return nil, 0, errors.New("figure repository is not configured")
 	}
+	limit = clampFigureLookupLimit(limit)
 	filter := model.FigureFilter{Keyword: query, Page: 1, PageSize: limit}
 	if paperID > 0 {
 		filter.PaperID = &paperID
@@ -130,10 +153,20 @@ func FigureRecordFromListItem(item model.FigureListItem) FigureRecord {
 		PaperID:      item.PaperID,
 		PaperTitle:   item.PaperTitle,
 		DisplayLabel: firstNonEmpty(item.DisplayLabel, item.ParentDisplayLabel, item.Filename),
-		ImageURL:     item.ImageURL,
+		ImageURL:     figureImageURL(item),
 		Caption:      item.Caption,
 		NotesText:    item.NotesText,
 	}
+}
+
+func figureImageURL(item model.FigureListItem) string {
+	if strings.TrimSpace(item.ImageURL) != "" {
+		return item.ImageURL
+	}
+	if strings.TrimSpace(item.Filename) == "" {
+		return ""
+	}
+	return "/files/figures/" + url.PathEscape(item.Filename)
 }
 
 func figureAnswerContext(items []FigureRecord) string {

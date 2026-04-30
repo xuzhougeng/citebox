@@ -3,6 +3,7 @@ package ai_assistant
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -17,6 +18,11 @@ type ExternalSearcher interface {
 type ExternalSearchTool struct {
 	searcher ExternalSearcher
 }
+
+const (
+	defaultExternalSearchLimit = 8
+	maxExternalSearchLimit     = 100
+)
 
 type ExternalPaperCard struct {
 	S2PaperID     string `json:"s2_paper_id"`
@@ -33,31 +39,19 @@ func NewExternalSearchTool(searcher ExternalSearcher) *ExternalSearchTool {
 }
 
 func (t *ExternalSearchTool) Run(ctx context.Context, in ToolInput) (ToolResult, error) {
-	limit := in.Limit
-	if limit <= 0 {
-		limit = 8
-	}
+	limit := clampExternalSearchLimit(in.Limit)
 	inputJSON, _ := json.Marshal(struct {
 		Query string `json:"query"`
 		Limit int    `json:"limit"`
 	}{Query: in.Query, Limit: limit})
 
+	if t == nil || t.searcher == nil {
+		return externalSearchFailedResult(inputJSON, errors.New("external searcher is not configured")), nil
+	}
+
 	res, err := t.searcher.Search(ctx, in.Query, research.SearchOpts{Limit: limit})
 	if err != nil {
-		return ToolResult{
-			Process: ProcessSummary{
-				Intent: IntentExternalSearch,
-				Stages: []ProcessStage{
-					{Label: "外部搜索", Status: "failed"},
-				},
-			},
-			ToolCalls: []ToolCallSummary{{
-				ToolName:  "external_search",
-				InputJSON: string(inputJSON),
-				Status:    "failed",
-				Error:     err.Error(),
-			}},
-		}, nil
+		return externalSearchFailedResult(inputJSON, err), nil
 	}
 
 	cards := make([]ResultCard, 0, len(res.Items))
@@ -109,6 +103,33 @@ func (t *ExternalSearchTool) Run(ctx context.Context, in ToolInput) (ToolResult,
 			Status:            "completed",
 		}},
 	}, nil
+}
+
+func clampExternalSearchLimit(limit int) int {
+	if limit <= 0 {
+		return defaultExternalSearchLimit
+	}
+	if limit > maxExternalSearchLimit {
+		return maxExternalSearchLimit
+	}
+	return limit
+}
+
+func externalSearchFailedResult(inputJSON []byte, err error) ToolResult {
+	return ToolResult{
+		Process: ProcessSummary{
+			Intent: IntentExternalSearch,
+			Stages: []ProcessStage{
+				{Label: "外部搜索", Status: "failed"},
+			},
+		},
+		ToolCalls: []ToolCallSummary{{
+			ToolName:  "external_search",
+			InputJSON: string(inputJSON),
+			Status:    "failed",
+			Error:     err.Error(),
+		}},
+	}
 }
 
 func externalID(p research.Paper) string {

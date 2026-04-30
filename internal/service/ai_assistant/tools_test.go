@@ -41,6 +41,43 @@ func TestExternalSearchToolReturnsExternalPaperCards(t *testing.T) {
 	}
 }
 
+type limitCapturingExternalSearch struct {
+	limit int
+}
+
+func (s *limitCapturingExternalSearch) Search(ctx context.Context, query string, opts research.SearchOpts) (research.PaperList, error) {
+	s.limit = opts.Limit
+	return research.PaperList{}, nil
+}
+
+func (s *limitCapturingExternalSearch) SnippetSearch(ctx context.Context, query string, opts research.SnippetSearchOpts) (research.SnippetList, error) {
+	return research.SnippetList{}, nil
+}
+
+func TestExternalSearchToolNilSearcherReturnsFailedResult(t *testing.T) {
+	res, err := NewExternalSearchTool(nil).Run(context.Background(), ToolInput{Query: "ATAC"})
+	if err != nil {
+		t.Fatalf("Run error = %v, want nil", err)
+	}
+	if len(res.ToolCalls) != 1 || res.ToolCalls[0].Status != "failed" {
+		t.Fatalf("tool calls = %+v", res.ToolCalls)
+	}
+	if len(res.Process.Stages) != 1 || res.Process.Stages[0].Status != "failed" {
+		t.Fatalf("process = %+v", res.Process)
+	}
+}
+
+func TestExternalSearchToolClampsLimit(t *testing.T) {
+	searcher := &limitCapturingExternalSearch{}
+	_, err := NewExternalSearchTool(searcher).Run(context.Background(), ToolInput{Query: "ATAC", Limit: 1000})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if searcher.limit != 100 {
+		t.Fatalf("limit = %d, want 100", searcher.limit)
+	}
+}
+
 func TestPaperReadToolComparesFullText(t *testing.T) {
 	store := stubPaperStore{
 		ids: []int64{1, 2},
@@ -65,12 +102,90 @@ func TestPaperReadToolComparesFullText(t *testing.T) {
 	}
 }
 
+func TestPaperReadToolNilGetterReturnsSkippedResult(t *testing.T) {
+	res, err := NewPaperReadTool(nil).Run(context.Background(), ToolInput{
+		Query:   "读这篇",
+		Context: RequestContext{PaperID: 1},
+	})
+	if err != nil {
+		t.Fatalf("Run error = %v, want nil", err)
+	}
+	if len(res.ToolCalls) != 1 || res.ToolCalls[0].Status != "skipped" {
+		t.Fatalf("tool calls = %+v", res.ToolCalls)
+	}
+	if len(res.Cards) != 0 {
+		t.Fatalf("cards = %+v, want empty", res.Cards)
+	}
+}
+
+func TestPaperReadToolAllMissingReturnsSkippedResult(t *testing.T) {
+	res, err := NewPaperReadTool(stubPaperStore{papers: map[int64]*model.Paper{}}).Run(context.Background(), ToolInput{
+		Query:   "读这篇",
+		Context: RequestContext{PaperIDs: []int64{1, 2}},
+	})
+	if err != nil {
+		t.Fatalf("Run error = %v, want nil", err)
+	}
+	if len(res.ToolCalls) != 1 || res.ToolCalls[0].Status != "skipped" {
+		t.Fatalf("tool calls = %+v", res.ToolCalls)
+	}
+	if len(res.Cards) != 0 {
+		t.Fatalf("cards = %+v, want empty", res.Cards)
+	}
+}
+
+func TestPaperReadToolCapsLoadedPapersAndIncludesCompareNote(t *testing.T) {
+	store := stubPaperStore{
+		papers: map[int64]*model.Paper{
+			1: {ID: 1, Title: "Paper A", PDFText: "ATAC-seq measures chromatin accessibility."},
+			2: {ID: 2, Title: "Paper B", PDFText: "scRNA-seq measures gene expression."},
+			3: {ID: 3, Title: "Paper C", PDFText: "Third paper should not be loaded."},
+		},
+	}
+	res, err := NewPaperReadTool(store).Run(context.Background(), ToolInput{
+		Query:   "对比这些文献",
+		Context: RequestContext{PaperIDs: []int64{1, 2, 3}},
+	})
+	if err != nil {
+		t.Fatalf("Run error = %v, want nil", err)
+	}
+	if len(res.Cards) != 1 || res.Cards[0].Type != "paper_compare" {
+		t.Fatalf("cards = %+v", res.Cards)
+	}
+	card, ok := res.Cards[0].Payload.(PaperCompareCard)
+	if !ok {
+		t.Fatalf("card payload = %T, want PaperCompareCard", res.Cards[0].Payload)
+	}
+	if len(card.Papers) != 2 {
+		t.Fatalf("loaded papers = %d, want 2", len(card.Papers))
+	}
+	if card.Note == "" {
+		t.Fatalf("compare note is empty")
+	}
+	if !strings.Contains(res.ToolCalls[0].OutputSummaryJSON, `"requested":3`) || !strings.Contains(res.ToolCalls[0].OutputSummaryJSON, `"skipped":1`) {
+		t.Fatalf("output summary = %s", res.ToolCalls[0].OutputSummaryJSON)
+	}
+	if len(res.Process.Stages) == 0 || res.Process.Stages[0].Count != 2 {
+		t.Fatalf("process = %+v", res.Process)
+	}
+}
+
 type stubFigureStore struct {
 	figures []FigureRecord
+	limit   int
 }
 
 func (s stubFigureStore) SearchFigures(query string, paperID int64, limit int) ([]FigureRecord, int, error) {
 	return s.figures, len(s.figures), nil
+}
+
+type limitCapturingFigureStore struct {
+	limit int
+}
+
+func (s *limitCapturingFigureStore) SearchFigures(query string, paperID int64, limit int) ([]FigureRecord, int, error) {
+	s.limit = limit
+	return nil, 0, nil
 }
 
 func TestFigureLookupToolReturnsFigureCards(t *testing.T) {
@@ -92,6 +207,30 @@ func TestFigureLookupToolReturnsFigureCards(t *testing.T) {
 	}
 }
 
+func TestFigureLookupToolNilSearcherReturnsFailedResult(t *testing.T) {
+	res, err := NewFigureLookupTool(nil).Run(context.Background(), ToolInput{Query: "看图"})
+	if err != nil {
+		t.Fatalf("Run error = %v, want nil", err)
+	}
+	if len(res.ToolCalls) != 1 || res.ToolCalls[0].Status != "failed" {
+		t.Fatalf("tool calls = %+v", res.ToolCalls)
+	}
+	if len(res.Process.Stages) != 1 || res.Process.Stages[0].Status != "failed" {
+		t.Fatalf("process = %+v", res.Process)
+	}
+}
+
+func TestFigureLookupToolClampsLimit(t *testing.T) {
+	figures := &limitCapturingFigureStore{}
+	_, err := NewFigureLookupTool(figures).Run(context.Background(), ToolInput{Query: "看图", Limit: 1000})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if figures.limit != 50 {
+		t.Fatalf("limit = %d, want 50", figures.limit)
+	}
+}
+
 type capturingFigureListProvider struct {
 	filter model.FigureFilter
 }
@@ -103,6 +242,7 @@ func (p *capturingFigureListProvider) ListFigures(filter model.FigureFilter) ([]
 		PaperID:      42,
 		PaperTitle:   "Scoped Paper",
 		DisplayLabel: "Fig 2",
+		Filename:     "figure 2.png",
 		Caption:      "Scoped caption",
 	}}, 1, nil
 }
@@ -126,5 +266,15 @@ func TestRepositoryFigureSearcherPassesPaperFilter(t *testing.T) {
 	}
 	if provider.filter.PaperID == nil || *provider.filter.PaperID != 42 {
 		t.Fatalf("paper_id = %v, want 42", provider.filter.PaperID)
+	}
+	if figures[0].ImageURL != "/files/figures/figure%202.png" {
+		t.Fatalf("image_url = %q, want filename fallback URL", figures[0].ImageURL)
+	}
+}
+
+func TestRepositoryFigureSearcherNilRepoReturnsError(t *testing.T) {
+	_, _, err := NewRepositoryFigureSearcher(nil).SearchFigures("ATAC", 1, 5)
+	if err == nil {
+		t.Fatalf("error = nil, want error")
 	}
 }
