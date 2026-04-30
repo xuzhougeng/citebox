@@ -1681,3 +1681,50 @@ const Utils = {
         return status || t('shared.utils.status_unknown', '未知状态');
     }
 };
+
+(function disableBrowserAutofill() {
+    const SKIP_TYPES = new Set(['checkbox', 'radio', 'file', 'color', 'range', 'hidden', 'submit', 'button', 'image', 'reset']);
+
+    function apply(el) {
+        if (!el || el.hasAttribute('autocomplete')) return;
+        if (el.tagName === 'INPUT' && SKIP_TYPES.has((el.getAttribute('type') || 'text').toLowerCase())) return;
+        el.setAttribute('autocomplete', 'off');
+        if (el.tagName !== 'TEXTAREA') {
+            el.setAttribute('autocorrect', 'off');
+            el.setAttribute('autocapitalize', 'off');
+        }
+    }
+
+    function sweep(root) {
+        if (!root || !root.querySelectorAll) return;
+        root.querySelectorAll('form').forEach((form) => {
+            if (!form.hasAttribute('autocomplete')) form.setAttribute('autocomplete', 'off');
+        });
+        root.querySelectorAll('input, textarea').forEach(apply);
+    }
+
+    function init() {
+        sweep(document);
+        const observer = new MutationObserver((mutations) => {
+            for (const m of mutations) {
+                m.addedNodes.forEach((node) => {
+                    if (node.nodeType !== 1) return;
+                    if (node.tagName === 'INPUT' || node.tagName === 'TEXTAREA') apply(node);
+                    else if (node.tagName === 'FORM' && !node.hasAttribute('autocomplete')) {
+                        node.setAttribute('autocomplete', 'off');
+                        sweep(node);
+                    } else {
+                        sweep(node);
+                    }
+                });
+            }
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init, { once: true });
+    } else {
+        init();
+    }
+})();
