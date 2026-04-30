@@ -218,7 +218,9 @@ func buildHandler(
 	groupHandler := handler.NewGroupHandler(librarySvc)
 	tagHandler := handler.NewTagHandler(librarySvc)
 	aiHandler := handler.NewAIHandler(aiSvc)
-	aiConvService := ai_conversation.New(repo.AIConversation, repo.Paper, aiSvc, aiSvc, logger.With("component", "ai_conversation"))
+	researchAdapter := &research.RepoAdapter{Repo: repo.Research}
+	researchSvc := research.NewService(s2Client, researchAdapter, research.ServiceConfig{})
+	aiConvService := ai_conversation.New(repo.AIConversation, repo.Paper, aiSvc, aiSvc, researchSvc, logger.With("component", "ai_conversation"))
 	aiConversationHandler := handler.NewAIConversationHandler(aiConvService)
 	settingsHandler := handler.NewSettingsHandler(librarySvc, versionSvc)
 	settingsHandler.SetResearchClient(s2Client)
@@ -227,8 +229,6 @@ func buildHandler(
 	sessionManager := service.NewSessionManager(24 * time.Hour)
 	authHandler := handler.NewAuthHandler(librarySvc, sessionManager)
 
-	researchAdapter := &research.RepoAdapter{Repo: repo.Research}
-	researchSvc := research.NewService(s2Client, researchAdapter, research.ServiceConfig{})
 	basket := research.NewBasket(researchAdapter, researchSvc, librarySvcImporterShim{librarySvc})
 	researchHandler := handler.NewResearchHandler(researchSvc, basket, nil)
 

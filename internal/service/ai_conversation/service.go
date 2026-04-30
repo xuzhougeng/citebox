@@ -32,6 +32,7 @@ type Service struct {
 	papers         *repository.PaperRepository
 	settings       AISettingsProvider
 	caller         StreamCaller
+	searcher       SnippetSearcher
 	titleCaller    NonStreamCaller
 	summaryCaller  NonStreamCaller
 	logger         *slog.Logger
@@ -39,11 +40,12 @@ type Service struct {
 
 // New builds the service. All deps required.
 func New(repo *repository.AIConversationRepository, papers *repository.PaperRepository,
-	settings AISettingsProvider, caller StreamCaller, logger *slog.Logger) *Service {
+	settings AISettingsProvider, caller StreamCaller, searcher SnippetSearcher,
+	logger *slog.Logger) *Service {
 	if logger == nil {
 		logger = slog.Default().With("component", "ai_conversation")
 	}
-	s := &Service{repo: repo, papers: papers, settings: settings, caller: caller, logger: logger}
+	s := &Service{repo: repo, papers: papers, settings: settings, caller: caller, searcher: searcher, logger: logger}
 	if tc, ok := caller.(NonStreamCaller); ok {
 		s.titleCaller = tc
 		s.summaryCaller = tc
@@ -235,6 +237,29 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput, onDelta 
 		return SendMessageResult{}, err
 	}
 
+	var citations []Citation
+	if conv.StrictEvidence && s.searcher != nil {
+		enrichedUser, cites, evErr := injectEvidence(ctx, s.searcher, in.Content, pinned)
+		if evErr != nil {
+			if !errors.Is(evErr, ErrNoExternalIDs) {
+				s.logger.Warn("ai_conversation: evidence search failed", "error", evErr)
+			}
+			// Surface a single warning line through the stream so the UI can toast.
+			_ = onDelta("\n\n_(证据检索失败或无外部标识，本次按普通模式作答)_\n\n")
+		} else {
+			// Replace the trailing "用户问题：\n<userText>" portion of asm.userPrompt
+			// with the enriched evidence block (which already ends with the same).
+			suffix := "用户问题：\n" + in.Content
+			if strings.HasSuffix(asm.userPrompt, suffix) {
+				asm.userPrompt = strings.TrimSuffix(asm.userPrompt, suffix) + enrichedUser
+			} else {
+				// Defensive: if the suffix shape changed, just append the evidence.
+				asm.userPrompt = asm.userPrompt + "\n\n" + enrichedUser
+			}
+			citations = cites
+		}
+	}
+
 	rawText, mode, err := s.caller.CallProviderStreamGeneric(ctx, *settings, asm.systemPrompt, asm.userPrompt, asm.images, onDelta)
 	if err != nil {
 		// User-cancelled stream: persist whatever was already streamed with mode="stopped".
@@ -253,9 +278,10 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput, onDelta 
 	}
 
 	asstID, err := s.repo.AddMessage(in.ConversationID, "assistant", rawText, repository.AIMessageMeta{
-		Provider: string(settings.Provider),
-		Model:    settings.Model,
-		Mode:     mode,
+		Provider:      string(settings.Provider),
+		Model:         settings.Model,
+		Mode:          mode,
+		CitationsJSON: MarshalCitations(citations),
 	})
 	if err != nil {
 		return SendMessageResult{}, err
