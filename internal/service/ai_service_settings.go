@@ -103,6 +103,8 @@ func (s *AIService) UpdateModelSettings(input model.AIModelSettingsUpdate) (*mod
 	next.Temperature = input.Temperature
 	next.MaxFigures = input.MaxFigures
 	next.Translation = input.Translation
+	next.PinPapersLimit = input.PinPapersLimit
+	next.ContextBudgetTokens = input.ContextBudgetTokens
 	next.RolePrompts = nil
 
 	return s.UpdateSettings(next)

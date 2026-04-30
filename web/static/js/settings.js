@@ -17,6 +17,8 @@ const SettingsPage = {
         this.ttsModelSelect = document.getElementById('aiTTSModelSelect');
         this.temperatureInput = document.getElementById('aiTemperatureInput');
         this.maxFiguresInput = document.getElementById('aiMaxFiguresInput');
+        this.pinPapersLimitInput = document.getElementById('aiPinPapersLimitInput');
+        this.contextBudgetTokensInput = document.getElementById('aiContextBudgetTokensInput');
         this.translationPrimaryLanguageInput = document.getElementById('aiTranslationPrimaryLanguageInput');
         this.translationTargetLanguageInput = document.getElementById('aiTranslationTargetLanguageInput');
         this.systemPromptInput = document.getElementById('aiSystemPromptInput');
@@ -449,6 +451,8 @@ const SettingsPage = {
         [
             this.temperatureInput,
             this.maxFiguresInput,
+            this.pinPapersLimitInput,
+            this.contextBudgetTokensInput,
             this.translationPrimaryLanguageInput,
             this.translationTargetLanguageInput
         ].forEach((element) => {
@@ -538,6 +542,8 @@ const SettingsPage = {
             : [this.createAIModelDraft()];
         this.temperatureInput.value = settings.temperature ?? 0.2;
         this.maxFiguresInput.value = settings.max_figures ?? 0;
+        if (this.pinPapersLimitInput) this.pinPapersLimitInput.value = settings.pin_papers_limit || 5;
+        if (this.contextBudgetTokensInput) this.contextBudgetTokensInput.value = settings.context_budget_tokens || 32000;
         this.translationPrimaryLanguageInput.value = settings.translation?.primary_language || t('settings.ai.primary_language_default', '中文');
         this.translationTargetLanguageInput.value = settings.translation?.target_language || t('settings.ai.target_language_default', '英文');
 
@@ -592,6 +598,8 @@ const SettingsPage = {
             scene_models: sceneModels,
             temperature: this.temperatureInput.value === '' ? 0.2 : Number(this.temperatureInput.value),
             max_figures: Number(this.maxFiguresInput.value || 0),
+            pin_papers_limit: parseInt(this.pinPapersLimitInput?.value, 10) || 5,
+            context_budget_tokens: parseInt(this.contextBudgetTokensInput?.value, 10) || 32000,
             translation: {
                 primary_language: this.translationPrimaryLanguageInput.value.trim(),
                 target_language: this.translationTargetLanguageInput.value.trim()
