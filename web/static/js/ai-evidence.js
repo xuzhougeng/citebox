@@ -86,6 +86,8 @@
             while ((node = walker.nextNode())) {
                 const text = node.nodeValue;
                 if (!/\[\d+\]/.test(text)) continue;
+                const parent = textNodeParentElement(node);
+                if (parent && parent.closest('.ai-citation')) continue;
                 replacements.push(node);
             }
             replacements.forEach((textNode) => {
@@ -123,6 +125,10 @@
             });
         },
     };
+
+    function textNodeParentElement(node) {
+        return node && node.parentElement || null;
+    }
 
     document.addEventListener('DOMContentLoaded', () => Evidence.init());
     if (typeof window !== 'undefined') {

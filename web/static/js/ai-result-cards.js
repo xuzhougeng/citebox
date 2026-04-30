@@ -60,7 +60,7 @@
     }
 
     function citation(index) {
-        return index ? ' <sup>[' + escapeHtml(index) + ']</sup>' : '';
+        return index ? ' [' + escapeHtml(index) + ']' : '';
     }
 
     function renderSnippets(snippets) {

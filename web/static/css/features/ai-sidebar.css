@@ -492,6 +492,38 @@
     margin: 0.45rem 0;
 }
 
+.ai-message-table-wrap {
+    width: 100%;
+    margin: 0.55rem 0;
+    overflow-x: auto;
+}
+
+.ai-message-table {
+    width: 100%;
+    min-width: 32rem;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+    line-height: 1.55;
+}
+
+.ai-message-table th,
+.ai-message-table td {
+    padding: 0.5rem 0.62rem;
+    border: 1px solid rgba(var(--ink-rgb), 0.1);
+    text-align: left;
+    vertical-align: top;
+}
+
+.ai-message-table th {
+    background: rgba(var(--ink-rgb), 0.055);
+    color: var(--ink);
+    font-weight: 700;
+}
+
+.ai-message-table td {
+    background: rgba(var(--surface-rgb), 0.48);
+}
+
 .ai-message-assistant ul,
 .ai-message-assistant ol {
     margin: 0.45rem 0 0.45rem 1.25rem;
