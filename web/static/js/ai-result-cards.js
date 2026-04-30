@@ -133,12 +133,13 @@
 
     function renderFigureResult(p) {
         const src = safeUrl(p.image_url);
+        const figureFallback = translate('ai.result_figure_fallback', 'Figure');
         return '<article class="ai-result-card ai-figure-result-card">' +
             (src
-                ? '<img src="' + escapeHtml(src) + '" alt="' + escapeHtml(p.display_label || 'Figure') + '" loading="lazy">'
+                ? '<img src="' + escapeHtml(src) + '" alt="' + escapeHtml(p.display_label || figureFallback) + '" loading="lazy">'
                 : '<div class="ai-figure-missing">' + escapeHtml(translate('ai.result_image_unavailable', '图片不可用')) + '</div>') +
             '<div class="ai-result-card-head">' +
-                '<h4>' + escapeHtml(p.display_label || 'Figure') + '</h4>' +
+                '<h4>' + escapeHtml(p.display_label || figureFallback) + '</h4>' +
                 (p.paper_title ? '<p>' + escapeHtml(p.paper_title) + '</p>' : '') +
             '</div>' +
             (p.caption ? '<p class="ai-result-reason">' + escapeHtml(p.caption) + '</p>' : '') +

@@ -35,6 +35,7 @@
     "ai.result_external_paper_fallback": "外部文献",
     "ai.result_paper_read_fallback": "文献阅读",
     "ai.result_paper_compare_fallback": "文献对比",
+    "ai.result_figure_fallback": "图",
     "ai.result_open_paper": "打开文献",
     "ai.result_open_external": "查看来源",
     "ai.result_image_unavailable": "图片不可用",

@@ -35,6 +35,7 @@
     "ai.result_external_paper_fallback": "External Paper",
     "ai.result_paper_read_fallback": "Paper Read",
     "ai.result_paper_compare_fallback": "Paper Compare",
+    "ai.result_figure_fallback": "Figure",
     "ai.result_open_paper": "Open Paper",
     "ai.result_open_external": "View Source",
     "ai.result_image_unavailable": "Image unavailable",
