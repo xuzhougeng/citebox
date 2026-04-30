@@ -12,6 +12,7 @@
 
     const Reader = {
         settings: null,
+        _allPapers: [],
 
         async init() {
             // Cache settings (best-effort)
@@ -25,9 +26,42 @@
             window.AIReader = window.AIReader || {};
             window.AIReader.settings = this.settings;
 
+            // Fire-and-forget: cache the library so the @ palette can offer
+            // every paper, not just the ones already pinned.
+            this._loadAllPapers();
+
             this._initModules();
             this._bindTitleRename();
+            this._bindQuestionMirror();
             await this._dispatchEntry();
+        },
+
+        async _loadAllPapers() {
+            try {
+                const res = await fetch('/api/papers?page_size=200');
+                if (!res.ok) return;
+                const body = await res.json();
+                Reader._allPapers = Array.isArray(body && body.papers) ? body.papers : [];
+            } catch (e) { /* leave cache empty — picker still works */ }
+        },
+
+        _bindQuestionMirror() {
+            // The textarea uses color: transparent so a sibling .ai-question-mirror
+            // can render the syntax-highlighted version. Without an active sync,
+            // the textarea is invisible. Plain textContent is enough for v1; the
+            // colored backgrounds for @ tokens are a polish task.
+            const input = $('aiQuestionInput');
+            const mirror = $('aiQuestionMirror');
+            if (!input || !mirror) return;
+            const sync = () => {
+                // Trailing space avoids the last visible line collapsing when the
+                // textarea ends with a newline.
+                mirror.textContent = input.value + ' ';
+                mirror.scrollTop = input.scrollTop;
+            };
+            input.addEventListener('input', sync);
+            input.addEventListener('scroll', () => { mirror.scrollTop = input.scrollTop; });
+            sync();
         },
 
         _initModules() {
@@ -63,6 +97,7 @@
                 title: $('aiActiveTitle'),
                 pinChips: $('aiPinChips'),
                 strictEvidence: $('aiStrictEvidenceToggle'),
+                externalEvidence: $('aiExternalEvidenceToggle'),
                 runBtn: $('runAIReaderButton'),
                 stopBtn: $('stopAIReaderButton'),
                 exportBtn: $('aiExportConversation'),
@@ -86,10 +121,43 @@
                     $('aiQuestionInput'),
                     $('aiMentionPopover'),
                     {
-                        getPapers: () => (view._state && view._state.pinnedPapers) || [],
+                        // Show every paper in the library, with the currently-pinned
+                        // ones lifted to the top of the list.
+                        getPapers: () => {
+                            const all = Reader._allPapers || [];
+                            const pinned = (view._state && view._state.pinnedPapers) || [];
+                            const pinnedIDs = new Set(pinned.map((p) => p.paper_id));
+                            const head = [];
+                            const tail = [];
+                            all.forEach((p) => {
+                                if (pinnedIDs.has(p.id)) {
+                                    head.push(p);
+                                } else {
+                                    tail.push(p);
+                                }
+                            });
+                            return head.concat(tail);
+                        },
+                        isCurrentPaper: (paper) => {
+                            const pinned = (view._state && view._state.pinnedPapers) || [];
+                            return pinned.some((p) => p.paper_id === paper.id);
+                        },
                         getRolePrompts: () => (Reader.settings && Reader.settings.role_prompts) || [],
-                        onPickPaper: (paper) => { /* paper inserted into textarea by mention module; no extra hook needed */ },
-                        onPickRole: (role) => { /* same */ },
+                        // Auto-pin on first @-mention (β + γ flow per spec § 3).
+                        // Active conversation: server-side pin via /papers POST.
+                        // Draft: stash on view._state so the first send carries paper_id.
+                        onPickPaper: (paper) => {
+                            const id = paper && paper.id;
+                            if (!id) return;
+                            const pinned = (view._state && view._state.pinnedPapers) || [];
+                            if (pinned.some((p) => p.paper_id === id)) return;
+                            if (view._state && view._state.conversationId) {
+                                window.AIReader.pin.pin(id);
+                            } else if (view._state) {
+                                view._state._draftPaperId = id;
+                            }
+                        },
+                        onPickRole: () => { /* role label inserted by mention module */ },
                     }
                 );
             }

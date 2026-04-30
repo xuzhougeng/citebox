@@ -669,8 +669,8 @@ html[lang^="zh"] .ai-config-details[open] .ai-collapsible-toggle::before {
 .ai-mention-popover {
     position: absolute;
     left: 0;
-    bottom: calc(100% + 6px);
-    z-index: 30;
+    top: calc(100% + 6px);
+    z-index: 80;
     width: 100%;
     max-height: 22rem;
     overflow-y: auto;
