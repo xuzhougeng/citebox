@@ -217,6 +217,11 @@
                     history.replaceState({}, '', url.toString());
                 } catch (e) { /* ignore */ }
                 document.dispatchEvent(new CustomEvent('ai-reader:conversation-changed'));
+                // Re-render pin chips now that the draft has a real conversation ID
+                // so the "+ pin" affordance appears without requiring a page reload.
+                if (window.AIReader && window.AIReader.pin && typeof window.AIReader.pin.setPinned === 'function') {
+                    window.AIReader.pin.setPinned(s.pinnedPapers || []);
+                }
             } else if (evt.type === 'delta' && evt.delta) {
                 if (s.streaming) {
                     s.streaming.accText += evt.delta;
