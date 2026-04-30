@@ -53,6 +53,40 @@ type AIPinnedPaper struct {
 	PinnedAt time.Time
 }
 
+type AITurnRun struct {
+	ID                 int64
+	ConversationID     int64
+	UserMessageID      int64
+	AssistantMessageID sql.NullInt64
+	Intent             string
+	IntentHint         string
+	ProcessSummaryJSON string
+	Status             string
+	CreatedAt          time.Time
+	UpdatedAt          time.Time
+}
+
+type AIToolCall struct {
+	ID                int64
+	TurnRunID         int64
+	ToolName          string
+	InputJSON         string
+	OutputSummaryJSON string
+	Status            string
+	DurationMS        int
+	Error             string
+	CreatedAt         time.Time
+}
+
+type AIResultCard struct {
+	ID          int64
+	TurnRunID   int64
+	CardType    string
+	SortOrder   int
+	PayloadJSON string
+	CreatedAt   time.Time
+}
+
 // AIConversationRepository owns all three new tables.
 type AIConversationRepository struct {
 	db *sql.DB
@@ -243,6 +277,140 @@ func (r *AIConversationRepository) ListMessages(conversationID int64, afterID in
 	return out, rows.Err()
 }
 
+func (r *AIConversationRepository) CreateTurnRun(run AITurnRun) (int64, error) {
+	status := strings.TrimSpace(run.Status)
+	if status == "" {
+		status = "completed"
+	}
+	res, err := r.db.Exec(`
+		INSERT INTO ai_turn_runs (
+			conversation_id, user_message_id, assistant_message_id,
+			intent, intent_hint, process_summary_json, status
+		) VALUES (?, ?, ?, ?, ?, ?, ?)
+	`, run.ConversationID, run.UserMessageID, nullableInt64(run.AssistantMessageID),
+		run.Intent, run.IntentHint, run.ProcessSummaryJSON, status)
+	if err != nil {
+		return 0, err
+	}
+	return res.LastInsertId()
+}
+
+func (r *AIConversationRepository) UpdateTurnRunAssistant(runID, assistantMessageID int64, status string) error {
+	if strings.TrimSpace(status) == "" {
+		status = "completed"
+	}
+	_, err := r.db.Exec(`
+		UPDATE ai_turn_runs
+		SET assistant_message_id = ?, status = ?, updated_at = CURRENT_TIMESTAMP
+		WHERE id = ?
+	`, assistantMessageID, status, runID)
+	return err
+}
+
+func (r *AIConversationRepository) AddToolCall(call AIToolCall) (int64, error) {
+	status := strings.TrimSpace(call.Status)
+	if status == "" {
+		status = "completed"
+	}
+	res, err := r.db.Exec(`
+		INSERT INTO ai_tool_calls (
+			turn_run_id, tool_name, input_json, output_summary_json,
+			status, duration_ms, error
+		) VALUES (?, ?, ?, ?, ?, ?, ?)
+	`, call.TurnRunID, call.ToolName, call.InputJSON, call.OutputSummaryJSON,
+		status, call.DurationMS, call.Error)
+	if err != nil {
+		return 0, err
+	}
+	return res.LastInsertId()
+}
+
+func (r *AIConversationRepository) AddResultCard(card AIResultCard) (int64, error) {
+	payload := strings.TrimSpace(card.PayloadJSON)
+	if payload == "" {
+		payload = "{}"
+	}
+	res, err := r.db.Exec(`
+		INSERT INTO ai_result_cards (turn_run_id, card_type, sort_order, payload_json)
+		VALUES (?, ?, ?, ?)
+	`, card.TurnRunID, card.CardType, card.SortOrder, payload)
+	if err != nil {
+		return 0, err
+	}
+	return res.LastInsertId()
+}
+
+func (r *AIConversationRepository) ListTurnRuns(conversationID int64) ([]AITurnRun, error) {
+	rows, err := r.db.Query(`
+		SELECT id, conversation_id, user_message_id, assistant_message_id,
+		       intent, intent_hint, process_summary_json, status, created_at, updated_at
+		FROM ai_turn_runs
+		WHERE conversation_id = ?
+		ORDER BY id ASC
+	`, conversationID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make([]AITurnRun, 0)
+	for rows.Next() {
+		var run AITurnRun
+		if err := rows.Scan(&run.ID, &run.ConversationID, &run.UserMessageID,
+			&run.AssistantMessageID, &run.Intent, &run.IntentHint,
+			&run.ProcessSummaryJSON, &run.Status, &run.CreatedAt, &run.UpdatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, run)
+	}
+	return out, rows.Err()
+}
+
+func (r *AIConversationRepository) ListToolCalls(turnRunID int64) ([]AIToolCall, error) {
+	rows, err := r.db.Query(`
+		SELECT id, turn_run_id, tool_name, input_json, output_summary_json,
+		       status, duration_ms, error, created_at
+		FROM ai_tool_calls
+		WHERE turn_run_id = ?
+		ORDER BY id ASC
+	`, turnRunID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make([]AIToolCall, 0)
+	for rows.Next() {
+		var call AIToolCall
+		if err := rows.Scan(&call.ID, &call.TurnRunID, &call.ToolName, &call.InputJSON,
+			&call.OutputSummaryJSON, &call.Status, &call.DurationMS, &call.Error, &call.CreatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, call)
+	}
+	return out, rows.Err()
+}
+
+func (r *AIConversationRepository) ListResultCards(turnRunID int64) ([]AIResultCard, error) {
+	rows, err := r.db.Query(`
+		SELECT id, turn_run_id, card_type, sort_order, payload_json, created_at
+		FROM ai_result_cards
+		WHERE turn_run_id = ?
+		ORDER BY sort_order ASC, id ASC
+	`, turnRunID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make([]AIResultCard, 0)
+	for rows.Next() {
+		var card AIResultCard
+		if err := rows.Scan(&card.ID, &card.TurnRunID, &card.CardType, &card.SortOrder, &card.PayloadJSON, &card.CreatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, card)
+	}
+	return out, rows.Err()
+}
+
 // PinPaper attaches a paper to a conversation. Idempotent (PRIMARY KEY).
 func (r *AIConversationRepository) PinPaper(conversationID, paperID int64) error {
 	_, err := r.db.Exec(`
@@ -304,4 +472,11 @@ func nullableString(s string) interface{} {
 		return nil
 	}
 	return s
+}
+
+func nullableInt64(v sql.NullInt64) interface{} {
+	if !v.Valid {
+		return nil
+	}
+	return v.Int64
 }

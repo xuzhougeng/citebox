@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"database/sql"
 	"path/filepath"
 	"testing"
 )
@@ -122,6 +123,105 @@ func TestAIConversationPinPaper(t *testing.T) {
 	pinned, _ = repo.ListPinnedPapers(convID)
 	if len(pinned) != 0 {
 		t.Fatalf("expected unpin to clear; got %+v", pinned)
+	}
+}
+
+func TestAIConversationRunArtifactsRoundTrip(t *testing.T) {
+	repo := newAIConversationRepoForTest(t)
+	convID, err := repo.CreateConversation()
+	if err != nil {
+		t.Fatalf("CreateConversation: %v", err)
+	}
+	userID, err := repo.AddMessage(convID, "user", "帮我查找 ATAC 数据", AIMessageMeta{})
+	if err != nil {
+		t.Fatalf("AddMessage user: %v", err)
+	}
+	assistantID, err := repo.AddMessage(convID, "assistant", "找到相关文献", AIMessageMeta{CitationsJSON: `[{"i":1}]`})
+	if err != nil {
+		t.Fatalf("AddMessage assistant: %v", err)
+	}
+
+	runID, err := repo.CreateTurnRun(AITurnRun{
+		ConversationID:     convID,
+		UserMessageID:      userID,
+		AssistantMessageID: sql.NullInt64{Int64: assistantID, Valid: true},
+		Intent:             "library_search",
+		IntentHint:         "library_search",
+		ProcessSummaryJSON: `{"stages":[{"label":"全库检索","count":184},{"label":"命中","count":12}]}`,
+		Status:             "completed",
+	})
+	if err != nil {
+		t.Fatalf("CreateTurnRun: %v", err)
+	}
+	if _, err := repo.AddToolCall(AIToolCall{
+		TurnRunID:         runID,
+		ToolName:          "library_search",
+		InputJSON:         `{"query":"ATAC"}`,
+		OutputSummaryJSON: `{"scanned":184,"hits":12}`,
+		Status:            "completed",
+		DurationMS:        17,
+	}); err != nil {
+		t.Fatalf("AddToolCall: %v", err)
+	}
+	if _, err := repo.AddResultCard(AIResultCard{
+		TurnRunID:   runID,
+		CardType:    "paper_hit",
+		SortOrder:   1,
+		PayloadJSON: `{"paper_id":42,"title":"ATAC Paper"}`,
+	}); err != nil {
+		t.Fatalf("AddResultCard: %v", err)
+	}
+
+	runs, err := repo.ListTurnRuns(convID)
+	if err != nil {
+		t.Fatalf("ListTurnRuns: %v", err)
+	}
+	if len(runs) != 1 || runs[0].Intent != "library_search" || runs[0].ProcessSummaryJSON == "" {
+		t.Fatalf("runs = %+v", runs)
+	}
+	calls, err := repo.ListToolCalls(runID)
+	if err != nil {
+		t.Fatalf("ListToolCalls: %v", err)
+	}
+	if len(calls) != 1 || calls[0].ToolName != "library_search" || calls[0].DurationMS != 17 {
+		t.Fatalf("calls = %+v", calls)
+	}
+	cards, err := repo.ListResultCards(runID)
+	if err != nil {
+		t.Fatalf("ListResultCards: %v", err)
+	}
+	if len(cards) != 1 || cards[0].CardType != "paper_hit" || cards[0].SortOrder != 1 {
+		t.Fatalf("cards = %+v", cards)
+	}
+}
+
+func TestAIConversationRunArtifactsCascadeWithConversation(t *testing.T) {
+	repo := newAIConversationRepoForTest(t)
+	convID, _ := repo.CreateConversation()
+	userID, _ := repo.AddMessage(convID, "user", "q", AIMessageMeta{})
+	assistantID, _ := repo.AddMessage(convID, "assistant", "a", AIMessageMeta{})
+	runID, err := repo.CreateTurnRun(AITurnRun{
+		ConversationID:     convID,
+		UserMessageID:      userID,
+		AssistantMessageID: sql.NullInt64{Int64: assistantID, Valid: true},
+		Intent:             "library_search",
+		Status:             "completed",
+	})
+	if err != nil {
+		t.Fatalf("CreateTurnRun: %v", err)
+	}
+	_, _ = repo.AddToolCall(AIToolCall{TurnRunID: runID, ToolName: "library_search", Status: "completed"})
+	_, _ = repo.AddResultCard(AIResultCard{TurnRunID: runID, CardType: "paper_hit", SortOrder: 1, PayloadJSON: `{}`})
+
+	if err := repo.DeleteConversation(convID); err != nil {
+		t.Fatalf("DeleteConversation: %v", err)
+	}
+	runs, err := repo.ListTurnRuns(convID)
+	if err != nil {
+		t.Fatalf("ListTurnRuns after delete: %v", err)
+	}
+	if len(runs) != 0 {
+		t.Fatalf("runs after delete = %+v, want empty", runs)
 	}
 }
 

@@ -163,6 +163,40 @@ func (m *Manager) initSchema() error {
 		PRIMARY KEY (conversation_id, paper_id)
 	);
 
+	CREATE TABLE IF NOT EXISTS ai_turn_runs (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		conversation_id INTEGER NOT NULL REFERENCES ai_conversations(id) ON DELETE CASCADE,
+		user_message_id INTEGER NOT NULL REFERENCES ai_messages(id) ON DELETE CASCADE,
+		assistant_message_id INTEGER REFERENCES ai_messages(id) ON DELETE SET NULL,
+		intent TEXT NOT NULL DEFAULT '',
+		intent_hint TEXT NOT NULL DEFAULT '',
+		process_summary_json TEXT NOT NULL DEFAULT '',
+		status TEXT NOT NULL DEFAULT 'completed' CHECK(status IN ('running','completed','stopped','failed')),
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
+
+	CREATE TABLE IF NOT EXISTS ai_tool_calls (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		turn_run_id INTEGER NOT NULL REFERENCES ai_turn_runs(id) ON DELETE CASCADE,
+		tool_name TEXT NOT NULL DEFAULT '',
+		input_json TEXT NOT NULL DEFAULT '',
+		output_summary_json TEXT NOT NULL DEFAULT '',
+		status TEXT NOT NULL DEFAULT 'completed' CHECK(status IN ('running','completed','skipped','failed')),
+		duration_ms INTEGER NOT NULL DEFAULT 0,
+		error TEXT NOT NULL DEFAULT '',
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
+
+	CREATE TABLE IF NOT EXISTS ai_result_cards (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		turn_run_id INTEGER NOT NULL REFERENCES ai_turn_runs(id) ON DELETE CASCADE,
+		card_type TEXT NOT NULL DEFAULT '',
+		sort_order INTEGER NOT NULL DEFAULT 0,
+		payload_json TEXT NOT NULL DEFAULT '{}',
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
+
 	CREATE INDEX IF NOT EXISTS idx_papers_group_id ON papers(group_id);
 	CREATE INDEX IF NOT EXISTS idx_papers_created_at ON papers(created_at);
 	CREATE INDEX IF NOT EXISTS idx_papers_status ON papers(extraction_status);
@@ -175,6 +209,10 @@ func (m *Manager) initSchema() error {
 	CREATE INDEX IF NOT EXISTS idx_ai_messages_conv     ON ai_messages(conversation_id, id);
 	CREATE INDEX IF NOT EXISTS idx_ai_conv_papers_paper ON ai_conversation_papers(paper_id);
 	CREATE INDEX IF NOT EXISTS idx_ai_conv_updated      ON ai_conversations(updated_at DESC);
+	CREATE INDEX IF NOT EXISTS idx_ai_turn_runs_conv ON ai_turn_runs(conversation_id, id);
+	CREATE INDEX IF NOT EXISTS idx_ai_turn_runs_user ON ai_turn_runs(user_message_id);
+	CREATE INDEX IF NOT EXISTS idx_ai_tool_calls_run ON ai_tool_calls(turn_run_id, id);
+	CREATE INDEX IF NOT EXISTS idx_ai_result_cards_run ON ai_result_cards(turn_run_id, sort_order, id);
 	`
 
 	if _, err := m.db.Exec(schema); err != nil {
@@ -219,10 +257,59 @@ func (m *Manager) ensureSchemaColumns() error {
 	if err := m.ensureValidationTriggers(); err != nil {
 		return err
 	}
+	if err := m.ensureAIOrchestrationSchema(); err != nil {
+		return err
+	}
 	if err := m.ensureIndexes(); err != nil {
 		return err
 	}
 	return m.ensureFTSSchema()
+}
+
+func (m *Manager) ensureAIOrchestrationSchema() error {
+	stmts := []string{
+		`CREATE TABLE IF NOT EXISTS ai_turn_runs (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			conversation_id INTEGER NOT NULL REFERENCES ai_conversations(id) ON DELETE CASCADE,
+			user_message_id INTEGER NOT NULL REFERENCES ai_messages(id) ON DELETE CASCADE,
+			assistant_message_id INTEGER REFERENCES ai_messages(id) ON DELETE SET NULL,
+			intent TEXT NOT NULL DEFAULT '',
+			intent_hint TEXT NOT NULL DEFAULT '',
+			process_summary_json TEXT NOT NULL DEFAULT '',
+			status TEXT NOT NULL DEFAULT 'completed' CHECK(status IN ('running','completed','stopped','failed')),
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE TABLE IF NOT EXISTS ai_tool_calls (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			turn_run_id INTEGER NOT NULL REFERENCES ai_turn_runs(id) ON DELETE CASCADE,
+			tool_name TEXT NOT NULL DEFAULT '',
+			input_json TEXT NOT NULL DEFAULT '',
+			output_summary_json TEXT NOT NULL DEFAULT '',
+			status TEXT NOT NULL DEFAULT 'completed' CHECK(status IN ('running','completed','skipped','failed')),
+			duration_ms INTEGER NOT NULL DEFAULT 0,
+			error TEXT NOT NULL DEFAULT '',
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE TABLE IF NOT EXISTS ai_result_cards (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			turn_run_id INTEGER NOT NULL REFERENCES ai_turn_runs(id) ON DELETE CASCADE,
+			card_type TEXT NOT NULL DEFAULT '',
+			sort_order INTEGER NOT NULL DEFAULT 0,
+			payload_json TEXT NOT NULL DEFAULT '{}',
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_ai_turn_runs_conv ON ai_turn_runs(conversation_id, id)`,
+		`CREATE INDEX IF NOT EXISTS idx_ai_turn_runs_user ON ai_turn_runs(user_message_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_ai_tool_calls_run ON ai_tool_calls(turn_run_id, id)`,
+		`CREATE INDEX IF NOT EXISTS idx_ai_result_cards_run ON ai_result_cards(turn_run_id, sort_order, id)`,
+	}
+	for _, stmt := range stmts {
+		if _, err := m.db.Exec(stmt); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (m *Manager) ensurePaperNotesSchema() error {
