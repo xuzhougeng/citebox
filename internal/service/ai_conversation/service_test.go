@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/xuzhougeng/citebox/internal/model"
 	"github.com/xuzhougeng/citebox/internal/repository"
@@ -152,4 +153,43 @@ func mustInsertPaperForTest(t *testing.T, libRepo *repository.LibraryRepository,
 	}
 	id, _ := res.LastInsertId()
 	return id
+}
+
+func TestTitleGeneratedOnFirstTurn(t *testing.T) {
+	svc, libRepo, caller := newServiceForTest(t)
+	caller.staticReply = "回答内容"
+
+	titleCaller := &stubNonStreamCaller{staticReply: "  对话标题  "}
+	svc.titleCaller = titleCaller
+
+	convID, _ := svc.CreateDraft()
+	_, err := svc.SendMessage(context.Background(), SendMessageInput{
+		ConversationID: convID,
+		Content:        "第一条消息",
+	}, func(string) error { return nil })
+	if err != nil {
+		t.Fatalf("SendMessage: %v", err)
+	}
+
+	// title generation is async; wait briefly
+	for i := 0; i < 50; i++ {
+		c, _ := libRepo.AIConversation.GetConversation(convID)
+		if c.Title != "" {
+			if c.Title != "对话标题" {
+				t.Fatalf("title = %q, want trimmed", c.Title)
+			}
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatalf("title was not generated within 1s")
+}
+
+type stubNonStreamCaller struct {
+	staticReply string
+}
+
+func (s *stubNonStreamCaller) CallProviderGeneric(ctx context.Context, settings model.AISettings,
+	systemPrompt, userPrompt string) (string, string, error) {
+	return s.staticReply, "test", nil
 }

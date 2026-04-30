@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"time"
 
 	"github.com/xuzhougeng/citebox/internal/apperr"
 	"github.com/xuzhougeng/citebox/internal/model"
@@ -27,11 +28,12 @@ type StreamCaller interface {
 
 // Service is the conversation lifecycle manager.
 type Service struct {
-	repo     *repository.AIConversationRepository
-	papers   *repository.PaperRepository
-	settings AISettingsProvider
-	caller   StreamCaller
-	logger   *slog.Logger
+	repo        *repository.AIConversationRepository
+	papers      *repository.PaperRepository
+	settings    AISettingsProvider
+	caller      StreamCaller
+	titleCaller NonStreamCaller
+	logger      *slog.Logger
 }
 
 // New builds the service. All deps required.
@@ -40,7 +42,11 @@ func New(repo *repository.AIConversationRepository, papers *repository.PaperRepo
 	if logger == nil {
 		logger = slog.Default().With("component", "ai_conversation")
 	}
-	return &Service{repo: repo, papers: papers, settings: settings, caller: caller, logger: logger}
+	s := &Service{repo: repo, papers: papers, settings: settings, caller: caller, logger: logger}
+	if tc, ok := caller.(NonStreamCaller); ok {
+		s.titleCaller = tc
+	}
+	return s
 }
 
 // CreateDraft creates an empty conversation row. Used by handler when client
@@ -251,6 +257,20 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput, onDelta 
 		return SendMessageResult{}, err
 	}
 	_ = s.repo.TouchConversation(in.ConversationID)
+
+	if conv.Title == "" && !conv.TitleLocked && s.titleCaller != nil {
+		go func(convID int64, settings model.AISettings, userText, asstText string) {
+			bg, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			title := generateTitle(bg, s.titleCaller, settings, userText, asstText)
+			if title == "" {
+				return
+			}
+			if err := s.repo.UpdateTitle(convID, title, false); err != nil {
+				s.logger.Warn("ai_conversation: title persist failed", "error", err)
+			}
+		}(in.ConversationID, *settings, in.Content, rawText)
+	}
 
 	res := SendMessageResult{
 		ConversationID:   in.ConversationID,
