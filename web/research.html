@@ -58,7 +58,10 @@
             <div class="research-toolbar">
                 <label class="field research-search-field">
                     <span data-i18n="research.search_label">搜索</span>
-                    <input id="research-search-input" class="form-input" type="text" data-i18n-placeholder="research.search.placeholder" placeholder="关键词 / DOI / arXiv ID / S2 paperId">
+                    <div class="research-autocomplete-wrap">
+                        <input id="research-search-input" class="form-input" type="text" data-i18n-placeholder="research.search.placeholder" placeholder="关键词 / DOI / arXiv ID / S2 paperId" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="research-autocomplete-list" aria-activedescendant="">
+                        <ul id="research-autocomplete-list" class="research-autocomplete-list" role="listbox" hidden></ul>
+                    </div>
                 </label>
                 <div class="research-toolbar-actions">
                     <button id="research-search-btn" class="btn btn-primary" type="button" data-i18n="research.action.search">搜索</button>

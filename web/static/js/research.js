@@ -15,6 +15,16 @@
 
     const STORAGE_KEY = 'citebox_research_state';
     const SEARCH_HISTORY_LIMIT = 5;
+    const AUTOCOMPLETE_DEBOUNCE_MS = 180;
+    const AUTOCOMPLETE_MIN_LEN = 2;
+
+    const autocomplete = {
+        items: [],
+        active: -1,
+        timer: null,
+        seq: 0,
+        suppress: false,
+    };
 
     function $(id) { return document.getElementById(id); }
 
@@ -90,6 +100,117 @@
             throw new Error(`${res.status}: ${text}`);
         }
         return res.json();
+    }
+
+    function hideAutocomplete() {
+        autocomplete.items = [];
+        autocomplete.active = -1;
+        const el = $('research-autocomplete-list');
+        if (el) {
+            el.hidden = true;
+            el.innerHTML = '';
+        }
+        const input = $('research-search-input');
+        if (input) {
+            input.setAttribute('aria-expanded', 'false');
+            input.setAttribute('aria-activedescendant', '');
+        }
+    }
+
+    function renderAutocomplete(items) {
+        const el = $('research-autocomplete-list');
+        const input = $('research-search-input');
+        if (!el || !input) return;
+        autocomplete.items = items;
+        autocomplete.active = -1;
+        if (!items.length) {
+            hideAutocomplete();
+            return;
+        }
+        const moreLabel = t('research.autocomplete.more', '查看全部搜索结果');
+        const moreIdx = items.length;
+        const itemsHTML = items.map((it, i) => {
+            const meta = it.authorsYear ? `<span class="research-autocomplete-meta">${escapeHtml(it.authorsYear)}</span>` : '';
+            return `<li id="research-autocomplete-item-${i}" class="research-autocomplete-item" role="option" data-id="${escapeHtml(it.paperId || '')}" data-i="${i}">
+                <span class="research-autocomplete-title">${escapeHtml(it.title || '')}</span>${meta}
+            </li>`;
+        }).join('');
+        const moreHTML = `<li id="research-autocomplete-item-${moreIdx}" class="research-autocomplete-more" role="option" data-more="1" data-i="${moreIdx}">
+            <span class="research-autocomplete-more-label">${escapeHtml(moreLabel)}</span>
+            <span class="research-autocomplete-more-arrow" aria-hidden="true">→</span>
+        </li>`;
+        el.innerHTML = itemsHTML + moreHTML;
+        el.hidden = false;
+        input.setAttribute('aria-expanded', 'true');
+    }
+
+    function setActiveSuggestion(idx) {
+        const list = $('research-autocomplete-list');
+        const input = $('research-search-input');
+        if (!list || !input) return;
+        // navigable count = papers + the trailing "more" row
+        const max = autocomplete.items.length + 1;
+        if (max <= 1) return;
+        autocomplete.active = ((idx % max) + max) % max;
+        list.querySelectorAll('[data-i]').forEach((el) => {
+            const i = parseInt(el.dataset.i, 10);
+            const active = i === autocomplete.active;
+            el.classList.toggle('is-active', active);
+            if (active) {
+                input.setAttribute('aria-activedescendant', el.id);
+                el.scrollIntoView({ block: 'nearest' });
+            }
+        });
+    }
+
+    async function fetchAutocomplete(query) {
+        const seq = ++autocomplete.seq;
+        try {
+            const data = await api(`/api/research/autocomplete?q=${encodeURIComponent(query)}`);
+            if (seq !== autocomplete.seq) return; // a newer query has been issued
+            renderAutocomplete(Array.isArray(data.items) ? data.items : []);
+        } catch (e) {
+            // network error — silently dismiss; user can still hit Enter to search
+            if (seq === autocomplete.seq) hideAutocomplete();
+        }
+    }
+
+    function scheduleAutocomplete() {
+        clearTimeout(autocomplete.timer);
+        const input = $('research-search-input');
+        if (!input) return;
+        if (autocomplete.suppress) {
+            autocomplete.suppress = false;
+            return;
+        }
+        const q = input.value.trim();
+        if (q.length < AUTOCOMPLETE_MIN_LEN) {
+            autocomplete.seq++; // invalidate any in-flight response
+            hideAutocomplete();
+            return;
+        }
+        autocomplete.timer = setTimeout(() => fetchAutocomplete(q), AUTOCOMPLETE_DEBOUNCE_MS);
+    }
+
+    async function selectAutocomplete(idx) {
+        const input = $('research-search-input');
+        // The trailing "more" row sits at index === items.length and runs the full search.
+        if (idx === autocomplete.items.length) {
+            const q = input ? input.value.trim() : '';
+            hideAutocomplete();
+            if (q) await searchSeed(q);
+            return;
+        }
+        const item = autocomplete.items[idx];
+        if (!item || !item.paperId) return;
+        autocomplete.suppress = true;
+        if (input) input.value = item.title || input.value;
+        hideAutocomplete();
+        try {
+            await setSeed(item.paperId);
+        } catch (e) {
+            if (input && input.value.trim()) await searchSeed(input.value.trim());
+        }
     }
 
     async function searchSeed(query) {
@@ -423,11 +544,55 @@
 
     function bindEvents() {
         $('research-search-btn').addEventListener('click', () => {
+            hideAutocomplete();
             const q = $('research-search-input').value.trim();
             if (q) searchSeed(q);
         });
-        $('research-search-input').addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') $('research-search-btn').click();
+        const input = $('research-search-input');
+        input.addEventListener('input', scheduleAutocomplete);
+        input.addEventListener('focus', () => {
+            // Re-show when refocusing if we still have suggestions for the current query.
+            if (autocomplete.items.length) {
+                $('research-autocomplete-list').hidden = false;
+                input.setAttribute('aria-expanded', 'true');
+            }
+        });
+        input.addEventListener('blur', () => {
+            // Delay so a click on the dropdown can land before we hide.
+            setTimeout(hideAutocomplete, 120);
+        });
+        input.addEventListener('keydown', (e) => {
+            const visible = autocomplete.items.length > 0 && !$('research-autocomplete-list').hidden;
+            if (visible && e.key === 'ArrowDown') {
+                e.preventDefault();
+                setActiveSuggestion(autocomplete.active + 1);
+                return;
+            }
+            if (visible && e.key === 'ArrowUp') {
+                e.preventDefault();
+                setActiveSuggestion(autocomplete.active - 1);
+                return;
+            }
+            if (visible && e.key === 'Escape') {
+                hideAutocomplete();
+                return;
+            }
+            if (e.key === 'Enter') {
+                if (visible && autocomplete.active >= 0) {
+                    e.preventDefault();
+                    selectAutocomplete(autocomplete.active);
+                    return;
+                }
+                $('research-search-btn').click();
+            }
+        });
+        $('research-autocomplete-list').addEventListener('mousedown', (e) => {
+            // mousedown so we beat the input's blur and prevent it from firing.
+            const li = e.target.closest('[data-i]');
+            if (!li) return;
+            e.preventDefault();
+            const i = parseInt(li.dataset.i, 10);
+            if (Number.isFinite(i)) selectAutocomplete(i);
         });
         $('research-basket-import-all').addEventListener('click', importBasketToLibrary);
         $('research-basket-export').addEventListener('click', exportBasket);
@@ -466,6 +631,7 @@
             const chip = e.target.closest('button.research-history-chip');
             if (chip && chip.dataset.q) {
                 $('research-search-input').value = chip.dataset.q;
+                hideAutocomplete();
                 await searchSeed(chip.dataset.q);
                 return;
             }
