@@ -167,7 +167,7 @@ func TestAIConversationRunArtifactsRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("AddToolCall: %v", err)
 	}
-	payloadJSON := `{"paper_id":42,"title":"ATAC Paper"}`
+	payloadJSON := ` {"paper_id":42,"title":"ATAC Paper"} `
 	cardID, err := repo.AddResultCard(AIResultCard{
 		TurnRunID:   runID,
 		CardType:    "paper_hit",
@@ -193,7 +193,9 @@ func TestAIConversationRunArtifactsRoundTrip(t *testing.T) {
 		run.AssistantMessageID.Int64 != assistantID ||
 		run.IntentHint != "library_search" ||
 		run.ProcessSummaryJSON != processSummaryJSON ||
-		run.Status != "completed" {
+		run.Status != "completed" ||
+		run.CreatedAt.IsZero() ||
+		run.UpdatedAt.IsZero() {
 		t.Fatalf("run = %+v", run)
 	}
 	calls, err := repo.ListToolCalls(runID)
@@ -209,7 +211,8 @@ func TestAIConversationRunArtifactsRoundTrip(t *testing.T) {
 		call.InputJSON != inputJSON ||
 		call.OutputSummaryJSON != outputSummaryJSON ||
 		call.Status != "completed" ||
-		call.Error != "" {
+		call.Error != "" ||
+		call.CreatedAt.IsZero() {
 		t.Fatalf("call = %+v", call)
 	}
 	cards, err := repo.ListResultCards(runID)
@@ -220,7 +223,7 @@ func TestAIConversationRunArtifactsRoundTrip(t *testing.T) {
 		t.Fatalf("cards = %+v", cards)
 	}
 	card := cards[0]
-	if card.ID != cardID || card.TurnRunID != runID || card.PayloadJSON != payloadJSON {
+	if card.ID != cardID || card.TurnRunID != runID || card.PayloadJSON != payloadJSON || card.CreatedAt.IsZero() {
 		t.Fatalf("card = %+v", card)
 	}
 }

@@ -326,7 +326,7 @@ func (r *AIConversationRepository) AddToolCall(call AIToolCall) (int64, error) {
 }
 
 func (r *AIConversationRepository) AddResultCard(card AIResultCard) (int64, error) {
-	payload := strings.TrimSpace(card.PayloadJSON)
+	payload := card.PayloadJSON
 	if payload == "" {
 		payload = "{}"
 	}
