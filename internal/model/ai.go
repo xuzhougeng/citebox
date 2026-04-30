@@ -28,6 +28,9 @@ type AIModelConfig struct {
 	Model            string     `json:"model"`
 	MaxOutputTokens  int        `json:"max_output_tokens"`
 	OpenAILegacyMode bool       `json:"openai_legacy_mode"`
+	OmitTemperature  bool       `json:"omit_temperature"`
+	ThinkingEnabled  bool       `json:"thinking_enabled"`
+	ReasoningEffort  string     `json:"reasoning_effort,omitempty"`
 }
 
 type AISceneModelSelection struct {
@@ -76,23 +79,26 @@ type AIPromptSettingsUpdate struct {
 }
 
 type AISettings struct {
-	Provider         AIProvider            `json:"provider"`
-	APIKey           string                `json:"api_key"`
-	BaseURL          string                `json:"base_url"`
-	Model            string                `json:"model"`
-	OpenAILegacyMode bool                  `json:"openai_legacy_mode"`
-	Models           []AIModelConfig       `json:"models"`
-	SceneModels      AISceneModelSelection `json:"scene_models"`
-	Temperature      float64               `json:"temperature"`
-	MaxOutputTokens  int                   `json:"max_output_tokens"`
-	MaxFigures       int                   `json:"max_figures"`
-	SystemPrompt     string                `json:"system_prompt"`
-	QAPrompt         string                `json:"qa_prompt"`
-	FigurePrompt     string                `json:"figure_prompt"`
-	TagPrompt        string                `json:"tag_prompt"`
-	GroupPrompt      string                `json:"group_prompt"`
-	TranslatePrompt  string                `json:"translate_prompt"`
-	TTSPrompt        string                `json:"tts_prompt"`
+	Provider            AIProvider            `json:"provider"`
+	APIKey              string                `json:"api_key"`
+	BaseURL             string                `json:"base_url"`
+	Model               string                `json:"model"`
+	OpenAILegacyMode    bool                  `json:"openai_legacy_mode"`
+	OmitTemperature     bool                  `json:"omit_temperature"`
+	ThinkingEnabled     bool                  `json:"thinking_enabled"`
+	ReasoningEffort     string                `json:"reasoning_effort,omitempty"`
+	Models              []AIModelConfig       `json:"models"`
+	SceneModels         AISceneModelSelection `json:"scene_models"`
+	Temperature         float64               `json:"temperature"`
+	MaxOutputTokens     int                   `json:"max_output_tokens"`
+	MaxFigures          int                   `json:"max_figures"`
+	SystemPrompt        string                `json:"system_prompt"`
+	QAPrompt            string                `json:"qa_prompt"`
+	FigurePrompt        string                `json:"figure_prompt"`
+	TagPrompt           string                `json:"tag_prompt"`
+	GroupPrompt         string                `json:"group_prompt"`
+	TranslatePrompt     string                `json:"translate_prompt"`
+	TTSPrompt           string                `json:"tts_prompt"`
 	Translation         AITranslationConfig   `json:"translation"`
 	RolePrompts         []AIRolePrompt        `json:"role_prompts"`
 	PinPapersLimit      int                   `json:"pin_papers_limit"`

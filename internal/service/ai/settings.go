@@ -173,6 +173,9 @@ func NormalizeSettings(input model.AISettings) (model.AISettings, error) {
 	settings.Model = defaultModel.Model
 	settings.MaxOutputTokens = defaultModel.MaxOutputTokens
 	settings.OpenAILegacyMode = defaultModel.OpenAILegacyMode
+	settings.OmitTemperature = defaultModel.OmitTemperature
+	settings.ThinkingEnabled = defaultModel.ThinkingEnabled
+	settings.ReasoningEffort = defaultModel.ReasoningEffort
 
 	return settings, nil
 }
@@ -194,6 +197,9 @@ func normalizeModels(settings model.AISettings, defaults model.AISettings) ([]mo
 			Model:            settings.Model,
 			MaxOutputTokens:  settings.MaxOutputTokens,
 			OpenAILegacyMode: settings.OpenAILegacyMode,
+			OmitTemperature:  settings.OmitTemperature,
+			ThinkingEnabled:  settings.ThinkingEnabled,
+			ReasoningEffort:  settings.ReasoningEffort,
 		}}
 	}
 
@@ -235,6 +241,7 @@ func normalizeModelConfig(input model.AIModelConfig, fallback model.AIModelConfi
 	config.BaseURL = strings.TrimRight(strings.TrimSpace(config.BaseURL), "/")
 	config.Model = strings.TrimSpace(config.Model)
 	config.Name = strings.TrimSpace(config.Name)
+	config.ReasoningEffort = normalizeReasoningEffort(config.ReasoningEffort)
 
 	if config.BaseURL == "" {
 		config.BaseURL = DefaultBaseURL(config.Provider)
@@ -253,9 +260,21 @@ func normalizeModelConfig(input model.AIModelConfig, fallback model.AIModelConfi
 	}
 	if config.Provider != model.AIProviderOpenAI {
 		config.OpenAILegacyMode = false
+		config.OmitTemperature = false
+		config.ThinkingEnabled = false
+		config.ReasoningEffort = ""
 	}
 
 	return config, nil
+}
+
+func normalizeReasoningEffort(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "minimal", "low", "medium", "high", "xhigh":
+		return strings.ToLower(strings.TrimSpace(value))
+	default:
+		return ""
+	}
 }
 
 func normalizeSceneModelSelection(input model.AISceneModelSelection, models []model.AIModelConfig) model.AISceneModelSelection {

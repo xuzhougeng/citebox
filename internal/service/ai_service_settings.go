@@ -232,12 +232,7 @@ func normalizeAISettings(input model.AISettings) (model.AISettings, error) {
 	if err != nil {
 		return model.AISettings{}, err
 	}
-	settings.Provider = defaultModel.Provider
-	settings.APIKey = defaultModel.APIKey
-	settings.BaseURL = defaultModel.BaseURL
-	settings.Model = defaultModel.Model
-	settings.MaxOutputTokens = defaultModel.MaxOutputTokens
-	settings.OpenAILegacyMode = defaultModel.OpenAILegacyMode
+	applyAIModelConfig(&settings, defaultModel)
 
 	return settings, nil
 }
@@ -337,6 +332,9 @@ func normalizeAIModels(settings model.AISettings, defaults model.AISettings) ([]
 			Model:            settings.Model,
 			MaxOutputTokens:  settings.MaxOutputTokens,
 			OpenAILegacyMode: settings.OpenAILegacyMode,
+			OmitTemperature:  settings.OmitTemperature,
+			ThinkingEnabled:  settings.ThinkingEnabled,
+			ReasoningEffort:  settings.ReasoningEffort,
 		}}
 	}
 
@@ -378,6 +376,7 @@ func normalizeAIModelConfig(input model.AIModelConfig, fallback model.AIModelCon
 	config.BaseURL = strings.TrimRight(strings.TrimSpace(config.BaseURL), "/")
 	config.Model = strings.TrimSpace(config.Model)
 	config.Name = strings.TrimSpace(config.Name)
+	config.ReasoningEffort = normalizeAIReasoningEffort(config.ReasoningEffort)
 
 	if config.BaseURL == "" {
 		config.BaseURL = defaultAIBaseURL(config.Provider)
@@ -396,9 +395,21 @@ func normalizeAIModelConfig(input model.AIModelConfig, fallback model.AIModelCon
 	}
 	if config.Provider != model.AIProviderOpenAI {
 		config.OpenAILegacyMode = false
+		config.OmitTemperature = false
+		config.ThinkingEnabled = false
+		config.ReasoningEffort = ""
 	}
 
 	return config, nil
+}
+
+func normalizeAIReasoningEffort(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "minimal", "low", "medium", "high", "xhigh":
+		return strings.ToLower(strings.TrimSpace(value))
+	default:
+		return ""
+	}
 }
 
 func normalizeAISceneModelSelection(input model.AISceneModelSelection, models []model.AIModelConfig) model.AISceneModelSelection {
@@ -471,6 +482,18 @@ func resolveModelByID(models []model.AIModelConfig, modelID string) (model.AIMod
 		return models[0], nil
 	}
 	return model.AIModelConfig{}, apperr.New(apperr.CodeFailedPrecondition, "当前场景绑定的 AI 模型不存在，请到配置页重新选择")
+}
+
+func applyAIModelConfig(settings *model.AISettings, config model.AIModelConfig) {
+	settings.Provider = config.Provider
+	settings.APIKey = config.APIKey
+	settings.BaseURL = config.BaseURL
+	settings.Model = config.Model
+	settings.MaxOutputTokens = config.MaxOutputTokens
+	settings.OpenAILegacyMode = config.OpenAILegacyMode
+	settings.OmitTemperature = config.OmitTemperature
+	settings.ThinkingEnabled = config.ThinkingEnabled
+	settings.ReasoningEffort = config.ReasoningEffort
 }
 
 func isSupportedAIProvider(provider model.AIProvider) bool {

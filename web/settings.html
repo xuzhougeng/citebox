@@ -870,6 +870,25 @@ User Prompt:
                         <input id="aiModelLegacyModeInput" type="checkbox">
                         <span data-i18n="settings.ai.legacy_mode">使用传统 OpenAI 接口模式（Chat Completions），以兼容其他 OpenAI 风格网关</span>
                     </label>
+                    <label class="field checkbox-field">
+                        <input id="aiModelOmitTemperatureInput" type="checkbox">
+                        <span data-i18n="settings.ai.omit_temperature">不发送 temperature 参数</span>
+                    </label>
+                    <label class="field checkbox-field">
+                        <input id="aiModelThinkingInput" type="checkbox">
+                        <span data-i18n="settings.ai.thinking_enabled">启用思考模式</span>
+                    </label>
+                    <label class="field field-span-2">
+                        <span data-i18n="settings.ai.reasoning_effort">Reasoning Effort</span>
+                        <select id="aiModelReasoningEffortInput" class="form-input">
+                            <option value="" data-i18n="settings.ai.reasoning_effort_none">不发送</option>
+                            <option value="minimal">minimal</option>
+                            <option value="low">low</option>
+                            <option value="medium">medium</option>
+                            <option value="high">high</option>
+                            <option value="xhigh">xhigh</option>
+                        </select>
+                    </label>
                 </div>
 
                 <div id="aiModelProviderNote" class="ai-provider-note"></div>

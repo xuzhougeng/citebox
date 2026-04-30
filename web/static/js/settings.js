@@ -49,6 +49,9 @@ const SettingsPage = {
         this.aiModelBaseURLInput = document.getElementById('aiModelBaseURLInput');
         this.aiModelAPIKeyInput = document.getElementById('aiModelAPIKeyInput');
         this.aiModelLegacyModeInput = document.getElementById('aiModelLegacyModeInput');
+        this.aiModelOmitTemperatureInput = document.getElementById('aiModelOmitTemperatureInput');
+        this.aiModelThinkingInput = document.getElementById('aiModelThinkingInput');
+        this.aiModelReasoningEffortInput = document.getElementById('aiModelReasoningEffortInput');
         this.aiModelProviderNote = document.getElementById('aiModelProviderNote');
         this.aiModelCheckStatus = document.getElementById('aiModelCheckStatus');
         this.aiModelEditorStatus = document.getElementById('aiModelEditorStatus');
@@ -289,6 +292,9 @@ const SettingsPage = {
             this.updateAIModelModalUI();
             this.scheduleAIModelAutosave({ immediate: true });
         });
+        this.aiModelLegacyModeInput.addEventListener('change', () => {
+            this.updateAIModelModalUI();
+        });
         this.closeAIModelModalButton.addEventListener('click', async () => {
             await this.closeAIModelModal();
         });
@@ -473,7 +479,10 @@ const SettingsPage = {
             this.aiModelMaxTokensInput,
             this.aiModelBaseURLInput,
             this.aiModelAPIKeyInput,
-            this.aiModelLegacyModeInput
+            this.aiModelLegacyModeInput,
+            this.aiModelOmitTemperatureInput,
+            this.aiModelThinkingInput,
+            this.aiModelReasoningEffortInput
         ].forEach((element) => {
             if (!element) return;
             element.addEventListener('input', () => {
@@ -1899,7 +1908,7 @@ const SettingsPage = {
 
     providerNoteText(provider) {
         const notes = {
-            openai: t('settings.ai.provider_note_openai', 'OpenAI 默认使用 Responses API。勾选传统模式后会切到 Chat Completions，以兼容多数 OpenAI 风格网关。'),
+            openai: t('settings.ai.provider_note_openai', 'OpenAI 默认使用 Responses API。勾选传统模式后会切到 Chat Completions；DeepSeek 等兼容网关可配合 thinking 和 reasoning_effort 使用。'),
             anthropic: t('settings.ai.provider_note_anthropic', 'Anthropic 使用原生 Messages API，请填写兼容的 Base URL 和模型名。'),
             gemini: t('settings.ai.provider_note_gemini', 'Gemini 使用 generateContent 接口，API Key 会通过 query 参数发送。')
         };
@@ -1917,6 +1926,9 @@ const SettingsPage = {
             api_key: '',
             max_output_tokens: 1200,
             openai_legacy_mode: false,
+            omit_temperature: false,
+            thinking_enabled: false,
+            reasoning_effort: '',
             check_status: ''
         };
     },
@@ -1980,6 +1992,9 @@ const SettingsPage = {
         this.aiModelBaseURLInput.value = model.base_url || '';
         this.aiModelAPIKeyInput.value = model.api_key || '';
         this.aiModelLegacyModeInput.checked = Boolean(model.openai_legacy_mode);
+        this.aiModelOmitTemperatureInput.checked = Boolean(model.omit_temperature);
+        this.aiModelThinkingInput.checked = Boolean(model.thinking_enabled);
+        this.aiModelReasoningEffortInput.value = model.reasoning_effort || '';
         this.aiModelCheckStatus.textContent = model.check_status || t('settings.ai.not_checked', '尚未检查');
         this.deleteAIModelButton.disabled = this.aiModelDraft.length <= 1;
         this.updateAIModelModalUI();
@@ -2004,8 +2019,14 @@ const SettingsPage = {
         this.aiModelProviderNote.textContent = this.providerNoteText(provider);
         const legacyEnabled = provider === 'openai';
         this.aiModelLegacyModeInput.disabled = !legacyEnabled;
+        this.aiModelOmitTemperatureInput.disabled = !legacyEnabled;
+        this.aiModelThinkingInput.disabled = !legacyEnabled;
+        this.aiModelReasoningEffortInput.disabled = !legacyEnabled;
         if (!legacyEnabled) {
             this.aiModelLegacyModeInput.checked = false;
+            this.aiModelOmitTemperatureInput.checked = false;
+            this.aiModelThinkingInput.checked = false;
+            this.aiModelReasoningEffortInput.value = '';
         }
     },
 
@@ -2019,10 +2040,16 @@ const SettingsPage = {
             base_url: this.aiModelBaseURLInput.value.trim(),
             api_key: this.aiModelAPIKeyInput.value.trim(),
             openai_legacy_mode: this.aiModelLegacyModeInput.checked,
+            omit_temperature: this.aiModelOmitTemperatureInput.checked,
+            thinking_enabled: this.aiModelThinkingInput.checked,
+            reasoning_effort: this.aiModelReasoningEffortInput.value,
             check_status: this.aiModelCheckStatus.textContent.trim()
         };
         if (model.provider !== 'openai') {
             model.openai_legacy_mode = false;
+            model.omit_temperature = false;
+            model.thinking_enabled = false;
+            model.reasoning_effort = '';
         }
         return model;
     },
@@ -2139,7 +2166,10 @@ const SettingsPage = {
             max_output_tokens: Number(item.max_output_tokens || 1200),
             base_url: item.base_url || '',
             api_key: item.api_key || '',
-            openai_legacy_mode: Boolean(item.openai_legacy_mode)
+            openai_legacy_mode: Boolean(item.openai_legacy_mode),
+            omit_temperature: Boolean(item.omit_temperature),
+            thinking_enabled: Boolean(item.thinking_enabled),
+            reasoning_effort: item.reasoning_effort || ''
         }));
     },
 
@@ -2158,7 +2188,10 @@ const SettingsPage = {
                 max_output_tokens: Number(model.max_output_tokens || 1200),
                 base_url: model.base_url,
                 api_key: model.api_key,
-                openai_legacy_mode: model.openai_legacy_mode
+                openai_legacy_mode: model.openai_legacy_mode,
+                omit_temperature: model.omit_temperature,
+                thinking_enabled: model.thinking_enabled,
+                reasoning_effort: model.reasoning_effort || ''
             });
             const statusText = `${result.message} · ${result.provider} / ${result.model} / ${result.mode}`;
             this.aiModelCheckStatus.textContent = statusText;

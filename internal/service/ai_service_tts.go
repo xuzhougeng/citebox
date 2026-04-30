@@ -53,12 +53,7 @@ func (s *AIService) RewriteTextForTTS(ctx context.Context, text string) (string,
 	systemPrompt, userPrompt := buildAITTSPrompts(*settings, text)
 
 	runtimeSettings := *settings
-	runtimeSettings.Provider = modelConfig.Provider
-	runtimeSettings.APIKey = modelConfig.APIKey
-	runtimeSettings.BaseURL = modelConfig.BaseURL
-	runtimeSettings.Model = modelConfig.Model
-	runtimeSettings.MaxOutputTokens = modelConfig.MaxOutputTokens
-	runtimeSettings.OpenAILegacyMode = modelConfig.OpenAILegacyMode
+	applyAIModelConfig(&runtimeSettings, modelConfig)
 	runtimeSettings.Temperature = 0.1
 
 	rawText, err := s.callTextProvider(ctx, runtimeSettings, systemPrompt, userPrompt, nil)

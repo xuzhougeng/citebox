@@ -26,12 +26,7 @@ func (s *AIService) CheckModel(ctx context.Context, input model.AIModelConfig) (
 	}
 
 	runtimeSettings := model.DefaultAISettings()
-	runtimeSettings.Provider = normalized.Provider
-	runtimeSettings.APIKey = normalized.APIKey
-	runtimeSettings.BaseURL = normalized.BaseURL
-	runtimeSettings.Model = normalized.Model
-	runtimeSettings.MaxOutputTokens = normalized.MaxOutputTokens
-	runtimeSettings.OpenAILegacyMode = normalized.OpenAILegacyMode
+	applyAIModelConfig(&runtimeSettings, normalized)
 	mode := aiProviderMode(runtimeSettings)
 
 	rawText, providerMode, err := s.callProvider(ctx, &aiReadPrepared{
@@ -115,6 +110,56 @@ func minInt(left, right int) int {
 	return right
 }
 
+func applyTemperature(payload map[string]interface{}, settings model.AISettings) {
+	if shouldOmitTemperature(settings) {
+		return
+	}
+	payload["temperature"] = settings.Temperature
+}
+
+func applyOpenAIRequestOptions(payload map[string]interface{}, settings model.AISettings, mode string) {
+	applyTemperature(payload, settings)
+
+	effort := strings.TrimSpace(settings.ReasoningEffort)
+	if mode == "responses" {
+		if settings.ThinkingEnabled && effort == "" {
+			effort = "medium"
+		}
+		if effort != "" {
+			payload["reasoning"] = map[string]interface{}{"effort": effort}
+		}
+		return
+	}
+
+	if effort != "" {
+		payload["reasoning_effort"] = effort
+	}
+	if mode == "chat_completions" && settings.ThinkingEnabled {
+		payload["thinking"] = map[string]interface{}{"type": "enabled"}
+	}
+}
+
+func shouldOmitTemperature(settings model.AISettings) bool {
+	if settings.OmitTemperature {
+		return true
+	}
+	if settings.Provider != model.AIProviderOpenAI {
+		return false
+	}
+	return openAIModelOmitsTemperature(settings.Model)
+}
+
+func openAIModelOmitsTemperature(modelName string) bool {
+	modelName = strings.ToLower(strings.TrimSpace(modelName))
+	modelName = strings.TrimPrefix(modelName, "openai/")
+	for _, prefix := range []string{"gpt-5", "o1", "o3", "o4", "o5"} {
+		if strings.HasPrefix(modelName, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *AIService) callTextProvider(ctx context.Context, settings model.AISettings, systemPrompt, userPrompt string, images []aiImageInput) (string, error) {
 	switch settings.Provider {
 	case model.AIProviderOpenAI:
@@ -146,9 +191,9 @@ func (s *AIService) callOpenAIResponses(ctx context.Context, settings model.AISe
 		"model":             settings.Model,
 		"instructions":      systemPrompt,
 		"input":             []map[string]interface{}{{"role": "user", "content": content}},
-		"temperature":       settings.Temperature,
 		"max_output_tokens": settings.MaxOutputTokens,
 	}
+	applyOpenAIRequestOptions(payload, settings, "responses")
 
 	body, err := s.postJSON(
 		ctx,
@@ -206,9 +251,9 @@ func (s *AIService) callOpenAIChatCompletions(ctx context.Context, settings mode
 			{"role": "system", "content": systemPrompt},
 			{"role": "user", "content": userContent},
 		},
-		"temperature": settings.Temperature,
-		"max_tokens":  settings.MaxOutputTokens,
+		"max_tokens": settings.MaxOutputTokens,
 	}
+	applyOpenAIRequestOptions(payload, settings, "chat_completions")
 
 	body, err := s.postJSON(
 		ctx,
@@ -254,14 +299,14 @@ func (s *AIService) callAnthropicMessages(ctx context.Context, settings model.AI
 	}
 
 	payload := map[string]interface{}{
-		"model":       settings.Model,
-		"max_tokens":  settings.MaxOutputTokens,
-		"temperature": settings.Temperature,
-		"system":      systemPrompt,
+		"model":      settings.Model,
+		"max_tokens": settings.MaxOutputTokens,
+		"system":     systemPrompt,
 		"messages": []map[string]interface{}{
 			{"role": "user", "content": content},
 		},
 	}
+	applyTemperature(payload, settings)
 
 	body, err := s.postJSON(
 		ctx,
@@ -316,10 +361,10 @@ func (s *AIService) callGeminiGenerateContent(ctx context.Context, settings mode
 			{"parts": parts},
 		},
 		"generationConfig": map[string]interface{}{
-			"temperature":     settings.Temperature,
 			"maxOutputTokens": settings.MaxOutputTokens,
 		},
 	}
+	applyTemperature(payload["generationConfig"].(map[string]interface{}), settings)
 
 	endpoint := joinProviderURL(settings.BaseURL, defaultAIBaseURL(model.AIProviderGemini), "/v1beta/models/"+url.PathEscape(settings.Model)+":generateContent")
 	endpointWithKey, err := addQuery(endpoint, "key", settings.APIKey)
@@ -369,10 +414,10 @@ func (s *AIService) callOpenAIResponsesStream(ctx context.Context, settings mode
 		"model":             settings.Model,
 		"instructions":      systemPrompt,
 		"input":             []map[string]interface{}{{"role": "user", "content": content}},
-		"temperature":       settings.Temperature,
 		"max_output_tokens": settings.MaxOutputTokens,
 		"stream":            true,
 	}
+	applyOpenAIRequestOptions(payload, settings, "responses")
 
 	var raw strings.Builder
 	err := s.postJSONStream(
@@ -419,10 +464,10 @@ func (s *AIService) callOpenAIChatCompletionsStream(ctx context.Context, setting
 			{"role": "system", "content": systemPrompt},
 			{"role": "user", "content": userContent},
 		},
-		"temperature": settings.Temperature,
-		"max_tokens":  settings.MaxOutputTokens,
-		"stream":      true,
+		"max_tokens": settings.MaxOutputTokens,
+		"stream":     true,
 	}
+	applyOpenAIRequestOptions(payload, settings, "chat_completions")
 
 	var raw strings.Builder
 	err := s.postJSONStream(
@@ -466,15 +511,15 @@ func (s *AIService) callAnthropicMessagesStream(ctx context.Context, settings mo
 	}
 
 	payload := map[string]interface{}{
-		"model":       settings.Model,
-		"max_tokens":  settings.MaxOutputTokens,
-		"temperature": settings.Temperature,
-		"system":      systemPrompt,
-		"stream":      true,
+		"model":      settings.Model,
+		"max_tokens": settings.MaxOutputTokens,
+		"system":     systemPrompt,
+		"stream":     true,
 		"messages": []map[string]interface{}{
 			{"role": "user", "content": content},
 		},
 	}
+	applyTemperature(payload, settings)
 
 	var raw strings.Builder
 	err := s.postJSONStream(
@@ -526,10 +571,10 @@ func (s *AIService) callGeminiGenerateContentStream(ctx context.Context, setting
 			{"parts": parts},
 		},
 		"generationConfig": map[string]interface{}{
-			"temperature":     settings.Temperature,
 			"maxOutputTokens": settings.MaxOutputTokens,
 		},
 	}
+	applyTemperature(payload["generationConfig"].(map[string]interface{}), settings)
 
 	endpoint := joinProviderURL(settings.BaseURL, defaultAIBaseURL(model.AIProviderGemini), "/v1beta/models/"+url.PathEscape(settings.Model)+":streamGenerateContent")
 	endpointWithKey, err := addQuery(endpoint, "key", settings.APIKey)
@@ -835,6 +880,8 @@ func joinProviderURL(baseURL, defaultBase, endpoint string) string {
 	}
 
 	switch {
+	case isDeepSeekRootBase(base) && endpoint == "/v1/chat/completions":
+		return base + "/chat/completions"
 	case strings.HasSuffix(base, "/v1") && strings.HasPrefix(endpoint, "/v1/"):
 		return base + strings.TrimPrefix(endpoint, "/v1")
 	case strings.HasSuffix(base, "/v1beta") && strings.HasPrefix(endpoint, "/v1beta/"):
@@ -842,6 +889,11 @@ func joinProviderURL(baseURL, defaultBase, endpoint string) string {
 	default:
 		return base + endpoint
 	}
+}
+
+func isDeepSeekRootBase(base string) bool {
+	normalized := strings.ToLower(strings.TrimRight(strings.TrimSpace(base), "/"))
+	return normalized == "https://api.deepseek.com" || normalized == "http://api.deepseek.com"
 }
 
 func addQuery(rawURL, key, value string) (string, error) {

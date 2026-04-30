@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"image"
 	_ "image/jpeg"
@@ -393,6 +394,141 @@ func TestCheckModelCallsProviderSuccessfully(t *testing.T) {
 	}
 	if !result.Success || result.Model != "gpt-test" || result.Mode != "responses" {
 		t.Fatalf("CheckModel() = %+v, want success for responses mode", result)
+	}
+}
+
+func TestCheckModelOmitsTemperatureForGPT5Family(t *testing.T) {
+	_, repo, cfg := newTestService(t)
+	aiSvc := NewAIService(repo, cfg, nil)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/responses" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		var payload map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			t.Fatalf("Decode() error = %v", err)
+		}
+		if _, exists := payload["temperature"]; exists {
+			t.Fatalf("request payload includes unsupported temperature: %+v", payload)
+		}
+		if payload["model"] != "gpt-5.5" {
+			t.Fatalf("request model = %v, want gpt-5.5", payload["model"])
+		}
+		reasoning, ok := payload["reasoning"].(map[string]interface{})
+		if !ok || reasoning["effort"] != "high" {
+			t.Fatalf("reasoning payload = %+v, want high effort", payload["reasoning"])
+		}
+		if _, exists := payload["thinking"]; exists {
+			t.Fatalf("responses payload should not include raw thinking parameter: %+v", payload)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"output_text":"OK"}`))
+	}))
+	defer server.Close()
+
+	result, err := aiSvc.CheckModel(context.Background(), model.AIModelConfig{
+		ID:              "check-gpt55",
+		Name:            "Check GPT 5.5",
+		Provider:        model.AIProviderOpenAI,
+		APIKey:          "test-key",
+		BaseURL:         server.URL,
+		Model:           "gpt-5.5",
+		MaxOutputTokens: 1200,
+		ThinkingEnabled: true,
+		ReasoningEffort: "high",
+	})
+	if err != nil {
+		t.Fatalf("CheckModel() error = %v", err)
+	}
+	if !result.Success || result.Model != "gpt-5.5" {
+		t.Fatalf("CheckModel() = %+v, want success for gpt-5.5", result)
+	}
+}
+
+func TestCheckModelResponsesThinkingDefaultsReasoningEffort(t *testing.T) {
+	_, repo, cfg := newTestService(t)
+	aiSvc := NewAIService(repo, cfg, nil)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var payload map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			t.Fatalf("Decode() error = %v", err)
+		}
+		reasoning, ok := payload["reasoning"].(map[string]interface{})
+		if !ok || reasoning["effort"] != "medium" {
+			t.Fatalf("reasoning payload = %+v, want default medium effort", payload["reasoning"])
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"output_text":"OK"}`))
+	}))
+	defer server.Close()
+
+	if _, err := aiSvc.CheckModel(context.Background(), model.AIModelConfig{
+		ID:              "check-gpt55-thinking",
+		Name:            "Check GPT 5.5 Thinking",
+		Provider:        model.AIProviderOpenAI,
+		APIKey:          "test-key",
+		BaseURL:         server.URL,
+		Model:           "gpt-5.5",
+		MaxOutputTokens: 1200,
+		ThinkingEnabled: true,
+	}); err != nil {
+		t.Fatalf("CheckModel() error = %v", err)
+	}
+}
+
+func TestCheckModelSendsChatCompletionsThinkingOptions(t *testing.T) {
+	_, repo, cfg := newTestService(t)
+	aiSvc := NewAIService(repo, cfg, nil)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/chat/completions" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		var payload map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			t.Fatalf("Decode() error = %v", err)
+		}
+		thinking, ok := payload["thinking"].(map[string]interface{})
+		if !ok || thinking["type"] != "enabled" {
+			t.Fatalf("thinking payload = %+v, want enabled", payload["thinking"])
+		}
+		if payload["reasoning_effort"] != "high" {
+			t.Fatalf("reasoning_effort = %v, want high", payload["reasoning_effort"])
+		}
+		if _, exists := payload["temperature"]; !exists {
+			t.Fatalf("request payload missing temperature: %+v", payload)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"OK"}}]}`))
+	}))
+	defer server.Close()
+
+	result, err := aiSvc.CheckModel(context.Background(), model.AIModelConfig{
+		ID:               "deepseek-pro",
+		Name:             "DeepSeek Pro",
+		Provider:         model.AIProviderOpenAI,
+		APIKey:           "test-key",
+		BaseURL:          server.URL,
+		Model:            "deepseek-v4-pro",
+		MaxOutputTokens:  4096,
+		OpenAILegacyMode: true,
+		ThinkingEnabled:  true,
+		ReasoningEffort:  "high",
+	})
+	if err != nil {
+		t.Fatalf("CheckModel() error = %v", err)
+	}
+	if !result.Success || result.Mode != "chat_completions" {
+		t.Fatalf("CheckModel() = %+v, want chat completions success", result)
+	}
+}
+
+func TestJoinProviderURLUsesDeepSeekRootChatCompletionsEndpoint(t *testing.T) {
+	got := joinProviderURL("https://api.deepseek.com", "https://api.openai.com", "/v1/chat/completions")
+	if got != "https://api.deepseek.com/chat/completions" {
+		t.Fatalf("joinProviderURL() = %q, want DeepSeek root chat completions endpoint", got)
 	}
 }
 

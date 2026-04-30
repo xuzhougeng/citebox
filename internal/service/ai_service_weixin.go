@@ -198,15 +198,11 @@ func (s *AIService) resolveWeixinSearchRuntimeSettings(maxOutputTokens int) (mod
 	}
 
 	runtimeSettings := *settings
-	runtimeSettings.Provider = modelConfig.Provider
-	runtimeSettings.APIKey = modelConfig.APIKey
-	runtimeSettings.BaseURL = modelConfig.BaseURL
-	runtimeSettings.Model = modelConfig.Model
+	applyAIModelConfig(&runtimeSettings, modelConfig)
 	runtimeSettings.MaxOutputTokens = minInt(modelConfig.MaxOutputTokens, maxOutputTokens)
 	if runtimeSettings.MaxOutputTokens <= 0 {
 		runtimeSettings.MaxOutputTokens = maxOutputTokens
 	}
-	runtimeSettings.OpenAILegacyMode = modelConfig.OpenAILegacyMode
 	runtimeSettings.Temperature = 0.1
 
 	return runtimeSettings, nil

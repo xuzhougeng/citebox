@@ -33,6 +33,56 @@ func ProviderMode(settings model.AISettings) string {
 	}
 }
 
+func applyTemperature(payload map[string]interface{}, settings model.AISettings) {
+	if shouldOmitTemperature(settings) {
+		return
+	}
+	payload["temperature"] = settings.Temperature
+}
+
+func applyOpenAIRequestOptions(payload map[string]interface{}, settings model.AISettings, mode string) {
+	applyTemperature(payload, settings)
+
+	effort := strings.TrimSpace(settings.ReasoningEffort)
+	if mode == "responses" {
+		if settings.ThinkingEnabled && effort == "" {
+			effort = "medium"
+		}
+		if effort != "" {
+			payload["reasoning"] = map[string]interface{}{"effort": effort}
+		}
+		return
+	}
+
+	if effort != "" {
+		payload["reasoning_effort"] = effort
+	}
+	if mode == "chat_completions" && settings.ThinkingEnabled {
+		payload["thinking"] = map[string]interface{}{"type": "enabled"}
+	}
+}
+
+func shouldOmitTemperature(settings model.AISettings) bool {
+	if settings.OmitTemperature {
+		return true
+	}
+	if settings.Provider != model.AIProviderOpenAI {
+		return false
+	}
+	return openAIModelOmitsTemperature(settings.Model)
+}
+
+func openAIModelOmitsTemperature(modelName string) bool {
+	modelName = strings.ToLower(strings.TrimSpace(modelName))
+	modelName = strings.TrimPrefix(modelName, "openai/")
+	for _, prefix := range []string{"gpt-5", "o1", "o3", "o4", "o5"} {
+		if strings.HasPrefix(modelName, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
 // CallOpenAIResponses 调用 OpenAI Responses API
 func CallOpenAIResponses(client *http.Client, settings model.AISettings, systemPrompt, userPrompt string, images []ImageInput) (string, error) {
 	content := []map[string]interface{}{
@@ -49,9 +99,9 @@ func CallOpenAIResponses(client *http.Client, settings model.AISettings, systemP
 		"model":             settings.Model,
 		"instructions":      systemPrompt,
 		"input":             []map[string]interface{}{{"role": "user", "content": content}},
-		"temperature":       settings.Temperature,
 		"max_output_tokens": settings.MaxOutputTokens,
 	}
+	applyOpenAIRequestOptions(payload, settings, "responses")
 
 	body, err := postJSON(client, settings.BaseURL+"/v1/responses", map[string]string{
 		"Authorization": "Bearer " + settings.APIKey,
@@ -105,9 +155,9 @@ func CallOpenAIChatCompletions(client *http.Client, settings model.AISettings, s
 			{"role": "system", "content": systemPrompt},
 			{"role": "user", "content": userContent},
 		},
-		"temperature": settings.Temperature,
-		"max_tokens":  settings.MaxOutputTokens,
+		"max_tokens": settings.MaxOutputTokens,
 	}
+	applyOpenAIRequestOptions(payload, settings, "chat_completions")
 
 	body, err := postJSON(client, settings.BaseURL+"/v1/chat/completions", map[string]string{
 		"Authorization": "Bearer " + settings.APIKey,
@@ -149,14 +199,14 @@ func CallAnthropicMessages(client *http.Client, settings model.AISettings, syste
 	}
 
 	payload := map[string]interface{}{
-		"model":       settings.Model,
-		"max_tokens":  settings.MaxOutputTokens,
-		"temperature": settings.Temperature,
-		"system":      systemPrompt,
+		"model":      settings.Model,
+		"max_tokens": settings.MaxOutputTokens,
+		"system":     systemPrompt,
 		"messages": []map[string]interface{}{
 			{"role": "user", "content": content},
 		},
 	}
+	applyTemperature(payload, settings)
 
 	body, err := postJSON(client, settings.BaseURL+"/v1/messages", map[string]string{
 		"x-api-key":         settings.APIKey,
@@ -207,10 +257,10 @@ func CallGeminiGenerateContent(client *http.Client, settings model.AISettings, s
 			{"parts": parts},
 		},
 		"generationConfig": map[string]interface{}{
-			"temperature":     settings.Temperature,
 			"maxOutputTokens": settings.MaxOutputTokens,
 		},
 	}
+	applyTemperature(payload["generationConfig"].(map[string]interface{}), settings)
 
 	endpoint := settings.BaseURL + "/v1beta/models/" + url.PathEscape(settings.Model) + ":generateContent"
 	endpointWithKey, err := addQuery(endpoint, "key", settings.APIKey)

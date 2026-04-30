@@ -46,12 +46,7 @@ func (s *AIService) Translate(ctx context.Context, input model.AITranslateReques
 	systemPrompt, userPrompt := buildAITranslatePrompts(*settings, sourceLanguage, targetLanguage, text)
 
 	runtimeSettings := *settings
-	runtimeSettings.Provider = modelConfig.Provider
-	runtimeSettings.APIKey = modelConfig.APIKey
-	runtimeSettings.BaseURL = modelConfig.BaseURL
-	runtimeSettings.Model = modelConfig.Model
-	runtimeSettings.MaxOutputTokens = modelConfig.MaxOutputTokens
-	runtimeSettings.OpenAILegacyMode = modelConfig.OpenAILegacyMode
+	applyAIModelConfig(&runtimeSettings, modelConfig)
 
 	rawText, mode, err := s.callProvider(ctx, &aiReadPrepared{
 		settings:     runtimeSettings,
@@ -211,12 +206,7 @@ func (s *AIService) prepareRead(input model.AIReadRequest, structuredOutput bool
 	systemPrompt, userPrompt := buildAIPrompts(*settings, paper, groups, tags, action, question, promptQuestion, history, figureSummaries, len(images), activeRolePrompts, structuredOutput)
 
 	runtimeSettings := *settings
-	runtimeSettings.Provider = modelConfig.Provider
-	runtimeSettings.APIKey = modelConfig.APIKey
-	runtimeSettings.BaseURL = modelConfig.BaseURL
-	runtimeSettings.Model = modelConfig.Model
-	runtimeSettings.MaxOutputTokens = modelConfig.MaxOutputTokens
-	runtimeSettings.OpenAILegacyMode = modelConfig.OpenAILegacyMode
+	applyAIModelConfig(&runtimeSettings, modelConfig)
 
 	s.logger.Info("ai paper read started",
 		"provider", runtimeSettings.Provider,

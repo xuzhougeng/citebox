@@ -91,12 +91,8 @@ func (s *AIService) DetectFigureRegions(ctx context.Context, input model.AIFigur
 	}
 
 	runtimeSettings := *settings
-	runtimeSettings.Provider = modelConfig.Provider
-	runtimeSettings.APIKey = modelConfig.APIKey
-	runtimeSettings.BaseURL = modelConfig.BaseURL
-	runtimeSettings.Model = modelConfig.Model
+	applyAIModelConfig(&runtimeSettings, modelConfig)
 	runtimeSettings.MaxOutputTokens = minInt(maxInt(modelConfig.MaxOutputTokens, 512), 1200)
-	runtimeSettings.OpenAILegacyMode = modelConfig.OpenAILegacyMode
 	runtimeSettings.Temperature = 0
 
 	rawText, err := s.callTextProvider(ctx, runtimeSettings, aiFigureRegionDetectionSystemPrompt, buildAIFigureRegionDetectionUserPrompt(input, paper), []aiImageInput{
