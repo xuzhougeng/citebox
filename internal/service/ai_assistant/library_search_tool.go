@@ -37,7 +37,7 @@ func (t *LibrarySearchTool) Run(ctx context.Context, in ToolInput) (ToolResult, 
 	terms := EvidenceSearchTerms(in.Query)
 	ids := candidateIDs(t.papers, terms, 120)
 	cards := make([]ResultCard, 0, limit)
-	citations := make([]Citation, 0, limit)
+	citations := make([]Citation, 0, limit*3)
 
 	for _, id := range ids {
 		if len(cards) >= limit {
@@ -55,21 +55,23 @@ func (t *LibrarySearchTool) Run(ctx context.Context, in ToolInput) (ToolResult, 
 			continue
 		}
 
-		match := matches[0]
-		citation := Citation{
-			I:       len(citations) + 1,
-			PaperID: paper.ID,
-			Title:   paper.Title,
-			Source:  "local",
-			Snippet: match.Snippet,
-			Score:   match.Score,
+		snippets := make([]PaperHitSnippet, 0, len(matches))
+		for _, match := range matches {
+			citation := Citation{
+				I:       len(citations) + 1,
+				PaperID: paper.ID,
+				Title:   paper.Title,
+				Source:  "local",
+				Snippet: match.Snippet,
+				Score:   match.Score,
+			}
+			citations = append(citations, citation)
+			snippets = append(snippets, PaperHitSnippet{
+				CitationIndex: citation.I,
+				Location:      match.Location,
+				Text:          match.Snippet.Text,
+			})
 		}
-		citations = append(citations, citation)
-		snippets := []PaperHitSnippet{{
-			CitationIndex: citation.I,
-			Location:      match.Location,
-			Text:          match.Snippet.Text,
-		}}
 
 		card := PaperHitCard{
 			PaperID:  paper.ID,

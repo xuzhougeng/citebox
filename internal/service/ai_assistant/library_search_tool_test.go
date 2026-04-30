@@ -25,7 +25,13 @@ func TestLibrarySearchToolReturnsPaperHitCards(t *testing.T) {
 	tool := NewLibrarySearchTool(stubPaperStore{
 		ids: []int64{1, 2},
 		papers: map[int64]*model.Paper{
-			1: {ID: 1, Title: "ATAC Atlas", DOI: "10.1/atac", PDFText: "ATAC-seq identifies chromatin accessibility changes."},
+			1: {
+				ID:           1,
+				Title:        "ATAC Atlas",
+				DOI:          "10.1/atac",
+				AbstractText: "The atlas studies chromatin accessibility.",
+				PDFText:      "ATAC-seq identifies chromatin accessibility changes.",
+			},
 			2: {ID: 2, Title: "Unrelated", PDFText: "Protein localization only."},
 		},
 	})
@@ -36,8 +42,20 @@ func TestLibrarySearchToolReturnsPaperHitCards(t *testing.T) {
 	if len(res.Cards) != 1 || res.Cards[0].Type != "paper_hit" {
 		t.Fatalf("cards = %+v", res.Cards)
 	}
-	if len(res.Citations) != 1 || res.Citations[0].PaperID != 1 {
+	if len(res.Citations) != 3 {
 		t.Fatalf("citations = %+v", res.Citations)
+	}
+	for _, citation := range res.Citations {
+		if citation.PaperID != 1 {
+			t.Fatalf("citation = %+v, want PaperID 1", citation)
+		}
+	}
+	card, ok := res.Cards[0].Payload.(PaperHitCard)
+	if !ok {
+		t.Fatalf("card payload = %T, want PaperHitCard", res.Cards[0].Payload)
+	}
+	if len(card.Snippets) != 3 {
+		t.Fatalf("snippets = %+v", card.Snippets)
 	}
 	if !strings.Contains(res.AnswerContext, "ATAC Atlas") || !strings.Contains(res.AnswerContext, "chromatin accessibility") {
 		t.Fatalf("answer context = %s", res.AnswerContext)
