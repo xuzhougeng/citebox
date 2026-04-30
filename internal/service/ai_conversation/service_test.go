@@ -55,7 +55,7 @@ func newServiceForTest(t *testing.T) (*Service, *repository.LibraryRepository, *
 	caller := &stubStreamCaller{staticReply: "AI 回答正文"}
 	svc := New(libRepo.AIConversation, libRepo.Paper,
 		&stubSettingsProvider{settings: settings},
-		caller, nil)
+		caller, nil, nil)
 	return svc, libRepo, caller
 }
 
