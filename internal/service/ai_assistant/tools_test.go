@@ -510,6 +510,57 @@ func TestFallbackExternalSearchGoalTreatsQuotedClaimAsEvidence(t *testing.T) {
 	}
 }
 
+func TestExternalSearchQueriesPlannerFailureReturnsFallbackGoalPlan(t *testing.T) {
+	query := `Find a source for "gene discovery has slowed over the past decade"`
+	tool := &ExternalSearchTool{
+		planner: &stubExternalPlanner{err: errors.New("planner unavailable")},
+	}
+
+	sourceQueries, plan, err := tool.searchQueries(context.Background(), query)
+	if err == nil {
+		t.Fatal("searchQueries error = nil, want planner failure")
+	}
+	if got, want := plan.SearchGoal, fallbackExternalSearchGoal(query); got != want {
+		t.Fatalf("search goal = %q, want fallback %q", got, want)
+	}
+	if got, want := plan.SearchQuery, ""; got != want {
+		t.Fatalf("search query = %q, want %q on planner failure fallback plan", got, want)
+	}
+	if got, want := sourceQueries[ai_external.SourcePubMed], ExternalSearchQueries(query); !slices.Equal(got, want) {
+		t.Fatalf("pubmed fallback queries = %+v, want %+v", got, want)
+	}
+	if got, want := sourceQueries[ai_external.SourceSemanticScholar], ExternalSearchQueries(query); !slices.Equal(got, want) {
+		t.Fatalf("semantic scholar fallback queries = %+v, want %+v", got, want)
+	}
+}
+
+func TestExternalSearchQueriesInvalidSearchGoalFallsBackToQueryHeuristic(t *testing.T) {
+	query := `Find a source for "gene discovery has slowed over the past decade"`
+	tool := &ExternalSearchTool{
+		planner: &stubExternalPlanner{plan: ExternalSearchPlan{
+			SearchGoal: "unsupported",
+			QueriesBySource: map[string][]string{
+				"pubmed":           {"gene discovery slowed forward genetic screens"},
+				"semantic_scholar": {"gene discovery slowed model organisms"},
+			},
+		}},
+	}
+
+	sourceQueries, plan, err := tool.searchQueries(context.Background(), query)
+	if err != nil {
+		t.Fatalf("searchQueries: %v", err)
+	}
+	if got, want := plan.SearchGoal, fallbackExternalSearchGoal(query); got != want {
+		t.Fatalf("search goal = %q, want fallback %q", got, want)
+	}
+	if got, want := sourceQueries[ai_external.SourcePubMed], []string{"gene discovery slowed forward genetic screens"}; !slices.Equal(got, want) {
+		t.Fatalf("pubmed queries = %+v, want %+v", got, want)
+	}
+	if got, want := sourceQueries[ai_external.SourceSemanticScholar], []string{"gene discovery slowed model organisms"}; !slices.Equal(got, want) {
+		t.Fatalf("semantic scholar queries = %+v, want %+v", got, want)
+	}
+}
+
 func TestNormalizeExternalQueriesBySourceMergesDuplicateAliasesDeterministically(t *testing.T) {
 	in := map[string][]string{
 		"PubMed": {
