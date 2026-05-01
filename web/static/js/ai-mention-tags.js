@@ -76,8 +76,8 @@
         for (let i = 1; i < tags.length; i++) {
             const tag = tags[i];
             if (tag.family !== keptFamily) {
-                if (!conflict) conflict = { dropped: keptFamily, kept: tag.family };
-                else conflict = { dropped: keptFamily, kept: tag.family };
+                // Last-wins: record only the most recent family transition.
+                conflict = { dropped: keptFamily, kept: tag.family };
                 keptFamily = tag.family;
                 kept = [tag];
             } else {
@@ -155,7 +155,10 @@
         const before = cleaned.slice(0, adjustedAt);
         const rest = cleaned.slice(adjustedAt);
         const insertion = '@' + newTag + ' ';
-        const finalValue = before + insertion + rest;
+        // If the residual text already starts with a space, our insertion's trailing
+        // space would create a double space. Drop one.
+        const trimmedRest = rest.startsWith(' ') ? rest.slice(1) : rest;
+        const finalValue = before + insertion + trimmedRest;
         return { value: finalValue, caret: before.length + insertion.length };
     }
 

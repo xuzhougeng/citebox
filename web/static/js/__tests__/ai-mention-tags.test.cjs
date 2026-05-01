@@ -133,3 +133,23 @@ test('commitToolTag cross-family preserves non-tool text and @paper mentions', (
     // Only the @PubMed tool tag is removed; @AlphaFold (a paper mention) is preserved.
     assert.equal(r.value, '@AlphaFold 这篇 @Library ');
 });
+
+test('parseToolTags reports last-only conflict when 3 families chain', () => {
+    // @PubMed @Figure @Library — last-wins is library, conflict reflects only
+    // the most recent transition (figure → library). Earlier external→figure
+    // is intentionally not tracked, since callers only need a single warning.
+    const r = parseToolTags('@PubMed @Figure @Library foo');
+    assert.equal(r.intentHint, 'library_search');
+    assert.deepEqual(r.sources, []);
+    assert.deepEqual(r.conflict, { dropped: 'figure', kept: 'library' });
+});
+
+test('commitToolTag does not produce double space when residual starts with space', () => {
+    // Reproduces the bug: removing @PubMed (which was preceded by a space and
+    // followed by another space) used to leave "@Library  bar" with two spaces.
+    const r = commitToolTag(
+        { value: '@li @PubMed bar', selectionStart: '@li @PubMed bar'.length, atIndex: 0, query: 'li' },
+        'Library'
+    );
+    assert.equal(r.value, '@Library bar');
+});
