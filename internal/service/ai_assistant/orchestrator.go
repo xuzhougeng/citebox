@@ -27,6 +27,7 @@ func NewOrchestrator(tools ToolSet) *Orchestrator {
 type RunInput struct {
 	Content    string
 	IntentHint string
+	Sources    []string
 	Context    RequestContext
 }
 
@@ -53,7 +54,12 @@ func (o *Orchestrator) Run(ctx context.Context, in RunInput) (RunOutput, error) 
 		}, nil
 	}
 
-	res, err := tool.Run(ctx, ToolInput{Query: in.Content, Context: in.Context, IntentHint: in.IntentHint})
+	res, err := tool.Run(ctx, ToolInput{
+		Query:      in.Content,
+		Context:    in.Context,
+		IntentHint: in.IntentHint,
+		Sources:    in.Sources,
+	})
 	if err != nil {
 		return RunOutput{}, err
 	}

@@ -71,9 +71,11 @@ type StreamEvent struct {
 type SendMessageInput struct {
 	ConversationID          int64 // 0 means "create new"
 	Content                 string
-	PaperID                 int64 // optional auto-pin
+	PaperID                 int64   // optional auto-pin (single)
+	PaperIDs                []int64 // optional auto-pin (multi); takes precedence over PaperID when non-empty
 	IncludeExternalEvidence bool
 	IntentHint              string
+	Sources                 []string
 	Context                 ai_assistant.RequestContext
 	OnEvent                 func(StreamEvent) error
 }

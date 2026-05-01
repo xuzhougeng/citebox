@@ -1141,6 +1141,14 @@ html[lang^="zh"] .ai-config-details[open] .ai-collapsible-toggle::before {
     background: rgba(var(--accent-rgb), 0.1);
 }
 
+.ai-mention-item.is-disabled {
+    opacity: 0.55;
+    cursor: pointer;
+}
+.ai-mention-item.is-disabled .ai-mention-item-meta {
+    color: var(--muted);
+}
+
 .ai-mention-item-icon {
     flex: 0 0 auto;
     width: 26px;

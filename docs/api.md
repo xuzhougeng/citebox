@@ -790,9 +790,10 @@ AI 流式阅读通过：
 
 ```json
 {
-  "content": "这些文献是否支持单细胞 RNA-seq 可以解析植物表皮发育轨迹？",
+  "content": "@PubMed 这些文献是否支持单细胞 RNA-seq 可以解析植物表皮发育轨迹？",
   "paper_id": 42,
-  "intent_hint": "library_search",
+  "intent_hint": "external_search",
+  "sources": ["pubmed"],
   "context": {
     "source": "ai",
     "paper_id": 42
@@ -804,8 +805,9 @@ AI 流式阅读通过：
 
 - `content`：用户问题或主张。
 - `paper_id`：可选，仅用于新会话或发送时自动 pin 当前文献。
-- `intent_hint`：可选的一次性路由提示。支持 `library_search`（查全库）、`external_search`（查外部）、`paper_read`（读文献）、`figure_lookup`（看图/图文）。省略时由后端按内容和上下文自动判断。
-- `context`：可选上下文对象，支持 `source`、`paper_id`、`paper_ids`、`figure_id`。用于指定当前文献、对比文献或图片上下文。
+- `intent_hint`：可选的一次性路由提示。支持 `library_search`（查全库）、`external_search`（查外部）、`paper_read`（读文献）、`figure_lookup`（看图/图文）。省略时由后端按内容和上下文自动判断。前端在用户输入 `@PubMed` / `@SemanticScholar` / `@Library` / `@Figure` 等工具标签时会自动填充该字段。
+- `sources`：可选字符串数组，仅在 `intent_hint == "external_search"` 时被读取。取值为外部源 ID 子集，例如 `["pubmed"]`、`["semantic_scholar"]` 或 `["pubmed","semantic_scholar"]`。当用户在输入框打了 `@PubMed`/`@SemanticScholar` 显式指定外部源时，前端会带上此字段；后端会与设置中"已启用源"取交集执行检索，被显式指定但未启用的源会以 `ErrSourceDisabled` 写入失败列表，并在 `Process.Note` 中提示"用户显式指定但未启用的源: …（请前往设置页启用）"。省略或为空数组时，等同当前默认行为（跑所有已启用源）。
+- `context`：可选上下文对象，支持 `source`、`paper_id`、`paper_ids`、`figure_id`。用于指定当前文献、对比文献或图片上下文。当 `intent_hint == "library_search"` 且 `paper_ids` 非空时（典型场景：用户同时输入 `@Library @<paper>`），后端会把候选集裁剪到该 PaperIDs 集合内。
 - `replace_last`：可选布尔值。为 `true` 时，服务端会先删除当前会话最后一轮用户消息及其后的回答、流程和结果卡片，再用本次 `content` 重新发送；仅适用于已有会话。
 - `strict_evidence`：兼容字段；历史上对应“内部搜索”开关。当前主 UI 使用 `intent_hint` 和 `context` 调度工具。没有显式 `intent_hint`/`context` 时，旧内部搜索语义仍保留。
 - `include_external_evidence`：兼容字段；历史上对应“外部搜索”开关。没有显式 `intent_hint`/`context` 时，仍使用旧外部 Semantic Scholar 证据检索语义。

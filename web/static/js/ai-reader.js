@@ -12,6 +12,7 @@
 
     const Reader = {
         settings: null,
+        externalSourcesEnabled: null,
         _allPapers: [],
 
         async init() {
@@ -23,8 +24,21 @@
                     this.settings = body || null;
                 }
             } catch (e) { /* offline / fresh install — leave settings null */ }
+            // Also cache the enabled external-search sources so the @ palette can
+            // gray out disabled rows. Best-effort: failure leaves the set null and
+            // the palette will treat all known sources as enabled.
+            try {
+                const res = await fetch('/api/settings/ai-external-search');
+                if (res.ok) {
+                    const body = await res.json();
+                    this.externalSourcesEnabled = Array.isArray(body && body.sources)
+                        ? body.sources.map((s) => String(s || '').toLowerCase())
+                        : null;
+                }
+            } catch (e) { /* offline — leave null */ }
             window.AIReader = window.AIReader || {};
             window.AIReader.settings = this.settings;
+            window.AIReader.externalSourcesEnabled = this.externalSourcesEnabled;
 
             // Fire-and-forget: cache the library so the @ palette can offer
             // every paper, not just the ones already pinned.
@@ -167,18 +181,62 @@
                             return pinned.some((p) => p.paper_id === paper.id);
                         },
                         getRolePrompts: () => (Reader.settings && Reader.settings.role_prompts) || [],
+                        getToolTags: () => {
+                            const enabled = (window.AIReader && Array.isArray(window.AIReader.externalSourcesEnabled))
+                                ? new Set(window.AIReader.externalSourcesEnabled)
+                                : null; // null = "settings unknown, treat all as enabled"
+                            const known = (window.AIReader && window.AIReader.toolTags && window.AIReader.toolTags.KNOWN_TOOL_TAGS) || [];
+                            const t = (typeof window !== 'undefined' && typeof window.t === 'function') ? window.t : (key, fallback) => (fallback || key);
+                            const descKeyMap = {
+                                PubMed: ['ai.tool_pubmed_desc', '外部源 · PubMed'],
+                                SemanticScholar: ['ai.tool_semantic_scholar_desc', '外部源 · Semantic Scholar'],
+                                Library: ['ai.tool_library_desc', '本地文本检索（不含图）'],
+                                Figure: ['ai.tool_figure_desc', '本地图片检索'],
+                            };
+                            return known.map((tag) => {
+                                const isExternal = tag.family === 'external';
+                                const isDisabled = isExternal && enabled !== null && !enabled.has(tag.source);
+                                const desc = descKeyMap[tag.name];
+                                return {
+                                    name: tag.name,
+                                    family: tag.family,
+                                    source: tag.source,
+                                    description: desc ? t(desc[0], desc[1]) : '',
+                                    disabled: isDisabled,
+                                    disabledReason: isDisabled ? t('ai.mention_tool_disabled', '未启用，前往设置 →') : '',
+                                };
+                            });
+                        },
+                        onPickToolTag: () => { /* nothing — value is read on submit */ },
+                        onPickDisabledTag: () => {
+                            window.location.href = '/settings#settings-external-sources';
+                        },
                         // Auto-pin on first @-mention (β + γ flow per spec § 3).
                         // Active conversation: server-side pin via /papers POST.
-                        // Draft: stash on view._state so the first send carries paper_id.
+                        // Draft: append to pinnedPapers and re-render chips so the
+                        // user sees the pin immediately. The first /messages call
+                        // forwards paper_id + paper_ids to the server, which auto-
+                        // pins each entry on the freshly-created conversation.
                         onPickPaper: (paper) => {
                             const id = paper && paper.id;
                             if (!id) return;
-                            const pinned = (view._state && view._state.pinnedPapers) || [];
+                            if (!view._state) return;
+                            const pinned = view._state.pinnedPapers || [];
                             if (pinned.some((p) => p.paper_id === id)) return;
-                            if (view._state && view._state.conversationId) {
+                            if (view._state.conversationId) {
                                 window.AIReader.pin.pin(id);
-                            } else if (view._state) {
-                                view._state._draftPaperId = id;
+                                return;
+                            }
+                            const next = pinned.concat([{
+                                paper_id: id,
+                                title: (paper && paper.title) || '',
+                            }]);
+                            view._state.pinnedPapers = next;
+                            // Keep the legacy single-value field in sync with the
+                            // first pin so that prefilled deep-links keep working.
+                            view._state._draftPaperId = next[0].paper_id;
+                            if (window.AIReader.pin && typeof window.AIReader.pin.setPinned === 'function') {
+                                window.AIReader.pin.setPinned(next);
                             }
                         },
                         onPickRole: () => { /* role label inserted by mention module */ },

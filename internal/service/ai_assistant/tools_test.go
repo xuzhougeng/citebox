@@ -1043,3 +1043,144 @@ func stageByLabel(stages []ProcessStage, label string) ProcessStage {
 	}
 	return ProcessStage{}
 }
+
+func TestExternalSearchToolHonoursUserSourcesOverride(t *testing.T) {
+	searcher := &enabledSourceQueryCapturingExternalSearch{
+		sources: []ai_external.SourceID{ai_external.SourcePubMed, ai_external.SourceSemanticScholar},
+	}
+	planner := &stubExternalPlanner{plan: ExternalSearchPlan{
+		QueriesBySource: map[string][]string{
+			"pubmed":           {"q1"},
+			"semantic_scholar": {"q2"},
+		},
+	}}
+	tool := NewExternalSearchToolWithPlanner(searcher, planner)
+
+	res, err := tool.Run(context.Background(), ToolInput{
+		Query:   "找一下",
+		Sources: []string{"pubmed"},
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if _, ok := searcher.queries[ai_external.SourcePubMed]; !ok {
+		t.Fatalf("expected PubMed in queries, got %+v", searcher.queries)
+	}
+	if _, ok := searcher.queries[ai_external.SourceSemanticScholar]; ok {
+		t.Fatalf("Semantic Scholar should be excluded by user override, got %+v", searcher.queries)
+	}
+	// User did not request a disabled source, so no disabled detail should leak.
+	if strings.Contains(res.Process.Note, "未启用") {
+		t.Fatalf("process note should not mention 未启用, got %q", res.Process.Note)
+	}
+}
+
+func TestExternalSearchToolReportsDisabledSourceWhenExplicitlyRequested(t *testing.T) {
+	searcher := &enabledSourceQueryCapturingExternalSearch{
+		sources: []ai_external.SourceID{ai_external.SourcePubMed}, // S2 NOT enabled
+	}
+	planner := &stubExternalPlanner{plan: ExternalSearchPlan{
+		QueriesBySource: map[string][]string{
+			"pubmed":           {"q1"},
+			"semantic_scholar": {"q2"},
+		},
+	}}
+	tool := NewExternalSearchToolWithPlanner(searcher, planner)
+
+	res, err := tool.Run(context.Background(), ToolInput{
+		Query:   "找一下",
+		Sources: []string{"pubmed", "semantic_scholar"},
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	// PubMed should still be queried.
+	if _, ok := searcher.queries[ai_external.SourcePubMed]; !ok {
+		t.Fatalf("expected PubMed in queries, got %+v", searcher.queries)
+	}
+	// Process note must mention that Semantic Scholar was disabled.
+	if !strings.Contains(res.Process.Note, "Semantic Scholar") || !strings.Contains(res.Process.Note, "未启用") {
+		t.Fatalf("expected note to mention disabled Semantic Scholar, got %q", res.Process.Note)
+	}
+	if strings.Contains(res.Process.Note, "ai_assistant:") {
+		t.Fatalf("internal sentinel leaked into note: %q", res.Process.Note)
+	}
+}
+
+func TestExternalSearchToolEmptyUserSourcesPreservesDefault(t *testing.T) {
+	searcher := &enabledSourceQueryCapturingExternalSearch{
+		sources: []ai_external.SourceID{ai_external.SourcePubMed, ai_external.SourceSemanticScholar},
+	}
+	planner := &stubExternalPlanner{plan: ExternalSearchPlan{
+		QueriesBySource: map[string][]string{
+			"pubmed":           {"q1"},
+			"semantic_scholar": {"q2"},
+		},
+	}}
+	tool := NewExternalSearchToolWithPlanner(searcher, planner)
+
+	_, err := tool.Run(context.Background(), ToolInput{Query: "找一下"})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	// Both sources should appear in queries when user gave no explicit Sources.
+	if _, ok := searcher.queries[ai_external.SourcePubMed]; !ok {
+		t.Fatalf("expected PubMed in queries when Sources is nil, got %+v", searcher.queries)
+	}
+	if _, ok := searcher.queries[ai_external.SourceSemanticScholar]; !ok {
+		t.Fatalf("expected Semantic Scholar in queries when Sources is nil, got %+v", searcher.queries)
+	}
+}
+
+type onlyEnabledStubExternalSearch struct {
+	enabled []ai_external.SourceID
+}
+
+func (s *onlyEnabledStubExternalSearch) EnabledExternalSources(ctx context.Context) ([]ai_external.SourceID, error) {
+	return append([]ai_external.SourceID(nil), s.enabled...), nil
+}
+
+func (s *onlyEnabledStubExternalSearch) Search(ctx context.Context, queries ai_external.SourceQueries, opts ai_external.SearchOptions) (ai_external.SearchResult, error) {
+	// Mimic the real service's failure when no queries are present.
+	hasQueries := false
+	for _, qs := range queries {
+		if len(qs) > 0 {
+			hasQueries = true
+			break
+		}
+	}
+	if !hasQueries {
+		return ai_external.SearchResult{}, ai_external.ErrNoSourcesEnabled
+	}
+	return ai_external.SearchResult{
+		Sources: append([]ai_external.SourceID(nil), s.enabled...),
+		Papers: []ai_external.Paper{{
+			Source:        ai_external.SourcePubMed,
+			SourcePaperID: "1",
+			Title:         "P",
+		}},
+	}, nil
+}
+
+func TestExternalSearchToolOnlyDisabledRequestedSurfacesError(t *testing.T) {
+	searcher := &onlyEnabledStubExternalSearch{
+		enabled: []ai_external.SourceID{ai_external.SourcePubMed},
+	}
+	tool := NewExternalSearchTool(searcher)
+	res, err := tool.Run(context.Background(), ToolInput{
+		Query:   "找一下",
+		Sources: []string{"semantic_scholar"},
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	// The disabled detail must be visible somewhere reachable by the user.
+	combined := res.Process.Note + " " + res.AnswerContext
+	if !strings.Contains(combined, "Semantic Scholar") {
+		t.Fatalf("expected Semantic Scholar in note/answer, got note=%q answer=%q", res.Process.Note, res.AnswerContext)
+	}
+	// And the internal sentinel must NOT leak into either user-facing string.
+	if strings.Contains(combined, "ai_assistant:") {
+		t.Fatalf("internal sentinel leaked: note=%q answer=%q", res.Process.Note, res.AnswerContext)
+	}
+}

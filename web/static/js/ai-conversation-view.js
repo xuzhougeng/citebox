@@ -241,7 +241,31 @@
             const content = (payload && payload.content || '').trim();
             if (!content) return;
             const body = { content: content, context: this._currentContext() };
-            if (payload && payload.intent_hint) body.intent_hint = payload.intent_hint;
+
+            // Parse @ tool tags out of the content. The text is left intact in
+            // body.content (so the model sees the user's literal input); the parsed
+            // intent + sources ride alongside as routing hints.
+            const tt = (window.AIReader && window.AIReader.toolTags && window.AIReader.toolTags.parseToolTags)
+                ? window.AIReader.toolTags.parseToolTags(content)
+                : { intentHint: '', sources: [], conflict: null };
+            if (tt.intentHint) body.intent_hint = tt.intentHint;
+            if (Array.isArray(tt.sources) && tt.sources.length > 0) body.sources = tt.sources;
+            if (tt.conflict) {
+                console.warn('[mention] dropped tool tag family=' + tt.conflict.dropped +
+                    ' due to family=' + tt.conflict.kept);
+            }
+
+            // Caller-supplied intent_hint (e.g., the shortcut buttons) overrides
+            // anything we parsed — keep the existing precedence. When the override
+            // doesn't match what we parsed, drop the parsed sources too: the
+            // backend only consults sources for external_search, so leaking them
+            // alongside a different intent muddles the request body.
+            if (payload && payload.intent_hint) {
+                if (payload.intent_hint !== body.intent_hint) {
+                    delete body.sources;
+                }
+                body.intent_hint = payload.intent_hint;
+            }
             if (this._state.rewriteLast && this._state.conversationId) body.replace_last = true;
             await this._sendBody(body);
         },
@@ -276,7 +300,17 @@
                 replaceLast: replaceLast,
             };
 
-            if (!s.conversationId && s._draftPaperId) body.paper_id = s._draftPaperId;
+            if (!s.conversationId) {
+                const ids = (Array.isArray(s.pinnedPapers) ? s.pinnedPapers : [])
+                    .map((p) => Number(p && p.paper_id || 0))
+                    .filter((id) => Number.isFinite(id) && id > 0);
+                if (ids.length > 0) {
+                    body.paper_id = ids[0];
+                    if (ids.length > 1) body.paper_ids = ids;
+                } else if (s._draftPaperId) {
+                    body.paper_id = s._draftPaperId;
+                }
+            }
             if (s.els.strictEvidence) {
                 body.strict_evidence = !!s.els.strictEvidence.checked;
             }
@@ -757,13 +791,18 @@
         _currentContext() {
             const s = this._state;
             const context = { source: 'ai' };
-            const draftPaperID = Number(s._draftPaperId || 0);
-            if (!s.conversationId && Number.isFinite(draftPaperID) && draftPaperID > 0) {
-                context.paper_id = draftPaperID;
-                return context;
-            }
             const pinned = Array.isArray(s.pinnedPapers) ? s.pinnedPapers : [];
-            const ids = pinned.map((paper) => Number(paper && paper.paper_id || 0)).filter((id) => Number.isFinite(id) && id > 0);
+            const ids = pinned
+                .map((paper) => Number(paper && paper.paper_id || 0))
+                .filter((id) => Number.isFinite(id) && id > 0);
+            // Fall back to the legacy single-value draft field only if the
+            // pinned-papers array hasn't picked it up yet (deep-link prefill).
+            if (ids.length === 0 && !s.conversationId) {
+                const draftPaperID = Number(s._draftPaperId || 0);
+                if (Number.isFinite(draftPaperID) && draftPaperID > 0) {
+                    ids.push(draftPaperID);
+                }
+            }
             if (ids.length === 1) {
                 context.paper_id = ids[0];
             } else if (ids.length > 1) {

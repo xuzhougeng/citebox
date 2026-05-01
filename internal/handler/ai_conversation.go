@@ -141,9 +141,11 @@ func (h *AIConversationHandler) PostMessage(w http.ResponseWriter, r *http.Reque
 	var body struct {
 		Content                 string                      `json:"content"`
 		PaperID                 int64                       `json:"paper_id,omitempty"`
+		PaperIDs                []int64                     `json:"paper_ids,omitempty"`
 		StrictEvidence          *bool                       `json:"strict_evidence,omitempty"`
 		IncludeExternalEvidence bool                        `json:"include_external_evidence,omitempty"`
 		IntentHint              string                      `json:"intent_hint,omitempty"`
+		Sources                 []string                    `json:"sources,omitempty"`
 		ReplaceLast             bool                        `json:"replace_last,omitempty"`
 		Context                 ai_assistant.RequestContext `json:"context,omitempty"`
 	}
@@ -191,8 +193,10 @@ func (h *AIConversationHandler) PostMessage(w http.ResponseWriter, r *http.Reque
 		ConversationID:          conversationID,
 		Content:                 body.Content,
 		PaperID:                 body.PaperID,
+		PaperIDs:                body.PaperIDs,
 		IncludeExternalEvidence: body.IncludeExternalEvidence,
 		IntentHint:              body.IntentHint,
+		Sources:                 body.Sources,
 		Context:                 body.Context,
 		OnEvent: func(event ai_conversation.StreamEvent) error {
 			return send(map[string]interface{}{"type": event.Type, "data": event.Data})

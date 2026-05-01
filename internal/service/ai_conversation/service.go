@@ -248,8 +248,15 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput, onDelta 
 	}
 
 	// Auto-pin (β/γ flow). Pin-limit may reject here.
-	if in.PaperID > 0 {
-		if err := s.PinPaper(in.ConversationID, in.PaperID); err != nil {
+	pinIDs := in.PaperIDs
+	if len(pinIDs) == 0 && in.PaperID > 0 {
+		pinIDs = []int64{in.PaperID}
+	}
+	for _, pid := range pinIDs {
+		if pid <= 0 {
+			continue
+		}
+		if err := s.PinPaper(in.ConversationID, pid); err != nil {
 			return SendMessageResult{}, err
 		}
 	}
@@ -298,11 +305,14 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput, onDelta 
 	var runOut ai_assistant.RunOutput
 	var runUsed bool
 	legacyEvidenceRequested := conv.StrictEvidence || in.IncludeExternalEvidence
-	explicitAssistantRequest := strings.TrimSpace(in.IntentHint) != "" || !requestContextEmpty(in.Context)
+	explicitAssistantRequest := strings.TrimSpace(in.IntentHint) != "" ||
+		!requestContextEmpty(in.Context) ||
+		len(in.Sources) > 0
 	if s.orchestrator != nil && (!legacyEvidenceRequested || explicitAssistantRequest) {
 		out, orchErr := s.orchestrator.Run(ctx, ai_assistant.RunInput{
 			Content:    in.Content,
 			IntentHint: in.IntentHint,
+			Sources:    in.Sources,
 			Context:    in.Context,
 		})
 		if orchErr != nil {

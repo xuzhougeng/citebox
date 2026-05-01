@@ -15,6 +15,11 @@
 //   - onPickPaper(paper)   => void           (called when user selects a paper from the popover)
 //   - onPickRole(role)     => void           (called when user selects a role prompt)
 //   - shortPaperLabel(title) => string       (optional; truncates a paper title for inline mention)
+//   - getToolTags()        => ToolTagItem[]    (the four MVP tool tags;
+//                              each {name, family, source, description, disabled, disabledReason})
+//   - onPickToolTag(tag)   => void             (called when user picks an enabled tool tag)
+//   - onPickDisabledTag(tag) => void           (called when user clicks a disabled tool tag row;
+//                              implementations should navigate the user to settings)
 
 (function () {
     'use strict';
@@ -240,7 +245,31 @@
             const q = String(query || '').trim().toLowerCase();
             const items = [];
 
-            // Role prompts first.
+            // Tool/source tags first — they change routing, so they outrank roles
+            // and papers visually.
+            const toolTags = typeof s.providers.getToolTags === 'function'
+                ? s.providers.getToolTags()
+                : [];
+            toolTags
+                .filter((tag) => {
+                    if (!q) return true;
+                    const haystack = [tag.name, tag.description].filter(Boolean).join(' ').toLowerCase();
+                    return haystack.includes(q);
+                })
+                .forEach((tag) => {
+                    items.push({
+                        type: 'tool',
+                        name: tag.name,
+                        title: '@' + tag.name,
+                        meta: tag.disabled
+                            ? (tag.disabledReason || tr('ai.mention_tool_disabled', '未启用，前往设置 →'))
+                            : (tag.description || ''),
+                        disabled: !!tag.disabled,
+                        _raw: tag,
+                    });
+                });
+
+            // Role prompts second.
             const roles = typeof s.providers.getRolePrompts === 'function'
                 ? s.providers.getRolePrompts()
                 : [];
@@ -260,7 +289,7 @@
                     });
                 });
 
-            // Papers second.
+            // Papers third.
             const papers = typeof s.providers.getPapers === 'function'
                 ? s.providers.getPapers()
                 : [];
@@ -325,16 +354,25 @@
             const renderItem = (item, globalIndex) => {
                 const active = globalIndex === s.activeIndex ? ' active' : '';
                 const current = item.isCurrent ? ' is-current' : '';
+                const disabled = item.disabled ? ' is-disabled' : '';
                 const badge = item.isCurrent
                     ? '<span class="ai-mention-item-badge">' +
                       escapeHTML(tr('ai.paper_active_badge', '当前文献')) +
                       '</span>'
                     : '';
-                const icon = item.type === 'role' ? '@' : '📄';
-                const dataset = item.type === 'role'
-                    ? 'data-mention-type="role" data-role-name="' + escapeHTML(item.name) + '"'
-                    : 'data-mention-type="paper" data-paper-id="' + item.id + '"';
-                return '<li class="ai-mention-item' + active + current +
+                let icon = '📄';
+                if (item.type === 'role') icon = '@';
+                else if (item.type === 'tool') icon = '⚙';
+                let dataset;
+                if (item.type === 'role') {
+                    dataset = 'data-mention-type="role" data-role-name="' + escapeHTML(item.name) + '"';
+                } else if (item.type === 'tool') {
+                    dataset = 'data-mention-type="tool" data-tool-name="' + escapeHTML(item.name) +
+                              '" data-tool-disabled="' + (item.disabled ? '1' : '0') + '"';
+                } else {
+                    dataset = 'data-mention-type="paper" data-paper-id="' + item.id + '"';
+                }
+                return '<li class="ai-mention-item' + active + current + disabled +
                     '" role="option" data-mention-index="' + globalIndex + '" ' + dataset + '>' +
                     '<span class="ai-mention-item-icon" aria-hidden="true">' + icon + '</span>' +
                     '<div class="ai-mention-item-body">' +
@@ -346,10 +384,22 @@
             };
 
             const sections = [];
+            const toolItems = items.filter((it) => it.type === 'tool');
             const roleItems = items.filter((it) => it.type === 'role');
             const paperItems = items.filter((it) => it.type === 'paper');
             let cursor = 0;
 
+            if (toolItems.length) {
+                const toolHTML = toolItems.map((item) => renderItem(item, cursor++)).join('');
+                sections.push(
+                    '<div class="ai-mention-section" data-section="tools">' +
+                    '<div class="ai-mention-section-title">' +
+                    escapeHTML(tr('ai.mention_section_tools', '工具/数据源')) +
+                    '</div>' +
+                    '<ul class="ai-mention-list" role="presentation">' + toolHTML + '</ul>' +
+                    '</div>'
+                );
+            }
             if (roleItems.length) {
                 const roleHTML = roleItems.map((item) => renderItem(item, cursor++)).join('');
                 sections.push(
@@ -413,6 +463,42 @@
                 ? input.value.slice(0, s.atIndex)
                 : input.value.slice(0, caret);
             const after = input.value.slice(caret);
+
+            if (item.type === 'tool') {
+                if (item.disabled) {
+                    if (s.providers && typeof s.providers.onPickDisabledTag === 'function') {
+                        s.providers.onPickDisabledTag(item._raw);
+                    }
+                    // Don't insert into textarea — keep the popover dismissed silently.
+                    this.dismiss();
+                    input.focus();
+                    return;
+                }
+                const commit = (window.AIReader && window.AIReader.toolTags && window.AIReader.toolTags.commitToolTag)
+                    || null;
+                if (!commit) {
+                    console.warn('[ai-mention] window.AIReader.toolTags.commitToolTag not loaded; falling back to plain @ insert without family rewrite');
+                    // Fallback: behave like a plain mention insert, no rewrite.
+                    const mention = '@' + item.name + ' ';
+                    input.value = beforeAt + mention + after;
+                    const newCaret = beforeAt.length + mention.length;
+                    input.setSelectionRange(newCaret, newCaret);
+                } else {
+                    const result = commit(
+                        { value: input.value, selectionStart: input.selectionStart, atIndex: s.atIndex, query: s.query },
+                        item.name
+                    );
+                    input.value = result.value;
+                    input.setSelectionRange(result.caret, result.caret);
+                }
+                if (s.providers && typeof s.providers.onPickToolTag === 'function') {
+                    s.providers.onPickToolTag(item._raw);
+                }
+                this.dismiss();
+                input.focus();
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+                return;
+            }
 
             if (item.type === 'role') {
                 const mention = '@' + item.name + ' ';
