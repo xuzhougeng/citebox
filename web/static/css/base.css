@@ -1,5 +1,38 @@
 * {
     box-sizing: border-box;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(var(--ink-rgb), 0.24) transparent;
+}
+
+*::-webkit-scrollbar {
+    width: 0.7rem;
+    height: 0.7rem;
+}
+
+*::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+    min-height: 2rem;
+    border: 0.18rem solid transparent;
+    border-radius: 999px;
+    background: rgba(var(--ink-rgb), 0.22);
+    background-clip: content-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+    background: rgba(var(--accent-rgb), 0.42);
+    background-clip: content-box;
+}
+
+*::-webkit-scrollbar-corner {
+    background: transparent;
+}
+
+html {
+    scrollbar-gutter: stable;
+    overflow-x: clip;
 }
 
 body {
@@ -11,6 +44,7 @@ body {
         radial-gradient(circle at top left, rgba(var(--accent-rgb), 0.18), transparent 22rem),
         radial-gradient(circle at top right, rgba(var(--success-rgb), 0.14), transparent 24rem),
         linear-gradient(180deg, var(--body-bg-1) 0%, var(--body-bg-2) 45%, var(--body-bg-3) 100%);
+    overflow-x: clip;
 }
 
 a {
