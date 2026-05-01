@@ -23,6 +23,13 @@ const SettingsPage = {
         this.maxFiguresInput = document.getElementById('aiMaxFiguresInput');
         this.pinPapersLimitInput = document.getElementById('aiPinPapersLimitInput');
         this.contextBudgetTokensInput = document.getElementById('aiContextBudgetTokensInput');
+        this.aiExternalSourcePubMedInput = document.getElementById('aiExternalSourcePubMedInput');
+        this.aiExternalSourceS2Input = document.getElementById('aiExternalSourceS2Input');
+        this.pubmedAPIKeyInput = document.getElementById('pubmedAPIKeyInput');
+        this.pubmedEmailInput = document.getElementById('pubmedEmailInput');
+        this.pubmedToolInput = document.getElementById('pubmedToolInput');
+        this.saveAIExternalSearchSettingsButton = document.getElementById('saveAIExternalSearchSettingsButton');
+        this.aiExternalSearchSaveStatus = document.getElementById('aiExternalSearchSaveStatus');
         this.translationPrimaryLanguageInput = document.getElementById('aiTranslationPrimaryLanguageInput');
         this.translationTargetLanguageInput = document.getElementById('aiTranslationTargetLanguageInput');
         this.systemPromptInput = document.getElementById('aiSystemPromptInput');
@@ -345,6 +352,9 @@ const SettingsPage = {
         this.saveFigureGroupPromptsButton?.addEventListener('click', async () => {
             await this.saveFigureGroupPromptSettings();
         });
+        this.saveAIExternalSearchSettingsButton?.addEventListener('click', async () => {
+            await this.saveAIExternalSearchSettings();
+        });
         this.extractorSettingsForm.addEventListener('submit', async (event) => {
             event.preventDefault();
             await this.saveExtractorSettings();
@@ -520,6 +530,7 @@ const SettingsPage = {
                 this.loadVersionStatus(),
                 this.loadAuthSettings(),
                 this.loadTTSSettings(),
+                this.loadAIExternalSearchSettings(),
                 this.loadResearchSettings()
             ]);
         } catch (error) {
@@ -665,6 +676,10 @@ const SettingsPage = {
 
     setAIModelEditorStatus(message, tone = '') {
         this.setInlineStatus(this.aiModelEditorStatus, message, tone);
+    },
+
+    setAIExternalSearchSaveStatus(message, tone = '') {
+        this.setInlineStatus(this.aiExternalSearchSaveStatus, message, tone);
     },
 
     supportsDesktopCloseSettings() {
@@ -1027,6 +1042,104 @@ const SettingsPage = {
         this.renderWolaiSummary(settings);
         this.setWolaiStatus('');
         this.renderWolaiResultLink('');
+    },
+
+    async loadAIExternalSearchSettings() {
+        this.renderAIExternalSearchSettings({});
+        const res = await fetch('/api/settings/ai-external-search');
+        if (!res.ok) return;
+        const settings = await res.json();
+        this.renderAIExternalSearchSettings(settings || {});
+        this.setAIExternalSearchSaveStatus('');
+    },
+
+    normalizeAIExternalSearchSources(sources) {
+        if (!Array.isArray(sources)) {
+            return ['pubmed'];
+        }
+        if (sources.length === 0) {
+            return [];
+        }
+
+        const allowed = new Set(['pubmed', 'semantic_scholar']);
+        const seen = new Set();
+        const normalized = [];
+        sources.forEach((source) => {
+            const value = String(source || '').trim().toLowerCase();
+            if (!allowed.has(value) || seen.has(value)) return;
+            seen.add(value);
+            normalized.push(value);
+        });
+        return normalized.length > 0 ? normalized : ['pubmed'];
+    },
+
+    renderAIExternalSearchSettings(settings = {}) {
+        const sources = this.normalizeAIExternalSearchSources(settings.sources);
+        if (this.aiExternalSourcePubMedInput) {
+            this.aiExternalSourcePubMedInput.checked = sources.includes('pubmed');
+        }
+        if (this.aiExternalSourceS2Input) {
+            this.aiExternalSourceS2Input.checked = sources.includes('semantic_scholar');
+        }
+        if (this.pubmedAPIKeyInput) {
+            this.pubmedAPIKeyInput.value = settings.pubmed_api_key || '';
+        }
+        if (this.pubmedEmailInput) {
+            this.pubmedEmailInput.value = settings.pubmed_email || '';
+        }
+        if (this.pubmedToolInput) {
+            this.pubmedToolInput.value = settings.pubmed_tool || 'citebox';
+        }
+    },
+
+    buildAIExternalSearchSettingsPayload() {
+        const sources = [];
+        if (this.aiExternalSourcePubMedInput?.checked) {
+            sources.push('pubmed');
+        }
+        if (this.aiExternalSourceS2Input?.checked) {
+            sources.push('semantic_scholar');
+        }
+        return {
+            sources,
+            pubmed_api_key: this.pubmedAPIKeyInput?.value.trim() || '',
+            pubmed_email: this.pubmedEmailInput?.value.trim() || '',
+            pubmed_tool: this.pubmedToolInput?.value.trim() || 'citebox'
+        };
+    },
+
+    async saveAIExternalSearchSettings() {
+        const button = this.saveAIExternalSearchSettingsButton;
+        const originalLabel = button?.textContent || '';
+        if (button) {
+            button.disabled = true;
+            button.textContent = t('settings.ai.saving_btn', '保存中...');
+        }
+
+        try {
+            const res = await fetch('/api/settings/ai-external-search', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(this.buildAIExternalSearchSettingsPayload())
+            });
+            if (!res.ok) {
+                throw new Error(t('settings.ai.external_search.save_failed', '保存失败'));
+            }
+            const settings = await res.json();
+            this.renderAIExternalSearchSettings(settings || {});
+            const message = t('settings.ai.external_search.saved', '外部搜索源已保存');
+            this.setAIExternalSearchSaveStatus(message, 'success');
+            Utils.showToast(message);
+        } catch (error) {
+            const message = t('settings.ai.external_search.save_failed', '保存失败');
+            this.setAIExternalSearchSaveStatus(message, 'error');
+            Utils.showToast(error.message || message, 'error');
+        } finally {
+            if (button) {
+                button.disabled = false;
+                button.textContent = originalLabel || t('settings.ai.external_search.save_btn', '保存外部搜索源');
+            }
+        }
     },
 
     async loadResearchSettings() {
