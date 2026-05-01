@@ -181,6 +181,21 @@ func (s *Service) DeleteConversation(id int64) error {
 	return nil
 }
 
+// TruncateLastTurn removes the latest user turn so a modified question can be
+// sent again without the stale answer staying in context.
+func (s *Service) TruncateLastTurn(id int64) error {
+	if id <= 0 {
+		return apperr.New(apperr.CodeInvalidArgument, "conversation_id 无效")
+	}
+	if _, err := s.repo.GetConversation(id); err != nil {
+		return mapRepoErr(err)
+	}
+	if err := s.repo.TruncateLastTurn(id); err != nil {
+		return mapRepoErr(err)
+	}
+	return nil
+}
+
 // PinPaper attaches a paper subject to the configured limit.
 func (s *Service) PinPaper(conversationID, paperID int64) error {
 	settings, err := s.settings.GetSettings()
@@ -451,6 +466,9 @@ func (s *Service) maybeSummarize(ctx context.Context, conv *repository.AIConvers
 func mapRepoErr(err error) error {
 	if errors.Is(err, repository.ErrAIConversationNotFound) {
 		return apperr.New(apperr.CodeNotFound, "会话不存在")
+	}
+	if errors.Is(err, repository.ErrAIConversationNoUserMessage) {
+		return apperr.New(apperr.CodeFailedPrecondition, "没有可重新发送的上一轮对话")
 	}
 	return err
 }

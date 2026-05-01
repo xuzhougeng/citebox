@@ -16,6 +16,7 @@ type stubAIConversationService struct {
 	getResult  ai_conversation.Conversation
 	getErr     error
 	deleted    int64
+	truncated  int64
 	strictID   int64
 	strictOn   bool
 	sentInput  ai_conversation.SendMessageInput
@@ -40,8 +41,12 @@ func (s *stubAIConversationService) UpdateStrictEvidence(id int64, on bool) erro
 	return nil
 }
 func (s *stubAIConversationService) DeleteConversation(id int64) error { s.deleted = id; return nil }
-func (s *stubAIConversationService) PinPaper(c, p int64) error         { return nil }
-func (s *stubAIConversationService) UnpinPaper(c, p int64) error       { return nil }
+func (s *stubAIConversationService) TruncateLastTurn(id int64) error {
+	s.truncated = id
+	return nil
+}
+func (s *stubAIConversationService) PinPaper(c, p int64) error   { return nil }
+func (s *stubAIConversationService) UnpinPaper(c, p int64) error { return nil }
 func (s *stubAIConversationService) SendMessage(ctx context.Context, in ai_conversation.SendMessageInput, onDelta func(string) error) (ai_conversation.SendMessageResult, error) {
 	s.sentInput = in
 	if in.OnEvent != nil {
@@ -114,6 +119,26 @@ func TestAIConversationPostMessageAcceptsIntentHintAndContext(t *testing.T) {
 	}
 	if stub.sentInput.Context.PaperID != 7 || stub.sentInput.Context.FigureID != 3 || stub.sentInput.Context.Source != "paper" {
 		t.Fatalf("Context = %+v", stub.sentInput.Context)
+	}
+}
+
+func TestAIConversationPostMessageCanReplaceLastTurn(t *testing.T) {
+	stub := &stubAIConversationService{}
+	h := NewAIConversationHandler(stub)
+	body := strings.NewReader(`{"content":"updated question","replace_last":true}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/conversations/7/messages", body)
+	rr := httptest.NewRecorder()
+
+	h.PostMessage(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d body = %s", rr.Code, rr.Body.String())
+	}
+	if stub.truncated != 7 {
+		t.Fatalf("truncated = %d, want 7", stub.truncated)
+	}
+	if stub.sentInput.Content != "updated question" {
+		t.Fatalf("sent content = %q", stub.sentInput.Content)
 	}
 }
 

@@ -23,6 +23,7 @@ type AIConversationService interface {
 	UpdateTitle(id int64, title string, lock bool) error
 	UpdateStrictEvidence(id int64, on bool) error
 	DeleteConversation(id int64) error
+	TruncateLastTurn(id int64) error
 	PinPaper(conversationID, paperID int64) error
 	UnpinPaper(conversationID, paperID int64) error
 	SendMessage(ctx context.Context, in ai_conversation.SendMessageInput, onDelta func(string) error) (ai_conversation.SendMessageResult, error)
@@ -143,6 +144,7 @@ func (h *AIConversationHandler) PostMessage(w http.ResponseWriter, r *http.Reque
 		StrictEvidence          *bool                       `json:"strict_evidence,omitempty"`
 		IncludeExternalEvidence bool                        `json:"include_external_evidence,omitempty"`
 		IntentHint              string                      `json:"intent_hint,omitempty"`
+		ReplaceLast             bool                        `json:"replace_last,omitempty"`
 		Context                 ai_assistant.RequestContext `json:"context,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
@@ -151,6 +153,16 @@ func (h *AIConversationHandler) PostMessage(w http.ResponseWriter, r *http.Reque
 	}
 	if body.StrictEvidence != nil {
 		if err := h.svc.UpdateStrictEvidence(conversationID, *body.StrictEvidence); err != nil {
+			sendError(w, err)
+			return
+		}
+	}
+	if body.ReplaceLast {
+		if idPart == "new" {
+			sendError(w, apperr.New(apperr.CodeInvalidArgument, "新会话不能重新发送上一轮"))
+			return
+		}
+		if err := h.svc.TruncateLastTurn(conversationID); err != nil {
 			sendError(w, err)
 			return
 		}

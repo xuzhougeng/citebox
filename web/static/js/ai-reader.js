@@ -92,6 +92,7 @@
                 emptyEl: $('aiSidebarEmpty'),
                 searchEl: $('aiConversationSearch'),
                 newBtn: $('aiNewConversation'),
+                moreBtn: $('aiMoreConversations'),
                 onSelect: (id) => {
                     if (id == null) {
                         view.loadDraft(0);

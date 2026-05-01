@@ -91,6 +91,89 @@ func TestAIConversationDeleteCascadesMessages(t *testing.T) {
 	}
 }
 
+func TestAIConversationTruncateLastTurn(t *testing.T) {
+	repo := newAIConversationRepoForTest(t)
+	convID, err := repo.CreateConversation()
+	if err != nil {
+		t.Fatalf("CreateConversation: %v", err)
+	}
+	firstUserID, err := repo.AddMessage(convID, "user", "first question", AIMessageMeta{})
+	if err != nil {
+		t.Fatalf("AddMessage first user: %v", err)
+	}
+	firstAssistantID, err := repo.AddMessage(convID, "assistant", "first answer", AIMessageMeta{})
+	if err != nil {
+		t.Fatalf("AddMessage first assistant: %v", err)
+	}
+	secondUserID, err := repo.AddMessage(convID, "user", "second question", AIMessageMeta{})
+	if err != nil {
+		t.Fatalf("AddMessage second user: %v", err)
+	}
+	secondAssistantID, err := repo.AddMessage(convID, "assistant", "second answer", AIMessageMeta{})
+	if err != nil {
+		t.Fatalf("AddMessage second assistant: %v", err)
+	}
+	firstRunID, err := repo.CreateTurnRun(AITurnRun{
+		ConversationID:     convID,
+		UserMessageID:      firstUserID,
+		AssistantMessageID: sql.NullInt64{Int64: firstAssistantID, Valid: true},
+		Intent:             "free_ask",
+		Status:             "completed",
+	})
+	if err != nil {
+		t.Fatalf("CreateTurnRun first: %v", err)
+	}
+	secondRunID, err := repo.CreateTurnRun(AITurnRun{
+		ConversationID:     convID,
+		UserMessageID:      secondUserID,
+		AssistantMessageID: sql.NullInt64{Int64: secondAssistantID, Valid: true},
+		Intent:             "free_ask",
+		Status:             "completed",
+	})
+	if err != nil {
+		t.Fatalf("CreateTurnRun second: %v", err)
+	}
+	if _, err := repo.AddResultCard(AIResultCard{TurnRunID: firstRunID, CardType: "first"}); err != nil {
+		t.Fatalf("AddResultCard first: %v", err)
+	}
+	if _, err := repo.AddResultCard(AIResultCard{TurnRunID: secondRunID, CardType: "second"}); err != nil {
+		t.Fatalf("AddResultCard second: %v", err)
+	}
+
+	if err := repo.TruncateLastTurn(convID); err != nil {
+		t.Fatalf("TruncateLastTurn: %v", err)
+	}
+
+	msgs, err := repo.ListMessages(convID, 0, 100)
+	if err != nil {
+		t.Fatalf("ListMessages: %v", err)
+	}
+	if len(msgs) != 2 || msgs[0].Content != "first question" || msgs[1].Content != "first answer" {
+		t.Fatalf("messages = %+v", msgs)
+	}
+	runs, err := repo.ListTurnRuns(convID)
+	if err != nil {
+		t.Fatalf("ListTurnRuns: %v", err)
+	}
+	if len(runs) != 1 || runs[0].ID != firstRunID {
+		t.Fatalf("runs = %+v", runs)
+	}
+	cards, err := repo.ListResultCards(firstRunID)
+	if err != nil {
+		t.Fatalf("ListResultCards first: %v", err)
+	}
+	if len(cards) != 1 || cards[0].CardType != "first" {
+		t.Fatalf("first cards = %+v", cards)
+	}
+	cards, err = repo.ListResultCards(secondRunID)
+	if err != nil {
+		t.Fatalf("ListResultCards second: %v", err)
+	}
+	if len(cards) != 0 {
+		t.Fatalf("second cards should be cascaded, got %+v", cards)
+	}
+}
+
 func TestAIConversationPinPaper(t *testing.T) {
 	libRepo, err := NewLibraryRepository(filepath.Join(t.TempDir(), "library.db"))
 	if err != nil {

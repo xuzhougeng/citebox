@@ -284,6 +284,128 @@
     opacity: 0.35;
 }
 
+.ai-sidebar-more {
+    width: 100%;
+    justify-content: center;
+    flex: 0 0 auto;
+    margin-top: 0.25rem;
+    border-color: rgba(var(--ink-rgb), 0.12);
+    background: rgba(var(--surface-rgb), 0.58);
+    color: var(--ink);
+    font-size: 0.9rem;
+    font-weight: 700;
+}
+
+.ai-sidebar-more:hover {
+    border-color: rgba(var(--accent-rgb), 0.26);
+    background: rgba(var(--accent-rgb), 0.1);
+    color: var(--accent-deep);
+}
+
+/* ------------------------------------------------------------------
+   4b. Conversation manager modal
+   ------------------------------------------------------------------ */
+
+.ai-conversation-manager-dialog {
+    width: min(760px, 100%);
+    max-height: min(720px, calc(100vh - 3rem));
+    padding: 0;
+    overflow: hidden;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    border-radius: 22px;
+    border: 1px solid rgba(var(--ink-rgb), 0.08);
+    background: var(--modal-bg);
+}
+
+.ai-conversation-manager-head {
+    padding: 1.25rem 4rem 1rem 1.35rem;
+    border-bottom: 1px solid rgba(var(--ink-rgb), 0.08);
+    background: rgba(var(--surface-rgb), 0.68);
+}
+
+.ai-conversation-manager-head h3 {
+    margin: 0;
+    color: var(--ink);
+    font-size: 1.12rem;
+    line-height: 1.35;
+}
+
+.ai-conversation-manager-head p {
+    margin: 0.3rem 0 0;
+    color: var(--muted);
+    font-size: 0.9rem;
+    line-height: 1.5;
+}
+
+.ai-conversation-manager-body {
+    min-height: 0;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    gap: 0.8rem;
+    padding: 1rem 1.15rem 1.15rem;
+}
+
+.ai-conversation-manager-search {
+    width: 100%;
+    min-height: 2.45rem;
+    border-radius: var(--radius-sm);
+}
+
+.ai-conversation-manager-list {
+    min-height: 0;
+    max-height: min(58vh, 34rem);
+    overflow-y: auto;
+    padding-right: 0.25rem;
+    scrollbar-gutter: stable;
+    scrollbar-width: thin;
+    scrollbar-color: var(--ai-scrollbar-thumb) var(--ai-scrollbar-track);
+}
+
+.ai-conversation-manager-list[hidden],
+.ai-conversation-manager-empty[hidden] {
+    display: none;
+}
+
+.ai-conversation-manager-list::-webkit-scrollbar {
+    width: 0.72rem;
+}
+
+.ai-conversation-manager-list::-webkit-scrollbar-track {
+    background: var(--ai-scrollbar-track);
+    border-radius: 999px;
+}
+
+.ai-conversation-manager-list::-webkit-scrollbar-thumb {
+    min-height: 3rem;
+    border: 3px solid transparent;
+    border-radius: 999px;
+    background: var(--ai-scrollbar-thumb);
+    background-clip: padding-box;
+}
+
+.ai-conversation-manager-list::-webkit-scrollbar-thumb:hover {
+    background: var(--ai-scrollbar-thumb-hover);
+    background-clip: padding-box;
+}
+
+.ai-conversation-manager-row {
+    padding-block: 0.65rem;
+}
+
+.ai-conversation-manager-empty,
+.ai-conversation-manager-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 8rem;
+    margin: 0;
+    color: var(--muted);
+    text-align: center;
+    font-size: 0.92rem;
+    line-height: 1.6;
+}
+
 /* ------------------------------------------------------------------
    5. Main pane
    ------------------------------------------------------------------ */
@@ -518,6 +640,48 @@
     background: rgba(var(--accent-rgb), 0.1);
     border-color: rgba(var(--accent-rgb), 0.12);
     max-width: min(78%, 42rem);
+}
+
+.ai-message-user.is-editing-last {
+    border-color: rgba(var(--accent-rgb), 0.34);
+    box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.09);
+}
+
+.ai-message-user-action-slot {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.45rem;
+    margin-top: 0.5rem;
+    white-space: normal;
+}
+
+.ai-message-user-action,
+.ai-message-user-action-hint {
+    min-height: 1.75rem;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    line-height: 1.2;
+}
+
+.ai-message-user-action {
+    border: 1px solid rgba(var(--accent-rgb), 0.2);
+    padding: 0.25rem 0.62rem;
+    background: rgba(var(--surface-rgb), 0.64);
+    color: var(--accent-deep);
+    cursor: pointer;
+    font-weight: 700;
+}
+
+.ai-message-user-action:hover {
+    border-color: rgba(var(--accent-rgb), 0.34);
+    background: rgba(var(--accent-rgb), 0.14);
+}
+
+.ai-message-user-action-hint {
+    display: inline-flex;
+    align-items: center;
+    color: var(--muted);
 }
 
 .ai-message-assistant {

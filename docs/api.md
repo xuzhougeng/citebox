@@ -805,6 +805,7 @@ AI 流式阅读通过：
 - `paper_id`：可选，仅用于新会话或发送时自动 pin 当前文献。
 - `intent_hint`：可选的一次性路由提示。支持 `library_search`（查全库）、`external_search`（查外部）、`paper_read`（读文献）、`figure_lookup`（看图/图文）。省略时由后端按内容和上下文自动判断。
 - `context`：可选上下文对象，支持 `source`、`paper_id`、`paper_ids`、`figure_id`。用于指定当前文献、对比文献或图片上下文。
+- `replace_last`：可选布尔值。为 `true` 时，服务端会先删除当前会话最后一轮用户消息及其后的回答、流程和结果卡片，再用本次 `content` 重新发送；仅适用于已有会话。
 - `strict_evidence`：兼容字段；历史上对应“内部搜索”开关。当前主 UI 使用 `intent_hint` 和 `context` 调度工具。没有显式 `intent_hint`/`context` 时，旧内部搜索语义仍保留。
 - `include_external_evidence`：兼容字段；历史上对应“外部搜索”开关。没有显式 `intent_hint`/`context` 时，仍使用旧外部 Semantic Scholar 证据检索语义。
 

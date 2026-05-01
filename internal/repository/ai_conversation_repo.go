@@ -12,6 +12,10 @@ import (
 // ErrAIConversationNotFound is returned when a conversation id has no row.
 var ErrAIConversationNotFound = errors.New("ai_conversation: not found")
 
+// ErrAIConversationNoUserMessage is returned when a conversation has no user
+// turn that can be edited or resent.
+var ErrAIConversationNoUserMessage = errors.New("ai_conversation: no user message")
+
 // AIConversation is one persisted chat session.
 type AIConversation struct {
 	ID                      int64
@@ -234,6 +238,65 @@ func (r *AIConversationRepository) UpdateSummary(id int64, summary string, throu
 func (r *AIConversationRepository) DeleteConversation(id int64) error {
 	_, err := r.db.Exec(`DELETE FROM ai_conversations WHERE id = ?`, id)
 	return err
+}
+
+// TruncateLastTurn removes the most recent user message and every message after
+// it in the same conversation. Turn-run artifacts are removed through FK
+// cascades from ai_turn_runs.user_message_id.
+func (r *AIConversationRepository) TruncateLastTurn(conversationID int64) error {
+	tx, err := r.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if tx != nil {
+			_ = tx.Rollback()
+		}
+	}()
+
+	var userMessageID int64
+	err = tx.QueryRow(`
+		SELECT id
+		FROM ai_messages
+		WHERE conversation_id = ? AND role = 'user'
+		ORDER BY id DESC
+		LIMIT 1
+	`, conversationID).Scan(&userMessageID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrAIConversationNoUserMessage
+		}
+		return err
+	}
+
+	if _, err = tx.Exec(`
+		DELETE FROM ai_messages
+		WHERE conversation_id = ? AND id >= ?
+	`, conversationID, userMessageID); err != nil {
+		return err
+	}
+	if _, err = tx.Exec(`
+		UPDATE ai_conversations
+		SET
+			summary_text = CASE
+				WHEN summary_through_message_id IS NOT NULL AND summary_through_message_id >= ? THEN ''
+				ELSE summary_text
+			END,
+			summary_through_message_id = CASE
+				WHEN summary_through_message_id IS NOT NULL AND summary_through_message_id >= ? THEN NULL
+				ELSE summary_through_message_id
+			END,
+			updated_at = strftime('%Y-%m-%d %H:%M:%f', 'now')
+		WHERE id = ?
+	`, userMessageID, userMessageID, conversationID); err != nil {
+		return err
+	}
+
+	if err = tx.Commit(); err != nil {
+		return err
+	}
+	tx = nil
+	return nil
 }
 
 // AddMessage inserts a message; returns its id. Implemented in Task 1.3.

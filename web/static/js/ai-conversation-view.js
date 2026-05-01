@@ -138,6 +138,8 @@
             messages: [],
             turnRuns: [],
             pendingCitations: [],
+            rewriteLast: false,
+            rewriteOriginalMessageID: null,
             streaming: null,         // { abortController, assistantBubbleEl, accText: '', userBubbleEl }
         },
 
@@ -155,6 +157,20 @@
                         } else {
                             self.sendCurrentInput();
                         }
+                    }
+                });
+            }
+            if (els.conversation) {
+                els.conversation.addEventListener('click', function (e) {
+                    const action = e.target.closest('[data-ai-message-action]');
+                    if (!action) return;
+                    const name = action.dataset.aiMessageAction;
+                    if (name === 'edit-resend') {
+                        e.preventDefault();
+                        self._beginEditLastUserMessage();
+                    } else if (name === 'cancel-edit-resend') {
+                        e.preventDefault();
+                        self._clearRewriteMode();
                     }
                 });
             }
@@ -194,6 +210,7 @@
             s.messages = conv.recent_messages || [];
             s.turnRuns = conv.turn_runs || [];
             s.pendingCitations = [];
+            this._clearRewriteMode({ keepInput: true });
             s._draftPaperId = 0;
             this._renderAll();
         },
@@ -206,6 +223,7 @@
             s.messages = [];
             s.turnRuns = [];
             s.pendingCitations = [];
+            this._clearRewriteMode({ keepInput: true });
             s._draftPaperId = prefilledPaperId || 0;
             this._renderAll();
         },
@@ -224,6 +242,7 @@
             if (!content) return;
             const body = { content: content, context: this._currentContext() };
             if (payload && payload.intent_hint) body.intent_hint = payload.intent_hint;
+            if (this._state.rewriteLast && this._state.conversationId) body.replace_last = true;
             await this._sendBody(body);
         },
 
@@ -232,6 +251,11 @@
             if (s.streaming) return;
             if (!body || !String(body.content || '').trim()) return;
             const content = String(body.content || '').trim();
+            const replaceLast = !!body.replace_last && !!s.conversationId;
+            if (replaceLast) {
+                this._dropLastTurnFromState();
+                this._removeRenderedLastTurn();
+            }
             // optimistic user bubble
             const userBubble = this._appendMessageBubble({ role: 'user', content: content });
             const assistantBubble = this._appendMessageBubble({ role: 'assistant', content: '', streaming: true });
@@ -249,6 +273,7 @@
                 process: null,
                 cards: [],
                 pendingCitations: [],
+                replaceLast: replaceLast,
             };
 
             if (!s.conversationId && s._draftPaperId) body.paper_id = s._draftPaperId;
@@ -277,6 +302,7 @@
             } finally {
                 this._toggleSendingState(false);
                 s.streaming = null;
+                this._clearRewriteMode({ keepInput: true });
             }
         },
 
@@ -362,6 +388,7 @@
                 Object.keys(citationsByID).forEach((id) => {
                     this._dispatchCitationHydration(assistantByID[id], citationsByID[id]);
                 });
+                this._decorateLastUserMessage();
             }
         },
 
@@ -501,6 +528,12 @@
             } else if (evt.type === 'final') {
                 if (assistantBubble) {
                     assistantBubble.classList.remove('is-streaming');
+                    if (s.streaming && s.streaming.userBubbleEl && evt.user_message && evt.user_message.id) {
+                        s.streaming.userBubbleEl.dataset.messageId = String(evt.user_message.id);
+                    }
+                    if (evt.assistant_message && evt.assistant_message.id) {
+                        assistantBubble.dataset.messageId = String(evt.assistant_message.id);
+                    }
                     if (evt.assistant_message && evt.assistant_message.content) {
                         this._renderMessageContent(assistantBubble, evt.assistant_message);
                     } else if (s.streaming && s.streaming.accText) {
@@ -511,6 +544,9 @@
                         this._renderCardsInto(assistantBubble, s.streaming.cards);
                     }
                     this._hydrateFinalCitations(assistantBubble, evt.assistant_message);
+                    this._persistFinalMessages(evt);
+                    this._decorateLastUserMessage();
+                    document.dispatchEvent(new CustomEvent('ai-reader:conversation-changed'));
                 }
             } else if (evt.type === 'error') {
                 if (assistantBubble) {
@@ -519,6 +555,122 @@
                     assistantBubble.classList.add('ai-message-error');
                 }
             }
+        },
+
+        _persistFinalMessages(evt) {
+            const s = this._state;
+            const user = evt && evt.user_message;
+            const assistant = evt && evt.assistant_message;
+            if (user && user.id && !s.messages.some((m) => String(m.id) === String(user.id))) {
+                s.messages.push(user);
+            }
+            if (assistant && assistant.id && !s.messages.some((m) => String(m.id) === String(assistant.id))) {
+                s.messages.push(assistant);
+            }
+        },
+
+        _beginEditLastUserMessage() {
+            const s = this._state;
+            if (s.streaming || !s.conversationId || !s.els || !s.els.questionInput) return;
+            const lastUser = this._lastUserMessage();
+            if (!lastUser) return;
+            s.rewriteLast = true;
+            s.rewriteOriginalMessageID = lastUser.id || null;
+            s.els.questionInput.value = lastUser.content || '';
+            s.els.questionInput.dispatchEvent(new Event('input', { bubbles: true }));
+            s.els.questionInput.focus();
+            if (s.els.questionInput.select) s.els.questionInput.select();
+            this._syncRewriteControls();
+            this._decorateLastUserMessage();
+        },
+
+        _clearRewriteMode(options) {
+            const s = this._state;
+            const opts = options || {};
+            s.rewriteLast = false;
+            s.rewriteOriginalMessageID = null;
+            if (!opts.keepInput && s.els && s.els.questionInput) {
+                s.els.questionInput.value = '';
+                s.els.questionInput.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+            this._syncRewriteControls();
+            this._decorateLastUserMessage();
+        },
+
+        _syncRewriteControls() {
+            const s = this._state;
+            if (!s.els || !s.els.runBtn) return;
+            s.els.runBtn.textContent = s.rewriteLast
+                ? translate('ai.btn_resend', '重新发送')
+                : translate('ai.btn_send', '发送问题');
+        },
+
+        _lastUserMessage() {
+            const s = this._state;
+            for (let i = s.messages.length - 1; i >= 0; i -= 1) {
+                if (s.messages[i] && s.messages[i].role === 'user') return s.messages[i];
+            }
+            return null;
+        },
+
+        _dropLastTurnFromState() {
+            const s = this._state;
+            let cut = -1;
+            for (let i = s.messages.length - 1; i >= 0; i -= 1) {
+                if (s.messages[i] && s.messages[i].role === 'user') {
+                    cut = i;
+                    break;
+                }
+            }
+            if (cut >= 0) {
+                const removedUser = s.messages[cut];
+                const removedIDs = new Set(s.messages.slice(cut).map((m) => String(m && m.id || '')).filter(Boolean));
+                s.messages = s.messages.slice(0, cut);
+                s.turnRuns = (s.turnRuns || []).filter((run) => {
+                    const userID = String(run && run.user_message_id || '');
+                    const assistantID = String(run && run.assistant_message_id || '');
+                    if (removedUser && String(removedUser.id) === userID) return false;
+                    return !removedIDs.has(userID) && !removedIDs.has(assistantID);
+                });
+            }
+        },
+
+        _removeRenderedLastTurn() {
+            const s = this._state;
+            if (!s.els || !s.els.conversation) return;
+            const bubbles = Array.from(s.els.conversation.querySelectorAll(':scope > .ai-message'));
+            let cut = -1;
+            for (let i = bubbles.length - 1; i >= 0; i -= 1) {
+                if (bubbles[i].classList.contains('ai-message-user')) {
+                    cut = i;
+                    break;
+                }
+            }
+            if (cut < 0) return;
+            bubbles.slice(cut).forEach((node) => node.remove());
+        },
+
+        _decorateLastUserMessage() {
+            const s = this._state;
+            if (!s.els || !s.els.conversation) return;
+            s.els.conversation.querySelectorAll('.ai-message-user-action-slot').forEach((node) => node.remove());
+            s.els.conversation.querySelectorAll('.ai-message-user.is-editing-last').forEach((node) => node.classList.remove('is-editing-last'));
+            if (s.streaming || !s.conversationId) return;
+            const lastUser = this._lastUserMessage();
+            if (!lastUser || !lastUser.id) return;
+            const bubble = Array.from(s.els.conversation.querySelectorAll('.ai-message-user'))
+                .find((node) => String(node.dataset.messageId || '') === String(lastUser.id));
+            if (!bubble) return;
+            if (s.rewriteLast) bubble.classList.add('is-editing-last');
+            const slot = document.createElement('div');
+            slot.className = 'ai-message-user-action-slot';
+            const editLabel = translate('ai.btn_edit_resend', '编辑重发');
+            const cancelLabel = translate('ai.btn_cancel_resend', '取消');
+            slot.innerHTML = s.rewriteLast
+                ? '<span class="ai-message-user-action-hint">' + escapeHtml(translate('ai.edit_resend_active', '正在编辑最后一问')) + '</span>' +
+                    '<button class="ai-message-user-action" type="button" data-ai-message-action="cancel-edit-resend">' + escapeHtml(cancelLabel) + '</button>'
+                : '<button class="ai-message-user-action" type="button" data-ai-message-action="edit-resend">' + escapeHtml(editLabel) + '</button>';
+            bubble.appendChild(slot);
         },
 
         _appendProcess(summary) {

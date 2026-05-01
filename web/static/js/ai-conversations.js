@@ -1,7 +1,7 @@
 // ai-conversations.js — sidebar conversation list / search / CRUD.
 // Pure data-driven module; reads from /api/ai/conversations*.
 //
-// Public API: window.AIReader.conversations.{init, refresh, setActive, setSearchQuery, openInlineRename}
+// Public API: window.AIReader.conversations.{init, refresh, setActive, setSearchQuery, openInlineRename, openManager}
 
 (function () {
     'use strict';
@@ -31,6 +31,10 @@
         return fallback || key;
     }
 
+    const SIDEBAR_LIMIT = 10;
+    const MANAGER_LIMIT = 200;
+    const SEARCH_DEBOUNCE_MS = 250;
+
     // ---------------------------------------------------------------------------
     // Module
     // ---------------------------------------------------------------------------
@@ -40,10 +44,21 @@
             activeID: null,
             query: '',
             searchTimer: null,
+            sidebarLimit: SIDEBAR_LIMIT,
+            managerLimit: MANAGER_LIMIT,
             container: null,
             emptyEl: null,
             searchEl: null,
             newBtn: null,
+            moreBtn: null,
+            managerOverlay: null,
+            managerList: null,
+            managerSearchEl: null,
+            managerEmptyEl: null,
+            managerItems: [],
+            managerQuery: '',
+            managerSearchTimer: null,
+            managerKeyHandler: null,
             onSelect: null,
             getActiveID: null,
         },
@@ -57,6 +72,7 @@
             s.emptyEl     = opts.emptyEl     || null;
             s.searchEl    = opts.searchEl    || null;
             s.newBtn      = opts.newBtn      || null;
+            s.moreBtn     = opts.moreBtn     || null;
             s.onSelect    = typeof opts.onSelect    === 'function' ? opts.onSelect    : function () {};
             s.getActiveID = typeof opts.getActiveID === 'function' ? opts.getActiveID : function () { return s.activeID; };
 
@@ -77,6 +93,12 @@
                 });
             }
 
+            if (s.moreBtn) {
+                s.moreBtn.addEventListener('click', function () {
+                    self.openManager();
+                });
+            }
+
             if (s.newBtn) {
                 s.newBtn.addEventListener('click', function () {
                     self.setActive(null);
@@ -90,24 +112,64 @@
         // -----------------------------------------------------------------------
         async refresh() {
             const s = this._state;
-            const qs = s.query
-                ? '?q=' + encodeURIComponent(s.query) + '&limit=50'
-                : '?limit=50';
-            const url = '/api/ai/conversations' + qs;
+            s.items = await this._fetchConversations(s.query, s.sidebarLimit);
+            this._render();
+        },
 
+        // -----------------------------------------------------------------------
+        // Public: openManager — show searchable conversation management modal
+        // -----------------------------------------------------------------------
+        async openManager() {
+            const s = this._state;
+            this._ensureManager();
+            if (!s.managerOverlay) return;
+
+            s.managerQuery = '';
+            if (s.managerSearchEl) {
+                s.managerSearchEl.value = '';
+            }
+
+            s.managerOverlay.classList.remove('hidden');
+            document.body.classList.add('modal-open');
+            this._renderManager({ loading: true });
+            await this._refreshManager();
+            if (s.managerSearchEl) {
+                setTimeout(function () { s.managerSearchEl.focus(); }, 0);
+            }
+        },
+
+        // -----------------------------------------------------------------------
+        // Public: closeManager — hide conversation management modal
+        // -----------------------------------------------------------------------
+        closeManager() {
+            const s = this._state;
+            if (!s.managerOverlay) return;
+            s.managerOverlay.classList.add('hidden');
+            if (!document.querySelector('.modal-shell:not(.hidden)')) {
+                document.body.classList.remove('modal-open');
+            }
+        },
+
+        // -----------------------------------------------------------------------
+        // Private: _fetchConversations — shared list loader
+        // -----------------------------------------------------------------------
+        async _fetchConversations(query, limit) {
+            const params = new URLSearchParams();
+            const q = (query || '').trim();
+            if (q) params.set('q', q);
+            params.set('limit', String(limit || SIDEBAR_LIMIT));
+            const url = '/api/ai/conversations?' + params.toString();
             try {
                 const res = await fetch(url, { headers: { 'Content-Type': 'application/json' } });
                 if (!res.ok) {
-                    s.items = [];
+                    return [];
                 } else {
                     const body = await res.json();
-                    s.items = Array.isArray(body.items) ? body.items : [];
+                    return Array.isArray(body.items) ? body.items : [];
                 }
             } catch (_e) {
-                s.items = [];
+                return [];
             }
-
-            this._render();
         },
 
         // -----------------------------------------------------------------------
@@ -116,6 +178,7 @@
         setActive(id) {
             this._state.activeID = id == null ? null : String(id);
             this._render();
+            this._renderManager();
         },
 
         // -----------------------------------------------------------------------
@@ -128,7 +191,7 @@
             s.searchTimer = setTimeout(function () {
                 s.query = (q || '').trim();
                 self.refresh();
-            }, 250);
+            }, SEARCH_DEBOUNCE_MS);
         },
 
         // -----------------------------------------------------------------------
@@ -240,6 +303,136 @@
         },
 
         // -----------------------------------------------------------------------
+        // Private: _ensureManager — create modal once and bind its events
+        // -----------------------------------------------------------------------
+        _ensureManager() {
+            const s = this._state;
+            if (s.managerOverlay) return;
+
+            const closeLabel = escapeHtml(tr('ai.btn_close_modal', 'Close'));
+            const title = escapeHtml(tr('ai.conversation_manager_title', 'Conversation Manager'));
+            const desc = escapeHtml(tr('ai.conversation_manager_desc', 'View, search, and manage older conversations.'));
+            const placeholder = escapeHtml(tr('ai.conversation_manager_search_placeholder', 'Search all conversations...'));
+
+            const overlay = document.createElement('div');
+            overlay.className = 'modal-shell ai-conversation-manager hidden';
+            overlay.setAttribute('role', 'dialog');
+            overlay.setAttribute('aria-modal', 'true');
+            overlay.setAttribute('aria-labelledby', 'aiConversationManagerTitle');
+            overlay.innerHTML = (
+                '<div class="modal-dialog ai-conversation-manager-dialog">' +
+                    '<button class="modal-close" type="button" aria-label="' + closeLabel + '">×</button>' +
+                    '<header class="ai-conversation-manager-head">' +
+                        '<div>' +
+                            '<h3 id="aiConversationManagerTitle">' + title + '</h3>' +
+                            '<p>' + desc + '</p>' +
+                        '</div>' +
+                    '</header>' +
+                    '<div class="ai-conversation-manager-body">' +
+                        '<input class="form-input ai-conversation-manager-search" type="text" placeholder="' + placeholder + '" autocomplete="off">' +
+                        '<ul class="ai-conversation-list ai-conversation-manager-list" role="list"></ul>' +
+                        '<p class="ai-conversation-manager-empty" hidden>' +
+                            escapeHtml(tr('ai.conversation_manager_empty', 'No matching conversations.')) +
+                        '</p>' +
+                    '</div>' +
+                '</div>'
+            );
+
+            document.body.appendChild(overlay);
+            s.managerOverlay = overlay;
+            s.managerList = overlay.querySelector('.ai-conversation-manager-list');
+            s.managerSearchEl = overlay.querySelector('.ai-conversation-manager-search');
+            s.managerEmptyEl = overlay.querySelector('.ai-conversation-manager-empty');
+
+            const self = this;
+            overlay.querySelector('.modal-close').addEventListener('click', function () {
+                self.closeManager();
+            });
+            overlay.addEventListener('click', function (e) {
+                if (e.target === overlay) self.closeManager();
+            });
+            s.managerList.addEventListener('click', function (e) {
+                self._onContainerClick(e);
+            });
+            s.managerList.addEventListener('dblclick', function (e) {
+                self._onContainerDoubleClick(e);
+            });
+            s.managerSearchEl.addEventListener('input', function () {
+                clearTimeout(s.managerSearchTimer);
+                s.managerSearchTimer = setTimeout(function () {
+                    s.managerQuery = s.managerSearchEl.value.trim();
+                    self._refreshManager();
+                }, SEARCH_DEBOUNCE_MS);
+            });
+            s.managerKeyHandler = function (e) {
+                if (e.key !== 'Escape') return;
+                if (!s.managerOverlay || s.managerOverlay.classList.contains('hidden')) return;
+                if (typeof Utils !== 'undefined' && typeof Utils.isTopVisibleModal === 'function') {
+                    if (!Utils.isTopVisibleModal(s.managerOverlay)) return;
+                }
+                self.closeManager();
+            };
+            document.addEventListener('keydown', s.managerKeyHandler);
+        },
+
+        // -----------------------------------------------------------------------
+        // Private: _refreshManager — fetch modal list then render
+        // -----------------------------------------------------------------------
+        async _refreshManager() {
+            const s = this._state;
+            if (!s.managerOverlay || s.managerOverlay.classList.contains('hidden')) return;
+            s.managerItems = await this._fetchConversations(s.managerQuery, s.managerLimit);
+            this._renderManager();
+        },
+
+        // -----------------------------------------------------------------------
+        // Private: _renderManager — rebuild the modal list DOM
+        // -----------------------------------------------------------------------
+        _renderManager(options) {
+            const s = this._state;
+            const list = s.managerList;
+            if (!list) return;
+
+            const opts = options || {};
+            if (opts.loading) {
+                list.hidden = false;
+                if (s.managerEmptyEl) s.managerEmptyEl.hidden = true;
+                list.innerHTML = (
+                    '<li class="ai-conversation-manager-loading">' +
+                        escapeHtml(tr('ai.conversation_manager_loading', 'Loading conversations...')) +
+                    '</li>'
+                );
+                return;
+            }
+
+            const items = s.managerItems || [];
+            if (items.length === 0) {
+                list.innerHTML = '';
+                list.hidden = true;
+                if (s.managerEmptyEl) s.managerEmptyEl.hidden = false;
+                return;
+            }
+
+            list.hidden = false;
+            if (s.managerEmptyEl) s.managerEmptyEl.hidden = true;
+
+            const fragment = document.createDocumentFragment();
+            items.forEach(function (item) {
+                const li = document.createElement('li');
+                li.className = 'ai-conversation-row ai-conversation-manager-row';
+                li.dataset.id = String(item.id);
+                if (String(item.id) === s.activeID) {
+                    li.classList.add('is-active');
+                }
+                li.innerHTML = this._renderRow(item);
+                fragment.appendChild(li);
+            }, this);
+
+            list.innerHTML = '';
+            list.appendChild(fragment);
+        },
+
+        // -----------------------------------------------------------------------
         // Private: _renderRow — return HTML string for one list item's inner HTML
         // -----------------------------------------------------------------------
         _renderRow(item) {
@@ -293,11 +486,11 @@
                 } else if (action === 'delete') {
                     if (typeof Utils !== 'undefined' && typeof Utils.confirm === 'function') {
                         const confirmed = await Utils.confirm(
-                            t('ai.confirm_delete_conversation', '删除后会移除当前会话及其消息记录。'),
-                            t('ai.confirm_delete_conversation_title', '删除对话')
+                            tr('ai.confirm_delete_conversation', 'This will remove the conversation and its message history.'),
+                            tr('ai.confirm_delete_conversation_title', 'Delete Conversation')
                         );
                         if (!confirmed) return;
-                        this._deleteConversation(id);
+                        await this._deleteConversation(id);
                     }
                 }
                 return;
@@ -311,8 +504,12 @@
                     return;
                 }
                 const id = rowEl.dataset.id;
+                const fromManager = Boolean(s.managerOverlay && s.managerOverlay.contains(rowEl));
                 this.setActive(id);
                 s.onSelect(id);
+                if (fromManager) {
+                    this.closeManager();
+                }
             }
         },
 
@@ -346,6 +543,7 @@
                 s.onSelect(null);
             }
             await this.refresh();
+            await this._refreshManager();
         },
 
         // -----------------------------------------------------------------------
@@ -363,8 +561,10 @@
             }
             // Sync items cache so a subsequent render shows the new title without a full fetch
             const s = this._state;
-            const item = s.items.find(function (x) { return String(x.id) === String(id); });
-            if (item) item.title = newTitle;
+            [s.items, s.managerItems].forEach(function (list) {
+                const item = list.find(function (x) { return String(x.id) === String(id); });
+                if (item) item.title = newTitle;
+            });
             if (String(id) === String(s.activeID)) {
                 const view = window.AIReader && window.AIReader.view;
                 if (view && view._state) {
@@ -374,6 +574,8 @@
                     }
                 }
             }
+            this._render();
+            this._renderManager();
         },
     };
 
