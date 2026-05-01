@@ -30,7 +30,6 @@ func MergePapers(results []SourceResult, sourceOrder []SourceID, limit int) []Pa
 
 	order := mergeSourceOrder(sourceOrder, results, seenSources)
 	out := make([]Paper, 0)
-	index := make(map[string]int)
 	for row := 0; ; row++ {
 		added := false
 		for _, source := range order {
@@ -40,13 +39,11 @@ func MergePapers(results []SourceResult, sourceOrder []SourceID, limit int) []Pa
 			}
 			added = true
 			paper := ensureSourceMetadata(papers[row])
-			if existing, ok := findExistingPaper(index, paper); ok {
+			if existing, ok := findExistingPaper(out, paper); ok {
 				out[existing] = mergePaper(out[existing], paper)
-				indexPaper(index, out[existing], existing)
 				continue
 			}
 			out = append(out, paper)
-			indexPaper(index, paper, len(out)-1)
 		}
 		if !added {
 			break
@@ -78,33 +75,31 @@ func mergeSourceOrder(sourceOrder []SourceID, results []SourceResult, seenSource
 	return order
 }
 
-func findExistingPaper(index map[string]int, paper Paper) (int, bool) {
-	for _, key := range paperKeys(paper) {
-		if existing, ok := index[key]; ok {
-			return existing, true
+func findExistingPaper(papers []Paper, paper Paper) (int, bool) {
+	for i, existing := range papers {
+		if samePaper(existing, paper) {
+			return i, true
 		}
 	}
 	return 0, false
 }
 
-func indexPaper(index map[string]int, paper Paper, position int) {
-	for _, key := range paperKeys(paper) {
-		index[key] = position
+func samePaper(a Paper, b Paper) bool {
+	doiA := normalizeDOI(a.DOI)
+	doiB := normalizeDOI(b.DOI)
+	if doiA != "" && doiB != "" {
+		return doiA == doiB
 	}
-}
 
-func paperKeys(paper Paper) []string {
-	keys := make([]string, 0, 3)
-	if doi := normalizeDOI(paper.DOI); doi != "" {
-		keys = append(keys, "doi:"+doi)
+	pmidA := strings.TrimSpace(a.PMID)
+	pmidB := strings.TrimSpace(b.PMID)
+	if pmidA != "" && pmidB != "" {
+		return pmidA == pmidB
 	}
-	if pmid := strings.TrimSpace(paper.PMID); pmid != "" {
-		keys = append(keys, "pmid:"+pmid)
-	}
-	if title := normalizeTitle(paper.Title); title != "" {
-		keys = append(keys, "title:"+title)
-	}
-	return keys
+
+	titleA := normalizeTitle(a.Title)
+	titleB := normalizeTitle(b.Title)
+	return titleA != "" && titleA == titleB
 }
 
 func ensureSourceMetadata(paper Paper) Paper {

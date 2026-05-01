@@ -30,6 +30,26 @@ func TestMergePapersDedupesByPMID(t *testing.T) {
 	}
 }
 
+func TestMergePapersDoesNotDedupeByTitleWhenDOIsConflict(t *testing.T) {
+	out := MergePapers([]SourceResult{
+		{Source: SourcePubMed, Papers: []Paper{{Source: SourcePubMed, SourcePaperID: "pmid", DOI: "10.1/abc", Title: "Cell Fate Control"}}},
+		{Source: SourceSemanticScholar, Papers: []Paper{{Source: SourceSemanticScholar, SourcePaperID: "s2", DOI: "10.1/def", Title: "Cell Fate Control!"}}},
+	}, []SourceID{SourcePubMed, SourceSemanticScholar}, 10)
+	if len(out) != 2 {
+		t.Fatalf("len = %d, want 2: %+v", len(out), out)
+	}
+}
+
+func TestMergePapersDoesNotDedupeByTitleWhenPMIDsConflict(t *testing.T) {
+	out := MergePapers([]SourceResult{
+		{Source: SourcePubMed, Papers: []Paper{{Source: SourcePubMed, SourcePaperID: "123", PMID: "123", Title: "Cell Fate Control"}}},
+		{Source: SourceSemanticScholar, Papers: []Paper{{Source: SourceSemanticScholar, SourcePaperID: "s2", PMID: "456", Title: "Cell Fate Control!"}}},
+	}, []SourceID{SourcePubMed, SourceSemanticScholar}, 10)
+	if len(out) != 2 {
+		t.Fatalf("len = %d, want 2: %+v", len(out), out)
+	}
+}
+
 func TestMergePapersDedupesByNormalizedTitleAndPreservesSourceOrder(t *testing.T) {
 	out := MergePapers([]SourceResult{
 		{Source: SourceSemanticScholar, Papers: []Paper{{Source: SourceSemanticScholar, SourcePaperID: "s2", Title: "Cell Fate Control!"}}},
