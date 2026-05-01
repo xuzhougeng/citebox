@@ -22,6 +22,8 @@ import (
 	"github.com/xuzhougeng/citebox/internal/service"
 	"github.com/xuzhougeng/citebox/internal/service/ai_assistant"
 	"github.com/xuzhougeng/citebox/internal/service/ai_conversation"
+	"github.com/xuzhougeng/citebox/internal/service/ai_external"
+	"github.com/xuzhougeng/citebox/internal/service/pubmed"
 	"github.com/xuzhougeng/citebox/internal/service/research"
 )
 
@@ -40,6 +42,7 @@ type Server struct {
 	bridgeCancel context.CancelFunc
 	bridgeDone   chan struct{}
 	s2Client     *research.Client
+	pubmedClient *pubmed.Client
 }
 
 func NewServer(opts Options) (*Server, error) {
@@ -95,18 +98,44 @@ func NewServer(opts Options) (*Server, error) {
 		MinInterval: research.RateInterval(s2APIKey),
 	})
 
+	pubmedAPIKey := strings.TrimSpace(cfg.PubMedAPIKey)
+	pubmedEmail := strings.TrimSpace(cfg.PubMedEmail)
+	pubmedTool := strings.TrimSpace(cfg.PubMedTool)
+	if settings, err := librarySvc.GetAIExternalSearchSettings(); err != nil {
+		_ = repo.Close()
+		s2Client.Close()
+		return nil, fmt.Errorf("load AI external search settings: %w", err)
+	} else if settings != nil {
+		if pubmedAPIKey == "" {
+			pubmedAPIKey = strings.TrimSpace(settings.PubMedAPIKey)
+		}
+		if pubmedEmail == "" {
+			pubmedEmail = strings.TrimSpace(settings.PubMedEmail)
+		}
+		if pubmedTool == "" {
+			pubmedTool = strings.TrimSpace(settings.PubMedTool)
+		}
+	}
+	pubmedClient := pubmed.NewClient(pubmed.Config{
+		APIKey:      pubmedAPIKey,
+		Email:       pubmedEmail,
+		Tool:        pubmedTool,
+		MinInterval: pubmed.RateInterval(pubmedAPIKey),
+	})
+
 	httpServer := &http.Server{
 		Addr:    ":" + cfg.ServerPort,
-		Handler: buildHandler(cfg, logger, librarySvc, aiSvc, repo, absoluteWebRoot, s2Client),
+		Handler: buildHandler(cfg, logger, librarySvc, aiSvc, repo, absoluteWebRoot, s2Client, pubmedClient),
 	}
 
 	server := &Server{
-		cfg:        cfg,
-		logger:     logger,
-		repo:       repo,
-		librarySvc: librarySvc,
-		httpServer: httpServer,
-		s2Client:   s2Client,
+		cfg:          cfg,
+		logger:       logger,
+		repo:         repo,
+		librarySvc:   librarySvc,
+		httpServer:   httpServer,
+		s2Client:     s2Client,
+		pubmedClient: pubmedClient,
 	}
 
 	logger.Info("resolved web root", "web_root", absoluteWebRoot)
@@ -182,6 +211,9 @@ func (s *Server) Close() error {
 	if s.s2Client != nil {
 		s.s2Client.Close()
 	}
+	if s.pubmedClient != nil {
+		s.pubmedClient.Close()
+	}
 
 	return errors.Join(serverErr, repoErr)
 }
@@ -211,6 +243,7 @@ func buildHandler(
 	repo *repository.LibraryRepository,
 	webRoot string,
 	s2Client *research.Client,
+	pubmedClient *pubmed.Client,
 ) http.Handler {
 	versionSvc := service.NewVersionService()
 	paperHandler := handler.NewPaperHandler(librarySvc)
@@ -221,20 +254,25 @@ func buildHandler(
 	aiHandler := handler.NewAIHandler(aiSvc)
 	researchAdapter := &research.RepoAdapter{Repo: repo.Research}
 	researchSvc := research.NewService(s2Client, researchAdapter, research.ServiceConfig{})
+	aiExternalSvc := ai_external.NewService(aiExternalSettingsShim{librarySvc: librarySvc}, map[ai_external.SourceID]ai_external.Searcher{
+		ai_external.SourcePubMed:          ai_external.PubMedAdapter{Client: pubmedClient},
+		ai_external.SourceSemanticScholar: ai_external.SemanticScholarAdapter{SearchService: researchSvc},
+	})
 	libraryPlanner := ai_assistant.NewLLMLibrarySearchPlanner(aiSvc, aiSvc)
 	libraryClassifier := ai_assistant.NewLLMLibraryPaperClassifier(aiSvc, aiSvc)
 	externalPlanner := ai_assistant.NewLLMExternalSearchPlanner(aiSvc, aiSvc)
 	externalClassifier := ai_assistant.NewLLMExternalPaperClassifier(aiSvc, aiSvc)
 	assistantOrchestrator := ai_assistant.NewOrchestrator(ai_assistant.ToolSet{
 		LibrarySearch:  ai_assistant.NewLibrarySearchToolWithAgents(repo.Paper, libraryPlanner, libraryClassifier),
-		ExternalSearch: ai_assistant.NewExternalSearchToolWithAgents(researchSvc, externalPlanner, externalClassifier),
+		ExternalSearch: ai_assistant.NewExternalSearchToolWithAgents(aiExternalSvc, externalPlanner, externalClassifier),
 		PaperRead:      ai_assistant.NewPaperReadTool(repo.Paper),
 		FigureLookup:   ai_assistant.NewFigureLookupToolWithPapers(ai_assistant.NewRepositoryFigureSearcher(repo.Figure), repo.Paper),
 	})
-	aiConvService := ai_conversation.New(repo.AIConversation, repo.Paper, aiSvc, aiSvc, researchSvc, logger.With("component", "ai_conversation"), assistantOrchestrator)
+	aiConvService := ai_conversation.New(repo.AIConversation, repo.Paper, aiSvc, aiSvc, aiExternalSvc, logger.With("component", "ai_conversation"), assistantOrchestrator)
 	aiConversationHandler := handler.NewAIConversationHandler(aiConvService)
 	settingsHandler := handler.NewSettingsHandler(librarySvc, versionSvc)
 	settingsHandler.SetResearchClient(s2Client)
+	settingsHandler.SetPubMedClient(pubmedClient)
 	wolaiHandler := handler.NewWolaiHandler(librarySvc)
 	databaseHandler := handler.NewDatabaseHandler(librarySvc)
 	sessionManager := service.NewSessionManager(24 * time.Hour)

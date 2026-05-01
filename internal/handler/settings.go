@@ -16,6 +16,11 @@ type SettingsHandler struct {
 	libraryService *service.LibraryService
 	versionService *service.VersionService
 	researchClient *research.Client
+	pubmedClient   pubmedSettingsClient
+}
+
+type pubmedSettingsClient interface {
+	SetSettings(apiKey, email, tool string)
 }
 
 func NewSettingsHandler(libraryService *service.LibraryService, versionService *service.VersionService) *SettingsHandler {
@@ -29,6 +34,10 @@ func NewSettingsHandler(libraryService *service.LibraryService, versionService *
 // PutResearchSettings can hot-reload the API key without a server restart.
 func (h *SettingsHandler) SetResearchClient(client *research.Client) {
 	h.researchClient = client
+}
+
+func (h *SettingsHandler) SetPubMedClient(client pubmedSettingsClient) {
+	h.pubmedClient = client
 }
 
 func (h *SettingsHandler) GetExtractorSettings(w http.ResponseWriter, r *http.Request) {
@@ -322,6 +331,9 @@ func (h *SettingsHandler) PutAIExternalSearchSettings(w http.ResponseWriter, r *
 	if err != nil {
 		sendError(w, err)
 		return
+	}
+	if h.pubmedClient != nil {
+		h.pubmedClient.SetSettings(settings.PubMedAPIKey, settings.PubMedEmail, settings.PubMedTool)
 	}
 	sendJSON(w, http.StatusOK, settings)
 }
