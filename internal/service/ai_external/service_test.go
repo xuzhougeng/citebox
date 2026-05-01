@@ -76,19 +76,37 @@ func TestServiceSearchKeepsPartialSuccess(t *testing.T) {
 }
 
 func TestServiceSearchReturnsErrorWhenNoSourcesEnabled(t *testing.T) {
-	svc := NewService(stubSettings{sources: []SourceID{}}, nil)
+	pubmed := &stubSearcher{}
+	s2 := &stubSearcher{}
+	svc := NewService(stubSettings{sources: []SourceID{}}, map[SourceID]Searcher{
+		SourcePubMed:          pubmed,
+		SourceSemanticScholar: s2,
+	})
+
 	_, err := svc.Search(context.Background(), SourceQueries{}, SearchOptions{Limit: 5})
 	if !errors.Is(err, ErrNoSourcesEnabled) {
 		t.Fatalf("err = %v, want ErrNoSourcesEnabled", err)
 	}
+	if len(pubmed.queries) != 0 || len(s2.queries) != 0 {
+		t.Fatalf("unexpected upstream calls: pubmed=%v s2=%v", pubmed.queries, s2.queries)
+	}
 }
 
 func TestServiceSearchReturnsErrorWhenAllSourcesFail(t *testing.T) {
-	svc := NewService(stubSettings{sources: []SourceID{SourcePubMed}}, map[SourceID]Searcher{
-		SourcePubMed: &stubSearcher{err: errors.New("down")},
+	svc := NewService(stubSettings{sources: []SourceID{SourcePubMed, SourceSemanticScholar}}, map[SourceID]Searcher{
+		SourcePubMed:          &stubSearcher{err: errors.New("pubmed down")},
+		SourceSemanticScholar: &stubSearcher{err: errors.New("s2 rate limited")},
 	})
-	_, err := svc.Search(context.Background(), SourceQueries{SourcePubMed: {"pub query"}}, SearchOptions{Limit: 5})
-	if err == nil || !strings.Contains(err.Error(), "down") {
+	_, err := svc.Search(context.Background(), SourceQueries{
+		SourcePubMed:          {"pub query"},
+		SourceSemanticScholar: {"s2 query"},
+	}, SearchOptions{Limit: 5})
+	if err == nil {
 		t.Fatalf("err = %v", err)
+	}
+	for _, want := range []string{"pubmed", "semantic_scholar", "pubmed down", "s2 rate limited"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("err = %v, want it to contain %q", err, want)
+		}
 	}
 }
