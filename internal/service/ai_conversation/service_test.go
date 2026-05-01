@@ -567,6 +567,99 @@ func (s *cancelingStreamCaller) CallProviderStreamGeneric(ctx context.Context, s
 	return s.rawText, "", context.Canceled
 }
 
+type failingStreamCaller struct {
+	calls int32
+	err   error
+}
+
+func (s *failingStreamCaller) CallProviderStreamGeneric(ctx context.Context, settings model.AISettings,
+	systemPrompt, userPrompt string, images []model.AIImageInput, onDelta func(string) error) (string, string, error) {
+	atomic.AddInt32(&s.calls, 1)
+	if s.err != nil {
+		return "", "", s.err
+	}
+	return "", "", errors.New("provider stream failed")
+}
+
+func TestSendMessageFallsBackToToolAnswerWhenProviderFails(t *testing.T) {
+	svc, libRepo, _ := newServiceForTest(t)
+	streamErr := errors.New("provider unavailable")
+	svc.caller = &failingStreamCaller{err: streamErr}
+	svc.titleCaller = nil
+	svc.summaryCaller = nil
+	svc.orchestrator = &stubOrchestrator{
+		out: ai_assistant.RunOutput{
+			Intent:     ai_assistant.IntentPaperRead,
+			IntentHint: ai_assistant.IntentPaperRead,
+			Process:    ai_assistant.ProcessSummary{Intent: ai_assistant.IntentPaperRead},
+			Cards: []ai_assistant.ResultCard{{
+				Type:    "paper_compare",
+				Payload: map[string]any{"query": "compare"},
+			}},
+			Citations: []ai_assistant.Citation{{
+				I:       1,
+				PaperID: 7,
+				Title:   "Paper A",
+				Source:  "local",
+				Snippet: research.Snippet{Text: "tool evidence", SnippetKind: "body"},
+			}},
+			AnswerContext: "你正在基于工具检索结果回答。\n\n工具结果：\n### Paper A\n- [1] 本地全文: tool evidence\n\n用户问题：\n对比文献",
+			ToolCalls: []ai_assistant.ToolCallSummary{{
+				ToolName:          "paper_read",
+				InputJSON:         `{"query":"对比文献"}`,
+				OutputSummaryJSON: `{"loaded":1}`,
+				Status:            "completed",
+			}},
+		},
+	}
+	convID, _ := svc.CreateDraft()
+
+	var deltas []string
+	var events []StreamEvent
+	res, err := svc.SendMessage(context.Background(), SendMessageInput{
+		ConversationID: convID,
+		Content:        "对比文献",
+		IntentHint:     ai_assistant.IntentPaperRead,
+		OnEvent: func(event StreamEvent) error {
+			events = append(events, event)
+			return nil
+		},
+	}, func(delta string) error {
+		deltas = append(deltas, delta)
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("SendMessage: %v", err)
+	}
+	if res.AssistantMessage.Mode != "tool_fallback" || !strings.Contains(res.AssistantMessage.Content, "tool evidence") {
+		t.Fatalf("assistant fallback = %+v", res.AssistantMessage)
+	}
+	if !strings.Contains(strings.Join(deltas, ""), "provider unavailable") {
+		t.Fatalf("deltas = %v", deltas)
+	}
+	if len(events) < 4 {
+		t.Fatalf("events = %+v", events)
+	}
+	finalProcess, ok := events[len(events)-1].Data.(ai_assistant.ProcessSummary)
+	if !ok || stageByLabel(finalProcess.Stages, "生成回答").Status != "failed" {
+		t.Fatalf("final process event = %+v, want failed answer generation stage", events[len(events)-1].Data)
+	}
+	msgs, err := libRepo.AIConversation.ListMessages(convID, 0, 10)
+	if err != nil {
+		t.Fatalf("ListMessages: %v", err)
+	}
+	if len(msgs) != 2 || msgs[1].Mode != "tool_fallback" || !strings.Contains(msgs[1].Content, "tool evidence") {
+		t.Fatalf("messages = %+v", msgs)
+	}
+	runs, err := libRepo.AIConversation.ListTurnRuns(convID)
+	if err != nil {
+		t.Fatalf("ListTurnRuns: %v", err)
+	}
+	if len(runs) != 1 || !strings.Contains(runs[0].ProcessSummaryJSON, `"status":"failed"`) {
+		t.Fatalf("runs = %+v", runs)
+	}
+}
+
 func TestSendMessagePersistsOrchestratorArtifactsForStoppedStream(t *testing.T) {
 	svc, libRepo, _ := newServiceForTest(t)
 	cancelingCaller := &cancelingStreamCaller{rawText: "partial assistant text"}

@@ -428,11 +428,14 @@ func (s *AIService) callOpenAIResponsesStream(ctx context.Context, settings mode
 		},
 		payload,
 		func(eventType, data string) error {
-			delta, err := extractOpenAIResponsesStreamDelta(eventType, data)
+			delta, snapshot, err := extractOpenAIResponsesStreamText(eventType, data)
 			if err != nil {
 				return err
 			}
 			if delta == "" {
+				return nil
+			}
+			if snapshot && raw.Len() > 0 {
 				return nil
 			}
 			raw.WriteString(delta)
@@ -441,6 +444,9 @@ func (s *AIService) callOpenAIResponsesStream(ctx context.Context, settings mode
 	)
 	if err != nil {
 		return "", err
+	}
+	if strings.TrimSpace(raw.String()) == "" {
+		return "", apperr.New(apperr.CodeUnavailable, "OpenAI Responses 未返回文本内容")
 	}
 	return raw.String(), nil
 }
@@ -720,13 +726,18 @@ func (s *AIService) postJSONStream(ctx context.Context, endpoint string, headers
 }
 
 func extractOpenAIResponsesStreamDelta(eventType, data string) (string, error) {
+	text, _, err := extractOpenAIResponsesStreamText(eventType, data)
+	return text, err
+}
+
+func extractOpenAIResponsesStreamText(eventType, data string) (string, bool, error) {
 	if strings.TrimSpace(data) == "" || strings.TrimSpace(data) == "[DONE]" {
-		return "", nil
+		return "", false, nil
 	}
 
 	var payload map[string]interface{}
 	if err := json.Unmarshal([]byte(data), &payload); err != nil {
-		return "", apperr.Wrap(apperr.CodeUnavailable, "解析 OpenAI Responses 流式事件失败", err)
+		return "", false, apperr.Wrap(apperr.CodeUnavailable, "解析 OpenAI Responses 流式事件失败", err)
 	}
 
 	typeName := firstString(payload["type"])
@@ -735,13 +746,67 @@ func extractOpenAIResponsesStreamDelta(eventType, data string) (string, error) {
 	}
 	if strings.HasSuffix(eventType, "output_text.delta") || strings.HasSuffix(typeName, "output_text.delta") {
 		if delta, ok := payload["delta"].(string); ok {
-			return delta, nil
+			return delta, false, nil
 		}
 		if text, ok := payload["text"].(string); ok {
-			return text, nil
+			return text, false, nil
 		}
 	}
-	return "", nil
+	if strings.HasSuffix(eventType, "output_text.done") || strings.HasSuffix(typeName, "output_text.done") {
+		if text, ok := payload["text"].(string); ok {
+			return text, true, nil
+		}
+	}
+	if strings.HasSuffix(eventType, "response.completed") || strings.HasSuffix(typeName, "response.completed") {
+		if text := extractOpenAIResponsesCompletedText(payload); text != "" {
+			return text, true, nil
+		}
+	}
+	return "", false, nil
+}
+
+func extractOpenAIResponsesCompletedText(payload map[string]interface{}) string {
+	if text := firstString(payload["output_text"]); strings.TrimSpace(text) != "" {
+		return text
+	}
+	if response, ok := payload["response"].(map[string]interface{}); ok {
+		if text := firstString(response["output_text"]); strings.TrimSpace(text) != "" {
+			return text
+		}
+		if text := extractOpenAIResponsesOutputText(response["output"]); text != "" {
+			return text
+		}
+	}
+	return extractOpenAIResponsesOutputText(payload["output"])
+}
+
+func extractOpenAIResponsesOutputText(value interface{}) string {
+	output, ok := value.([]interface{})
+	if !ok {
+		return ""
+	}
+	var b strings.Builder
+	for _, item := range output {
+		obj, ok := item.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		content, ok := obj["content"].([]interface{})
+		if !ok {
+			continue
+		}
+		for _, part := range content {
+			partObj, ok := part.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			text := firstString(partObj["text"])
+			if strings.TrimSpace(text) != "" {
+				b.WriteString(text)
+			}
+		}
+	}
+	return b.String()
 }
 
 func extractOpenAIChatCompletionsStreamDelta(data string) (string, error) {

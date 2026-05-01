@@ -816,6 +816,7 @@ AI 流式阅读通过：
   - `paper_hit.payload.highlight_terms`：本地全文扫描实际使用的检索词数组，前端用于在证据片段中高亮命中词；旧消息可能没有该字段。
   - `figure_result.payload.evidence_text` / `evidence_location`：当图文检索由全文候选文献回退产生时，记录支持该候选图的本地全文证据片段和位置；旧消息或直接图注命中可能没有该字段。
 - `citations`：证据引用数组，用于脚注和结果卡片引用。
+- 当工具调度已经完成但最终模型回答失败或返回空文本时，服务端会优先返回已完成的工具证据，并在最终 assistant 消息中使用 `mode="tool_fallback"`；客户端应按普通 assistant 文本和已返回结果卡片展示。
 
 搜索模式说明：
 

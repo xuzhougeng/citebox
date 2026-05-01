@@ -375,6 +375,33 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput, onDelta 
 			}
 			_ = s.repo.TouchConversation(in.ConversationID)
 		}
+		if !errors.Is(err, context.Canceled) && runUsed {
+			if fallbackText := fallbackToolAnswer(in.Content, runOut, err); fallbackText != "" {
+				runOut.Process = ai_assistant.WithAnswerGenerationStage(runOut.Process, "failed")
+				if eventErr := s.emitStreamEvent(in, StreamEvent{Type: "process", Data: runOut.Process}); eventErr != nil {
+					return SendMessageResult{}, eventErr
+				}
+				if deltaErr := onDelta(fallbackText); deltaErr != nil {
+					return SendMessageResult{}, deltaErr
+				}
+				asstID, persistErr := s.repo.AddMessage(in.ConversationID, "assistant", fallbackText, repository.AIMessageMeta{
+					Provider:      string(masterSettings.Provider),
+					Model:         masterSettings.Model,
+					Mode:          "tool_fallback",
+					CitationsJSON: citationsJSON,
+				})
+				if persistErr != nil {
+					return SendMessageResult{}, persistErr
+				}
+				_ = s.repo.TouchConversation(in.ConversationID)
+				s.persistRunArtifacts(in.ConversationID, userMsgID, asstID, "completed", runOut)
+				return SendMessageResult{
+					ConversationID:   in.ConversationID,
+					UserMessage:      Message{ID: userMsgID, Role: "user", Content: in.Content},
+					AssistantMessage: Message{ID: asstID, Role: "assistant", Content: fallbackText, Provider: string(masterSettings.Provider), Model: masterSettings.Model, Mode: "tool_fallback"},
+				}, nil
+			}
+		}
 		return SendMessageResult{}, err
 	}
 
@@ -419,6 +446,36 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput, onDelta 
 		AssistantMessage: Message{ID: asstID, Role: "assistant", Content: rawText, Provider: string(masterSettings.Provider), Model: masterSettings.Model, Mode: mode},
 	}
 	return res, nil
+}
+
+func fallbackToolAnswer(userText string, out ai_assistant.RunOutput, providerErr error) string {
+	contextText := strings.TrimSpace(out.AnswerContext)
+	if contextText == "" {
+		return ""
+	}
+	if idx := strings.Index(contextText, "工具结果："); idx >= 0 {
+		contextText = strings.TrimSpace(contextText[idx+len("工具结果："):])
+	}
+	if idx := strings.LastIndex(contextText, "\n\n用户问题："); idx >= 0 {
+		contextText = strings.TrimSpace(contextText[:idx])
+	}
+	if contextText == "" {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("模型生成最终回答失败，先返回已经完成的工具结果。\n\n")
+	if providerErr != nil {
+		b.WriteString("失败原因：")
+		b.WriteString(providerErr.Error())
+		b.WriteString("\n\n")
+	}
+	if strings.TrimSpace(userText) != "" {
+		b.WriteString("用户问题：")
+		b.WriteString(strings.TrimSpace(userText))
+		b.WriteString("\n\n")
+	}
+	b.WriteString(contextText)
+	return b.String()
 }
 
 // maybeSummarize compresses old history when the projected prompt estimate

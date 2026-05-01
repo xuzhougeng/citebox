@@ -538,6 +538,8 @@
                         this._renderMessageContent(assistantBubble, evt.assistant_message);
                     } else if (s.streaming && s.streaming.accText) {
                         this._setAssistantText(assistantBubble, s.streaming.accText, true);
+                    } else {
+                        this._setAssistantText(assistantBubble, translate('ai.turn_no_text', '模型没有返回文本结果。'), false);
                     }
                     if (s.streaming && s.streaming.process) this._renderProcessInto(assistantBubble, s.streaming.process);
                     if (s.streaming && Array.isArray(s.streaming.cards) && s.streaming.cards.length) {

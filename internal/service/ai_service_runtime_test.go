@@ -650,6 +650,66 @@ func TestReadPaperStreamSupportsPaperQA(t *testing.T) {
 	}
 }
 
+func TestCallProviderStreamGenericUsesResponsesDoneSnapshot(t *testing.T) {
+	_, repo, cfg := newTestService(t)
+	aiSvc := NewAIService(repo, cfg, nil)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/responses" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = fmt.Fprint(w, "event: response.output_text.done\ndata: {\"type\":\"response.output_text.done\",\"text\":\"完整回答\"}\n\n")
+		_, _ = fmt.Fprint(w, "data: [DONE]\n\n")
+	}))
+	defer server.Close()
+
+	settings := model.DefaultAISettings()
+	settings.Provider = model.AIProviderOpenAI
+	settings.APIKey = "test-key"
+	settings.BaseURL = server.URL
+	settings.Model = "gpt-test"
+	settings.MaxOutputTokens = 1200
+
+	var deltas []string
+	raw, mode, err := aiSvc.CallProviderStreamGeneric(context.Background(), settings, "system", "question", nil, func(delta string) error {
+		deltas = append(deltas, delta)
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("CallProviderStreamGeneric() error = %v", err)
+	}
+	if raw != "完整回答" || mode != "responses" {
+		t.Fatalf("raw/mode = %q/%q, want 完整回答/responses", raw, mode)
+	}
+	if strings.Join(deltas, "") != "完整回答" {
+		t.Fatalf("deltas = %v", deltas)
+	}
+}
+
+func TestCallProviderStreamGenericErrorsOnEmptyResponsesStream(t *testing.T) {
+	_, repo, cfg := newTestService(t)
+	aiSvc := NewAIService(repo, cfg, nil)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = fmt.Fprint(w, "data: [DONE]\n\n")
+	}))
+	defer server.Close()
+
+	settings := model.DefaultAISettings()
+	settings.Provider = model.AIProviderOpenAI
+	settings.APIKey = "test-key"
+	settings.BaseURL = server.URL
+	settings.Model = "gpt-test"
+	settings.MaxOutputTokens = 1200
+
+	_, _, err := aiSvc.CallProviderStreamGeneric(context.Background(), settings, "system", "question", nil, func(string) error { return nil })
+	if !apperr.IsCode(err, apperr.CodeUnavailable) {
+		t.Fatalf("CallProviderStreamGeneric() code = %q, want %q", apperr.CodeOf(err), apperr.CodeUnavailable)
+	}
+}
+
 func TestReadPaperStreamDoesNotEmitMetaWhenProviderFailsBeforeStreaming(t *testing.T) {
 	_, repo, cfg := newTestService(t)
 	aiSvc := NewAIService(repo, cfg, nil)

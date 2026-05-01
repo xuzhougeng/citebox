@@ -41,7 +41,9 @@
                 const res = await fetch('/api/papers?page_size=200');
                 if (!res.ok) return;
                 const body = await res.json();
-                Reader._allPapers = Array.isArray(body && body.papers) ? body.papers : [];
+                Reader._allPapers = Array.isArray(body && body.papers)
+                    ? body.papers
+                    : (Array.isArray(body && body.items) ? body.items : []);
             } catch (e) { /* leave cache empty — picker still works */ }
         },
 
