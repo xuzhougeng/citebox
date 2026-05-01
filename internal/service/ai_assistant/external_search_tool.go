@@ -86,17 +86,35 @@ func (p *ExternalSearchPlan) UnmarshalJSON(data []byte) error {
 }
 
 type ExternalPaperClassificationInput struct {
-	Query         string
-	SearchQueries []string
-	MatchedQuery  string
-	Paper         research.Paper
-	EvidenceText  string
+	Query           string
+	SearchGoal      ExternalSearchGoal
+	MustMatch       []string
+	SoftPreferences []string
+	SearchQueries   []string
+	MatchedQuery    string
+	Paper           research.Paper
+	EvidenceText    string
+	OnlineYear      int
+	IssueYear       int
+	YearLabel       string
 }
 
+type ExternalPaperTier string
+
+const (
+	ExternalPaperTierStrongMatch ExternalPaperTier = "strong_match"
+	ExternalPaperTierWeakMatch   ExternalPaperTier = "weak_match"
+	ExternalPaperTierNeedsReview ExternalPaperTier = "needs_review"
+	ExternalPaperTierDrop        ExternalPaperTier = "drop"
+)
+
 type ExternalPaperClassificationResult struct {
-	Relevant    bool                         `json:"relevant"`
-	Reason      string                       `json:"reason,omitempty"`
-	Annotations []ExternalEvidenceAnnotation `json:"annotations,omitempty"`
+	Tier               ExternalPaperTier            `json:"tier,omitempty"`
+	Reason             string                       `json:"reason,omitempty"`
+	MatchedConstraints []string                     `json:"matched_constraints,omitempty"`
+	MatchedPreferences []string                     `json:"matched_preferences,omitempty"`
+	ArticleRole        string                       `json:"article_role,omitempty"`
+	Annotations        []ExternalEvidenceAnnotation `json:"annotations,omitempty"`
 }
 
 type ExternalEvidenceAnnotation struct {
@@ -237,7 +255,7 @@ func (t *ExternalSearchTool) Run(ctx context.Context, in ToolInput) (ToolResult,
 		if len(classifyInput) > maxExternalClassification {
 			classifyInput = classifyInput[:maxExternalClassification]
 		}
-		candidates, classified, classifierFailed = t.classifyCandidates(ctx, in.Query, searchQueries, classifyInput)
+		candidates, classified, classifierFailed = t.classifyCandidates(ctx, in.Query, plan, searchQueries, classifyInput)
 	}
 
 	cards := make([]ResultCard, 0, len(candidates))
@@ -364,7 +382,7 @@ type externalSearchCandidate struct {
 	Classification ExternalPaperClassificationResult
 }
 
-func (t *ExternalSearchTool) classifyCandidates(ctx context.Context, query string, searchQueries []string, candidates []externalSearchCandidate) ([]externalSearchCandidate, int, int) {
+func (t *ExternalSearchTool) classifyCandidates(ctx context.Context, query string, plan ExternalSearchPlan, searchQueries []string, candidates []externalSearchCandidate) ([]externalSearchCandidate, int, int) {
 	type result struct {
 		index int
 		ok    bool
@@ -392,11 +410,17 @@ func (t *ExternalSearchTool) classifyCandidates(ctx context.Context, query strin
 				return
 			}
 			res, err := t.classifier.ClassifyExternalPaper(ctx, ExternalPaperClassificationInput{
-				Query:         query,
-				SearchQueries: searchQueries,
-				MatchedQuery:  cand.MatchedQuery,
-				Paper:         researchPaper,
-				EvidenceText:  externalEvidenceText(researchPaper),
+				Query:           query,
+				SearchGoal:      plan.SearchGoal,
+				MustMatch:       append([]string(nil), plan.MustMatch...),
+				SoftPreferences: append([]string(nil), plan.SoftPreferences...),
+				SearchQueries:   searchQueries,
+				MatchedQuery:    cand.MatchedQuery,
+				Paper:           researchPaper,
+				EvidenceText:    externalEvidenceText(researchPaper),
+				OnlineYear:      cand.Paper.OnlineYear,
+				IssueYear:       cand.Paper.IssueYear,
+				YearLabel:       cand.Paper.YearLabel,
 			})
 			if err != nil {
 				if fallback, ok := classifyExternalPaperHeuristic(query, researchPaper); ok {
@@ -421,7 +445,7 @@ func (t *ExternalSearchTool) classifyCandidates(ctx context.Context, query strin
 			continue
 		}
 		classified++
-		accepted[res.index] = res.res.Relevant
+		accepted[res.index] = res.res.Tier == ExternalPaperTierStrongMatch
 		classifications[res.index] = res.res
 	}
 	filtered := make([]externalSearchCandidate, 0, len(candidates))
@@ -1206,7 +1230,11 @@ func externalEvidenceText(p research.Paper) string {
 }
 
 func sanitizeExternalClassification(res ExternalPaperClassificationResult) ExternalPaperClassificationResult {
+	res.Tier = normalizeExternalPaperTier(res.Tier)
 	res.Reason = strings.TrimSpace(res.Reason)
+	res.MatchedConstraints = sanitizeExternalClassificationTerms(res.MatchedConstraints)
+	res.MatchedPreferences = sanitizeExternalClassificationTerms(res.MatchedPreferences)
+	res.ArticleRole = normalizeExternalArticleRole(res.ArticleRole)
 	cleaned := make([]ExternalEvidenceAnnotation, 0, len(res.Annotations))
 	for _, annotation := range res.Annotations {
 		annotation.Claim = strings.TrimSpace(annotation.Claim)
@@ -1223,6 +1251,46 @@ func sanitizeExternalClassification(res ExternalPaperClassificationResult) Exter
 	}
 	res.Annotations = cleaned
 	return res
+}
+
+func normalizeExternalPaperTier(tier ExternalPaperTier) ExternalPaperTier {
+	switch ExternalPaperTier(strings.TrimSpace(strings.ToLower(string(tier)))) {
+	case ExternalPaperTierStrongMatch:
+		return ExternalPaperTierStrongMatch
+	case ExternalPaperTierWeakMatch:
+		return ExternalPaperTierWeakMatch
+	case ExternalPaperTierDrop:
+		return ExternalPaperTierDrop
+	default:
+		return ExternalPaperTierNeedsReview
+	}
+}
+
+func sanitizeExternalClassificationTerms(values []string) []string {
+	out := make([]string, 0, len(values))
+	seen := make(map[string]bool, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" || seen[value] {
+			continue
+		}
+		seen[value] = true
+		out = append(out, value)
+	}
+	return out
+}
+
+func normalizeExternalArticleRole(role string) string {
+	role = strings.TrimSpace(strings.ToLower(role))
+	if role == "" {
+		return ""
+	}
+	role = strings.ReplaceAll(role, "-", "_")
+	role = strings.ReplaceAll(role, " ", "_")
+	for strings.Contains(role, "__") {
+		role = strings.ReplaceAll(role, "__", "_")
+	}
+	return role
 }
 
 func classifyExternalPaperHeuristic(_ string, p research.Paper) (ExternalPaperClassificationResult, bool) {
@@ -1267,7 +1335,7 @@ func classifyExternalPaperHeuristic(_ string, p research.Paper) (ExternalPaperCl
 		return ExternalPaperClassificationResult{}, false
 	}
 	return ExternalPaperClassificationResult{
-		Relevant:    true,
+		Tier:        ExternalPaperTierStrongMatch,
 		Reason:      "工具判定：候选文本包含可直接对应用户原句的证据片段。",
 		Annotations: annotations,
 	}, true

@@ -195,11 +195,14 @@ JSON 格式：
 const externalClassifierSystemPrompt = `你是 CiteBox 的 Sub-Agent，负责判断外部检索候选是否能作为用户原句或问题的出处。
 只输出 JSON，不要输出 Markdown。
 JSON 格式：
-{"relevant":true,"reason":"一句话说明为什么保留或排除","annotations":[{"claim":"用户原句中被支持的子断言","evidence":"候选文本中对应的原文句子","verdict":"supported|partial|unsupported","rationale":"一句话解释对应关系"}]}
+{"tier":"strong_match|weak_match|needs_review|drop","reason":"一句话说明为什么保留或排除","matched_constraints":["命中的 must_match 约束"],"matched_preferences":["命中的 soft_preferences"],"article_role":"primary_study|review|meta_analysis|guideline|case_report|dataset|method|commentary|other","annotations":[{"claim":"用户原句中被支持的子断言","evidence":"候选文本中对应的原文句子","verdict":"supported|partial|unsupported","rationale":"一句话解释对应关系"}]}
 判断规则：
 - 必须把用户原句拆成可以核查的子断言，再看候选标题、TLDR、摘要中是否有对应原文。
-- relevant=true 只用于候选能支持核心断言，或能支持一个对用户问题非常关键的子断言。
-- 如果只有主题词相似，但没有能对应原句的证据句，必须 relevant=false。
+- 先根据 search_goal 判断分层规则。
+- 当 search_goal=discovery 时：strong_match 用于真正命中 must_match 且明显值得保留的候选；weak_match 用于主题相关、命中部分偏好、可作为拓展阅读的候选；needs_review 用于信息不足、只看标题难判断、或年份/角色存在歧义的候选；drop 用于明显不相关或违背 must_match 的候选。
+- 当 search_goal=evidence 时：strong_match 只用于能直接支持核心断言或关键子断言的候选；weak_match 用于只支持背景、旁证、部分子断言或只给出间接线索的候选；needs_review 用于证据关系不清、年份版本可疑、或需要正文才能确认的候选；drop 用于只有主题词相似但没有对应证据句、或明显不能支持断言的候选。
+- matched_constraints 只列真正被候选文本满足的 must_match 项；matched_preferences 只列真正命中的 soft_preferences 项；两者都不要编造。
+- article_role 选择最贴近的文献角色；拿不准就填 other。
 - evidence 必须是候选文本里的原句或紧密片段；不要编造正文中不存在的句子。
 - annotations 最多 4 条，优先标注 supported 和 partial 的对应关系。`
 
@@ -241,6 +244,28 @@ func externalClassifierUserPrompt(in ExternalPaperClassificationInput) string {
 	var b strings.Builder
 	b.WriteString("用户原句或问题：\n")
 	b.WriteString(strings.TrimSpace(in.Query))
+	if in.SearchGoal != "" {
+		b.WriteString("\n\nsearch_goal: ")
+		b.WriteString(strings.TrimSpace(string(in.SearchGoal)))
+	}
+	if len(in.MustMatch) > 0 {
+		b.WriteString("\nmust_match: ")
+		b.WriteString(strings.Join(in.MustMatch, " | "))
+	}
+	if len(in.SoftPreferences) > 0 {
+		b.WriteString("\nsoft_preferences: ")
+		b.WriteString(strings.Join(in.SoftPreferences, " | "))
+	}
+	if strings.TrimSpace(in.YearLabel) != "" {
+		b.WriteString("\nyear_label: ")
+		b.WriteString(strings.TrimSpace(in.YearLabel))
+	}
+	if in.OnlineYear > 0 {
+		fmt.Fprintf(&b, "\nonline_year: %d", in.OnlineYear)
+	}
+	if in.IssueYear > 0 {
+		fmt.Fprintf(&b, "\nissue_year: %d", in.IssueYear)
+	}
 	b.WriteString("\n\nMaster 检索式：")
 	b.WriteString(strings.Join(in.SearchQueries, " | "))
 	if strings.TrimSpace(in.MatchedQuery) != "" {

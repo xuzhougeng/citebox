@@ -10,6 +10,7 @@ import (
 
 	"github.com/xuzhougeng/citebox/internal/model"
 	"github.com/xuzhougeng/citebox/internal/service/ai_external"
+	"github.com/xuzhougeng/citebox/internal/service/research"
 )
 
 type stubExternalSearch struct {
@@ -301,6 +302,19 @@ type stubExternalClassifier struct {
 	err     error
 }
 
+func externalClassifierPaperKey(p research.Paper) string {
+	if key := strings.TrimSpace(p.PaperID); key != "" {
+		return key
+	}
+	if key := strings.TrimSpace(p.ExternalIDs.PubMed); key != "" {
+		return key
+	}
+	if key := strings.TrimSpace(p.ExternalIDs.DOI); key != "" {
+		return key
+	}
+	return strings.TrimSpace(p.Title)
+}
+
 func (s *stubExternalClassifier) ClassifyExternalPaper(ctx context.Context, in ExternalPaperClassificationInput) (ExternalPaperClassificationResult, error) {
 	s.mu.Lock()
 	s.inputs = append(s.inputs, in)
@@ -308,10 +322,121 @@ func (s *stubExternalClassifier) ClassifyExternalPaper(ctx context.Context, in E
 	if s.err != nil {
 		return ExternalPaperClassificationResult{}, s.err
 	}
-	if res, ok := s.results[in.Paper.PaperID]; ok {
+	if res, ok := s.results[externalClassifierPaperKey(in.Paper)]; ok {
 		return res, nil
 	}
-	return ExternalPaperClassificationResult{Relevant: false, Reason: "unrelated"}, nil
+	return ExternalPaperClassificationResult{Tier: ExternalPaperTierDrop, Reason: "unrelated"}, nil
+}
+
+func TestSanitizeExternalClassificationDefaultsUnknownTierToNeedsReview(t *testing.T) {
+	res := sanitizeExternalClassification(ExternalPaperClassificationResult{
+		Tier:               ExternalPaperTier(" maybe "),
+		Reason:             "  ambiguous evidence  ",
+		MatchedConstraints: []string{" CRISPR ", "retinal degeneration", "CRISPR", " "},
+		MatchedPreferences: []string{" AAV ", "mouse model", "AAV", ""},
+		ArticleRole:        " Primary Study ",
+		Annotations: []ExternalEvidenceAnnotation{
+			{},
+			{
+				Claim:     " core claim ",
+				Evidence:  " supporting sentence ",
+				Verdict:   " supported ",
+				Rationale: " direct match ",
+			},
+			{
+				Claim:     " ",
+				Evidence:  " partial sentence ",
+				Verdict:   " partial ",
+				Rationale: " some overlap ",
+			},
+		},
+	})
+
+	if got, want := res.Tier, ExternalPaperTierNeedsReview; got != want {
+		t.Fatalf("tier = %q, want %q", got, want)
+	}
+	if got, want := res.Reason, "ambiguous evidence"; got != want {
+		t.Fatalf("reason = %q, want %q", got, want)
+	}
+	if got, want := res.MatchedConstraints, []string{"CRISPR", "retinal degeneration"}; !slices.Equal(got, want) {
+		t.Fatalf("matched constraints = %+v, want %+v", got, want)
+	}
+	if got, want := res.MatchedPreferences, []string{"AAV", "mouse model"}; !slices.Equal(got, want) {
+		t.Fatalf("matched preferences = %+v, want %+v", got, want)
+	}
+	if got, want := res.ArticleRole, "primary_study"; got != want {
+		t.Fatalf("article role = %q, want %q", got, want)
+	}
+	if len(res.Annotations) != 2 {
+		t.Fatalf("annotations = %+v, want 2 cleaned annotations", res.Annotations)
+	}
+	if got, want := res.Annotations[0].Claim, "core claim"; got != want {
+		t.Fatalf("annotation claim = %q, want %q", got, want)
+	}
+	if got, want := res.Annotations[1].Evidence, "partial sentence"; got != want {
+		t.Fatalf("annotation evidence = %q, want %q", got, want)
+	}
+}
+
+func TestExternalClassifierPromptIncludesMustMatchSoftPreferencesAndDualYears(t *testing.T) {
+	in := ExternalPaperClassificationInput{
+		Query:           "Find evidence for CRISPR retinal degeneration therapy",
+		SearchGoal:      ExternalSearchGoalEvidence,
+		MustMatch:       []string{"CRISPR", "retinal degeneration"},
+		SoftPreferences: []string{"AAV", "mouse model"},
+		SearchQueries: []string{
+			"CRISPR retinal degeneration AAV",
+			"CRISPR retinal degeneration mouse model",
+		},
+		MatchedQuery: "CRISPR retinal degeneration AAV",
+		OnlineYear:   2024,
+		IssueYear:    2023,
+		YearLabel:    "requested year window",
+		Paper: research.Paper{
+			PaperID: "paper-1",
+			ExternalIDs: research.IDs{
+				DOI:    "10.1000/test",
+				PubMed: "12345",
+			},
+			Title:    "Retinal CRISPR therapy evidence",
+			Year:     2024,
+			Venue:    "Nature Medicine",
+			Abstract: "AAV-mediated CRISPR therapy improved retinal outcomes in a mouse model.",
+		},
+	}
+
+	prompt := externalClassifierUserPrompt(in)
+	for _, want := range []string{
+		"search_goal",
+		"evidence",
+		"must_match",
+		"CRISPR | retinal degeneration",
+		"soft_preferences",
+		"AAV | mouse model",
+		"year_label",
+		"requested year window",
+		"online_year",
+		"2024",
+		"issue_year",
+		"2023",
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("user prompt = %q, missing %q", prompt, want)
+		}
+	}
+	for _, want := range []string{
+		`"tier"`,
+		`"matched_constraints"`,
+		`"matched_preferences"`,
+		`"article_role"`,
+		`"annotations"`,
+		"search_goal=discovery",
+		"search_goal=evidence",
+	} {
+		if !strings.Contains(externalClassifierSystemPrompt, want) {
+			t.Fatalf("system prompt = %q, missing %q", externalClassifierSystemPrompt, want)
+		}
+	}
 }
 
 func TestExternalSearchToolNilSearcherReturnsFailedResult(t *testing.T) {
@@ -747,8 +872,8 @@ func TestExternalSearchToolRunsMultipleQueriesAndFiltersWithClassifier(t *testin
 	}}
 	classifier := &stubExternalClassifier{results: map[string]ExternalPaperClassificationResult{
 		"cell-2025": {
-			Relevant: true,
-			Reason:   "摘要直接说明 gene discovery slowed and forward genetic screens reach saturation.",
+			Tier:   ExternalPaperTierStrongMatch,
+			Reason: "摘要直接说明 gene discovery slowed and forward genetic screens reach saturation.",
 			Annotations: []ExternalEvidenceAnnotation{{
 				Claim:     "基因发现速度变慢",
 				Evidence:  "The pace of gene discovery in plants has slowed as forward genetic screens reach saturation.",
