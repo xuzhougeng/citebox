@@ -276,6 +276,39 @@ func TestExternalPlannerReturnsQueriesBySource(t *testing.T) {
 	}
 }
 
+func TestNormalizeExternalQueriesBySourceMergesDuplicateAliasesDeterministically(t *testing.T) {
+	in := map[string][]string{
+		"PubMed": {
+			"mixed tertiary",
+			"mixed fourth",
+			"mixed fifth",
+		},
+		" pubmed ": {
+			" spaced secondary ",
+			"duplicate term",
+		},
+		"pubmed": {
+			"exact primary",
+			"duplicate term",
+		},
+		" Semantic_Scholar ": {
+			"broad academic query",
+		},
+	}
+	wantPubMed := []string{"exact primary", "duplicate term", "spaced secondary", "mixed tertiary"}
+	wantSemanticScholar := []string{"broad academic query"}
+
+	for i := 0; i < 20; i++ {
+		got := normalizeExternalQueriesBySource(in)
+		if !slices.Equal(got["pubmed"], wantPubMed) {
+			t.Fatalf("run %d pubmed queries = %+v, want %+v", i, got["pubmed"], wantPubMed)
+		}
+		if !slices.Equal(got["semantic_scholar"], wantSemanticScholar) {
+			t.Fatalf("run %d semantic scholar queries = %+v, want %+v", i, got["semantic_scholar"], wantSemanticScholar)
+		}
+	}
+}
+
 func TestExternalSearchToolUsesPlannerSearchQuery(t *testing.T) {
 	searcher := &limitCapturingExternalSearch{}
 	planner := &stubExternalPlanner{plan: ExternalSearchPlan{

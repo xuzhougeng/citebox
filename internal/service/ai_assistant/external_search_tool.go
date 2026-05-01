@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 
@@ -590,21 +591,97 @@ func normalizeExternalQueriesBySource(queriesBySource map[string][]string) map[s
 	if len(queriesBySource) == 0 {
 		return nil
 	}
-	normalized := make(map[string][]string, len(queriesBySource))
-	for source, queries := range queriesBySource {
-		source = normalizeExternalSource(source)
+	grouped := make(map[string][]externalSourceQueryGroup, len(queriesBySource))
+	for rawSource, queries := range queriesBySource {
+		source := normalizeExternalSource(rawSource)
 		if source == "" {
 			continue
 		}
-		normalized[source] = sanitizeExternalQueries(append(normalized[source], queries...))
-		if len(normalized[source]) == 0 {
-			delete(normalized, source)
+		grouped[source] = append(grouped[source], externalSourceQueryGroup{
+			rawSource: rawSource,
+			queries:   queries,
+		})
+	}
+
+	normalized := make(map[string][]string, len(grouped))
+	for _, source := range orderedExternalSources(grouped) {
+		groups := grouped[source]
+		sort.SliceStable(groups, func(i, j int) bool {
+			return lessExternalSourceAlias(groups[i].rawSource, groups[j].rawSource)
+		})
+		merged := make([]string, 0)
+		for _, group := range groups {
+			merged = append(merged, group.queries...)
+		}
+		if queries := sanitizeExternalQueries(merged); len(queries) > 0 {
+			normalized[source] = queries
 		}
 	}
 	if len(normalized) == 0 {
 		return nil
 	}
 	return normalized
+}
+
+type externalSourceQueryGroup struct {
+	rawSource string
+	queries   []string
+}
+
+func orderedExternalSources(grouped map[string][]externalSourceQueryGroup) []string {
+	known := []string{"pubmed", "semantic_scholar"}
+	seen := make(map[string]bool, len(grouped))
+	sources := make([]string, 0, len(grouped))
+	for _, source := range known {
+		if _, ok := grouped[source]; ok {
+			sources = append(sources, source)
+			seen[source] = true
+		}
+	}
+	unknown := make([]string, 0, len(grouped))
+	for source := range grouped {
+		if !seen[source] {
+			unknown = append(unknown, source)
+		}
+	}
+	sort.Strings(unknown)
+	return append(sources, unknown...)
+}
+
+func lessExternalSourceAlias(a, b string) bool {
+	aTrimmed := strings.TrimSpace(a)
+	bTrimmed := strings.TrimSpace(b)
+	aLower := strings.ToLower(aTrimmed)
+	bLower := strings.ToLower(bTrimmed)
+	if aLower != bLower {
+		return aLower < bLower
+	}
+	aExactLower := 1
+	if aTrimmed == aLower {
+		aExactLower = 0
+	}
+	bExactLower := 1
+	if bTrimmed == bLower {
+		bExactLower = 0
+	}
+	if aExactLower != bExactLower {
+		return aExactLower < bExactLower
+	}
+	aHasWhitespace := 1
+	if a == aTrimmed {
+		aHasWhitespace = 0
+	}
+	bHasWhitespace := 1
+	if b == bTrimmed {
+		bHasWhitespace = 0
+	}
+	if aHasWhitespace != bHasWhitespace {
+		return aHasWhitespace < bHasWhitespace
+	}
+	if aTrimmed != bTrimmed {
+		return aTrimmed < bTrimmed
+	}
+	return a < b
 }
 
 func firstExternalQuery(queries []string) string {
