@@ -158,3 +158,30 @@ func TestOrchestratorPropagatesToolError(t *testing.T) {
 		t.Fatalf("err = %v, want %v", err, wantErr)
 	}
 }
+
+func TestOrchestratorPropagatesSourcesToToolInput(t *testing.T) {
+	tool := &capturingTool{res: ToolResult{
+		Process: ProcessSummary{Intent: IntentExternalSearch},
+	}}
+	orch := NewOrchestrator(ToolSet{
+		ExternalSearch: tool,
+	})
+
+	_, err := orch.Run(context.Background(), RunInput{
+		Content:    "找一下相关研究",
+		IntentHint: IntentExternalSearch,
+		Sources:    []string{"pubmed"},
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	want := ToolInput{
+		Query:      "找一下相关研究",
+		IntentHint: IntentExternalSearch,
+		Sources:    []string{"pubmed"},
+	}
+	if !reflect.DeepEqual(tool.in, want) {
+		t.Fatalf("tool input = %+v, want %+v", tool.in, want)
+	}
+}

@@ -29,6 +29,7 @@ type ToolInput struct {
 	Context    RequestContext `json:"context,omitempty"`
 	Limit      int            `json:"limit,omitempty"`
 	IntentHint string         `json:"intent_hint,omitempty"`
+	Sources    []string       `json:"sources,omitempty"`
 }
 
 type RouteDecision struct {
