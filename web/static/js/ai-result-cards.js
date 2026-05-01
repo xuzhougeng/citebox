@@ -217,10 +217,15 @@
             primary_study: translate('ai.result_article_role_primary_study', 'Primary study'),
             review: translate('ai.result_article_role_review', 'Review'),
             meta_analysis: translate('ai.result_article_role_meta_analysis', 'Meta-analysis'),
+            guideline: translate('ai.result_article_role_guideline', 'Guideline'),
+            case_report: translate('ai.result_article_role_case_report', 'Case report'),
+            dataset: translate('ai.result_article_role_dataset', 'Dataset'),
             background_review: translate('ai.result_article_role_background_review', 'Background review'),
             method: translate('ai.result_article_role_method', 'Method'),
+            commentary: translate('ai.result_article_role_commentary', 'Commentary'),
             overview: translate('ai.result_article_role_overview', 'Overview'),
-            unclear: translate('ai.result_article_role_unclear', 'Unclear')
+            unclear: translate('ai.result_article_role_unclear', 'Unclear'),
+            other: translate('ai.result_article_role_other', 'Other')
         };
         if (labels[normalized]) return labels[normalized];
         return normalized
