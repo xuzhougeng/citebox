@@ -89,10 +89,8 @@ func NewServer(opts Options) (*Server, error) {
 
 	aiSvc := service.NewAIService(repo, cfg, logger.With("component", "ai_service"))
 
-	s2APIKey := strings.TrimSpace(cfg.S2APIKey)
-	if dbKey, _ := repo.GetAppSetting("s2_api_key"); s2APIKey == "" {
-		s2APIKey = strings.TrimSpace(dbKey)
-	}
+	dbS2APIKey, _ := repo.GetAppSetting("s2_api_key")
+	s2APIKey := startupS2APIKey(cfg, dbS2APIKey)
 	s2Client := research.NewClient(research.Config{
 		APIKey:      s2APIKey,
 		MinInterval: research.RateInterval(s2APIKey),
@@ -151,31 +149,66 @@ func NewServer(opts Options) (*Server, error) {
 	return server, nil
 }
 
-func startupPubMedSettings(cfg *config.Config, settings *model.AIExternalSearchSettings, lookupEnv func(string) (string, bool)) (apiKey, email, tool string) {
+func startupS2APIKey(cfg *config.Config, savedAPIKey string) string {
 	if cfg != nil {
-		apiKey = strings.TrimSpace(cfg.PubMedAPIKey)
-		email = strings.TrimSpace(cfg.PubMedEmail)
-		tool = strings.TrimSpace(cfg.PubMedTool)
-	}
-	if settings != nil {
-		if apiKey == "" {
-			apiKey = strings.TrimSpace(settings.PubMedAPIKey)
-		}
-		if email == "" {
-			email = strings.TrimSpace(settings.PubMedEmail)
+		if apiKey := strings.TrimSpace(cfg.S2APIKey); apiKey != "" {
+			return apiKey
 		}
 	}
-	if envTool, ok := nonemptyEnvValue(lookupEnv, "PUBMED_TOOL"); ok {
-		tool = envTool
+	return strings.TrimSpace(savedAPIKey)
+}
+
+func s2RuntimeSettings(cfg *config.Config) handler.ResearchRuntimeSettings {
+	if cfg == nil {
+		return handler.ResearchRuntimeSettings{}
+	}
+	apiKey := strings.TrimSpace(cfg.S2APIKey)
+	return handler.ResearchRuntimeSettings{
+		APIKey:    apiKey,
+		APIKeySet: apiKey != "",
+	}
+}
+
+func startupPubMedSettings(cfg *config.Config, settings *model.AIExternalSearchSettings, lookupEnv func(string) (string, bool)) (apiKey, email, tool string) {
+	runtime := pubmedRuntimeSettings(cfg, lookupEnv)
+	if runtime.APIKeySet {
+		apiKey = strings.TrimSpace(runtime.APIKey)
 	} else if settings != nil {
-		if savedTool := strings.TrimSpace(settings.PubMedTool); savedTool != "" {
-			tool = savedTool
-		}
+		apiKey = strings.TrimSpace(settings.PubMedAPIKey)
+	}
+	if runtime.EmailSet {
+		email = strings.TrimSpace(runtime.Email)
+	} else if settings != nil {
+		email = strings.TrimSpace(settings.PubMedEmail)
+	}
+	if runtime.ToolSet {
+		tool = strings.TrimSpace(runtime.Tool)
+	} else if settings != nil {
+		tool = strings.TrimSpace(settings.PubMedTool)
 	}
 	if tool == "" {
 		tool = "citebox"
 	}
 	return apiKey, email, tool
+}
+
+func pubmedRuntimeSettings(cfg *config.Config, lookupEnv func(string) (string, bool)) handler.PubMedRuntimeSettings {
+	var runtime handler.PubMedRuntimeSettings
+	if cfg != nil {
+		if apiKey := strings.TrimSpace(cfg.PubMedAPIKey); apiKey != "" {
+			runtime.APIKey = apiKey
+			runtime.APIKeySet = true
+		}
+		if email := strings.TrimSpace(cfg.PubMedEmail); email != "" {
+			runtime.Email = email
+			runtime.EmailSet = true
+		}
+	}
+	if tool, ok := nonemptyEnvValue(lookupEnv, "PUBMED_TOOL"); ok {
+		runtime.Tool = tool
+		runtime.ToolSet = true
+	}
+	return runtime
 }
 
 func nonemptyEnvValue(lookupEnv func(string) (string, bool), key string) (string, bool) {
@@ -296,8 +329,8 @@ func buildHandler(
 	aiConvService := ai_conversation.New(repo.AIConversation, repo.Paper, aiSvc, aiSvc, aiExternalSvc, logger.With("component", "ai_conversation"), assistantOrchestrator)
 	aiConversationHandler := handler.NewAIConversationHandler(aiConvService)
 	settingsHandler := handler.NewSettingsHandler(librarySvc, versionSvc)
-	settingsHandler.SetResearchClient(s2Client)
-	settingsHandler.SetPubMedClient(pubmedClient)
+	settingsHandler.SetResearchClient(s2Client, s2RuntimeSettings(cfg))
+	settingsHandler.SetPubMedClient(pubmedClient, pubmedRuntimeSettings(cfg, os.LookupEnv))
 	wolaiHandler := handler.NewWolaiHandler(librarySvc)
 	databaseHandler := handler.NewDatabaseHandler(librarySvc)
 	sessionManager := service.NewSessionManager(24 * time.Hour)

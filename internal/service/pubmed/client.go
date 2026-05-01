@@ -37,13 +37,17 @@ type Config struct {
 }
 
 type Client struct {
-	baseURL    string
-	settingsMu sync.RWMutex
-	apiKey     string
-	email      string
-	tool       string
-	httpClient *http.Client
-	ticker     *time.Ticker
+	baseURL     string
+	settingsMu  sync.RWMutex
+	apiKey      string
+	email       string
+	tool        string
+	httpClient  *http.Client
+	rateMu      sync.RWMutex
+	ticker      *time.Ticker
+	tickerDone  chan struct{}
+	minInterval time.Duration
+	autoRate    bool
 }
 
 type settingsSnapshot struct {
@@ -75,9 +79,8 @@ func NewClient(cfg Config) *Client {
 		tool:       tool,
 		httpClient: httpClient,
 	}
-	if cfg.MinInterval > 0 {
-		c.ticker = time.NewTicker(cfg.MinInterval)
-	}
+	c.autoRate = cfg.MinInterval == RateInterval(cfg.APIKey)
+	c.setRateInterval(cfg.MinInterval)
 	return c
 }
 
@@ -89,20 +92,22 @@ func RateInterval(apiKey string) time.Duration {
 }
 
 func (c *Client) Close() {
-	if c.ticker != nil {
-		c.ticker.Stop()
-	}
+	c.setRateInterval(0)
 }
 
 func (c *Client) SetSettings(apiKey, email, tool string) {
+	apiKey = strings.TrimSpace(apiKey)
 	c.settingsMu.Lock()
-	defer c.settingsMu.Unlock()
-
-	c.apiKey = strings.TrimSpace(apiKey)
+	c.apiKey = apiKey
 	c.email = strings.TrimSpace(email)
 	c.tool = strings.TrimSpace(tool)
 	if c.tool == "" {
 		c.tool = defaultTool
+	}
+	c.settingsMu.Unlock()
+
+	if c.autoRate {
+		c.SetRateInterval(RateInterval(apiKey))
 	}
 }
 
@@ -178,12 +183,8 @@ func (c *Client) do(ctx context.Context, path string, values url.Values, dst any
 }
 
 func (c *Client) doOnce(ctx context.Context, path string, values url.Values, dst any) error {
-	if c.ticker != nil {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-c.ticker.C:
-		}
+	if err := c.takeToken(ctx); err != nil {
+		return err
 	}
 
 	c.addConfiguredParams(values)
@@ -213,6 +214,56 @@ func (c *Client) doOnce(ctx context.Context, path string, values url.Values, dst
 		return xml.NewDecoder(resp.Body).Decode(v)
 	default:
 		return fmt.Errorf("unsupported pubmed decode target %T", dst)
+	}
+}
+
+func (c *Client) SetRateInterval(interval time.Duration) {
+	c.setRateInterval(interval)
+}
+
+func (c *Client) setRateInterval(interval time.Duration) {
+	c.rateMu.Lock()
+	defer c.rateMu.Unlock()
+
+	if c.ticker != nil {
+		c.ticker.Stop()
+	}
+	if c.tickerDone != nil {
+		close(c.tickerDone)
+	}
+	c.ticker = nil
+	c.tickerDone = nil
+	c.minInterval = interval
+
+	if interval <= 0 {
+		return
+	}
+	c.ticker = time.NewTicker(interval)
+	c.tickerDone = make(chan struct{})
+}
+
+func (c *Client) currentRateInterval() time.Duration {
+	c.rateMu.RLock()
+	defer c.rateMu.RUnlock()
+	return c.minInterval
+}
+
+func (c *Client) takeToken(ctx context.Context) error {
+	for {
+		c.rateMu.RLock()
+		ticker := c.ticker
+		done := c.tickerDone
+		c.rateMu.RUnlock()
+		if ticker == nil {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-done:
+		case <-ticker.C:
+			return nil
+		}
 	}
 }
 

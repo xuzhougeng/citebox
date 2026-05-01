@@ -9,18 +9,37 @@ import (
 	"github.com/xuzhougeng/citebox/internal/apperr"
 	"github.com/xuzhougeng/citebox/internal/model"
 	"github.com/xuzhougeng/citebox/internal/service"
-	"github.com/xuzhougeng/citebox/internal/service/research"
 )
 
 type SettingsHandler struct {
-	libraryService *service.LibraryService
-	versionService *service.VersionService
-	researchClient *research.Client
-	pubmedClient   pubmedSettingsClient
+	libraryService  *service.LibraryService
+	versionService  *service.VersionService
+	researchClient  researchSettingsClient
+	researchRuntime ResearchRuntimeSettings
+	pubmedClient    pubmedSettingsClient
+	pubmedRuntime   PubMedRuntimeSettings
+}
+
+type researchSettingsClient interface {
+	SetAPIKey(key string)
 }
 
 type pubmedSettingsClient interface {
 	SetSettings(apiKey, email, tool string)
+}
+
+type ResearchRuntimeSettings struct {
+	APIKey    string
+	APIKeySet bool
+}
+
+type PubMedRuntimeSettings struct {
+	APIKey    string
+	APIKeySet bool
+	Email     string
+	EmailSet  bool
+	Tool      string
+	ToolSet   bool
 }
 
 func NewSettingsHandler(libraryService *service.LibraryService, versionService *service.VersionService) *SettingsHandler {
@@ -32,12 +51,14 @@ func NewSettingsHandler(libraryService *service.LibraryService, versionService *
 
 // SetResearchClient lets the caller wire in the live S2 client so that
 // PutResearchSettings can hot-reload the API key without a server restart.
-func (h *SettingsHandler) SetResearchClient(client *research.Client) {
+func (h *SettingsHandler) SetResearchClient(client researchSettingsClient, runtime ResearchRuntimeSettings) {
 	h.researchClient = client
+	h.researchRuntime = runtime
 }
 
-func (h *SettingsHandler) SetPubMedClient(client pubmedSettingsClient) {
+func (h *SettingsHandler) SetPubMedClient(client pubmedSettingsClient, runtime PubMedRuntimeSettings) {
 	h.pubmedClient = client
+	h.pubmedRuntime = runtime
 }
 
 func (h *SettingsHandler) GetExtractorSettings(w http.ResponseWriter, r *http.Request) {
@@ -305,7 +326,7 @@ func (h *SettingsHandler) PutResearchSettings(w http.ResponseWriter, r *http.Req
 		return
 	}
 	if h.researchClient != nil {
-		h.researchClient.SetAPIKey(body.S2APIKey)
+		h.researchClient.SetAPIKey(h.effectiveResearchAPIKey(body.S2APIKey))
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -333,9 +354,35 @@ func (h *SettingsHandler) PutAIExternalSearchSettings(w http.ResponseWriter, r *
 		return
 	}
 	if h.pubmedClient != nil {
-		h.pubmedClient.SetSettings(settings.PubMedAPIKey, settings.PubMedEmail, settings.PubMedTool)
+		apiKey, email, tool := h.effectivePubMedSettings(settings)
+		h.pubmedClient.SetSettings(apiKey, email, tool)
 	}
 	sendJSON(w, http.StatusOK, settings)
+}
+
+func (h *SettingsHandler) effectiveResearchAPIKey(saved string) string {
+	if h.researchRuntime.APIKeySet {
+		return strings.TrimSpace(h.researchRuntime.APIKey)
+	}
+	return strings.TrimSpace(saved)
+}
+
+func (h *SettingsHandler) effectivePubMedSettings(saved *model.AIExternalSearchSettings) (apiKey, email, tool string) {
+	if saved != nil {
+		apiKey = strings.TrimSpace(saved.PubMedAPIKey)
+		email = strings.TrimSpace(saved.PubMedEmail)
+		tool = strings.TrimSpace(saved.PubMedTool)
+	}
+	if h.pubmedRuntime.APIKeySet {
+		apiKey = strings.TrimSpace(h.pubmedRuntime.APIKey)
+	}
+	if h.pubmedRuntime.EmailSet {
+		email = strings.TrimSpace(h.pubmedRuntime.Email)
+	}
+	if h.pubmedRuntime.ToolSet {
+		tool = strings.TrimSpace(h.pubmedRuntime.Tool)
+	}
+	return apiKey, email, tool
 }
 
 func (h *SettingsHandler) GetVersionStatus(w http.ResponseWriter, r *http.Request) {

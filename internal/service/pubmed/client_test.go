@@ -99,6 +99,27 @@ func TestClientRetriesRateLimitOnce(t *testing.T) {
 	}
 }
 
+func TestClientSetSettingsUpdatesManagedRateInterval(t *testing.T) {
+	client := NewClient(Config{APIKey: "", MinInterval: RateInterval("")})
+	defer client.Close()
+
+	if got := client.currentRateInterval(); got != RateInterval("") {
+		t.Fatalf("initial interval = %v, want %v", got, RateInterval(""))
+	}
+
+	client.SetSettings("key", "email@example.org", "tool")
+
+	if got := client.currentRateInterval(); got != RateInterval("key") {
+		t.Fatalf("interval with key = %v, want %v", got, RateInterval("key"))
+	}
+
+	client.SetSettings("", "", "")
+
+	if got := client.currentRateInterval(); got != RateInterval("") {
+		t.Fatalf("interval without key = %v, want %v", got, RateInterval(""))
+	}
+}
+
 func TestClientSetSettingsConcurrentWithSearch(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

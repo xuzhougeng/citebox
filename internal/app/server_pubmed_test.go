@@ -33,7 +33,7 @@ func TestStartupPubMedSettingsUsesSavedToolWhenEnvUnset(t *testing.T) {
 }
 
 func TestStartupPubMedSettingsEnvToolWinsOverSavedTool(t *testing.T) {
-	cfg := &config.Config{PubMedTool: "env-tool"}
+	cfg := &config.Config{PubMedTool: "citebox"}
 	settings := &model.AIExternalSearchSettings{PubMedTool: "saved-tool"}
 
 	_, _, tool := startupPubMedSettings(cfg, settings, envLookup(map[string]string{
@@ -45,11 +45,43 @@ func TestStartupPubMedSettingsEnvToolWinsOverSavedTool(t *testing.T) {
 	}
 }
 
+func TestStartupPubMedSettingsUsesConfigAPIKeyAndEmailOverSaved(t *testing.T) {
+	cfg := &config.Config{
+		PubMedAPIKey: "cfg-key",
+		PubMedEmail:  "cfg@example.org",
+	}
+	settings := &model.AIExternalSearchSettings{
+		PubMedAPIKey: "saved-key",
+		PubMedEmail:  "saved@example.org",
+	}
+
+	apiKey, email, _ := startupPubMedSettings(cfg, settings, envLookup(nil))
+
+	if apiKey != "cfg-key" {
+		t.Fatalf("apiKey = %q, want cfg-key", apiKey)
+	}
+	if email != "cfg@example.org" {
+		t.Fatalf("email = %q, want cfg@example.org", email)
+	}
+}
+
 func TestStartupPubMedSettingsDefaultsToolWhenUnsetEverywhere(t *testing.T) {
 	_, _, tool := startupPubMedSettings(&config.Config{}, &model.AIExternalSearchSettings{}, envLookup(nil))
 
 	if tool != "citebox" {
 		t.Fatalf("tool = %q, want citebox", tool)
+	}
+}
+
+func TestStartupS2APIKeyUsesConfigOverSaved(t *testing.T) {
+	if got := startupS2APIKey(&config.Config{S2APIKey: "cfg-key"}, "saved-key"); got != "cfg-key" {
+		t.Fatalf("startupS2APIKey() = %q, want cfg-key", got)
+	}
+}
+
+func TestStartupS2APIKeyFallsBackToSaved(t *testing.T) {
+	if got := startupS2APIKey(&config.Config{}, "saved-key"); got != "saved-key" {
+		t.Fatalf("startupS2APIKey() = %q, want saved-key", got)
 	}
 }
 
