@@ -82,6 +82,66 @@ func TestPutAIExternalSearchSettingsPersistsNormalizedValues(t *testing.T) {
 	}
 }
 
+func TestPutAIExternalSearchSettingsPreservesPubMedFieldsWhenOnlySourcesSaved(t *testing.T) {
+	h, repo := newSettingsHandlerForTest(t)
+	seedReq := httptest.NewRequest(http.MethodPut, "/api/settings/ai-external-search", bytes.NewBufferString(`{
+		"sources":["pubmed"],
+		"pubmed_api_key":"saved-pubmed-key",
+		"pubmed_email":"saved@example.org",
+		"pubmed_tool":"saved-tool"
+	}`))
+	seedRec := httptest.NewRecorder()
+	h.PutAIExternalSearchSettings(seedRec, seedReq)
+	if seedRec.Code != http.StatusOK {
+		t.Fatalf("seed status = %d body = %s", seedRec.Code, seedRec.Body.String())
+	}
+
+	req := httptest.NewRequest(http.MethodPut, "/api/settings/ai-external-search", bytes.NewBufferString(`{"sources":["semantic_scholar"]}`))
+	rec := httptest.NewRecorder()
+	h.PutAIExternalSearchSettings(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	raw, err := repo.GetAppSetting("ai_external_search_settings")
+	if err != nil {
+		t.Fatalf("GetAppSetting() error = %v", err)
+	}
+	if !strings.Contains(raw, `"sources":["semantic_scholar"]`) || !strings.Contains(raw, `"pubmed_api_key":"saved-pubmed-key"`) {
+		t.Fatalf("raw = %s", raw)
+	}
+}
+
+func TestGetResearchSettingsIncludesPubMedSettings(t *testing.T) {
+	h, _ := newSettingsHandlerForTest(t)
+	if err := h.libraryService.UpsertAppSetting("s2_api_key", "saved-s2-key"); err != nil {
+		t.Fatalf("UpsertAppSetting() error = %v", err)
+	}
+	if _, err := h.libraryService.UpdateAIExternalSearchSettings(model.AIExternalSearchSettings{
+		Sources:      []string{model.AIExternalSourcePubMed},
+		PubMedAPIKey: "saved-pubmed-key",
+		PubMedEmail:  "saved@example.org",
+		PubMedTool:   "saved-tool",
+	}); err != nil {
+		t.Fatalf("UpdateAIExternalSearchSettings() error = %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/settings/research", nil)
+	rec := httptest.NewRecorder()
+	h.GetResearchSettings(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	var body map[string]string
+	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+		t.Fatalf("Decode() error = %v", err)
+	}
+	if body["s2_api_key"] != "saved-s2-key" || body["pubmed_api_key"] != "saved-pubmed-key" || body["pubmed_tool"] != "saved-tool" {
+		t.Fatalf("body = %+v", body)
+	}
+}
+
 func TestPutResearchSettingsPersistsSavedKeyButKeepsConfiguredLiveKey(t *testing.T) {
 	h, repo := newSettingsHandlerForTest(t)
 	client := &stubResearchSettingsClient{}
@@ -120,6 +180,35 @@ func TestPutResearchSettingsHotReloadsSavedKeyWhenNoConfiguredKey(t *testing.T) 
 	}
 	if client.apiKey != "saved-s2-key" {
 		t.Fatalf("live key = %q, want saved-s2-key", client.apiKey)
+	}
+}
+
+func TestPutResearchSettingsPersistsPubMedSettingsAndHotReloads(t *testing.T) {
+	h, repo := newSettingsHandlerForTest(t)
+	client := &stubPubMedSettingsClient{}
+	h.SetPubMedClient(client, PubMedRuntimeSettings{})
+	req := httptest.NewRequest(http.MethodPut, "/api/settings/research", bytes.NewBufferString(`{
+		"s2_api_key":"saved-s2-key",
+		"pubmed_api_key":" saved-pubmed-key ",
+		"pubmed_email":" saved@example.org ",
+		"pubmed_tool":" saved-tool "
+	}`))
+	rec := httptest.NewRecorder()
+
+	h.PutResearchSettings(rec, req)
+
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	raw, err := repo.GetAppSetting("ai_external_search_settings")
+	if err != nil {
+		t.Fatalf("GetAppSetting() error = %v", err)
+	}
+	if !strings.Contains(raw, `"pubmed_api_key":"saved-pubmed-key"`) || !strings.Contains(raw, `"pubmed_email":"saved@example.org"`) {
+		t.Fatalf("raw = %s", raw)
+	}
+	if client.apiKey != "saved-pubmed-key" || client.email != "saved@example.org" || client.tool != "saved-tool" {
+		t.Fatalf("live settings = key %q email %q tool %q", client.apiKey, client.email, client.tool)
 	}
 }
 

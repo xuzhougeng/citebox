@@ -42,6 +42,20 @@ type PubMedRuntimeSettings struct {
 	ToolSet   bool
 }
 
+type researchSettingsPayload struct {
+	S2APIKey     string  `json:"s2_api_key"`
+	PubMedAPIKey *string `json:"pubmed_api_key,omitempty"`
+	PubMedEmail  *string `json:"pubmed_email,omitempty"`
+	PubMedTool   *string `json:"pubmed_tool,omitempty"`
+}
+
+type aiExternalSearchSettingsPayload struct {
+	Sources      *[]string `json:"sources,omitempty"`
+	PubMedAPIKey *string   `json:"pubmed_api_key,omitempty"`
+	PubMedEmail  *string   `json:"pubmed_email,omitempty"`
+	PubMedTool   *string   `json:"pubmed_tool,omitempty"`
+}
+
 func NewSettingsHandler(libraryService *service.LibraryService, versionService *service.VersionService) *SettingsHandler {
 	return &SettingsHandler{
 		libraryService: libraryService,
@@ -309,14 +323,22 @@ func (h *SettingsHandler) GetResearchSettings(w http.ResponseWriter, r *http.Req
 		sendError(w, err)
 		return
 	}
-	sendJSON(w, http.StatusOK, map[string]string{"s2_api_key": key})
+	aiExternalSettings, err := h.libraryService.GetAIExternalSearchSettings()
+	if err != nil {
+		sendError(w, err)
+		return
+	}
+	sendJSON(w, http.StatusOK, map[string]string{
+		"s2_api_key":     key,
+		"pubmed_api_key": aiExternalSettings.PubMedAPIKey,
+		"pubmed_email":   aiExternalSettings.PubMedEmail,
+		"pubmed_tool":    aiExternalSettings.PubMedTool,
+	})
 }
 
 // PutResearchSettings → PUT /api/settings/research
 func (h *SettingsHandler) PutResearchSettings(w http.ResponseWriter, r *http.Request) {
-	var body struct {
-		S2APIKey string `json:"s2_api_key"`
-	}
+	var body researchSettingsPayload
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		sendError(w, apperr.New(apperr.CodeInvalidArgument, "请求体格式错误"))
 		return
@@ -327,6 +349,31 @@ func (h *SettingsHandler) PutResearchSettings(w http.ResponseWriter, r *http.Req
 	}
 	if h.researchClient != nil {
 		h.researchClient.SetAPIKey(h.effectiveResearchAPIKey(body.S2APIKey))
+	}
+	if body.hasPubMedSettings() {
+		settings, err := h.libraryService.GetAIExternalSearchSettings()
+		if err != nil {
+			sendError(w, err)
+			return
+		}
+		if body.PubMedAPIKey != nil {
+			settings.PubMedAPIKey = *body.PubMedAPIKey
+		}
+		if body.PubMedEmail != nil {
+			settings.PubMedEmail = *body.PubMedEmail
+		}
+		if body.PubMedTool != nil {
+			settings.PubMedTool = *body.PubMedTool
+		}
+		updatedSettings, err := h.libraryService.UpdateAIExternalSearchSettings(*settings)
+		if err != nil {
+			sendError(w, err)
+			return
+		}
+		if h.pubmedClient != nil {
+			apiKey, email, tool := h.effectivePubMedSettings(updatedSettings)
+			h.pubmedClient.SetSettings(apiKey, email, tool)
+		}
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -343,12 +390,30 @@ func (h *SettingsHandler) GetAIExternalSearchSettings(w http.ResponseWriter, r *
 
 // PutAIExternalSearchSettings -> PUT /api/settings/ai-external-search
 func (h *SettingsHandler) PutAIExternalSearchSettings(w http.ResponseWriter, r *http.Request) {
-	var body model.AIExternalSearchSettings
+	var body aiExternalSearchSettingsPayload
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		sendError(w, apperr.New(apperr.CodeInvalidArgument, "请求体格式错误"))
 		return
 	}
-	settings, err := h.libraryService.UpdateAIExternalSearchSettings(body)
+	current, err := h.libraryService.GetAIExternalSearchSettings()
+	if err != nil {
+		sendError(w, err)
+		return
+	}
+	input := *current
+	if body.Sources != nil {
+		input.Sources = *body.Sources
+	}
+	if body.PubMedAPIKey != nil {
+		input.PubMedAPIKey = *body.PubMedAPIKey
+	}
+	if body.PubMedEmail != nil {
+		input.PubMedEmail = *body.PubMedEmail
+	}
+	if body.PubMedTool != nil {
+		input.PubMedTool = *body.PubMedTool
+	}
+	settings, err := h.libraryService.UpdateAIExternalSearchSettings(input)
 	if err != nil {
 		sendError(w, err)
 		return
@@ -358,6 +423,10 @@ func (h *SettingsHandler) PutAIExternalSearchSettings(w http.ResponseWriter, r *
 		h.pubmedClient.SetSettings(apiKey, email, tool)
 	}
 	sendJSON(w, http.StatusOK, settings)
+}
+
+func (p researchSettingsPayload) hasPubMedSettings() bool {
+	return p.PubMedAPIKey != nil || p.PubMedEmail != nil || p.PubMedTool != nil
 }
 
 func (h *SettingsHandler) effectiveResearchAPIKey(saved string) string {

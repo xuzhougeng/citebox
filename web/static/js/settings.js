@@ -25,9 +25,6 @@ const SettingsPage = {
         this.contextBudgetTokensInput = document.getElementById('aiContextBudgetTokensInput');
         this.aiExternalSourcePubMedInput = document.getElementById('aiExternalSourcePubMedInput');
         this.aiExternalSourceS2Input = document.getElementById('aiExternalSourceS2Input');
-        this.pubmedAPIKeyInput = document.getElementById('pubmedAPIKeyInput');
-        this.pubmedEmailInput = document.getElementById('pubmedEmailInput');
-        this.pubmedToolInput = document.getElementById('pubmedToolInput');
         this.saveAIExternalSearchSettingsButton = document.getElementById('saveAIExternalSearchSettingsButton');
         this.aiExternalSearchSaveStatus = document.getElementById('aiExternalSearchSaveStatus');
         this.aiExternalSearchSettingsLoaded = false;
@@ -149,6 +146,9 @@ const SettingsPage = {
         this.ttsAudioObjectURL = '';
         this.researchSettingsForm = document.getElementById('researchSettingsForm');
         this.s2APIKeyInput = document.getElementById('settings-s2-api-key');
+        this.researchPubMedAPIKeyInput = document.getElementById('settings-pubmed-api-key');
+        this.researchPubMedEmailInput = document.getElementById('settings-pubmed-email');
+        this.researchPubMedToolInput = document.getElementById('settings-pubmed-tool');
 
         this.bindEvents();
         this.bootstrap();
@@ -361,10 +361,7 @@ const SettingsPage = {
         });
         [
             this.aiExternalSourcePubMedInput,
-            this.aiExternalSourceS2Input,
-            this.pubmedAPIKeyInput,
-            this.pubmedEmailInput,
-            this.pubmedToolInput
+            this.aiExternalSourceS2Input
         ].forEach((element) => {
             element?.addEventListener('input', () => this.handleAIExternalSearchSettingsChanged());
             element?.addEventListener('change', () => this.handleAIExternalSearchSettingsChanged());
@@ -1108,15 +1105,6 @@ const SettingsPage = {
         if (this.aiExternalSourceS2Input) {
             this.aiExternalSourceS2Input.checked = sources.includes('semantic_scholar');
         }
-        if (this.pubmedAPIKeyInput) {
-            this.pubmedAPIKeyInput.value = settings.pubmed_api_key || '';
-        }
-        if (this.pubmedEmailInput) {
-            this.pubmedEmailInput.value = settings.pubmed_email || '';
-        }
-        if (this.pubmedToolInput) {
-            this.pubmedToolInput.value = settings.pubmed_tool || 'citebox';
-        }
         this.isHydratingAIExternalSearchSettings = false;
     },
 
@@ -1140,10 +1128,7 @@ const SettingsPage = {
             sources.push('semantic_scholar');
         }
         return {
-            sources,
-            pubmed_api_key: this.pubmedAPIKeyInput?.value.trim() || '',
-            pubmed_email: this.pubmedEmailInput?.value.trim() || '',
-            pubmed_tool: this.pubmedToolInput?.value.trim() || 'citebox'
+            sources
         };
     },
 
@@ -1194,6 +1179,15 @@ const SettingsPage = {
         if (this.s2APIKeyInput) {
             this.s2APIKeyInput.value = data.s2_api_key || '';
         }
+        if (this.researchPubMedAPIKeyInput) {
+            this.researchPubMedAPIKeyInput.value = data.pubmed_api_key || '';
+        }
+        if (this.researchPubMedEmailInput) {
+            this.researchPubMedEmailInput.value = data.pubmed_email || '';
+        }
+        if (this.researchPubMedToolInput) {
+            this.researchPubMedToolInput.value = data.pubmed_tool || 'citebox';
+        }
     },
 
     async saveResearchSettings() {
@@ -1201,7 +1195,12 @@ const SettingsPage = {
         const res = await fetch('/api/settings/research', {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ s2_api_key: this.s2APIKeyInput.value }),
+            body: JSON.stringify({
+                s2_api_key: this.s2APIKeyInput.value,
+                pubmed_api_key: this.researchPubMedAPIKeyInput?.value.trim() || '',
+                pubmed_email: this.researchPubMedEmailInput?.value.trim() || '',
+                pubmed_tool: this.researchPubMedToolInput?.value.trim() || 'citebox',
+            }),
         });
         if (res.ok) {
             Utils.showToast(t('settings.research.saved_toast', '研究数据库配置已保存'));

@@ -1082,6 +1082,48 @@ OpenAI 兼容模型配置说明：
 - `pdf_text_source`：兼容旧字段保留，但当前由后端按 `extractor_profile` 自动归一化；`manual` / `open_source_vision` 固定为 `pdfjs`，`pdffigx_v1` 固定为 `extractor`
 - 其余字段与提取接口地址、鉴权和超时设置相同
 
+#### `GET /api/settings/research`
+
+用途：
+
+- 获取调研服务 API 凭据
+- Semantic Scholar 配置用于 `/research` 调研页
+- PubMed / NCBI 配置用于 AI 助手外部搜索中的 PubMed 来源
+
+返回示例：
+
+```json
+{
+  "s2_api_key": "",
+  "pubmed_api_key": "",
+  "pubmed_email": "",
+  "pubmed_tool": "citebox"
+}
+```
+
+#### `PUT /api/settings/research`
+
+用途：
+
+- 保存 Semantic Scholar 与 PubMed / NCBI 凭据
+- 保存后热更新运行中的 Semantic Scholar 与 PubMed 客户端；若服务端环境变量显式配置了对应值，运行时客户端继续优先使用环境变量值
+
+请求体示例：
+
+```json
+{
+  "s2_api_key": "",
+  "pubmed_api_key": "",
+  "pubmed_email": "user@example.org",
+  "pubmed_tool": "citebox"
+}
+```
+
+说明：
+
+- `pubmed_api_key`、`pubmed_email`、`pubmed_tool` 均可留空；留空时 PubMed 使用 NCBI 匿名访问
+- `pubmed_tool` 省略或为空时，前端默认写入 `citebox`
+
 #### `GET /api/settings/ai-external-search`
 
 用途：
@@ -1093,35 +1135,27 @@ OpenAI 兼容模型配置说明：
 
 ```json
 {
-  "sources": ["pubmed", "semantic_scholar"],
-  "pubmed_api_key": "",
-  "pubmed_email": "",
-  "pubmed_tool": "citebox"
+  "sources": ["pubmed", "semantic_scholar"]
 }
 ```
 
 字段说明：
 
 - `sources`：AI 助手外部搜索启用源，可包含 `pubmed`、`semantic_scholar`
-- `pubmed_api_key`：可选 NCBI API key，留空时使用匿名访问
-- `pubmed_email`：可选 NCBI email
-- `pubmed_tool`：可选 NCBI tool，默认 `citebox`
+- PubMed / NCBI 凭据由 `/api/settings/research` 管理；为兼容旧客户端，此接口仍可能返回已保存的 PubMed 字段
 
 #### `PUT /api/settings/ai-external-search`
 
 用途：
 
 - 保存 AI 助手外部搜索源配置
-- 运行中的 PubMed 客户端会热更新保存后的 PubMed 配置；若服务端环境变量显式配置了对应值，运行时客户端继续优先使用环境变量值
+- 若请求体包含 PubMed 字段，也会兼容保存并热更新 PubMed 客户端；设置页默认通过 `/api/settings/research` 管理 PubMed 凭据
 
 请求体示例：
 
 ```json
 {
-  "sources": ["pubmed"],
-  "pubmed_api_key": "",
-  "pubmed_email": "user@example.org",
-  "pubmed_tool": "citebox"
+  "sources": ["pubmed"]
 }
 ```
 
@@ -1129,8 +1163,8 @@ OpenAI 兼容模型配置说明：
 
 - `sources` 可包含 `pubmed`、`semantic_scholar`
 - `sources` 也可以为空数组，表示不启用 AI 外部搜索源
-- PubMed 配置允许留空，留空时使用 NCBI 匿名访问
-- Semantic Scholar API key 仍由研究数据库配置接口管理
+- 未传 PubMed 字段时，已保存的 PubMed / NCBI 凭据会被保留，不会被清空
+- Semantic Scholar API key 和 PubMed / NCBI 凭据均由研究数据库配置接口管理
 
 #### `GET /api/settings/desktop-close`
 
