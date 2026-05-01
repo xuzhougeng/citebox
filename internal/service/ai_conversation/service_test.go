@@ -257,7 +257,7 @@ func TestExternalEvidenceCanRunWithoutStrictEvidence(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SendMessage: %v", err)
 	}
-	if !strings.Contains(caller.userSeen, "外部 Semantic Scholar") || !strings.Contains(caller.userSeen, "external independent evidence snippet") {
+	if !strings.Contains(caller.userSeen, "外部学术搜索") || !strings.Contains(caller.userSeen, "Semantic Scholar") || !strings.Contains(caller.userSeen, "external independent evidence snippet") {
 		t.Fatalf("prompt missing independent external evidence: %s", caller.userSeen)
 	}
 }
@@ -358,7 +358,7 @@ func TestExternalEvidenceUsesLegacyPathWhenOrchestratorConfiguredWithoutExplicit
 	if strings.Contains(caller.userSeen, "ORCH_CONTEXT_SHOULD_NOT_APPEAR") {
 		t.Fatalf("prompt used orchestrator context: %s", caller.userSeen)
 	}
-	if !strings.Contains(caller.userSeen, "外部 Semantic Scholar") || !strings.Contains(caller.userSeen, "external independent evidence snippet") {
+	if !strings.Contains(caller.userSeen, "外部学术搜索") || !strings.Contains(caller.userSeen, "Semantic Scholar") || !strings.Contains(caller.userSeen, "external independent evidence snippet") {
 		t.Fatalf("prompt missing legacy external evidence: %s", caller.userSeen)
 	}
 }

@@ -855,3 +855,51 @@ func TestInsertWolaiTestPageCreatesChildPageAndWritesImageTODO(t *testing.T) {
 		t.Fatalf("todo CreateBlocks() content = %#v, want image TODO text", calls[2].blocks[0])
 	}
 }
+
+func TestAIExternalSearchSettingsDefaultToPubMed(t *testing.T) {
+	svc, repo, _ := newTestService(t)
+
+	settings, err := svc.GetAIExternalSearchSettings()
+	if err != nil {
+		t.Fatalf("GetAIExternalSearchSettings() error = %v", err)
+	}
+	if len(settings.Sources) != 1 || settings.Sources[0] != "pubmed" {
+		t.Fatalf("Sources = %#v, want [pubmed]", settings.Sources)
+	}
+
+	raw, err := repo.GetAppSetting("ai_external_search_settings")
+	if err != nil {
+		t.Fatalf("GetAppSetting() error = %v", err)
+	}
+	if raw != "" {
+		t.Fatalf("raw default setting = %q, want empty until saved", raw)
+	}
+}
+
+func TestUpdateAIExternalSearchSettingsNormalizesSourcesAndPubMedFields(t *testing.T) {
+	svc, repo, _ := newTestService(t)
+
+	updated, err := svc.UpdateAIExternalSearchSettings(model.AIExternalSearchSettings{
+		Sources:      []string{"semantic_scholar", "pubmed", "pubmed", "bad"},
+		PubMedAPIKey: " key ",
+		PubMedEmail:  " user@example.org ",
+		PubMedTool:   " CiteBox Desktop ",
+	})
+	if err != nil {
+		t.Fatalf("UpdateAIExternalSearchSettings() error = %v", err)
+	}
+	if got, want := strings.Join(updated.Sources, ","), "semantic_scholar,pubmed"; got != want {
+		t.Fatalf("Sources = %q, want %q", got, want)
+	}
+	if updated.PubMedAPIKey != "key" || updated.PubMedEmail != "user@example.org" || updated.PubMedTool != "CiteBox Desktop" {
+		t.Fatalf("settings not trimmed: %+v", updated)
+	}
+
+	raw, err := repo.GetAppSetting("ai_external_search_settings")
+	if err != nil {
+		t.Fatalf("GetAppSetting() error = %v", err)
+	}
+	if !strings.Contains(raw, `"sources":["semantic_scholar","pubmed"]`) {
+		t.Fatalf("persisted raw = %s", raw)
+	}
+}

@@ -46,8 +46,11 @@ type Client struct {
 	apiKeyMu    sync.RWMutex
 	apiKey      string
 	httpClient  *http.Client
+	rateMu      sync.RWMutex
 	tokens      chan struct{} // ticker buffer; nil if rate limiting disabled
 	closeTicker chan struct{}
+	minInterval time.Duration
+	autoRate    bool
 }
 
 // NewClient constructs a Client. If MinInterval > 0, a goroutine drips tokens.
@@ -63,27 +66,27 @@ func NewClient(cfg Config) *Client {
 	if c.httpClient == nil {
 		c.httpClient = &http.Client{Timeout: 30 * time.Second}
 	}
-	if cfg.MinInterval > 0 {
-		c.tokens = make(chan struct{}, 1)
-		c.closeTicker = make(chan struct{})
-		go c.refillTokens(cfg.MinInterval)
-	}
+	c.autoRate = cfg.MinInterval == RateInterval(cfg.APIKey)
+	c.setRateInterval(cfg.MinInterval)
 	return c
 }
 
 // Close releases the rate-limit ticker goroutine.
 func (c *Client) Close() {
-	if c.closeTicker != nil {
-		close(c.closeTicker)
-	}
+	c.setRateInterval(0)
 }
 
 // SetAPIKey updates the API key used by subsequent requests. Safe for
 // concurrent use. Pass "" to revert to anonymous access.
 func (c *Client) SetAPIKey(key string) {
+	key = strings.TrimSpace(key)
 	c.apiKeyMu.Lock()
-	c.apiKey = strings.TrimSpace(key)
+	c.apiKey = key
 	c.apiKeyMu.Unlock()
+
+	if c.autoRate {
+		c.SetRateInterval(RateInterval(key))
+	}
 }
 
 // currentAPIKey returns the active API key under the read lock.
@@ -93,21 +96,50 @@ func (c *Client) currentAPIKey() string {
 	return c.apiKey
 }
 
-func (c *Client) refillTokens(interval time.Duration) {
+func (c *Client) SetRateInterval(interval time.Duration) {
+	c.setRateInterval(interval)
+}
+
+func (c *Client) setRateInterval(interval time.Duration) {
+	c.rateMu.Lock()
+	defer c.rateMu.Unlock()
+
+	if c.closeTicker != nil {
+		close(c.closeTicker)
+	}
+	c.tokens = nil
+	c.closeTicker = nil
+	c.minInterval = interval
+
+	if interval <= 0 {
+		return
+	}
+	c.tokens = make(chan struct{}, 1)
+	c.closeTicker = make(chan struct{})
+	go c.refillTokens(c.tokens, c.closeTicker, interval)
+}
+
+func (c *Client) currentRateInterval() time.Duration {
+	c.rateMu.RLock()
+	defer c.rateMu.RUnlock()
+	return c.minInterval
+}
+
+func (c *Client) refillTokens(tokens chan<- struct{}, done <-chan struct{}, interval time.Duration) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	// seed one token immediately so first call doesn't wait
 	select {
-	case c.tokens <- struct{}{}:
+	case tokens <- struct{}{}:
 	default:
 	}
 	for {
 		select {
-		case <-c.closeTicker:
+		case <-done:
 			return
 		case <-ticker.C:
 			select {
-			case c.tokens <- struct{}{}:
+			case tokens <- struct{}{}:
 			default:
 			}
 		}
@@ -115,14 +147,21 @@ func (c *Client) refillTokens(interval time.Duration) {
 }
 
 func (c *Client) takeToken(ctx context.Context) error {
-	if c.tokens == nil {
-		return nil
-	}
-	select {
-	case <-c.tokens:
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
+	for {
+		c.rateMu.RLock()
+		tokens := c.tokens
+		done := c.closeTicker
+		c.rateMu.RUnlock()
+		if tokens == nil {
+			return nil
+		}
+		select {
+		case <-tokens:
+			return nil
+		case <-done:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
 	}
 }
 

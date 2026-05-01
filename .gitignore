@@ -40,6 +40,7 @@ web/static/vendor/pdfjs/
 .vscode/
 .idea/
 .superpowers/
+.worktrees/
 
 server
 .database

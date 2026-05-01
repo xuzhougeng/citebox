@@ -160,6 +160,30 @@
                             <input id="aiContextBudgetTokensInput" class="form-input" type="number" min="2000" step="1000" data-i18n-placeholder="settings.ai.context_budget_tokens_hint" placeholder="默认 32000">
                         </label>
                     </div>
+                    <div class="settings-subsection-body">
+                        <section class="prompt-preset-panel">
+                            <div class="prompt-preset-head">
+                                <div>
+                                    <h4 data-i18n="settings.ai.external_search.title">AI 外部搜索源</h4>
+                                    <p data-i18n="settings.ai.external_search.desc">选择 AI 助手执行外部检索时使用的学术搜索源。可启用多个来源，AI 会按来源生成检索词并合并结果。</p>
+                                </div>
+                            </div>
+                            <div class="form-grid">
+                                <label class="field checkbox-field field-span-2">
+                                    <input id="aiExternalSourcePubMedInput" type="checkbox">
+                                    <span data-i18n-html="settings.ai.external_search.pubmed"><strong>PubMed</strong><br>默认来源；支持匿名访问，API 凭据在调研服务 API 中配置。</span>
+                                </label>
+                                <label class="field checkbox-field field-span-2">
+                                    <input id="aiExternalSourceS2Input" type="checkbox">
+                                    <span data-i18n-html="settings.ai.external_search.s2"><strong>Semantic Scholar</strong><br>适合跨学科调研；未配置 API key 时容易遇到匿名限流。</span>
+                                </label>
+                            </div>
+                            <div class="submit-row">
+                                <button id="saveAIExternalSearchSettingsButton" class="btn btn-primary" type="button" data-i18n="settings.ai.external_search.save_btn">保存外部搜索源</button>
+                                <span id="aiExternalSearchSaveStatus" class="settings-inline-status"></span>
+                            </div>
+                        </section>
+                    </div>
                 </div>
             </details>
 
@@ -755,8 +779,8 @@ User Prompt:
 
             <details class="manager-card settings-collapsible" open>
                 <summary class="settings-collapsible-toggle">
-                    <h2 data-i18n="settings.research.title">研究数据库配置</h2>
-                    <p data-i18n="settings.research.desc">配置 Semantic Scholar 等学术数据库的 API 密钥，以提升查询速率和访问权限。</p>
+                    <h2 data-i18n="settings.research.title">调研服务 API</h2>
+                    <p data-i18n="settings.research.desc">配置 Semantic Scholar 与 PubMed / NCBI 的访问凭据。Semantic Scholar 用于 /research 调研页；PubMed 用于 AI 助手外部搜索。</p>
                 </summary>
                 <form id="researchSettingsForm" class="manager-form">
                     <div class="form-grid">
@@ -764,10 +788,23 @@ User Prompt:
                             <span data-i18n="settings.research.s2.label">Semantic Scholar API key</span>
                             <input id="settings-s2-api-key" class="form-input" type="password" autocomplete="off" placeholder="" />
                         </label>
+                        <label class="field field-span-2">
+                            <span data-i18n="settings.research.pubmed.api_key">PubMed / NCBI API key</span>
+                            <input id="settings-pubmed-api-key" class="form-input" type="password" autocomplete="off" />
+                        </label>
+                        <label class="field">
+                            <span data-i18n="settings.research.pubmed.email">NCBI email</span>
+                            <input id="settings-pubmed-email" class="form-input" type="email" autocomplete="email" />
+                        </label>
+                        <label class="field">
+                            <span data-i18n="settings.research.pubmed.tool">NCBI tool</span>
+                            <input id="settings-pubmed-tool" class="form-input" type="text" autocomplete="off" />
+                        </label>
                     </div>
                     <p class="muted" data-i18n="settings.research.s2.hint">未填写时使用匿名速率（约 1 req/s）。</p>
+                    <p class="muted" data-i18n="settings.research.pubmed.hint">PubMed 可留空使用匿名访问；填写 NCBI API key 后可获得更高请求额度。</p>
                     <div class="submit-row">
-                        <button class="btn btn-primary" type="submit" data-i18n="settings.research.save_btn">保存研究数据库配置</button>
+                        <button class="btn btn-primary" type="submit" data-i18n="settings.research.save_btn">保存调研配置</button>
                     </div>
                 </form>
             </details>

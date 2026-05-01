@@ -2,41 +2,70 @@ package ai_conversation
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
 	"github.com/xuzhougeng/citebox/internal/model"
 	"github.com/xuzhougeng/citebox/internal/repository"
+	"github.com/xuzhougeng/citebox/internal/service/ai_external"
 	"github.com/xuzhougeng/citebox/internal/service/research"
 )
 
 type stubSnippetSearcher struct {
-	lastQuery       string
-	last            research.SnippetSearchOpts
-	res             research.SnippetList
-	err             error
-	lastSearchQuery string
-	lastSearch      research.SearchOpts
-	searchRes       research.PaperList
-	searchErr       error
+	lastQueries ai_external.SourceQueries
+	lastOpts    ai_external.SearchOptions
+	searchRes   ai_external.SearchResult
+	searchErr   error
+
+	res research.SnippetList
+	err error
 }
 
-func (s *stubSnippetSearcher) SnippetSearch(ctx context.Context, query string, opts research.SnippetSearchOpts) (research.SnippetList, error) {
-	s.lastQuery = query
-	s.last = opts
-	if s.err != nil {
-		return research.SnippetList{}, s.err
-	}
-	return s.res, nil
-}
-
-func (s *stubSnippetSearcher) Search(ctx context.Context, query string, opts research.SearchOpts) (research.PaperList, error) {
-	s.lastSearchQuery = query
-	s.lastSearch = opts
+func (s *stubSnippetSearcher) Search(ctx context.Context, queries ai_external.SourceQueries, opts ai_external.SearchOptions) (ai_external.SearchResult, error) {
+	s.lastQueries = cloneSourceQueries(queries)
+	s.lastOpts = opts
 	if s.searchErr != nil {
-		return research.PaperList{}, s.searchErr
+		return s.searchRes, s.searchErr
 	}
-	return s.searchRes, nil
+	if s.err != nil {
+		return ai_external.SearchResult{}, s.err
+	}
+	if len(s.searchRes.Papers) > 0 || len(s.searchRes.Sources) > 0 || len(s.searchRes.Results) > 0 || len(s.searchRes.Failures) > 0 {
+		return s.searchRes, nil
+	}
+	return aiExternalResultFromSnippetList(s.res), nil
+}
+
+func cloneSourceQueries(queries ai_external.SourceQueries) ai_external.SourceQueries {
+	out := make(ai_external.SourceQueries, len(queries))
+	for source, sourceQueries := range queries {
+		out[source] = append([]string(nil), sourceQueries...)
+	}
+	return out
+}
+
+func aiExternalResultFromSnippetList(list research.SnippetList) ai_external.SearchResult {
+	papers := make([]ai_external.Paper, 0, len(list.Items))
+	for _, item := range list.Items {
+		papers = append(papers, ai_external.Paper{
+			Source:        ai_external.SourceSemanticScholar,
+			SourcePaperID: item.PaperID,
+			SourcePaperIDs: map[ai_external.SourceID]string{
+				ai_external.SourceSemanticScholar: item.PaperID,
+			},
+			Sources:  []ai_external.SourceID{ai_external.SourceSemanticScholar},
+			DOI:      item.Paper.ExternalIDs.DOI,
+			ArXiv:    item.Paper.ExternalIDs.ArXiv,
+			PMID:     item.Paper.ExternalIDs.PubMed,
+			Title:    item.Paper.Title,
+			Abstract: item.Snippet.Text,
+		})
+	}
+	return ai_external.SearchResult{
+		Sources: []ai_external.SourceID{ai_external.SourceSemanticScholar},
+		Papers:  papers,
+	}
 }
 
 type stubPaperGetter map[int64]*model.Paper
@@ -128,14 +157,111 @@ func TestEvidenceCanIncludeExternalSnippets(t *testing.T) {
 	if err != nil {
 		t.Fatalf("injectEvidence: %v", err)
 	}
-	if !strings.Contains(prompt, "外部 Semantic Scholar") || !strings.Contains(prompt, "external snippet text") {
+	if !strings.Contains(prompt, "外部学术搜索") || !strings.Contains(prompt, "Semantic Scholar") || !strings.Contains(prompt, "external snippet text") {
 		t.Fatalf("prompt missing external evidence: %s", prompt)
 	}
-	if len(citations) != 1 || citations[0].PaperID != 42 || citations[0].ExternalID != "DOI:10.1/abc" || citations[0].Source != evidenceSourceExternal {
+	if len(citations) != 1 || citations[0].PaperID != 42 || citations[0].ExternalID != "DOI:10.1/abc" || citations[0].Source != "external:Semantic Scholar" {
 		t.Fatalf("citations = %+v", citations)
 	}
-	if len(searcher.last.PaperIDs) != 0 {
-		t.Fatalf("paperIDs sent to S2 = %v, want broad external search", searcher.last.PaperIDs)
+	if searcher.lastOpts.Limit != 8 {
+		t.Fatalf("limit = %d, want 8", searcher.lastOpts.Limit)
+	}
+}
+
+func TestExternalEvidenceUsesConfiguredSourceLabels(t *testing.T) {
+	searcher := &stubSnippetSearcher{
+		searchRes: ai_external.SearchResult{
+			Sources: []ai_external.SourceID{ai_external.SourcePubMed},
+			Papers: []ai_external.Paper{{
+				Source:        ai_external.SourcePubMed,
+				SourcePaperID: "12345",
+				SourcePaperIDs: map[ai_external.SourceID]string{
+					ai_external.SourcePubMed: "12345",
+				},
+				Sources:  []ai_external.SourceID{ai_external.SourcePubMed},
+				PMID:     "12345",
+				Title:    "PubMed Evidence",
+				Abstract: "PubMed abstract evidence.",
+			}},
+		},
+	}
+
+	prompt, citations, err := injectEvidence(context.Background(), stubPaperGetter{}, searcher, "用户问题", nil, EvidenceOptions{
+		IncludeExternal: true,
+		DisableLocal:    true,
+	})
+	if err != nil {
+		t.Fatalf("injectEvidence: %v", err)
+	}
+	if len(citations) != 1 || citations[0].Source != "external:PubMed" || citations[0].ExternalID != "PMID:12345" {
+		t.Fatalf("citations = %+v", citations)
+	}
+	if !strings.Contains(prompt, "外部学术搜索") || !strings.Contains(prompt, "PubMed") {
+		t.Fatalf("prompt missing PubMed source label: %s", prompt)
+	}
+}
+
+func TestExternalEvidenceFailuresWithoutUsablePapersSurfaceFailure(t *testing.T) {
+	searcher := &stubSnippetSearcher{
+		searchRes: ai_external.SearchResult{
+			Sources: []ai_external.SourceID{ai_external.SourcePubMed, ai_external.SourceSemanticScholar},
+			Failures: []ai_external.SourceFailure{{
+				Source: ai_external.SourcePubMed,
+				Err:    errors.New("rate limited"),
+			}},
+		},
+	}
+
+	citations, err := externalEvidence(context.Background(), searcher, "用户问题", nil, 8)
+	if err == nil {
+		t.Fatalf("externalEvidence error = nil, want failure")
+	}
+	if len(citations) != 0 {
+		t.Fatalf("citations = %+v, want none", citations)
+	}
+
+	prompt, citations, err := injectEvidence(context.Background(), stubPaperGetter{}, searcher, "用户问题", nil, EvidenceOptions{
+		IncludeExternal: true,
+		DisableLocal:    true,
+	})
+	if err != nil {
+		t.Fatalf("injectEvidence: %v", err)
+	}
+	if len(citations) != 0 {
+		t.Fatalf("citations = %+v, want none", citations)
+	}
+	if !strings.Contains(prompt, "外部搜索失败") || !strings.Contains(prompt, "证据不足") {
+		t.Fatalf("prompt missing failure handling: %s", prompt)
+	}
+}
+
+func TestExternalEvidenceUsesUppercaseArXivExternalID(t *testing.T) {
+	searcher := &stubSnippetSearcher{
+		searchRes: ai_external.SearchResult{
+			Sources: []ai_external.SourceID{ai_external.SourceSemanticScholar},
+			Papers: []ai_external.Paper{{
+				Source:        ai_external.SourceSemanticScholar,
+				SourcePaperID: "s2-arxiv",
+				SourcePaperIDs: map[ai_external.SourceID]string{
+					ai_external.SourceSemanticScholar: "s2-arxiv",
+				},
+				Sources:  []ai_external.SourceID{ai_external.SourceSemanticScholar},
+				ArXiv:    "2301.12345",
+				Title:    "ArXiv Evidence",
+				Abstract: "ArXiv-only external evidence.",
+			}},
+		},
+	}
+
+	_, citations, err := injectEvidence(context.Background(), stubPaperGetter{}, searcher, "用户问题", nil, EvidenceOptions{
+		IncludeExternal: true,
+		DisableLocal:    true,
+	})
+	if err != nil {
+		t.Fatalf("injectEvidence: %v", err)
+	}
+	if len(citations) != 1 || citations[0].ExternalID != "ARXIV:2301.12345" {
+		t.Fatalf("citations = %+v", citations)
 	}
 }
 
@@ -160,13 +286,18 @@ func TestEvidenceExternalSearchesBroadlyWithoutPinnedIDs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("injectEvidence: %v", err)
 	}
-	if len(searcher.last.PaperIDs) != 0 {
-		t.Fatalf("paper IDs = %v, want broad external search", searcher.last.PaperIDs)
+	gotPubMed := strings.Join(searcher.lastQueries[ai_external.SourcePubMed], "\n")
+	gotS2 := strings.Join(searcher.lastQueries[ai_external.SourceSemanticScholar], "\n")
+	if gotPubMed == gotS2 {
+		t.Fatalf("source queries should be source-specific: pubmed=%q s2=%q", gotPubMed, gotS2)
 	}
-	if !strings.Contains(strings.ToLower(searcher.lastQuery), "atac-seq") {
-		t.Fatalf("query = %q, want ATAC expansion", searcher.lastQuery)
+	if !strings.Contains(strings.ToLower(gotPubMed), "atac-seq") {
+		t.Fatalf("pubmed queries = %v, want ATAC expansion", searcher.lastQueries)
 	}
-	if !strings.Contains(prompt, "外部 Semantic Scholar") || !strings.Contains(prompt, "ATAC-seq identifies") {
+	if !strings.Contains(strings.ToLower(strings.Join(searcher.lastQueries[ai_external.SourceSemanticScholar], "\n")), "atac-seq") {
+		t.Fatalf("queries = %v, want ATAC expansion", searcher.lastQueries)
+	}
+	if !strings.Contains(prompt, "外部学术搜索") || !strings.Contains(prompt, "Semantic Scholar") || !strings.Contains(prompt, "ATAC-seq identifies") {
 		t.Fatalf("prompt missing broad external evidence: %s", prompt)
 	}
 	if len(citations) != 1 || citations[0].S2PaperID != "s2-atac" || citations[0].ExternalID != "DOI:10.1/atac" {
@@ -174,19 +305,25 @@ func TestEvidenceExternalSearchesBroadlyWithoutPinnedIDs(t *testing.T) {
 	}
 }
 
-func TestEvidenceExternalFallsBackToPaperSearchWhenSnippetSearchFails(t *testing.T) {
+func TestEvidenceExternalKeepsPartialPapersWhenSearchReturnsError(t *testing.T) {
 	searcher := &stubSnippetSearcher{
-		err: research.ErrRateLimited,
-		searchRes: research.PaperList{
-			Items: []research.Paper{
+		searchErr: research.ErrRateLimited,
+		searchRes: ai_external.SearchResult{
+			Sources: []ai_external.SourceID{ai_external.SourceSemanticScholar},
+			Papers: []ai_external.Paper{
 				{
-					PaperID:     "s2-atac-search",
-					Title:       "ATAC-seq maps chromatin accessibility",
-					Abstract:    "ATAC-seq identifies accessible chromatin regions using sequencing.",
-					TLDR:        "ATAC-seq profiles chromatin accessibility genome-wide.",
-					ExternalIDs: research.IDs{DOI: "10.1/search-atac"},
-					Year:        2024,
-					Venue:       "Genome Biology",
+					Source:        ai_external.SourceSemanticScholar,
+					SourcePaperID: "s2-atac-search",
+					SourcePaperIDs: map[ai_external.SourceID]string{
+						ai_external.SourceSemanticScholar: "s2-atac-search",
+					},
+					Sources:  []ai_external.SourceID{ai_external.SourceSemanticScholar},
+					Title:    "ATAC-seq maps chromatin accessibility",
+					Abstract: "ATAC-seq identifies accessible chromatin regions using sequencing.",
+					TLDR:     "ATAC-seq profiles chromatin accessibility genome-wide.",
+					DOI:      "10.1/search-atac",
+					Year:     2024,
+					Venue:    "Genome Biology",
 				},
 			},
 		},
@@ -199,14 +336,11 @@ func TestEvidenceExternalFallsBackToPaperSearchWhenSnippetSearchFails(t *testing
 	if err != nil {
 		t.Fatalf("injectEvidence: %v", err)
 	}
-	if searcher.lastSearchQuery == "" {
-		t.Fatalf("expected paper search fallback after snippet failure")
-	}
 	if strings.Contains(prompt, "外部搜索失败") {
-		t.Fatalf("prompt should use fallback evidence instead of declaring external search failure: %s", prompt)
+		t.Fatalf("prompt should use partial evidence instead of declaring external search failure: %s", prompt)
 	}
 	if !strings.Contains(prompt, "ATAC-seq maps chromatin accessibility") || !strings.Contains(prompt, "accessible chromatin regions") {
-		t.Fatalf("prompt missing fallback search evidence: %s", prompt)
+		t.Fatalf("prompt missing partial search evidence: %s", prompt)
 	}
 	if len(citations) != 1 || citations[0].S2PaperID != "s2-atac-search" || citations[0].ExternalID != "DOI:10.1/search-atac" {
 		t.Fatalf("citations = %+v", citations)
@@ -232,7 +366,7 @@ func TestEvidenceDoesNotRequireExternalIDsForLocalEvidence(t *testing.T) {
 }
 
 func TestEvidenceExternalSearchErrorKeepsStrictLocalPrompt(t *testing.T) {
-	searcher := &stubSnippetSearcher{err: research.ErrRateLimited, searchErr: research.ErrRateLimited}
+	searcher := &stubSnippetSearcher{searchErr: research.ErrRateLimited}
 	pinned := []repository.AIPinnedPaper{{PaperID: 1, Title: "x", DOI: "10.1/x"}}
 	prompt, citations, err := injectEvidence(context.Background(), stubPaperGetter{}, searcher, "Q", pinned, EvidenceOptions{IncludeExternal: true})
 	if err != nil {

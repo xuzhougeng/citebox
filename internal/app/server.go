@@ -22,6 +22,8 @@ import (
 	"github.com/xuzhougeng/citebox/internal/service"
 	"github.com/xuzhougeng/citebox/internal/service/ai_assistant"
 	"github.com/xuzhougeng/citebox/internal/service/ai_conversation"
+	"github.com/xuzhougeng/citebox/internal/service/ai_external"
+	"github.com/xuzhougeng/citebox/internal/service/pubmed"
 	"github.com/xuzhougeng/citebox/internal/service/research"
 )
 
@@ -40,6 +42,7 @@ type Server struct {
 	bridgeCancel context.CancelFunc
 	bridgeDone   chan struct{}
 	s2Client     *research.Client
+	pubmedClient *pubmed.Client
 }
 
 func NewServer(opts Options) (*Server, error) {
@@ -86,27 +89,40 @@ func NewServer(opts Options) (*Server, error) {
 
 	aiSvc := service.NewAIService(repo, cfg, logger.With("component", "ai_service"))
 
-	s2APIKey := strings.TrimSpace(cfg.S2APIKey)
-	if dbKey, _ := repo.GetAppSetting("s2_api_key"); s2APIKey == "" {
-		s2APIKey = strings.TrimSpace(dbKey)
-	}
+	dbS2APIKey, _ := repo.GetAppSetting("s2_api_key")
+	s2APIKey := startupS2APIKey(cfg, dbS2APIKey)
 	s2Client := research.NewClient(research.Config{
 		APIKey:      s2APIKey,
 		MinInterval: research.RateInterval(s2APIKey),
 	})
 
+	pubmedSettings, err := librarySvc.GetAIExternalSearchSettings()
+	if err != nil {
+		_ = repo.Close()
+		s2Client.Close()
+		return nil, fmt.Errorf("load AI external search settings: %w", err)
+	}
+	pubmedAPIKey, pubmedEmail, pubmedTool := startupPubMedSettings(cfg, pubmedSettings, os.LookupEnv)
+	pubmedClient := pubmed.NewClient(pubmed.Config{
+		APIKey:      pubmedAPIKey,
+		Email:       pubmedEmail,
+		Tool:        pubmedTool,
+		MinInterval: pubmed.RateInterval(pubmedAPIKey),
+	})
+
 	httpServer := &http.Server{
 		Addr:    ":" + cfg.ServerPort,
-		Handler: buildHandler(cfg, logger, librarySvc, aiSvc, repo, absoluteWebRoot, s2Client),
+		Handler: buildHandler(cfg, logger, librarySvc, aiSvc, repo, absoluteWebRoot, s2Client, pubmedClient),
 	}
 
 	server := &Server{
-		cfg:        cfg,
-		logger:     logger,
-		repo:       repo,
-		librarySvc: librarySvc,
-		httpServer: httpServer,
-		s2Client:   s2Client,
+		cfg:          cfg,
+		logger:       logger,
+		repo:         repo,
+		librarySvc:   librarySvc,
+		httpServer:   httpServer,
+		s2Client:     s2Client,
+		pubmedClient: pubmedClient,
 	}
 
 	logger.Info("resolved web root", "web_root", absoluteWebRoot)
@@ -131,6 +147,77 @@ func NewServer(opts Options) (*Server, error) {
 	}()
 
 	return server, nil
+}
+
+func startupS2APIKey(cfg *config.Config, savedAPIKey string) string {
+	if cfg != nil {
+		if apiKey := strings.TrimSpace(cfg.S2APIKey); apiKey != "" {
+			return apiKey
+		}
+	}
+	return strings.TrimSpace(savedAPIKey)
+}
+
+func s2RuntimeSettings(cfg *config.Config) handler.ResearchRuntimeSettings {
+	if cfg == nil {
+		return handler.ResearchRuntimeSettings{}
+	}
+	apiKey := strings.TrimSpace(cfg.S2APIKey)
+	return handler.ResearchRuntimeSettings{
+		APIKey:    apiKey,
+		APIKeySet: apiKey != "",
+	}
+}
+
+func startupPubMedSettings(cfg *config.Config, settings *model.AIExternalSearchSettings, lookupEnv func(string) (string, bool)) (apiKey, email, tool string) {
+	runtime := pubmedRuntimeSettings(cfg, lookupEnv)
+	if runtime.APIKeySet {
+		apiKey = strings.TrimSpace(runtime.APIKey)
+	} else if settings != nil {
+		apiKey = strings.TrimSpace(settings.PubMedAPIKey)
+	}
+	if runtime.EmailSet {
+		email = strings.TrimSpace(runtime.Email)
+	} else if settings != nil {
+		email = strings.TrimSpace(settings.PubMedEmail)
+	}
+	if runtime.ToolSet {
+		tool = strings.TrimSpace(runtime.Tool)
+	} else if settings != nil {
+		tool = strings.TrimSpace(settings.PubMedTool)
+	}
+	if tool == "" {
+		tool = "citebox"
+	}
+	return apiKey, email, tool
+}
+
+func pubmedRuntimeSettings(cfg *config.Config, lookupEnv func(string) (string, bool)) handler.PubMedRuntimeSettings {
+	var runtime handler.PubMedRuntimeSettings
+	if cfg != nil {
+		if apiKey := strings.TrimSpace(cfg.PubMedAPIKey); apiKey != "" {
+			runtime.APIKey = apiKey
+			runtime.APIKeySet = true
+		}
+		if email := strings.TrimSpace(cfg.PubMedEmail); email != "" {
+			runtime.Email = email
+			runtime.EmailSet = true
+		}
+	}
+	if tool, ok := nonemptyEnvValue(lookupEnv, "PUBMED_TOOL"); ok {
+		runtime.Tool = tool
+		runtime.ToolSet = true
+	}
+	return runtime
+}
+
+func nonemptyEnvValue(lookupEnv func(string) (string, bool), key string) (string, bool) {
+	if lookupEnv == nil {
+		return "", false
+	}
+	value, ok := lookupEnv(key)
+	value = strings.TrimSpace(value)
+	return value, ok && value != ""
 }
 
 func (s *Server) ListenAndServe() error {
@@ -182,6 +269,9 @@ func (s *Server) Close() error {
 	if s.s2Client != nil {
 		s.s2Client.Close()
 	}
+	if s.pubmedClient != nil {
+		s.pubmedClient.Close()
+	}
 
 	return errors.Join(serverErr, repoErr)
 }
@@ -211,6 +301,7 @@ func buildHandler(
 	repo *repository.LibraryRepository,
 	webRoot string,
 	s2Client *research.Client,
+	pubmedClient *pubmed.Client,
 ) http.Handler {
 	versionSvc := service.NewVersionService()
 	paperHandler := handler.NewPaperHandler(librarySvc)
@@ -221,20 +312,25 @@ func buildHandler(
 	aiHandler := handler.NewAIHandler(aiSvc)
 	researchAdapter := &research.RepoAdapter{Repo: repo.Research}
 	researchSvc := research.NewService(s2Client, researchAdapter, research.ServiceConfig{})
+	aiExternalSvc := ai_external.NewService(aiExternalSettingsShim{librarySvc: librarySvc}, map[ai_external.SourceID]ai_external.Searcher{
+		ai_external.SourcePubMed:          ai_external.PubMedAdapter{Client: pubmedClient},
+		ai_external.SourceSemanticScholar: ai_external.SemanticScholarAdapter{SearchService: researchSvc},
+	})
 	libraryPlanner := ai_assistant.NewLLMLibrarySearchPlanner(aiSvc, aiSvc)
 	libraryClassifier := ai_assistant.NewLLMLibraryPaperClassifier(aiSvc, aiSvc)
 	externalPlanner := ai_assistant.NewLLMExternalSearchPlanner(aiSvc, aiSvc)
 	externalClassifier := ai_assistant.NewLLMExternalPaperClassifier(aiSvc, aiSvc)
 	assistantOrchestrator := ai_assistant.NewOrchestrator(ai_assistant.ToolSet{
 		LibrarySearch:  ai_assistant.NewLibrarySearchToolWithAgents(repo.Paper, libraryPlanner, libraryClassifier),
-		ExternalSearch: ai_assistant.NewExternalSearchToolWithAgents(researchSvc, externalPlanner, externalClassifier),
+		ExternalSearch: ai_assistant.NewExternalSearchToolWithAgents(aiExternalSvc, externalPlanner, externalClassifier),
 		PaperRead:      ai_assistant.NewPaperReadTool(repo.Paper),
 		FigureLookup:   ai_assistant.NewFigureLookupToolWithPapers(ai_assistant.NewRepositoryFigureSearcher(repo.Figure), repo.Paper),
 	})
-	aiConvService := ai_conversation.New(repo.AIConversation, repo.Paper, aiSvc, aiSvc, researchSvc, logger.With("component", "ai_conversation"), assistantOrchestrator)
+	aiConvService := ai_conversation.New(repo.AIConversation, repo.Paper, aiSvc, aiSvc, aiExternalSvc, logger.With("component", "ai_conversation"), assistantOrchestrator)
 	aiConversationHandler := handler.NewAIConversationHandler(aiConvService)
 	settingsHandler := handler.NewSettingsHandler(librarySvc, versionSvc)
-	settingsHandler.SetResearchClient(s2Client)
+	settingsHandler.SetResearchClient(s2Client, s2RuntimeSettings(cfg))
+	settingsHandler.SetPubMedClient(pubmedClient, pubmedRuntimeSettings(cfg, os.LookupEnv))
 	wolaiHandler := handler.NewWolaiHandler(librarySvc)
 	databaseHandler := handler.NewDatabaseHandler(librarySvc)
 	sessionManager := service.NewSessionManager(24 * time.Hour)
@@ -856,6 +952,17 @@ func buildHandler(
 			settingsHandler.GetResearchSettings(w, r)
 		case http.MethodPut:
 			settingsHandler.PutResearchSettings(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	mux.HandleFunc("/api/settings/ai-external-search", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			settingsHandler.GetAIExternalSearchSettings(w, r)
+		case http.MethodPut:
+			settingsHandler.PutAIExternalSearchSettings(w, r)
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}

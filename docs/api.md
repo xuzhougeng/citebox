@@ -27,6 +27,7 @@
     - 包括 `/api/ai/detect-figure-regions`
   - 版本检查：`/api/settings/version`
   - 提取器设置：`/api/settings/extractor`
+  - AI 外部搜索源设置：`/api/settings/ai-external-search`
   - 桌面端关闭行为设置：`/api/settings/desktop-close`
   - 微信桥接设置：`/api/settings/weixin-bridge`
   - 今日推荐测试发图：`/api/settings/weixin-bridge/daily-recommendation/test`
@@ -1080,6 +1081,90 @@ OpenAI 兼容模型配置说明：
 - `extractor_profile`：`manual`、`pdffigx_v1` 或 `open_source_vision`
 - `pdf_text_source`：兼容旧字段保留，但当前由后端按 `extractor_profile` 自动归一化；`manual` / `open_source_vision` 固定为 `pdfjs`，`pdffigx_v1` 固定为 `extractor`
 - 其余字段与提取接口地址、鉴权和超时设置相同
+
+#### `GET /api/settings/research`
+
+用途：
+
+- 获取调研服务 API 凭据
+- Semantic Scholar 配置用于 `/research` 调研页
+- PubMed / NCBI 配置用于 AI 助手外部搜索中的 PubMed 来源
+
+返回示例：
+
+```json
+{
+  "s2_api_key": "",
+  "pubmed_api_key": "",
+  "pubmed_email": "",
+  "pubmed_tool": "citebox"
+}
+```
+
+#### `PUT /api/settings/research`
+
+用途：
+
+- 保存 Semantic Scholar 与 PubMed / NCBI 凭据
+- 保存后热更新运行中的 Semantic Scholar 与 PubMed 客户端；若服务端环境变量显式配置了对应值，运行时客户端继续优先使用环境变量值
+
+请求体示例：
+
+```json
+{
+  "s2_api_key": "",
+  "pubmed_api_key": "",
+  "pubmed_email": "user@example.org",
+  "pubmed_tool": "citebox"
+}
+```
+
+说明：
+
+- `pubmed_api_key`、`pubmed_email`、`pubmed_tool` 均可留空；留空时 PubMed 使用 NCBI 匿名访问
+- `pubmed_tool` 省略或为空时，前端默认写入 `citebox`
+
+#### `GET /api/settings/ai-external-search`
+
+用途：
+
+- 获取 AI 助手外部搜索源配置
+- 默认 `sources` 为 `["pubmed"]`
+
+返回示例：
+
+```json
+{
+  "sources": ["pubmed", "semantic_scholar"]
+}
+```
+
+字段说明：
+
+- `sources`：AI 助手外部搜索启用源，可包含 `pubmed`、`semantic_scholar`
+- PubMed / NCBI 凭据由 `/api/settings/research` 管理；为兼容旧客户端，此接口仍可能返回已保存的 PubMed 字段
+
+#### `PUT /api/settings/ai-external-search`
+
+用途：
+
+- 保存 AI 助手外部搜索源配置
+- 若请求体包含 PubMed 字段，也会兼容保存并热更新 PubMed 客户端；设置页默认通过 `/api/settings/research` 管理 PubMed 凭据
+
+请求体示例：
+
+```json
+{
+  "sources": ["pubmed"]
+}
+```
+
+说明：
+
+- `sources` 可包含 `pubmed`、`semantic_scholar`
+- `sources` 也可以为空数组，表示不启用 AI 外部搜索源
+- 未传 PubMed 字段时，已保存的 PubMed / NCBI 凭据会被保留，不会被清空
+- Semantic Scholar API key 和 PubMed / NCBI 凭据均由研究数据库配置接口管理
 
 #### `GET /api/settings/desktop-close`
 

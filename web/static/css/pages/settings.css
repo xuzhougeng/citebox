@@ -720,6 +720,7 @@ html[lang^="zh"] .prompt-template-details[open] summary::before {
     grid-template-columns: 220px minmax(0, 1fr);
     gap: 1.5rem;
     align-items: start;
+    min-width: 0;
 }
 
 .settings-anchor-sidebar {
@@ -728,6 +729,9 @@ html[lang^="zh"] .prompt-template-details[open] summary::before {
     align-self: start;
     max-height: calc(100vh - 96px);
     overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
     padding: 0.75rem;
     border-radius: calc(var(--radius) - 4px);
     background: rgba(var(--surface-rgb), 0.7);
@@ -758,6 +762,7 @@ html[lang^="zh"] .prompt-template-details[open] summary::before {
     line-height: 1.4;
     border-left: 2px solid transparent;
     transition: 0.15s ease;
+    overflow-wrap: anywhere;
 }
 
 .settings-anchor-list a:hover {
@@ -773,6 +778,15 @@ html[lang^="zh"] .prompt-template-details[open] summary::before {
 }
 
 .settings-content {
+    min-width: 0;
+}
+
+.settings-content,
+.settings-collapsible,
+.settings-subsection-body,
+.manager-form,
+.prompt-field,
+.prompt-preset-panel {
     min-width: 0;
 }
 

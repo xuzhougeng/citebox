@@ -19,6 +19,9 @@ type Config struct {
 	AdminPassword           string
 	OAContactEmail          string
 	S2APIKey                string
+	PubMedAPIKey            string
+	PubMedEmail             string
+	PubMedTool              string
 	AllowedTypes            []string
 	ExtractorProfile        string
 	ExtractorPDFTextSource  string
@@ -43,6 +46,9 @@ func Load() *Config {
 		AdminPassword:           getEnv("ADMIN_PASSWORD", "citebox123"),
 		OAContactEmail:          getEnv("OA_CONTACT_EMAIL", ""),
 		S2APIKey:                getEnv("S2_API_KEY", ""),
+		PubMedAPIKey:            getEnv("PUBMED_API_KEY", ""),
+		PubMedEmail:             getEnv("PUBMED_EMAIL", ""),
+		PubMedTool:              getEnv("PUBMED_TOOL", "citebox"),
 		AllowedTypes:            []string{"application/pdf"},
 		ExtractorProfile:        getEnv("PDF_EXTRACTOR_PROFILE", "pdffigx_v1"),
 		ExtractorPDFTextSource:  getEnv("PDF_EXTRACTOR_PDF_TEXT_SOURCE", "extractor"),

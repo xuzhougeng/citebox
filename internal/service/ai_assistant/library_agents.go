@@ -75,13 +75,16 @@ func (p *LLMExternalSearchPlanner) PlanExternalSearch(ctx context.Context, query
 	if err := decodeFirstJSONObject(out, &plan); err != nil {
 		return ExternalSearchPlan{}, err
 	}
-	plan.SearchQuery = strings.Join(strings.Fields(plan.SearchQuery), " ")
+	plan.SearchQuery = normalizeExternalQuery(plan.SearchQuery)
 	plan.SearchQueries = sanitizeExternalQueries(append([]string{plan.SearchQuery}, plan.SearchQueries...))
-	if len(plan.SearchQueries) > 0 {
-		plan.SearchQuery = plan.SearchQueries[0]
+	plan.SearchQuery = firstExternalQuery(plan.SearchQueries)
+	plan.QueriesBySource = normalizeExternalQueriesBySource(plan.QueriesBySource)
+	if len(plan.SearchQueries) == 0 && len(plan.QueriesBySource) == 0 {
+		plan.SearchQueries = ExternalSearchQueries(query)
+		plan.SearchQuery = firstExternalQuery(plan.SearchQueries)
 	}
 	plan.Rationale = strings.TrimSpace(plan.Rationale)
-	if len(plan.SearchQueries) == 0 {
+	if len(plan.SearchQueries) == 0 && len(plan.QueriesBySource) == 0 {
 		return ExternalSearchPlan{}, fmt.Errorf("empty external search query")
 	}
 	return plan, nil
@@ -153,16 +156,19 @@ JSON 格式：
 - 不要加入“数据、文章、论文、文献、相关、查找、paper、data”等泛词。
 - 不要把窄问题扩大成泛化问题；用户问 ChIP-seq 时，不要改成所有 sequencing。`
 
-const externalPlannerSystemPrompt = `你是 CiteBox AI 助手的 Master Agent。你的任务是把用户的外部调研或出处查找请求改写成适合 Semantic Scholar 的英文检索式。
+const externalPlannerSystemPrompt = `你是 CiteBox AI 助手的 Master Agent。你的任务是把用户的外部调研或出处查找请求改写成适合已启用外部来源的英文检索式。
 只输出 JSON，不要输出 Markdown，不要解释思考过程。
 JSON 格式：
-{"search_query":"primary concise English academic query","search_queries":["query 1","query 2"],"rationale":"一句话说明检索式如何覆盖用户需求"}
+{"queries_by_source":{"pubmed":["query 1","query 2"],"semantic_scholar":["query 1","query 2"]},"rationale":"一句话说明检索式如何覆盖用户需求"}
 规则：
 - 用户可能使用任意语言提问；理解其真实学术需求，并改写为简短英文关键词检索式。
 - 保留用户明确给出的技术名词、实验类型、测序类型、物种、疾病和缩写，例如 ChIP-seq、ATAC-seq、single-cell RNA-seq。
 - 用户要求找出处、引用或证据时，检索核心断言本身，不要保留 source、citation、reference、出处、引用等操作词。
 - 不要加入 article、paper、literature、data、search、find、about、external 等泛词。
-- 生成 2 到 4 个互补查询：第一个高精度，后续用于召回同义表达；不要把所有限定词塞进同一个长查询。
+- 只为已启用的来源生成查询；当前支持来源键为 pubmed 和 semantic_scholar。
+- 为每个已启用来源生成 2 到 4 个互补短英文查询：第一个高精度，后续用于召回同义表达；不要把所有限定词塞进同一个长查询。
+- pubmed 查询应偏生物医学和 MeSH 风格，可使用疾病、干预、实验体系、物种、基因/蛋白名和常见 MeSH 词组，不要使用 PubMed 不支持的复杂语法。
+- semantic_scholar 查询应更宽泛，面向跨学科论文标题、摘要和关键词检索，覆盖方法、核心断言和同义学术表达。
 - 每个查询优先输出 3 到 8 个关键词；必要时加入一个能提高召回的同义技术短语。`
 
 func libraryPlannerUserPrompt(query string) string {

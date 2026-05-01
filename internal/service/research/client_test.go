@@ -146,6 +146,27 @@ func TestClientSendsAPIKey(t *testing.T) {
 	}
 }
 
+func TestClientSetAPIKeyUpdatesManagedRateInterval(t *testing.T) {
+	c := NewClient(Config{APIKey: "", MinInterval: RateInterval("")})
+	defer c.Close()
+
+	if got := c.currentRateInterval(); got != RateInterval("") {
+		t.Fatalf("initial interval = %v, want %v", got, RateInterval(""))
+	}
+
+	c.SetAPIKey("secret")
+
+	if got := c.currentRateInterval(); got != RateInterval("secret") {
+		t.Fatalf("interval with key = %v, want %v", got, RateInterval("secret"))
+	}
+
+	c.SetAPIKey("")
+
+	if got := c.currentRateInterval(); got != RateInterval("") {
+		t.Fatalf("interval without key = %v, want %v", got, RateInterval(""))
+	}
+}
+
 func TestClientRateLimit(t *testing.T) {
 	calls := 0
 	srv, stop := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {

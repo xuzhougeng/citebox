@@ -11,6 +11,7 @@ import (
 
 	"github.com/xuzhougeng/citebox/internal/model"
 	"github.com/xuzhougeng/citebox/internal/repository"
+	"github.com/xuzhougeng/citebox/internal/service/ai_external"
 	"github.com/xuzhougeng/citebox/internal/service/research"
 )
 
@@ -19,11 +20,9 @@ const (
 	evidenceSourceExternal = "external"
 )
 
-// ExternalEvidenceSearcher is the external search surface we depend on. Satisfied by
-// *research.Service.
+// ExternalEvidenceSearcher is the external search surface we depend on.
 type ExternalEvidenceSearcher interface {
-	SnippetSearch(ctx context.Context, query string, opts research.SnippetSearchOpts) (research.SnippetList, error)
-	Search(ctx context.Context, query string, opts research.SearchOpts) (research.PaperList, error)
+	Search(ctx context.Context, queries ai_external.SourceQueries, opts ai_external.SearchOptions) (ai_external.SearchResult, error)
 }
 
 // PaperDetailGetter is the local library surface used by internal search.
@@ -100,7 +99,7 @@ func buildEvidencePrompt(userText string, citations []Citation, pinnedCount int,
 		sources = append(sources, "本地文献库（已钉文献优先，包含本地已钉文献全文、标题、摘要、笔记和 PDF 全文）")
 	}
 	if includeExternal {
-		sources = append(sources, "外部 Semantic Scholar 片段")
+		sources = append(sources, "外部学术搜索")
 	}
 	if len(sources) == 0 {
 		sources = append(sources, "当前证据来源")
@@ -128,8 +127,14 @@ func buildEvidencePrompt(userText string, citations []Citation, pinnedCount int,
 				section = c.Snippet.SnippetKind
 			}
 			source := "本地全文"
-			if c.Source == evidenceSourceExternal {
-				source = "外部 Semantic Scholar"
+			if strings.HasPrefix(c.Source, evidenceSourceExternal+":") {
+				if label := strings.TrimSpace(strings.TrimPrefix(c.Source, evidenceSourceExternal+":")); label != "" {
+					source = label
+				} else {
+					source = "外部学术搜索"
+				}
+			} else if c.Source == evidenceSourceExternal {
+				source = "外部学术搜索"
 			}
 			title := strings.TrimSpace(c.Title)
 			if title == "" {
@@ -363,79 +368,57 @@ func externalEvidence(ctx context.Context, searcher ExternalEvidenceSearcher, us
 	}
 	idMap := map[string]repository.AIPinnedPaper{}
 	for _, p := range pinned {
-		ext := externalIDFor(p)
-		if ext == "" {
-			continue
-		}
-		idMap[ext] = p
-	}
-
-	q := externalEvidenceQuery(userText)
-	if len([]rune(q)) > 200 {
-		q = string([]rune(q)[:200])
-	}
-	res, err := searcher.SnippetSearch(ctx, q, research.SnippetSearchOpts{
-		Limit: limit,
-	})
-	if err == nil {
-		citations := citationsFromSnippetMatches(res.Items, idMap)
-		if len(citations) > 0 {
-			return citations, nil
+		for _, ext := range externalIDsForPinnedPaper(p) {
+			idMap[ext] = p
 		}
 	}
 
-	fallback, fallbackErr := externalPaperSearchEvidence(ctx, searcher, q, idMap, limit)
-	if fallbackErr != nil {
-		if err != nil {
-			return nil, fallbackErr
-		}
+	sourceQueries := externalEvidenceFallbackQueriesBySource(userText)
+	if !hasExternalEvidenceQueries(sourceQueries) {
 		return nil, nil
 	}
-	return fallback, nil
-}
-
-func citationsFromSnippetMatches(items []research.SnippetMatch, idMap map[string]repository.AIPinnedPaper) []Citation {
-	citations := make([]Citation, 0, len(items))
-	for _, m := range items {
-		ext := externalIDForResearchPaper(m.Paper)
-		var paperID int64
-		title := m.Paper.Title
-		if title == "" {
-			title = m.PaperID
-		}
-		if pin, ok := idMap[ext]; ok {
-			paperID = pin.PaperID
-			if title == "" {
-				title = pin.Title
-			}
-		}
-		citations = append(citations, Citation{
-			PaperID: paperID, ExternalID: ext, S2PaperID: m.PaperID, Title: title,
-			Source: evidenceSourceExternal, Snippet: m.Snippet, Score: m.Score,
-		})
+	res, err := searcher.Search(ctx, sourceQueries, ai_external.SearchOptions{
+		Limit: limit,
+	})
+	citations := citationsFromExternalPapers(res.Papers, idMap, limit)
+	if len(citations) > 0 {
+		return citations, nil
 	}
-	return citations
-}
-
-func externalPaperSearchEvidence(ctx context.Context, searcher ExternalEvidenceSearcher, query string,
-	idMap map[string]repository.AIPinnedPaper, limit int) ([]Citation, error) {
-
-	res, err := searcher.Search(ctx, query, research.SearchOpts{Limit: limit})
 	if err != nil {
 		return nil, err
 	}
-	citations := make([]Citation, 0, len(res.Items))
-	for i, p := range res.Items {
-		snippet, kind := evidenceSnippetFromSearchPaper(p)
+	if len(res.Failures) > 0 {
+		return nil, externalSearchFailuresError(res.Failures)
+	}
+	return nil, nil
+}
+
+func citationsFromExternalPapers(papers []ai_external.Paper, idMap map[string]repository.AIPinnedPaper, limit int) []Citation {
+	if limit <= 0 {
+		return nil
+	}
+	capacity := len(papers)
+	if capacity > limit {
+		capacity = limit
+	}
+	citations := make([]Citation, 0, capacity)
+	for i, p := range papers {
+		if len(citations) >= limit {
+			break
+		}
+		snippet, kind := evidenceSnippetFromExternalPaper(p)
 		if snippet == "" {
 			continue
 		}
-		ext := externalIDForResearchPaper(p)
-		var paperID int64
 		title := p.Title
-		if title == "" {
-			title = p.PaperID
+		if title == "" && p.SourcePaperIDs != nil {
+			title = p.SourcePaperIDs[ai_external.SourceSemanticScholar]
 		}
+		if title == "" {
+			title = p.SourcePaperID
+		}
+		ext := externalIDForExternalPaper(p)
+		var paperID int64
 		if pin, ok := idMap[ext]; ok {
 			paperID = pin.PaperID
 			if title == "" {
@@ -447,20 +430,20 @@ func externalPaperSearchEvidence(ctx context.Context, searcher ExternalEvidenceS
 			score -= float64(i) * 0.03
 		}
 		citations = append(citations, Citation{
-			PaperID: paperID, ExternalID: ext, S2PaperID: p.PaperID, Title: title,
-			Source: evidenceSourceExternal,
+			PaperID: paperID, ExternalID: ext, S2PaperID: externalSemanticScholarID(p), Title: title,
+			Source: externalCitationSource(p),
 			Snippet: research.Snippet{
 				Text:        snippet,
 				SnippetKind: kind,
-				Section:     externalSearchSectionLabel(kind, p),
+				Section:     "外部学术搜索: " + strings.Join(externalPaperSourceLabels(p), "+"),
 			},
 			Score: score,
 		})
 	}
-	return citations, nil
+	return citations
 }
 
-func evidenceSnippetFromSearchPaper(p research.Paper) (string, string) {
+func evidenceSnippetFromExternalPaper(p ai_external.Paper) (string, string) {
 	parts := make([]string, 0, 3)
 	if p.Title != "" {
 		parts = append(parts, "Title: "+p.Title)
@@ -481,34 +464,60 @@ func evidenceSnippetFromSearchPaper(p research.Paper) (string, string) {
 	return text, kind
 }
 
-func externalSearchSectionLabel(kind string, p research.Paper) string {
-	switch kind {
-	case "abstract":
-		return "Semantic Scholar 摘要"
-	case "tldr":
-		return "Semantic Scholar TLDR"
-	default:
-		if p.Year > 0 && p.Venue != "" {
-			return fmt.Sprintf("Semantic Scholar 搜索结果（%s, %d）", p.Venue, p.Year)
+func externalEvidenceFallbackQueriesBySource(userText string) ai_external.SourceQueries {
+	return ai_external.SourceQueries{
+		ai_external.SourcePubMed:          externalEvidencePubMedFallbackQueries(userText),
+		ai_external.SourceSemanticScholar: externalEvidenceSemanticScholarFallbackQueries(userText),
+	}
+}
+
+func hasExternalEvidenceQueries(queries ai_external.SourceQueries) bool {
+	for _, sourceQueries := range queries {
+		if len(sourceQueries) > 0 {
+			return true
 		}
-		return "Semantic Scholar 搜索结果"
 	}
+	return false
 }
 
-func externalIDForResearchPaper(p research.Paper) string {
-	if p.ExternalIDs.DOI != "" {
-		return "DOI:" + p.ExternalIDs.DOI
-	}
-	if p.ExternalIDs.ArXiv != "" {
-		return "ARXIV:" + p.ExternalIDs.ArXiv
-	}
-	if p.ExternalIDs.PubMed != "" {
-		return "PMID:" + p.ExternalIDs.PubMed
-	}
-	return ""
+func externalEvidenceSemanticScholarFallbackQueries(userText string) []string {
+	queries := make([]string, 0, 2)
+	queries = appendEvidenceQuery(queries, userText)
+	queries = appendEvidenceQuery(queries, externalEvidenceExpandedQuery(userText))
+	return queries
 }
 
-func externalEvidenceQuery(userText string) string {
+func externalEvidencePubMedFallbackQueries(userText string) []string {
+	queries := make([]string, 0, 2)
+	queries = appendEvidenceQuery(queries, externalEvidenceExpandedQuery(userText))
+	if containsASCIIWord(userText) {
+		queries = appendEvidenceQuery(queries, userText)
+	}
+	if len(queries) == 0 {
+		queries = appendEvidenceQuery(queries, userText)
+	}
+	return queries
+}
+
+func appendEvidenceQuery(queries []string, query string) []string {
+	query = strings.TrimSpace(query)
+	if query == "" {
+		return queries
+	}
+	runes := []rune(query)
+	if len(runes) > 200 {
+		query = string(runes[:200])
+	}
+	key := strings.ToLower(query)
+	for _, existing := range queries {
+		if strings.ToLower(existing) == key {
+			return queries
+		}
+	}
+	return append(queries, query)
+}
+
+func externalEvidenceExpandedQuery(userText string) string {
 	terms := evidenceSearchTerms(userText)
 	selected := make([]string, 0, 12)
 	seen := map[string]bool{}
@@ -539,6 +548,152 @@ func externalEvidenceQuery(userText string) string {
 	return strings.Join(selected, " ")
 }
 
+func externalCitationSource(p ai_external.Paper) string {
+	return evidenceSourceExternal + ":" + strings.Join(externalPaperSourceLabels(p), "+")
+}
+
+func externalPaperSourceLabels(p ai_external.Paper) []string {
+	sources := p.Sources
+	if len(sources) == 0 && p.Source != "" {
+		sources = []ai_external.SourceID{p.Source}
+	}
+	if len(sources) == 0 && len(p.SourcePaperIDs) > 0 {
+		for source := range p.SourcePaperIDs {
+			sources = append(sources, source)
+		}
+		sort.Slice(sources, func(i, j int) bool {
+			return string(sources[i]) < string(sources[j])
+		})
+	}
+
+	labels := make([]string, 0, len(sources))
+	seen := map[string]bool{}
+	for _, source := range sources {
+		label := externalSourceLabel(source)
+		key := strings.ToLower(label)
+		if label == "" || seen[key] {
+			continue
+		}
+		seen[key] = true
+		labels = append(labels, label)
+	}
+	if len(labels) == 0 {
+		return []string{"Unknown"}
+	}
+	return labels
+}
+
+func externalSourceLabel(source ai_external.SourceID) string {
+	switch source {
+	case ai_external.SourcePubMed:
+		return "PubMed"
+	case ai_external.SourceSemanticScholar:
+		return "Semantic Scholar"
+	default:
+		if strings.TrimSpace(string(source)) == "" {
+			return "Unknown"
+		}
+		return string(source)
+	}
+}
+
+func externalSemanticScholarID(p ai_external.Paper) string {
+	if p.SourcePaperIDs != nil {
+		if id := strings.TrimSpace(p.SourcePaperIDs[ai_external.SourceSemanticScholar]); id != "" {
+			return id
+		}
+	}
+	if p.Source == ai_external.SourceSemanticScholar {
+		return strings.TrimSpace(p.SourcePaperID)
+	}
+	return ""
+}
+
+func externalIDForExternalPaper(p ai_external.Paper) string {
+	if doi := strings.TrimSpace(p.DOI); doi != "" {
+		return "DOI:" + doi
+	}
+	if pmid := strings.TrimSpace(p.PMID); pmid != "" {
+		return "PMID:" + pmid
+	}
+	if arxiv := strings.TrimSpace(p.ArXiv); arxiv != "" {
+		return "ARXIV:" + arxiv
+	}
+	for _, source := range externalPaperSourcesForID(p) {
+		if id := strings.TrimSpace(externalPaperIDForSource(p, source)); id != "" {
+			return string(source) + ":" + id
+		}
+	}
+	return ""
+}
+
+func externalSearchFailuresError(failures []ai_external.SourceFailure) error {
+	parts := make([]string, 0, len(failures))
+	for _, failure := range failures {
+		if failure.Err == nil {
+			continue
+		}
+		source := externalSourceLabel(failure.Source)
+		parts = append(parts, fmt.Sprintf("%s: %v", source, failure.Err))
+	}
+	if len(parts) == 0 {
+		return fmt.Errorf("external search failed")
+	}
+	return fmt.Errorf("external search failed: %s", strings.Join(parts, "; "))
+}
+
+func externalPaperSourcesForID(p ai_external.Paper) []ai_external.SourceID {
+	sources := make([]ai_external.SourceID, 0, len(p.Sources)+len(p.SourcePaperIDs)+1)
+	add := func(source ai_external.SourceID) {
+		if source == "" {
+			return
+		}
+		for _, existing := range sources {
+			if existing == source {
+				return
+			}
+		}
+		sources = append(sources, source)
+	}
+	for _, source := range p.Sources {
+		add(source)
+	}
+	add(p.Source)
+	if len(p.SourcePaperIDs) > 0 {
+		mapSources := make([]ai_external.SourceID, 0, len(p.SourcePaperIDs))
+		for source := range p.SourcePaperIDs {
+			mapSources = append(mapSources, source)
+		}
+		sort.Slice(mapSources, func(i, j int) bool {
+			return string(mapSources[i]) < string(mapSources[j])
+		})
+		for _, source := range mapSources {
+			add(source)
+		}
+	}
+	return sources
+}
+
+func externalPaperIDForSource(p ai_external.Paper, source ai_external.SourceID) string {
+	if p.SourcePaperIDs != nil {
+		if id := strings.TrimSpace(p.SourcePaperIDs[source]); id != "" {
+			return id
+		}
+	}
+	if p.Source == source {
+		return strings.TrimSpace(p.SourcePaperID)
+	}
+	return ""
+}
+
+func externalIDsForPinnedPaper(p repository.AIPinnedPaper) []string {
+	ids := make([]string, 0, 1)
+	if id := strings.TrimSpace(p.DOI); id != "" {
+		ids = append(ids, "DOI:"+id)
+	}
+	return ids
+}
+
 func containsASCIIWord(s string) bool {
 	for _, r := range s {
 		if (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') {
@@ -546,13 +701,6 @@ func containsASCIIWord(s string) bool {
 		}
 	}
 	return false
-}
-
-func externalIDFor(p repository.AIPinnedPaper) string {
-	if p.DOI != "" {
-		return "DOI:" + p.DOI
-	}
-	return ""
 }
 
 var asciiTermRe = regexp.MustCompile(`[A-Za-z][A-Za-z0-9+&./-]{2,}`)

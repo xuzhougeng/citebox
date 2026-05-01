@@ -4,6 +4,7 @@
     display: flex;
     flex-direction: column;
     gap: 0.55rem;
+    min-width: 0;
     color: var(--muted);
     font-size: 0.95rem;
 }
@@ -14,12 +15,15 @@
     justify-content: space-between;
     gap: 0.75rem;
     width: 100%;
+    min-width: 0;
     align-self: stretch;
 }
 
 .field-label-text {
+    min-width: 0;
     color: var(--ink);
     font-weight: 600;
+    overflow-wrap: anywhere;
 }
 
 .form-input,
@@ -241,6 +245,7 @@
 
 .field-help::after {
     content: attr(data-help);
+    display: none;
     position: absolute;
     left: 50%;
     top: calc(100% + 0.65rem);
@@ -264,6 +269,7 @@
 
 .field-help::before {
     content: "";
+    display: none;
     position: absolute;
     left: 50%;
     top: calc(100% + 0.25rem);
@@ -282,6 +288,7 @@
 .field-help:hover::before,
 .field-help:focus-visible::after,
 .field-help:focus-visible::before {
+    display: block;
     opacity: 1;
     visibility: visible;
 }
