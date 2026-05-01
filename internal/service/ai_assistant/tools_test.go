@@ -3,6 +3,7 @@ package ai_assistant
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -86,6 +87,33 @@ func (p *stubExternalPlanner) PlanExternalSearch(ctx context.Context, query stri
 		return ExternalSearchPlan{}, p.err
 	}
 	return p.plan, nil
+}
+
+type stubAISettingsProvider struct {
+	settings model.AISettings
+	err      error
+}
+
+func (p stubAISettingsProvider) GetSettings() (*model.AISettings, error) {
+	if p.err != nil {
+		return nil, p.err
+	}
+	settings := p.settings
+	return &settings, nil
+}
+
+type stubNonStreamCaller struct {
+	output       string
+	settingsSeen model.AISettings
+	systemPrompt string
+	userPrompt   string
+}
+
+func (c *stubNonStreamCaller) CallProviderGeneric(ctx context.Context, settings model.AISettings, systemPrompt, userPrompt string) (string, string, error) {
+	c.settingsSeen = settings
+	c.systemPrompt = systemPrompt
+	c.userPrompt = userPrompt
+	return c.output, "", nil
 }
 
 type queryRoutingExternalSearch struct {
@@ -188,6 +216,63 @@ func TestExternalSearchQueriesForLongForwardGeneticsClaimIncludeRecallVariants(t
 		if !containsTestTerm(queries, want) {
 			t.Fatalf("queries = %+v, missing %q", queries, want)
 		}
+	}
+}
+
+func TestExternalSearchPlanQueriesForSource(t *testing.T) {
+	fallback := []string{"fallback external query"}
+	plan := ExternalSearchPlan{
+		QueriesBySource: map[string][]string{
+			"pubmed": {
+				"CRISPR therapy MeSH",
+				" ",
+				"CRISPR therapy MeSH",
+			},
+			"semantic_scholar": {
+				"CRISPR gene editing therapy",
+				"genome editing clinical trials",
+			},
+		},
+	}
+
+	if got, want := plan.QueriesForSource("pubmed", fallback), []string{"CRISPR therapy MeSH"}; !slices.Equal(got, want) {
+		t.Fatalf("pubmed queries = %+v, want %+v", got, want)
+	}
+	if got, want := plan.QueriesForSource("semantic_scholar", fallback), []string{"CRISPR gene editing therapy", "genome editing clinical trials"}; !slices.Equal(got, want) {
+		t.Fatalf("semantic scholar queries = %+v, want %+v", got, want)
+	}
+	if got := plan.QueriesForSource("missing_source", fallback); !slices.Equal(got, fallback) {
+		t.Fatalf("missing source queries = %+v, want fallback %+v", got, fallback)
+	}
+}
+
+func TestExternalPlannerReturnsQueriesBySource(t *testing.T) {
+	caller := &stubNonStreamCaller{output: `{
+		"queries_by_source": {
+			" PubMed ": [" CRISPR therapy MeSH ", "gene editing adverse effects", "CRISPR therapy MeSH"],
+			"semantic_scholar": ["CRISPR gene editing therapy", "genome editing clinical trials"]
+		},
+		"rationale": "source-specific biomedical and broad academic coverage"
+	}`}
+	planner := NewLLMExternalSearchPlanner(stubAISettingsProvider{settings: model.DefaultAISettings()}, caller)
+
+	plan, err := planner.PlanExternalSearch(context.Background(), "查找 CRISPR 治疗副作用的出处")
+	if err != nil {
+		t.Fatalf("PlanExternalSearch: %v", err)
+	}
+	if got, want := plan.QueriesBySource["pubmed"], []string{"CRISPR therapy MeSH", "gene editing adverse effects"}; !slices.Equal(got, want) {
+		t.Fatalf("pubmed queries = %+v, want %+v", got, want)
+	}
+	if got, want := plan.QueriesBySource["semantic_scholar"], []string{"CRISPR gene editing therapy", "genome editing clinical trials"}; !slices.Equal(got, want) {
+		t.Fatalf("semantic scholar queries = %+v, want %+v", got, want)
+	}
+	if len(plan.SearchQueries) != 0 || plan.SearchQuery != "" {
+		t.Fatalf("global queries = %q/%+v, want empty when source-specific queries are present", plan.SearchQuery, plan.SearchQueries)
+	}
+	if !strings.Contains(caller.systemPrompt, `"queries_by_source"`) ||
+		!strings.Contains(caller.systemPrompt, "pubmed") ||
+		!strings.Contains(caller.systemPrompt, "semantic_scholar") {
+		t.Fatalf("system prompt does not describe source-specific JSON: %s", caller.systemPrompt)
 	}
 }
 

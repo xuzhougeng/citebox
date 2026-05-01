@@ -25,9 +25,10 @@ type ExternalPaperClassifier interface {
 }
 
 type ExternalSearchPlan struct {
-	SearchQuery   string   `json:"search_query,omitempty"`
-	SearchQueries []string `json:"search_queries,omitempty"`
-	Rationale     string   `json:"rationale,omitempty"`
+	SearchQuery     string              `json:"search_query,omitempty"`
+	SearchQueries   []string            `json:"search_queries,omitempty"`
+	QueriesBySource map[string][]string `json:"queries_by_source,omitempty"`
+	Rationale       string              `json:"rationale,omitempty"`
 }
 
 type ExternalPaperClassificationInput struct {
@@ -384,11 +385,8 @@ func (t *ExternalSearchTool) searchQueries(ctx context.Context, query string) ([
 	if err != nil {
 		return fallback, ExternalSearchPlan{}, err
 	}
-	plan.SearchQuery = normalizeExternalQuery(plan.SearchQuery)
-	plan.SearchQueries = mergeExternalQueries(append([]string{plan.SearchQuery}, plan.SearchQueries...), fallback)
-	if len(plan.SearchQueries) > 0 {
-		plan.SearchQuery = plan.SearchQueries[0]
-	}
+	plan.SearchQueries = plan.QueriesForSource("semantic_scholar", fallback)
+	plan.SearchQuery = firstExternalQuery(plan.SearchQueries)
 	plan.Rationale = strings.TrimSpace(plan.Rationale)
 	if len(plan.SearchQueries) == 0 {
 		return fallback, ExternalSearchPlan{}, errors.New("empty external search query")
@@ -430,6 +428,29 @@ func ExternalSearchQuery(query string) string {
 		return queries[0]
 	}
 	return ""
+}
+
+func (p ExternalSearchPlan) QueriesForSource(source string, fallback []string) []string {
+	source = normalizeExternalSource(source)
+	if source != "" {
+		if queries := sanitizeExternalQueries(p.QueriesBySource[source]); len(queries) > 0 {
+			return queries
+		}
+		for planSource, sourceQueries := range p.QueriesBySource {
+			if normalizeExternalSource(planSource) != source {
+				continue
+			}
+			if queries := sanitizeExternalQueries(sourceQueries); len(queries) > 0 {
+				return queries
+			}
+		}
+	}
+
+	legacyQueries := sanitizeExternalQueries(append([]string{p.SearchQuery}, p.SearchQueries...))
+	if len(legacyQueries) == 0 {
+		return fallback
+	}
+	return mergeExternalQueries(legacyQueries, fallback)
 }
 
 func externalSearchQueryCandidates(query string) []string {
@@ -559,6 +580,38 @@ func combineExternalSearchErrors(errs []error) error {
 
 func normalizeExternalQuery(query string) string {
 	return strings.Join(strings.Fields(strings.TrimSpace(query)), " ")
+}
+
+func normalizeExternalSource(source string) string {
+	return strings.ToLower(strings.TrimSpace(source))
+}
+
+func normalizeExternalQueriesBySource(queriesBySource map[string][]string) map[string][]string {
+	if len(queriesBySource) == 0 {
+		return nil
+	}
+	normalized := make(map[string][]string, len(queriesBySource))
+	for source, queries := range queriesBySource {
+		source = normalizeExternalSource(source)
+		if source == "" {
+			continue
+		}
+		normalized[source] = sanitizeExternalQueries(append(normalized[source], queries...))
+		if len(normalized[source]) == 0 {
+			delete(normalized, source)
+		}
+	}
+	if len(normalized) == 0 {
+		return nil
+	}
+	return normalized
+}
+
+func firstExternalQuery(queries []string) string {
+	if len(queries) == 0 {
+		return ""
+	}
+	return queries[0]
 }
 
 func sanitizeExternalQueries(queries []string) []string {
