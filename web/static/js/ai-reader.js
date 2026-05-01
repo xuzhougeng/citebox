@@ -12,6 +12,7 @@
 
     const Reader = {
         settings: null,
+        externalSourcesEnabled: null,
         _allPapers: [],
 
         async init() {
@@ -23,8 +24,21 @@
                     this.settings = body || null;
                 }
             } catch (e) { /* offline / fresh install — leave settings null */ }
+            // Also cache the enabled external-search sources so the @ palette can
+            // gray out disabled rows. Best-effort: failure leaves the set null and
+            // the palette will treat all known sources as enabled.
+            try {
+                const res = await fetch('/api/settings/ai-external-search');
+                if (res.ok) {
+                    const body = await res.json();
+                    this.externalSourcesEnabled = Array.isArray(body && body.sources)
+                        ? body.sources.map((s) => String(s || '').toLowerCase())
+                        : null;
+                }
+            } catch (e) { /* offline — leave null */ }
             window.AIReader = window.AIReader || {};
             window.AIReader.settings = this.settings;
+            window.AIReader.externalSourcesEnabled = this.externalSourcesEnabled;
 
             // Fire-and-forget: cache the library so the @ palette can offer
             // every paper, not just the ones already pinned.
