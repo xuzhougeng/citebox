@@ -165,10 +165,10 @@
         const matchedQuery = p.matched_query
             ? '<p class="ai-result-note">' + escapeHtml(translate('ai.result_matched_query', '匹配查询')) + ': ' + escapeHtml(p.matched_query) + '</p>'
             : '';
-        const matchedConstraints = renderExternalListNote('ai.result_matched_constraints', p.matched_constraints);
-        const matchedPreferences = renderExternalListNote('ai.result_matched_preferences', p.matched_preferences);
+        const matchedConstraints = renderExternalListNote('ai.result_matched_constraints', 'Matched constraints', p.matched_constraints);
+        const matchedPreferences = renderExternalListNote('ai.result_matched_preferences', 'Matched preferences', p.matched_preferences);
         const articleRole = p.article_role
-            ? '<p class="ai-result-note">' + escapeHtml(translate('ai.result_article_role')) + ': ' + escapeHtml(formatExternalArticleRole(p.article_role)) + '</p>'
+            ? '<p class="ai-result-note">' + escapeHtml(translate('ai.result_article_role', 'Article role')) + ': ' + escapeHtml(formatExternalArticleRole(p.article_role)) + '</p>'
             : '';
         return '<article class="ai-result-card ai-result-card-external">' +
             '<div class="ai-result-card-head">' +
@@ -194,24 +194,38 @@
 
     function externalTierLabel(tier) {
         const key = String(tier || '').trim().toLowerCase();
-        if (key === 'strong_match') return translate('ai.result_tier_strong');
-        if (key === 'weak_match') return translate('ai.result_tier_weak');
-        if (key === 'needs_review') return translate('ai.result_tier_review');
+        if (key === 'strong_match') return translate('ai.result_tier_strong', 'Strong match');
+        if (key === 'weak_match') return translate('ai.result_tier_weak', 'Weak match');
+        if (key === 'needs_review') return translate('ai.result_tier_review', 'Needs review');
         return '';
     }
 
-    function renderExternalListNote(labelKey, values) {
+    function renderExternalListNote(labelKey, fallback, values) {
         if (!Array.isArray(values) || values.length === 0) return '';
         const text = values
             .map((value) => String(value == null ? '' : value).trim())
             .filter((value) => value !== '')
             .join(', ');
         if (!text) return '';
-        return '<p class="ai-result-note">' + escapeHtml(translate(labelKey)) + ': ' + escapeHtml(text) + '</p>';
+        return '<p class="ai-result-note">' + escapeHtml(translate(labelKey, fallback)) + ': ' + escapeHtml(text) + '</p>';
     }
 
     function formatExternalArticleRole(value) {
-        return String(value == null ? '' : value).trim().replace(/_/g, ' ');
+        const normalized = String(value == null ? '' : value).trim().toLowerCase();
+        if (!normalized) return '';
+        const labels = {
+            primary_study: translate('ai.result_article_role_primary_study', 'Primary study'),
+            review: translate('ai.result_article_role_review', 'Review'),
+            meta_analysis: translate('ai.result_article_role_meta_analysis', 'Meta-analysis'),
+            background_review: translate('ai.result_article_role_background_review', 'Background review'),
+            method: translate('ai.result_article_role_method', 'Method'),
+            overview: translate('ai.result_article_role_overview', 'Overview'),
+            unclear: translate('ai.result_article_role_unclear', 'Unclear')
+        };
+        if (labels[normalized]) return labels[normalized];
+        return normalized
+            .replace(/_/g, ' ')
+            .replace(/\b\w/g, (char) => char.toUpperCase());
     }
 
     function renderExternalAnnotations(annotations, terms) {
