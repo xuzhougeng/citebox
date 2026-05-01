@@ -30,6 +30,10 @@ const SettingsPage = {
         this.pubmedToolInput = document.getElementById('pubmedToolInput');
         this.saveAIExternalSearchSettingsButton = document.getElementById('saveAIExternalSearchSettingsButton');
         this.aiExternalSearchSaveStatus = document.getElementById('aiExternalSearchSaveStatus');
+        this.aiExternalSearchSettingsLoaded = false;
+        if (this.saveAIExternalSearchSettingsButton) {
+            this.saveAIExternalSearchSettingsButton.disabled = true;
+        }
         this.translationPrimaryLanguageInput = document.getElementById('aiTranslationPrimaryLanguageInput');
         this.translationTargetLanguageInput = document.getElementById('aiTranslationTargetLanguageInput');
         this.systemPromptInput = document.getElementById('aiSystemPromptInput');
@@ -354,6 +358,16 @@ const SettingsPage = {
         });
         this.saveAIExternalSearchSettingsButton?.addEventListener('click', async () => {
             await this.saveAIExternalSearchSettings();
+        });
+        [
+            this.aiExternalSourcePubMedInput,
+            this.aiExternalSourceS2Input,
+            this.pubmedAPIKeyInput,
+            this.pubmedEmailInput,
+            this.pubmedToolInput
+        ].forEach((element) => {
+            element?.addEventListener('input', () => this.handleAIExternalSearchSettingsChanged());
+            element?.addEventListener('change', () => this.handleAIExternalSearchSettingsChanged());
         });
         this.extractorSettingsForm.addEventListener('submit', async (event) => {
             event.preventDefault();
@@ -1045,12 +1059,24 @@ const SettingsPage = {
     },
 
     async loadAIExternalSearchSettings() {
-        this.renderAIExternalSearchSettings({});
-        const res = await fetch('/api/settings/ai-external-search');
-        if (!res.ok) return;
-        const settings = await res.json();
-        this.renderAIExternalSearchSettings(settings || {});
-        this.setAIExternalSearchSaveStatus('');
+        this.aiExternalSearchSettingsLoaded = false;
+        this.setAIExternalSearchSaveEnabled(false);
+
+        try {
+            const res = await fetch('/api/settings/ai-external-search');
+            if (!res.ok) {
+                throw new Error(t('settings.ai.external_search.save_failed', '保存失败'));
+            }
+            const settings = await res.json();
+            this.renderAIExternalSearchSettings(settings || {});
+            this.aiExternalSearchSettingsLoaded = true;
+            this.setAIExternalSearchSaveEnabled(true);
+            this.setAIExternalSearchSaveStatus('');
+        } catch (error) {
+            this.aiExternalSearchSettingsLoaded = false;
+            this.setAIExternalSearchSaveEnabled(false);
+            this.setAIExternalSearchSaveStatus(t('settings.ai.external_search.save_failed', '保存失败'), 'error');
+        }
     },
 
     normalizeAIExternalSearchSources(sources) {
@@ -1074,6 +1100,7 @@ const SettingsPage = {
     },
 
     renderAIExternalSearchSettings(settings = {}) {
+        this.isHydratingAIExternalSearchSettings = true;
         const sources = this.normalizeAIExternalSearchSources(settings.sources);
         if (this.aiExternalSourcePubMedInput) {
             this.aiExternalSourcePubMedInput.checked = sources.includes('pubmed');
@@ -1090,6 +1117,18 @@ const SettingsPage = {
         if (this.pubmedToolInput) {
             this.pubmedToolInput.value = settings.pubmed_tool || 'citebox';
         }
+        this.isHydratingAIExternalSearchSettings = false;
+    },
+
+    setAIExternalSearchSaveEnabled(enabled) {
+        if (this.saveAIExternalSearchSettingsButton) {
+            this.saveAIExternalSearchSettingsButton.disabled = !enabled;
+        }
+    },
+
+    handleAIExternalSearchSettingsChanged() {
+        if (this.isHydratingAIExternalSearchSettings || !this.aiExternalSearchSettingsLoaded) return;
+        this.setAIExternalSearchSaveStatus('');
     },
 
     buildAIExternalSearchSettingsPayload() {
@@ -1109,6 +1148,11 @@ const SettingsPage = {
     },
 
     async saveAIExternalSearchSettings() {
+        if (!this.aiExternalSearchSettingsLoaded) {
+            this.setAIExternalSearchSaveStatus(t('settings.ai.external_search.save_failed', '保存失败'), 'error');
+            this.setAIExternalSearchSaveEnabled(false);
+            return;
+        }
         const button = this.saveAIExternalSearchSettingsButton;
         const originalLabel = button?.textContent || '';
         if (button) {
@@ -1127,16 +1171,17 @@ const SettingsPage = {
             }
             const settings = await res.json();
             this.renderAIExternalSearchSettings(settings || {});
+            this.aiExternalSearchSettingsLoaded = true;
             const message = t('settings.ai.external_search.saved', '外部搜索源已保存');
             this.setAIExternalSearchSaveStatus(message, 'success');
             Utils.showToast(message);
         } catch (error) {
             const message = t('settings.ai.external_search.save_failed', '保存失败');
             this.setAIExternalSearchSaveStatus(message, 'error');
-            Utils.showToast(error.message || message, 'error');
+            Utils.showToast(message, 'error');
         } finally {
             if (button) {
-                button.disabled = false;
+                button.disabled = !this.aiExternalSearchSettingsLoaded;
                 button.textContent = originalLabel || t('settings.ai.external_search.save_btn', '保存外部搜索源');
             }
         }
