@@ -27,6 +27,7 @@
     - 包括 `/api/ai/detect-figure-regions`
   - 版本检查：`/api/settings/version`
   - 提取器设置：`/api/settings/extractor`
+  - AI 外部搜索源设置：`/api/settings/ai-external-search`
   - 桌面端关闭行为设置：`/api/settings/desktop-close`
   - 微信桥接设置：`/api/settings/weixin-bridge`
   - 今日推荐测试发图：`/api/settings/weixin-bridge/daily-recommendation/test`
@@ -1080,6 +1081,56 @@ OpenAI 兼容模型配置说明：
 - `extractor_profile`：`manual`、`pdffigx_v1` 或 `open_source_vision`
 - `pdf_text_source`：兼容旧字段保留，但当前由后端按 `extractor_profile` 自动归一化；`manual` / `open_source_vision` 固定为 `pdfjs`，`pdffigx_v1` 固定为 `extractor`
 - 其余字段与提取接口地址、鉴权和超时设置相同
+
+#### `GET /api/settings/ai-external-search`
+
+用途：
+
+- 获取 AI 助手外部搜索源配置
+- 默认 `sources` 为 `["pubmed"]`
+
+返回示例：
+
+```json
+{
+  "sources": ["pubmed", "semantic_scholar"],
+  "pubmed_api_key": "",
+  "pubmed_email": "",
+  "pubmed_tool": "citebox"
+}
+```
+
+字段说明：
+
+- `sources`：AI 助手外部搜索启用源，可包含 `pubmed`、`semantic_scholar`
+- `pubmed_api_key`：可选 NCBI API key，留空时使用匿名访问
+- `pubmed_email`：可选 NCBI email
+- `pubmed_tool`：可选 NCBI tool，默认 `citebox`
+
+#### `PUT /api/settings/ai-external-search`
+
+用途：
+
+- 保存 AI 助手外部搜索源配置
+- 运行中的 PubMed 客户端会热更新保存后的 PubMed 配置；若服务端环境变量显式配置了对应值，运行时客户端继续优先使用环境变量值
+
+请求体示例：
+
+```json
+{
+  "sources": ["pubmed"],
+  "pubmed_api_key": "",
+  "pubmed_email": "user@example.org",
+  "pubmed_tool": "citebox"
+}
+```
+
+说明：
+
+- `sources` 可包含 `pubmed`、`semantic_scholar`
+- `sources` 也可以为空数组，表示不启用 AI 外部搜索源
+- PubMed 配置允许留空，留空时使用 NCBI 匿名访问
+- Semantic Scholar API key 仍由研究数据库配置接口管理
 
 #### `GET /api/settings/desktop-close`
 
