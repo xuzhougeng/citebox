@@ -98,24 +98,13 @@ func NewServer(opts Options) (*Server, error) {
 		MinInterval: research.RateInterval(s2APIKey),
 	})
 
-	pubmedAPIKey := strings.TrimSpace(cfg.PubMedAPIKey)
-	pubmedEmail := strings.TrimSpace(cfg.PubMedEmail)
-	pubmedTool := strings.TrimSpace(cfg.PubMedTool)
-	if settings, err := librarySvc.GetAIExternalSearchSettings(); err != nil {
+	pubmedSettings, err := librarySvc.GetAIExternalSearchSettings()
+	if err != nil {
 		_ = repo.Close()
 		s2Client.Close()
 		return nil, fmt.Errorf("load AI external search settings: %w", err)
-	} else if settings != nil {
-		if pubmedAPIKey == "" {
-			pubmedAPIKey = strings.TrimSpace(settings.PubMedAPIKey)
-		}
-		if pubmedEmail == "" {
-			pubmedEmail = strings.TrimSpace(settings.PubMedEmail)
-		}
-		if pubmedTool == "" {
-			pubmedTool = strings.TrimSpace(settings.PubMedTool)
-		}
 	}
+	pubmedAPIKey, pubmedEmail, pubmedTool := startupPubMedSettings(cfg, pubmedSettings, os.LookupEnv)
 	pubmedClient := pubmed.NewClient(pubmed.Config{
 		APIKey:      pubmedAPIKey,
 		Email:       pubmedEmail,
@@ -160,6 +149,42 @@ func NewServer(opts Options) (*Server, error) {
 	}()
 
 	return server, nil
+}
+
+func startupPubMedSettings(cfg *config.Config, settings *model.AIExternalSearchSettings, lookupEnv func(string) (string, bool)) (apiKey, email, tool string) {
+	if cfg != nil {
+		apiKey = strings.TrimSpace(cfg.PubMedAPIKey)
+		email = strings.TrimSpace(cfg.PubMedEmail)
+		tool = strings.TrimSpace(cfg.PubMedTool)
+	}
+	if settings != nil {
+		if apiKey == "" {
+			apiKey = strings.TrimSpace(settings.PubMedAPIKey)
+		}
+		if email == "" {
+			email = strings.TrimSpace(settings.PubMedEmail)
+		}
+	}
+	if envTool, ok := nonemptyEnvValue(lookupEnv, "PUBMED_TOOL"); ok {
+		tool = envTool
+	} else if settings != nil {
+		if savedTool := strings.TrimSpace(settings.PubMedTool); savedTool != "" {
+			tool = savedTool
+		}
+	}
+	if tool == "" {
+		tool = "citebox"
+	}
+	return apiKey, email, tool
+}
+
+func nonemptyEnvValue(lookupEnv func(string) (string, bool), key string) (string, bool) {
+	if lookupEnv == nil {
+		return "", false
+	}
+	value, ok := lookupEnv(key)
+	value = strings.TrimSpace(value)
+	return value, ok && value != ""
 }
 
 func (s *Server) ListenAndServe() error {
