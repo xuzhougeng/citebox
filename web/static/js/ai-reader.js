@@ -213,16 +213,30 @@
                         },
                         // Auto-pin on first @-mention (β + γ flow per spec § 3).
                         // Active conversation: server-side pin via /papers POST.
-                        // Draft: stash on view._state so the first send carries paper_id.
+                        // Draft: append to pinnedPapers and re-render chips so the
+                        // user sees the pin immediately. The first /messages call
+                        // forwards paper_id + paper_ids to the server, which auto-
+                        // pins each entry on the freshly-created conversation.
                         onPickPaper: (paper) => {
                             const id = paper && paper.id;
                             if (!id) return;
-                            const pinned = (view._state && view._state.pinnedPapers) || [];
+                            if (!view._state) return;
+                            const pinned = view._state.pinnedPapers || [];
                             if (pinned.some((p) => p.paper_id === id)) return;
-                            if (view._state && view._state.conversationId) {
+                            if (view._state.conversationId) {
                                 window.AIReader.pin.pin(id);
-                            } else if (view._state) {
-                                view._state._draftPaperId = id;
+                                return;
+                            }
+                            const next = pinned.concat([{
+                                paper_id: id,
+                                title: (paper && paper.title) || '',
+                            }]);
+                            view._state.pinnedPapers = next;
+                            // Keep the legacy single-value field in sync with the
+                            // first pin so that prefilled deep-links keep working.
+                            view._state._draftPaperId = next[0].paper_id;
+                            if (window.AIReader.pin && typeof window.AIReader.pin.setPinned === 'function') {
+                                window.AIReader.pin.setPinned(next);
                             }
                         },
                         onPickRole: () => { /* role label inserted by mention module */ },

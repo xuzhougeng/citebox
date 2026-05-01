@@ -163,6 +163,26 @@ func TestAIConversationPostMessageDecodesSources(t *testing.T) {
 	}
 }
 
+func TestAIConversationPostMessageDecodesPaperIDs(t *testing.T) {
+	stub := &stubAIConversationService{}
+	h := NewAIConversationHandler(stub)
+	body := strings.NewReader(`{"content":"对比这两篇","paper_id":11,"paper_ids":[11,10]}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/conversations/new/messages", body)
+	rec := httptest.NewRecorder()
+	h.PostMessage(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	if stub.sentInput.PaperID != 11 {
+		t.Fatalf("PaperID = %d, want 11", stub.sentInput.PaperID)
+	}
+	want := []int64{11, 10}
+	if !reflect.DeepEqual(stub.sentInput.PaperIDs, want) {
+		t.Fatalf("PaperIDs = %+v, want %+v", stub.sentInput.PaperIDs, want)
+	}
+}
+
 func TestAIConversationDeleteEndpoint(t *testing.T) {
 	stub := &stubAIConversationService{}
 	h := NewAIConversationHandler(stub)

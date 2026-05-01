@@ -248,8 +248,15 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput, onDelta 
 	}
 
 	// Auto-pin (β/γ flow). Pin-limit may reject here.
-	if in.PaperID > 0 {
-		if err := s.PinPaper(in.ConversationID, in.PaperID); err != nil {
+	pinIDs := in.PaperIDs
+	if len(pinIDs) == 0 && in.PaperID > 0 {
+		pinIDs = []int64{in.PaperID}
+	}
+	for _, pid := range pinIDs {
+		if pid <= 0 {
+			continue
+		}
+		if err := s.PinPaper(in.ConversationID, pid); err != nil {
 			return SendMessageResult{}, err
 		}
 	}

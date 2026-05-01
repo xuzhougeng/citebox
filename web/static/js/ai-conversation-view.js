@@ -300,7 +300,17 @@
                 replaceLast: replaceLast,
             };
 
-            if (!s.conversationId && s._draftPaperId) body.paper_id = s._draftPaperId;
+            if (!s.conversationId) {
+                const ids = (Array.isArray(s.pinnedPapers) ? s.pinnedPapers : [])
+                    .map((p) => Number(p && p.paper_id || 0))
+                    .filter((id) => Number.isFinite(id) && id > 0);
+                if (ids.length > 0) {
+                    body.paper_id = ids[0];
+                    if (ids.length > 1) body.paper_ids = ids;
+                } else if (s._draftPaperId) {
+                    body.paper_id = s._draftPaperId;
+                }
+            }
             if (s.els.strictEvidence) {
                 body.strict_evidence = !!s.els.strictEvidence.checked;
             }
@@ -781,13 +791,18 @@
         _currentContext() {
             const s = this._state;
             const context = { source: 'ai' };
-            const draftPaperID = Number(s._draftPaperId || 0);
-            if (!s.conversationId && Number.isFinite(draftPaperID) && draftPaperID > 0) {
-                context.paper_id = draftPaperID;
-                return context;
-            }
             const pinned = Array.isArray(s.pinnedPapers) ? s.pinnedPapers : [];
-            const ids = pinned.map((paper) => Number(paper && paper.paper_id || 0)).filter((id) => Number.isFinite(id) && id > 0);
+            const ids = pinned
+                .map((paper) => Number(paper && paper.paper_id || 0))
+                .filter((id) => Number.isFinite(id) && id > 0);
+            // Fall back to the legacy single-value draft field only if the
+            // pinned-papers array hasn't picked it up yet (deep-link prefill).
+            if (ids.length === 0 && !s.conversationId) {
+                const draftPaperID = Number(s._draftPaperId || 0);
+                if (Number.isFinite(draftPaperID) && draftPaperID > 0) {
+                    ids.push(draftPaperID);
+                }
+            }
             if (ids.length === 1) {
                 context.paper_id = ids[0];
             } else if (ids.length > 1) {
