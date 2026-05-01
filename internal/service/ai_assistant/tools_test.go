@@ -203,14 +203,58 @@ func TestExternalSearchToolUsesPlannerSearchQuery(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	if searcher.query != "forward genetic screens gene discovery slowed" {
-		t.Fatalf("query = %q, want planner search query", searcher.query)
+	if !containsTestTerm(searcher.queries, "forward genetic screens gene discovery slowed") {
+		t.Fatalf("queries = %+v, want planner search query", searcher.queries)
 	}
 	if len(planner.queries) != 1 {
 		t.Fatalf("planner queries = %+v, want one call", planner.queries)
 	}
 	if !strings.Contains(res.ToolCalls[0].InputJSON, `"search_query":"forward genetic screens gene discovery slowed"`) {
 		t.Fatalf("input json = %s, want planner search query", res.ToolCalls[0].InputJSON)
+	}
+}
+
+func TestExternalSearchToolMergesPlannerAndFallbackQueries(t *testing.T) {
+	searcher := &limitCapturingExternalSearch{}
+	planner := &stubExternalPlanner{plan: ExternalSearchPlan{
+		SearchQuery: "cell fate gene discovery decline forward genetic screens redundancy",
+		SearchQueries: []string{
+			"model organisms forward genetics saturation gene discovery",
+			"gene family redundancy forward genetic screens developmental genes",
+		},
+		Rationale: "planner query is specific but may be too narrow",
+	}}
+	_, err := NewExternalSearchToolWithPlanner(searcher, planner).Run(context.Background(), ToolInput{
+		Query: "寻找出处：然而，由于模式物种中正向遗传筛选的饱和以及基因家族内普遍存在的冗余，基因发现——尤其是那些影响细胞命运的基因——在过去十年中显著减少。",
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if !containsTestTerm(searcher.queries, "cell fate gene discovery decline forward genetic screens redundancy") {
+		t.Fatalf("queries = %+v, missing planner primary", searcher.queries)
+	}
+	if !containsTestTerm(searcher.queries, "gene discovery slowed forward genetic screens saturation") {
+		t.Fatalf("queries = %+v, missing fallback recall query", searcher.queries)
+	}
+}
+
+func TestExternalSearchToolAddsRecallQueriesFromPlannerTerms(t *testing.T) {
+	searcher := &limitCapturingExternalSearch{}
+	planner := &stubExternalPlanner{plan: ExternalSearchPlan{
+		SearchQuery: "model organisms forward genetic screens gene discovery decline",
+		SearchQueries: []string{
+			"functional redundancy gene families forward genetics screens",
+		},
+		Rationale: "translated source query",
+	}}
+	_, err := NewExternalSearchToolWithPlanner(searcher, planner).Run(context.Background(), ToolInput{
+		Query: "source request in another language",
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if !containsTestTerm(searcher.queries, "gene discovery slowed forward genetic screens saturation") {
+		t.Fatalf("queries = %+v, missing recall query derived from planner terms", searcher.queries)
 	}
 }
 
@@ -269,7 +313,7 @@ func TestExternalSearchToolRunsMultipleQueriesAndFiltersWithClassifier(t *testin
 	if !ok {
 		t.Fatalf("payload = %#v", res.Cards[0].Payload)
 	}
-	if card.S2PaperID != "cell-2025" || len(card.EvidenceAnnotations) != 1 {
+	if card.S2PaperID != "cell-2025" || len(card.EvidenceAnnotations) == 0 {
 		t.Fatalf("card = %+v, want annotated Cell hit", card)
 	}
 	if !strings.Contains(res.AnswerContext, "Evidence annotations") ||

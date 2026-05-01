@@ -420,6 +420,7 @@ func (s *AIService) callOpenAIResponsesStream(ctx context.Context, settings mode
 	applyOpenAIRequestOptions(payload, settings, "responses")
 
 	var raw strings.Builder
+	var snapshotText string
 	err := s.postJSONStream(
 		ctx,
 		joinProviderURL(settings.BaseURL, defaultAIBaseURL(model.AIProviderOpenAI), "/v1/responses"),
@@ -435,6 +436,11 @@ func (s *AIService) callOpenAIResponsesStream(ctx context.Context, settings mode
 			if delta == "" {
 				return nil
 			}
+			if snapshot {
+				if strings.TrimSpace(delta) != "" {
+					snapshotText = delta
+				}
+			}
 			if snapshot && raw.Len() > 0 {
 				return nil
 			}
@@ -445,10 +451,14 @@ func (s *AIService) callOpenAIResponsesStream(ctx context.Context, settings mode
 	if err != nil {
 		return "", err
 	}
-	if strings.TrimSpace(raw.String()) == "" {
+	finalText := raw.String()
+	if strings.TrimSpace(snapshotText) != "" && len([]rune(snapshotText)) > len([]rune(finalText)) {
+		finalText = snapshotText
+	}
+	if strings.TrimSpace(finalText) == "" {
 		return "", apperr.New(apperr.CodeUnavailable, "OpenAI Responses 未返回文本内容")
 	}
-	return raw.String(), nil
+	return finalText, nil
 }
 
 func (s *AIService) callOpenAIChatCompletionsStream(ctx context.Context, settings model.AISettings, systemPrompt, userPrompt string, images []aiImageInput, onDelta func(string) error) (string, error) {

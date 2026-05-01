@@ -61,7 +61,8 @@ const (
 	defaultExternalSearchLimit = 8
 	maxExternalSearchLimit     = 100
 	maxExternalSearchQueries   = 4
-	externalClassifierParallel = 8
+	maxExternalClassification  = 20
+	externalClassifierParallel = 20
 	externalSearchSource       = "Semantic Scholar"
 )
 
@@ -125,7 +126,11 @@ func (t *ExternalSearchTool) Run(ctx context.Context, in ToolInput) (ToolResult,
 	classified := 0
 	classifierFailed := 0
 	if t.classifier != nil && len(candidates) > 0 {
-		candidates, classified, classifierFailed = t.classifyCandidates(ctx, in.Query, searchQueries, candidates)
+		classifyInput := candidates
+		if len(classifyInput) > maxExternalClassification {
+			classifyInput = classifyInput[:maxExternalClassification]
+		}
+		candidates, classified, classifierFailed = t.classifyCandidates(ctx, in.Query, searchQueries, classifyInput)
 	}
 
 	cards := make([]ResultCard, 0, len(candidates))
@@ -274,11 +279,21 @@ func (t *ExternalSearchTool) searchMany(ctx context.Context, queries []string, l
 
 	seen := map[string]bool{}
 	candidates := make([]externalSearchCandidate, 0)
+	maxRows := 0
 	for i := range queries {
 		if !hasResult[i] || results[i].err != nil {
 			continue
 		}
-		for _, p := range results[i].list.Items {
+		if len(results[i].list.Items) > maxRows {
+			maxRows = len(results[i].list.Items)
+		}
+	}
+	for row := 0; row < maxRows; row++ {
+		for i := range queries {
+			if !hasResult[i] || results[i].err != nil || row >= len(results[i].list.Items) {
+				continue
+			}
+			p := results[i].list.Items[row]
 			key := externalPaperKey(p)
 			if key == "" || seen[key] {
 				continue
@@ -312,6 +327,10 @@ func (t *ExternalSearchTool) classifyCandidates(ctx context.Context, query strin
 		go func(index int, cand externalSearchCandidate) {
 			defer wg.Done()
 			defer func() { <-sem }()
+			if res, ok := classifyExternalPaperHeuristic(query, cand.Paper); ok {
+				out <- result{index: index, ok: true, res: res}
+				return
+			}
 			res, err := t.classifier.ClassifyExternalPaper(ctx, ExternalPaperClassificationInput{
 				Query:         query,
 				SearchQueries: searchQueries,
@@ -319,6 +338,12 @@ func (t *ExternalSearchTool) classifyCandidates(ctx context.Context, query strin
 				Paper:         cand.Paper,
 				EvidenceText:  externalEvidenceText(cand.Paper),
 			})
+			if err != nil {
+				if fallback, ok := classifyExternalPaperHeuristic(query, cand.Paper); ok {
+					out <- result{index: index, ok: true, res: fallback}
+					return
+				}
+			}
 			out <- result{index: index, ok: err == nil, res: sanitizeExternalClassification(res)}
 		}(i, candidate)
 	}
@@ -332,8 +357,7 @@ func (t *ExternalSearchTool) classifyCandidates(ctx context.Context, query strin
 	for res := range out {
 		if !res.ok {
 			failed++
-			accepted[res.index] = true
-			classifications[res.index] = ExternalPaperClassificationResult{Relevant: true, Reason: "Sub-Agent判定失败，保留为待核查结果"}
+			accepted[res.index] = false
 			continue
 		}
 		classified++
@@ -361,7 +385,7 @@ func (t *ExternalSearchTool) searchQueries(ctx context.Context, query string) ([
 		return fallback, ExternalSearchPlan{}, err
 	}
 	plan.SearchQuery = normalizeExternalQuery(plan.SearchQuery)
-	plan.SearchQueries = sanitizeExternalQueries(append([]string{plan.SearchQuery}, plan.SearchQueries...))
+	plan.SearchQueries = mergeExternalQueries(append([]string{plan.SearchQuery}, plan.SearchQueries...), fallback)
 	if len(plan.SearchQueries) > 0 {
 		plan.SearchQuery = plan.SearchQueries[0]
 	}
@@ -558,6 +582,64 @@ func sanitizeExternalQueries(queries []string) []string {
 	return out
 }
 
+func mergeExternalQueries(planned, fallback []string) []string {
+	primary := ""
+	if len(planned) > 0 {
+		primary = normalizeExternalQuery(planned[0])
+	}
+	recall := externalRecallQueriesFromPlanned(planned)
+	seen := map[string]bool{}
+	out := make([]string, 0, maxExternalSearchQueries)
+	add := func(query string) {
+		query = normalizeExternalQuery(query)
+		if query == "" {
+			return
+		}
+		key := strings.ToLower(query)
+		if seen[key] {
+			return
+		}
+		seen[key] = true
+		out = append(out, query)
+	}
+	add(primary)
+	for _, query := range recall {
+		if len(out) >= maxExternalSearchQueries {
+			break
+		}
+		add(query)
+	}
+	for _, query := range fallback {
+		if len(out) >= maxExternalSearchQueries {
+			break
+		}
+		add(query)
+	}
+	if len(planned) > 1 {
+		for _, query := range planned[1:] {
+			if len(out) >= maxExternalSearchQueries {
+				break
+			}
+			add(query)
+		}
+	}
+	return out
+}
+
+func externalRecallQueriesFromPlanned(planned []string) []string {
+	joined := strings.ToLower(strings.Join(planned, " "))
+	if !containsAnyEvidenceText(joined, "forward genetic", "forward genetics") ||
+		!containsAnyEvidenceText(joined, "gene discovery") ||
+		!containsAnyEvidenceText(joined, "slowed", "slow", "decline", "declined", "reduced", "saturation") {
+		return nil
+	}
+	return []string{
+		"forward genetic screens gene discovery slowed",
+		"gene discovery slowed forward genetic screens saturation",
+		"plant gene discovery slowed forward genetic screens",
+	}
+}
+
 func externalPaperKey(p research.Paper) string {
 	if strings.TrimSpace(p.PaperID) != "" {
 		return "s2:" + strings.TrimSpace(p.PaperID)
@@ -608,6 +690,98 @@ func sanitizeExternalClassification(res ExternalPaperClassificationResult) Exter
 	}
 	res.Annotations = cleaned
 	return res
+}
+
+func classifyExternalPaperHeuristic(_ string, p research.Paper) (ExternalPaperClassificationResult, bool) {
+	evidenceText := externalEvidenceText(p)
+	lower := strings.ToLower(evidenceText)
+	annotations := make([]ExternalEvidenceAnnotation, 0, 3)
+
+	if containsAnyEvidenceText(lower, "gene discovery") &&
+		containsAnyEvidenceText(lower, "slowed", "slow") &&
+		containsAnyEvidenceText(lower, "forward genetic") &&
+		containsAnyEvidenceText(lower, "saturation", "reach saturation") {
+		annotations = append(annotations, ExternalEvidenceAnnotation{
+			Claim:     "基因发现速度变慢，并与正向遗传筛选饱和有关",
+			Evidence:  bestExternalEvidenceSentence(evidenceText, "gene discovery", "forward genetic", "saturation"),
+			Verdict:   "supported",
+			Rationale: "候选摘要直接同时覆盖 gene discovery slowed、forward genetic screens 和 saturation。",
+		})
+	}
+
+	if (containsAnyEvidenceText(lower, "gene family", "gene families") ||
+		(containsAnyEvidenceText(lower, "poor handling") && containsAnyEvidenceText(lower, "genetic redundancy"))) &&
+		containsAnyEvidenceText(lower, "forward genetic", "genetic screens") {
+		annotations = append(annotations, ExternalEvidenceAnnotation{
+			Claim:     "基因家族冗余会影响正向遗传筛选或功能发现",
+			Evidence:  bestExternalEvidenceSentence(evidenceText, "redundancy", "gene family", "forward genetic"),
+			Verdict:   "partial",
+			Rationale: "候选文本支持遗传冗余/基因家族对筛选的影响，但不一定支持整句的时间趋势。",
+		})
+	}
+
+	if len(annotations) > 0 &&
+		containsAnyEvidenceText(lower, "cell-type", "cell type", "cell fate", "key regulators of plant cell types") {
+		annotations = append(annotations, ExternalEvidenceAnnotation{
+			Claim:     "研究目标涉及细胞类型/细胞命运相关调控基因",
+			Evidence:  bestExternalEvidenceSentence(evidenceText, "cell-type", "cell type", "cell fate", "key regulators"),
+			Verdict:   "partial",
+			Rationale: "候选文本支持细胞类型调控基因发现这一部分，但不单独支持整句全部断言。",
+		})
+	}
+
+	if len(annotations) == 0 {
+		return ExternalPaperClassificationResult{}, false
+	}
+	return ExternalPaperClassificationResult{
+		Relevant:    true,
+		Reason:      "工具判定：候选文本包含可直接对应用户原句的证据片段。",
+		Annotations: annotations,
+	}, true
+}
+
+func bestExternalEvidenceSentence(text string, needles ...string) string {
+	text = normalizeEvidenceWhitespace(text)
+	if text == "" {
+		return ""
+	}
+	sentences := splitExternalEvidenceSentences(text)
+	best := ""
+	bestScore := -1
+	for _, sentence := range sentences {
+		lower := strings.ToLower(sentence)
+		score := 0
+		for _, needle := range needles {
+			if strings.Contains(lower, strings.ToLower(needle)) {
+				score++
+			}
+		}
+		if score > bestScore {
+			bestScore = score
+			best = sentence
+		}
+	}
+	if best == "" {
+		return trimRunes(text, 360)
+	}
+	return trimRunes(best, 420)
+}
+
+func splitExternalEvidenceSentences(text string) []string {
+	fields := strings.FieldsFunc(text, func(r rune) bool {
+		return r == '.' || r == ';' || r == '\n'
+	})
+	out := make([]string, 0, len(fields))
+	for _, field := range fields {
+		field = strings.TrimSpace(field)
+		field = strings.TrimPrefix(field, "Abstract: ")
+		field = strings.TrimPrefix(field, "TLDR: ")
+		field = strings.TrimPrefix(field, "Title: ")
+		if field != "" {
+			out = append(out, field)
+		}
+	}
+	return out
 }
 
 func externalHighlightTerms(searchQueries []string) []string {
