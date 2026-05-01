@@ -197,6 +197,10 @@ func (c externalTierCounts) nonDropped() int {
 	return c.Strong + c.Weak + c.NeedsReview
 }
 
+func (c externalTierCounts) total() int {
+	return c.Strong + c.Weak + c.NeedsReview + c.Dropped
+}
+
 func NewExternalSearchTool(searcher ExternalSearcher) *ExternalSearchTool {
 	return NewExternalSearchToolWithPlanner(searcher, nil)
 }
@@ -412,7 +416,7 @@ func (t *ExternalSearchTool) Run(ctx context.Context, in ToolInput) (ToolResult,
 	note := joinProcessNotes(noteParts)
 	answerContext := externalAnswerContext(searchGoal, tierCounts, cards)
 	if len(cards) == 0 {
-		answerContext = fmt.Sprintf("没有命中：%s 使用查询 %q 返回 0 条结果。", strings.Join(sourceLabels, "+"), strings.Join(searchQueries, " | "))
+		answerContext = externalNoSupportAnswerContext(searchGoal, tierCounts, sourceLabels, searchQueries)
 	}
 
 	return ToolResult{
@@ -937,6 +941,18 @@ func externalHitStage(goal ExternalSearchGoal, counts externalTierCounts) Proces
 	hits := counts.Strong
 	if goal != ExternalSearchGoalEvidence {
 		hits = counts.nonDropped()
+	}
+	if counts.total() == 0 {
+		return ProcessStage{Label: "命中 0条", Unit: "条", Status: "completed", Detail: fmt.Sprintf("goal %s; strong %d; weak %d; needs_review %d; dropped %d", goal, counts.Strong, counts.Weak, counts.NeedsReview, counts.Dropped)}
+	}
+	if goal == ExternalSearchGoalEvidence && counts.Strong == 0 {
+		return ProcessStage{
+			Label:  "未形成证据",
+			Count:  counts.total(),
+			Unit:   "条",
+			Status: "completed",
+			Detail: fmt.Sprintf("goal %s; strong %d; weak %d; needs_review %d; dropped %d", goal, counts.Strong, counts.Weak, counts.NeedsReview, counts.Dropped),
+		}
 	}
 	return ProcessStage{
 		Label:  "命中",
@@ -1708,4 +1724,21 @@ func externalAnswerContext(goal ExternalSearchGoal, counts externalTierCounts, c
 		b.WriteString("\n\n")
 	}
 	return b.String()
+}
+
+func externalNoSupportAnswerContext(goal ExternalSearchGoal, counts externalTierCounts, sourceLabels []string, searchQueries []string) string {
+	sourceText := strings.Join(sourceLabels, "+")
+	queryText := strings.Join(searchQueries, " | ")
+	if goal == ExternalSearchGoalEvidence && counts.total() > 0 && counts.Strong == 0 {
+		return fmt.Sprintf(
+			"检索到 %d 条候选结果，但暂无 strong_match 可作为支持证据：%s 使用查询 %q。候选分层：weak_match %d 条，needs_review %d 条，dropped %d 条。",
+			counts.total(),
+			sourceText,
+			queryText,
+			counts.Weak,
+			counts.NeedsReview,
+			counts.Dropped,
+		)
+	}
+	return fmt.Sprintf("没有命中：%s 使用查询 %q 返回 0 条结果。", sourceText, queryText)
 }

@@ -1156,6 +1156,89 @@ func TestExternalSearchToolEvidenceOnlyCitesStrongMatches(t *testing.T) {
 	}
 }
 
+func TestExternalSearchToolEvidenceZeroStrongDistinguishesNoSupportFromNoRecall(t *testing.T) {
+	weak := ai_external.Paper{
+		Source:        ai_external.SourceSemanticScholar,
+		SourcePaperID: "weak-1",
+		SourcePaperIDs: map[ai_external.SourceID]string{
+			ai_external.SourceSemanticScholar: "weak-1",
+		},
+		Sources:  []ai_external.SourceID{ai_external.SourceSemanticScholar},
+		Title:    "Weak match paper",
+		Abstract: "Related background discussion without a direct match.",
+	}
+	review := ai_external.Paper{
+		Source:        ai_external.SourceSemanticScholar,
+		SourcePaperID: "review-1",
+		SourcePaperIDs: map[ai_external.SourceID]string{
+			ai_external.SourceSemanticScholar: "review-1",
+		},
+		Sources:  []ai_external.SourceID{ai_external.SourceSemanticScholar},
+		Title:    "Needs review paper",
+		Abstract: "Potentially relevant but ambiguous from the abstract alone.",
+	}
+	classifierFailed := ai_external.Paper{
+		Source:        ai_external.SourceSemanticScholar,
+		SourcePaperID: "failed-1",
+		SourcePaperIDs: map[ai_external.SourceID]string{
+			ai_external.SourceSemanticScholar: "failed-1",
+		},
+		Sources:  []ai_external.SourceID{ai_external.SourceSemanticScholar},
+		Title:    "Classifier failed paper",
+		Abstract: "Potentially relevant but the classifier did not return a final judgment.",
+	}
+	searcher := &queryRoutingExternalSearch{results: map[string][]ai_external.Paper{
+		"tiered evidence no support query": {weak, review, classifierFailed},
+	}}
+	planner := &stubExternalPlanner{plan: ExternalSearchPlan{
+		SearchGoal:  ExternalSearchGoalEvidence,
+		SearchQuery: "tiered evidence no support query",
+	}}
+	classifier := &stubExternalClassifier{
+		results: map[string]ExternalPaperClassificationResult{
+			"weak-1":   {Tier: ExternalPaperTierWeakMatch, Reason: "Background support only."},
+			"review-1": {Tier: ExternalPaperTierNeedsReview, Reason: "Need full text to confirm."},
+		},
+		errs: map[string]error{
+			"failed-1": errors.New("classifier timeout"),
+		},
+	}
+
+	res, err := NewExternalSearchToolWithAgents(searcher, planner, classifier).Run(context.Background(), ToolInput{
+		Query: "Find evidence for the claim",
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(res.Cards) != 0 {
+		t.Fatalf("cards = %+v, want zero surfaced evidence cards when no strong_match exists", res.Cards)
+	}
+	if len(res.Citations) != 0 {
+		t.Fatalf("citations = %+v, want zero citations when no strong_match exists", res.Citations)
+	}
+	if strings.Contains(res.AnswerContext, "没有命中") {
+		t.Fatalf("answer context = %q, candidate-present zero-strong evidence path should not look like zero recall", res.AnswerContext)
+	}
+	for _, want := range []string{"暂无 strong_match", "支持证据"} {
+		if !strings.Contains(res.AnswerContext, want) {
+			t.Fatalf("answer context = %q, want %q", res.AnswerContext, want)
+		}
+	}
+	labels := processLabels(res.Process.Stages)
+	if !containsTestTerm(labels, "未形成证据") {
+		t.Fatalf("process labels = %+v, want visible no-support label distinct from zero recall", labels)
+	}
+	noSupport := stageByLabel(res.Process.Stages, "未形成证据")
+	if got, want := noSupport.Count, 3; got != want {
+		t.Fatalf("no-support count = %d, want %d recalled candidates represented", got, want)
+	}
+	for _, want := range []string{"strong 0", "weak 1", "needs_review 1", "dropped 1"} {
+		if !strings.Contains(noSupport.Detail, want) {
+			t.Fatalf("no-support detail = %q, want %q", noSupport.Detail, want)
+		}
+	}
+}
+
 func TestExternalSearchToolFallsBackWhenPlannerFails(t *testing.T) {
 	searcher := &limitCapturingExternalSearch{}
 	planner := &stubExternalPlanner{err: errors.New("planner unavailable")}
