@@ -181,6 +181,33 @@
                             return pinned.some((p) => p.paper_id === paper.id);
                         },
                         getRolePrompts: () => (Reader.settings && Reader.settings.role_prompts) || [],
+                        getToolTags: () => {
+                            const enabled = (window.AIReader && Array.isArray(window.AIReader.externalSourcesEnabled))
+                                ? new Set(window.AIReader.externalSourcesEnabled)
+                                : null; // null = "settings unknown, treat all as enabled"
+                            const known = (window.AIReader && window.AIReader.toolTags && window.AIReader.toolTags.KNOWN_TOOL_TAGS) || [];
+                            return known.map((t) => {
+                                const isExternal = t.family === 'external';
+                                const isDisabled = isExternal && enabled !== null && !enabled.has(t.source);
+                                let description;
+                                if (t.name === 'PubMed') description = '外部源 · PubMed';
+                                else if (t.name === 'SemanticScholar') description = '外部源 · Semantic Scholar';
+                                else if (t.name === 'Library') description = '本地文本检索（不含图）';
+                                else if (t.name === 'Figure') description = '本地图片检索';
+                                return {
+                                    name: t.name,
+                                    family: t.family,
+                                    source: t.source,
+                                    description: description,
+                                    disabled: isDisabled,
+                                    disabledReason: isDisabled ? '未启用，前往设置 →' : '',
+                                };
+                            });
+                        },
+                        onPickToolTag: () => { /* nothing — value is read on submit */ },
+                        onPickDisabledTag: () => {
+                            window.location.href = '/settings#settings-external-sources';
+                        },
                         // Auto-pin on first @-mention (β + γ flow per spec § 3).
                         // Active conversation: server-side pin via /papers POST.
                         // Draft: stash on view._state so the first send carries paper_id.
