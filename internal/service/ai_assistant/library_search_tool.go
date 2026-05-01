@@ -108,6 +108,9 @@ func (t *LibrarySearchTool) Run(ctx context.Context, in ToolInput) (ToolResult, 
 		Limit int      `json:"limit"`
 	}{Query: in.Query, Terms: terms, Limit: limit})
 	ids, candidateErr := candidateIDs(t.papers, terms, 120)
+	if in.IntentHint == IntentLibrarySearch && len(in.Context.PaperIDs) > 0 {
+		ids = scopePaperIDs(ids, in.Context.PaperIDs)
+	}
 	if candidateErr != nil {
 		reason := "全文扫描失败：" + candidateErr.Error()
 		processStages = append(processStages, ProcessStage{Label: "全文扫描", Status: "failed", Detail: candidateErr.Error()})
@@ -753,3 +756,24 @@ var evidenceQueryPhrases = []string{
 }
 
 var assistantASCIITermRe = regexp.MustCompile(`[A-Za-z][A-Za-z0-9+&./-]{2,}`)
+
+// scopePaperIDs intersects ids with allowed in the input order. Used when the
+// user explicitly asked @Library while @-mentioning specific papers.
+func scopePaperIDs(ids []int64, allowed []int64) []int64 {
+	if len(allowed) == 0 {
+		return ids
+	}
+	allowedSet := make(map[int64]bool, len(allowed))
+	for _, id := range allowed {
+		if id > 0 {
+			allowedSet[id] = true
+		}
+	}
+	out := make([]int64, 0, len(ids))
+	for _, id := range ids {
+		if allowedSet[id] {
+			out = append(out, id)
+		}
+	}
+	return out
+}

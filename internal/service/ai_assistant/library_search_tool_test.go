@@ -345,3 +345,83 @@ func TestLibrarySearchToolClampsLargeLimit(t *testing.T) {
 		t.Fatalf("process = %+v", res.Process)
 	}
 }
+
+type stubPaperGetter struct {
+	papers map[int64]*model.Paper
+	listFn func(terms []string, limit int) ([]int64, error)
+}
+
+func (s *stubPaperGetter) GetPaperDetail(id int64) (*model.Paper, error) {
+	return s.papers[id], nil
+}
+
+func (s *stubPaperGetter) ListEvidenceCandidatePaperIDs(terms []string, limit int) ([]int64, error) {
+	if s.listFn != nil {
+		return s.listFn(terms, limit)
+	}
+	return nil, nil
+}
+
+func TestLibrarySearchScopesToContextPaperIDsWhenExplicit(t *testing.T) {
+	getter := &stubPaperGetter{
+		papers: map[int64]*model.Paper{
+			11: {ID: 11, Title: "Paper 11", AbstractText: "ATAC-seq study"},
+			12: {ID: 12, Title: "Paper 12", AbstractText: "ATAC-seq study"},
+			13: {ID: 13, Title: "Paper 13", AbstractText: "ATAC-seq study"},
+		},
+		listFn: func(terms []string, limit int) ([]int64, error) {
+			return []int64{11, 12, 13}, nil
+		},
+	}
+	tool := NewLibrarySearchTool(getter)
+
+	res, err := tool.Run(context.Background(), ToolInput{
+		Query:      "找 ATAC",
+		IntentHint: IntentLibrarySearch,
+		Context:    RequestContext{PaperIDs: []int64{11, 13}},
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	got := map[int64]bool{}
+	for _, card := range res.Cards {
+		if hit, ok := card.Payload.(PaperHitCard); ok {
+			got[hit.PaperID] = true
+		}
+	}
+	if !got[11] || !got[13] {
+		t.Fatalf("expected papers 11 and 13, got %+v", got)
+	}
+	if got[12] {
+		t.Fatalf("paper 12 should be excluded by PaperIDs scoping")
+	}
+}
+
+func TestLibrarySearchIgnoresPaperIDsWhenIntentHintIsEmpty(t *testing.T) {
+	getter := &stubPaperGetter{
+		papers: map[int64]*model.Paper{
+			11: {ID: 11, Title: "Paper 11", AbstractText: "ATAC-seq study"},
+			12: {ID: 12, Title: "Paper 12", AbstractText: "ATAC-seq study"},
+		},
+		listFn: func(terms []string, limit int) ([]int64, error) { return []int64{11, 12}, nil },
+	}
+	tool := NewLibrarySearchTool(getter)
+
+	res, err := tool.Run(context.Background(), ToolInput{
+		Query:   "找 ATAC",
+		Context: RequestContext{PaperIDs: []int64{11}},
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	got := map[int64]bool{}
+	for _, card := range res.Cards {
+		if hit, ok := card.Payload.(PaperHitCard); ok {
+			got[hit.PaperID] = true
+		}
+	}
+	if !got[11] || !got[12] {
+		t.Fatalf("expected both 11 and 12 without scoping, got %+v", got)
+	}
+}
