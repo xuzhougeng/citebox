@@ -363,6 +363,7 @@ html[lang^="zh"] .ai-config-details[open] .ai-collapsible-toggle::before {
 .ai-result-cards {
     display: grid;
     gap: 0.65rem;
+    width: 100%;
 }
 
 .ai-result-card {
@@ -482,8 +483,9 @@ html[lang^="zh"] .ai-config-details[open] .ai-collapsible-toggle::before {
     line-height: 1.5;
     max-height: 8.25rem;
     overflow-y: auto;
+    scrollbar-gutter: stable;
     scrollbar-width: thin;
-    scrollbar-color: rgba(var(--ink-rgb), 0.22) rgba(var(--ink-rgb), 0.05);
+    scrollbar-color: var(--ai-scrollbar-thumb, rgba(var(--ink-rgb), 0.22)) var(--ai-scrollbar-track, rgba(var(--ink-rgb), 0.05));
 }
 
 .ai-result-card blockquote::-webkit-scrollbar {
@@ -491,14 +493,19 @@ html[lang^="zh"] .ai-config-details[open] .ai-collapsible-toggle::before {
 }
 
 .ai-result-card blockquote::-webkit-scrollbar-track {
-    background: rgba(var(--ink-rgb), 0.04);
+    background: var(--ai-scrollbar-track, rgba(var(--ink-rgb), 0.04));
     border-radius: 999px;
 }
 
 .ai-result-card blockquote::-webkit-scrollbar-thumb {
     border: 2px solid transparent;
     border-radius: 999px;
-    background: rgba(var(--ink-rgb), 0.24);
+    background: var(--ai-scrollbar-thumb, rgba(var(--ink-rgb), 0.24));
+    background-clip: padding-box;
+}
+
+.ai-result-card blockquote::-webkit-scrollbar-thumb:hover {
+    background: var(--ai-scrollbar-thumb-hover, rgba(var(--accent-rgb), 0.44));
     background-clip: padding-box;
 }
 
@@ -952,8 +959,10 @@ html[lang^="zh"] .ai-config-details[open] .ai-collapsible-toggle::before {
     background: transparent;
     color: transparent;
     caret-color: var(--ink);
-    resize: none;
+    resize: none !important;
     overflow-y: hidden;
+    scrollbar-width: thin;
+    scrollbar-color: var(--ai-scrollbar-thumb, rgba(var(--ink-rgb), 0.22)) var(--ai-scrollbar-track, rgba(var(--ink-rgb), 0.05));
 }
 
 .ai-question-input-wrap .ai-question-input::placeholder {
@@ -974,6 +983,27 @@ html[lang^="zh"] .ai-config-details[open] .ai-collapsible-toggle::before {
     background: var(--panel-strong, #fffaf4);
     overflow-y: auto;
     overflow-x: hidden;
+    scrollbar-width: thin;
+    scrollbar-color: var(--ai-scrollbar-thumb, rgba(var(--ink-rgb), 0.22)) var(--ai-scrollbar-track, rgba(var(--ink-rgb), 0.05));
+}
+
+.ai-question-input-wrap .ai-question-input::-webkit-scrollbar,
+.ai-question-mirror::-webkit-scrollbar {
+    width: 0.55rem;
+}
+
+.ai-question-input-wrap .ai-question-input::-webkit-scrollbar-track,
+.ai-question-mirror::-webkit-scrollbar-track {
+    background: var(--ai-scrollbar-track, rgba(var(--ink-rgb), 0.04));
+    border-radius: 999px;
+}
+
+.ai-question-input-wrap .ai-question-input::-webkit-scrollbar-thumb,
+.ai-question-mirror::-webkit-scrollbar-thumb {
+    border: 2px solid transparent;
+    border-radius: 999px;
+    background: var(--ai-scrollbar-thumb, rgba(var(--ink-rgb), 0.24));
+    background-clip: padding-box;
 }
 
 /* Highlights must NOT affect character width, otherwise the textarea

@@ -482,7 +482,7 @@ const Utils = {
             const overlay = document.createElement('div');
             overlay.className = 'dialog-overlay';
             overlay.innerHTML = `
-                <div class="dialog-box">
+                <div class="dialog-box" role="dialog" aria-modal="true">
                     <div class="dialog-header">
                         <h3>${title}</h3>
                     </div>
@@ -490,8 +490,8 @@ const Utils = {
                         <p>${message}</p>
                     </div>
                     <div class="dialog-footer">
-                        <button class="btn btn-outline dialog-cancel">${t('shared.utils.cancel', '取消')}</button>
-                        <button class="btn btn-danger dialog-confirm">${t('shared.utils.ok', '确定')}</button>
+                        <button class="btn btn-outline dialog-cancel" type="button">${t('shared.utils.cancel', '取消')}</button>
+                        <button class="btn btn-danger dialog-confirm" type="button">${t('shared.utils.ok', '确定')}</button>
                     </div>
                 </div>
             `;
@@ -501,14 +501,24 @@ const Utils = {
             requestAnimationFrame(() => overlay.classList.add('active'));
 
             const close = (result) => {
+                document.removeEventListener('keydown', onKeydown);
                 overlay.classList.remove('active');
                 setTimeout(() => overlay.remove(), 200);
                 resolve(result);
+            };
+            const onKeydown = (event) => {
+                if (event.key === 'Escape') {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    close(false);
+                }
             };
 
             overlay.querySelector('.dialog-cancel').onclick = () => close(false);
             overlay.querySelector('.dialog-confirm').onclick = () => close(true);
             overlay.onclick = (e) => { if (e.target === overlay) close(false); };
+            document.addEventListener('keydown', onKeydown);
+            setTimeout(() => overlay.querySelector('.dialog-confirm')?.focus(), 0);
         });
     },
 

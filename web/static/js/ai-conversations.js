@@ -21,6 +21,16 @@
             .replace(/'/g, '&#39;');
     }
 
+    function tr(key, fallback) {
+        if (window.CiteBoxI18n && typeof window.CiteBoxI18n.t === 'function') {
+            return window.CiteBoxI18n.t(key, fallback);
+        }
+        if (typeof window.t === 'function') {
+            return window.t(key, fallback);
+        }
+        return fallback || key;
+    }
+
     // ---------------------------------------------------------------------------
     // Module
     // ---------------------------------------------------------------------------
@@ -140,9 +150,9 @@
             const input = document.createElement('input');
             input.type = 'text';
             input.className = 'ai-conv-rename-input';
-            input.value = originalText === '新对话' ? '' : originalText;
-            input.placeholder = '新对话';
-            input.setAttribute('aria-label', '重命名对话');
+            input.value = originalText === tr('ai.active_title_default', 'New Conversation') ? '' : originalText;
+            input.placeholder = tr('ai.active_title_default', 'New Conversation');
+            input.setAttribute('aria-label', tr('ai.rename_conversation', 'Rename Conversation'));
 
             // Replace the text node with the input
             titleEl.textContent = '';
@@ -161,7 +171,7 @@
                 committed = true;
                 const newTitle = input.value.trim();
                 // Restore display immediately (optimistic)
-                titleEl.textContent = newTitle || '新对话';
+                titleEl.textContent = newTitle || tr('ai.active_title_default', 'New Conversation');
                 rowEl.classList.remove('is-renaming');
                 if (newTitle && newTitle !== originalText) {
                     self._commitRename(id, newTitle);
@@ -234,15 +244,17 @@
         // -----------------------------------------------------------------------
         _renderRow(item) {
             const title   = escapeHtml(item.title || '');
-            const display = title || '新对话';
+            const display = title || escapeHtml(tr('ai.active_title_default', 'New Conversation'));
             const meta    = escapeHtml(this._formatPinSummary(item.pinned_papers));
+            const renameLabel = escapeHtml(tr('ai.rename_conversation', 'Rename Conversation'));
+            const deleteLabel = escapeHtml(tr('ai.delete_conversation_aria', 'Delete Conversation'));
 
             return (
                 '<div class="ai-conversation-row-title">' + display + '</div>' +
                 '<div class="ai-conversation-row-meta">' + meta + '</div>' +
                 '<div class="ai-conversation-row-actions">' +
-                    '<button class="ai-conversation-row-action" data-action="rename" aria-label="重命名" type="button">✎</button>' +
-                    '<button class="ai-conversation-row-action" data-action="delete" aria-label="删除" type="button">×</button>' +
+                    '<button class="ai-conversation-row-action" data-action="rename" aria-label="' + renameLabel + '" type="button">✎</button>' +
+                    '<button class="ai-conversation-row-action" data-action="delete" aria-label="' + deleteLabel + '" type="button">×</button>' +
                 '</div>'
             );
         },
@@ -252,7 +264,7 @@
         // -----------------------------------------------------------------------
         _formatPinSummary(pinned) {
             if (!Array.isArray(pinned) || pinned.length === 0) {
-                return '暂无 pin 文献';
+                return tr('ai.no_pinned_papers', 'No pinned papers');
             }
             return pinned
                 .slice(0, 3)
