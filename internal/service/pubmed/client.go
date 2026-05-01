@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -37,11 +38,18 @@ type Config struct {
 
 type Client struct {
 	baseURL    string
+	settingsMu sync.RWMutex
 	apiKey     string
 	email      string
 	tool       string
 	httpClient *http.Client
 	ticker     *time.Ticker
+}
+
+type settingsSnapshot struct {
+	apiKey string
+	email  string
+	tool   string
 }
 
 func NewClient(cfg Config) *Client {
@@ -87,11 +95,25 @@ func (c *Client) Close() {
 }
 
 func (c *Client) SetSettings(apiKey, email, tool string) {
+	c.settingsMu.Lock()
+	defer c.settingsMu.Unlock()
+
 	c.apiKey = strings.TrimSpace(apiKey)
 	c.email = strings.TrimSpace(email)
 	c.tool = strings.TrimSpace(tool)
 	if c.tool == "" {
 		c.tool = defaultTool
+	}
+}
+
+func (c *Client) currentSettings() settingsSnapshot {
+	c.settingsMu.RLock()
+	defer c.settingsMu.RUnlock()
+
+	return settingsSnapshot{
+		apiKey: c.apiKey,
+		email:  c.email,
+		tool:   c.tool,
 	}
 }
 
@@ -195,14 +217,15 @@ func (c *Client) doOnce(ctx context.Context, path string, values url.Values, dst
 }
 
 func (c *Client) addConfiguredParams(values url.Values) {
-	if c.apiKey != "" {
-		values.Set("api_key", c.apiKey)
+	settings := c.currentSettings()
+	if settings.apiKey != "" {
+		values.Set("api_key", settings.apiKey)
 	}
-	if c.email != "" {
-		values.Set("email", c.email)
+	if settings.email != "" {
+		values.Set("email", settings.email)
 	}
-	if c.tool != "" {
-		values.Set("tool", c.tool)
+	if settings.tool != "" {
+		values.Set("tool", settings.tool)
 	}
 }
 

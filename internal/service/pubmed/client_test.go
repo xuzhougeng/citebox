@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -14,7 +15,8 @@ func TestClientSearchHydratesPubMedArticle(t *testing.T) {
 		switch r.URL.Path {
 		case "/entrez/eutils/esearch.fcgi":
 			if got := r.URL.Query().Get("term"); got != "cell fate" {
-				t.Fatalf("term = %q, want cell fate", got)
+				http.Error(w, "unexpected term "+got, http.StatusBadRequest)
+				return
 			}
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"esearchresult":{"idlist":["12345"]}}`))
@@ -22,7 +24,7 @@ func TestClientSearchHydratesPubMedArticle(t *testing.T) {
 			w.Header().Set("Content-Type", "application/xml")
 			_, _ = w.Write([]byte(pubmedFetchXML))
 		default:
-			t.Fatalf("unexpected path %s", r.URL.Path)
+			http.Error(w, "unexpected path "+r.URL.Path, http.StatusNotFound)
 		}
 	}))
 	defer server.Close()
@@ -94,6 +96,46 @@ func TestClientRetriesRateLimitOnce(t *testing.T) {
 	}
 	if calls != 2 {
 		t.Fatalf("calls = %d, want 2", calls)
+	}
+}
+
+func TestClientSetSettingsConcurrentWithSearch(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"esearchresult":{"idlist":[]}}`))
+	}))
+	defer server.Close()
+
+	client := NewClient(Config{BaseURL: server.URL, MinInterval: 0})
+	errs := make(chan error, 8)
+	var wg sync.WaitGroup
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 250; i++ {
+			client.SetSettings("key", "email@example.com", "tool")
+			client.SetSettings("", "", "")
+		}
+	}()
+
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < 50; j++ {
+				if _, err := client.Search(context.Background(), "race", SearchOptions{Limit: 1}); err != nil {
+					errs <- err
+					return
+				}
+			}
+		}()
+	}
+
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		t.Fatalf("Search() error = %v", err)
 	}
 }
 
