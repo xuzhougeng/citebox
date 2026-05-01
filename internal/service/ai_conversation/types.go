@@ -74,6 +74,7 @@ type SendMessageInput struct {
 	PaperID                 int64 // optional auto-pin
 	IncludeExternalEvidence bool
 	IntentHint              string
+	Sources                 []string
 	Context                 ai_assistant.RequestContext
 	OnEvent                 func(StreamEvent) error
 }
