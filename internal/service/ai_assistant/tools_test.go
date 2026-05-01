@@ -912,6 +912,77 @@ func TestExternalSearchToolRunsMultipleQueriesAndFiltersWithClassifier(t *testin
 	}
 }
 
+func TestExternalSearchToolOnlySurfacesStrongMatchBeforeTask4(t *testing.T) {
+	strong := ai_external.Paper{
+		Source:        ai_external.SourceSemanticScholar,
+		SourcePaperID: "strong-1",
+		SourcePaperIDs: map[ai_external.SourceID]string{
+			ai_external.SourceSemanticScholar: "strong-1",
+		},
+		Sources:  []ai_external.SourceID{ai_external.SourceSemanticScholar},
+		Title:    "Strong match paper",
+		Abstract: "Direct evidence for the requested claim.",
+	}
+	weak := ai_external.Paper{
+		Source:        ai_external.SourceSemanticScholar,
+		SourcePaperID: "weak-1",
+		SourcePaperIDs: map[ai_external.SourceID]string{
+			ai_external.SourceSemanticScholar: "weak-1",
+		},
+		Sources:  []ai_external.SourceID{ai_external.SourceSemanticScholar},
+		Title:    "Weak match paper",
+		Abstract: "Related background discussion without a direct match.",
+	}
+	review := ai_external.Paper{
+		Source:        ai_external.SourceSemanticScholar,
+		SourcePaperID: "review-1",
+		SourcePaperIDs: map[ai_external.SourceID]string{
+			ai_external.SourceSemanticScholar: "review-1",
+		},
+		Sources:  []ai_external.SourceID{ai_external.SourceSemanticScholar},
+		Title:    "Needs review paper",
+		Abstract: "Potentially relevant but ambiguous from the abstract alone.",
+	}
+	searcher := &queryRoutingExternalSearch{results: map[string][]ai_external.Paper{
+		"tiered classifier query": {strong, weak, review},
+	}}
+	planner := &stubExternalPlanner{plan: ExternalSearchPlan{
+		SearchGoal:  ExternalSearchGoalEvidence,
+		SearchQuery: "tiered classifier query",
+	}}
+	classifier := &stubExternalClassifier{results: map[string]ExternalPaperClassificationResult{
+		"strong-1": {Tier: ExternalPaperTierStrongMatch, Reason: "Direct support."},
+		"weak-1":   {Tier: ExternalPaperTierWeakMatch, Reason: "Background support only."},
+		"review-1": {Tier: ExternalPaperTierNeedsReview, Reason: "Need full text to confirm."},
+	}}
+
+	res, err := NewExternalSearchToolWithAgents(searcher, planner, classifier).Run(context.Background(), ToolInput{
+		Query: "Find evidence for the claim",
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(res.Cards) != 1 {
+		t.Fatalf("cards = %+v, want only the strong_match card", res.Cards)
+	}
+	card, ok := res.Cards[0].Payload.(ExternalPaperCard)
+	if !ok {
+		t.Fatalf("payload = %#v", res.Cards[0].Payload)
+	}
+	if got, want := card.S2PaperID, "strong-1"; got != want {
+		t.Fatalf("card id = %q, want %q", got, want)
+	}
+	if len(res.Citations) != 1 {
+		t.Fatalf("citations = %+v, want only the strong_match citation", res.Citations)
+	}
+	if got, want := res.Citations[0].S2PaperID, "strong-1"; got != want {
+		t.Fatalf("citation s2 id = %q, want %q", got, want)
+	}
+	if strings.Contains(res.AnswerContext, "Weak match paper") || strings.Contains(res.AnswerContext, "Needs review paper") {
+		t.Fatalf("answer context = %q, should not surface weak_match or needs_review candidates", res.AnswerContext)
+	}
+}
+
 func TestExternalSearchToolFallsBackWhenPlannerFails(t *testing.T) {
 	searcher := &limitCapturingExternalSearch{}
 	planner := &stubExternalPlanner{err: errors.New("planner unavailable")}
