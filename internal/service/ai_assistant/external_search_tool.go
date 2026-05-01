@@ -13,6 +13,10 @@ import (
 	"github.com/xuzhougeng/citebox/internal/service/research"
 )
 
+// ErrSourceDisabled signals that the user explicitly named an external source
+// (e.g. via @PubMed) that is not enabled in the user's settings.
+var ErrSourceDisabled = errors.New("ai_assistant: external source is not enabled in settings")
+
 type ExternalSearcher interface {
 	Search(ctx context.Context, queries ai_external.SourceQueries, opts ai_external.SearchOptions) (ai_external.SearchResult, error)
 }
@@ -122,7 +126,19 @@ func (t *ExternalSearchTool) Run(ctx context.Context, in ToolInput) (ToolResult,
 		}{Query: in.Query, SearchQueries: searchQueries, QueriesBySource: sourceQueriesForJSON(sourceQueries), Limit: limit})
 		return externalSearchFailedResult(inputJSON, err, externalPlanningStages(t, sourceQueries, plan, planErr), searchQueries), nil
 	} else if ok {
-		sourceQueries = filterExternalSourceQueries(sourceQueries, enabledSources)
+		// User-explicit override: when in.Sources is non-empty, narrow execution
+		// further to the intersection. Sources that the user requested but that
+		// are not enabled in settings are reported as ErrSourceDisabled below so
+		// the user sees a clear error card.
+		executionSources := enabledSources
+		var disabledRequested []ai_external.SourceID
+		if len(in.Sources) > 0 {
+			executionSources, disabledRequested = intersectUserSources(in.Sources, enabledSources)
+		}
+		sourceQueries = filterExternalSourceQueries(sourceQueries, executionSources)
+		if len(disabledRequested) > 0 {
+			ctx = withDisabledRequestedSources(ctx, disabledRequested)
+		}
 	}
 	searchQueries := flattenExternalSourceQueries(sourceQueries)
 	searchQuery := ""
@@ -144,6 +160,11 @@ func (t *ExternalSearchTool) Run(ctx context.Context, in ToolInput) (ToolResult,
 
 	searchRes, searchErr := t.searcher.Search(ctx, sourceQueries, ai_external.SearchOptions{Limit: limit})
 	searchErrs := externalSearchFailures(searchRes, searchErr)
+	if disabled := disabledRequestedSourcesFrom(ctx); len(disabled) > 0 {
+		for _, s := range disabled {
+			searchErrs = append(searchErrs, fmt.Errorf("%s: %w", externalSourceLabel(s), ErrSourceDisabled))
+		}
+	}
 	candidates := externalSearchCandidates(searchRes.Papers)
 	if len(candidates) == 0 && searchErr != nil {
 		return externalSearchFailedResult(inputJSON, combineExternalSearchErrors(searchErrs), processStages, searchQueries), nil
@@ -244,8 +265,13 @@ func (t *ExternalSearchTool) Run(ctx context.Context, in ToolInput) (ToolResult,
 	if planErr != nil {
 		noteParts = append(noteParts, "Master规划失败，已使用本地查询回退。")
 	}
-	if len(searchErrs) > 0 && len(candidates) > 0 {
-		noteParts = append(noteParts, fmt.Sprintf("外部学术搜索部分失败 %d 个: %s。", len(searchErrs), combineExternalSearchErrors(searchErrs).Error()))
+	if len(searchErrs) > 0 {
+		if note := disabledSourcesNote(searchErrs); note != "" {
+			noteParts = append(noteParts, note)
+		}
+		if len(candidates) > 0 {
+			noteParts = append(noteParts, fmt.Sprintf("外部学术搜索部分失败 %d 个: %s。", len(searchErrs), combineExternalSearchErrors(searchErrs).Error()))
+		}
 	}
 	noteParts = append(noteParts, fmt.Sprintf("%s 查询: %s", strings.Join(sourceLabels, "+"), formatExternalSourceQueries(sourceQueries)))
 	note := joinProcessNotes(noteParts)
@@ -1221,6 +1247,63 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+// intersectUserSources returns (intersection, disabled).
+// disabled = sources the user requested but that are not in enabled.
+// Unknown source names (case-insensitive lookup miss) are silently dropped —
+// they're handled later by the "source not configured" branch.
+func intersectUserSources(requested []string, enabled []ai_external.SourceID) ([]ai_external.SourceID, []ai_external.SourceID) {
+	enabledSet := make(map[ai_external.SourceID]bool, len(enabled))
+	for _, s := range enabled {
+		enabledSet[s] = true
+	}
+	intersection := make([]ai_external.SourceID, 0, len(requested))
+	disabled := make([]ai_external.SourceID, 0)
+	seen := map[ai_external.SourceID]bool{}
+	for _, raw := range requested {
+		s := ai_external.SourceID(strings.TrimSpace(strings.ToLower(raw)))
+		if s == "" || seen[s] {
+			continue
+		}
+		seen[s] = true
+		if enabledSet[s] {
+			intersection = append(intersection, s)
+		} else {
+			disabled = append(disabled, s)
+		}
+	}
+	return intersection, disabled
+}
+
+type disabledRequestedKey struct{}
+
+func withDisabledRequestedSources(ctx context.Context, sources []ai_external.SourceID) context.Context {
+	return context.WithValue(ctx, disabledRequestedKey{}, sources)
+}
+
+func disabledRequestedSourcesFrom(ctx context.Context) []ai_external.SourceID {
+	v := ctx.Value(disabledRequestedKey{})
+	if v == nil {
+		return nil
+	}
+	if s, ok := v.([]ai_external.SourceID); ok {
+		return s
+	}
+	return nil
+}
+
+func disabledSourcesNote(errs []error) string {
+	parts := make([]string, 0, len(errs))
+	for _, err := range errs {
+		if errors.Is(err, ErrSourceDisabled) {
+			parts = append(parts, err.Error())
+		}
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return "用户显式指定但未启用的源: " + strings.Join(parts, "; ") + "（请前往设置页启用）"
 }
 
 func externalAnswerContext(cards []ResultCard) string {
