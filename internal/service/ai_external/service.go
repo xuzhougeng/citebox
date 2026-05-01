@@ -35,6 +35,10 @@ func NewService(settings SettingsProvider, searchers map[SourceID]Searcher) *Ser
 	return &Service{settings: settings, searchers: searchers}
 }
 
+func (s *Service) EnabledExternalSources(ctx context.Context) ([]SourceID, error) {
+	return s.enabledSources(ctx)
+}
+
 func (s *Service) Search(ctx context.Context, queries SourceQueries, opts SearchOptions) (SearchResult, error) {
 	sources, err := s.enabledSources(ctx)
 	if err != nil {

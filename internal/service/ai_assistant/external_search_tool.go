@@ -17,6 +17,10 @@ type ExternalSearcher interface {
 	Search(ctx context.Context, queries ai_external.SourceQueries, opts ai_external.SearchOptions) (ai_external.SearchResult, error)
 }
 
+type ExternalSourceLister interface {
+	EnabledExternalSources(ctx context.Context) ([]ai_external.SourceID, error)
+}
+
 type ExternalSearchPlanner interface {
 	PlanExternalSearch(ctx context.Context, query string) (ExternalSearchPlan, error)
 }
@@ -107,6 +111,18 @@ func (t *ExternalSearchTool) Run(ctx context.Context, in ToolInput) (ToolResult,
 	sourceQueries := externalSearchSourceQueries(fallbackQueries, plan)
 	if t != nil {
 		sourceQueries, plan, planErr = t.searchQueries(ctx, in.Query)
+	}
+	if enabledSources, ok, err := enabledExternalSearchSources(ctx, t); err != nil {
+		searchQueries := flattenExternalSourceQueries(sourceQueries)
+		inputJSON, _ := json.Marshal(struct {
+			Query           string              `json:"query"`
+			SearchQueries   []string            `json:"search_queries,omitempty"`
+			QueriesBySource map[string][]string `json:"queries_by_source,omitempty"`
+			Limit           int                 `json:"limit"`
+		}{Query: in.Query, SearchQueries: searchQueries, QueriesBySource: sourceQueriesForJSON(sourceQueries), Limit: limit})
+		return externalSearchFailedResult(inputJSON, err, externalPlanningStages(t, sourceQueries, plan, planErr), searchQueries), nil
+	} else if ok {
+		sourceQueries = filterExternalSourceQueries(sourceQueries, enabledSources)
 	}
 	searchQueries := flattenExternalSourceQueries(sourceQueries)
 	searchQuery := ""
@@ -417,6 +433,46 @@ func externalSearchSourceQueries(fallback []string, plan ExternalSearchPlan) ai_
 		ai_external.SourcePubMed:          plan.QueriesForSource(string(ai_external.SourcePubMed), fallback),
 		ai_external.SourceSemanticScholar: plan.QueriesForSource(string(ai_external.SourceSemanticScholar), fallback),
 	}
+}
+
+func enabledExternalSearchSources(ctx context.Context, t *ExternalSearchTool) ([]ai_external.SourceID, bool, error) {
+	if t == nil || t.searcher == nil {
+		return nil, false, nil
+	}
+	lister, ok := t.searcher.(ExternalSourceLister)
+	if !ok {
+		return nil, false, nil
+	}
+	sources, err := lister.EnabledExternalSources(ctx)
+	if err != nil {
+		return nil, true, err
+	}
+	return uniqueExternalSources(sources), true, nil
+}
+
+func uniqueExternalSources(sources []ai_external.SourceID) []ai_external.SourceID {
+	out := make([]ai_external.SourceID, 0, len(sources))
+	seen := map[ai_external.SourceID]bool{}
+	for _, source := range sources {
+		if source == "" || seen[source] {
+			continue
+		}
+		seen[source] = true
+		out = append(out, source)
+	}
+	return out
+}
+
+func filterExternalSourceQueries(queries ai_external.SourceQueries, sources []ai_external.SourceID) ai_external.SourceQueries {
+	out := make(ai_external.SourceQueries, len(sources))
+	for _, source := range sources {
+		sourceQueries := sanitizeExternalQueries(queries[source])
+		if len(sourceQueries) == 0 {
+			continue
+		}
+		out[source] = sourceQueries
+	}
+	return out
 }
 
 func sourceIDsInQueries(queries ai_external.SourceQueries) []ai_external.SourceID {

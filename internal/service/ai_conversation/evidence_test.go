@@ -286,8 +286,13 @@ func TestEvidenceExternalSearchesBroadlyWithoutPinnedIDs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("injectEvidence: %v", err)
 	}
-	if gotPubMed, gotS2 := strings.Join(searcher.lastQueries[ai_external.SourcePubMed], "\n"), strings.Join(searcher.lastQueries[ai_external.SourceSemanticScholar], "\n"); gotPubMed != gotS2 {
-		t.Fatalf("source queries differ: pubmed=%q s2=%q", gotPubMed, gotS2)
+	gotPubMed := strings.Join(searcher.lastQueries[ai_external.SourcePubMed], "\n")
+	gotS2 := strings.Join(searcher.lastQueries[ai_external.SourceSemanticScholar], "\n")
+	if gotPubMed == gotS2 {
+		t.Fatalf("source queries should be source-specific: pubmed=%q s2=%q", gotPubMed, gotS2)
+	}
+	if !strings.Contains(strings.ToLower(gotPubMed), "atac-seq") {
+		t.Fatalf("pubmed queries = %v, want ATAC expansion", searcher.lastQueries)
 	}
 	if !strings.Contains(strings.ToLower(strings.Join(searcher.lastQueries[ai_external.SourceSemanticScholar], "\n")), "atac-seq") {
 		t.Fatalf("queries = %v, want ATAC expansion", searcher.lastQueries)

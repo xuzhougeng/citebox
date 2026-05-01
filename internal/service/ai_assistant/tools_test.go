@@ -88,6 +88,38 @@ func (s *sourceQueryCapturingExternalSearch) Search(ctx context.Context, queries
 	}, nil
 }
 
+type enabledSourceQueryCapturingExternalSearch struct {
+	mu      sync.Mutex
+	queries ai_external.SourceQueries
+	sources []ai_external.SourceID
+}
+
+func (s *enabledSourceQueryCapturingExternalSearch) EnabledExternalSources(ctx context.Context) ([]ai_external.SourceID, error) {
+	return append([]ai_external.SourceID(nil), s.sources...), nil
+}
+
+func (s *enabledSourceQueryCapturingExternalSearch) Search(ctx context.Context, queries ai_external.SourceQueries, opts ai_external.SearchOptions) (ai_external.SearchResult, error) {
+	s.mu.Lock()
+	s.queries = cloneTestSourceQueries(queries)
+	s.mu.Unlock()
+
+	return ai_external.SearchResult{
+		Sources: append([]ai_external.SourceID(nil), s.sources...),
+		Papers: []ai_external.Paper{{
+			Source:        ai_external.SourcePubMed,
+			SourcePaperID: "12345",
+			SourcePaperIDs: map[ai_external.SourceID]string{
+				ai_external.SourcePubMed: "12345",
+			},
+			Sources:      []ai_external.SourceID{ai_external.SourcePubMed},
+			PMID:         "12345",
+			Title:        "PubMed indexed gene discovery paper",
+			Abstract:     "PubMed abstract evidence.",
+			MatchedQuery: queries[ai_external.SourcePubMed][0],
+		}},
+	}, nil
+}
+
 func TestExternalSearchToolReturnsPubMedSourceMetadata(t *testing.T) {
 	searcher := &sourceQueryCapturingExternalSearch{}
 	planner := &stubExternalPlanner{plan: ExternalSearchPlan{
@@ -137,6 +169,37 @@ func TestExternalSearchToolReturnsPubMedSourceMetadata(t *testing.T) {
 	}
 	if !strings.Contains(res.Process.Note, "PubMed") {
 		t.Fatalf("process note = %q, want PubMed", res.Process.Note)
+	}
+}
+
+func TestExternalSearchToolUsesOnlyEnabledSources(t *testing.T) {
+	searcher := &enabledSourceQueryCapturingExternalSearch{
+		sources: []ai_external.SourceID{ai_external.SourcePubMed},
+	}
+	planner := &stubExternalPlanner{plan: ExternalSearchPlan{
+		QueriesBySource: map[string][]string{
+			"pubmed":           {"gene discovery PubMed query"},
+			"semantic_scholar": {"gene discovery broad query"},
+		},
+	}}
+
+	res, err := NewExternalSearchToolWithPlanner(searcher, planner).Run(context.Background(), ToolInput{
+		Query: "找 PubMed 里的 gene discovery 证据",
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if got, want := searcher.queries[ai_external.SourcePubMed], []string{"gene discovery PubMed query"}; !slices.Equal(got, want) {
+		t.Fatalf("pubmed queries = %+v, want %+v", got, want)
+	}
+	if _, ok := searcher.queries[ai_external.SourceSemanticScholar]; ok {
+		t.Fatalf("semantic scholar should not be queried when disabled: %+v", searcher.queries)
+	}
+	if strings.Contains(res.Process.Note, "Semantic Scholar") {
+		t.Fatalf("process note = %q, should not mention disabled Semantic Scholar", res.Process.Note)
+	}
+	if strings.Contains(res.ToolCalls[0].InputJSON, "semantic_scholar") || strings.Contains(res.ToolCalls[0].OutputSummaryJSON, "Semantic Scholar") {
+		t.Fatalf("tool call should not mention disabled source: input=%s output=%s", res.ToolCalls[0].InputJSON, res.ToolCalls[0].OutputSummaryJSON)
 	}
 }
 

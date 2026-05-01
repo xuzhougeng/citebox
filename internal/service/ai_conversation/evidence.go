@@ -373,14 +373,11 @@ func externalEvidence(ctx context.Context, searcher ExternalEvidenceSearcher, us
 		}
 	}
 
-	fallback := externalEvidenceFallbackQueries(userText)
-	if len(fallback) == 0 {
+	sourceQueries := externalEvidenceFallbackQueriesBySource(userText)
+	if !hasExternalEvidenceQueries(sourceQueries) {
 		return nil, nil
 	}
-	res, err := searcher.Search(ctx, ai_external.SourceQueries{
-		ai_external.SourcePubMed:          append([]string(nil), fallback...),
-		ai_external.SourceSemanticScholar: append([]string(nil), fallback...),
-	}, ai_external.SearchOptions{
+	res, err := searcher.Search(ctx, sourceQueries, ai_external.SearchOptions{
 		Limit: limit,
 	})
 	citations := citationsFromExternalPapers(res.Papers, idMap, limit)
@@ -467,29 +464,57 @@ func evidenceSnippetFromExternalPaper(p ai_external.Paper) (string, string) {
 	return text, kind
 }
 
-func externalEvidenceFallbackQueries(userText string) []string {
-	queries := make([]string, 0, 2)
-	seen := map[string]bool{}
-	add := func(query string) {
-		query = strings.TrimSpace(query)
-		if query == "" {
-			return
-		}
-		runes := []rune(query)
-		if len(runes) > 200 {
-			query = string(runes[:200])
-		}
-		key := strings.ToLower(query)
-		if seen[key] {
-			return
-		}
-		seen[key] = true
-		queries = append(queries, query)
+func externalEvidenceFallbackQueriesBySource(userText string) ai_external.SourceQueries {
+	return ai_external.SourceQueries{
+		ai_external.SourcePubMed:          externalEvidencePubMedFallbackQueries(userText),
+		ai_external.SourceSemanticScholar: externalEvidenceSemanticScholarFallbackQueries(userText),
 	}
+}
 
-	add(userText)
-	add(externalEvidenceExpandedQuery(userText))
+func hasExternalEvidenceQueries(queries ai_external.SourceQueries) bool {
+	for _, sourceQueries := range queries {
+		if len(sourceQueries) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func externalEvidenceSemanticScholarFallbackQueries(userText string) []string {
+	queries := make([]string, 0, 2)
+	queries = appendEvidenceQuery(queries, userText)
+	queries = appendEvidenceQuery(queries, externalEvidenceExpandedQuery(userText))
 	return queries
+}
+
+func externalEvidencePubMedFallbackQueries(userText string) []string {
+	queries := make([]string, 0, 2)
+	queries = appendEvidenceQuery(queries, externalEvidenceExpandedQuery(userText))
+	if containsASCIIWord(userText) {
+		queries = appendEvidenceQuery(queries, userText)
+	}
+	if len(queries) == 0 {
+		queries = appendEvidenceQuery(queries, userText)
+	}
+	return queries
+}
+
+func appendEvidenceQuery(queries []string, query string) []string {
+	query = strings.TrimSpace(query)
+	if query == "" {
+		return queries
+	}
+	runes := []rune(query)
+	if len(runes) > 200 {
+		query = string(runes[:200])
+	}
+	key := strings.ToLower(query)
+	for _, existing := range queries {
+		if strings.ToLower(existing) == key {
+			return queries
+		}
+	}
+	return append(queries, query)
 }
 
 func externalEvidenceExpandedQuery(userText string) string {
