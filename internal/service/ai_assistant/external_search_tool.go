@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -52,6 +53,38 @@ type ExternalSearchPlan struct {
 	Rationale       string              `json:"rationale,omitempty"`
 }
 
+func (p *ExternalSearchPlan) UnmarshalJSON(data []byte) error {
+	type externalSearchPlanAlias struct {
+		SearchGoal      ExternalSearchGoal  `json:"search_goal,omitempty"`
+		MustMatch       []string            `json:"must_match,omitempty"`
+		SoftPreferences []string            `json:"soft_preferences,omitempty"`
+		TargetYear      json.RawMessage     `json:"target_year,omitempty"`
+		SearchQuery     string              `json:"search_query,omitempty"`
+		SearchQueries   []string            `json:"search_queries,omitempty"`
+		QueriesBySource map[string][]string `json:"queries_by_source,omitempty"`
+		Rationale       string              `json:"rationale,omitempty"`
+	}
+	var raw externalSearchPlanAlias
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	targetYear, err := parseExternalTargetYear(raw.TargetYear)
+	if err != nil {
+		return err
+	}
+	*p = ExternalSearchPlan{
+		SearchGoal:      raw.SearchGoal,
+		MustMatch:       raw.MustMatch,
+		SoftPreferences: raw.SoftPreferences,
+		TargetYear:      targetYear,
+		SearchQuery:     raw.SearchQuery,
+		SearchQueries:   raw.SearchQueries,
+		QueriesBySource: raw.QueriesBySource,
+		Rationale:       raw.Rationale,
+	}
+	return nil
+}
+
 type ExternalPaperClassificationInput struct {
 	Query         string
 	SearchQueries []string
@@ -88,7 +121,7 @@ const (
 )
 
 var (
-	externalSearchQuotedClaimPattern = regexp.MustCompile(`["'“”‘’「」『』][^"'“”‘’「」『』\r\n]{6,}["'“”‘’「」『』]`)
+	externalSearchQuotedClaimPattern = regexp.MustCompile(`["“”‘’「」『』]([^"“”‘’「」『』\r\n]+)["“”‘’「」『』]`)
 	externalSearchDOIPattern         = regexp.MustCompile(`(?i)\b10\.\d{4,9}/[-._;()/:A-Z0-9]+\b`)
 	externalSearchPMIDPattern        = regexp.MustCompile(`(?i)\bpmid\s*:\s*\d{5,9}\b`)
 	externalSearchArXivPattern       = regexp.MustCompile(`(?i)\barxiv\s*:\s*(?:[a-z.-]+/)?\d{4}\.\d{4,5}(?:v\d+)?\b`)
@@ -863,6 +896,33 @@ func normalizeExternalSearchGoal(raw string) ExternalSearchGoal {
 	}
 }
 
+func parseExternalTargetYear(raw json.RawMessage) (int, error) {
+	if len(raw) == 0 {
+		return 0, nil
+	}
+	trimmed := strings.TrimSpace(string(raw))
+	if trimmed == "" || trimmed == "null" {
+		return 0, nil
+	}
+	var year int
+	if err := json.Unmarshal(raw, &year); err == nil {
+		return year, nil
+	}
+	var yearString string
+	if err := json.Unmarshal(raw, &yearString); err == nil {
+		yearString = strings.TrimSpace(yearString)
+		if yearString == "" {
+			return 0, nil
+		}
+		parsed, err := strconv.Atoi(yearString)
+		if err != nil {
+			return 0, err
+		}
+		return parsed, nil
+	}
+	return 0, fmt.Errorf("invalid target_year: %s", trimmed)
+}
+
 func sanitizeExternalPlan(plan ExternalSearchPlan) ExternalSearchPlan {
 	plan.SearchGoal = normalizeExternalSearchGoal(string(plan.SearchGoal))
 	plan.MustMatch = dedupeExternalPlanTerms(plan.MustMatch)
@@ -904,7 +964,7 @@ func fallbackExternalSearchGoal(query string) ExternalSearchGoal {
 	switch {
 	case trimmed == "":
 		return ExternalSearchGoalDiscovery
-	case externalSearchQuotedClaimPattern.MatchString(trimmed):
+	case hasEvidenceLikeQuotedSpan(trimmed):
 		return ExternalSearchGoalEvidence
 	case externalSearchDOIPattern.MatchString(trimmed):
 		return ExternalSearchGoalEvidence
@@ -915,6 +975,23 @@ func fallbackExternalSearchGoal(query string) ExternalSearchGoal {
 	default:
 		return ExternalSearchGoalDiscovery
 	}
+}
+
+func hasEvidenceLikeQuotedSpan(query string) bool {
+	matches := externalSearchQuotedClaimPattern.FindAllStringSubmatch(query, -1)
+	for _, match := range matches {
+		if len(match) < 2 {
+			continue
+		}
+		quoted := normalizeExternalQuery(match[1])
+		if quoted == "" {
+			continue
+		}
+		if len(strings.Fields(quoted)) >= 5 {
+			return true
+		}
+	}
+	return false
 }
 
 func isKnownExternalSearchGoal(raw string) bool {

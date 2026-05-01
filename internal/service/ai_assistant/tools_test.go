@@ -481,6 +481,26 @@ func TestExternalPlannerReturnsGoalConstraintsAndTargetYear(t *testing.T) {
 	}
 }
 
+func TestExternalPlannerAcceptsStringTargetYear(t *testing.T) {
+	caller := &stubNonStreamCaller{output: `{
+		"search_goal": "evidence",
+		"target_year": "2024",
+		"queries_by_source": {
+			"pubmed": ["CRISPR retinal degeneration AAV"],
+			"semantic_scholar": ["CRISPR retinal degeneration mouse model"]
+		}
+	}`}
+	planner := NewLLMExternalSearchPlanner(stubAISettingsProvider{settings: model.DefaultAISettings()}, caller)
+
+	plan, err := planner.PlanExternalSearch(context.Background(), "Find evidence for CRISPR retinal degeneration therapy in 2024")
+	if err != nil {
+		t.Fatalf("PlanExternalSearch: %v", err)
+	}
+	if got, want := plan.TargetYear, 2024; got != want {
+		t.Fatalf("target year = %d, want %d", got, want)
+	}
+}
+
 func TestNormalizeExternalSearchGoalDefaultsToDiscovery(t *testing.T) {
 	for _, raw := range []string{"", " ", "unknown", "DISCOVERY", " discovery "} {
 		got := normalizeExternalSearchGoal(raw)
@@ -507,6 +527,13 @@ func TestFallbackExternalSearchGoalTreatsQuotedClaimAsEvidence(t *testing.T) {
 	}
 	if got, want := fallbackExternalSearchGoal("recent CRISPR delivery review"), ExternalSearchGoalDiscovery; got != want {
 		t.Fatalf("fallbackExternalSearchGoal(discovery query) = %q, want %q", got, want)
+	}
+}
+
+func TestFallbackExternalSearchGoalKeepsQuotedTopicQueriesAsDiscovery(t *testing.T) {
+	query := `recent reviews on "single-cell RNA-seq" in plants`
+	if got, want := fallbackExternalSearchGoal(query), ExternalSearchGoalDiscovery; got != want {
+		t.Fatalf("fallbackExternalSearchGoal(%q) = %q, want %q", query, got, want)
 	}
 }
 
@@ -539,6 +566,33 @@ func TestExternalSearchQueriesInvalidSearchGoalFallsBackToQueryHeuristic(t *test
 	tool := &ExternalSearchTool{
 		planner: &stubExternalPlanner{plan: ExternalSearchPlan{
 			SearchGoal: "unsupported",
+			QueriesBySource: map[string][]string{
+				"pubmed":           {"gene discovery slowed forward genetic screens"},
+				"semantic_scholar": {"gene discovery slowed model organisms"},
+			},
+		}},
+	}
+
+	sourceQueries, plan, err := tool.searchQueries(context.Background(), query)
+	if err != nil {
+		t.Fatalf("searchQueries: %v", err)
+	}
+	if got, want := plan.SearchGoal, fallbackExternalSearchGoal(query); got != want {
+		t.Fatalf("search goal = %q, want fallback %q", got, want)
+	}
+	if got, want := sourceQueries[ai_external.SourcePubMed], []string{"gene discovery slowed forward genetic screens"}; !slices.Equal(got, want) {
+		t.Fatalf("pubmed queries = %+v, want %+v", got, want)
+	}
+	if got, want := sourceQueries[ai_external.SourceSemanticScholar], []string{"gene discovery slowed model organisms"}; !slices.Equal(got, want) {
+		t.Fatalf("semantic scholar queries = %+v, want %+v", got, want)
+	}
+}
+
+func TestExternalSearchQueriesEmptySearchGoalFallsBackToQueryHeuristic(t *testing.T) {
+	query := `Find a source for "gene discovery has slowed over the past decade"`
+	tool := &ExternalSearchTool{
+		planner: &stubExternalPlanner{plan: ExternalSearchPlan{
+			SearchGoal: "",
 			QueriesBySource: map[string][]string{
 				"pubmed":           {"gene discovery slowed forward genetic screens"},
 				"semantic_scholar": {"gene discovery slowed model organisms"},
