@@ -301,6 +301,31 @@ func (h *SettingsHandler) PutResearchSettings(w http.ResponseWriter, r *http.Req
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// GetAIExternalSearchSettings -> GET /api/settings/ai-external-search
+func (h *SettingsHandler) GetAIExternalSearchSettings(w http.ResponseWriter, r *http.Request) {
+	settings, err := h.libraryService.GetAIExternalSearchSettings()
+	if err != nil {
+		sendError(w, err)
+		return
+	}
+	sendJSON(w, http.StatusOK, settings)
+}
+
+// PutAIExternalSearchSettings -> PUT /api/settings/ai-external-search
+func (h *SettingsHandler) PutAIExternalSearchSettings(w http.ResponseWriter, r *http.Request) {
+	var body model.AIExternalSearchSettings
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sendError(w, apperr.New(apperr.CodeInvalidArgument, "请求体格式错误"))
+		return
+	}
+	settings, err := h.libraryService.UpdateAIExternalSearchSettings(body)
+	if err != nil {
+		sendError(w, err)
+		return
+	}
+	sendJSON(w, http.StatusOK, settings)
+}
+
 func (h *SettingsHandler) GetVersionStatus(w http.ResponseWriter, r *http.Request) {
 	refresh := false
 	switch r.URL.Query().Get("refresh") {
