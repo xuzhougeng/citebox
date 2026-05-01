@@ -817,7 +817,15 @@ AI 流式阅读通过：
 - `process`：紧凑流程摘要，用于展示扫描阶段、命中数和状态。
 - `cards`：结构化结果卡片，例如 `paper_hit`、`external_paper`、`paper_read`、`paper_compare`、`figure_result`。
   - `paper_hit.payload.highlight_terms`：本地全文扫描实际使用的检索词数组，前端用于在证据片段中高亮命中词；旧消息可能没有该字段。
-  - `external_paper.payload.matched_query` / `reason` / `evidence_annotations`：外部出处检索使用多查询召回后，由 Sub-Agent 对候选文献进行证据对应判定；`evidence_annotations` 标注用户原句片段、候选原文证据、支持状态和简短理由。
+  - `external_paper.payload`：外部出处检索卡片。常见字段包括 `matched_query`、`reason`、`search_goal`、`tier`、`year_label`、`article_role`、`matched_constraints`、`matched_preferences`、`evidence_annotations`。
+    - `search_goal`：`discovery` 或 `evidence`。`discovery` 表示“找方向 / 找候选 / 找综述”一类外部摸排；`evidence` 表示“核查具体断言 / 找直接出处”一类证据检索。
+    - `tier`：候选分层结果。当前会返回 `strong_match`、`weak_match`、`needs_review`（内部还可能出现 `drop`，但不会作为结果卡片返回给前端）。
+    - `year_label`：优先展示的年份标签，例如同时包含 online year / issue year 的字符串；旧消息或没有年份细分时可以只看 `year`。
+    - `matched_constraints`：分类阶段确认已满足的硬约束（来自 planner 的 `must_match`）。
+    - `matched_preferences`：分类阶段确认已命中的软偏好（来自 planner 的 `soft_preferences`）。
+    - `article_role`：分类阶段归纳的文献角色，例如 `primary_study`、`review`、`meta_analysis`、`method` 等。
+    - `evidence_annotations`：仅在需要说明证据对应关系时返回，标注用户原句片段、候选原文证据、支持状态和简短理由。
+    - 语义约定：外部检索先做多查询召回，再由 Sub-Agent 做候选分层和证据判定。`discovery` 模式会保留 `weak_match` / `needs_review` 候选，便于继续筛选；`evidence` 模式只把 `strong_match` 作为正式证据卡片返回，弱相关或待核查候选只体现在流程摘要中，不进入最终证据卡片和 citations。
   - `figure_result.payload.evidence_text` / `evidence_location`：当图文检索由全文候选文献回退产生时，记录支持该候选图的本地全文证据片段和位置；旧消息或直接图注命中可能没有该字段。
 - `citations`：证据引用数组，用于脚注和结果卡片引用。
 - 当工具调度已经完成但最终模型回答失败或返回空文本时，服务端会优先返回已完成的工具证据，并在最终 assistant 消息中使用 `mode="tool_fallback"`；客户端应按普通 assistant 文本和已返回结果卡片展示。

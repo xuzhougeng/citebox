@@ -156,24 +156,62 @@
         '</article>';
     }
 
+    // `external_paper` cards may include tier/search_goal metadata plus year_label, article_role, matched_constraints, and matched_preferences.
     function renderExternalPaper(p) {
-        const meta = metaLine([p.venue, p.year, p.doi]);
+        const meta = metaLine([p.venue, p.year_label || p.year, p.doi]);
         const s2 = safeUrl(p.s2_paper_id ? 'https://www.semanticscholar.org/paper/' + encodeURIComponent(p.s2_paper_id) : '', { allowExternal: true });
         const annotations = renderExternalAnnotations(p.evidence_annotations, p.highlight_terms);
+        const tierBadge = renderExternalTierBadge(p.tier);
         const matchedQuery = p.matched_query
             ? '<p class="ai-result-note">' + escapeHtml(translate('ai.result_matched_query', '匹配查询')) + ': ' + escapeHtml(p.matched_query) + '</p>'
             : '';
+        const matchedConstraints = renderExternalListNote('ai.result_matched_constraints', '命中约束', p.matched_constraints);
+        const matchedPreferences = renderExternalListNote('ai.result_matched_preferences', '命中偏好', p.matched_preferences);
+        const articleRole = p.article_role
+            ? '<p class="ai-result-note">' + escapeHtml(translate('ai.result_article_role', '文献角色')) + ': ' + escapeHtml(formatExternalArticleRole(p.article_role)) + '</p>'
+            : '';
         return '<article class="ai-result-card ai-result-card-external">' +
             '<div class="ai-result-card-head">' +
-                '<h4>' + escapeHtml(p.title || translate('ai.result_external_paper_fallback', '外部文献')) + '</h4>' +
+                '<h4>' + escapeHtml(p.title || translate('ai.result_external_paper_fallback', '外部文献')) + (tierBadge ? ' ' + tierBadge : '') + '</h4>' +
                 (meta ? '<p>' + escapeHtml(meta) + '</p>' : '') +
             '</div>' +
             matchedQuery +
+            matchedConstraints +
+            matchedPreferences +
+            articleRole +
             (p.reason ? '<p class="ai-result-reason">' + escapeHtml(p.reason) + '</p>' : '') +
             (annotations || (p.abstract ? '<p class="ai-result-reason">' + renderHighlightedText(p.abstract, p.highlight_terms) + citation(p.citation_index) + '</p>' :
                 (p.tldr ? '<p class="ai-result-reason">' + renderHighlightedText(p.tldr, p.highlight_terms) + citation(p.citation_index) + '</p>' : ''))) +
             (s2 ? '<a class="btn btn-small btn-outline" href="' + escapeHtml(s2) + '" target="_blank" rel="noopener">' + escapeHtml(translate('ai.result_open_external', '查看来源')) + '</a>' : '') +
         '</article>';
+    }
+
+    function renderExternalTierBadge(tier) {
+        const label = externalTierLabel(tier);
+        if (!label) return '';
+        return '<span class="figure-badge">' + escapeHtml(label) + '</span>';
+    }
+
+    function externalTierLabel(tier) {
+        const key = String(tier || '').trim().toLowerCase();
+        if (key === 'strong_match') return translate('ai.result_tier_strong', '强相关');
+        if (key === 'weak_match') return translate('ai.result_tier_weak', '弱相关');
+        if (key === 'needs_review') return translate('ai.result_tier_review', '待核查');
+        return '';
+    }
+
+    function renderExternalListNote(labelKey, fallback, values) {
+        if (!Array.isArray(values) || values.length === 0) return '';
+        const text = values
+            .map((value) => String(value == null ? '' : value).trim())
+            .filter((value) => value !== '')
+            .join(', ');
+        if (!text) return '';
+        return '<p class="ai-result-note">' + escapeHtml(translate(labelKey, fallback)) + ': ' + escapeHtml(text) + '</p>';
+    }
+
+    function formatExternalArticleRole(value) {
+        return String(value == null ? '' : value).trim().replace(/_/g, ' ');
     }
 
     function renderExternalAnnotations(annotations, terms) {
