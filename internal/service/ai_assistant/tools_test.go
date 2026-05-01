@@ -437,6 +437,79 @@ func TestExternalPlannerReturnsQueriesBySource(t *testing.T) {
 	}
 }
 
+func TestExternalPlannerReturnsGoalConstraintsAndTargetYear(t *testing.T) {
+	caller := &stubNonStreamCaller{output: `{
+		"search_goal": " Evidence ",
+		"must_match": ["CRISPR", " retinal degeneration ", "CRISPR"],
+		"soft_preferences": ["AAV", "mouse model", "AAV"],
+		"target_year": 2024,
+		"queries_by_source": {
+			"pubmed": ["CRISPR retinal degeneration AAV"],
+			"semantic_scholar": ["CRISPR retinal degeneration mouse model"]
+		},
+		"rationale": "preserve the core claim while keeping expansion terms soft"
+	}`}
+	planner := NewLLMExternalSearchPlanner(stubAISettingsProvider{settings: model.DefaultAISettings()}, caller)
+
+	plan, err := planner.PlanExternalSearch(context.Background(), "Find evidence for CRISPR retinal degeneration therapy in 2024")
+	if err != nil {
+		t.Fatalf("PlanExternalSearch: %v", err)
+	}
+	if got, want := plan.SearchGoal, ExternalSearchGoalEvidence; got != want {
+		t.Fatalf("search goal = %q, want %q", got, want)
+	}
+	if got, want := plan.MustMatch, []string{"CRISPR", "retinal degeneration"}; !slices.Equal(got, want) {
+		t.Fatalf("must match = %+v, want %+v", got, want)
+	}
+	if got, want := plan.SoftPreferences, []string{"AAV", "mouse model"}; !slices.Equal(got, want) {
+		t.Fatalf("soft preferences = %+v, want %+v", got, want)
+	}
+	if got, want := plan.TargetYear, 2024; got != want {
+		t.Fatalf("target year = %d, want %d", got, want)
+	}
+	if got, want := plan.QueriesBySource["pubmed"], []string{"CRISPR retinal degeneration AAV"}; !slices.Equal(got, want) {
+		t.Fatalf("pubmed queries = %+v, want %+v", got, want)
+	}
+	if got, want := plan.QueriesBySource["semantic_scholar"], []string{"CRISPR retinal degeneration mouse model"}; !slices.Equal(got, want) {
+		t.Fatalf("semantic scholar queries = %+v, want %+v", got, want)
+	}
+	if !strings.Contains(caller.systemPrompt, `"search_goal"`) ||
+		!strings.Contains(caller.systemPrompt, `"must_match"`) ||
+		!strings.Contains(caller.systemPrompt, `"soft_preferences"`) ||
+		!strings.Contains(caller.systemPrompt, `"target_year"`) {
+		t.Fatalf("system prompt does not describe richer planner JSON: %s", caller.systemPrompt)
+	}
+}
+
+func TestNormalizeExternalSearchGoalDefaultsToDiscovery(t *testing.T) {
+	for _, raw := range []string{"", " ", "unknown", "DISCOVERY", " discovery "} {
+		got := normalizeExternalSearchGoal(raw)
+		want := ExternalSearchGoalDiscovery
+		if raw == "DISCOVERY" || raw == " discovery " {
+			want = ExternalSearchGoalDiscovery
+		}
+		if got != want {
+			t.Fatalf("normalizeExternalSearchGoal(%q) = %q, want %q", raw, got, want)
+		}
+	}
+}
+
+func TestFallbackExternalSearchGoalTreatsQuotedClaimAsEvidence(t *testing.T) {
+	for _, query := range []string{
+		`Find a source for "gene discovery has slowed over the past decade"`,
+		`10.1038/nature12373`,
+		`PMID: 12345678`,
+		`arXiv:2401.01234`,
+	} {
+		if got, want := fallbackExternalSearchGoal(query), ExternalSearchGoalEvidence; got != want {
+			t.Fatalf("fallbackExternalSearchGoal(%q) = %q, want %q", query, got, want)
+		}
+	}
+	if got, want := fallbackExternalSearchGoal("recent CRISPR delivery review"), ExternalSearchGoalDiscovery; got != want {
+		t.Fatalf("fallbackExternalSearchGoal(discovery query) = %q, want %q", got, want)
+	}
+}
+
 func TestNormalizeExternalQueriesBySourceMergesDuplicateAliasesDeterministically(t *testing.T) {
 	in := map[string][]string{
 		"PubMed": {

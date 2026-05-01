@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -33,7 +34,18 @@ type ExternalPaperClassifier interface {
 	ClassifyExternalPaper(ctx context.Context, in ExternalPaperClassificationInput) (ExternalPaperClassificationResult, error)
 }
 
+type ExternalSearchGoal string
+
+const (
+	ExternalSearchGoalDiscovery ExternalSearchGoal = "discovery"
+	ExternalSearchGoalEvidence  ExternalSearchGoal = "evidence"
+)
+
 type ExternalSearchPlan struct {
+	SearchGoal      ExternalSearchGoal  `json:"search_goal,omitempty"`
+	MustMatch       []string            `json:"must_match,omitempty"`
+	SoftPreferences []string            `json:"soft_preferences,omitempty"`
+	TargetYear      int                 `json:"target_year,omitempty"`
 	SearchQuery     string              `json:"search_query,omitempty"`
 	SearchQueries   []string            `json:"search_queries,omitempty"`
 	QueriesBySource map[string][]string `json:"queries_by_source,omitempty"`
@@ -73,6 +85,13 @@ const (
 	maxExternalSearchQueries   = 4
 	maxExternalClassification  = 20
 	externalClassifierParallel = 20
+)
+
+var (
+	externalSearchQuotedClaimPattern = regexp.MustCompile(`["'“”‘’「」『』][^"'“”‘’「」『』\r\n]{6,}["'“”‘’「」『』]`)
+	externalSearchDOIPattern         = regexp.MustCompile(`(?i)\b10\.\d{4,9}/[-._;()/:A-Z0-9]+\b`)
+	externalSearchPMIDPattern        = regexp.MustCompile(`(?i)\bpmid\s*:\s*\d{5,9}\b`)
+	externalSearchArXivPattern       = regexp.MustCompile(`(?i)\barxiv\s*:\s*(?:[a-z.-]+/)?\d{4}\.\d{4,5}(?:v\d+)?\b`)
 )
 
 type ExternalPaperCard struct {
@@ -386,18 +405,25 @@ func (t *ExternalSearchTool) classifyCandidates(ctx context.Context, query strin
 func (t *ExternalSearchTool) searchQueries(ctx context.Context, query string) (ai_external.SourceQueries, ExternalSearchPlan, error) {
 	fallback := ExternalSearchQueries(query)
 	if t == nil || t.planner == nil {
-		return externalSearchSourceQueries(fallback, ExternalSearchPlan{}), ExternalSearchPlan{}, nil
+		plan := ExternalSearchPlan{SearchGoal: fallbackExternalSearchGoal(query)}
+		return externalSearchSourceQueries(fallback, plan), plan, nil
 	}
 	plan, err := t.planner.PlanExternalSearch(ctx, query)
 	if err != nil {
-		return externalSearchSourceQueries(fallback, ExternalSearchPlan{}), ExternalSearchPlan{}, err
+		plan := ExternalSearchPlan{SearchGoal: fallbackExternalSearchGoal(query)}
+		return externalSearchSourceQueries(fallback, plan), plan, err
+	}
+	rawGoal := strings.TrimSpace(string(plan.SearchGoal))
+	plan = sanitizeExternalPlan(plan)
+	if !isKnownExternalSearchGoal(rawGoal) {
+		plan.SearchGoal = fallbackExternalSearchGoal(query)
 	}
 	sourceQueries := externalSearchSourceQueries(fallback, plan)
 	plan.SearchQueries = flattenExternalSourceQueries(sourceQueries)
 	plan.SearchQuery = firstExternalQuery(plan.SearchQueries)
-	plan.Rationale = strings.TrimSpace(plan.Rationale)
 	if len(plan.SearchQueries) == 0 {
-		return externalSearchSourceQueries(fallback, ExternalSearchPlan{}), ExternalSearchPlan{}, errors.New("empty external search query")
+		fallbackPlan := ExternalSearchPlan{SearchGoal: fallbackExternalSearchGoal(query)}
+		return externalSearchSourceQueries(fallback, fallbackPlan), fallbackPlan, errors.New("empty external search query")
 	}
 	return sourceQueries, plan, nil
 }
@@ -824,6 +850,80 @@ func normalizeExternalQuery(query string) string {
 
 func normalizeExternalSource(source string) string {
 	return strings.ToLower(strings.TrimSpace(source))
+}
+
+func normalizeExternalSearchGoal(raw string) ExternalSearchGoal {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case string(ExternalSearchGoalEvidence):
+		return ExternalSearchGoalEvidence
+	case "", string(ExternalSearchGoalDiscovery):
+		return ExternalSearchGoalDiscovery
+	default:
+		return ExternalSearchGoalDiscovery
+	}
+}
+
+func sanitizeExternalPlan(plan ExternalSearchPlan) ExternalSearchPlan {
+	plan.SearchGoal = normalizeExternalSearchGoal(string(plan.SearchGoal))
+	plan.MustMatch = dedupeExternalPlanTerms(plan.MustMatch)
+	plan.SoftPreferences = dedupeExternalPlanTerms(plan.SoftPreferences)
+	plan.SearchQuery = normalizeExternalQuery(plan.SearchQuery)
+	plan.SearchQueries = sanitizeExternalQueries(append([]string{plan.SearchQuery}, plan.SearchQueries...))
+	plan.SearchQuery = firstExternalQuery(plan.SearchQueries)
+	plan.QueriesBySource = normalizeExternalQueriesBySource(plan.QueriesBySource)
+	plan.Rationale = strings.TrimSpace(plan.Rationale)
+	if plan.TargetYear < 0 {
+		plan.TargetYear = 0
+	}
+	return plan
+}
+
+func dedupeExternalPlanTerms(values []string) []string {
+	seen := map[string]bool{}
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		value = normalizeExternalQuery(value)
+		if value == "" {
+			continue
+		}
+		key := strings.ToLower(value)
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		out = append(out, value)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func fallbackExternalSearchGoal(query string) ExternalSearchGoal {
+	trimmed := strings.TrimSpace(query)
+	switch {
+	case trimmed == "":
+		return ExternalSearchGoalDiscovery
+	case externalSearchQuotedClaimPattern.MatchString(trimmed):
+		return ExternalSearchGoalEvidence
+	case externalSearchDOIPattern.MatchString(trimmed):
+		return ExternalSearchGoalEvidence
+	case externalSearchPMIDPattern.MatchString(trimmed):
+		return ExternalSearchGoalEvidence
+	case externalSearchArXivPattern.MatchString(trimmed):
+		return ExternalSearchGoalEvidence
+	default:
+		return ExternalSearchGoalDiscovery
+	}
+}
+
+func isKnownExternalSearchGoal(raw string) bool {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case string(ExternalSearchGoalDiscovery), string(ExternalSearchGoalEvidence):
+		return true
+	default:
+		return false
+	}
 }
 
 func normalizeExternalQueriesBySource(queriesBySource map[string][]string) map[string][]string {

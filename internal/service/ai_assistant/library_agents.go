@@ -75,15 +75,15 @@ func (p *LLMExternalSearchPlanner) PlanExternalSearch(ctx context.Context, query
 	if err := decodeFirstJSONObject(out, &plan); err != nil {
 		return ExternalSearchPlan{}, err
 	}
-	plan.SearchQuery = normalizeExternalQuery(plan.SearchQuery)
-	plan.SearchQueries = sanitizeExternalQueries(append([]string{plan.SearchQuery}, plan.SearchQueries...))
-	plan.SearchQuery = firstExternalQuery(plan.SearchQueries)
-	plan.QueriesBySource = normalizeExternalQueriesBySource(plan.QueriesBySource)
+	rawGoal := strings.TrimSpace(string(plan.SearchGoal))
+	plan = sanitizeExternalPlan(plan)
+	if !isKnownExternalSearchGoal(rawGoal) {
+		plan.SearchGoal = fallbackExternalSearchGoal(query)
+	}
 	if len(plan.SearchQueries) == 0 && len(plan.QueriesBySource) == 0 {
 		plan.SearchQueries = ExternalSearchQueries(query)
 		plan.SearchQuery = firstExternalQuery(plan.SearchQueries)
 	}
-	plan.Rationale = strings.TrimSpace(plan.Rationale)
 	if len(plan.SearchQueries) == 0 && len(plan.QueriesBySource) == 0 {
 		return ExternalSearchPlan{}, fmt.Errorf("empty external search query")
 	}
@@ -159,10 +159,14 @@ JSON 格式：
 const externalPlannerSystemPrompt = `你是 CiteBox AI 助手的 Master Agent。你的任务是把用户的外部调研或出处查找请求改写成适合已启用外部来源的英文检索式。
 只输出 JSON，不要输出 Markdown，不要解释思考过程。
 JSON 格式：
-{"queries_by_source":{"pubmed":["query 1","query 2"],"semantic_scholar":["query 1","query 2"]},"rationale":"一句话说明检索式如何覆盖用户需求"}
+{"search_goal":"discovery|evidence","must_match":["term 1","term 2"],"soft_preferences":["term 1","term 2"],"target_year":2024,"queries_by_source":{"pubmed":["query 1","query 2"],"semantic_scholar":["query 1","query 2"]},"rationale":"一句话说明检索式如何覆盖用户需求"}
 规则：
 - 用户可能使用任意语言提问；理解其真实学术需求，并改写为简短英文关键词检索式。
 - 保留用户明确给出的技术名词、实验类型、测序类型、物种、疾病和缩写，例如 ChIP-seq、ATAC-seq、single-cell RNA-seq。
+- "search_goal" 只能是 "discovery" 或 "evidence"。主题摸排、综述、最新进展、有哪些方向等用 discovery；核查具体断言、找出处、找编号对应文献等用 evidence。
+- "must_match" 只放用户需求里真正不能放松的硬约束，例如核心实体、疾病、干预、方法、明确限定的人群/物种。去重，控制在 2 到 6 项。
+- "soft_preferences" 放有助于召回或排序的同义表达、补充表述、上下文限定或扩展词。查询扩展词不能自动升级为 "must_match" 硬约束。
+- "target_year" 只在用户明确要求某一年或近年窗口的锚点年份时填写，否则填 0。
 - 用户要求找出处、引用或证据时，检索核心断言本身，不要保留 source、citation、reference、出处、引用等操作词。
 - 不要加入 article、paper、literature、data、search、find、about、external 等泛词。
 - 只为已启用的来源生成查询；当前支持来源键为 pubmed 和 semantic_scholar。
