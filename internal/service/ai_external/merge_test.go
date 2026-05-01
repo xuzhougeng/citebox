@@ -1,0 +1,56 @@
+package ai_external
+
+import "testing"
+
+func TestMergePapersDedupesByDOIAndMergesSources(t *testing.T) {
+	in := []SourceResult{
+		{Source: SourcePubMed, Papers: []Paper{{Source: SourcePubMed, SourcePaperID: "pmid-1", PMID: "1", DOI: "https://doi.org/10.1/ABC", Title: "Short", Abstract: "short"}}},
+		{Source: SourceSemanticScholar, Papers: []Paper{{Source: SourceSemanticScholar, SourcePaperID: "s2-1", DOI: "10.1/abc", Title: "Short", Abstract: "a much longer abstract"}}},
+	}
+	out := MergePapers(in, []SourceID{SourcePubMed, SourceSemanticScholar}, 10)
+	if len(out) != 1 {
+		t.Fatalf("len = %d, want 1: %+v", len(out), out)
+	}
+	p := out[0]
+	if len(p.Sources) != 2 || p.SourcePaperIDs[SourcePubMed] != "pmid-1" || p.SourcePaperIDs[SourceSemanticScholar] != "s2-1" {
+		t.Fatalf("merged source metadata = %+v", p)
+	}
+	if p.Abstract != "a much longer abstract" {
+		t.Fatalf("abstract = %q", p.Abstract)
+	}
+}
+
+func TestMergePapersDedupesByPMID(t *testing.T) {
+	out := MergePapers([]SourceResult{
+		{Source: SourcePubMed, Papers: []Paper{{Source: SourcePubMed, SourcePaperID: "123", PMID: "123", Title: "A"}}},
+		{Source: SourceSemanticScholar, Papers: []Paper{{Source: SourceSemanticScholar, SourcePaperID: "s2", PMID: "123", Title: "A"}}},
+	}, []SourceID{SourcePubMed, SourceSemanticScholar}, 10)
+	if len(out) != 1 {
+		t.Fatalf("len = %d, want 1", len(out))
+	}
+}
+
+func TestMergePapersDedupesByNormalizedTitleAndPreservesSourceOrder(t *testing.T) {
+	out := MergePapers([]SourceResult{
+		{Source: SourceSemanticScholar, Papers: []Paper{{Source: SourceSemanticScholar, SourcePaperID: "s2", Title: "Cell Fate Control!"}}},
+		{Source: SourcePubMed, Papers: []Paper{{Source: SourcePubMed, SourcePaperID: "pmid", Title: "cell fate control"}}},
+	}, []SourceID{SourcePubMed, SourceSemanticScholar}, 10)
+	if len(out) != 1 {
+		t.Fatalf("len = %d, want 1", len(out))
+	}
+	if out[0].SourcePaperIDs[SourcePubMed] != "pmid" || out[0].SourcePaperIDs[SourceSemanticScholar] != "s2" {
+		t.Fatalf("source ids = %+v", out[0].SourcePaperIDs)
+	}
+}
+
+func TestMergePapersTruncatesAfterMerge(t *testing.T) {
+	out := MergePapers([]SourceResult{
+		{Source: SourcePubMed, Papers: []Paper{
+			{Source: SourcePubMed, SourcePaperID: "1", PMID: "1", Title: "One"},
+			{Source: SourcePubMed, SourcePaperID: "2", PMID: "2", Title: "Two"},
+		}},
+	}, []SourceID{SourcePubMed}, 1)
+	if len(out) != 1 || out[0].PMID != "1" {
+		t.Fatalf("out = %+v", out)
+	}
+}
