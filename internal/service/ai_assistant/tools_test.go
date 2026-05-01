@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/xuzhougeng/citebox/internal/model"
@@ -54,13 +55,18 @@ func TestExternalSearchToolReturnsExternalPaperCards(t *testing.T) {
 }
 
 type limitCapturingExternalSearch struct {
-	limit int
-	query string
+	mu      sync.Mutex
+	limit   int
+	query   string
+	queries []string
 }
 
 func (s *limitCapturingExternalSearch) Search(ctx context.Context, query string, opts research.SearchOpts) (research.PaperList, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.limit = opts.Limit
 	s.query = query
+	s.queries = append(s.queries, query)
 	return research.PaperList{}, nil
 }
 
@@ -80,6 +86,43 @@ func (p *stubExternalPlanner) PlanExternalSearch(ctx context.Context, query stri
 		return ExternalSearchPlan{}, p.err
 	}
 	return p.plan, nil
+}
+
+type queryRoutingExternalSearch struct {
+	mu      sync.Mutex
+	queries []string
+	results map[string][]research.Paper
+}
+
+func (s *queryRoutingExternalSearch) Search(ctx context.Context, query string, opts research.SearchOpts) (research.PaperList, error) {
+	s.mu.Lock()
+	s.queries = append(s.queries, query)
+	s.mu.Unlock()
+	return research.PaperList{Items: s.results[query]}, nil
+}
+
+func (s *queryRoutingExternalSearch) SnippetSearch(ctx context.Context, query string, opts research.SnippetSearchOpts) (research.SnippetList, error) {
+	return research.SnippetList{}, nil
+}
+
+type stubExternalClassifier struct {
+	mu      sync.Mutex
+	inputs  []ExternalPaperClassificationInput
+	results map[string]ExternalPaperClassificationResult
+	err     error
+}
+
+func (s *stubExternalClassifier) ClassifyExternalPaper(ctx context.Context, in ExternalPaperClassificationInput) (ExternalPaperClassificationResult, error) {
+	s.mu.Lock()
+	s.inputs = append(s.inputs, in)
+	s.mu.Unlock()
+	if s.err != nil {
+		return ExternalPaperClassificationResult{}, s.err
+	}
+	if res, ok := s.results[in.Paper.PaperID]; ok {
+		return res, nil
+	}
+	return ExternalPaperClassificationResult{Relevant: false, Reason: "unrelated"}, nil
 }
 
 func TestExternalSearchToolNilSearcherReturnsFailedResult(t *testing.T) {
@@ -127,8 +170,24 @@ func TestExternalSearchToolNormalizesForwardGeneticsSourceQuery(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	if searcher.query != "forward genetic screens gene discovery slowed" {
-		t.Fatalf("query = %q, want forward genetics source query", searcher.query)
+	if !containsTestTerm(searcher.queries, "forward genetic screens gene discovery slowed") {
+		t.Fatalf("queries = %q, want forward genetics source query", searcher.queries)
+	}
+	if !containsTestTerm(searcher.queries, "gene discovery slowed forward genetic screens saturation") {
+		t.Fatalf("queries = %q, want source-oriented fallback query", searcher.queries)
+	}
+}
+
+func TestExternalSearchQueriesForLongForwardGeneticsClaimIncludeRecallVariants(t *testing.T) {
+	queries := ExternalSearchQueries("寻找出处：然而，由于模式物种中正向遗传筛选的饱和以及基因家族内普遍存在的冗余，基因发现——尤其是那些影响细胞命运的基因——在过去十年中显著减少。")
+	for _, want := range []string{
+		"forward genetic screens gene discovery slowed",
+		"gene discovery slowed forward genetic screens saturation",
+		"plant gene discovery slowed forward genetic screens",
+	} {
+		if !containsTestTerm(queries, want) {
+			t.Fatalf("queries = %+v, missing %q", queries, want)
+		}
 	}
 }
 
@@ -152,6 +211,73 @@ func TestExternalSearchToolUsesPlannerSearchQuery(t *testing.T) {
 	}
 	if !strings.Contains(res.ToolCalls[0].InputJSON, `"search_query":"forward genetic screens gene discovery slowed"`) {
 		t.Fatalf("input json = %s, want planner search query", res.ToolCalls[0].InputJSON)
+	}
+}
+
+func TestExternalSearchToolRunsMultipleQueriesAndFiltersWithClassifier(t *testing.T) {
+	correct := research.Paper{
+		PaperID:  "cell-2025",
+		Title:    "A unified cell atlas of vascular plants reveals cell-type foundational genes and accelerates gene discovery.",
+		Year:     2025,
+		Venue:    "Cell",
+		Abstract: "The pace of gene discovery in plants has slowed as forward genetic screens reach saturation.",
+	}
+	searcher := &queryRoutingExternalSearch{results: map[string][]research.Paper{
+		"forward genetic screens saturation gene discovery decline": {
+			{PaperID: "pamir", Title: "pamiR", TLDR: "Forward genetics without functional genetic redundancy."},
+		},
+		"gene discovery slowed forward genetic screens saturation": {
+			correct,
+			{PaperID: "root-fate", Title: "Regulation of cell fate", TLDR: "Cell fate segregation."},
+		},
+	}}
+	planner := &stubExternalPlanner{plan: ExternalSearchPlan{
+		SearchQuery: "forward genetic screens saturation gene discovery decline",
+		SearchQueries: []string{
+			"forward genetic screens saturation gene discovery decline",
+			"gene discovery slowed forward genetic screens saturation",
+		},
+		Rationale: "split precise and recall queries",
+	}}
+	classifier := &stubExternalClassifier{results: map[string]ExternalPaperClassificationResult{
+		"cell-2025": {
+			Relevant: true,
+			Reason:   "摘要直接说明 gene discovery slowed and forward genetic screens reach saturation.",
+			Annotations: []ExternalEvidenceAnnotation{{
+				Claim:     "基因发现速度变慢",
+				Evidence:  "The pace of gene discovery in plants has slowed as forward genetic screens reach saturation.",
+				Verdict:   "supported",
+				Rationale: "该句直接对应原句核心断言。",
+			}},
+		},
+	}}
+
+	res, err := NewExternalSearchToolWithAgents(searcher, planner, classifier).Run(context.Background(), ToolInput{
+		Query: "寻找出处：正向遗传筛选饱和导致基因发现减少",
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if !containsTestTerm(searcher.queries, "forward genetic screens saturation gene discovery decline") ||
+		!containsTestTerm(searcher.queries, "gene discovery slowed forward genetic screens saturation") {
+		t.Fatalf("queries = %+v", searcher.queries)
+	}
+	if len(res.Cards) != 1 {
+		t.Fatalf("cards = %+v, want one classified hit", res.Cards)
+	}
+	card, ok := res.Cards[0].Payload.(ExternalPaperCard)
+	if !ok {
+		t.Fatalf("payload = %#v", res.Cards[0].Payload)
+	}
+	if card.S2PaperID != "cell-2025" || len(card.EvidenceAnnotations) != 1 {
+		t.Fatalf("card = %+v, want annotated Cell hit", card)
+	}
+	if !strings.Contains(res.AnswerContext, "Evidence annotations") ||
+		!strings.Contains(res.AnswerContext, "gene discovery in plants has slowed") {
+		t.Fatalf("answer context = %s", res.AnswerContext)
+	}
+	if got := stageByLabel(res.Process.Stages, "Sub-Agent判定").Count; got != 3 {
+		t.Fatalf("classified count = %d, want 3", got)
 	}
 }
 

@@ -814,6 +814,7 @@ AI 流式阅读通过：
 - `process`：紧凑流程摘要，用于展示扫描阶段、命中数和状态。
 - `cards`：结构化结果卡片，例如 `paper_hit`、`external_paper`、`paper_read`、`paper_compare`、`figure_result`。
   - `paper_hit.payload.highlight_terms`：本地全文扫描实际使用的检索词数组，前端用于在证据片段中高亮命中词；旧消息可能没有该字段。
+  - `external_paper.payload.matched_query` / `reason` / `evidence_annotations`：外部出处检索使用多查询召回后，由 Sub-Agent 对候选文献进行证据对应判定；`evidence_annotations` 标注用户原句片段、候选原文证据、支持状态和简短理由。
   - `figure_result.payload.evidence_text` / `evidence_location`：当图文检索由全文候选文献回退产生时，记录支持该候选图的本地全文证据片段和位置；旧消息或直接图注命中可能没有该字段。
 - `citations`：证据引用数组，用于脚注和结果卡片引用。
 - 当工具调度已经完成但最终模型回答失败或返回空文本时，服务端会优先返回已完成的工具证据，并在最终 assistant 消息中使用 `mode="tool_fallback"`；客户端应按普通 assistant 文本和已返回结果卡片展示。
@@ -823,6 +824,7 @@ AI 流式阅读通过：
 - 默认证据来源是本地文献库的标题、摘要、笔记和 `pdf_text`；已钉文献会优先参与检索，但未 pin 的入库文献也可被命中。
 - 本地证据检索现在按 Master/Sub-Agent 流程执行：Master 模型先把用户请求改写成精确全文扫描词，Sub-Agent 模型再逐篇判定候选文献是否真正符合需求，最后由 Master 基于判定结果生成回答。
 - 本地候选召回仍使用关键词扩展和字面全文扫描，例如 `ATAC 数据` 会扩展匹配 `ATAC-seq`、`chromatin accessibility`、`scATAC-seq` 等表述；泛词（如“数据”“文章”）不会单独作为召回词。
+- 外部出处检索现在支持 Master 生成多个 Semantic Scholar 查询式并行召回；结果按外部 ID / DOI / 标题去重，再由 Sub-Agent 判断候选文本中哪句话能对应用户原句，最终只把通过判定或需要人工核查的候选交给 Master 汇总。
 - 图文检索会先检索图片 caption、笔记、标签和来源文献标题；若没有命中且未限定单篇文献，会用同一组关键词做本地全文候选文献扫描，再返回候选文献下可供检查的图片，并在 `figure_result` 中附带全文证据。
 - 不使用 embedding，不使用向量数据库。
 - 外部搜索可以独立开启；在同时开启内部搜索时作为本地证据的补充。Semantic Scholar 限流或失败时，本地证据仍可继续用于回答。

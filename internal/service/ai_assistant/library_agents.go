@@ -76,11 +76,43 @@ func (p *LLMExternalSearchPlanner) PlanExternalSearch(ctx context.Context, query
 		return ExternalSearchPlan{}, err
 	}
 	plan.SearchQuery = strings.Join(strings.Fields(plan.SearchQuery), " ")
+	plan.SearchQueries = sanitizeExternalQueries(append([]string{plan.SearchQuery}, plan.SearchQueries...))
+	if len(plan.SearchQueries) > 0 {
+		plan.SearchQuery = plan.SearchQueries[0]
+	}
 	plan.Rationale = strings.TrimSpace(plan.Rationale)
-	if plan.SearchQuery == "" {
+	if len(plan.SearchQueries) == 0 {
 		return ExternalSearchPlan{}, fmt.Errorf("empty external search query")
 	}
 	return plan, nil
+}
+
+type LLMExternalPaperClassifier struct {
+	settings AISettingsProvider
+	caller   NonStreamCaller
+}
+
+func NewLLMExternalPaperClassifier(settings AISettingsProvider, caller NonStreamCaller) *LLMExternalPaperClassifier {
+	return &LLMExternalPaperClassifier{settings: settings, caller: caller}
+}
+
+func (c *LLMExternalPaperClassifier) ClassifyExternalPaper(ctx context.Context, in ExternalPaperClassificationInput) (ExternalPaperClassificationResult, error) {
+	if c == nil || c.settings == nil || c.caller == nil {
+		return ExternalPaperClassificationResult{}, fmt.Errorf("external paper classifier not configured")
+	}
+	settings, err := c.settings.GetSettings()
+	if err != nil {
+		return ExternalPaperClassificationResult{}, err
+	}
+	out, _, err := c.caller.CallProviderGeneric(ctx, assistantSubagentSettings(*settings), externalClassifierSystemPrompt, externalClassifierUserPrompt(in))
+	if err != nil {
+		return ExternalPaperClassificationResult{}, err
+	}
+	var res ExternalPaperClassificationResult
+	if err := decodeFirstJSONObject(out, &res); err != nil {
+		return ExternalPaperClassificationResult{}, err
+	}
+	return sanitizeExternalClassification(res), nil
 }
 
 type LLMLibraryPaperClassifier struct {
@@ -124,13 +156,14 @@ JSON 格式：
 const externalPlannerSystemPrompt = `你是 CiteBox AI 助手的 Master Agent。你的任务是把用户的外部调研或出处查找请求改写成适合 Semantic Scholar 的英文检索式。
 只输出 JSON，不要输出 Markdown，不要解释思考过程。
 JSON 格式：
-{"search_query":"concise English academic query","rationale":"一句话说明检索式如何覆盖用户需求"}
+{"search_query":"primary concise English academic query","search_queries":["query 1","query 2"],"rationale":"一句话说明检索式如何覆盖用户需求"}
 规则：
 - 用户可能使用任意语言提问；理解其真实学术需求，并改写为简短英文关键词检索式。
 - 保留用户明确给出的技术名词、实验类型、测序类型、物种、疾病和缩写，例如 ChIP-seq、ATAC-seq、single-cell RNA-seq。
 - 用户要求找出处、引用或证据时，检索核心断言本身，不要保留 source、citation、reference、出处、引用等操作词。
 - 不要加入 article、paper、literature、data、search、find、about、external 等泛词。
-- 优先输出 3 到 8 个关键词；必要时加入一个能提高召回的同义技术短语。`
+- 生成 2 到 4 个互补查询：第一个高精度，后续用于召回同义表达；不要把所有限定词塞进同一个长查询。
+- 每个查询优先输出 3 到 8 个关键词；必要时加入一个能提高召回的同义技术短语。`
 
 func libraryPlannerUserPrompt(query string) string {
 	return "用户检索请求：\n" + strings.TrimSpace(query)
@@ -148,6 +181,17 @@ JSON 格式：
 - 只有候选文献确实使用、包含、分析或明确比较了用户要求的数据/方法，才 relevant=true。
 - 只是泛泛提到背景词、引用无关术语、或者只出现“数据/文章”等泛词，必须 relevant=false。
 - reason 必须引用候选片段中的具体证据词。`
+
+const externalClassifierSystemPrompt = `你是 CiteBox 的 Sub-Agent，负责判断外部检索候选是否能作为用户原句或问题的出处。
+只输出 JSON，不要输出 Markdown。
+JSON 格式：
+{"relevant":true,"reason":"一句话说明为什么保留或排除","annotations":[{"claim":"用户原句中被支持的子断言","evidence":"候选文本中对应的原文句子","verdict":"supported|partial|unsupported","rationale":"一句话解释对应关系"}]}
+判断规则：
+- 必须把用户原句拆成可以核查的子断言，再看候选标题、TLDR、摘要中是否有对应原文。
+- relevant=true 只用于候选能支持核心断言，或能支持一个对用户问题非常关键的子断言。
+- 如果只有主题词相似，但没有能对应原句的证据句，必须 relevant=false。
+- evidence 必须是候选文本里的原句或紧密片段；不要编造正文中不存在的句子。
+- annotations 最多 4 条，优先标注 supported 和 partial 的对应关系。`
 
 func libraryClassifierUserPrompt(in LibraryPaperClassificationInput) string {
 	var b strings.Builder
@@ -180,6 +224,34 @@ func libraryClassifierUserPrompt(in LibraryPaperClassificationInput) string {
 		}
 		fmt.Fprintf(&b, "[%d] %s: %s\n", i+1, match.Location, trimRunes(match.Snippet.Text, 1200))
 	}
+	return b.String()
+}
+
+func externalClassifierUserPrompt(in ExternalPaperClassificationInput) string {
+	var b strings.Builder
+	b.WriteString("用户原句或问题：\n")
+	b.WriteString(strings.TrimSpace(in.Query))
+	b.WriteString("\n\nMaster 检索式：")
+	b.WriteString(strings.Join(in.SearchQueries, " | "))
+	if strings.TrimSpace(in.MatchedQuery) != "" {
+		b.WriteString("\n候选命中的检索式：")
+		b.WriteString(strings.TrimSpace(in.MatchedQuery))
+	}
+	b.WriteString("\n\n候选文献：\n标题：")
+	b.WriteString(in.Paper.Title)
+	if in.Paper.ExternalIDs.DOI != "" {
+		b.WriteString("\nDOI：")
+		b.WriteString(in.Paper.ExternalIDs.DOI)
+	}
+	if in.Paper.Year > 0 {
+		fmt.Fprintf(&b, "\n年份：%d", in.Paper.Year)
+	}
+	if strings.TrimSpace(in.Paper.Venue) != "" {
+		b.WriteString("\n来源：")
+		b.WriteString(strings.TrimSpace(in.Paper.Venue))
+	}
+	b.WriteString("\n\n候选证据文本：\n")
+	b.WriteString(trimRunes(normalizeEvidenceWhitespace(in.EvidenceText), 2200))
 	return b.String()
 }
 

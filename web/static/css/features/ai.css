@@ -520,6 +520,66 @@ html[lang^="zh"] .ai-config-details[open] .ai-collapsible-toggle::before {
     padding: 0 0.08rem;
 }
 
+.ai-evidence-annotations {
+    display: grid;
+    gap: 0.5rem;
+}
+
+.ai-evidence-annotations > strong {
+    font-size: 0.82rem;
+    color: var(--muted);
+}
+
+.ai-evidence-annotation {
+    display: grid;
+    gap: 0.42rem;
+    padding: 0.56rem 0.62rem;
+    border-radius: 6px;
+    background: rgba(var(--ink-rgb), 0.035);
+    border: 1px solid rgba(var(--ink-rgb), 0.07);
+}
+
+.ai-evidence-annotation > div {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.6rem;
+}
+
+.ai-evidence-annotation p {
+    min-width: 0;
+    line-height: 1.5;
+}
+
+.ai-evidence-annotation p span {
+    display: block;
+    margin-bottom: 0.16rem;
+    color: var(--muted);
+    font-size: 0.76rem;
+}
+
+.ai-evidence-annotation em {
+    flex: 0 0 auto;
+    padding: 0.16rem 0.42rem;
+    border-radius: 999px;
+    background: rgba(var(--accent-rgb), 0.1);
+    color: var(--accent-deep);
+    font-style: normal;
+    font-size: 0.74rem;
+    font-weight: 800;
+    white-space: nowrap;
+}
+
+.ai-evidence-annotation em[data-verdict="unsupported"] {
+    background: rgba(var(--error-rgb), 0.08);
+    color: var(--error);
+}
+
+.ai-evidence-annotation em[data-verdict="partial"] {
+    background: rgba(var(--info-rgb), 0.1);
+    color: var(--info);
+}
+
 .ai-result-card blockquote span {
     display: block;
     margin-top: 0.25rem;

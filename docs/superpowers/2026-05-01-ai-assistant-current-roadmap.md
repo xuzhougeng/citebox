@@ -16,7 +16,7 @@ AI 页面已经不再只是“伴读”页面，而是 CiteBox 的 AI 助手与�
 - 已有 AI orchestrator/tool 架构，覆盖全库搜索、外部搜索、文献阅读/对比和图文检索。
 - 已有 process strip、result cards、citation 恢复和 run/tool/card 持久化。
 - 内部文献搜索已经支持全文扫描，并可走轻量 Master/Sub-Agent 风格的 planner/classifier。
-- 外部搜索复用 Semantic Scholar 能力，并已接入 Master 规划器，把任意语言请求改写为适合外部学术检索的英文查询；规划失败时回退到本地启发式查询。
+- 外部搜索复用 Semantic Scholar 能力，并已接入 Master 多查询规划器和 Sub-Agent 证据判定，把候选文本中能对应用户原句的证据句标注回结果卡；规划失败时回退到本地启发式查询。
 - 图文检索支持直接搜图，也支持通过全文候选文献 fallback。
 - 当前路线明确禁止 embedding 和 vector database。
 
@@ -32,6 +32,7 @@ AI 页面已经不再只是“伴读”页面，而是 CiteBox 的 AI 助手与�
 - [x] 外部搜索：例如“查一下外部有没有 single-cell ATAC 综述”，应独立触发外部检索，失败时给出可解释状态。
   - 2026-05-01 已验证外部搜索可独立触发 Semantic Scholar。
   - 已补 Master 外部查询规划器；法文手工问题“给遗传发现速度变慢找出处”可命中 Cell 2025 文献，并引用摘要证据。
+  - 针对“正向遗传筛选饱和导致基因发现减少”类出处查找，已升级为 Master 多查询并行召回、Sub-Agent 候选判定和结果卡证据标注，降低单一长查询排序偏移导致错失正确出处的风险。
 - [x] 文献阅读/对比：选择 1-2 篇文献后提问，应读取选中文献全文并返回对比结果。
   - 2026-05-01 已在浏览器创建双文献 pin 场景，触发 `读文献`，验证 `全文扫描 2篇`、`命中 6段`、`paper_compare` 结果卡和证据片段可渲染。
   - 同次验收发现当前 OpenAI Responses 兼容接口可能不返回 delta；已补 `response.output_text.done` / `response.completed` 解析、空流错误兜底，以及工具结果 fallback，确保模型最终回答失败时仍返回已完成的文献阅读/对比证据。

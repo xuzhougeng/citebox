@@ -224,9 +224,10 @@ func buildHandler(
 	libraryPlanner := ai_assistant.NewLLMLibrarySearchPlanner(aiSvc, aiSvc)
 	libraryClassifier := ai_assistant.NewLLMLibraryPaperClassifier(aiSvc, aiSvc)
 	externalPlanner := ai_assistant.NewLLMExternalSearchPlanner(aiSvc, aiSvc)
+	externalClassifier := ai_assistant.NewLLMExternalPaperClassifier(aiSvc, aiSvc)
 	assistantOrchestrator := ai_assistant.NewOrchestrator(ai_assistant.ToolSet{
 		LibrarySearch:  ai_assistant.NewLibrarySearchToolWithAgents(repo.Paper, libraryPlanner, libraryClassifier),
-		ExternalSearch: ai_assistant.NewExternalSearchToolWithPlanner(researchSvc, externalPlanner),
+		ExternalSearch: ai_assistant.NewExternalSearchToolWithAgents(researchSvc, externalPlanner, externalClassifier),
 		PaperRead:      ai_assistant.NewPaperReadTool(repo.Paper),
 		FigureLookup:   ai_assistant.NewFigureLookupToolWithPapers(ai_assistant.NewRepositoryFigureSearcher(repo.Figure), repo.Paper),
 	})

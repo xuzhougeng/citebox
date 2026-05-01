@@ -159,15 +159,48 @@
     function renderExternalPaper(p) {
         const meta = metaLine([p.venue, p.year, p.doi]);
         const s2 = safeUrl(p.s2_paper_id ? 'https://www.semanticscholar.org/paper/' + encodeURIComponent(p.s2_paper_id) : '', { allowExternal: true });
+        const annotations = renderExternalAnnotations(p.evidence_annotations, p.highlight_terms);
+        const matchedQuery = p.matched_query
+            ? '<p class="ai-result-note">' + escapeHtml(translate('ai.result_matched_query', '匹配查询')) + ': ' + escapeHtml(p.matched_query) + '</p>'
+            : '';
         return '<article class="ai-result-card ai-result-card-external">' +
             '<div class="ai-result-card-head">' +
                 '<h4>' + escapeHtml(p.title || translate('ai.result_external_paper_fallback', '外部文献')) + '</h4>' +
                 (meta ? '<p>' + escapeHtml(meta) + '</p>' : '') +
             '</div>' +
-            (p.abstract ? '<p class="ai-result-reason">' + escapeHtml(p.abstract) + citation(p.citation_index) + '</p>' :
-                (p.tldr ? '<p class="ai-result-reason">' + escapeHtml(p.tldr) + citation(p.citation_index) + '</p>' : '')) +
+            matchedQuery +
+            (p.reason ? '<p class="ai-result-reason">' + escapeHtml(p.reason) + '</p>' : '') +
+            (annotations || (p.abstract ? '<p class="ai-result-reason">' + renderHighlightedText(p.abstract, p.highlight_terms) + citation(p.citation_index) + '</p>' :
+                (p.tldr ? '<p class="ai-result-reason">' + renderHighlightedText(p.tldr, p.highlight_terms) + citation(p.citation_index) + '</p>' : ''))) +
             (s2 ? '<a class="btn btn-small btn-outline" href="' + escapeHtml(s2) + '" target="_blank" rel="noopener">' + escapeHtml(translate('ai.result_open_external', '查看来源')) + '</a>' : '') +
         '</article>';
+    }
+
+    function renderExternalAnnotations(annotations, terms) {
+        if (!Array.isArray(annotations) || annotations.length === 0) return '';
+        return '<div class="ai-evidence-annotations">' +
+            '<strong>' + escapeHtml(translate('ai.result_evidence_annotations', '证据标注')) + '</strong>' +
+            annotations.slice(0, 4).map((item) => {
+                const verdict = String(item.verdict || '').trim();
+                const verdictLabel = verdict ? externalVerdictLabel(verdict) : '';
+                return '<section class="ai-evidence-annotation">' +
+                    '<div>' +
+                        (item.claim ? '<p><span>' + escapeHtml(translate('ai.result_claim', '原句部分')) + '</span>' + escapeHtml(item.claim) + '</p>' : '') +
+                        (verdictLabel ? '<em data-verdict="' + escapeHtml(verdict) + '">' + escapeHtml(verdictLabel) + '</em>' : '') +
+                    '</div>' +
+                    (item.evidence ? '<blockquote><p>' + renderHighlightedText(item.evidence, terms) + '</p></blockquote>' : '') +
+                    (item.rationale ? '<p class="ai-result-note">' + escapeHtml(item.rationale) + '</p>' : '') +
+                '</section>';
+            }).join('') +
+        '</div>';
+    }
+
+    function externalVerdictLabel(verdict) {
+        const key = String(verdict || '').toLowerCase();
+        if (key === 'supported') return translate('ai.result_verdict_supported', '支持');
+        if (key === 'partial') return translate('ai.result_verdict_partial', '部分支持');
+        if (key === 'unsupported') return translate('ai.result_verdict_unsupported', '未支持');
+        return verdict;
     }
 
     function renderPaperRead(p, type) {
