@@ -30,6 +30,33 @@ func TestMergePapersDedupesByPMID(t *testing.T) {
 	}
 }
 
+func TestMergePapersDerivesSourceAndMatchedQueryFromResult(t *testing.T) {
+	out := MergePapers([]SourceResult{
+		{Source: SourcePubMed, Query: "pub query", Papers: []Paper{{SourcePaperID: "1", Title: "A"}}},
+	}, []SourceID{SourcePubMed}, 10)
+	if len(out) != 1 {
+		t.Fatalf("len = %d, want 1: %+v", len(out), out)
+	}
+	if out[0].Source != SourcePubMed || out[0].MatchedQuery != "pub query" {
+		t.Fatalf("paper metadata = %+v", out[0])
+	}
+}
+
+func TestMergePapersUsesResultSourceOverInnerPaperSource(t *testing.T) {
+	out := MergePapers([]SourceResult{
+		{Source: SourcePubMed, Papers: []Paper{{Source: SourceSemanticScholar, SourcePaperID: "1", Title: "A"}}},
+	}, []SourceID{SourcePubMed}, 10)
+	if len(out) != 1 {
+		t.Fatalf("len = %d, want 1: %+v", len(out), out)
+	}
+	if out[0].Source != SourcePubMed || len(out[0].Sources) != 1 || out[0].Sources[0] != SourcePubMed {
+		t.Fatalf("source metadata = %+v", out[0])
+	}
+	if out[0].SourcePaperIDs[SourcePubMed] != "1" || out[0].SourcePaperIDs[SourceSemanticScholar] != "" {
+		t.Fatalf("source ids = %+v", out[0].SourcePaperIDs)
+	}
+}
+
 func TestMergePapersDoesNotDedupeByTitleWhenDOIsConflict(t *testing.T) {
 	out := MergePapers([]SourceResult{
 		{Source: SourcePubMed, Papers: []Paper{{Source: SourcePubMed, SourcePaperID: "pmid", DOI: "10.1/abc", Title: "Cell Fate Control"}}},

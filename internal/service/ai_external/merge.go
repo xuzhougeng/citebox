@@ -21,8 +21,9 @@ func MergePapers(results []SourceResult, sourceOrder []SourceID, limit int) []Pa
 		source := result.Source
 		seenSources[source] = true
 		for _, paper := range result.Papers {
-			if paper.Source == "" {
-				paper.Source = source
+			paper.Source = source
+			if paper.MatchedQuery == "" {
+				paper.MatchedQuery = result.Query
 			}
 			bySource[source] = append(bySource[source], paper)
 		}
