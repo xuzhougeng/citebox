@@ -1,7 +1,7 @@
 # AI 助手当前路线图
 
 **日期**: 2026-05-01
-**状态**: 当前活文档；P0 大部分已完成，P1 调度可观察性已完成，剩余文献阅读/对比的浏览器验收
+**状态**: 当前活文档；P0 大部分已完成，P1 调度可观察性已完成，P2 模型场景绑定已完成，剩余文献阅读/对比的浏览器验收
 
 ## 定位
 
@@ -64,11 +64,17 @@ AI 页面已经不再只是“伴读”页面，而是 CiteBox 的 AI 助手与�
 
 目标是让强模型做规划与综合，便宜模型做高并发判定，从配置上明确 Master/Sub-Agent 的职责。
 
-- [ ] settings 中明确 Master 模型和 Sub-Agent 模型的绑定关系。
-- [ ] Master 默认适合使用强推理模型，例如 GPT-5.5 thinking/xhigh 或同等级模型。
-- [ ] Sub-Agent 默认适合使用便宜并发模型，例如 DeepSeek Flash。
-- [ ] 支持 provider-specific 参数，例如 DeepSeek `thinking`、`reasoning_effort`，以及 OpenAI Responses 不支持 `temperature` 的模型差异。
-- [ ] 模型检查应能提示具体 unsupported parameter，而不是让用户猜。
+- [x] settings 中明确 Master 模型和 Sub-Agent 模型的绑定关系。
+  - 2026-05-01 已在场景绑定区增加 AI 助手绑定摘要，直接显示 Master/Sub-Agent 当前模型、职责和是否拆分。
+- [x] Master 默认适合使用强推理模型，例如 GPT-5.5 thinking/xhigh 或同等级模型。
+  - 通过“套用 AI 助手推荐绑定”根据已配置模型选择强推理模型作为 Master；不会在没有 API Key 的情况下自动创建不可用模型。
+- [x] Sub-Agent 默认适合使用便宜并发模型，例如 DeepSeek Flash。
+  - 推荐绑定会优先选择 DeepSeek/Flash/mini/nano/lite/fast/cheap 类模型作为 Sub-Agent，并尽量与 Master 拆分。
+- [x] 支持 provider-specific 参数，例如 DeepSeek `thinking`、`reasoning_effort`，以及 OpenAI Responses 不支持 `temperature` 的模型差异。
+  - OpenAI 兼容模型支持 Responses / Chat Completions 切换；Chat Completions 可发送 `thinking` 和 `reasoning_effort`，Responses 使用 `reasoning.effort`；GPT-5/o 系列自动省略 `temperature`，也可手动勾选不发送。
+- [x] 模型检查应能提示具体 unsupported parameter，而不是让用户猜。
+  - 2026-05-01 已给模型检查错误追加参数级处理建议，例如 `temperature` 不支持时提示勾选“不发送 temperature 参数”。
+  - 已用 settings 页面做浏览器验收：绑定摘要可渲染，`thinking` 和 `Reasoning Effort` 控件在 OpenAI 兼容模型下可启用，推荐算法会把 GPT-5.5 thinking/xhigh 选为 Master、DeepSeek Flash 选为 Sub-Agent。
 
 ### P3: AI 页面体验收口
 
@@ -92,5 +98,4 @@ AI 页面已经不再只是“伴读”页面，而是 CiteBox 的 AI 助手与�
 ## 下一步执行建议
 
 1. 先完成 P0 剩余的文献阅读/对比浏览器验收。
-2. 然后做 P2 的模型场景绑定，把强模型和便宜模型的职责固定下来。
-3. 最后按 P3 收口 UI 细节，避免功能增强把对话页变成杂乱面板。
+2. 按 P3 收口 UI 细节，避免功能增强把对话页变成杂乱面板。

@@ -446,6 +446,37 @@ func TestCheckModelOmitsTemperatureForGPT5Family(t *testing.T) {
 	}
 }
 
+func TestCheckModelUnsupportedTemperatureErrorIncludesHint(t *testing.T) {
+	_, repo, cfg := newTestService(t)
+	aiSvc := NewAIService(repo, cfg, nil)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/responses" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"error":{"message":"Unsupported parameter: 'temperature' is not supported with this model."}}`))
+	}))
+	defer server.Close()
+
+	_, err := aiSvc.CheckModel(context.Background(), model.AIModelConfig{
+		ID:       "check-custom-no-temp",
+		Name:     "Check Custom No Temperature",
+		Provider: model.AIProviderOpenAI,
+		APIKey:   "test-key",
+		BaseURL:  server.URL,
+		Model:    "custom-no-temperature",
+	})
+	if err == nil {
+		t.Fatal("CheckModel() error = nil, want unsupported temperature error")
+	}
+	message := err.Error()
+	if !strings.Contains(message, "Unsupported parameter") || !strings.Contains(message, "不发送 temperature 参数") {
+		t.Fatalf("CheckModel() error = %q, want original provider error and actionable temperature hint", message)
+	}
+}
+
 func TestCheckModelResponsesThinkingDefaultsReasoningEffort(t *testing.T) {
 	_, repo, cfg := newTestService(t)
 	aiSvc := NewAIService(repo, cfg, nil)

@@ -632,7 +632,7 @@ func (s *AIService) postJSON(ctx context.Context, endpoint string, headers map[s
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, apperr.New(apperr.CodeUnavailable, fmt.Sprintf("AI 接口返回 %d: %s", resp.StatusCode, extractProviderError(respBody)))
+		return nil, apperr.New(apperr.CodeUnavailable, fmt.Sprintf("AI 接口返回 %d: %s", resp.StatusCode, formatProviderError(respBody)))
 	}
 
 	return respBody, nil
@@ -668,7 +668,7 @@ func (s *AIService) postJSONStream(ctx context.Context, endpoint string, headers
 		if readErr != nil {
 			return apperr.Wrap(apperr.CodeUnavailable, "读取 AI 流式接口错误响应失败", readErr)
 		}
-		return apperr.New(apperr.CodeUnavailable, fmt.Sprintf("AI 接口返回 %d: %s", resp.StatusCode, extractProviderError(respBody)))
+		return apperr.New(apperr.CodeUnavailable, fmt.Sprintf("AI 接口返回 %d: %s", resp.StatusCode, formatProviderError(respBody)))
 	}
 
 	scanner := bufio.NewScanner(resp.Body)
@@ -871,6 +871,87 @@ func extractProviderError(body []byte) string {
 	}
 
 	return fallbackText(message, "未知错误")
+}
+
+func formatProviderError(body []byte) string {
+	message := extractProviderError(body)
+	if hint := providerUnsupportedParameterHint(message); hint != "" {
+		return message + "；" + hint
+	}
+	return message
+}
+
+func providerUnsupportedParameterHint(message string) string {
+	lowerMessage := strings.ToLower(strings.TrimSpace(message))
+	if lowerMessage == "" {
+		return ""
+	}
+	if !strings.Contains(lowerMessage, "parameter") {
+		return ""
+	}
+	if !strings.Contains(lowerMessage, "unsupported") && !strings.Contains(lowerMessage, "not supported") {
+		return ""
+	}
+
+	parameter := strings.ToLower(extractUnsupportedParameterName(message))
+	switch parameter {
+	case "temperature":
+		return "提示：该模型不支持 temperature，请在模型配置中勾选「不发送 temperature 参数」。"
+	case "thinking":
+		return "提示：该接口不支持 thinking，请关闭 thinking 参数；DeepSeek Pro 需要 OpenAI 兼容提供商、传统 Chat Completions 模式和正确 Base URL。"
+	case "reasoning", "reasoning_effort", "reasoning.effort":
+		return "提示：该接口不支持 reasoning_effort，请清空 Reasoning Effort，或确认当前模型和接口支持该参数。"
+	case "max_tokens", "max_output_tokens":
+		return "提示：该接口不支持当前 token 参数，请检查是否选错 Responses 或 Chat Completions 模式。"
+	default:
+		if parameter != "" {
+			return fmt.Sprintf("提示：请在模型配置中关闭或调整参数 %s。", parameter)
+		}
+	}
+	return ""
+}
+
+func extractUnsupportedParameterName(message string) string {
+	lowerMessage := strings.ToLower(message)
+	for _, marker := range []string{"unsupported parameter:", "unsupported parameter", "unknown parameter:", "unknown parameter", "parameter:"} {
+		index := strings.Index(lowerMessage, marker)
+		if index < 0 {
+			continue
+		}
+		remainder := strings.TrimSpace(message[index+len(marker):])
+		if parameter := trimProviderParameterToken(remainder); parameter != "" {
+			return parameter
+		}
+	}
+	return ""
+}
+
+func trimProviderParameterToken(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	if quote := value[0]; quote == '\'' || quote == '"' || quote == '`' {
+		if end := strings.IndexByte(value[1:], quote); end >= 0 {
+			return strings.TrimSpace(value[1 : 1+end])
+		}
+	}
+	value = strings.TrimLeft(value, "'\"`:")
+	for index, r := range value {
+		if !isProviderParameterRune(r) {
+			return strings.TrimSpace(value[:index])
+		}
+	}
+	return strings.TrimSpace(value)
+}
+
+func isProviderParameterRune(r rune) bool {
+	return (r >= 'a' && r <= 'z') ||
+		(r >= 'A' && r <= 'Z') ||
+		(r >= '0' && r <= '9') ||
+		r == '_' ||
+		r == '-' ||
+		r == '.'
 }
 
 func joinProviderURL(baseURL, defaultBase, endpoint string) string {

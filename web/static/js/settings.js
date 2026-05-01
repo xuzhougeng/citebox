@@ -11,6 +11,8 @@ const SettingsPage = {
         this.qaModelSelect = document.getElementById('aiQAModelSelect');
         this.assistantMasterModelSelect = document.getElementById('aiAssistantMasterModelSelect');
         this.assistantSubagentModelSelect = document.getElementById('aiAssistantSubagentModelSelect');
+        this.assistantBindingSummary = document.getElementById('aiAssistantBindingSummary');
+        this.applyAssistantBindingRecommendationButton = document.getElementById('applyAIAssistantBindingRecommendationButton');
         this.imIntentModelSelect = document.getElementById('aiIMIntentModelSelect');
         this.figureModelSelect = document.getElementById('aiFigureModelSelect');
         this.tagModelSelect = document.getElementById('aiTagModelSelect');
@@ -251,6 +253,9 @@ const SettingsPage = {
         this.addAIModelButton.addEventListener('click', async () => {
             await this.addAIModel();
         });
+        this.applyAssistantBindingRecommendationButton?.addEventListener('click', async () => {
+            await this.applyAssistantBindingRecommendation();
+        });
         this.restoreAIPromptsButton.addEventListener('click', async () => {
             await this.restoreRecommendedPrompts();
         });
@@ -450,6 +455,7 @@ const SettingsPage = {
             this.translateModelSelect
         ].forEach((element) => {
             element?.addEventListener('change', () => {
+                this.renderAssistantBindingSummary();
                 this.scheduleAIModelAutosave({ immediate: true });
             });
         });
@@ -2134,6 +2140,7 @@ const SettingsPage = {
                 ? selectedValue
                 : (index === 0 ? fallback : (this.defaultModelSelect?.value || fallback));
         });
+        this.renderAssistantBindingSummary();
     },
 
     readSceneModelSelections() {
@@ -2151,6 +2158,196 @@ const SettingsPage = {
             translate_model_id: this.translateModelSelect?.value || defaultModelID,
             tts_model_id: this.ttsModelSelect?.value || defaultModelID
         };
+    },
+
+    async applyAssistantBindingRecommendation() {
+        const models = this.currentAIModelsForSave();
+        if (!models.length) return;
+
+        if (this.applyAssistantBindingRecommendationButton) {
+            this.applyAssistantBindingRecommendationButton.disabled = true;
+        }
+        try {
+            const master = this.recommendAssistantMasterModel(models);
+            const subagent = this.recommendAssistantSubagentModel(models, master?.id);
+            if (master?.id && this.assistantMasterModelSelect) {
+                this.assistantMasterModelSelect.value = master.id;
+            }
+            if (subagent?.id && this.assistantSubagentModelSelect) {
+                this.assistantSubagentModelSelect.value = subagent.id;
+            }
+            this.renderAssistantBindingSummary();
+
+            const response = await API.updateAIModelSettings(this.buildAIModelSettingsPayload({
+                models,
+                sceneModels: this.readSceneModelSelections()
+            }));
+            this.applyAISettings(response.settings || {}, {
+                overwritePromptInputs: false,
+                overwriteRolePrompts: false
+            });
+            this.setAIModelAutosaveStatus(t('settings.ai.assistant_binding_applied', 'AI 助手推荐绑定已套用。'), 'success');
+            Utils.showToast(t('settings.ai.assistant_binding_applied_toast', 'AI 助手推荐绑定已套用'));
+        } catch (error) {
+            this.setAIModelAutosaveStatus(t('settings.ai.model_config_save_failed', '自动保存失败：{0}').replace('{0}', error.message), 'error');
+            Utils.showToast(error.message, 'error');
+        } finally {
+            if (this.applyAssistantBindingRecommendationButton) {
+                this.applyAssistantBindingRecommendationButton.disabled = false;
+            }
+        }
+    },
+
+    renderAssistantBindingSummary() {
+        if (!this.assistantBindingSummary) return;
+
+        const selection = this.readSceneModelSelections();
+        const master = this.findAIModelByID(selection.assistant_master_model_id);
+        const subagent = this.findAIModelByID(selection.assistant_subagent_model_id);
+        const masterLabel = this.aiModelDisplayLabel(selection.assistant_master_model_id, selection.default_model_id, t('settings.ai.binding_unset', '未配置'));
+        const subagentLabel = this.aiModelDisplayLabel(selection.assistant_subagent_model_id, selection.default_model_id, t('settings.ai.binding_unset', '未配置'));
+        const separated = master && subagent && master.id !== subagent.id;
+        const splitState = separated
+            ? t('settings.ai.binding_split_ready', '已拆分')
+            : t('settings.ai.binding_split_shared', '共用模型');
+        const splitHint = separated
+            ? t('settings.ai.binding_split_ready_desc', 'Master 和 Sub-Agent 已使用不同模型，适合规划与高并发判定分工。')
+            : t('settings.ai.binding_split_shared_desc', '当前两个角色共用同一个模型；可在配置多个模型后套用推荐绑定。');
+
+        this.assistantBindingSummary.innerHTML = `
+            <div>
+                <span>${t('settings.ai.binding_master_role', 'Master 职责')}</span>
+                <strong>${Utils.escapeHTML(masterLabel)}</strong>
+                <p>${Utils.escapeHTML(this.assistantMasterRoleText(master))}</p>
+            </div>
+            <div>
+                <span>${t('settings.ai.binding_subagent_role', 'Sub-Agent 职责')}</span>
+                <strong>${Utils.escapeHTML(subagentLabel)}</strong>
+                <p>${Utils.escapeHTML(this.assistantSubagentRoleText(subagent))}</p>
+            </div>
+            <div>
+                <span>${t('settings.ai.binding_split_state', '绑定状态')}</span>
+                <strong>${Utils.escapeHTML(splitState)}</strong>
+                <p>${Utils.escapeHTML(splitHint)}</p>
+            </div>
+        `;
+    },
+
+    findAIModelByID(modelID) {
+        const targetID = String(modelID || '').trim();
+        if (!targetID) return null;
+        return (this.aiModelDraft || []).find((item) => item.id === targetID) || null;
+    },
+
+    assistantMasterRoleText(model) {
+        const base = t('settings.ai.binding_master_desc', '负责理解用户问题、规划工具调用、综合证据和生成最终回答。推荐强推理模型。');
+        return this.appendModelCapabilityHint(base, model);
+    },
+
+    assistantSubagentRoleText(model) {
+        const base = t('settings.ai.binding_subagent_desc', '负责标题、候选判定和轻量分类等高并发任务。推荐低成本快速模型。');
+        return this.appendModelCapabilityHint(base, model);
+    },
+
+    appendModelCapabilityHint(base, model) {
+        if (!model) return base;
+
+        const tags = [];
+        if (model.openai_legacy_mode) {
+            tags.push(t('settings.ai.binding_tag_chat_completions', 'Chat Completions'));
+        }
+        if (model.thinking_enabled) {
+            tags.push(t('settings.ai.binding_tag_thinking', 'thinking'));
+        }
+        if (model.reasoning_effort) {
+            tags.push(t('settings.ai.binding_tag_reasoning_effort', 'reasoning: {0}').replace('{0}', model.reasoning_effort));
+        }
+        if (model.omit_temperature || this.modelAutoOmitsTemperature(model)) {
+            tags.push(t('settings.ai.binding_tag_omit_temperature', '省略 temperature'));
+        }
+        if (!tags.length) return base;
+
+        return `${base} ${t('settings.ai.binding_enabled_options', '已启用：{0}').replace('{0}', tags.join(' / '))}`;
+    },
+
+    modelAutoOmitsTemperature(model) {
+        if ((model?.provider || 'openai') !== 'openai') return false;
+        const name = String(model?.model || '').trim().toLowerCase().replace(/^openai\//, '');
+        return ['gpt-5', 'o1', 'o3', 'o4', 'o5'].some((prefix) => name.startsWith(prefix));
+    },
+
+    recommendAssistantMasterModel(models) {
+        return this.pickBestAIModel(models, (item) => this.scoreAssistantMasterModel(item));
+    },
+
+    recommendAssistantSubagentModel(models, masterModelID = '') {
+        return this.pickBestAIModel(models, (item) => this.scoreAssistantSubagentModel(item), {
+            avoidModelID: masterModelID
+        });
+    },
+
+    pickBestAIModel(models, scoreModel, options = {}) {
+        const scored = (models || [])
+            .filter((item) => item?.id)
+            .map((item, index) => ({
+                item,
+                score: scoreModel(item) - (index * 0.01)
+            }))
+            .sort((left, right) => right.score - left.score);
+        if (!scored.length) return null;
+
+        const avoidModelID = String(options.avoidModelID || '').trim();
+        if (avoidModelID && scored.length > 1) {
+            const alternative = scored.find((entry) => entry.item.id !== avoidModelID);
+            if (alternative) return alternative.item;
+        }
+        return scored[0].item;
+    },
+
+    scoreAssistantMasterModel(model) {
+        const text = this.aiModelSearchText(model);
+        let score = 0;
+        if (text.includes('gpt-5')) score += 90;
+        if (text.includes('gpt-4.1')) score += 45;
+        if (/\bo[1345]\b/.test(text) || /\bo[1345]-/.test(text)) score += 70;
+        if (text.includes('opus')) score += 65;
+        if (text.includes('sonnet')) score += 50;
+        if (text.includes('claude')) score += 40;
+        if (text.includes('gemini')) score += 30;
+        if (text.includes('pro')) score += 25;
+        if (text.includes('reason') || text.includes('thinking')) score += 30;
+        if (model.thinking_enabled) score += 35;
+        if (model.reasoning_effort === 'xhigh') score += 35;
+        if (model.reasoning_effort === 'high') score += 25;
+        if (model.reasoning_effort === 'medium') score += 10;
+        if (text.includes('flash')) score -= 30;
+        if (text.includes('mini') || text.includes('nano') || text.includes('lite')) score -= 15;
+        score += Math.min(Number(model.max_output_tokens || 0) / 2000, 8);
+        return score;
+    },
+
+    scoreAssistantSubagentModel(model) {
+        const text = this.aiModelSearchText(model);
+        let score = 0;
+        if (text.includes('deepseek')) score += 35;
+        if (text.includes('flash')) score += 80;
+        if (text.includes('mini') || text.includes('nano') || text.includes('lite')) score += 35;
+        if (text.includes('fast') || text.includes('cheap')) score += 20;
+        if (model.openai_legacy_mode && text.includes('deepseek')) score += 10;
+        if (text.includes('gpt-5') || /\bo[1345]\b/.test(text) || /\bo[1345]-/.test(text)) score -= 30;
+        if (text.includes('opus') || text.includes('pro')) score -= 20;
+        score -= Math.min(Number(model.max_output_tokens || 0) / 4000, 6);
+        return score;
+    },
+
+    aiModelSearchText(model) {
+        return [
+            model?.id,
+            model?.name,
+            model?.provider,
+            model?.model,
+            model?.base_url
+        ].filter(Boolean).join(' ').toLowerCase();
     },
 
     aiModelDisplayLabel(modelID, fallbackModelID = '', emptyLabel = '未配置') {
