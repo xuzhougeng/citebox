@@ -241,6 +241,22 @@
             const content = (payload && payload.content || '').trim();
             if (!content) return;
             const body = { content: content, context: this._currentContext() };
+
+            // Parse @ tool tags out of the content. The text is left intact in
+            // body.content (so the model sees the user's literal input); the parsed
+            // intent + sources ride alongside as routing hints.
+            const tt = (window.AIReader && window.AIReader.toolTags && window.AIReader.toolTags.parseToolTags)
+                ? window.AIReader.toolTags.parseToolTags(content)
+                : { intentHint: '', sources: [], conflict: null };
+            if (tt.intentHint) body.intent_hint = tt.intentHint;
+            if (Array.isArray(tt.sources) && tt.sources.length > 0) body.sources = tt.sources;
+            if (tt.conflict) {
+                console.warn('[mention] dropped tool tag family=' + tt.conflict.dropped +
+                    ' due to family=' + tt.conflict.kept);
+            }
+
+            // Caller-supplied intent_hint (e.g., the shortcut buttons) overrides
+            // anything we parsed — keep the existing precedence.
             if (payload && payload.intent_hint) body.intent_hint = payload.intent_hint;
             if (this._state.rewriteLast && this._state.conversationId) body.replace_last = true;
             await this._sendBody(body);
