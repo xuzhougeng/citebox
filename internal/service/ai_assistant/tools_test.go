@@ -9,31 +9,34 @@ import (
 	"testing"
 
 	"github.com/xuzhougeng/citebox/internal/model"
-	"github.com/xuzhougeng/citebox/internal/service/research"
+	"github.com/xuzhougeng/citebox/internal/service/ai_external"
 )
 
 type stubExternalSearch struct {
-	search research.PaperList
-	snips  research.SnippetList
+	search ai_external.SearchResult
 	err    error
 }
 
-func (s stubExternalSearch) Search(ctx context.Context, query string, opts research.SearchOpts) (research.PaperList, error) {
-	if s.err != nil {
-		return research.PaperList{}, s.err
-	}
-	return s.search, nil
+func (s stubExternalSearch) Search(ctx context.Context, queries ai_external.SourceQueries, opts ai_external.SearchOptions) (ai_external.SearchResult, error) {
+	return s.search, s.err
 }
 
-func (s stubExternalSearch) SnippetSearch(ctx context.Context, query string, opts research.SnippetSearchOpts) (research.SnippetList, error) {
-	return s.snips, nil
+func cloneTestSourceQueries(queries ai_external.SourceQueries) ai_external.SourceQueries {
+	out := make(ai_external.SourceQueries, len(queries))
+	for source, sourceQueries := range queries {
+		out[source] = append([]string(nil), sourceQueries...)
+	}
+	return out
 }
 
 func TestExternalSearchToolReturnsExternalPaperCards(t *testing.T) {
 	tool := NewExternalSearchTool(stubExternalSearch{
-		search: research.PaperList{Items: []research.Paper{{
-			PaperID: "s2-1", Title: "ATAC Review", Year: 2024, Venue: "Genome Biology",
-			ExternalIDs: research.IDs{DOI: "10.1/ext"}, TLDR: "ATAC review summary.",
+		search: ai_external.SearchResult{Sources: []ai_external.SourceID{ai_external.SourceSemanticScholar}, Papers: []ai_external.Paper{{
+			Source: ai_external.SourceSemanticScholar, SourcePaperID: "s2-1",
+			SourcePaperIDs: map[ai_external.SourceID]string{ai_external.SourceSemanticScholar: "s2-1"},
+			Sources:        []ai_external.SourceID{ai_external.SourceSemanticScholar},
+			Title:          "ATAC Review", Year: 2024, Venue: "Genome Biology",
+			DOI: "10.1/ext", TLDR: "ATAC review summary.",
 			Abstract: "The full abstract states the pace of gene discovery has slowed.",
 		}}},
 	})
@@ -55,24 +58,106 @@ func TestExternalSearchToolReturnsExternalPaperCards(t *testing.T) {
 	}
 }
 
-type limitCapturingExternalSearch struct {
+type sourceQueryCapturingExternalSearch struct {
 	mu      sync.Mutex
-	limit   int
-	query   string
-	queries []string
+	queries ai_external.SourceQueries
 }
 
-func (s *limitCapturingExternalSearch) Search(ctx context.Context, query string, opts research.SearchOpts) (research.PaperList, error) {
+func (s *sourceQueryCapturingExternalSearch) Search(ctx context.Context, queries ai_external.SourceQueries, opts ai_external.SearchOptions) (ai_external.SearchResult, error) {
+	s.mu.Lock()
+	s.queries = cloneTestSourceQueries(queries)
+	s.mu.Unlock()
+	return ai_external.SearchResult{
+		Sources: []ai_external.SourceID{ai_external.SourcePubMed, ai_external.SourceSemanticScholar},
+		Papers: []ai_external.Paper{{
+			Source:        ai_external.SourcePubMed,
+			SourcePaperID: "12345",
+			SourcePaperIDs: map[ai_external.SourceID]string{
+				ai_external.SourcePubMed: "12345",
+			},
+			Sources:      []ai_external.SourceID{ai_external.SourcePubMed},
+			PMID:         "12345",
+			PMCID:        "PMC12345",
+			URL:          "https://pubmed.ncbi.nlm.nih.gov/12345/",
+			Title:        "PubMed indexed gene discovery paper",
+			Abstract:     "PubMed abstract evidence.",
+			MatchedQuery: queries[ai_external.SourcePubMed][0],
+			Year:         2024,
+			Venue:        "PubMed Journal",
+		}},
+	}, nil
+}
+
+func TestExternalSearchToolReturnsPubMedSourceMetadata(t *testing.T) {
+	searcher := &sourceQueryCapturingExternalSearch{}
+	planner := &stubExternalPlanner{plan: ExternalSearchPlan{
+		QueriesBySource: map[string][]string{
+			"pubmed":           {"gene discovery PubMed query"},
+			"semantic_scholar": {"gene discovery broad query"},
+		},
+		Rationale: "source-specific query planning",
+	}}
+
+	res, err := NewExternalSearchToolWithPlanner(searcher, planner).Run(context.Background(), ToolInput{
+		Query: "找 PubMed 里的 gene discovery 证据",
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if got, want := searcher.queries[ai_external.SourcePubMed], []string{"gene discovery PubMed query"}; !slices.Equal(got, want) {
+		t.Fatalf("pubmed queries = %+v, want %+v", got, want)
+	}
+	if got, want := searcher.queries[ai_external.SourceSemanticScholar], []string{"gene discovery broad query"}; !slices.Equal(got, want) {
+		t.Fatalf("semantic scholar queries = %+v, want %+v", got, want)
+	}
+	if len(res.Cards) != 1 {
+		t.Fatalf("cards = %+v, want one PubMed card", res.Cards)
+	}
+	card, ok := res.Cards[0].Payload.(ExternalPaperCard)
+	if !ok {
+		t.Fatalf("payload = %#v", res.Cards[0].Payload)
+	}
+	if card.PMID != "12345" || card.URL != "https://pubmed.ncbi.nlm.nih.gov/12345/" {
+		t.Fatalf("card metadata = %+v, want PMID and URL", card)
+	}
+	if !slices.Equal(card.Sources, []string{"PubMed"}) {
+		t.Fatalf("card sources = %+v, want PubMed", card.Sources)
+	}
+	if got := card.SourceIDs["pubmed"]; got != "12345" {
+		t.Fatalf("source ids = %+v, want pubmed id", card.SourceIDs)
+	}
+	if len(res.Citations) != 1 || res.Citations[0].Source != "external:PubMed" {
+		t.Fatalf("citations = %+v, want PubMed citation source", res.Citations)
+	}
+	if res.Citations[0].ExternalID != "PMID:12345" {
+		t.Fatalf("external id = %q, want PMID", res.Citations[0].ExternalID)
+	}
+	if !strings.Contains(res.Citations[0].Snippet.Section, "外部学术搜索: PubMed") {
+		t.Fatalf("snippet section = %q", res.Citations[0].Snippet.Section)
+	}
+	if !strings.Contains(res.Process.Note, "PubMed") {
+		t.Fatalf("process note = %q, want PubMed", res.Process.Note)
+	}
+}
+
+type limitCapturingExternalSearch struct {
+	mu       sync.Mutex
+	limit    int
+	query    string
+	queries  []string
+	bySource ai_external.SourceQueries
+}
+
+func (s *limitCapturingExternalSearch) Search(ctx context.Context, queries ai_external.SourceQueries, opts ai_external.SearchOptions) (ai_external.SearchResult, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.limit = opts.Limit
-	s.query = query
-	s.queries = append(s.queries, query)
-	return research.PaperList{}, nil
-}
-
-func (s *limitCapturingExternalSearch) SnippetSearch(ctx context.Context, query string, opts research.SnippetSearchOpts) (research.SnippetList, error) {
-	return research.SnippetList{}, nil
+	s.bySource = cloneTestSourceQueries(queries)
+	s.queries = flattenExternalSourceQueries(queries)
+	if len(s.queries) > 0 {
+		s.query = s.queries[0]
+	}
+	return ai_external.SearchResult{Sources: sourceIDsInQueries(queries)}, nil
 }
 
 type stubExternalPlanner struct {
@@ -117,20 +202,33 @@ func (c *stubNonStreamCaller) CallProviderGeneric(ctx context.Context, settings 
 }
 
 type queryRoutingExternalSearch struct {
-	mu      sync.Mutex
-	queries []string
-	results map[string][]research.Paper
+	mu       sync.Mutex
+	queries  []string
+	bySource ai_external.SourceQueries
+	results  map[string][]ai_external.Paper
 }
 
-func (s *queryRoutingExternalSearch) Search(ctx context.Context, query string, opts research.SearchOpts) (research.PaperList, error) {
+func (s *queryRoutingExternalSearch) Search(ctx context.Context, queries ai_external.SourceQueries, opts ai_external.SearchOptions) (ai_external.SearchResult, error) {
 	s.mu.Lock()
-	s.queries = append(s.queries, query)
+	s.bySource = cloneTestSourceQueries(queries)
+	s.queries = flattenExternalSourceQueries(queries)
 	s.mu.Unlock()
-	return research.PaperList{Items: s.results[query]}, nil
-}
 
-func (s *queryRoutingExternalSearch) SnippetSearch(ctx context.Context, query string, opts research.SnippetSearchOpts) (research.SnippetList, error) {
-	return research.SnippetList{}, nil
+	results := make([]ai_external.SourceResult, 0)
+	for _, source := range orderedExternalSearchSources(queries) {
+		for _, query := range queries[source] {
+			results = append(results, ai_external.SourceResult{
+				Source: source,
+				Query:  query,
+				Papers: s.results[query],
+			})
+		}
+	}
+	return ai_external.SearchResult{
+		Sources: sourceIDsInQueries(queries),
+		Results: results,
+		Papers:  ai_external.MergePapers(results, sourceIDsInQueries(queries), opts.Limit),
+	}, nil
 }
 
 type stubExternalClassifier struct {
@@ -377,20 +475,25 @@ func TestExternalSearchToolAddsRecallQueriesFromPlannerTerms(t *testing.T) {
 }
 
 func TestExternalSearchToolRunsMultipleQueriesAndFiltersWithClassifier(t *testing.T) {
-	correct := research.Paper{
-		PaperID:  "cell-2025",
+	correct := ai_external.Paper{
+		Source:        ai_external.SourceSemanticScholar,
+		SourcePaperID: "cell-2025",
+		SourcePaperIDs: map[ai_external.SourceID]string{
+			ai_external.SourceSemanticScholar: "cell-2025",
+		},
+		Sources:  []ai_external.SourceID{ai_external.SourceSemanticScholar},
 		Title:    "A unified cell atlas of vascular plants reveals cell-type foundational genes and accelerates gene discovery.",
 		Year:     2025,
 		Venue:    "Cell",
 		Abstract: "The pace of gene discovery in plants has slowed as forward genetic screens reach saturation.",
 	}
-	searcher := &queryRoutingExternalSearch{results: map[string][]research.Paper{
+	searcher := &queryRoutingExternalSearch{results: map[string][]ai_external.Paper{
 		"forward genetic screens saturation gene discovery decline": {
-			{PaperID: "pamir", Title: "pamiR", TLDR: "Forward genetics without functional genetic redundancy."},
+			{Source: ai_external.SourceSemanticScholar, SourcePaperID: "pamir", Title: "pamiR", TLDR: "Forward genetics without functional genetic redundancy."},
 		},
 		"gene discovery slowed forward genetic screens saturation": {
 			correct,
-			{PaperID: "root-fate", Title: "Regulation of cell fate", TLDR: "Cell fate segregation."},
+			{Source: ai_external.SourceSemanticScholar, SourcePaperID: "root-fate", Title: "Regulation of cell fate", TLDR: "Cell fate segregation."},
 		},
 	}}
 	planner := &stubExternalPlanner{plan: ExternalSearchPlan{
@@ -463,8 +566,11 @@ func TestExternalSearchToolReportsSourceAndPlannedQuery(t *testing.T) {
 		Rationale:   "external review query",
 	}}
 	tool := NewExternalSearchToolWithPlanner(stubExternalSearch{
-		search: research.PaperList{Items: []research.Paper{{
-			PaperID: "s2-review", Title: "Single-cell ATAC review", Abstract: "Review evidence.",
+		search: ai_external.SearchResult{Sources: []ai_external.SourceID{ai_external.SourcePubMed, ai_external.SourceSemanticScholar}, Papers: []ai_external.Paper{{
+			Source: ai_external.SourceSemanticScholar, SourcePaperID: "s2-review",
+			SourcePaperIDs: map[ai_external.SourceID]string{ai_external.SourceSemanticScholar: "s2-review"},
+			Sources:        []ai_external.SourceID{ai_external.SourceSemanticScholar},
+			Title:          "Single-cell ATAC review", Abstract: "Review evidence.",
 		}}},
 	}, planner)
 
@@ -478,13 +584,13 @@ func TestExternalSearchToolReportsSourceAndPlannedQuery(t *testing.T) {
 			t.Fatalf("process labels = %v, missing %s", labels, want)
 		}
 	}
-	if !strings.Contains(res.Process.Note, "Semantic Scholar") || !strings.Contains(res.Process.Note, "single-cell ATAC-seq review") {
+	if !strings.Contains(res.Process.Note, "PubMed") || !strings.Contains(res.Process.Note, "Semantic Scholar") || !strings.Contains(res.Process.Note, "single-cell ATAC-seq review") {
 		t.Fatalf("process note = %q, want source and planned query", res.Process.Note)
 	}
-	if got := stageByLabel(res.Process.Stages, "外部搜索").Detail; !strings.Contains(got, "Semantic Scholar") {
+	if got := stageByLabel(res.Process.Stages, "外部搜索").Detail; !strings.Contains(got, "PubMed") || !strings.Contains(got, "Semantic Scholar") {
 		t.Fatalf("external search stage detail = %q, want source detail", got)
 	}
-	if !strings.Contains(res.ToolCalls[0].OutputSummaryJSON, `"source":"Semantic Scholar"`) ||
+	if !strings.Contains(res.ToolCalls[0].OutputSummaryJSON, `"sources":["PubMed","Semantic Scholar"]`) ||
 		!strings.Contains(res.ToolCalls[0].OutputSummaryJSON, `"search_query":"single-cell ATAC-seq review"`) {
 		t.Fatalf("output summary = %s, want source and search query", res.ToolCalls[0].OutputSummaryJSON)
 	}

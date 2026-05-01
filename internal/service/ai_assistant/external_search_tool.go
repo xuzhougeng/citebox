@@ -9,12 +9,12 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/xuzhougeng/citebox/internal/service/ai_external"
 	"github.com/xuzhougeng/citebox/internal/service/research"
 )
 
 type ExternalSearcher interface {
-	Search(ctx context.Context, query string, opts research.SearchOpts) (research.PaperList, error)
-	SnippetSearch(ctx context.Context, query string, opts research.SnippetSearchOpts) (research.SnippetList, error)
+	Search(ctx context.Context, queries ai_external.SourceQueries, opts ai_external.SearchOptions) (ai_external.SearchResult, error)
 }
 
 type ExternalSearchPlanner interface {
@@ -65,11 +65,15 @@ const (
 	maxExternalSearchQueries   = 4
 	maxExternalClassification  = 20
 	externalClassifierParallel = 20
-	externalSearchSource       = "Semantic Scholar"
 )
 
 type ExternalPaperCard struct {
-	S2PaperID           string                       `json:"s2_paper_id"`
+	S2PaperID           string                       `json:"s2_paper_id,omitempty"`
+	SourceIDs           map[string]string            `json:"source_ids,omitempty"`
+	Sources             []string                     `json:"sources,omitempty"`
+	PMID                string                       `json:"pmid,omitempty"`
+	PMCID               string                       `json:"pmcid,omitempty"`
+	URL                 string                       `json:"url,omitempty"`
 	Title               string                       `json:"title"`
 	Year                int                          `json:"year,omitempty"`
 	Venue               string                       `json:"venue,omitempty"`
@@ -97,30 +101,35 @@ func NewExternalSearchToolWithAgents(searcher ExternalSearcher, planner External
 
 func (t *ExternalSearchTool) Run(ctx context.Context, in ToolInput) (ToolResult, error) {
 	limit := clampExternalSearchLimit(in.Limit)
-	searchQueries := ExternalSearchQueries(in.Query)
+	fallbackQueries := ExternalSearchQueries(in.Query)
 	plan := ExternalSearchPlan{}
 	var planErr error
+	sourceQueries := externalSearchSourceQueries(fallbackQueries, plan)
 	if t != nil {
-		searchQueries, plan, planErr = t.searchQueries(ctx, in.Query)
+		sourceQueries, plan, planErr = t.searchQueries(ctx, in.Query)
 	}
+	searchQueries := flattenExternalSourceQueries(sourceQueries)
 	searchQuery := ""
 	if len(searchQueries) > 0 {
 		searchQuery = searchQueries[0]
 	}
 	inputJSON, _ := json.Marshal(struct {
-		Query         string   `json:"query"`
-		SearchQuery   string   `json:"search_query,omitempty"`
-		SearchQueries []string `json:"search_queries,omitempty"`
-		Limit         int      `json:"limit"`
-	}{Query: in.Query, SearchQuery: searchQuery, SearchQueries: searchQueries, Limit: limit})
-	processStages := externalPlanningStages(t, searchQueries, plan, planErr)
+		Query           string              `json:"query"`
+		SearchQuery     string              `json:"search_query,omitempty"`
+		SearchQueries   []string            `json:"search_queries,omitempty"`
+		QueriesBySource map[string][]string `json:"queries_by_source,omitempty"`
+		Limit           int                 `json:"limit"`
+	}{Query: in.Query, SearchQuery: searchQuery, SearchQueries: searchQueries, QueriesBySource: sourceQueriesForJSON(sourceQueries), Limit: limit})
+	processStages := externalPlanningStages(t, sourceQueries, plan, planErr)
 
 	if t == nil || t.searcher == nil {
 		return externalSearchFailedResult(inputJSON, errors.New("external searcher is not configured"), processStages, searchQueries), nil
 	}
 
-	candidates, searchErrs := t.searchMany(ctx, searchQueries, limit)
-	if len(candidates) == 0 && len(searchErrs) > 0 {
+	searchRes, searchErr := t.searcher.Search(ctx, sourceQueries, ai_external.SearchOptions{Limit: limit})
+	searchErrs := externalSearchFailures(searchRes, searchErr)
+	candidates := externalSearchCandidates(searchRes.Papers)
+	if len(candidates) == 0 && searchErr != nil {
 		return externalSearchFailedResult(inputJSON, combineExternalSearchErrors(searchErrs), processStages, searchQueries), nil
 	}
 	rawReturned := len(candidates)
@@ -143,25 +152,31 @@ func (t *ExternalSearchTool) Run(ctx context.Context, in ToolInput) (ToolResult,
 			break
 		}
 		p := candidate.Paper
+		labels := externalPaperSourceLabels(p)
 		citation := Citation{
 			I:          len(citations) + 1,
-			S2PaperID:  p.PaperID,
+			S2PaperID:  externalSemanticScholarID(p),
 			ExternalID: externalID(p),
 			Title:      p.Title,
-			Source:     "external",
+			Source:     "external:" + strings.Join(labels, "+"),
 			Snippet: research.Snippet{
 				Text:        firstNonEmpty(p.Abstract, p.TLDR, p.Title),
 				SnippetKind: "abstract",
-				Section:     "Semantic Scholar",
+				Section:     "外部学术搜索: " + strings.Join(labels, "+"),
 			},
 		}
 		citations = append(citations, citation)
 		cards = append(cards, ResultCard{Type: "external_paper", Payload: ExternalPaperCard{
-			S2PaperID:           p.PaperID,
+			S2PaperID:           externalSemanticScholarID(p),
+			SourceIDs:           externalSourceIDsForCard(p),
+			Sources:             labels,
+			PMID:                p.PMID,
+			PMCID:               p.PMCID,
+			URL:                 p.URL,
 			Title:               p.Title,
 			Year:                p.Year,
 			Venue:               p.Venue,
-			DOI:                 p.ExternalIDs.DOI,
+			DOI:                 p.DOI,
 			TLDR:                p.TLDR,
 			Abstract:            p.Abstract,
 			MatchedQuery:        candidate.MatchedQuery,
@@ -172,17 +187,22 @@ func (t *ExternalSearchTool) Run(ctx context.Context, in ToolInput) (ToolResult,
 		}})
 	}
 
+	sourceLabels := labelsForExternalSources(searchRes.Sources)
+	if len(sourceLabels) == 0 {
+		sourceLabels = labelsForExternalSources(sourceIDsInQueries(sourceQueries))
+	}
 	outputJSON, _ := json.Marshal(struct {
-		Source           string   `json:"source"`
-		SearchQuery      string   `json:"search_query"`
-		SearchQueries    []string `json:"search_queries,omitempty"`
-		Returned         int      `json:"returned"`
-		Hits             int      `json:"hits"`
-		Classified       int      `json:"classified,omitempty"`
-		ClassifierFailed int      `json:"classifier_failed,omitempty"`
-	}{Source: externalSearchSource, SearchQuery: searchQuery, SearchQueries: searchQueries, Returned: rawReturned, Hits: len(cards), Classified: classified, ClassifierFailed: classifierFailed})
+		Sources          []string            `json:"sources,omitempty"`
+		SearchQuery      string              `json:"search_query"`
+		SearchQueries    []string            `json:"search_queries,omitempty"`
+		QueriesBySource  map[string][]string `json:"queries_by_source,omitempty"`
+		Returned         int                 `json:"returned"`
+		Hits             int                 `json:"hits"`
+		Classified       int                 `json:"classified,omitempty"`
+		ClassifierFailed int                 `json:"classifier_failed,omitempty"`
+	}{Sources: sourceLabels, SearchQuery: searchQuery, SearchQueries: searchQueries, QueriesBySource: sourceQueriesForJSON(sourceQueries), Returned: rawReturned, Hits: len(cards), Classified: classified, ClassifierFailed: classifierFailed})
 
-	searchDetail := fmt.Sprintf("来源: %s", externalSearchSource)
+	searchDetail := fmt.Sprintf("来源: %s", strings.Join(sourceLabels, "+"))
 	if len(searchQueries) > 1 {
 		searchDetail += fmt.Sprintf("; 查询 %d个", len(searchQueries))
 	}
@@ -209,13 +229,13 @@ func (t *ExternalSearchTool) Run(ctx context.Context, in ToolInput) (ToolResult,
 		noteParts = append(noteParts, "Master规划失败，已使用本地查询回退。")
 	}
 	if len(searchErrs) > 0 && len(candidates) > 0 {
-		noteParts = append(noteParts, fmt.Sprintf("%s 部分查询失败 %d 个。", externalSearchSource, len(searchErrs)))
+		noteParts = append(noteParts, fmt.Sprintf("外部学术搜索部分失败 %d 个: %s。", len(searchErrs), combineExternalSearchErrors(searchErrs).Error()))
 	}
-	noteParts = append(noteParts, fmt.Sprintf("%s 查询: %s", externalSearchSource, strings.Join(searchQueries, " | ")))
+	noteParts = append(noteParts, fmt.Sprintf("%s 查询: %s", strings.Join(sourceLabels, "+"), formatExternalSourceQueries(sourceQueries)))
 	note := joinProcessNotes(noteParts)
 	answerContext := externalAnswerContext(cards)
 	if len(cards) == 0 {
-		answerContext = fmt.Sprintf("没有命中：%s 使用查询 %q 返回 0 条结果。", externalSearchSource, strings.Join(searchQueries, " | "))
+		answerContext = fmt.Sprintf("没有命中：%s 使用查询 %q 返回 0 条结果。", strings.Join(sourceLabels, "+"), strings.Join(searchQueries, " | "))
 	}
 
 	return ToolResult{
@@ -237,74 +257,9 @@ func (t *ExternalSearchTool) Run(ctx context.Context, in ToolInput) (ToolResult,
 }
 
 type externalSearchCandidate struct {
-	Paper          research.Paper
+	Paper          ai_external.Paper
 	MatchedQuery   string
 	Classification ExternalPaperClassificationResult
-}
-
-func (t *ExternalSearchTool) searchMany(ctx context.Context, queries []string, limit int) ([]externalSearchCandidate, []error) {
-	if len(queries) == 0 {
-		return nil, nil
-	}
-	type result struct {
-		index int
-		query string
-		list  research.PaperList
-		err   error
-	}
-	out := make(chan result, len(queries))
-	var wg sync.WaitGroup
-	for i, query := range queries {
-		if strings.TrimSpace(query) == "" {
-			continue
-		}
-		wg.Add(1)
-		go func(index int, q string) {
-			defer wg.Done()
-			list, err := t.searcher.Search(ctx, q, research.SearchOpts{Limit: limit})
-			out <- result{index: index, query: q, list: list, err: err}
-		}(i, query)
-	}
-	wg.Wait()
-	close(out)
-
-	results := make([]result, len(queries))
-	hasResult := make([]bool, len(queries))
-	errs := make([]error, 0)
-	for res := range out {
-		results[res.index] = res
-		hasResult[res.index] = true
-		if res.err != nil {
-			errs = append(errs, fmt.Errorf("%s: %w", res.query, res.err))
-		}
-	}
-
-	seen := map[string]bool{}
-	candidates := make([]externalSearchCandidate, 0)
-	maxRows := 0
-	for i := range queries {
-		if !hasResult[i] || results[i].err != nil {
-			continue
-		}
-		if len(results[i].list.Items) > maxRows {
-			maxRows = len(results[i].list.Items)
-		}
-	}
-	for row := 0; row < maxRows; row++ {
-		for i := range queries {
-			if !hasResult[i] || results[i].err != nil || row >= len(results[i].list.Items) {
-				continue
-			}
-			p := results[i].list.Items[row]
-			key := externalPaperKey(p)
-			if key == "" || seen[key] {
-				continue
-			}
-			seen[key] = true
-			candidates = append(candidates, externalSearchCandidate{Paper: p, MatchedQuery: results[i].query})
-		}
-	}
-	return candidates, errs
 }
 
 func (t *ExternalSearchTool) classifyCandidates(ctx context.Context, query string, searchQueries []string, candidates []externalSearchCandidate) ([]externalSearchCandidate, int, int) {
@@ -329,7 +284,8 @@ func (t *ExternalSearchTool) classifyCandidates(ctx context.Context, query strin
 		go func(index int, cand externalSearchCandidate) {
 			defer wg.Done()
 			defer func() { <-sem }()
-			if res, ok := classifyExternalPaperHeuristic(query, cand.Paper); ok {
+			researchPaper := externalPaperToResearchPaper(cand.Paper)
+			if res, ok := classifyExternalPaperHeuristic(query, researchPaper); ok {
 				out <- result{index: index, ok: true, res: res}
 				return
 			}
@@ -337,11 +293,11 @@ func (t *ExternalSearchTool) classifyCandidates(ctx context.Context, query strin
 				Query:         query,
 				SearchQueries: searchQueries,
 				MatchedQuery:  cand.MatchedQuery,
-				Paper:         cand.Paper,
-				EvidenceText:  externalEvidenceText(cand.Paper),
+				Paper:         researchPaper,
+				EvidenceText:  externalEvidenceText(researchPaper),
 			})
 			if err != nil {
-				if fallback, ok := classifyExternalPaperHeuristic(query, cand.Paper); ok {
+				if fallback, ok := classifyExternalPaperHeuristic(query, researchPaper); ok {
 					out <- result{index: index, ok: true, res: fallback}
 					return
 				}
@@ -377,36 +333,38 @@ func (t *ExternalSearchTool) classifyCandidates(ctx context.Context, query strin
 	return filtered, classified, failed
 }
 
-func (t *ExternalSearchTool) searchQueries(ctx context.Context, query string) ([]string, ExternalSearchPlan, error) {
+func (t *ExternalSearchTool) searchQueries(ctx context.Context, query string) (ai_external.SourceQueries, ExternalSearchPlan, error) {
 	fallback := ExternalSearchQueries(query)
 	if t == nil || t.planner == nil {
-		return fallback, ExternalSearchPlan{}, nil
+		return externalSearchSourceQueries(fallback, ExternalSearchPlan{}), ExternalSearchPlan{}, nil
 	}
 	plan, err := t.planner.PlanExternalSearch(ctx, query)
 	if err != nil {
-		return fallback, ExternalSearchPlan{}, err
+		return externalSearchSourceQueries(fallback, ExternalSearchPlan{}), ExternalSearchPlan{}, err
 	}
-	plan.SearchQueries = plan.QueriesForSource("semantic_scholar", fallback)
+	sourceQueries := externalSearchSourceQueries(fallback, plan)
+	plan.SearchQueries = flattenExternalSourceQueries(sourceQueries)
 	plan.SearchQuery = firstExternalQuery(plan.SearchQueries)
 	plan.Rationale = strings.TrimSpace(plan.Rationale)
 	if len(plan.SearchQueries) == 0 {
-		return fallback, ExternalSearchPlan{}, errors.New("empty external search query")
+		return externalSearchSourceQueries(fallback, ExternalSearchPlan{}), ExternalSearchPlan{}, errors.New("empty external search query")
 	}
-	return plan.SearchQueries, plan, nil
+	return sourceQueries, plan, nil
 }
 
-func externalPlanningStages(t *ExternalSearchTool, searchQueries []string, plan ExternalSearchPlan, planErr error) []ProcessStage {
+func externalPlanningStages(t *ExternalSearchTool, sourceQueries ai_external.SourceQueries, plan ExternalSearchPlan, planErr error) []ProcessStage {
 	if t == nil || t.planner == nil {
 		return nil
 	}
+	searchQueries := flattenExternalSourceQueries(sourceQueries)
 	if planErr != nil {
 		return []ProcessStage{{
 			Label:  "Master规划",
 			Status: "failed",
-			Detail: fmt.Sprintf("规划失败: %s; 回退查询: %s", planErr.Error(), strings.Join(searchQueries, " | ")),
+			Detail: fmt.Sprintf("规划失败: %s; 回退查询: %s", planErr.Error(), formatExternalSourceQueries(sourceQueries)),
 		}}
 	}
-	detail := "检索式: " + strings.Join(searchQueries, " | ")
+	detail := "检索式: " + formatExternalSourceQueries(sourceQueries)
 	if strings.TrimSpace(plan.Rationale) != "" {
 		detail += "; " + strings.TrimSpace(plan.Rationale)
 	}
@@ -452,6 +410,197 @@ func (p ExternalSearchPlan) QueriesForSource(source string, fallback []string) [
 		return fallback
 	}
 	return mergeExternalQueries(legacyQueries, fallback)
+}
+
+func externalSearchSourceQueries(fallback []string, plan ExternalSearchPlan) ai_external.SourceQueries {
+	return ai_external.SourceQueries{
+		ai_external.SourcePubMed:          plan.QueriesForSource(string(ai_external.SourcePubMed), fallback),
+		ai_external.SourceSemanticScholar: plan.QueriesForSource(string(ai_external.SourceSemanticScholar), fallback),
+	}
+}
+
+func sourceIDsInQueries(queries ai_external.SourceQueries) []ai_external.SourceID {
+	sources := make([]ai_external.SourceID, 0, len(queries))
+	for _, source := range orderedExternalSearchSources(queries) {
+		if len(queries[source]) > 0 {
+			sources = append(sources, source)
+		}
+	}
+	return sources
+}
+
+func orderedExternalSearchSources(queries ai_external.SourceQueries) []ai_external.SourceID {
+	known := []ai_external.SourceID{ai_external.SourcePubMed, ai_external.SourceSemanticScholar}
+	seen := make(map[ai_external.SourceID]bool, len(queries))
+	out := make([]ai_external.SourceID, 0, len(queries))
+	for _, source := range known {
+		if _, ok := queries[source]; ok {
+			out = append(out, source)
+			seen[source] = true
+		}
+	}
+	unknown := make([]string, 0, len(queries))
+	for source := range queries {
+		if !seen[source] {
+			unknown = append(unknown, string(source))
+		}
+	}
+	sort.Strings(unknown)
+	for _, source := range unknown {
+		out = append(out, ai_external.SourceID(source))
+	}
+	return out
+}
+
+func flattenExternalSourceQueries(queries ai_external.SourceQueries) []string {
+	seen := map[string]bool{}
+	out := make([]string, 0)
+	for _, source := range orderedExternalSearchSources(queries) {
+		for _, query := range queries[source] {
+			query = normalizeExternalQuery(query)
+			if query == "" {
+				continue
+			}
+			key := strings.ToLower(query)
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+			out = append(out, query)
+		}
+	}
+	return out
+}
+
+func sourceQueriesForJSON(queries ai_external.SourceQueries) map[string][]string {
+	out := make(map[string][]string, len(queries))
+	for _, source := range orderedExternalSearchSources(queries) {
+		sourceQueries := sanitizeExternalQueries(queries[source])
+		if len(sourceQueries) == 0 {
+			continue
+		}
+		out[string(source)] = sourceQueries
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func formatExternalSourceQueries(queries ai_external.SourceQueries) string {
+	parts := make([]string, 0, len(queries))
+	for _, source := range orderedExternalSearchSources(queries) {
+		sourceQueries := sanitizeExternalQueries(queries[source])
+		if len(sourceQueries) == 0 {
+			continue
+		}
+		parts = append(parts, fmt.Sprintf("%s: %s", externalSourceLabel(source), strings.Join(sourceQueries, " | ")))
+	}
+	return strings.Join(parts, "; ")
+}
+
+func labelsForExternalSources(sources []ai_external.SourceID) []string {
+	labels := make([]string, 0, len(sources))
+	seen := map[string]bool{}
+	for _, source := range sources {
+		label := externalSourceLabel(source)
+		key := strings.ToLower(label)
+		if label == "" || seen[key] {
+			continue
+		}
+		seen[key] = true
+		labels = append(labels, label)
+	}
+	return labels
+}
+
+func externalSourceLabel(source ai_external.SourceID) string {
+	switch source {
+	case ai_external.SourcePubMed:
+		return "PubMed"
+	case ai_external.SourceSemanticScholar:
+		return "Semantic Scholar"
+	default:
+		if strings.TrimSpace(string(source)) == "" {
+			return "Unknown"
+		}
+		return string(source)
+	}
+}
+
+func externalPaperSourceLabels(p ai_external.Paper) []string {
+	sources := p.Sources
+	if len(sources) == 0 && p.Source != "" {
+		sources = []ai_external.SourceID{p.Source}
+	}
+	if len(sources) == 0 && len(p.SourcePaperIDs) > 0 {
+		for source := range p.SourcePaperIDs {
+			sources = append(sources, source)
+		}
+		sort.Slice(sources, func(i, j int) bool {
+			return string(sources[i]) < string(sources[j])
+		})
+	}
+	labels := labelsForExternalSources(sources)
+	if len(labels) == 0 {
+		return []string{"Unknown"}
+	}
+	return labels
+}
+
+func externalSemanticScholarID(p ai_external.Paper) string {
+	if p.SourcePaperIDs != nil && strings.TrimSpace(p.SourcePaperIDs[ai_external.SourceSemanticScholar]) != "" {
+		return strings.TrimSpace(p.SourcePaperIDs[ai_external.SourceSemanticScholar])
+	}
+	if p.Source == ai_external.SourceSemanticScholar {
+		return strings.TrimSpace(p.SourcePaperID)
+	}
+	return ""
+}
+
+func externalSourceIDsForCard(p ai_external.Paper) map[string]string {
+	out := make(map[string]string, len(p.SourcePaperIDs)+1)
+	for source, id := range p.SourcePaperIDs {
+		if strings.TrimSpace(id) != "" {
+			out[string(source)] = strings.TrimSpace(id)
+		}
+	}
+	if p.Source != "" && strings.TrimSpace(p.SourcePaperID) != "" && out[string(p.Source)] == "" {
+		out[string(p.Source)] = strings.TrimSpace(p.SourcePaperID)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func externalSearchCandidates(papers []ai_external.Paper) []externalSearchCandidate {
+	candidates := make([]externalSearchCandidate, 0, len(papers))
+	for _, paper := range papers {
+		candidates = append(candidates, externalSearchCandidate{
+			Paper:        paper,
+			MatchedQuery: paper.MatchedQuery,
+		})
+	}
+	return candidates
+}
+
+func externalSearchFailures(res ai_external.SearchResult, err error) []error {
+	errs := make([]error, 0, len(res.Failures)+1)
+	for _, failure := range res.Failures {
+		if failure.Err == nil {
+			continue
+		}
+		if failure.Source != "" {
+			errs = append(errs, fmt.Errorf("%s: %w", externalSourceLabel(failure.Source), failure.Err))
+			continue
+		}
+		errs = append(errs, failure.Err)
+	}
+	if err != nil && len(errs) == 0 {
+		errs = append(errs, err)
+	}
+	return errs
 }
 
 func externalSearchQueryCandidates(query string) []string {
@@ -770,19 +919,6 @@ func externalRecallQueriesFromPlanned(planned []string) []string {
 	}
 }
 
-func externalPaperKey(p research.Paper) string {
-	if strings.TrimSpace(p.PaperID) != "" {
-		return "s2:" + strings.TrimSpace(p.PaperID)
-	}
-	if strings.TrimSpace(p.ExternalIDs.DOI) != "" {
-		return "doi:" + strings.ToLower(strings.TrimSpace(p.ExternalIDs.DOI))
-	}
-	if strings.TrimSpace(p.Title) != "" {
-		return "title:" + strings.ToLower(strings.TrimSpace(p.Title))
-	}
-	return ""
-}
-
 func externalEvidenceText(p research.Paper) string {
 	var b strings.Builder
 	if strings.TrimSpace(p.Title) != "" {
@@ -950,17 +1086,76 @@ func externalSearchFailedResult(inputJSON []byte, err error, stages []ProcessSta
 	}
 }
 
-func externalID(p research.Paper) string {
-	if p.ExternalIDs.DOI != "" {
-		return "DOI:" + p.ExternalIDs.DOI
+func externalID(p ai_external.Paper) string {
+	if strings.TrimSpace(p.DOI) != "" {
+		return "DOI:" + strings.TrimSpace(p.DOI)
 	}
-	if p.ExternalIDs.ArXiv != "" {
-		return "ARXIV:" + p.ExternalIDs.ArXiv
+	if strings.TrimSpace(p.PMID) != "" {
+		return "PMID:" + strings.TrimSpace(p.PMID)
 	}
-	if p.ExternalIDs.PubMed != "" {
-		return "PMID:" + p.ExternalIDs.PubMed
+	if strings.TrimSpace(p.ArXiv) != "" {
+		return "ARXIV:" + strings.TrimSpace(p.ArXiv)
+	}
+	for _, source := range externalPaperSourceOrder(p) {
+		if id := strings.TrimSpace(p.SourcePaperIDs[source]); id != "" {
+			return string(source) + ":" + id
+		}
+	}
+	if p.Source != "" && strings.TrimSpace(p.SourcePaperID) != "" {
+		return string(p.Source) + ":" + strings.TrimSpace(p.SourcePaperID)
 	}
 	return ""
+}
+
+func externalPaperSourceOrder(p ai_external.Paper) []ai_external.SourceID {
+	sources := p.Sources
+	if len(sources) == 0 && p.Source != "" {
+		sources = []ai_external.SourceID{p.Source}
+	}
+	seen := map[ai_external.SourceID]bool{}
+	out := make([]ai_external.SourceID, 0, len(sources)+len(p.SourcePaperIDs))
+	for _, source := range sources {
+		if source != "" && !seen[source] {
+			seen[source] = true
+			out = append(out, source)
+		}
+	}
+	unknown := make([]string, 0, len(p.SourcePaperIDs))
+	for source := range p.SourcePaperIDs {
+		if !seen[source] {
+			unknown = append(unknown, string(source))
+		}
+	}
+	sort.Strings(unknown)
+	for _, source := range unknown {
+		out = append(out, ai_external.SourceID(source))
+	}
+	return out
+}
+
+func externalPaperToResearchPaper(p ai_external.Paper) research.Paper {
+	authors := make([]research.Author, 0, len(p.Authors))
+	for _, name := range p.Authors {
+		if strings.TrimSpace(name) != "" {
+			authors = append(authors, research.Author{Name: strings.TrimSpace(name)})
+		}
+	}
+	return research.Paper{
+		PaperID: externalSemanticScholarID(p),
+		ExternalIDs: research.IDs{
+			DOI:    p.DOI,
+			ArXiv:  p.ArXiv,
+			PubMed: p.PMID,
+		},
+		Title:            p.Title,
+		Abstract:         p.Abstract,
+		TLDR:             p.TLDR,
+		Year:             p.Year,
+		Venue:            p.Venue,
+		Authors:          authors,
+		CitationCount:    p.CitationCount,
+		OpenAccessPDFURL: p.OpenAccessURL,
+	}
 }
 
 func firstNonEmpty(values ...string) string {
