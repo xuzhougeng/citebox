@@ -165,10 +165,10 @@
         const matchedQuery = p.matched_query
             ? '<p class="ai-result-note">' + escapeHtml(translate('ai.result_matched_query', '匹配查询')) + ': ' + escapeHtml(p.matched_query) + '</p>'
             : '';
-        const matchedConstraints = renderExternalListNote('ai.result_matched_constraints', '命中约束', p.matched_constraints);
-        const matchedPreferences = renderExternalListNote('ai.result_matched_preferences', '命中偏好', p.matched_preferences);
+        const matchedConstraints = renderExternalListNote('ai.result_matched_constraints', p.matched_constraints);
+        const matchedPreferences = renderExternalListNote('ai.result_matched_preferences', p.matched_preferences);
         const articleRole = p.article_role
-            ? '<p class="ai-result-note">' + escapeHtml(translate('ai.result_article_role', '文献角色')) + ': ' + escapeHtml(formatExternalArticleRole(p.article_role)) + '</p>'
+            ? '<p class="ai-result-note">' + escapeHtml(translate('ai.result_article_role')) + ': ' + escapeHtml(formatExternalArticleRole(p.article_role)) + '</p>'
             : '';
         return '<article class="ai-result-card ai-result-card-external">' +
             '<div class="ai-result-card-head">' +
@@ -194,20 +194,20 @@
 
     function externalTierLabel(tier) {
         const key = String(tier || '').trim().toLowerCase();
-        if (key === 'strong_match') return translate('ai.result_tier_strong', '强相关');
-        if (key === 'weak_match') return translate('ai.result_tier_weak', '弱相关');
-        if (key === 'needs_review') return translate('ai.result_tier_review', '待核查');
+        if (key === 'strong_match') return translate('ai.result_tier_strong');
+        if (key === 'weak_match') return translate('ai.result_tier_weak');
+        if (key === 'needs_review') return translate('ai.result_tier_review');
         return '';
     }
 
-    function renderExternalListNote(labelKey, fallback, values) {
+    function renderExternalListNote(labelKey, values) {
         if (!Array.isArray(values) || values.length === 0) return '';
         const text = values
             .map((value) => String(value == null ? '' : value).trim())
             .filter((value) => value !== '')
             .join(', ');
         if (!text) return '';
-        return '<p class="ai-result-note">' + escapeHtml(translate(labelKey, fallback)) + ': ' + escapeHtml(text) + '</p>';
+        return '<p class="ai-result-note">' + escapeHtml(translate(labelKey)) + ': ' + escapeHtml(text) + '</p>';
     }
 
     function formatExternalArticleRole(value) {
