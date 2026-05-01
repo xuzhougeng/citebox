@@ -186,21 +186,24 @@
                                 ? new Set(window.AIReader.externalSourcesEnabled)
                                 : null; // null = "settings unknown, treat all as enabled"
                             const known = (window.AIReader && window.AIReader.toolTags && window.AIReader.toolTags.KNOWN_TOOL_TAGS) || [];
-                            return known.map((t) => {
-                                const isExternal = t.family === 'external';
-                                const isDisabled = isExternal && enabled !== null && !enabled.has(t.source);
-                                let description;
-                                if (t.name === 'PubMed') description = '外部源 · PubMed';
-                                else if (t.name === 'SemanticScholar') description = '外部源 · Semantic Scholar';
-                                else if (t.name === 'Library') description = '本地文本检索（不含图）';
-                                else if (t.name === 'Figure') description = '本地图片检索';
+                            const t = (typeof window !== 'undefined' && typeof window.t === 'function') ? window.t : (key, fallback) => (fallback || key);
+                            const descKeyMap = {
+                                PubMed: ['ai.tool_pubmed_desc', '外部源 · PubMed'],
+                                SemanticScholar: ['ai.tool_semantic_scholar_desc', '外部源 · Semantic Scholar'],
+                                Library: ['ai.tool_library_desc', '本地文本检索（不含图）'],
+                                Figure: ['ai.tool_figure_desc', '本地图片检索'],
+                            };
+                            return known.map((tag) => {
+                                const isExternal = tag.family === 'external';
+                                const isDisabled = isExternal && enabled !== null && !enabled.has(tag.source);
+                                const desc = descKeyMap[tag.name];
                                 return {
-                                    name: t.name,
-                                    family: t.family,
-                                    source: t.source,
-                                    description: description,
+                                    name: tag.name,
+                                    family: tag.family,
+                                    source: tag.source,
+                                    description: desc ? t(desc[0], desc[1]) : '',
                                     disabled: isDisabled,
-                                    disabledReason: isDisabled ? '未启用，前往设置 →' : '',
+                                    disabledReason: isDisabled ? t('ai.mention_tool_disabled', '未启用，前往设置 →') : '',
                                 };
                             });
                         },

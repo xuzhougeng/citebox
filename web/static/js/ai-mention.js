@@ -477,14 +477,11 @@
                 const commit = (window.AIReader && window.AIReader.toolTags && window.AIReader.toolTags.commitToolTag)
                     || null;
                 if (!commit) {
+                    console.warn('[ai-mention] window.AIReader.toolTags.commitToolTag not loaded; falling back to plain @ insert without family rewrite');
                     // Fallback: behave like a plain mention insert, no rewrite.
                     const mention = '@' + item.name + ' ';
-                    const beforeAtFallback = Number.isFinite(s.atIndex) && s.atIndex >= 0
-                        ? input.value.slice(0, s.atIndex)
-                        : input.value.slice(0, input.selectionStart);
-                    const afterFallback = input.value.slice(input.selectionStart);
-                    input.value = beforeAtFallback + mention + afterFallback;
-                    const newCaret = beforeAtFallback.length + mention.length;
+                    input.value = beforeAt + mention + after;
+                    const newCaret = beforeAt.length + mention.length;
                     input.setSelectionRange(newCaret, newCaret);
                 } else {
                     const result = commit(
