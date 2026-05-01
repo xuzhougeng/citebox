@@ -299,6 +299,7 @@ type stubExternalClassifier struct {
 	mu      sync.Mutex
 	inputs  []ExternalPaperClassificationInput
 	results map[string]ExternalPaperClassificationResult
+	errs    map[string]error
 	err     error
 }
 
@@ -321,6 +322,9 @@ func (s *stubExternalClassifier) ClassifyExternalPaper(ctx context.Context, in E
 	s.mu.Unlock()
 	if s.err != nil {
 		return ExternalPaperClassificationResult{}, s.err
+	}
+	if err, ok := s.errs[externalClassifierPaperKey(in.Paper)]; ok {
+		return ExternalPaperClassificationResult{}, err
 	}
 	if res, ok := s.results[externalClassifierPaperKey(in.Paper)]; ok {
 		return res, nil
@@ -912,7 +916,164 @@ func TestExternalSearchToolRunsMultipleQueriesAndFiltersWithClassifier(t *testin
 	}
 }
 
-func TestExternalSearchToolOnlySurfacesStrongMatchBeforeTask4(t *testing.T) {
+func TestExternalSearchToolDiscoveryKeepsWeakAndNeedsReviewCandidates(t *testing.T) {
+	weak := ai_external.Paper{
+		Source:        ai_external.SourceSemanticScholar,
+		SourcePaperID: "weak-1",
+		SourcePaperIDs: map[ai_external.SourceID]string{
+			ai_external.SourceSemanticScholar: "weak-1",
+		},
+		Sources:    []ai_external.SourceID{ai_external.SourceSemanticScholar},
+		Title:      "Weak match paper",
+		Abstract:   "Related background discussion without a direct match.",
+		OnlineYear: 2024,
+		IssueYear:  2023,
+		YearLabel:  "online 2024 / issue 2023",
+	}
+	review := ai_external.Paper{
+		Source:        ai_external.SourceSemanticScholar,
+		SourcePaperID: "review-1",
+		SourcePaperIDs: map[ai_external.SourceID]string{
+			ai_external.SourceSemanticScholar: "review-1",
+		},
+		Sources:    []ai_external.SourceID{ai_external.SourceSemanticScholar},
+		Title:      "Needs review paper",
+		Abstract:   "Potentially relevant but ambiguous from the abstract alone.",
+		OnlineYear: 2022,
+		IssueYear:  2021,
+		YearLabel:  "online 2022 / issue 2021",
+	}
+	classifierFailed := ai_external.Paper{
+		Source:        ai_external.SourceSemanticScholar,
+		SourcePaperID: "failed-1",
+		SourcePaperIDs: map[ai_external.SourceID]string{
+			ai_external.SourceSemanticScholar: "failed-1",
+		},
+		Sources:    []ai_external.SourceID{ai_external.SourceSemanticScholar},
+		Title:      "Classifier failed paper",
+		Abstract:   "Potentially relevant but needs human review when classification fails.",
+		OnlineYear: 2020,
+		IssueYear:  2019,
+		YearLabel:  "online 2020 / issue 2019",
+	}
+	searcher := &queryRoutingExternalSearch{results: map[string][]ai_external.Paper{
+		"tiered discovery query": {weak, review, classifierFailed},
+	}}
+	planner := &stubExternalPlanner{plan: ExternalSearchPlan{
+		SearchGoal:      ExternalSearchGoalDiscovery,
+		MustMatch:       []string{"single-cell"},
+		SoftPreferences: []string{"review"},
+		SearchQuery:     "tiered discovery query",
+	}}
+	classifier := &stubExternalClassifier{
+		results: map[string]ExternalPaperClassificationResult{
+			"weak-1": {
+				Tier:               ExternalPaperTierWeakMatch,
+				Reason:             "Background match only.",
+				MatchedConstraints: []string{"single-cell"},
+				MatchedPreferences: []string{"review"},
+				ArticleRole:        "background review",
+			},
+			"review-1": {
+				Tier:        ExternalPaperTierNeedsReview,
+				Reason:      "Need full text to confirm.",
+				ArticleRole: "overview",
+			},
+		},
+		errs: map[string]error{
+			"failed-1": errors.New("classifier timeout"),
+		},
+	}
+
+	res, err := NewExternalSearchToolWithAgents(searcher, planner, classifier).Run(context.Background(), ToolInput{
+		Query: "Find discovery candidates for single-cell background",
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(res.Cards) != 3 {
+		t.Fatalf("cards = %+v, want weak_match and needs_review candidates kept in discovery mode", res.Cards)
+	}
+
+	gotByID := make(map[string]ExternalPaperCard, len(res.Cards))
+	for _, item := range res.Cards {
+		card, ok := item.Payload.(ExternalPaperCard)
+		if !ok {
+			t.Fatalf("payload = %#v", item.Payload)
+		}
+		gotByID[card.S2PaperID] = card
+	}
+
+	if got := gotByID["weak-1"].Tier; got != ExternalPaperTierWeakMatch {
+		t.Fatalf("weak tier = %q, want %q", got, ExternalPaperTierWeakMatch)
+	}
+	if got := gotByID["review-1"].Tier; got != ExternalPaperTierNeedsReview {
+		t.Fatalf("review tier = %q, want %q", got, ExternalPaperTierNeedsReview)
+	}
+	if got := gotByID["failed-1"].Tier; got != ExternalPaperTierNeedsReview {
+		t.Fatalf("failed tier = %q, want classifier failures degraded to %q in discovery", got, ExternalPaperTierNeedsReview)
+	}
+	if got := gotByID["weak-1"].SearchGoal; got != ExternalSearchGoalDiscovery {
+		t.Fatalf("search goal = %q, want discovery metadata on cards", got)
+	}
+	if got := gotByID["weak-1"].YearLabel; got != "online 2024 / issue 2023" {
+		t.Fatalf("year label = %q", got)
+	}
+	if got := gotByID["weak-1"].ArticleRole; got != "background_review" {
+		t.Fatalf("article role = %q, want normalized classifier metadata", got)
+	}
+	if got, want := gotByID["weak-1"].MatchedConstraints, []string{"single-cell"}; !slices.Equal(got, want) {
+		t.Fatalf("matched constraints = %+v, want %+v", got, want)
+	}
+	if got, want := gotByID["weak-1"].MatchedPreferences, []string{"review"}; !slices.Equal(got, want) {
+		t.Fatalf("matched preferences = %+v, want %+v", got, want)
+	}
+	if len(res.Citations) != 0 {
+		t.Fatalf("citations = %+v, want discovery mode to keep citation semantics conservative without strong matches", res.Citations)
+	}
+	if strings.Contains(res.AnswerContext, "没有命中") {
+		t.Fatalf("answer context = %q, discovery mode should not say no hits when non-dropped candidates exist", res.AnswerContext)
+	}
+	for _, want := range []string{
+		"暂无 strong_match",
+		"weak_match",
+		"needs_review",
+		"online 2024 / issue 2023",
+		"Classifier failed paper",
+	} {
+		if !strings.Contains(res.AnswerContext, want) {
+			t.Fatalf("answer context = %q, want %q", res.AnswerContext, want)
+		}
+	}
+	hitStage := stageByLabel(res.Process.Stages, "命中")
+	for _, want := range []string{"strong 0", "weak 1", "needs_review 2", "dropped 0"} {
+		if !strings.Contains(hitStage.Detail, want) {
+			t.Fatalf("hit detail = %q, want %q", hitStage.Detail, want)
+		}
+	}
+	if got := stageByLabel(res.Process.Stages, "Sub-Agent判定").Detail; !strings.Contains(got, "失败 1篇") || !strings.Contains(got, "待核查结果") {
+		t.Fatalf("classifier stage detail = %q", got)
+	}
+	if len(classifier.inputs) != 3 {
+		t.Fatalf("classifier inputs = %d, want 3", len(classifier.inputs))
+	}
+	for _, input := range classifier.inputs {
+		if got := input.SearchGoal; got != ExternalSearchGoalDiscovery {
+			t.Fatalf("classifier search goal = %q, want discovery", got)
+		}
+		if got, want := input.MustMatch, []string{"single-cell"}; !slices.Equal(got, want) {
+			t.Fatalf("classifier must match = %+v, want %+v", got, want)
+		}
+		if got, want := input.SoftPreferences, []string{"review"}; !slices.Equal(got, want) {
+			t.Fatalf("classifier preferences = %+v, want %+v", got, want)
+		}
+		if input.YearLabel == "" || input.OnlineYear == 0 || input.IssueYear == 0 {
+			t.Fatalf("classifier input = %+v, want year metadata wired through", input)
+		}
+	}
+}
+
+func TestExternalSearchToolEvidenceOnlyCitesStrongMatches(t *testing.T) {
 	strong := ai_external.Paper{
 		Source:        ai_external.SourceSemanticScholar,
 		SourcePaperID: "strong-1",
@@ -963,7 +1124,7 @@ func TestExternalSearchToolOnlySurfacesStrongMatchBeforeTask4(t *testing.T) {
 		t.Fatalf("Run: %v", err)
 	}
 	if len(res.Cards) != 1 {
-		t.Fatalf("cards = %+v, want only the strong_match card", res.Cards)
+		t.Fatalf("cards = %+v, want only the strong_match card in evidence mode", res.Cards)
 	}
 	card, ok := res.Cards[0].Payload.(ExternalPaperCard)
 	if !ok {
@@ -972,14 +1133,26 @@ func TestExternalSearchToolOnlySurfacesStrongMatchBeforeTask4(t *testing.T) {
 	if got, want := card.S2PaperID, "strong-1"; got != want {
 		t.Fatalf("card id = %q, want %q", got, want)
 	}
+	if got := card.Tier; got != ExternalPaperTierStrongMatch {
+		t.Fatalf("card tier = %q, want %q", got, ExternalPaperTierStrongMatch)
+	}
+	if got := card.SearchGoal; got != ExternalSearchGoalEvidence {
+		t.Fatalf("card search goal = %q, want evidence", got)
+	}
 	if len(res.Citations) != 1 {
-		t.Fatalf("citations = %+v, want only the strong_match citation", res.Citations)
+		t.Fatalf("citations = %+v, want only the strong_match citation in evidence mode", res.Citations)
 	}
 	if got, want := res.Citations[0].S2PaperID, "strong-1"; got != want {
 		t.Fatalf("citation s2 id = %q, want %q", got, want)
 	}
 	if strings.Contains(res.AnswerContext, "Weak match paper") || strings.Contains(res.AnswerContext, "Needs review paper") {
 		t.Fatalf("answer context = %q, should not surface weak_match or needs_review candidates", res.AnswerContext)
+	}
+	hitStage := stageByLabel(res.Process.Stages, "命中")
+	for _, want := range []string{"strong 1", "weak 1", "needs_review 1", "dropped 0"} {
+		if !strings.Contains(hitStage.Detail, want) {
+			t.Fatalf("hit detail = %q, want %q", hitStage.Detail, want)
+		}
 	}
 }
 

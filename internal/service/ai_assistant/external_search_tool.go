@@ -160,9 +160,41 @@ type ExternalPaperCard struct {
 	Abstract            string                       `json:"abstract,omitempty"`
 	MatchedQuery        string                       `json:"matched_query,omitempty"`
 	Reason              string                       `json:"reason,omitempty"`
+	OnlineYear          int                          `json:"online_year,omitempty"`
+	IssueYear           int                          `json:"issue_year,omitempty"`
+	YearLabel           string                       `json:"year_label,omitempty"`
+	SearchGoal          ExternalSearchGoal           `json:"search_goal,omitempty"`
+	Tier                ExternalPaperTier            `json:"tier,omitempty"`
+	ArticleRole         string                       `json:"article_role,omitempty"`
+	MatchedConstraints  []string                     `json:"matched_constraints,omitempty"`
+	MatchedPreferences  []string                     `json:"matched_preferences,omitempty"`
 	CitationIndex       int                          `json:"citation_index,omitempty"`
 	HighlightTerms      []string                     `json:"highlight_terms,omitempty"`
 	EvidenceAnnotations []ExternalEvidenceAnnotation `json:"evidence_annotations,omitempty"`
+}
+
+type externalTierCounts struct {
+	Strong      int `json:"strong"`
+	Weak        int `json:"weak"`
+	NeedsReview int `json:"needs_review"`
+	Dropped     int `json:"dropped"`
+}
+
+func (c *externalTierCounts) add(tier ExternalPaperTier) {
+	switch normalizeExternalPaperTier(tier) {
+	case ExternalPaperTierStrongMatch:
+		c.Strong++
+	case ExternalPaperTierWeakMatch:
+		c.Weak++
+	case ExternalPaperTierDrop:
+		c.Dropped++
+	default:
+		c.NeedsReview++
+	}
+}
+
+func (c externalTierCounts) nonDropped() int {
+	return c.Strong + c.Weak + c.NeedsReview
 }
 
 func NewExternalSearchTool(searcher ExternalSearcher) *ExternalSearchTool {
@@ -250,36 +282,47 @@ func (t *ExternalSearchTool) Run(ctx context.Context, in ToolInput) (ToolResult,
 
 	classified := 0
 	classifierFailed := 0
+	tierCounts := externalTierCounts{}
 	if t.classifier != nil && len(candidates) > 0 {
 		classifyInput := candidates
 		if len(classifyInput) > maxExternalClassification {
 			classifyInput = classifyInput[:maxExternalClassification]
 		}
-		candidates, classified, classifierFailed = t.classifyCandidates(ctx, in.Query, plan, searchQueries, classifyInput)
+		candidates, tierCounts, classified, classifierFailed = t.classifyCandidates(ctx, in.Query, plan, searchQueries, classifyInput)
+	} else {
+		for i := range candidates {
+			candidates[i].Classification = ExternalPaperClassificationResult{Tier: ExternalPaperTierStrongMatch}
+			tierCounts.add(ExternalPaperTierStrongMatch)
+		}
 	}
 
 	cards := make([]ResultCard, 0, len(candidates))
 	citations := make([]Citation, 0, len(candidates))
 	highlightTerms := externalHighlightTerms(searchQueries)
+	searchGoal := normalizeExternalSearchGoal(string(plan.SearchGoal))
 	for _, candidate := range candidates {
 		if len(cards) >= limit {
 			break
 		}
 		p := candidate.Paper
 		labels := externalPaperSourceLabels(p)
-		citation := Citation{
-			I:          len(citations) + 1,
-			S2PaperID:  externalSemanticScholarID(p),
-			ExternalID: externalID(p),
-			Title:      p.Title,
-			Source:     "external:" + strings.Join(labels, "+"),
-			Snippet: research.Snippet{
-				Text:        firstNonEmpty(p.Abstract, p.TLDR, p.Title),
-				SnippetKind: "abstract",
-				Section:     "外部学术搜索: " + strings.Join(labels, "+"),
-			},
+		citationIndex := 0
+		if candidate.Classification.Tier == ExternalPaperTierStrongMatch {
+			citation := Citation{
+				I:          len(citations) + 1,
+				S2PaperID:  externalSemanticScholarID(p),
+				ExternalID: externalID(p),
+				Title:      p.Title,
+				Source:     "external:" + strings.Join(labels, "+"),
+				Snippet: research.Snippet{
+					Text:        firstNonEmpty(p.Abstract, p.TLDR, p.Title),
+					SnippetKind: "abstract",
+					Section:     "外部学术搜索: " + strings.Join(labels, "+"),
+				},
+			}
+			citations = append(citations, citation)
+			citationIndex = citation.I
 		}
-		citations = append(citations, citation)
 		cards = append(cards, ResultCard{Type: "external_paper", Payload: ExternalPaperCard{
 			S2PaperID:           externalSemanticScholarID(p),
 			SourceIDs:           externalSourceIDsForCard(p),
@@ -295,7 +338,15 @@ func (t *ExternalSearchTool) Run(ctx context.Context, in ToolInput) (ToolResult,
 			Abstract:            p.Abstract,
 			MatchedQuery:        candidate.MatchedQuery,
 			Reason:              candidate.Classification.Reason,
-			CitationIndex:       citation.I,
+			OnlineYear:          p.OnlineYear,
+			IssueYear:           p.IssueYear,
+			YearLabel:           p.YearLabel,
+			SearchGoal:          searchGoal,
+			Tier:                candidate.Classification.Tier,
+			ArticleRole:         candidate.Classification.ArticleRole,
+			MatchedConstraints:  candidate.Classification.MatchedConstraints,
+			MatchedPreferences:  candidate.Classification.MatchedPreferences,
+			CitationIndex:       citationIndex,
 			HighlightTerms:      highlightTerms,
 			EvidenceAnnotations: candidate.Classification.Annotations,
 		}})
@@ -312,9 +363,10 @@ func (t *ExternalSearchTool) Run(ctx context.Context, in ToolInput) (ToolResult,
 		QueriesBySource  map[string][]string `json:"queries_by_source,omitempty"`
 		Returned         int                 `json:"returned"`
 		Hits             int                 `json:"hits"`
+		TierCounts       externalTierCounts  `json:"tier_counts"`
 		Classified       int                 `json:"classified,omitempty"`
 		ClassifierFailed int                 `json:"classifier_failed,omitempty"`
-	}{Sources: sourceLabels, SearchQuery: searchQuery, SearchQueries: searchQueries, QueriesBySource: sourceQueriesForJSON(sourceQueries), Returned: rawReturned, Hits: len(cards), Classified: classified, ClassifierFailed: classifierFailed})
+	}{Sources: sourceLabels, SearchQuery: searchQuery, SearchQueries: searchQueries, QueriesBySource: sourceQueriesForJSON(sourceQueries), Returned: rawReturned, Hits: len(cards), TierCounts: tierCounts, Classified: classified, ClassifierFailed: classifierFailed})
 
 	searchDetail := fmt.Sprintf("来源: %s", strings.Join(sourceLabels, "+"))
 	if len(searchQueries) > 1 {
@@ -329,14 +381,19 @@ func (t *ExternalSearchTool) Run(ctx context.Context, in ToolInput) (ToolResult,
 	if t.classifier != nil {
 		detail := ""
 		if classifierFailed > 0 {
-			detail = fmt.Sprintf("失败 %d篇；失败候选保留为待核查结果", classifierFailed)
+			detail = fmt.Sprintf("失败 %d篇", classifierFailed)
+			if searchGoal == ExternalSearchGoalDiscovery {
+				detail += "；失败候选保留为待核查结果"
+			} else {
+				detail += "；失败候选未作为证据引用"
+			}
 		}
 		processStages = append(processStages,
 			ProcessStage{Label: "Sub-Agent判定", Count: classified, Unit: "篇", Status: "completed", Detail: detail},
 		)
 	}
 	processStages = append(processStages,
-		externalHitStage(len(cards)),
+		externalHitStage(searchGoal, tierCounts),
 	)
 	noteParts := make([]string, 0, 2)
 	if planErr != nil {
@@ -353,7 +410,7 @@ func (t *ExternalSearchTool) Run(ctx context.Context, in ToolInput) (ToolResult,
 	}
 	noteParts = append(noteParts, fmt.Sprintf("%s 查询: %s", strings.Join(sourceLabels, "+"), formatExternalSourceQueries(sourceQueries)))
 	note := joinProcessNotes(noteParts)
-	answerContext := externalAnswerContext(cards)
+	answerContext := externalAnswerContext(searchGoal, tierCounts, cards)
 	if len(cards) == 0 {
 		answerContext = fmt.Sprintf("没有命中：%s 使用查询 %q 返回 0 条结果。", strings.Join(sourceLabels, "+"), strings.Join(searchQueries, " | "))
 	}
@@ -382,7 +439,7 @@ type externalSearchCandidate struct {
 	Classification ExternalPaperClassificationResult
 }
 
-func (t *ExternalSearchTool) classifyCandidates(ctx context.Context, query string, plan ExternalSearchPlan, searchQueries []string, candidates []externalSearchCandidate) ([]externalSearchCandidate, int, int) {
+func (t *ExternalSearchTool) classifyCandidates(ctx context.Context, query string, plan ExternalSearchPlan, searchQueries []string, candidates []externalSearchCandidate) ([]externalSearchCandidate, externalTierCounts, int, int) {
 	type result struct {
 		index int
 		ok    bool
@@ -434,29 +491,38 @@ func (t *ExternalSearchTool) classifyCandidates(ctx context.Context, query strin
 	wg.Wait()
 	close(out)
 
-	accepted := make([]bool, len(candidates))
+	searchGoal := normalizeExternalSearchGoal(string(plan.SearchGoal))
 	classifications := make([]ExternalPaperClassificationResult, len(candidates))
+	counts := externalTierCounts{}
 	classified := 0
 	failed := 0
 	for res := range out {
 		if !res.ok {
 			failed++
-			accepted[res.index] = false
+			if searchGoal == ExternalSearchGoalDiscovery {
+				classifications[res.index] = ExternalPaperClassificationResult{
+					Tier:   ExternalPaperTierNeedsReview,
+					Reason: "Sub-Agent判定失败，建议人工复核。",
+				}
+				counts.add(ExternalPaperTierNeedsReview)
+			} else {
+				counts.add(ExternalPaperTierDrop)
+			}
 			continue
 		}
 		classified++
-		accepted[res.index] = res.res.Tier == ExternalPaperTierStrongMatch
 		classifications[res.index] = res.res
+		counts.add(res.res.Tier)
 	}
 	filtered := make([]externalSearchCandidate, 0, len(candidates))
 	for i, cand := range candidates {
-		if !accepted[i] {
+		cand.Classification = classifications[i]
+		if !keepExternalCandidateForGoal(searchGoal, cand.Classification.Tier) {
 			continue
 		}
-		cand.Classification = classifications[i]
 		filtered = append(filtered, cand)
 	}
-	return filtered, classified, failed
+	return filtered, counts, classified, failed
 }
 
 func (t *ExternalSearchTool) searchQueries(ctx context.Context, query string) (ai_external.SourceQueries, ExternalSearchPlan, error) {
@@ -857,11 +923,28 @@ func externalSearchQueryCandidates(query string) []string {
 	).Replace(q))}
 }
 
-func externalHitStage(hits int) ProcessStage {
-	if hits == 0 {
-		return ProcessStage{Label: "命中 0条", Unit: "条", Status: "completed"}
+func keepExternalCandidateForGoal(goal ExternalSearchGoal, tier ExternalPaperTier) bool {
+	tier = normalizeExternalPaperTier(tier)
+	switch goal {
+	case ExternalSearchGoalEvidence:
+		return tier == ExternalPaperTierStrongMatch
+	default:
+		return tier != ExternalPaperTierDrop
 	}
-	return ProcessStage{Label: "命中", Count: hits, Unit: "条", Status: "completed"}
+}
+
+func externalHitStage(goal ExternalSearchGoal, counts externalTierCounts) ProcessStage {
+	hits := counts.Strong
+	if goal != ExternalSearchGoalEvidence {
+		hits = counts.nonDropped()
+	}
+	return ProcessStage{
+		Label:  "命中",
+		Count:  hits,
+		Unit:   "条",
+		Status: "completed",
+		Detail: fmt.Sprintf("goal %s; strong %d; weak %d; needs_review %d; dropped %d", goal, counts.Strong, counts.Weak, counts.NeedsReview, counts.Dropped),
+	}
 }
 
 func shouldSkipExternalASCIITerm(term string, existing []string) bool {
@@ -1555,19 +1638,46 @@ func nonDisabledErrors(errs []error) []error {
 	return out
 }
 
-func externalAnswerContext(cards []ResultCard) string {
+func externalAnswerContext(goal ExternalSearchGoal, counts externalTierCounts, cards []ResultCard) string {
 	var b strings.Builder
+	if goal != ExternalSearchGoalEvidence && counts.Strong == 0 && len(cards) > 0 {
+		b.WriteString("发现候选结果，但暂无 strong_match；以下结果按 weak_match / needs_review 展示。\n\n")
+	}
 	for i, card := range cards {
 		p, ok := card.Payload.(ExternalPaperCard)
 		if !ok {
 			continue
 		}
 		fmt.Fprintf(&b, "[external %d] %s", i+1, p.Title)
-		if p.Year > 0 || p.Venue != "" {
-			fmt.Fprintf(&b, " (%s %d)", p.Venue, p.Year)
+		meta := make([]string, 0, 4)
+		if p.Tier != "" {
+			meta = append(meta, "tier="+string(p.Tier))
+		}
+		switch {
+		case p.Venue != "" && p.Year > 0:
+			meta = append(meta, fmt.Sprintf("%s %d", p.Venue, p.Year))
+		case p.Venue != "":
+			meta = append(meta, p.Venue)
+		case p.Year > 0:
+			meta = append(meta, strconv.Itoa(p.Year))
+		}
+		if p.YearLabel != "" {
+			meta = append(meta, "year="+p.YearLabel)
+		}
+		if len(meta) > 0 {
+			fmt.Fprintf(&b, " (%s)", strings.Join(meta, "; "))
 		}
 		if p.MatchedQuery != "" {
 			fmt.Fprintf(&b, "\nMatched query: %s", p.MatchedQuery)
+		}
+		if p.ArticleRole != "" {
+			fmt.Fprintf(&b, "\nArticle role: %s", p.ArticleRole)
+		}
+		if len(p.MatchedConstraints) > 0 {
+			fmt.Fprintf(&b, "\nMatched constraints: %s", strings.Join(p.MatchedConstraints, " | "))
+		}
+		if len(p.MatchedPreferences) > 0 {
+			fmt.Fprintf(&b, "\nMatched preferences: %s", strings.Join(p.MatchedPreferences, " | "))
 		}
 		if p.Reason != "" {
 			fmt.Fprintf(&b, "\nSub-Agent judgment: %s", p.Reason)
