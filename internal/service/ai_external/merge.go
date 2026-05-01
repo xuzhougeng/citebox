@@ -104,9 +104,7 @@ func samePaper(a Paper, b Paper) bool {
 }
 
 func ensureSourceMetadata(paper Paper) Paper {
-	if paper.SourcePaperIDs == nil {
-		paper.SourcePaperIDs = make(map[SourceID]string)
-	}
+	paper.SourcePaperIDs = cloneSourcePaperIDs(paper.SourcePaperIDs)
 	paper.Sources = uniqueSources(paper.Sources)
 	if paper.Source != "" {
 		if !hasSource(paper.Sources, paper.Source) {
@@ -184,6 +182,14 @@ func mergePaper(dst Paper, src Paper) Paper {
 	return dst
 }
 
+func cloneSourcePaperIDs(sourcePaperIDs map[SourceID]string) map[SourceID]string {
+	cloned := make(map[SourceID]string, len(sourcePaperIDs))
+	for source, id := range sourcePaperIDs {
+		cloned[source] = id
+	}
+	return cloned
+}
+
 func uniqueSources(sources []SourceID) []SourceID {
 	unique := make([]SourceID, 0, len(sources))
 	for _, source := range sources {
@@ -212,16 +218,15 @@ func normalizeDOI(doi string) string {
 }
 
 func normalizeTitle(title string) string {
-	title = strings.ToLower(title)
 	var b strings.Builder
 	lastSpace := true
 	for _, r := range title {
-		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
-			b.WriteRune(r)
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			b.WriteRune(unicode.ToLower(r))
 			lastSpace = false
 			continue
 		}
-		if unicode.IsSpace(r) || !lastSpace {
+		if !lastSpace {
 			b.WriteByte(' ')
 			lastSpace = true
 		}

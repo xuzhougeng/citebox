@@ -57,6 +57,29 @@ func TestMergePapersUsesResultSourceOverInnerPaperSource(t *testing.T) {
 	}
 }
 
+func TestMergePapersDoesNotMutateInputSourcePaperIDs(t *testing.T) {
+	sourcePaperIDs := map[SourceID]string{SourceSemanticScholar: "s2"}
+	in := []SourceResult{
+		{Source: SourcePubMed, Papers: []Paper{{
+			Source:         SourcePubMed,
+			SourcePaperID:  "pmid",
+			SourcePaperIDs: sourcePaperIDs,
+			Title:          "A",
+		}}},
+	}
+
+	out := MergePapers(in, []SourceID{SourcePubMed}, 10)
+	if len(out) != 1 {
+		t.Fatalf("len = %d, want 1: %+v", len(out), out)
+	}
+	if sourcePaperIDs[SourcePubMed] != "" || len(sourcePaperIDs) != 1 {
+		t.Fatalf("input source ids mutated = %+v", sourcePaperIDs)
+	}
+	if out[0].SourcePaperIDs[SourcePubMed] != "pmid" || out[0].SourcePaperIDs[SourceSemanticScholar] != "s2" {
+		t.Fatalf("output source ids = %+v", out[0].SourcePaperIDs)
+	}
+}
+
 func TestMergePapersDoesNotDedupeByTitleWhenDOIsConflict(t *testing.T) {
 	out := MergePapers([]SourceResult{
 		{Source: SourcePubMed, Papers: []Paper{{Source: SourcePubMed, SourcePaperID: "pmid", DOI: "10.1/abc", Title: "Cell Fate Control"}}},
@@ -77,6 +100,16 @@ func TestMergePapersDoesNotDedupeByTitleWhenPMIDsConflict(t *testing.T) {
 	}
 }
 
+func TestMergePapersDoesNotDedupeWhenUnicodeTitleLetterDiffers(t *testing.T) {
+	out := MergePapers([]SourceResult{
+		{Source: SourcePubMed, Papers: []Paper{{Source: SourcePubMed, SourcePaperID: "pmid", Title: "β cell"}}},
+		{Source: SourceSemanticScholar, Papers: []Paper{{Source: SourceSemanticScholar, SourcePaperID: "s2", Title: "cell"}}},
+	}, []SourceID{SourcePubMed, SourceSemanticScholar}, 10)
+	if len(out) != 2 {
+		t.Fatalf("len = %d, want 2: %+v", len(out), out)
+	}
+}
+
 func TestMergePapersDedupesByNormalizedTitleAndPreservesSourceOrder(t *testing.T) {
 	out := MergePapers([]SourceResult{
 		{Source: SourceSemanticScholar, Papers: []Paper{{Source: SourceSemanticScholar, SourcePaperID: "s2", Title: "Cell Fate Control!"}}},
@@ -87,6 +120,12 @@ func TestMergePapersDedupesByNormalizedTitleAndPreservesSourceOrder(t *testing.T
 	}
 	if out[0].SourcePaperIDs[SourcePubMed] != "pmid" || out[0].SourcePaperIDs[SourceSemanticScholar] != "s2" {
 		t.Fatalf("source ids = %+v", out[0].SourcePaperIDs)
+	}
+	if out[0].Source != SourcePubMed || out[0].SourcePaperID != "pmid" {
+		t.Fatalf("primary source metadata = %+v", out[0])
+	}
+	if len(out[0].Sources) != 2 || out[0].Sources[0] != SourcePubMed || out[0].Sources[1] != SourceSemanticScholar {
+		t.Fatalf("source order = %+v", out[0].Sources)
 	}
 }
 
