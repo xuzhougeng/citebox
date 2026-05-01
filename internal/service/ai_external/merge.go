@@ -162,6 +162,15 @@ func mergePaper(dst Paper, src Paper) Paper {
 	if dst.Year == 0 {
 		dst.Year = src.Year
 	}
+	if dst.OnlineYear == 0 {
+		dst.OnlineYear = src.OnlineYear
+	}
+	if dst.IssueYear == 0 {
+		dst.IssueYear = src.IssueYear
+	}
+	if dst.YearLabel == "" {
+		dst.YearLabel = src.YearLabel
+	}
 	if len(dst.Authors) == 0 && len(src.Authors) > 0 {
 		dst.Authors = src.Authors
 	}

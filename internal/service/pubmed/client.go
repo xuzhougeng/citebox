@@ -375,20 +375,12 @@ type pubDatePayload struct {
 type articleDateList []articleDatePayload
 
 func (l articleDateList) onlineYear() int {
-	var fallback int
 	for _, articleDate := range l {
-		year := articleDate.Year()
-		if year == 0 {
-			continue
-		}
 		if strings.EqualFold(articleDate.DateType, "Electronic") {
-			return year
-		}
-		if fallback == 0 {
-			fallback = year
+			return articleDate.Year()
 		}
 	}
-	return fallback
+	return 0
 }
 
 type articleDatePayload struct {

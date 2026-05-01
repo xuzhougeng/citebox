@@ -100,6 +100,9 @@ func TestClientSearchHydratesPubMedOnlineAndIssueYears(t *testing.T) {
 		t.Fatalf("len = %d, want 1", len(res.Items))
 	}
 	p := res.Items[0]
+	if p.Year != 2026 {
+		t.Fatalf("Year = %d, want 2026", p.Year)
+	}
 	if p.OnlineYear != 2025 {
 		t.Fatalf("OnlineYear = %d, want 2025", p.OnlineYear)
 	}
@@ -108,6 +111,58 @@ func TestClientSearchHydratesPubMedOnlineAndIssueYears(t *testing.T) {
 	}
 	if p.YearLabel != "2025 online / 2026 issue" {
 		t.Fatalf("YearLabel = %q, want %q", p.YearLabel, "2025 online / 2026 issue")
+	}
+}
+
+func TestClientSearchDoesNotTreatNonElectronicArticleDateAsOnlineYear(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/entrez/eutils/esearch.fcgi":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"esearchresult":{"idlist":["67891"]}}`))
+		case "/entrez/eutils/efetch.fcgi":
+			w.Header().Set("Content-Type", "application/xml")
+			_, _ = w.Write([]byte(`<?xml version="1.0"?>
+<PubmedArticleSet>
+  <PubmedArticle>
+    <MedlineCitation>
+      <PMID>67891</PMID>
+      <Article>
+        <ArticleTitle>Issue only article</ArticleTitle>
+        <Journal>
+          <Title>Science</Title>
+          <JournalIssue><PubDate><Year>2026</Year></PubDate></JournalIssue>
+        </Journal>
+        <ArticleDate DateType="Print">
+          <Year>2025</Year>
+        </ArticleDate>
+      </Article>
+    </MedlineCitation>
+  </PubmedArticle>
+</PubmedArticleSet>`))
+		default:
+			http.Error(w, "unexpected path "+r.URL.Path, http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	client := NewClient(Config{BaseURL: server.URL, MinInterval: 0})
+	res, err := client.Search(context.Background(), "issue only", SearchOptions{Limit: 5})
+	if err != nil {
+		t.Fatalf("Search() error = %v", err)
+	}
+	if len(res.Items) != 1 {
+		t.Fatalf("len = %d, want 1", len(res.Items))
+	}
+	p := res.Items[0]
+	if p.OnlineYear != 0 {
+		t.Fatalf("OnlineYear = %d, want 0", p.OnlineYear)
+	}
+	if p.IssueYear != 2026 {
+		t.Fatalf("IssueYear = %d, want 2026", p.IssueYear)
+	}
+	if p.YearLabel != "2026 issue" {
+		t.Fatalf("YearLabel = %q, want %q", p.YearLabel, "2026 issue")
 	}
 }
 

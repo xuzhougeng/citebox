@@ -5,7 +5,7 @@ import "testing"
 func TestMergePapersDedupesByDOIAndMergesSources(t *testing.T) {
 	in := []SourceResult{
 		{Source: SourcePubMed, Papers: []Paper{{Source: SourcePubMed, SourcePaperID: "pmid-1", PMID: "1", DOI: "https://doi.org/10.1/ABC", Title: "Short", Abstract: "short"}}},
-		{Source: SourceSemanticScholar, Papers: []Paper{{Source: SourceSemanticScholar, SourcePaperID: "s2-1", DOI: "10.1/abc", Title: "Short", Abstract: "a much longer abstract"}}},
+		{Source: SourceSemanticScholar, Papers: []Paper{{Source: SourceSemanticScholar, SourcePaperID: "s2-1", DOI: "10.1/abc", Title: "Short", Abstract: "a much longer abstract", Year: 2026, OnlineYear: 2025, IssueYear: 2026, YearLabel: "2025 online / 2026 issue"}}},
 	}
 	out := MergePapers(in, []SourceID{SourcePubMed, SourceSemanticScholar}, 10)
 	if len(out) != 1 {
@@ -17,6 +17,9 @@ func TestMergePapersDedupesByDOIAndMergesSources(t *testing.T) {
 	}
 	if p.Abstract != "a much longer abstract" {
 		t.Fatalf("abstract = %q", p.Abstract)
+	}
+	if p.Year != 2026 || p.OnlineYear != 2025 || p.IssueYear != 2026 || p.YearLabel != "2025 online / 2026 issue" {
+		t.Fatalf("year metadata = %+v", p)
 	}
 }
 
