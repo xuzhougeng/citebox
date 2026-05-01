@@ -2,7 +2,13 @@
 
 **日期**: 2026-04-29
 **作者**: brainstorm session
-**状态**: 待实现
+**状态**: 核心已完成（2026-05-01 审核）
+
+## 当前完成状态
+
+- **已完成**: `/research` 页面、Semantic Scholar client/service/repository、S2 cache、调研篮持久化、references/citations/recommendations、导入文献库、markdown 导出、settings API key、导航入口、i18n、README/API 文档和主要后端测试。
+- **仍需人工验收**: 下面的手动验收 checklist 依赖真实浏览器和 Semantic Scholar 匿名/API-key 环境，本次状态更新只做代码与文档结构核对，没有重新跑真实外部服务。
+- **文档属性**: 本文件保留为实现前设计文档；实际实现已包含后续给 AI 助手复用的 `/api/research/snippets` 能力。
 
 ## 背景与目标
 
@@ -205,6 +211,8 @@ research.inLibrary
 - `internal/service/research/integration_test.go`：起完整 server，灌 fake S2，跑「搜索 → 设种子 → 加篮 → 导入文献库」全流程。复用 `library_service_integration_test.go` 的脚手架
 
 ### 手动验收 checklist
+
+> 状态备注（2026-05-01）: 这些是发布前 QA 项，不再表示功能未实现。
 
 - [ ] 匿名（无 API key）能搜索、加种子、翻页，速率受限时 UI 正常提示
 - [ ] 配置 API key 后，连续操作不再触发 429

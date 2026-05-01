@@ -2,6 +2,17 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+## Current Completion Status
+
+**Status:** Main implementation complete as of 2026-05-01; some terminology and behavior were superseded by the AI Assistant Command Center work.
+
+This file is now an archival implementation plan. The detailed step checklist below was not maintained as the live source of truth after implementation; use this status block for current completion state.
+
+- **Completed:** Commit 1 backend goals are present: AI conversation schema/repository/service/handler, persistent messages, pin tables, title generation, export, routes, and AI settings.
+- **Completed:** Commit 2 frontend goals are present: two-pane AI page, conversation sidebar, pin picker, `@` mention module, settings bindings, and entry points from paper/library-related pages.
+- **Completed and evolved:** Commit 3 summary/evidence goals are present, but “严格证据” has been renamed/evolved into internal/external search and orchestrator-backed tool routing in later work.
+- **Known differences from the original plan:** The current stream contract is NDJSON events, not the original SSE wording; the AI page is now positioned as a general AI assistant, not only a reader companion.
+
 **Goal:** Rebuild `/ai` page from a single in-memory paper-bound chat into a ChatGPT/Claude.ai-style modern AI reader with persisted conversations, multi-paper pinning, sliding-window+summary context management, and strict-evidence mode wired to `/api/research/snippets`.
 
 **Architecture:** New `internal/service/ai_conversation/` package owns conversation lifecycle and reuses the existing `service.AIService.CallProviderStream` LLM primitive. Three new SQLite tables back persistence. Frontend `/ai` page is rebuilt as a 2-pane SPA (sidebar + main) with five focused JS modules. Strict-evidence mode calls into the existing `research.Client.SnippetSearch`.

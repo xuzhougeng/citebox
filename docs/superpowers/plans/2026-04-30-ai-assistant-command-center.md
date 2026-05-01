@@ -2,6 +2,17 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+## Current Completion Status
+
+**Status:** Core implementation complete as of 2026-05-01, with follow-up UI and retrieval refinements already applied.
+
+This file is now an archival implementation plan. The detailed step checklist below was not maintained as the live source of truth after implementation; use this status block for current completion state.
+
+- **Completed:** Tasks 1-8 are represented in the current codebase: orchestration persistence, router/types, internal library search, external search, paper read/compare, figure lookup, orchestrator integration, frontend composer/process strip/result cards, locale strings, and API docs.
+- **Evolved after the plan:** The library search tool now supports a lightweight Master/Sub-Agent style planner/classifier path for local full-text scanning; result cards are collapsible by default and evidence snippets can highlight search terms.
+- **Recent fixes included:** Streaming shows a “thinking” placeholder before text arrives, figure lookup can fall back through full-text candidate papers, and model settings now support provider-specific `thinking`/reasoning behavior.
+- **Still intentionally not done:** No embeddings, no vector database, and no long-running background task center.
+
 **Goal:** Rebuild the AI page into a chat-first command center that routes full-library search, external search, paper reading/comparison, and figure lookup through an orchestrator/tool layer with persisted process strips and result cards.
 
 **Architecture:** Keep `AIConversationService` as the conversation and streaming lifecycle owner. Add an `internal/service/ai_assistant/` package for intent routing, tool execution, process summaries, result cards, and answer-context assembly. Persist turn runs, tool-call summaries, result cards, and citations so reopened conversations restore structured state.

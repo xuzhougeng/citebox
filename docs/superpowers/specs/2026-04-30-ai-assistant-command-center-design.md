@@ -1,5 +1,14 @@
 # AI Assistant Command Center Design
 
+**状态**: 基本已完成，并在后续迭代中继续扩展（2026-05-01 审核）
+
+## Current Completion Status
+
+- **Completed**: orchestrator/tool layer, `intent_hint` routing, full-library search, external search, paper read/compare, figure lookup, process strip, result cards, citation restoration, artifact persistence, frontend shortcuts, API documentation, and no-embedding/no-vector-search constraint.
+- **Evolved after this spec**: full-library search now uses a lightweight Master/Sub-Agent style planner/classifier path for local full-text scanning when configured, rather than only rule-based tool dispatch.
+- **Recent additions covered by implementation but not by the original spec**: result-card collapse behavior, search-term highlighting in evidence snippets, streaming “thinking” placeholder, and figure lookup fallback through full-text candidate papers.
+- **Still a product boundary**: this is not a long-running async task center; tool execution remains request-scoped.
+
 ## Purpose
 
 The AI page should become CiteBox's central research dispatcher while still feeling like a traditional chat page. Users should be able to ask natural questions such as "帮我查找关于 ATAC 数据的文章", "查一下外部有没有 single-cell ATAC 综述", "对比这几篇文献", or "看图 1", and the system should route the request to the right internal capability.

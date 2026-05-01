@@ -2,6 +2,16 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+## Current Completion Status
+
+**Status:** Core implementation complete as of 2026-05-01.
+
+This file is now an archival implementation plan. The detailed step checklist below was not maintained as the live source of truth after implementation; use this status block for current completion state.
+
+- **Completed:** Tasks 1-17 are represented in the current codebase: schema, repository, S2 client/service, cache adapter, basket workflow, settings, server routes, `/research` page, i18n, and backend tests are present.
+- **Completed with minor documentation caveat:** Task 18 README coverage exists in `README.md` and `README.en.md`; `web/manual.html` has the `/research` navigation entry, but no dedicated long-form manual section was added.
+- **Release QA remaining:** The manual checklist from the spec should still be run against a live Semantic Scholar environment before a release that depends on the external service behavior.
+
 **Goal:** Add a `/research` page powered by the Semantic Scholar Graph API that lets users seed from a paper, expand its references / citations / recommendations one hop at a time, and curate a persisted basket they can import into the library.
 
 **Architecture:** New `internal/service/research/` package owns the S2 client + cache + basket repo (independent of the existing `library_service` which stays focused on local-file paper management). A new `LibraryService.ImportPaperFromS2` method bridges S2 metadata into the existing `papers` table for "import to library". Frontend is a new `web/research.html` + `web/static/js/research.js` following the project's vanilla-JS / IIFE pattern.
