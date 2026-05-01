@@ -2,6 +2,7 @@ package ai_assistant
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -27,6 +28,7 @@ func TestExternalSearchToolReturnsExternalPaperCards(t *testing.T) {
 		search: research.PaperList{Items: []research.Paper{{
 			PaperID: "s2-1", Title: "ATAC Review", Year: 2024, Venue: "Genome Biology",
 			ExternalIDs: research.IDs{DOI: "10.1/ext"}, TLDR: "ATAC review summary.",
+			Abstract: "The full abstract states the pace of gene discovery has slowed.",
 		}}},
 	})
 	res, err := tool.Run(context.Background(), ToolInput{Query: "single-cell ATAC 综述"})
@@ -39,19 +41,41 @@ func TestExternalSearchToolReturnsExternalPaperCards(t *testing.T) {
 	if !strings.Contains(res.AnswerContext, "ATAC Review") {
 		t.Fatalf("answer context = %s", res.AnswerContext)
 	}
+	if !strings.Contains(res.AnswerContext, "full abstract") {
+		t.Fatalf("answer context = %s, want abstract evidence", res.AnswerContext)
+	}
+	if got := res.Citations[0].Snippet.Text; !strings.Contains(got, "pace of gene discovery has slowed") {
+		t.Fatalf("citation snippet = %q, want abstract evidence", got)
+	}
 }
 
 type limitCapturingExternalSearch struct {
 	limit int
+	query string
 }
 
 func (s *limitCapturingExternalSearch) Search(ctx context.Context, query string, opts research.SearchOpts) (research.PaperList, error) {
 	s.limit = opts.Limit
+	s.query = query
 	return research.PaperList{}, nil
 }
 
 func (s *limitCapturingExternalSearch) SnippetSearch(ctx context.Context, query string, opts research.SnippetSearchOpts) (research.SnippetList, error) {
 	return research.SnippetList{}, nil
+}
+
+type stubExternalPlanner struct {
+	plan    ExternalSearchPlan
+	err     error
+	queries []string
+}
+
+func (p *stubExternalPlanner) PlanExternalSearch(ctx context.Context, query string) (ExternalSearchPlan, error) {
+	p.queries = append(p.queries, query)
+	if p.err != nil {
+		return ExternalSearchPlan{}, p.err
+	}
+	return p.plan, nil
 }
 
 func TestExternalSearchToolNilSearcherReturnsFailedResult(t *testing.T) {
@@ -75,6 +99,69 @@ func TestExternalSearchToolClampsLimit(t *testing.T) {
 	}
 	if searcher.limit != 100 {
 		t.Fatalf("limit = %d, want 100", searcher.limit)
+	}
+}
+
+func TestExternalSearchToolNormalizesChineseNaturalLanguageQuery(t *testing.T) {
+	searcher := &limitCapturingExternalSearch{}
+	_, err := NewExternalSearchTool(searcher).Run(context.Background(), ToolInput{
+		Query: "P0验收：查一下外部有没有 single-cell ATAC 综述",
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if searcher.query != "single-cell ATAC-seq review" {
+		t.Fatalf("query = %q, want normalized Semantic Scholar query", searcher.query)
+	}
+}
+
+func TestExternalSearchToolNormalizesForwardGeneticsSourceQuery(t *testing.T) {
+	searcher := &limitCapturingExternalSearch{}
+	_, err := NewExternalSearchTool(searcher).Run(context.Background(), ToolInput{
+		Query: "帮我给这句话找个出处：目前的正向遗传学筛选基因速度变慢了",
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if searcher.query != "forward genetic screens gene discovery slowed" {
+		t.Fatalf("query = %q, want forward genetics source query", searcher.query)
+	}
+}
+
+func TestExternalSearchToolUsesPlannerSearchQuery(t *testing.T) {
+	searcher := &limitCapturingExternalSearch{}
+	planner := &stubExternalPlanner{plan: ExternalSearchPlan{
+		SearchQuery: "forward genetic screens gene discovery slowed",
+		Rationale:   "source request rewritten for external search",
+	}}
+	res, err := NewExternalSearchToolWithPlanner(searcher, planner).Run(context.Background(), ToolInput{
+		Query: "帮我给这句话找个出处：遗传发现速度变慢",
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if searcher.query != "forward genetic screens gene discovery slowed" {
+		t.Fatalf("query = %q, want planner search query", searcher.query)
+	}
+	if len(planner.queries) != 1 {
+		t.Fatalf("planner queries = %+v, want one call", planner.queries)
+	}
+	if !strings.Contains(res.ToolCalls[0].InputJSON, `"search_query":"forward genetic screens gene discovery slowed"`) {
+		t.Fatalf("input json = %s, want planner search query", res.ToolCalls[0].InputJSON)
+	}
+}
+
+func TestExternalSearchToolFallsBackWhenPlannerFails(t *testing.T) {
+	searcher := &limitCapturingExternalSearch{}
+	planner := &stubExternalPlanner{err: errors.New("planner unavailable")}
+	_, err := NewExternalSearchToolWithPlanner(searcher, planner).Run(context.Background(), ToolInput{
+		Query: "查一下外部有没有 single-cell ATAC 综述",
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if searcher.query != "single-cell ATAC-seq review" {
+		t.Fatalf("query = %q, want fallback query", searcher.query)
 	}
 }
 

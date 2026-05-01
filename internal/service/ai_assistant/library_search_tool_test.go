@@ -80,6 +80,19 @@ func TestLibrarySearchToolReturnsPaperHitCards(t *testing.T) {
 	}
 }
 
+func TestLibrarySearchToolShowsZeroCountsInProcessLabels(t *testing.T) {
+	res, err := NewLibrarySearchTool(stubPaperStore{}).Run(context.Background(), ToolInput{Query: "查找不存在的内容"})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(res.Process.Stages) != 2 {
+		t.Fatalf("process = %+v", res.Process)
+	}
+	if res.Process.Stages[0].Label != "全文扫描 0篇" || res.Process.Stages[1].Label != "命中 0篇" {
+		t.Fatalf("process = %+v, want explicit zero-count labels", res.Process)
+	}
+}
+
 type termSensitivePaperStore struct {
 	paper *model.Paper
 	terms []string

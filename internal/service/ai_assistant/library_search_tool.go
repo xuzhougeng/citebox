@@ -115,7 +115,7 @@ func (t *LibrarySearchTool) Run(ctx context.Context, in ToolInput) (ToolResult, 
 			}},
 		}, nil
 	}
-	processStages = append(processStages, ProcessStage{Label: "全文扫描", Count: len(ids), Unit: "篇", Status: "completed"})
+	processStages = append(processStages, countStage("全文扫描", len(ids), "篇", "completed"))
 	rawHitLimit := limit
 	if t.classifier != nil {
 		rawHitLimit = limit * 4
@@ -190,7 +190,7 @@ func (t *LibrarySearchTool) Run(ctx context.Context, in ToolInput) (ToolResult, 
 		}
 		cards = append(cards, ResultCard{Type: "paper_hit", Payload: card})
 	}
-	processStages = append(processStages, ProcessStage{Label: "命中", Count: len(cards), Unit: "篇", Status: "completed"})
+	processStages = append(processStages, countStage("命中", len(cards), "篇", "completed"))
 
 	outputJSON, _ := json.Marshal(struct {
 		Candidates int `json:"candidates"`
@@ -214,6 +214,13 @@ func (t *LibrarySearchTool) Run(ctx context.Context, in ToolInput) (ToolResult, 
 			Status:            "completed",
 		}},
 	}, nil
+}
+
+func countStage(label string, count int, unit, status string) ProcessStage {
+	if count == 0 {
+		return ProcessStage{Label: fmt.Sprintf("%s 0%s", label, unit), Unit: unit, Status: status}
+	}
+	return ProcessStage{Label: label, Count: count, Unit: unit, Status: status}
 }
 
 type librarySearchHit struct {

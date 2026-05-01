@@ -23,6 +23,13 @@ func TestRouteIntentDetectsExternalSearch(t *testing.T) {
 	}
 }
 
+func TestRouteIntentSourceRequestUsesExternalSearch(t *testing.T) {
+	got := RouteIntent(RouteInput{Content: "帮我给这句话找个出处：目前的正向遗传学筛选基因速度变慢了"})
+	if got.Intent != IntentExternalSearch {
+		t.Fatalf("intent = %q", got.Intent)
+	}
+}
+
 func TestRouteIntentDetectsPaperCompare(t *testing.T) {
 	got := RouteIntent(RouteInput{Content: "对比这两篇文献的结论差异", Context: RequestContext{PaperIDs: []int64{1, 2}}})
 	if got.Intent != IntentPaperRead {

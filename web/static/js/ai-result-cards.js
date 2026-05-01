@@ -164,7 +164,8 @@
                 '<h4>' + escapeHtml(p.title || translate('ai.result_external_paper_fallback', '外部文献')) + '</h4>' +
                 (meta ? '<p>' + escapeHtml(meta) + '</p>' : '') +
             '</div>' +
-            (p.tldr ? '<p class="ai-result-reason">' + escapeHtml(p.tldr) + citation(p.citation_index) + '</p>' : '') +
+            (p.abstract ? '<p class="ai-result-reason">' + escapeHtml(p.abstract) + citation(p.citation_index) + '</p>' :
+                (p.tldr ? '<p class="ai-result-reason">' + escapeHtml(p.tldr) + citation(p.citation_index) + '</p>' : '')) +
             (s2 ? '<a class="btn btn-small btn-outline" href="' + escapeHtml(s2) + '" target="_blank" rel="noopener">' + escapeHtml(translate('ai.result_open_external', '查看来源')) + '</a>' : '') +
         '</article>';
     }

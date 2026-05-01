@@ -16,10 +16,12 @@ func RouteIntent(in RouteInput) RouteDecision {
 	if in.Context.FigureID > 0 {
 		return RouteDecision{Intent: IntentFigureLookup, Confidence: "rule", Reason: "figure context"}
 	}
-	hasLibraryTerms := containsAny(q, "查找", "找", "检索", "哪些文章", "哪些文献", "相关文献", "相关的文章", "articles", "papers")
+	hasLibraryTerms := containsAny(q, "查找", "找", "检索", "哪些文章", "哪些文献", "相关文献", "相关的文章",
+		"articles", "papers")
 	hasExplicitExternalTerms := containsAny(q, "外部", "semantic scholar", "pubmed", "web")
+	hasCitationTerms := containsAny(q, "出处", "引用", "证据来源", "source", "citation", "reference")
 	hasReviewTerms := containsAny(q, "综述", "review")
-	if hasExplicitExternalTerms || (hasReviewTerms && !hasLibraryTerms) {
+	if hasExplicitExternalTerms || hasCitationTerms || (hasReviewTerms && !hasLibraryTerms) {
 		return RouteDecision{Intent: IntentExternalSearch, Confidence: "rule", Reason: "external search terms"}
 	}
 	if containsAny(q, "对比", "比较", "compare", "异同", "差异") || len(in.Context.PaperIDs) > 1 {

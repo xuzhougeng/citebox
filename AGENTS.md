@@ -33,6 +33,12 @@ Use `gofmt` for all Go files; keep package names lowercase and exported identifi
 - Put page-specific strings in the matching page locale file and reserve `shared.json` for copy reused across multiple pages or features.
 - When wiring UI text, prefer the existing translation hooks and helpers already used in the repo, such as `data-i18n` attributes and `t(...)`/`CiteBoxI18n` lookups.
 
+## Language Content Policy
+
+- Do not introduce hardcoded natural-language content outside Chinese and English in code, tests, fixtures, configuration, docs, or locale files unless the user explicitly asks for that language-specific content.
+- Do not add Japanese, Korean, or other non-Chinese/non-English examples just to exercise multilingual behavior. Use abstracted fixtures, transliteration-free markers, or provider/model mocks instead.
+- Keep production routing, search, and prompt logic language-agnostic where possible. If language-specific behavior is required, make the supported language scope explicit and keep it limited to Chinese and English.
+
 ## Testing Guidelines
 
 Go tests are colocated as `*_test.go` files, especially under `internal/repository` and `internal/service`. Name tests as `Test<Behavior>`. Add repository tests for schema changes, migrations, constraints, and search behavior. Use `go test ./...` before submitting; for UI-only changes, include at least a JS syntax check and a brief manual verification note.

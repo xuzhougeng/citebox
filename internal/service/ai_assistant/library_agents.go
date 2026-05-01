@@ -50,6 +50,39 @@ func (p *LLMLibrarySearchPlanner) PlanLibrarySearch(ctx context.Context, query s
 	return plan, nil
 }
 
+type LLMExternalSearchPlanner struct {
+	settings AISettingsProvider
+	caller   NonStreamCaller
+}
+
+func NewLLMExternalSearchPlanner(settings AISettingsProvider, caller NonStreamCaller) *LLMExternalSearchPlanner {
+	return &LLMExternalSearchPlanner{settings: settings, caller: caller}
+}
+
+func (p *LLMExternalSearchPlanner) PlanExternalSearch(ctx context.Context, query string) (ExternalSearchPlan, error) {
+	if p == nil || p.settings == nil || p.caller == nil {
+		return ExternalSearchPlan{}, fmt.Errorf("external search planner not configured")
+	}
+	settings, err := p.settings.GetSettings()
+	if err != nil {
+		return ExternalSearchPlan{}, err
+	}
+	out, _, err := p.caller.CallProviderGeneric(ctx, assistantMasterSettings(*settings), externalPlannerSystemPrompt, externalPlannerUserPrompt(query))
+	if err != nil {
+		return ExternalSearchPlan{}, err
+	}
+	var plan ExternalSearchPlan
+	if err := decodeFirstJSONObject(out, &plan); err != nil {
+		return ExternalSearchPlan{}, err
+	}
+	plan.SearchQuery = strings.Join(strings.Fields(plan.SearchQuery), " ")
+	plan.Rationale = strings.TrimSpace(plan.Rationale)
+	if plan.SearchQuery == "" {
+		return ExternalSearchPlan{}, fmt.Errorf("empty external search query")
+	}
+	return plan, nil
+}
+
 type LLMLibraryPaperClassifier struct {
 	settings AISettingsProvider
 	caller   NonStreamCaller
@@ -88,8 +121,23 @@ JSON 格式：
 - 不要加入“数据、文章、论文、文献、相关、查找、paper、data”等泛词。
 - 不要把窄问题扩大成泛化问题；用户问 ChIP-seq 时，不要改成所有 sequencing。`
 
+const externalPlannerSystemPrompt = `你是 CiteBox AI 助手的 Master Agent。你的任务是把用户的外部调研或出处查找请求改写成适合 Semantic Scholar 的英文检索式。
+只输出 JSON，不要输出 Markdown，不要解释思考过程。
+JSON 格式：
+{"search_query":"concise English academic query","rationale":"一句话说明检索式如何覆盖用户需求"}
+规则：
+- 用户可能使用任意语言提问；理解其真实学术需求，并改写为简短英文关键词检索式。
+- 保留用户明确给出的技术名词、实验类型、测序类型、物种、疾病和缩写，例如 ChIP-seq、ATAC-seq、single-cell RNA-seq。
+- 用户要求找出处、引用或证据时，检索核心断言本身，不要保留 source、citation、reference、出处、引用等操作词。
+- 不要加入 article、paper、literature、data、search、find、about、external 等泛词。
+- 优先输出 3 到 8 个关键词；必要时加入一个能提高召回的同义技术短语。`
+
 func libraryPlannerUserPrompt(query string) string {
 	return "用户检索请求：\n" + strings.TrimSpace(query)
+}
+
+func externalPlannerUserPrompt(query string) string {
+	return "用户外部检索请求：\n" + strings.TrimSpace(query)
 }
 
 const libraryClassifierSystemPrompt = `你是 CiteBox 的 Sub-Agent，负责逐篇判断全文扫描候选是否真正符合用户需求。
