@@ -383,10 +383,17 @@ func externalEvidence(ctx context.Context, searcher ExternalEvidenceSearcher, us
 	}, ai_external.SearchOptions{
 		Limit: limit,
 	})
-	if err != nil && len(res.Papers) == 0 {
+	citations := citationsFromExternalPapers(res.Papers, idMap, limit)
+	if len(citations) > 0 {
+		return citations, nil
+	}
+	if err != nil {
 		return nil, err
 	}
-	return citationsFromExternalPapers(res.Papers, idMap, limit), nil
+	if len(res.Failures) > 0 {
+		return nil, externalSearchFailuresError(res.Failures)
+	}
+	return nil, nil
 }
 
 func citationsFromExternalPapers(papers []ai_external.Paper, idMap map[string]repository.AIPinnedPaper, limit int) []Citation {
@@ -585,7 +592,7 @@ func externalIDForExternalPaper(p ai_external.Paper) string {
 		return "PMID:" + pmid
 	}
 	if arxiv := strings.TrimSpace(p.ArXiv); arxiv != "" {
-		return "ArXiv:" + arxiv
+		return "ARXIV:" + arxiv
 	}
 	for _, source := range externalPaperSourcesForID(p) {
 		if id := strings.TrimSpace(externalPaperIDForSource(p, source)); id != "" {
@@ -593,6 +600,21 @@ func externalIDForExternalPaper(p ai_external.Paper) string {
 		}
 	}
 	return ""
+}
+
+func externalSearchFailuresError(failures []ai_external.SourceFailure) error {
+	parts := make([]string, 0, len(failures))
+	for _, failure := range failures {
+		if failure.Err == nil {
+			continue
+		}
+		source := externalSourceLabel(failure.Source)
+		parts = append(parts, fmt.Sprintf("%s: %v", source, failure.Err))
+	}
+	if len(parts) == 0 {
+		return fmt.Errorf("external search failed")
+	}
+	return fmt.Errorf("external search failed: %s", strings.Join(parts, "; "))
 }
 
 func externalPaperSourcesForID(p ai_external.Paper) []ai_external.SourceID {

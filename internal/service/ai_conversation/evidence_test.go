@@ -2,6 +2,7 @@ package ai_conversation
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -197,6 +198,70 @@ func TestExternalEvidenceUsesConfiguredSourceLabels(t *testing.T) {
 	}
 	if !strings.Contains(prompt, "外部学术搜索") || !strings.Contains(prompt, "PubMed") {
 		t.Fatalf("prompt missing PubMed source label: %s", prompt)
+	}
+}
+
+func TestExternalEvidenceFailuresWithoutUsablePapersSurfaceFailure(t *testing.T) {
+	searcher := &stubSnippetSearcher{
+		searchRes: ai_external.SearchResult{
+			Sources: []ai_external.SourceID{ai_external.SourcePubMed, ai_external.SourceSemanticScholar},
+			Failures: []ai_external.SourceFailure{{
+				Source: ai_external.SourcePubMed,
+				Err:    errors.New("rate limited"),
+			}},
+		},
+	}
+
+	citations, err := externalEvidence(context.Background(), searcher, "用户问题", nil, 8)
+	if err == nil {
+		t.Fatalf("externalEvidence error = nil, want failure")
+	}
+	if len(citations) != 0 {
+		t.Fatalf("citations = %+v, want none", citations)
+	}
+
+	prompt, citations, err := injectEvidence(context.Background(), stubPaperGetter{}, searcher, "用户问题", nil, EvidenceOptions{
+		IncludeExternal: true,
+		DisableLocal:    true,
+	})
+	if err != nil {
+		t.Fatalf("injectEvidence: %v", err)
+	}
+	if len(citations) != 0 {
+		t.Fatalf("citations = %+v, want none", citations)
+	}
+	if !strings.Contains(prompt, "外部搜索失败") || !strings.Contains(prompt, "证据不足") {
+		t.Fatalf("prompt missing failure handling: %s", prompt)
+	}
+}
+
+func TestExternalEvidenceUsesUppercaseArXivExternalID(t *testing.T) {
+	searcher := &stubSnippetSearcher{
+		searchRes: ai_external.SearchResult{
+			Sources: []ai_external.SourceID{ai_external.SourceSemanticScholar},
+			Papers: []ai_external.Paper{{
+				Source:        ai_external.SourceSemanticScholar,
+				SourcePaperID: "s2-arxiv",
+				SourcePaperIDs: map[ai_external.SourceID]string{
+					ai_external.SourceSemanticScholar: "s2-arxiv",
+				},
+				Sources:  []ai_external.SourceID{ai_external.SourceSemanticScholar},
+				ArXiv:    "2301.12345",
+				Title:    "ArXiv Evidence",
+				Abstract: "ArXiv-only external evidence.",
+			}},
+		},
+	}
+
+	_, citations, err := injectEvidence(context.Background(), stubPaperGetter{}, searcher, "用户问题", nil, EvidenceOptions{
+		IncludeExternal: true,
+		DisableLocal:    true,
+	})
+	if err != nil {
+		t.Fatalf("injectEvidence: %v", err)
+	}
+	if len(citations) != 1 || citations[0].ExternalID != "ARXIV:2301.12345" {
+		t.Fatalf("citations = %+v", citations)
 	}
 }
 
