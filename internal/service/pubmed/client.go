@@ -307,13 +307,18 @@ type pubmedArticleSet struct {
 func (s pubmedArticleSet) papers() []Paper {
 	papers := make([]Paper, 0, len(s.Articles))
 	for _, article := range s.Articles {
+		issueYear := article.MedlineCitation.Article.Journal.Year()
+		onlineYear := article.MedlineCitation.Article.OnlineYear()
 		p := Paper{
-			PMID:     normalizeSpace(article.MedlineCitation.PMID),
-			Title:    normalizeSpace(article.MedlineCitation.Article.Title),
-			Abstract: normalizeSpace(strings.Join(article.MedlineCitation.Article.Abstract.Texts, " ")),
-			Journal:  normalizeSpace(article.MedlineCitation.Article.Journal.Title),
-			Year:     article.MedlineCitation.Article.Journal.Year(),
-			Authors:  article.MedlineCitation.Article.Authors.names(),
+			PMID:       normalizeSpace(article.MedlineCitation.PMID),
+			Title:      normalizeSpace(article.MedlineCitation.Article.Title),
+			Abstract:   normalizeSpace(strings.Join(article.MedlineCitation.Article.Abstract.Texts, " ")),
+			Journal:    normalizeSpace(article.MedlineCitation.Article.Journal.Title),
+			Year:       issueYear,
+			OnlineYear: onlineYear,
+			IssueYear:  issueYear,
+			YearLabel:  formatYearLabel(onlineYear, issueYear),
+			Authors:    article.MedlineCitation.Article.Authors.names(),
 		}
 		p.DOI = normalizeSpace(article.PubmedData.ArticleIDs.find("doi"))
 		if p.DOI == "" {
@@ -343,7 +348,12 @@ type articlePayload struct {
 	Journal      journalPayload     `xml:"Journal"`
 	Abstract     abstractPayload    `xml:"Abstract"`
 	Authors      authorList         `xml:"AuthorList"`
+	ArticleDates articleDateList    `xml:"ArticleDate"`
 	ELocationIDs eLocationIDPayload `xml:"ELocationID"`
+}
+
+func (a articlePayload) OnlineYear() int {
+	return a.ArticleDates.onlineYear()
 }
 
 type journalPayload struct {
@@ -360,6 +370,35 @@ func (j journalPayload) Year() int {
 
 type pubDatePayload struct {
 	Year string `xml:"Year"`
+}
+
+type articleDateList []articleDatePayload
+
+func (l articleDateList) onlineYear() int {
+	var fallback int
+	for _, articleDate := range l {
+		year := articleDate.Year()
+		if year == 0 {
+			continue
+		}
+		if strings.EqualFold(articleDate.DateType, "Electronic") {
+			return year
+		}
+		if fallback == 0 {
+			fallback = year
+		}
+	}
+	return fallback
+}
+
+type articleDatePayload struct {
+	DateType string `xml:"DateType,attr"`
+	YearText string `xml:"Year"`
+}
+
+func (d articleDatePayload) Year() int {
+	year, _ := strconv.Atoi(normalizeSpace(d.YearText))
+	return year
 }
 
 type abstractPayload struct {
@@ -423,4 +462,17 @@ func (v typedValue) typeName() string {
 		return v.IDType
 	}
 	return v.EIDType
+}
+
+func formatYearLabel(onlineYear, issueYear int) string {
+	switch {
+	case onlineYear > 0 && issueYear > 0 && onlineYear != issueYear:
+		return fmt.Sprintf("%d online / %d issue", onlineYear, issueYear)
+	case issueYear > 0:
+		return fmt.Sprintf("%d issue", issueYear)
+	case onlineYear > 0:
+		return fmt.Sprintf("%d online", onlineYear)
+	default:
+		return ""
+	}
 }

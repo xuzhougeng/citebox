@@ -23,6 +23,9 @@ type Paper struct {
 	TLDR           string
 	Venue          string
 	Year           int
+	OnlineYear     int
+	IssueYear      int
+	YearLabel      string
 	Authors        []string
 	URL            string
 	OpenAccessURL  string

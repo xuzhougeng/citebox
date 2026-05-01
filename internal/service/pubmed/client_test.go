@@ -52,6 +52,65 @@ func TestClientSearchHydratesPubMedArticle(t *testing.T) {
 	}
 }
 
+func TestClientSearchHydratesPubMedOnlineAndIssueYears(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/entrez/eutils/esearch.fcgi":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"esearchresult":{"idlist":["67890"]}}`))
+		case "/entrez/eutils/efetch.fcgi":
+			w.Header().Set("Content-Type", "application/xml")
+			_, _ = w.Write([]byte(`<?xml version="1.0"?>
+<PubmedArticleSet>
+  <PubmedArticle>
+    <MedlineCitation>
+      <PMID>67890</PMID>
+      <Article>
+        <ArticleTitle>Dual year article</ArticleTitle>
+        <Journal>
+          <Title>Science</Title>
+          <JournalIssue><PubDate><Year>2026</Year></PubDate></JournalIssue>
+        </Journal>
+        <ArticleDate DateType="Electronic">
+          <Year>2025</Year>
+          <Month>12</Month>
+          <Day>31</Day>
+        </ArticleDate>
+      </Article>
+    </MedlineCitation>
+    <PubmedData>
+      <ArticleIdList>
+        <ArticleId IdType="doi">10.1/dual-year</ArticleId>
+      </ArticleIdList>
+    </PubmedData>
+  </PubmedArticle>
+</PubmedArticleSet>`))
+		default:
+			http.Error(w, "unexpected path "+r.URL.Path, http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	client := NewClient(Config{BaseURL: server.URL, MinInterval: 0})
+	res, err := client.Search(context.Background(), "dual year", SearchOptions{Limit: 5})
+	if err != nil {
+		t.Fatalf("Search() error = %v", err)
+	}
+	if len(res.Items) != 1 {
+		t.Fatalf("len = %d, want 1", len(res.Items))
+	}
+	p := res.Items[0]
+	if p.OnlineYear != 2025 {
+		t.Fatalf("OnlineYear = %d, want 2025", p.OnlineYear)
+	}
+	if p.IssueYear != 2026 {
+		t.Fatalf("IssueYear = %d, want 2026", p.IssueYear)
+	}
+	if p.YearLabel != "2025 online / 2026 issue" {
+		t.Fatalf("YearLabel = %q, want %q", p.YearLabel, "2025 online / 2026 issue")
+	}
+}
+
 func TestClientSearchReturnsEmptyWithoutFetching(t *testing.T) {
 	fetchCalled := false
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

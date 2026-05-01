@@ -36,6 +36,9 @@ func (a PubMedAdapter) Search(ctx context.Context, query string, opts SearchOpti
 			Abstract:      p.Abstract,
 			Venue:         p.Journal,
 			Year:          p.Year,
+			OnlineYear:    p.OnlineYear,
+			IssueYear:     p.IssueYear,
+			YearLabel:     p.YearLabel,
 			Authors:       p.Authors,
 			URL:           p.URL,
 		})
