@@ -91,6 +91,9 @@ func TestLibrarySearchToolShowsZeroCountsInProcessLabels(t *testing.T) {
 	if res.Process.Stages[0].Label != "全文扫描 0篇" || res.Process.Stages[1].Label != "命中 0篇" {
 		t.Fatalf("process = %+v, want explicit zero-count labels", res.Process)
 	}
+	if !strings.Contains(res.AnswerContext, "没有命中") {
+		t.Fatalf("answer context = %q, want explicit no-hit reason", res.AnswerContext)
+	}
 }
 
 type termSensitivePaperStore struct {
@@ -163,10 +166,14 @@ func (s *stubLibraryPlanner) PlanLibrarySearch(ctx context.Context, query string
 type stubLibraryClassifier struct {
 	seen    []LibraryPaperClassificationInput
 	results map[int64]LibraryPaperClassificationResult
+	err     error
 }
 
 func (s *stubLibraryClassifier) ClassifyLibraryPaper(ctx context.Context, in LibraryPaperClassificationInput) (LibraryPaperClassificationResult, error) {
 	s.seen = append(s.seen, in)
+	if s.err != nil {
+		return LibraryPaperClassificationResult{}, s.err
+	}
 	if s.results != nil {
 		if res, ok := s.results[in.Paper.ID]; ok {
 			return res, nil
@@ -257,8 +264,37 @@ func TestLibrarySearchToolReportsCandidateListerFailure(t *testing.T) {
 	if !strings.Contains(res.ToolCalls[0].Error, "candidate query failed") {
 		t.Fatalf("tool call error = %q", res.ToolCalls[0].Error)
 	}
+	if !strings.Contains(res.Process.Note, "全文扫描失败") || !strings.Contains(res.AnswerContext, "全文扫描失败") {
+		t.Fatalf("process note=%q answer context=%q, want explicit scan failure", res.Process.Note, res.AnswerContext)
+	}
 	if len(res.Cards) != 0 || len(res.Citations) != 0 {
 		t.Fatalf("cards=%+v citations=%+v, want empty", res.Cards, res.Citations)
+	}
+}
+
+func TestLibrarySearchToolReportsClassifierFailure(t *testing.T) {
+	store := &planningPaperStore{
+		papers: map[int64]*model.Paper{
+			1: {ID: 1, Title: "ChIP-seq Paper", PDFText: "This study uses H3K27ac ChIP-seq data."},
+			2: {ID: 2, Title: "Second ChIP-seq Paper", PDFText: "This study uses H3K4me3 ChIP-seq data."},
+		},
+	}
+	planner := &stubLibraryPlanner{plan: LibrarySearchPlan{SearchTerms: []string{"ChIP-seq"}}}
+	classifier := &stubLibraryClassifier{err: errors.New("classifier unavailable")}
+	tool := NewLibrarySearchToolWithAgents(store, planner, classifier)
+
+	res, err := tool.Run(context.Background(), ToolInput{Query: "查找包括 ChIP-seq 数据的文章"})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if !strings.Contains(res.Process.Note, "Sub-Agent判定失败") {
+		t.Fatalf("process note = %q, want classifier failure note", res.Process.Note)
+	}
+	if got := stageByLabel(res.Process.Stages, "Sub-Agent判定").Detail; !strings.Contains(got, "失败 2篇") {
+		t.Fatalf("Sub-Agent stage detail = %q, want failed classifier count", got)
+	}
+	if len(res.Cards) != 2 {
+		t.Fatalf("cards = %+v, want fallback to local full-text hits", res.Cards)
 	}
 }
 

@@ -13,9 +13,13 @@ import (
 type stubExternalSearch struct {
 	search research.PaperList
 	snips  research.SnippetList
+	err    error
 }
 
 func (s stubExternalSearch) Search(ctx context.Context, query string, opts research.SearchOpts) (research.PaperList, error) {
+	if s.err != nil {
+		return research.PaperList{}, s.err
+	}
 	return s.search, nil
 }
 
@@ -165,6 +169,57 @@ func TestExternalSearchToolFallsBackWhenPlannerFails(t *testing.T) {
 	}
 }
 
+func TestExternalSearchToolReportsSourceAndPlannedQuery(t *testing.T) {
+	planner := &stubExternalPlanner{plan: ExternalSearchPlan{
+		SearchQuery: "single-cell ATAC-seq review",
+		Rationale:   "external review query",
+	}}
+	tool := NewExternalSearchToolWithPlanner(stubExternalSearch{
+		search: research.PaperList{Items: []research.Paper{{
+			PaperID: "s2-review", Title: "Single-cell ATAC review", Abstract: "Review evidence.",
+		}}},
+	}, planner)
+
+	res, err := tool.Run(context.Background(), ToolInput{Query: "查一下外部有没有 single-cell ATAC 综述"})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	labels := processLabels(res.Process.Stages)
+	for _, want := range []string{"Master规划", "外部搜索", "命中"} {
+		if !containsTestTerm(labels, want) {
+			t.Fatalf("process labels = %v, missing %s", labels, want)
+		}
+	}
+	if !strings.Contains(res.Process.Note, "Semantic Scholar") || !strings.Contains(res.Process.Note, "single-cell ATAC-seq review") {
+		t.Fatalf("process note = %q, want source and planned query", res.Process.Note)
+	}
+	if got := stageByLabel(res.Process.Stages, "外部搜索").Detail; !strings.Contains(got, "Semantic Scholar") {
+		t.Fatalf("external search stage detail = %q, want source detail", got)
+	}
+	if !strings.Contains(res.ToolCalls[0].OutputSummaryJSON, `"source":"Semantic Scholar"`) ||
+		!strings.Contains(res.ToolCalls[0].OutputSummaryJSON, `"search_query":"single-cell ATAC-seq review"`) {
+		t.Fatalf("output summary = %s, want source and search query", res.ToolCalls[0].OutputSummaryJSON)
+	}
+}
+
+func TestExternalSearchToolExplainsFailureInProcessAndAnswerContext(t *testing.T) {
+	tool := NewExternalSearchTool(stubExternalSearch{err: errors.New("semantic scholar timeout")})
+
+	res, err := tool.Run(context.Background(), ToolInput{Query: "ATAC review"})
+	if err != nil {
+		t.Fatalf("Run error = %v, want nil", err)
+	}
+	if !strings.Contains(res.Process.Note, "外部搜索失败") || !strings.Contains(res.Process.Note, "semantic scholar timeout") {
+		t.Fatalf("process note = %q, want explicit failure reason", res.Process.Note)
+	}
+	if !strings.Contains(res.AnswerContext, "外部搜索失败") || !strings.Contains(res.AnswerContext, "semantic scholar timeout") {
+		t.Fatalf("answer context = %q, want explicit failure reason", res.AnswerContext)
+	}
+	if got := stageByLabel(res.Process.Stages, "外部搜索").Detail; !strings.Contains(got, "semantic scholar timeout") {
+		t.Fatalf("failed stage detail = %q, want error detail", got)
+	}
+}
+
 func TestPaperReadToolComparesFullText(t *testing.T) {
 	store := stubPaperStore{
 		ids: []int64{1, 2},
@@ -254,6 +309,25 @@ func TestPaperReadToolCapsLoadedPapersAndIncludesCompareNote(t *testing.T) {
 	}
 	if len(res.Process.Stages) == 0 || res.Process.Stages[0].Count != 2 {
 		t.Fatalf("process = %+v", res.Process)
+	}
+}
+
+func TestPaperReadToolUsesStableHitStage(t *testing.T) {
+	store := stubPaperStore{
+		papers: map[int64]*model.Paper{
+			1: {ID: 1, Title: "Paper A", PDFText: "ATAC-seq measures chromatin accessibility."},
+		},
+	}
+	res, err := NewPaperReadTool(store).Run(context.Background(), ToolInput{
+		Query:   "读这篇 ATAC 文章",
+		Context: RequestContext{PaperID: 1},
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	labels := processLabels(res.Process.Stages)
+	if !containsTestTerm(labels, "全文扫描") || !containsTestTerm(labels, "命中") {
+		t.Fatalf("process labels = %v, want stable scan and hit labels", labels)
 	}
 }
 
@@ -419,6 +493,9 @@ func TestFigureLookupToolFallsBackToFullTextCandidatePapers(t *testing.T) {
 	if !strings.Contains(res.AnswerContext, "Full-text evidence") || !strings.Contains(res.AnswerContext, "H3K27ac ChIP-seq") {
 		t.Fatalf("answer context = %s", res.AnswerContext)
 	}
+	if !strings.Contains(res.Process.Note, "全文候选文献") {
+		t.Fatalf("process note = %q, want fallback path explanation", res.Process.Note)
+	}
 }
 
 func TestFigureLookupToolNilSearcherReturnsFailedResult(t *testing.T) {
@@ -491,4 +568,21 @@ func TestRepositoryFigureSearcherNilRepoReturnsError(t *testing.T) {
 	if err == nil {
 		t.Fatalf("error = nil, want error")
 	}
+}
+
+func processLabels(stages []ProcessStage) []string {
+	labels := make([]string, 0, len(stages))
+	for _, stage := range stages {
+		labels = append(labels, stage.Label)
+	}
+	return labels
+}
+
+func stageByLabel(stages []ProcessStage, label string) ProcessStage {
+	for _, stage := range stages {
+		if stage.Label == label {
+			return stage
+		}
+	}
+	return ProcessStage{}
 }

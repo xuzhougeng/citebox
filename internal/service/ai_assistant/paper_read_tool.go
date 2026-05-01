@@ -112,7 +112,7 @@ func (t *PaperReadTool) Run(ctx context.Context, in ToolInput) (ToolResult, erro
 			Note:   note,
 			Stages: []ProcessStage{
 				{Label: "全文扫描", Count: len(items), Unit: "篇", Status: "completed"},
-				{Label: "命中证据", Count: len(citations), Unit: "段", Status: "completed"},
+				{Label: "命中", Count: len(citations), Unit: "段", Status: "completed", Detail: "文献阅读证据片段"},
 			},
 		},
 		Cards: []ResultCard{{Type: cardType, Payload: PaperCompareCard{
@@ -167,7 +167,8 @@ func paperReadSkippedResult(inputJSON []byte, outputJSON, note string, err error
 				{Label: "全文扫描", Count: 0, Unit: "篇", Status: "skipped"},
 			},
 		},
-		ToolCalls: []ToolCallSummary{call},
+		AnswerContext: note,
+		ToolCalls:     []ToolCallSummary{call},
 	}
 }
 

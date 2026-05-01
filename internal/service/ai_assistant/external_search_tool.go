@@ -32,6 +32,7 @@ type ExternalSearchTool struct {
 const (
 	defaultExternalSearchLimit = 8
 	maxExternalSearchLimit     = 100
+	externalSearchSource       = "Semantic Scholar"
 )
 
 type ExternalPaperCard struct {
@@ -56,22 +57,25 @@ func NewExternalSearchToolWithPlanner(searcher ExternalSearcher, planner Externa
 func (t *ExternalSearchTool) Run(ctx context.Context, in ToolInput) (ToolResult, error) {
 	limit := clampExternalSearchLimit(in.Limit)
 	searchQuery := ExternalSearchQuery(in.Query)
+	plan := ExternalSearchPlan{}
+	var planErr error
 	if t != nil {
-		searchQuery, _ = t.searchQuery(ctx, in.Query)
+		searchQuery, plan, planErr = t.searchQuery(ctx, in.Query)
 	}
 	inputJSON, _ := json.Marshal(struct {
 		Query       string `json:"query"`
 		SearchQuery string `json:"search_query,omitempty"`
 		Limit       int    `json:"limit"`
 	}{Query: in.Query, SearchQuery: searchQuery, Limit: limit})
+	processStages := externalPlanningStages(t, searchQuery, plan, planErr)
 
 	if t == nil || t.searcher == nil {
-		return externalSearchFailedResult(inputJSON, errors.New("external searcher is not configured")), nil
+		return externalSearchFailedResult(inputJSON, errors.New("external searcher is not configured"), processStages, searchQuery), nil
 	}
 
 	res, err := t.searcher.Search(ctx, searchQuery, research.SearchOpts{Limit: limit})
 	if err != nil {
-		return externalSearchFailedResult(inputJSON, err), nil
+		return externalSearchFailedResult(inputJSON, err, processStages, searchQuery), nil
 	}
 
 	cards := make([]ResultCard, 0, len(res.Items))
@@ -103,20 +107,36 @@ func (t *ExternalSearchTool) Run(ctx context.Context, in ToolInput) (ToolResult,
 	}
 
 	outputJSON, _ := json.Marshal(struct {
-		Hits int `json:"hits"`
-	}{Hits: len(cards)})
+		Source      string `json:"source"`
+		SearchQuery string `json:"search_query"`
+		Returned    int    `json:"returned"`
+		Hits        int    `json:"hits"`
+	}{Source: externalSearchSource, SearchQuery: searchQuery, Returned: len(res.Items), Hits: len(cards)})
+
+	processStages = append(processStages,
+		ProcessStage{Label: "外部搜索", Count: len(res.Items), Unit: "条", Status: "completed", Detail: "来源: " + externalSearchSource},
+		externalHitStage(len(cards)),
+	)
+	noteParts := make([]string, 0, 2)
+	if planErr != nil {
+		noteParts = append(noteParts, "Master规划失败，已使用本地查询回退。")
+	}
+	noteParts = append(noteParts, fmt.Sprintf("%s 查询: %s", externalSearchSource, searchQuery))
+	note := joinProcessNotes(noteParts)
+	answerContext := externalAnswerContext(cards)
+	if len(cards) == 0 {
+		answerContext = fmt.Sprintf("没有命中：%s 使用查询 %q 返回 0 条结果。", externalSearchSource, searchQuery)
+	}
 
 	return ToolResult{
 		Process: ProcessSummary{
 			Intent: IntentExternalSearch,
-			Stages: []ProcessStage{
-				{Label: "外部搜索", Count: len(res.Items), Unit: "条", Status: "completed"},
-				externalHitStage(len(cards)),
-			},
+			Stages: processStages,
+			Note:   note,
 		},
 		Cards:         cards,
 		Citations:     citations,
-		AnswerContext: externalAnswerContext(cards),
+		AnswerContext: answerContext,
 		ToolCalls: []ToolCallSummary{{
 			ToolName:          "external_search",
 			InputJSON:         string(inputJSON),
@@ -126,21 +146,45 @@ func (t *ExternalSearchTool) Run(ctx context.Context, in ToolInput) (ToolResult,
 	}, nil
 }
 
-func (t *ExternalSearchTool) searchQuery(ctx context.Context, query string) (string, ExternalSearchPlan) {
+func (t *ExternalSearchTool) searchQuery(ctx context.Context, query string) (string, ExternalSearchPlan, error) {
 	fallback := ExternalSearchQuery(query)
 	if t == nil || t.planner == nil {
-		return fallback, ExternalSearchPlan{}
+		return fallback, ExternalSearchPlan{}, nil
 	}
 	plan, err := t.planner.PlanExternalSearch(ctx, query)
 	if err != nil {
-		return fallback, ExternalSearchPlan{}
+		return fallback, ExternalSearchPlan{}, err
 	}
 	plan.SearchQuery = strings.Join(strings.Fields(plan.SearchQuery), " ")
 	plan.Rationale = strings.TrimSpace(plan.Rationale)
 	if plan.SearchQuery == "" {
-		return fallback, ExternalSearchPlan{}
+		return fallback, ExternalSearchPlan{}, errors.New("empty external search query")
 	}
-	return plan.SearchQuery, plan
+	return plan.SearchQuery, plan, nil
+}
+
+func externalPlanningStages(t *ExternalSearchTool, searchQuery string, plan ExternalSearchPlan, planErr error) []ProcessStage {
+	if t == nil || t.planner == nil {
+		return nil
+	}
+	if planErr != nil {
+		return []ProcessStage{{
+			Label:  "Master规划",
+			Status: "failed",
+			Detail: fmt.Sprintf("规划失败: %s; 回退查询: %s", planErr.Error(), searchQuery),
+		}}
+	}
+	detail := "检索式: " + searchQuery
+	if strings.TrimSpace(plan.Rationale) != "" {
+		detail += "; " + strings.TrimSpace(plan.Rationale)
+	}
+	return []ProcessStage{{
+		Label:  "Master规划",
+		Count:  len(strings.Fields(searchQuery)),
+		Unit:   "词",
+		Status: "completed",
+		Detail: detail,
+	}}
 }
 
 func ExternalSearchQuery(query string) string {
@@ -244,14 +288,19 @@ func clampExternalSearchLimit(limit int) int {
 	return limit
 }
 
-func externalSearchFailedResult(inputJSON []byte, err error) ToolResult {
+func externalSearchFailedResult(inputJSON []byte, err error, stages []ProcessStage, searchQuery string) ToolResult {
+	reason := "外部搜索失败：" + err.Error()
+	stages = append(stages, ProcessStage{Label: "外部搜索", Status: "failed", Detail: err.Error()})
+	if strings.TrimSpace(searchQuery) != "" {
+		reason += "；查询: " + searchQuery
+	}
 	return ToolResult{
 		Process: ProcessSummary{
 			Intent: IntentExternalSearch,
-			Stages: []ProcessStage{
-				{Label: "外部搜索", Status: "failed"},
-			},
+			Stages: stages,
+			Note:   reason,
 		},
+		AnswerContext: reason,
 		ToolCalls: []ToolCallSummary{{
 			ToolName:  "external_search",
 			InputJSON: string(inputJSON),

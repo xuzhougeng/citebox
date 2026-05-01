@@ -81,6 +81,7 @@ func (t *LibrarySearchTool) Run(ctx context.Context, in ToolInput) (ToolResult, 
 	terms := EvidenceSearchTerms(in.Query)
 	plan := LibrarySearchPlan{}
 	processStages := make([]ProcessStage, 0, 4)
+	notes := make([]string, 0, 2)
 	if t.planner != nil {
 		planned, planErr := t.planner.PlanLibrarySearch(ctx, in.Query)
 		if planErr == nil {
@@ -89,9 +90,16 @@ func (t *LibrarySearchTool) Run(ctx context.Context, in ToolInput) (ToolResult, 
 			if len(plannedTerms) > 0 {
 				terms = plannedTerms
 			}
-			processStages = append(processStages, ProcessStage{Label: "Master规划", Count: len(terms), Unit: "词", Status: "completed"})
+			processStages = append(processStages, ProcessStage{
+				Label:  "Master规划",
+				Count:  len(terms),
+				Unit:   "词",
+				Status: "completed",
+				Detail: "检索词: " + strings.Join(terms, " | "),
+			})
 		} else {
-			processStages = append(processStages, ProcessStage{Label: "Master规划", Status: "failed"})
+			notes = append(notes, "Master规划失败，已使用本地关键词回退。")
+			processStages = append(processStages, ProcessStage{Label: "Master规划", Status: "failed", Detail: planErr.Error()})
 		}
 	}
 	inputJSON, _ := json.Marshal(struct {
@@ -101,12 +109,15 @@ func (t *LibrarySearchTool) Run(ctx context.Context, in ToolInput) (ToolResult, 
 	}{Query: in.Query, Terms: terms, Limit: limit})
 	ids, candidateErr := candidateIDs(t.papers, terms, 120)
 	if candidateErr != nil {
-		processStages = append(processStages, ProcessStage{Label: "全文扫描", Status: "failed"})
+		reason := "全文扫描失败：" + candidateErr.Error()
+		processStages = append(processStages, ProcessStage{Label: "全文扫描", Status: "failed", Detail: candidateErr.Error()})
 		return ToolResult{
 			Process: ProcessSummary{
 				Intent: IntentLibrarySearch,
 				Stages: processStages,
+				Note:   joinProcessNotes(append(notes, reason)),
 			},
+			AnswerContext: reason,
 			ToolCalls: []ToolCallSummary{{
 				ToolName:  "library_search",
 				InputJSON: string(inputJSON),
@@ -115,7 +126,11 @@ func (t *LibrarySearchTool) Run(ctx context.Context, in ToolInput) (ToolResult, 
 			}},
 		}, nil
 	}
-	processStages = append(processStages, countStage("全文扫描", len(ids), "篇", "completed"))
+	scanStage := countStage("全文扫描", len(ids), "篇", "completed")
+	if len(terms) > 0 {
+		scanStage.Detail = "检索词: " + strings.Join(terms, " | ")
+	}
+	processStages = append(processStages, scanStage)
 	rawHitLimit := limit
 	if t.classifier != nil {
 		rawHitLimit = limit * 4
@@ -146,9 +161,15 @@ func (t *LibrarySearchTool) Run(ctx context.Context, in ToolInput) (ToolResult, 
 	}
 
 	classified := 0
+	classifierFailed := 0
 	if t.classifier != nil && len(hits) > 0 {
-		hits, classified = t.classifyHits(ctx, in.Query, plan, terms, hits)
-		processStages = append(processStages, ProcessStage{Label: "Sub-Agent判定", Count: classified, Unit: "篇", Status: "completed"})
+		hits, classified, classifierFailed = t.classifyHits(ctx, in.Query, plan, terms, hits)
+		detail := ""
+		if classifierFailed > 0 {
+			detail = fmt.Sprintf("失败 %d篇；失败候选保留为全文命中候选", classifierFailed)
+			notes = append(notes, fmt.Sprintf("Sub-Agent判定失败 %d 篇，已保留对应全文命中候选。", classifierFailed))
+		}
+		processStages = append(processStages, ProcessStage{Label: "Sub-Agent判定", Count: classified, Unit: "篇", Status: "completed", Detail: detail})
 	}
 
 	cards := make([]ResultCard, 0, limit)
@@ -193,20 +214,27 @@ func (t *LibrarySearchTool) Run(ctx context.Context, in ToolInput) (ToolResult, 
 	processStages = append(processStages, countStage("命中", len(cards), "篇", "completed"))
 
 	outputJSON, _ := json.Marshal(struct {
-		Candidates int `json:"candidates"`
-		Hits       int `json:"hits"`
-		Skipped    int `json:"skipped,omitempty"`
-		Classified int `json:"classified,omitempty"`
-	}{Candidates: len(ids), Hits: len(cards), Skipped: skipped, Classified: classified})
+		Candidates       int `json:"candidates"`
+		Hits             int `json:"hits"`
+		Skipped          int `json:"skipped,omitempty"`
+		Classified       int `json:"classified,omitempty"`
+		ClassifierFailed int `json:"classifier_failed,omitempty"`
+	}{Candidates: len(ids), Hits: len(cards), Skipped: skipped, Classified: classified, ClassifierFailed: classifierFailed})
+
+	answerContext := libraryAnswerContext(cards)
+	if len(cards) == 0 {
+		answerContext = fmt.Sprintf("没有命中：内部全文搜索扫描了 %d 篇候选文献，没有找到符合用户问题的证据。", len(ids))
+	}
 
 	return ToolResult{
 		Process: ProcessSummary{
 			Intent: IntentLibrarySearch,
 			Stages: processStages,
+			Note:   joinProcessNotes(notes),
 		},
 		Cards:         cards,
 		Citations:     citations,
-		AnswerContext: libraryAnswerContext(cards),
+		AnswerContext: answerContext,
 		ToolCalls: []ToolCallSummary{{
 			ToolName:          "library_search",
 			InputJSON:         string(inputJSON),
@@ -221,6 +249,17 @@ func countStage(label string, count int, unit, status string) ProcessStage {
 		return ProcessStage{Label: fmt.Sprintf("%s 0%s", label, unit), Unit: unit, Status: status}
 	}
 	return ProcessStage{Label: label, Count: count, Unit: unit, Status: status}
+}
+
+func joinProcessNotes(notes []string) string {
+	cleaned := make([]string, 0, len(notes))
+	for _, note := range notes {
+		note = strings.TrimSpace(note)
+		if note != "" {
+			cleaned = append(cleaned, note)
+		}
+	}
+	return strings.Join(cleaned, " ")
 }
 
 type librarySearchHit struct {
@@ -302,9 +341,9 @@ func EvidenceSearchTerms(query string) []string {
 	return sanitizeEvidenceTerms(terms)
 }
 
-func (t *LibrarySearchTool) classifyHits(ctx context.Context, query string, plan LibrarySearchPlan, terms []string, hits []librarySearchHit) ([]librarySearchHit, int) {
+func (t *LibrarySearchTool) classifyHits(ctx context.Context, query string, plan LibrarySearchPlan, terms []string, hits []librarySearchHit) ([]librarySearchHit, int, int) {
 	if t.classifier == nil || len(hits) == 0 {
-		return hits, 0
+		return hits, 0, 0
 	}
 	type result struct {
 		index int
@@ -344,8 +383,10 @@ func (t *LibrarySearchTool) classifyHits(ctx context.Context, query string, plan
 	accepted := make([]bool, len(hits))
 	reasons := make([]string, len(hits))
 	classified := 0
+	failed := 0
 	for res := range out {
 		if !res.ok {
+			failed++
 			accepted[res.index] = true
 			continue
 		}
@@ -361,7 +402,7 @@ func (t *LibrarySearchTool) classifyHits(ctx context.Context, query string, plan
 		hit.ClassifierReason = reasons[i]
 		filtered = append(filtered, hit)
 	}
-	return filtered, classified
+	return filtered, classified, failed
 }
 
 func FindLocalEvidenceMatches(paper model.Paper, terms []string, limit int) []LocalEvidenceMatch {

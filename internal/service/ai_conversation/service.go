@@ -304,7 +304,8 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput, onDelta 
 				}
 			}
 			citationsJSON = marshalAssistantCitations(out.Citations)
-			if err := s.emitStreamEvent(in, StreamEvent{Type: "process", Data: out.Process}); err != nil {
+			streamProcess := ai_assistant.WithAnswerGenerationStage(out.Process, "running")
+			if err := s.emitStreamEvent(in, StreamEvent{Type: "process", Data: streamProcess}); err != nil {
 				return SendMessageResult{}, err
 			}
 			if err := s.emitStreamEvent(in, StreamEvent{Type: "cards", Data: out.Cards}); err != nil {
@@ -343,6 +344,9 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput, onDelta 
 	if err != nil {
 		// User-cancelled stream: persist whatever was already streamed with mode="stopped".
 		if errors.Is(err, context.Canceled) && rawText != "" {
+			if runUsed {
+				runOut.Process = ai_assistant.WithAnswerGenerationStage(runOut.Process, "stopped")
+			}
 			asstID, persistErr := s.repo.AddMessage(in.ConversationID, "assistant", rawText, repository.AIMessageMeta{
 				Provider:      string(masterSettings.Provider),
 				Model:         masterSettings.Model,
@@ -357,6 +361,13 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput, onDelta 
 			_ = s.repo.TouchConversation(in.ConversationID)
 		}
 		return SendMessageResult{}, err
+	}
+
+	if runUsed {
+		runOut.Process = ai_assistant.WithAnswerGenerationStage(runOut.Process, "completed")
+		if err := s.emitStreamEvent(in, StreamEvent{Type: "process", Data: runOut.Process}); err != nil {
+			return SendMessageResult{}, err
+		}
 	}
 
 	asstID, err := s.repo.AddMessage(in.ConversationID, "assistant", rawText, repository.AIMessageMeta{

@@ -26,7 +26,11 @@
             const hasCount = stage && stage.count != null && stage.count !== '';
             const count = hasCount ? ' ' + stage.count + (stage.unit || '') : '';
             const status = stage && stage.status ? ' data-status="' + escapeHtml(stage.status) + '"' : '';
-            return '<span class="ai-process-stage"' + status + '>' +
+            const detail = stage && stage.detail ? String(stage.detail) : '';
+            const detailAttrs = detail
+                ? ' title="' + escapeHtml(detail) + '" aria-label="' + escapeHtml(label + count + '：' + detail) + '"'
+                : '';
+            return '<span class="ai-process-stage"' + status + detailAttrs + '>' +
                 escapeHtml(label) + escapeHtml(count) +
             '</span>';
         }).join('<span class="ai-process-sep">·</span>');

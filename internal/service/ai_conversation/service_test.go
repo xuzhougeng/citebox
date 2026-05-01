@@ -477,8 +477,16 @@ func TestSendMessageUsesOrchestratorEventsAndPersistsArtifacts(t *testing.T) {
 	if !strings.Contains(caller.userSeen, "ORCH_CONTEXT") {
 		t.Fatalf("provider prompt missing orchestrator context: %s", caller.userSeen)
 	}
-	if len(events) != 3 || events[0].Type != "process" || events[1].Type != "cards" || events[2].Type != "citations" {
+	if len(events) != 4 || events[0].Type != "process" || events[1].Type != "cards" || events[2].Type != "citations" || events[3].Type != "process" {
 		t.Fatalf("events = %+v", events)
+	}
+	firstProcess, ok := events[0].Data.(ai_assistant.ProcessSummary)
+	if !ok || stageByLabel(firstProcess.Stages, "生成回答").Status != "running" {
+		t.Fatalf("first process event = %+v, want running answer generation stage", events[0].Data)
+	}
+	finalProcess, ok := events[3].Data.(ai_assistant.ProcessSummary)
+	if !ok || stageByLabel(finalProcess.Stages, "生成回答").Status != "completed" {
+		t.Fatalf("final process event = %+v, want completed answer generation stage", events[3].Data)
 	}
 
 	msgs, err := libRepo.AIConversation.ListMessages(convID, 0, 10)
@@ -494,6 +502,9 @@ func TestSendMessageUsesOrchestratorEventsAndPersistsArtifacts(t *testing.T) {
 	}
 	if len(runs) != 1 || runs[0].Intent != ai_assistant.IntentFigureLookup || runs[0].Status != "completed" {
 		t.Fatalf("runs = %+v", runs)
+	}
+	if !strings.Contains(runs[0].ProcessSummaryJSON, "生成回答") || !strings.Contains(runs[0].ProcessSummaryJSON, "completed") {
+		t.Fatalf("process summary json = %s, want completed answer generation stage", runs[0].ProcessSummaryJSON)
 	}
 	calls, err := libRepo.AIConversation.ListToolCalls(runs[0].ID)
 	if err != nil {
@@ -776,4 +787,13 @@ func TestSendMessageTriggersSummaryWhenOverBudget(t *testing.T) {
 	if conv.SummaryText == "" {
 		t.Fatalf("expected summary to be persisted")
 	}
+}
+
+func stageByLabel(stages []ai_assistant.ProcessStage, label string) ai_assistant.ProcessStage {
+	for _, stage := range stages {
+		if stage.Label == label {
+			return stage
+		}
+	}
+	return ai_assistant.ProcessStage{}
 }

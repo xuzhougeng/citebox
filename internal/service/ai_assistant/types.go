@@ -42,6 +42,7 @@ type ProcessStage struct {
 	Count      int    `json:"count,omitempty"`
 	Unit       string `json:"unit,omitempty"`
 	Status     string `json:"status,omitempty"`
+	Detail     string `json:"detail,omitempty"`
 	DurationMS int    `json:"duration_ms,omitempty"`
 }
 
@@ -98,4 +99,22 @@ type ToolResult struct {
 	Citations     []Citation        `json:"citations,omitempty"`
 	AnswerContext string            `json:"answer_context,omitempty"`
 	ToolCalls     []ToolCallSummary `json:"tool_calls,omitempty"`
+}
+
+func WithAnswerGenerationStage(summary ProcessSummary, status string) ProcessSummary {
+	stage := ProcessStage{
+		Label:  "生成回答",
+		Status: status,
+		Detail: "根据工具结果生成最终回答",
+	}
+	out := summary
+	out.Stages = append([]ProcessStage(nil), summary.Stages...)
+	for i, existing := range out.Stages {
+		if existing.Label == stage.Label {
+			out.Stages[i] = stage
+			return out
+		}
+	}
+	out.Stages = append(out.Stages, stage)
+	return out
 }

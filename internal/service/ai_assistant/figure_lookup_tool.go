@@ -85,14 +85,22 @@ func (t *FigureLookupTool) Run(ctx context.Context, in ToolInput) (ToolResult, e
 		Total int `json:"total"`
 		Hits  int `json:"hits"`
 	}{Total: total, Hits: len(cards)})
+	answerContext := figureAnswerContext(items)
+	if len(cards) == 0 {
+		answerContext = "没有命中：图文检索没有找到符合用户问题的图片。"
+		if searchResult.usedFullText {
+			answerContext = fmt.Sprintf("没有命中：直接图文检索无结果；全文扫描找到 %d 篇候选文献，但没有找到可返回的图片。", searchResult.candidatePapers)
+		}
+	}
 
 	return ToolResult{
 		Process: ProcessSummary{
 			Intent: IntentFigureLookup,
 			Stages: figureProcessStages(searchResult, len(cards)),
+			Note:   figureProcessNote(searchResult),
 		},
 		Cards:         cards,
-		AnswerContext: figureAnswerContext(items),
+		AnswerContext: answerContext,
 		ToolCalls: []ToolCallSummary{{
 			ToolName:          "figure_lookup",
 			InputJSON:         string(inputJSON),
@@ -216,14 +224,21 @@ func figureFullTextEvidence(paper model.Paper, terms []string) (string, string) 
 
 func figureProcessStages(result figureLookupSearchResult, hits int) []ProcessStage {
 	stages := []ProcessStage{
-		{Label: "图文检索", Count: result.directTotal, Unit: "张图", Status: "completed"},
+		{Label: "图文检索", Count: result.directTotal, Unit: "张图", Status: "completed", Detail: "直接搜索图片库"},
 	}
 	if result.usedFullText {
-		stages = append(stages, ProcessStage{Label: "全文扫描", Count: result.candidatePapers, Unit: "篇", Status: "completed"})
-		stages = append(stages, ProcessStage{Label: "候选文献找图", Count: result.total, Unit: "张图", Status: "completed"})
+		stages = append(stages, ProcessStage{Label: "全文扫描", Count: result.candidatePapers, Unit: "篇", Status: "completed", Detail: "直接搜图无结果，改用全文候选文献"})
+		stages = append(stages, ProcessStage{Label: "候选文献找图", Count: result.total, Unit: "张图", Status: "completed", Detail: "从全文候选文献列出图片"})
 	}
 	stages = append(stages, ProcessStage{Label: "命中", Count: hits, Unit: "张", Status: "completed"})
 	return stages
+}
+
+func figureProcessNote(result figureLookupSearchResult) string {
+	if result.usedFullText {
+		return fmt.Sprintf("直接图文检索无结果，已使用全文候选文献 fallback；候选文献 %d 篇。", result.candidatePapers)
+	}
+	return "直接搜索图片库。"
 }
 
 func clampFigureLookupLimit(limit int) int {
@@ -237,13 +252,16 @@ func clampFigureLookupLimit(limit int) int {
 }
 
 func figureLookupFailedResult(inputJSON []byte, err error) ToolResult {
+	reason := "图文检索失败：" + err.Error()
 	return ToolResult{
 		Process: ProcessSummary{
 			Intent: IntentFigureLookup,
+			Note:   reason,
 			Stages: []ProcessStage{
-				{Label: "图文检索", Status: "failed"},
+				{Label: "图文检索", Status: "failed", Detail: err.Error()},
 			},
 		},
+		AnswerContext: reason,
 		ToolCalls: []ToolCallSummary{{
 			ToolName:  "figure_lookup",
 			InputJSON: string(inputJSON),
