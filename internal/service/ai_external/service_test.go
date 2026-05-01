@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 )
 
 type stubSettings struct {
@@ -16,15 +18,36 @@ func (s stubSettings) EnabledExternalSources(ctx context.Context) ([]SourceID, e
 }
 
 type stubSearcher struct {
+	mu      sync.Mutex
 	papers  map[string][]Paper
 	err     error
 	queries []string
 }
 
 func (s *stubSearcher) Search(ctx context.Context, query string, opts SearchOptions) ([]Paper, error) {
+	s.mu.Lock()
 	s.queries = append(s.queries, query)
+	s.mu.Unlock()
 	if s.err != nil {
 		return nil, s.err
+	}
+	return s.papers[query], nil
+}
+
+type delayedSearcher struct {
+	delays map[string]time.Duration
+	papers map[string][]Paper
+}
+
+func (s delayedSearcher) Search(ctx context.Context, query string, opts SearchOptions) ([]Paper, error) {
+	if delay := s.delays[query]; delay > 0 {
+		timer := time.NewTimer(delay)
+		defer timer.Stop()
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-timer.C:
+		}
 	}
 	return s.papers[query], nil
 }
@@ -72,6 +95,37 @@ func TestServiceSearchKeepsPartialSuccess(t *testing.T) {
 	}
 	if len(res.Papers) != 1 || len(res.Failures) != 1 || res.Failures[0].Source != SourceSemanticScholar {
 		t.Fatalf("res = %+v", res)
+	}
+}
+
+func TestServiceSearchPreservesResultOrderWhenQueriesCompleteOutOfOrder(t *testing.T) {
+	searcher := delayedSearcher{
+		delays: map[string]time.Duration{
+			"first query": 50 * time.Millisecond,
+		},
+		papers: map[string][]Paper{
+			"first query":  {{SourcePaperID: "pmid-1", PMID: "1", Title: "First"}},
+			"second query": {{SourcePaperID: "pmid-2", PMID: "2", Title: "Second"}},
+		},
+	}
+	svc := NewService(stubSettings{sources: []SourceID{SourcePubMed}}, map[SourceID]Searcher{
+		SourcePubMed: searcher,
+	})
+
+	res, err := svc.Search(context.Background(), SourceQueries{
+		SourcePubMed: {"first query", "second query"},
+	}, SearchOptions{Limit: 5})
+	if err != nil {
+		t.Fatalf("Search() error = %v", err)
+	}
+	if len(res.Results) != 2 {
+		t.Fatalf("results = %+v", res.Results)
+	}
+	if res.Results[0].Query != "first query" || res.Results[1].Query != "second query" {
+		t.Fatalf("result query order = %q, %q", res.Results[0].Query, res.Results[1].Query)
+	}
+	if len(res.Papers) != 2 || res.Papers[0].Title != "First" || res.Papers[1].Title != "Second" {
+		t.Fatalf("papers = %+v", res.Papers)
 	}
 }
 

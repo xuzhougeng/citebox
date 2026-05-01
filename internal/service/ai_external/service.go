@@ -48,47 +48,69 @@ func (s *Service) Search(ctx context.Context, queries SourceQueries, opts Search
 		Sources: sources,
 	}
 
-	var wg sync.WaitGroup
-	results := make(chan SourceResult, resultBufferSize(sources, queries))
+	type searchTask struct {
+		resultIndex int
+		source      SourceID
+		query       string
+		searcher    Searcher
+	}
+
+	results := make([]SourceResult, 0)
+	tasks := make([]searchTask, 0)
 	for _, source := range sources {
 		source := source
 		searcher := s.searcher(source)
 		sourceQueries := nonblankQueries(queries[source])
 		if searcher == nil {
-			results <- SourceResult{
+			results = append(results, SourceResult{
 				Source: source,
 				Err:    fmt.Errorf("source %s is not configured", source),
-			}
+			})
 			continue
 		}
 		if len(sourceQueries) == 0 {
-			results <- SourceResult{
+			results = append(results, SourceResult{
 				Source: source,
 				Err:    fmt.Errorf("source %s has no queries", source),
-			}
+			})
 			continue
 		}
 
 		for _, query := range sourceQueries {
 			query := query
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				papers, err := searcher.Search(ctx, query, opts)
-				results <- SourceResult{
-					Source: source,
-					Query:  query,
-					Papers: papers,
-					Err:    err,
-				}
-			}()
+			resultIndex := len(results)
+			results = append(results, SourceResult{
+				Source: source,
+				Query:  query,
+			})
+			tasks = append(tasks, searchTask{
+				resultIndex: resultIndex,
+				source:      source,
+				query:       query,
+				searcher:    searcher,
+			})
 		}
 	}
+
+	var wg sync.WaitGroup
+	for _, task := range tasks {
+		task := task
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			papers, err := task.searcher.Search(ctx, task.query, opts)
+			results[task.resultIndex] = SourceResult{
+				Source: task.source,
+				Query:  task.query,
+				Papers: papers,
+				Err:    err,
+			}
+		}()
+	}
 	wg.Wait()
-	close(results)
 
 	successfulSources := make(map[SourceID]bool)
-	for result := range results {
+	for _, result := range results {
 		out.Results = append(out.Results, result)
 		if result.Err != nil {
 			out.Failures = append(out.Failures, SourceFailure{
@@ -129,18 +151,6 @@ func nonblankQueries(queries []string) []string {
 		}
 	}
 	return out
-}
-
-func resultBufferSize(sources []SourceID, queries SourceQueries) int {
-	size := 0
-	for _, source := range sources {
-		if count := len(nonblankQueries(queries[source])); count > 0 {
-			size += count
-			continue
-		}
-		size++
-	}
-	return size
 }
 
 func allSourcesFailedError(failures []SourceFailure) error {
