@@ -256,8 +256,16 @@
             }
 
             // Caller-supplied intent_hint (e.g., the shortcut buttons) overrides
-            // anything we parsed — keep the existing precedence.
-            if (payload && payload.intent_hint) body.intent_hint = payload.intent_hint;
+            // anything we parsed — keep the existing precedence. When the override
+            // doesn't match what we parsed, drop the parsed sources too: the
+            // backend only consults sources for external_search, so leaking them
+            // alongside a different intent muddles the request body.
+            if (payload && payload.intent_hint) {
+                if (payload.intent_hint !== body.intent_hint) {
+                    delete body.sources;
+                }
+                body.intent_hint = payload.intent_hint;
+            }
             if (this._state.rewriteLast && this._state.conversationId) body.replace_last = true;
             await this._sendBody(body);
         },
