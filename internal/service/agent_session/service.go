@@ -69,6 +69,9 @@ func (s *Service) Handle(ctx context.Context, req AgentRequest) (*AgentResponse,
 		return wrapCmdResp(cmdResp), nil
 	}
 
+	if s.freeText == nil {
+		return nil, apperr.New(apperr.CodeFailedPrecondition, "AI 助手未配置")
+	}
 	res, err := s.freeText.SendForSurface(ctx, commands.FreeTextInput{
 		ConversationID: convID,
 		Text:           req.Input.Text,

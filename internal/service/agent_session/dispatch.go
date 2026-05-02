@@ -37,6 +37,12 @@ func looksLikeDOI(s string) bool {
 	if s == "" {
 		return false
 	}
+	// Reject anything containing internal whitespace — matches the legacy
+	// looksLikeWeixinDOIText behavior and prevents sentences like
+	// "请解释 10.1038/x 的结论" from being misclassified as bare DOIs.
+	if strings.ContainsAny(s, " \t\r\n") {
+		return false
+	}
 	if doiPattern.MatchString(s) {
 		return true
 	}

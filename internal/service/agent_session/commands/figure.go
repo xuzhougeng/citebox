@@ -59,5 +59,13 @@ func (c *FigureCommand) Execute(_ context.Context, arg string, rt RuntimeCtx) (*
 			return nil, err
 		}
 	}
-	return &Result{UsedShortcut: true, ChunksText: []string{brief}}, nil
+	// Sentinel image path: surfaces that send previews (the WeChat bridge)
+	// look up the actual file from SurfaceStateStore.CurrentFigureID rather
+	// than this string. Setting any ImagePath flips the "send preview" flag
+	// in the envelope.
+	return &Result{
+		UsedShortcut: true,
+		ChunksText:   []string{brief},
+		ImagePath:    "current_figure",
+	}, nil
 }

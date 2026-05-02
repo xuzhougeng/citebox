@@ -88,6 +88,61 @@ func TestWeixinIMBridgeClearSetsBarrierViaAgentSession(t *testing.T) {
 	}
 }
 
+// TestWeixinIMBridgeActivatePaperContextMirrorsToSurfaceState verifies the
+// fix for review issue #1: when a PDF is imported via WeChat the bridge now
+// mirrors the selected paper into the agent_session surface state, so
+// subsequent agent commands (which read SurfaceStateStore, not the legacy
+// weixinIMContext) see the just-imported paper.
+func TestWeixinIMBridgeActivatePaperContextMirrorsToSurfaceState(t *testing.T) {
+	svc, repo, cfg := newTestService(t)
+	paper := createTestPaper(t, repo)
+
+	state, _ := agent_session.NewSurfaceStateStore(filepath.Join(cfg.StorageDir, "wx_state.json"))
+	bridge := NewWeixinIMBridge(svc, &fakeWeixinAIReader{}, slog.New(slog.NewTextHandler(io.Discard, nil)),
+		cfg.StorageDir, nil, state)
+
+	bridge.activatePaperContext(paper.ID, true)
+
+	sc, _ := state.Get("wechat")
+	if sc.CurrentPaperID != paper.ID {
+		t.Fatalf("CurrentPaperID = %d, want %d", sc.CurrentPaperID, paper.ID)
+	}
+	if sc.CurrentPaperTitle == "" {
+		t.Errorf("CurrentPaperTitle should be populated, got empty")
+	}
+}
+
+// TestWeixinIMBridgeFigurePreviewFlagFromAgentSession verifies that
+// FigureCommand's image-chunk sentinel propagates through chunksToWeixinEnvelope
+// and flips the bridge's PreviewCurrentFigure flag. This exercises the fix for
+// review issue #2.
+func TestWeixinIMBridgeFigurePreviewFlagFromAgentSession(t *testing.T) {
+	svc, repo, cfg := newTestService(t)
+	state, _ := agent_session.NewSurfaceStateStore(filepath.Join(cfg.StorageDir, "wx_state.json"))
+
+	// Seed surface state with a recent figure search so /figure 1 resolves.
+	if err := state.SetSearchResults("wechat", nil, []int64{42}); err != nil {
+		t.Fatalf("SetSearchResults: %v", err)
+	}
+
+	registry := commands.NewRegistry(&commands.FigureCommand{})
+	agentSvc := agent_session.New(repo.AIConversation, registry, nil, state, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	bridge := NewWeixinIMBridge(svc, &fakeWeixinAIReader{}, slog.New(slog.NewTextHandler(io.Discard, nil)),
+		cfg.StorageDir, agentSvc, state)
+
+	envelope := bridge.handleIncomingTextReply(context.Background(), "/figure 1")
+	if !envelope.PreviewCurrentFigure {
+		t.Fatalf("/figure should set PreviewCurrentFigure; got envelope = %+v", envelope)
+	}
+
+	// The bridge should also see CurrentFigureID == 42 in surface state after
+	// the command ran.
+	sc, _ := state.Get("wechat")
+	if sc.CurrentFigureID != 42 {
+		t.Fatalf("want CurrentFigureID=42 in surface state, got %d", sc.CurrentFigureID)
+	}
+}
+
 // TestWeixinIMBridgeAliasRewriteRoutesQAToHelp confirms the alias map (e.g.
 // "/qa" → "/ask") works through the bridge dispatch. Without an /ask command
 // in the registry, the request becomes "unknown command", which the bridge

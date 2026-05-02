@@ -639,6 +639,21 @@ func (b *WeixinIMBridge) activatePaperContext(paperID int64, clearSearch bool) {
 		state.CurrentFigureID = 0
 		state.QAHistory = nil
 	})
+	// Mirror into the agent_session surface state so subsequent /ask, /note,
+	// /figures, /interpret commands (which read from SurfaceStateStore, not
+	// the legacy weixinIMContext) see the just-imported paper. Resolve the
+	// title best-effort; the empty fallback is fine.
+	if b.surfaceState != nil {
+		title := ""
+		if paper, err := b.libraryService.GetPaper(paperID); err == nil && paper != nil {
+			title = paper.Title
+		}
+		_ = b.surfaceState.SetCurrentPaper("wechat", paperID, title)
+		_ = b.surfaceState.SetCurrentFigure("wechat", 0)
+		if clearSearch {
+			_ = b.surfaceState.SetSearchResults("wechat", nil, nil)
+		}
+	}
 }
 
 func (b *WeixinIMBridge) requireCurrentPaper() (*model.Paper, string) {
@@ -746,21 +761,45 @@ func (b *WeixinIMBridge) loadSyncBuf() string {
 }
 
 func (b *WeixinIMBridge) selectedFigurePreviewPath(message weixin.Message, reply weixinReplyEnvelope) (string, error) {
+	// chunksToWeixinEnvelope flips PreviewCurrentFigure whenever the
+	// agent_session response carries a figure chunk; that's the canonical
+	// signal that we should attach a preview. We deliberately ignore the
+	// legacy text-prefix sniffing path — agent_session command wording has
+	// diverged from the old "已选中图片 [ID ..." strings.
 	if !reply.PreviewCurrentFigure {
-		command, _, ok := parseWeixinSlashCommand(extractWeixinText(message))
-		if !ok || (command != "/figure" && command != "/random") {
-			return "", nil
-		}
-	}
-	if !strings.HasPrefix(strings.TrimSpace(reply.Text), "已选中图片 [ID ") && !strings.HasPrefix(strings.TrimSpace(reply.Text), "已随机选中图片 [ID ") {
 		return "", nil
 	}
 
-	_, figure, errText := b.requireCurrentFigure()
-	if errText != "" {
+	figureID := int64(0)
+	if b.surfaceState != nil {
+		if sc, err := b.surfaceState.Get("wechat"); err == nil {
+			figureID = sc.CurrentFigureID
+		}
+	}
+	if figureID == 0 {
 		return "", nil
 	}
-	return b.figurePreviewPath(figure)
+
+	figure, err := b.libraryService.repo.GetFigure(figureID)
+	if err != nil || figure == nil {
+		return "", nil
+	}
+	return b.figureListItemPreviewPath(figure)
+}
+
+func (b *WeixinIMBridge) figureListItemPreviewPath(figure *model.FigureListItem) (string, error) {
+	if figure == nil {
+		return "", errors.New("figure is nil")
+	}
+	filename := filepath.Base(strings.TrimSpace(figure.Filename))
+	if filename == "" {
+		return "", errors.New("figure filename is empty")
+	}
+	targetPath := filepath.Join(b.libraryService.config.FiguresDir(), filename)
+	if _, err := os.Stat(targetPath); err != nil {
+		return "", err
+	}
+	return targetPath, nil
 }
 
 func (b *WeixinIMBridge) resolveVoiceReply(ctx context.Context, message weixin.Message, reply weixinReplyEnvelope) (string, func(), error) {
