@@ -43,10 +43,11 @@ type PubMedRuntimeSettings struct {
 }
 
 type researchSettingsPayload struct {
-	S2APIKey     string  `json:"s2_api_key"`
-	PubMedAPIKey *string `json:"pubmed_api_key,omitempty"`
-	PubMedEmail  *string `json:"pubmed_email,omitempty"`
-	PubMedTool   *string `json:"pubmed_tool,omitempty"`
+	S2APIKey     string    `json:"s2_api_key"`
+	PubMedAPIKey *string   `json:"pubmed_api_key,omitempty"`
+	PubMedEmail  *string   `json:"pubmed_email,omitempty"`
+	PubMedTool   *string   `json:"pubmed_tool,omitempty"`
+	Sources      *[]string `json:"sources,omitempty"`
 }
 
 type aiExternalSearchSettingsPayload struct {
@@ -328,11 +329,12 @@ func (h *SettingsHandler) GetResearchSettings(w http.ResponseWriter, r *http.Req
 		sendError(w, err)
 		return
 	}
-	sendJSON(w, http.StatusOK, map[string]string{
+	sendJSON(w, http.StatusOK, map[string]any{
 		"s2_api_key":     key,
 		"pubmed_api_key": aiExternalSettings.PubMedAPIKey,
 		"pubmed_email":   aiExternalSettings.PubMedEmail,
 		"pubmed_tool":    aiExternalSettings.PubMedTool,
+		"sources":        aiExternalSettings.Sources,
 	})
 }
 
@@ -350,7 +352,7 @@ func (h *SettingsHandler) PutResearchSettings(w http.ResponseWriter, r *http.Req
 	if h.researchClient != nil {
 		h.researchClient.SetAPIKey(h.effectiveResearchAPIKey(body.S2APIKey))
 	}
-	if body.hasPubMedSettings() {
+	if body.hasPubMedSettings() || body.Sources != nil {
 		settings, err := h.libraryService.GetAIExternalSearchSettings()
 		if err != nil {
 			sendError(w, err)
@@ -364,6 +366,9 @@ func (h *SettingsHandler) PutResearchSettings(w http.ResponseWriter, r *http.Req
 		}
 		if body.PubMedTool != nil {
 			settings.PubMedTool = *body.PubMedTool
+		}
+		if body.Sources != nil {
+			settings.Sources = *body.Sources
 		}
 		updatedSettings, err := h.libraryService.UpdateAIExternalSearchSettings(*settings)
 		if err != nil {

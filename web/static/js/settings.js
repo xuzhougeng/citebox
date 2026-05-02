@@ -24,12 +24,6 @@ const SettingsPage = {
         this.pinPapersLimitInput = document.getElementById('aiPinPapersLimitInput');
         this.contextBudgetTokensInput = document.getElementById('aiContextBudgetTokensInput');
         this.aiExternalSourcePubMedInput = document.getElementById('aiExternalSourcePubMedInput');
-        this.saveAIExternalSearchSettingsButton = document.getElementById('saveAIExternalSearchSettingsButton');
-        this.aiExternalSearchSaveStatus = document.getElementById('aiExternalSearchSaveStatus');
-        this.aiExternalSearchSettingsLoaded = false;
-        if (this.saveAIExternalSearchSettingsButton) {
-            this.saveAIExternalSearchSettingsButton.disabled = true;
-        }
         this.translationPrimaryLanguageInput = document.getElementById('aiTranslationPrimaryLanguageInput');
         this.translationTargetLanguageInput = document.getElementById('aiTranslationTargetLanguageInput');
         this.systemPromptInput = document.getElementById('aiSystemPromptInput');
@@ -355,15 +349,6 @@ const SettingsPage = {
         this.saveFigureGroupPromptsButton?.addEventListener('click', async () => {
             await this.saveFigureGroupPromptSettings();
         });
-        this.saveAIExternalSearchSettingsButton?.addEventListener('click', async () => {
-            await this.saveAIExternalSearchSettings();
-        });
-        [
-            this.aiExternalSourcePubMedInput
-        ].forEach((element) => {
-            element?.addEventListener('input', () => this.handleAIExternalSearchSettingsChanged());
-            element?.addEventListener('change', () => this.handleAIExternalSearchSettingsChanged());
-        });
         this.extractorSettingsForm.addEventListener('submit', async (event) => {
             event.preventDefault();
             await this.saveExtractorSettings();
@@ -539,7 +524,6 @@ const SettingsPage = {
                 this.loadVersionStatus(),
                 this.loadAuthSettings(),
                 this.loadTTSSettings(),
-                this.loadAIExternalSearchSettings(),
                 this.loadResearchSettings()
             ]);
         } catch (error) {
@@ -685,10 +669,6 @@ const SettingsPage = {
 
     setAIModelEditorStatus(message, tone = '') {
         this.setInlineStatus(this.aiModelEditorStatus, message, tone);
-    },
-
-    setAIExternalSearchSaveStatus(message, tone = '') {
-        this.setInlineStatus(this.aiExternalSearchSaveStatus, message, tone);
     },
 
     supportsDesktopCloseSettings() {
@@ -1053,117 +1033,6 @@ const SettingsPage = {
         this.renderWolaiResultLink('');
     },
 
-    async loadAIExternalSearchSettings() {
-        this.aiExternalSearchSettingsLoaded = false;
-        this.setAIExternalSearchSaveEnabled(false);
-
-        try {
-            const res = await fetch('/api/settings/ai-external-search');
-            if (!res.ok) {
-                throw new Error(t('settings.ai.external_search.save_failed', '保存失败'));
-            }
-            const settings = await res.json();
-            this.renderAIExternalSearchSettings(settings || {});
-            this.aiExternalSearchSettingsLoaded = true;
-            this.setAIExternalSearchSaveEnabled(true);
-            this.setAIExternalSearchSaveStatus('');
-        } catch (error) {
-            this.aiExternalSearchSettingsLoaded = false;
-            this.setAIExternalSearchSaveEnabled(false);
-            this.setAIExternalSearchSaveStatus(t('settings.ai.external_search.save_failed', '保存失败'), 'error');
-        }
-    },
-
-    normalizeAIExternalSearchSources(sources) {
-        if (!Array.isArray(sources)) {
-            return ['pubmed'];
-        }
-        if (sources.length === 0) {
-            return [];
-        }
-
-        const allowed = new Set(['pubmed']);
-        const seen = new Set();
-        const normalized = [];
-        sources.forEach((source) => {
-            const value = String(source || '').trim().toLowerCase();
-            if (!allowed.has(value) || seen.has(value)) return;
-            seen.add(value);
-            normalized.push(value);
-        });
-        return normalized.length > 0 ? normalized : ['pubmed'];
-    },
-
-    renderAIExternalSearchSettings(settings = {}) {
-        this.isHydratingAIExternalSearchSettings = true;
-        const sources = this.normalizeAIExternalSearchSources(settings.sources);
-        if (this.aiExternalSourcePubMedInput) {
-            this.aiExternalSourcePubMedInput.checked = sources.includes('pubmed');
-        }
-        this.isHydratingAIExternalSearchSettings = false;
-    },
-
-    setAIExternalSearchSaveEnabled(enabled) {
-        if (this.saveAIExternalSearchSettingsButton) {
-            this.saveAIExternalSearchSettingsButton.disabled = !enabled;
-        }
-    },
-
-    handleAIExternalSearchSettingsChanged() {
-        if (this.isHydratingAIExternalSearchSettings || !this.aiExternalSearchSettingsLoaded) return;
-        this.setAIExternalSearchSaveStatus('');
-    },
-
-    buildAIExternalSearchSettingsPayload() {
-        const sources = [];
-        if (this.aiExternalSourcePubMedInput?.checked) {
-            sources.push('pubmed');
-        }
-        return {
-            sources
-        };
-    },
-
-    async saveAIExternalSearchSettings() {
-        if (!this.aiExternalSearchSettingsLoaded) {
-            this.setAIExternalSearchSaveStatus(t('settings.ai.external_search.save_failed', '保存失败'), 'error');
-            this.setAIExternalSearchSaveEnabled(false);
-            return;
-        }
-        const button = this.saveAIExternalSearchSettingsButton;
-        const originalLabel = button?.textContent || '';
-        if (button) {
-            button.disabled = true;
-            button.textContent = t('settings.ai.saving_btn', '保存中...');
-        }
-
-        try {
-            const res = await fetch('/api/settings/ai-external-search', {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(this.buildAIExternalSearchSettingsPayload())
-            });
-            if (!res.ok) {
-                throw new Error(t('settings.ai.external_search.save_failed', '保存失败'));
-            }
-            const settings = await res.json();
-            this.renderAIExternalSearchSettings(settings || {});
-            this.aiExternalSearchSettingsLoaded = true;
-            const message = t('settings.ai.external_search.saved', '外部搜索源已保存');
-            this.setAIExternalSearchSaveStatus(message, 'success');
-            Utils.showToast(message);
-        } catch (error) {
-            const message = t('settings.ai.external_search.save_failed', '保存失败');
-            this.setAIExternalSearchSaveStatus(message, 'error');
-            Utils.showToast(message, 'error');
-        } finally {
-            if (button) {
-                button.disabled = !this.aiExternalSearchSettingsLoaded;
-                button.textContent = originalLabel || t('settings.ai.external_search.save_btn', '保存外部搜索源');
-            }
-        }
-    },
-
     async loadResearchSettings() {
         const res = await fetch('/api/settings/research');
         if (!res.ok) return;
@@ -1180,10 +1049,18 @@ const SettingsPage = {
         if (this.researchPubMedToolInput) {
             this.researchPubMedToolInput.value = data.pubmed_tool || 'citebox';
         }
+        if (this.aiExternalSourcePubMedInput) {
+            const sources = Array.isArray(data.sources) ? data.sources : ['pubmed'];
+            this.aiExternalSourcePubMedInput.checked = sources.includes('pubmed');
+        }
     },
 
     async saveResearchSettings() {
         if (!this.s2APIKeyInput) return;
+        const sources = [];
+        if (this.aiExternalSourcePubMedInput?.checked) {
+            sources.push('pubmed');
+        }
         const res = await fetch('/api/settings/research', {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
@@ -1192,6 +1069,7 @@ const SettingsPage = {
                 pubmed_api_key: this.researchPubMedAPIKeyInput?.value.trim() || '',
                 pubmed_email: this.researchPubMedEmailInput?.value.trim() || '',
                 pubmed_tool: this.researchPubMedToolInput?.value.trim() || 'citebox',
+                sources,
             }),
         });
         if (res.ok) {

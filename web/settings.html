@@ -160,26 +160,6 @@
                             <input id="aiContextBudgetTokensInput" class="form-input" type="number" min="2000" step="1000" data-i18n-placeholder="settings.ai.context_budget_tokens_hint" placeholder="默认 32000">
                         </label>
                     </div>
-                    <div class="settings-subsection-body">
-                        <section class="prompt-preset-panel" id="settings-external-sources">
-                            <div class="prompt-preset-head">
-                                <div>
-                                    <h4 data-i18n="settings.ai.external_search.title">AI 外部搜索源</h4>
-                                    <p data-i18n="settings.ai.external_search.desc">选择 AI 助手执行外部检索时使用的学术搜索源。Semantic Scholar 由「文献搜索服务 API」中的 API key 控制，配置后自动启用。</p>
-                                </div>
-                            </div>
-                            <div class="form-grid">
-                                <label class="field checkbox-field field-span-2">
-                                    <input id="aiExternalSourcePubMedInput" type="checkbox">
-                                    <span data-i18n-html="settings.ai.external_search.pubmed"><strong>PubMed</strong><br>默认来源；支持匿名访问，API 凭据在文献搜索服务 API 中配置。</span>
-                                </label>
-                            </div>
-                            <div class="submit-row">
-                                <button id="saveAIExternalSearchSettingsButton" class="btn btn-primary" type="button" data-i18n="settings.ai.external_search.save_btn">保存外部搜索源</button>
-                                <span id="aiExternalSearchSaveStatus" class="settings-inline-status"></span>
-                            </div>
-                        </section>
-                    </div>
                 </div>
             </details>
 
@@ -773,10 +753,10 @@ User Prompt:
                 </form>
             </details>
 
-            <details class="manager-card settings-collapsible">
+            <details id="settings-external-sources" class="manager-card settings-collapsible">
                 <summary class="settings-collapsible-toggle">
                     <h2 data-i18n="settings.research.title">文献搜索服务 API</h2>
-                    <p data-i18n="settings.research.desc">配置 Semantic Scholar 与 PubMed / NCBI 的访问凭据。Semantic Scholar 用于 /research 文献搜索页；PubMed 用于 AI 助手外部搜索。</p>
+                    <p data-i18n="settings.research.desc">配置 Semantic Scholar 与 PubMed / NCBI 凭据，以及 AI 助手外部检索使用的来源。Semantic Scholar 在 API key 非空时自动启用。</p>
                 </summary>
                 <form id="researchSettingsForm" class="manager-form">
                     <div class="form-grid">
@@ -799,6 +779,12 @@ User Prompt:
                     </div>
                     <p class="muted" data-i18n="settings.research.s2.hint">未填写时使用匿名速率（约 1 req/s）。</p>
                     <p class="muted" data-i18n="settings.research.pubmed.hint">PubMed 可留空使用匿名访问；填写 NCBI API key 后可获得更高请求额度。</p>
+                    <div class="form-grid">
+                        <label class="field checkbox-field field-span-2">
+                            <input id="aiExternalSourcePubMedInput" type="checkbox">
+                            <span data-i18n-html="settings.ai.external_search.pubmed"><strong>启用 PubMed 用于 AI 外部搜索</strong><br>未勾选时 AI 助手不会向 PubMed 发起检索；Semantic Scholar 则由上方 API key 控制，非空即启用。</span>
+                        </label>
+                    </div>
                     <div class="submit-row">
                         <button class="btn btn-primary" type="submit" data-i18n="settings.research.save_btn">保存文献搜索配置</button>
                     </div>

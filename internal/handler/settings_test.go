@@ -133,12 +133,39 @@ func TestGetResearchSettingsIncludesPubMedSettings(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d body = %s", rec.Code, rec.Body.String())
 	}
-	var body map[string]string
+	var body map[string]any
 	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
 		t.Fatalf("Decode() error = %v", err)
 	}
 	if body["s2_api_key"] != "saved-s2-key" || body["pubmed_api_key"] != "saved-pubmed-key" || body["pubmed_tool"] != "saved-tool" {
 		t.Fatalf("body = %+v", body)
+	}
+	sources, _ := body["sources"].([]any)
+	if len(sources) != 1 || sources[0] != model.AIExternalSourcePubMed {
+		t.Fatalf("sources = %#v, want [pubmed]", body["sources"])
+	}
+}
+
+func TestPutResearchSettingsAcceptsSourcesAndPersistsThem(t *testing.T) {
+	h, _ := newSettingsHandlerForTest(t)
+	client := &stubResearchSettingsClient{}
+	h.SetResearchClient(client, ResearchRuntimeSettings{})
+	req := httptest.NewRequest(http.MethodPut, "/api/settings/research", bytes.NewBufferString(`{"s2_api_key":"key","sources":[]}`))
+	rec := httptest.NewRecorder()
+
+	h.PutResearchSettings(rec, req)
+
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	settings, err := h.libraryService.GetAIExternalSearchSettings()
+	if err != nil {
+		t.Fatalf("GetAIExternalSearchSettings() error = %v", err)
+	}
+	for _, source := range settings.Sources {
+		if source == model.AIExternalSourcePubMed {
+			t.Fatalf("Sources = %#v, should be empty after explicit unchecking", settings.Sources)
+		}
 	}
 }
 
