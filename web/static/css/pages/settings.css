@@ -744,6 +744,68 @@ html[lang^="zh"] .prompt-template-details[open] summary::before {
     padding: 0 0.5rem;
 }
 
+.settings-sub-eyebrow {
+    margin: 1rem 0 0.4rem !important;
+    padding: 0 0.6rem;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+}
+
+/* Category list (top of sidebar) — macOS Settings-style rows. */
+.settings-category-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+}
+
+.settings-category-item {
+    width: 100%;
+    background: transparent;
+    border: 0;
+    cursor: pointer;
+    padding: 0.4rem 0.5rem;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-size: 0.92rem;
+    color: var(--ink);
+    text-align: left;
+    transition: background 0.14s ease, color 0.14s ease;
+}
+
+.settings-category-item:hover {
+    background: rgba(var(--ink-rgb), 0.05);
+}
+
+.settings-category-item.active {
+    background: rgba(var(--accent-rgb), 0.14);
+    color: var(--accent-deep);
+    font-weight: 600;
+}
+
+.settings-category-icon {
+    width: 1.7rem;
+    height: 1.7rem;
+    border-radius: 7px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(var(--accent-rgb), 0.12);
+    font-size: 0.95rem;
+    flex-shrink: 0;
+}
+
+.settings-category-item.active .settings-category-icon {
+    background: rgba(var(--accent-rgb), 0.28);
+}
+
+/* Anchor list (within active category) */
 .settings-anchor-list {
     display: flex;
     flex-direction: column;
@@ -755,10 +817,10 @@ html[lang^="zh"] .prompt-template-details[open] summary::before {
 
 .settings-anchor-list a {
     display: block;
-    padding: 0.45rem 0.6rem;
+    padding: 0.4rem 0.6rem 0.4rem 1.2rem;
     border-radius: 8px;
     color: var(--muted);
-    font-size: 0.9rem;
+    font-size: 0.85rem;
     line-height: 1.4;
     border-left: 2px solid transparent;
     transition: 0.15s ease;
@@ -775,6 +837,18 @@ html[lang^="zh"] .prompt-template-details[open] summary::before {
     background: rgba(var(--accent-rgb), 0.1);
     border-left-color: var(--accent-deep);
     font-weight: 600;
+}
+
+/* Hide collapsibles outside the active category. .hidden uses !important so
+   sections that are inherently hidden (e.g. desktop-only) stay hidden. */
+.settings-content[data-settings-category-active] > details.settings-collapsible[data-settings-category] {
+    display: none;
+}
+.settings-content[data-settings-category-active="ai"] > details.settings-collapsible[data-settings-category="ai"],
+.settings-content[data-settings-category-active="integrations"] > details.settings-collapsible[data-settings-category="integrations"],
+.settings-content[data-settings-category-active="system"] > details.settings-collapsible[data-settings-category="system"],
+.settings-content[data-settings-category-active="account"] > details.settings-collapsible[data-settings-category="account"] {
+    display: block;
 }
 
 .settings-content {
@@ -800,20 +874,19 @@ html[lang^="zh"] .prompt-template-details[open] summary::before {
         max-height: none;
     }
 
-    .settings-anchor-list {
+    /* On mobile: categories become a horizontal pill bar, sub-list hidden. */
+    .settings-category-list {
         flex-direction: row;
         flex-wrap: wrap;
         gap: 0.3rem;
     }
 
-    .settings-anchor-list a {
-        border-left: none;
-        border-bottom: 2px solid transparent;
+    .settings-category-item {
         padding: 0.35rem 0.7rem;
     }
 
-    .settings-anchor-list a.active {
-        border-left: none;
-        border-bottom-color: var(--accent-deep);
+    .settings-sub-eyebrow,
+    .settings-anchor-list {
+        display: none;
     }
 }

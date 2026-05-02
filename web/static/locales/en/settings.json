@@ -2,6 +2,10 @@
     "_title": "Settings - CiteBox",
     "settings.eyebrow": "Settings",
     "settings.hero_title": "Settings",
+    "settings.category.ai": "AI",
+    "settings.category.integrations": "Integrations",
+    "settings.category.system": "System",
+    "settings.category.account": "Account",
     "settings.hero_text": "Manage AI models, prompts, integrations and account. Model config auto-saves; prompts require manual save.",
     "settings.anchor_sidebar_aria": "Settings navigation",
 

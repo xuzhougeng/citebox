@@ -152,31 +152,116 @@ const SettingsPage = {
         const stack = document.querySelector('.settings-content');
         if (!sidebar || !stack) return;
 
+        const CATEGORIES = [
+            { id: 'system',       i18n: 'settings.category.system',       label: '系统',    icon: '⚙' },
+            { id: 'ai',           i18n: 'settings.category.ai',           label: 'AI',     icon: '✨' },
+            { id: 'integrations', i18n: 'settings.category.integrations', label: '集成',    icon: '🔌' },
+            { id: 'account',      i18n: 'settings.category.account',      label: '账号',    icon: '👤' },
+        ];
+        // Categories that should auto-expand all their <details> on entry —
+        // these have few cards and the user wants them visible right away.
+        const AUTO_EXPAND_CATEGORIES = new Set(['system', 'account']);
+        this._settingsAutoExpandCategories = AUTO_EXPAND_CATEGORIES;
+        const SECTION_TO_CATEGORY = {
+            'settings.version.title':              'system',
+            'settings.desktop_close.title':        'system',
+            'settings.ai.model_title':             'ai',
+            'settings.ai.scene_title':             'ai',
+            'settings.ai.global_prompt_title':     'ai',
+            'settings.ai.figure_group_prompt_title': 'ai',
+            'settings.ai.translate_title':         'ai',
+            'settings.extractor.title':            'integrations',
+            'settings.weixin.title':               'integrations',
+            'settings.weixin.daily_title':         'integrations',
+            'settings.tts.title':                  'integrations',
+            'settings.wolai.title':                'integrations',
+            'settings.research.title':             'integrations',
+            'settings.password.account_title':     'account',
+            'settings.db.title':                   'system',
+        };
+
         const sections = Array.from(stack.querySelectorAll(':scope > details.settings-collapsible'));
-        const items = sections
-            .filter((section) => !section.classList.contains('hidden'))
-            .map((section, index) => {
-                const titleEl = section.querySelector('summary h2');
-                if (!titleEl) return null;
-                if (!section.id) section.id = `settings-section-${index + 1}`;
-                return {
-                    id: section.id,
-                    titleEl,
-                    section,
-                };
-            })
-            .filter(Boolean);
+        sections.forEach((section, index) => {
+            if (!section.id) section.id = `settings-section-${index + 1}`;
+            const titleEl = section.querySelector('summary h2[data-i18n]');
+            const key = titleEl?.dataset.i18n;
+            section.dataset.settingsCategory = SECTION_TO_CATEGORY[key] || 'system';
+        });
 
-        if (items.length === 0) return;
+        const tt = (typeof window !== 'undefined' && typeof window.t === 'function') ? window.t : (k, fb) => (fb || k);
 
-        const eyebrow = document.createElement('p');
-        eyebrow.className = 'eyebrow';
-        eyebrow.textContent = 'On this page';
+        const catList = document.createElement('ul');
+        catList.className = 'settings-category-list';
+        catList.setAttribute('role', 'list');
+        CATEGORIES.forEach((cat) => {
+            const li = document.createElement('li');
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'settings-category-item';
+            btn.dataset.category = cat.id;
+            btn.innerHTML =
+                `<span class="settings-category-icon" aria-hidden="true">${cat.icon}</span>` +
+                `<span class="settings-category-label" data-i18n="${cat.i18n}">${tt(cat.i18n, cat.label)}</span>`;
+            btn.addEventListener('click', () => this.setActiveSettingsCategory(cat.id, true));
+            li.appendChild(btn);
+            catList.appendChild(li);
+        });
 
-        const list = document.createElement('ul');
-        list.className = 'settings-anchor-list';
-        list.setAttribute('role', 'list');
+        const subEyebrow = document.createElement('p');
+        subEyebrow.className = 'eyebrow settings-sub-eyebrow';
+        subEyebrow.textContent = 'On this page';
 
+        const subList = document.createElement('ul');
+        subList.className = 'settings-anchor-list';
+        subList.setAttribute('role', 'list');
+
+        sidebar.innerHTML = '';
+        sidebar.appendChild(catList);
+        sidebar.appendChild(subEyebrow);
+        sidebar.appendChild(subList);
+
+        this.settingsCategoryList = catList;
+        this.settingsAnchorList = subList;
+
+        const initial = (window.location.hash || '').replace(/^#category-/, '').replace(/^#/, '');
+        const valid = CATEGORIES.some((c) => c.id === initial);
+        this.setActiveSettingsCategory(valid ? initial : 'system', false);
+
+        // i18n bundles load async; re-translate the dynamically inserted labels
+        // once they're available.
+        const refreshI18n = () => {
+            if (typeof CiteBoxI18n !== 'undefined' && typeof CiteBoxI18n.applyDOM === 'function') {
+                CiteBoxI18n.applyDOM();
+            }
+        };
+        window.setTimeout(refreshI18n, 100);
+        window.setTimeout(refreshI18n, 600);
+    },
+
+    setActiveSettingsCategory(catId, updateHash) {
+        const stack = document.querySelector('.settings-content');
+        if (!stack || !this.settingsCategoryList || !this.settingsAnchorList) return;
+
+        stack.dataset.settingsCategoryActive = catId;
+        this.settingsCategoryList.querySelectorAll('.settings-category-item').forEach((btn) => {
+            btn.classList.toggle('active', btn.dataset.category === catId);
+        });
+
+        const sections = Array.from(stack.querySelectorAll(`:scope > details.settings-collapsible[data-settings-category="${catId}"]`))
+            .filter((section) => !section.classList.contains('hidden'));
+
+        // Auto-expand all cards for categories that are short and benefit from
+        // immediate visibility (e.g. 系统/账号 only have 1–2 cards each).
+        if (this._settingsAutoExpandCategories?.has(catId)) {
+            sections.forEach((section) => { section.open = true; });
+        }
+
+        const items = sections.map((section) => {
+            const titleEl = section.querySelector('summary h2');
+            return titleEl ? { id: section.id, titleEl, section } : null;
+        }).filter(Boolean);
+
+        this.settingsAnchorList.innerHTML = '';
         items.forEach((item) => {
             const li = document.createElement('li');
             const a = document.createElement('a');
@@ -188,28 +273,26 @@ const SettingsPage = {
                 this.scrollToSection(item.id);
             });
             li.appendChild(a);
-            list.appendChild(li);
+            this.settingsAnchorList.appendChild(li);
         });
 
-        sidebar.innerHTML = '';
-        sidebar.appendChild(eyebrow);
-        sidebar.appendChild(list);
-
         this.anchorItems = items;
-        this.anchorLinks = Array.from(list.querySelectorAll('a'));
+        this.anchorLinks = Array.from(this.settingsAnchorList.querySelectorAll('a'));
 
-        // Re-sync labels after i18n loads (since titles use data-i18n)
+        // Re-sync labels after i18n loads (titles use data-i18n).
         const refreshLabels = () => {
             this.anchorLinks.forEach((link) => {
                 const item = items.find((it) => it.id === link.dataset.targetId);
-                if (item && item.titleEl) {
-                    link.textContent = item.titleEl.textContent.trim();
-                }
+                if (item && item.titleEl) link.textContent = item.titleEl.textContent.trim();
             });
         };
         window.setTimeout(refreshLabels, 50);
         window.setTimeout(refreshLabels, 400);
-        window.setTimeout(refreshLabels, 1200);
+
+        if (updateHash) {
+            history.replaceState(null, '', `#category-${catId}`);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
 
         this.bindAnchorScrollSpy();
     },

@@ -50,7 +50,7 @@
 @import url('pages/notes.css');
 @import url('pages/viewer.css');
 @import url('pages/note-editor.css');
-@import url('pages/settings.css');
+@import url('pages/settings.css?v=20260502-categories');
 @import url('pages/research.css');
 
 /* ===== 7. Responsive ===== */
