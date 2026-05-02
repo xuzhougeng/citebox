@@ -38,6 +38,7 @@
     "ai.intent_shortcuts_label": "AI 任务快捷入口",
     "ai.intent_library_search": "查全库",
     "ai.intent_external_search": "查外部",
+    "ai.intent_external_evidence": "找出处",
     "ai.intent_paper_read": "读文献",
     "ai.intent_figure_lookup": "看图/图文",
     "ai.result_paper_fallback": "文献",

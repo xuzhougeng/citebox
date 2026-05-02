@@ -38,6 +38,7 @@
     "ai.intent_shortcuts_label": "AI task shortcuts",
     "ai.intent_library_search": "Search Library",
     "ai.intent_external_search": "Search External",
+    "ai.intent_external_evidence": "Find Source",
     "ai.intent_paper_read": "Read Papers",
     "ai.intent_figure_lookup": "Figures",
     "ai.result_paper_fallback": "Paper",
