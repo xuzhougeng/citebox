@@ -260,6 +260,9 @@ func (m *Manager) ensureSchemaColumns() error {
 	if err := m.ensureAIOrchestrationSchema(); err != nil {
 		return err
 	}
+	if err := m.ensureConversationSurfaceColumns(); err != nil {
+		return err
+	}
 	if err := m.ensureIndexes(); err != nil {
 		return err
 	}
@@ -310,6 +313,21 @@ func (m *Manager) ensureAIOrchestrationSchema() error {
 		}
 	}
 	return nil
+}
+
+func (m *Manager) ensureConversationSurfaceColumns() error {
+	for _, col := range []struct{ name, def string }{
+		{"surface_origin", "TEXT NOT NULL DEFAULT 'web'"},
+		{"kind", "TEXT NOT NULL DEFAULT 'default_web'"},
+		{"clear_barrier_turn_id", "INTEGER"},
+	} {
+		if err := m.ensureColumn("ai_conversations", col.name, col.def); err != nil {
+			return err
+		}
+	}
+	_, err := m.db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_ai_conv_main_wechat
+		ON ai_conversations(kind) WHERE kind = 'main_wechat'`)
+	return err
 }
 
 func (m *Manager) ensurePaperNotesSchema() error {
