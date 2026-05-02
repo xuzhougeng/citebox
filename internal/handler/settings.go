@@ -316,6 +316,35 @@ func (h *SettingsHandler) TestTTS(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(audio)
 }
 
+// SynthesizeTTS → POST /api/ai/tts. Body: {"text": "..."}. Synthesizes the
+// supplied text using the saved TTS settings and returns the audio bytes.
+// Used by the web AI assistant's per-message 🔊 button (T18).
+func (h *SettingsHandler) SynthesizeTTS(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Text string `json:"text"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		sendError(w, apperr.New(apperr.CodeInvalidArgument, "请求体格式错误"))
+		return
+	}
+	audio, filename, contentType, err := h.libraryService.SynthesizeTTS(r.Context(), req.Text)
+	if err != nil {
+		sendError(w, err)
+		return
+	}
+	if strings.TrimSpace(contentType) == "" {
+		contentType = "audio/mpeg"
+	}
+	if strings.TrimSpace(filename) == "" {
+		filename = "tts.mp3"
+	}
+	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Content-Disposition", fmt.Sprintf("inline; filename=\"%s\"", filename))
+	w.Header().Set("Content-Length", fmt.Sprintf("%d", len(audio)))
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(audio)
+}
+
 // GetResearchSettings → GET /api/settings/research
 func (h *SettingsHandler) GetResearchSettings(w http.ResponseWriter, r *http.Request) {
 	key, err := h.libraryService.GetAppSetting("s2_api_key")
