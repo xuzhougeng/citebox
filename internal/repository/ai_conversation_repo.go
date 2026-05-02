@@ -573,6 +573,93 @@ func (r *AIConversationRepository) ListPinnedPapers(conversationID int64) ([]AIP
 	return out, rows.Err()
 }
 
+// FindOrCreateByKind returns the conversation id for the given kind, creating it
+// (with surface_origin) on first use. The unique index on kind='main_wechat'
+// guarantees a single row per kind.
+func (r *AIConversationRepository) FindOrCreateByKind(kind, surfaceOrigin string) (int64, error) {
+	var id int64
+	err := r.db.QueryRow(`SELECT id FROM ai_conversations WHERE kind = ? LIMIT 1`, kind).Scan(&id)
+	if err == nil {
+		return id, nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return 0, err
+	}
+	res, err := r.db.Exec(
+		`INSERT INTO ai_conversations(title, kind, surface_origin) VALUES (?, ?, ?)`,
+		defaultTitleForKind(kind), kind, surfaceOrigin)
+	if err != nil {
+		// Concurrent insert raced us; re-select.
+		var id2 int64
+		if errSel := r.db.QueryRow(`SELECT id FROM ai_conversations WHERE kind = ?`, kind).Scan(&id2); errSel == nil {
+			return id2, nil
+		}
+		return 0, err
+	}
+	return res.LastInsertId()
+}
+
+func defaultTitleForKind(kind string) string {
+	switch kind {
+	case "main_wechat":
+		return "微信主会话"
+	default:
+		return ""
+	}
+}
+
+// SetClearBarrier updates clear_barrier_turn_id so future history reads exclude
+// any message with id <= barrier.
+func (r *AIConversationRepository) SetClearBarrier(conversationID, barrier int64) error {
+	res, err := r.db.Exec(
+		`UPDATE ai_conversations SET clear_barrier_turn_id = ? WHERE id = ?`,
+		barrier, conversationID)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return ErrAIConversationNotFound
+	}
+	return nil
+}
+
+// ListMessagesAfterBarrier returns the most recent `limit` messages whose id is
+// strictly greater than the conversation's clear_barrier_turn_id (zero if NULL),
+// in ascending id order.
+func (r *AIConversationRepository) ListMessagesAfterBarrier(conversationID int64, limit int) ([]AIMessage, error) {
+	if limit <= 0 {
+		limit = 10
+	}
+	rows, err := r.db.Query(`
+		SELECT id, conversation_id, role, content,
+		       COALESCE(provider,''), COALESCE(model,''), COALESCE(mode,''),
+		       COALESCE(included_figures,0), COALESCE(citations_json,''), created_at
+		FROM ai_messages
+		WHERE conversation_id = ?
+		  AND id > COALESCE((SELECT clear_barrier_turn_id FROM ai_conversations WHERE id = ?), 0)
+		ORDER BY id DESC
+		LIMIT ?`, conversationID, conversationID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []AIMessage
+	for rows.Next() {
+		var m AIMessage
+		if err := rows.Scan(&m.ID, &m.ConversationID, &m.Role, &m.Content,
+			&m.Provider, &m.Model, &m.Mode, &m.IncludedFigures, &m.CitationsJSON, &m.CreatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, m)
+	}
+	// Reverse to ascending.
+	for i, j := 0, len(out)-1; i < j; i, j = i+1, j-1 {
+		out[i], out[j] = out[j], out[i]
+	}
+	return out, nil
+}
+
 func nullableString(s string) interface{} {
 	if s == "" {
 		return nil
