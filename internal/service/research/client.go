@@ -96,6 +96,11 @@ func (c *Client) currentAPIKey() string {
 	return c.apiKey
 }
 
+// HasAPIKey reports whether subsequent upstream requests will send x-api-key.
+func (c *Client) HasAPIKey() bool {
+	return strings.TrimSpace(c.currentAPIKey()) != ""
+}
+
 func (c *Client) SetRateInterval(interval time.Duration) {
 	c.setRateInterval(interval)
 }

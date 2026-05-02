@@ -39,14 +39,23 @@ type BasketStore interface {
 
 // ResearchHandler aggregates routes under /api/research/*.
 type ResearchHandler struct {
-	service ResearchService
-	basket  BasketStore
+	service            ResearchService
+	basket             BasketStore
+	rateLimitInspector researchRateLimitInspector
+}
+
+type researchRateLimitInspector interface {
+	HasAPIKey() bool
 }
 
 // NewResearchHandler builds a handler. The third parameter is reserved for an
 // optional library-existence checker (see ExistsByDOI) and is currently nil.
 func NewResearchHandler(service ResearchService, basket BasketStore, _ interface{}) *ResearchHandler {
 	return &ResearchHandler{service: service, basket: basket}
+}
+
+func (h *ResearchHandler) SetRateLimitInspector(inspector researchRateLimitInspector) {
+	h.rateLimitInspector = inspector
 }
 
 // Search → GET /api/research/search?q=...
@@ -69,7 +78,7 @@ func (h *ResearchHandler) Search(w http.ResponseWriter, r *http.Request) {
 
 	res, err := h.service.Search(r.Context(), q, opts)
 	if err != nil {
-		writeResearchError(w, err)
+		h.writeResearchError(w, err)
 		return
 	}
 	sendJSON(w, http.StatusOK, res)
@@ -84,7 +93,7 @@ func (h *ResearchHandler) GetPaper(w http.ResponseWriter, r *http.Request) {
 	}
 	p, err := h.service.GetPaper(r.Context(), id)
 	if err != nil {
-		writeResearchError(w, err)
+		h.writeResearchError(w, err)
 		return
 	}
 	sendJSON(w, http.StatusOK, p)
@@ -100,7 +109,7 @@ func (h *ResearchHandler) References(w http.ResponseWriter, r *http.Request) {
 	off, lim := readPageParams(r)
 	res, err := h.service.References(r.Context(), id, off, lim)
 	if err != nil {
-		writeResearchError(w, err)
+		h.writeResearchError(w, err)
 		return
 	}
 	sendJSON(w, http.StatusOK, res)
@@ -119,7 +128,7 @@ func (h *ResearchHandler) Citations(w http.ResponseWriter, r *http.Request) {
 	}
 	res, err := h.service.Citations(r.Context(), id, off, lim, opts)
 	if err != nil {
-		writeResearchError(w, err)
+		h.writeResearchError(w, err)
 		return
 	}
 	sendJSON(w, http.StatusOK, res)
@@ -134,7 +143,7 @@ func (h *ResearchHandler) Recommendations(w http.ResponseWriter, r *http.Request
 	}
 	res, err := h.service.Recommendations(r.Context(), id)
 	if err != nil {
-		writeResearchError(w, err)
+		h.writeResearchError(w, err)
 		return
 	}
 	sendJSON(w, http.StatusOK, map[string]interface{}{"items": res})
@@ -149,7 +158,7 @@ func (h *ResearchHandler) Autocomplete(w http.ResponseWriter, r *http.Request) {
 	}
 	items, err := h.service.Autocomplete(r.Context(), q)
 	if err != nil {
-		writeResearchError(w, err)
+		h.writeResearchError(w, err)
 		return
 	}
 	sendJSON(w, http.StatusOK, map[string]interface{}{"items": items})
@@ -185,7 +194,7 @@ func (h *ResearchHandler) SnippetSearch(w http.ResponseWriter, r *http.Request) 
 	}
 	res, err := h.service.SnippetSearch(r.Context(), q, opts)
 	if err != nil {
-		writeResearchError(w, err)
+		h.writeResearchError(w, err)
 		return
 	}
 	sendJSON(w, http.StatusOK, res)
@@ -207,7 +216,7 @@ func (h *ResearchHandler) RecommendationsForList(w http.ResponseWriter, r *http.
 	}
 	res, err := h.service.RecommendationsForList(r.Context(), body.Positive, body.Negative)
 	if err != nil {
-		writeResearchError(w, err)
+		h.writeResearchError(w, err)
 		return
 	}
 	sendJSON(w, http.StatusOK, map[string]interface{}{"items": res})
@@ -247,12 +256,20 @@ func readPageParams(r *http.Request) (int, int) {
 	return off, lim
 }
 
-func writeResearchError(w http.ResponseWriter, err error) {
+func (h *ResearchHandler) writeResearchError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, research.ErrPaperNotFound):
 		sendError(w, apperr.New(apperr.CodeNotFound, "未找到对应论文"))
 	case errors.Is(err, research.ErrRateLimited):
-		sendError(w, apperr.New(apperr.CodeUnavailable, "Semantic Scholar 限流，请稍后再试"))
+		body := map[string]interface{}{
+			"success": false,
+			"code":    string(apperr.CodeUnavailable),
+			"error":   "Semantic Scholar 限流，请稍后再试",
+		}
+		if h.rateLimitInspector != nil {
+			body["used_api_key"] = h.rateLimitInspector.HasAPIKey()
+		}
+		sendJSON(w, http.StatusServiceUnavailable, body)
 	default:
 		slog.Default().Warn("research upstream error", "error", err.Error())
 		sendError(w, apperr.New(apperr.CodeUnavailable, "文献搜索服务暂不可用: "+err.Error()))
@@ -267,7 +284,7 @@ func (h *ResearchHandler) BasketList(w http.ResponseWriter, r *http.Request) {
 	}
 	items, err := h.basket.List(r.Context())
 	if err != nil {
-		writeResearchError(w, err)
+		h.writeResearchError(w, err)
 		return
 	}
 	sendJSON(w, http.StatusOK, map[string]interface{}{"items": items})
@@ -288,7 +305,7 @@ func (h *ResearchHandler) BasketAdd(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.basket.Add(r.Context(), body.S2PaperID, body.Notes); err != nil {
-		writeResearchError(w, err)
+		h.writeResearchError(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -302,7 +319,7 @@ func (h *ResearchHandler) BasketRemove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.basket.Remove(r.Context(), id); err != nil {
-		writeResearchError(w, err)
+		h.writeResearchError(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -319,7 +336,7 @@ func (h *ResearchHandler) BasketImportToLibrary(w http.ResponseWriter, r *http.R
 	}
 	n, err := h.basket.ImportToLibrary(r.Context(), body.IDs)
 	if err != nil {
-		writeResearchError(w, err)
+		h.writeResearchError(w, err)
 		return
 	}
 	sendJSON(w, http.StatusOK, map[string]interface{}{"imported": n})
@@ -329,7 +346,7 @@ func (h *ResearchHandler) BasketImportToLibrary(w http.ResponseWriter, r *http.R
 func (h *ResearchHandler) BasketExport(w http.ResponseWriter, r *http.Request) {
 	md, err := h.basket.ExportMarkdown(r.Context())
 	if err != nil {
-		writeResearchError(w, err)
+		h.writeResearchError(w, err)
 		return
 	}
 	w.Header().Set("Content-Type", "text/markdown; charset=utf-8")

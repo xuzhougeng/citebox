@@ -338,6 +338,7 @@ func buildHandler(
 
 	basket := research.NewBasket(researchAdapter, researchSvc, librarySvcImporterShim{librarySvc})
 	researchHandler := handler.NewResearchHandler(researchSvc, basket, nil)
+	researchHandler.SetRateLimitInspector(s2Client)
 
 	mux := http.NewServeMux()
 

@@ -181,11 +181,17 @@ const SettingsPage = {
         };
 
         const sections = Array.from(stack.querySelectorAll(':scope > details.settings-collapsible'));
+        this.settingsCategoryIDs = CATEGORIES.map((cat) => cat.id);
+        this.settingsSectionCategoryById = {};
+        this.settingsLegacySectionAliasByHash = {
+            research: 'settings-external-sources',
+        };
         sections.forEach((section, index) => {
             if (!section.id) section.id = `settings-section-${index + 1}`;
             const titleEl = section.querySelector('summary h2[data-i18n]');
             const key = titleEl?.dataset.i18n;
             section.dataset.settingsCategory = SECTION_TO_CATEGORY[key] || 'system';
+            this.settingsSectionCategoryById[section.id] = section.dataset.settingsCategory;
         });
 
         const tt = (typeof window !== 'undefined' && typeof window.t === 'function') ? window.t : (k, fb) => (fb || k);
@@ -223,9 +229,13 @@ const SettingsPage = {
         this.settingsCategoryList = catList;
         this.settingsAnchorList = subList;
 
-        const initial = (window.location.hash || '').replace(/^#category-/, '').replace(/^#/, '');
-        const valid = CATEGORIES.some((c) => c.id === initial);
-        this.setActiveSettingsCategory(valid ? initial : 'system', false);
+        this.applySettingsHash(window.location.hash, { scroll: true });
+        if (!this._settingsHashChangeBound) {
+            this._settingsHashChangeBound = true;
+            window.addEventListener('hashchange', () => {
+                this.applySettingsHash(window.location.hash, { scroll: true });
+            });
+        }
 
         // i18n bundles load async; re-translate the dynamically inserted labels
         // once they're available.
@@ -297,10 +307,42 @@ const SettingsPage = {
         this.bindAnchorScrollSpy();
     },
 
-    scrollToSection(id) {
+    resolveSettingsHashTarget(hash) {
+        const resolver = window.CiteBoxSettingsAnchor && window.CiteBoxSettingsAnchor.resolveSettingsNavigation;
+        if (typeof resolver === 'function') {
+            return resolver(hash, {
+                defaultCategoryId: 'system',
+                categoryIds: this.settingsCategoryIDs || [],
+                sectionCategoryById: this.settingsSectionCategoryById || {},
+                legacySectionAliasByHash: this.settingsLegacySectionAliasByHash || {},
+            });
+        }
+        return { categoryId: 'system', sectionId: '' };
+    },
+
+    applySettingsHash(hash, options = {}) {
+        const target = this.resolveSettingsHashTarget(hash);
+        this.setActiveSettingsCategory(target.categoryId || 'system', false);
+        if (!target.sectionId) {
+            return;
+        }
+        const section = document.getElementById(target.sectionId);
+        if (section?.tagName === 'DETAILS' && !section.open) {
+            section.open = true;
+        }
+        if (options.scroll === false) {
+            return;
+        }
+        window.requestAnimationFrame(() => this.scrollToSection(target.sectionId, false));
+    },
+
+    scrollToSection(id, updateHash = true) {
         const section = document.getElementById(id);
         if (!section) return;
         if (section.tagName === 'DETAILS' && !section.open) section.open = true;
+        if (updateHash) {
+            history.replaceState(null, '', `#${id}`);
+        }
         const top = section.getBoundingClientRect().top + window.scrollY - 80;
         window.scrollTo({ top, behavior: 'smooth' });
     },
