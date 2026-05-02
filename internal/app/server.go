@@ -20,6 +20,8 @@ import (
 	"github.com/xuzhougeng/citebox/internal/model"
 	"github.com/xuzhougeng/citebox/internal/repository"
 	"github.com/xuzhougeng/citebox/internal/service"
+	"github.com/xuzhougeng/citebox/internal/service/agent_session"
+	"github.com/xuzhougeng/citebox/internal/service/agent_session/commands"
 	"github.com/xuzhougeng/citebox/internal/service/ai_assistant"
 	"github.com/xuzhougeng/citebox/internal/service/ai_conversation"
 	"github.com/xuzhougeng/citebox/internal/service/ai_external"
@@ -110,9 +112,15 @@ func NewServer(opts Options) (*Server, error) {
 		MinInterval: pubmed.RateInterval(pubmedAPIKey),
 	})
 
+	// Build the shared AI services here (rather than inside buildHandler) so
+	// the WeChat bridge can wire them into the agent_session.Service before the
+	// HTTP handler is even constructed. The handler then receives the same
+	// instances and registers its routes against them.
+	aiServices := buildAIServices(cfg, logger, librarySvc, aiSvc, repo, s2Client, pubmedClient)
+
 	httpServer := &http.Server{
 		Addr:    ":" + cfg.ServerPort,
-		Handler: buildHandler(cfg, logger, librarySvc, aiSvc, repo, absoluteWebRoot, s2Client, pubmedClient),
+		Handler: buildHandlerWithAIServices(cfg, logger, librarySvc, aiSvc, repo, absoluteWebRoot, s2Client, pubmedClient, aiServices),
 	}
 
 	server := &Server{
@@ -127,6 +135,51 @@ func NewServer(opts Options) (*Server, error) {
 
 	logger.Info("resolved web root", "web_root", absoluteWebRoot)
 
+	// Wire the agent_session façade. Both surfaces (WeChat bridge today,
+	// desktop ai_conversation handler tomorrow) route through this Service so
+	// they share commands, conversation rows, and a single per-user history
+	// window. The surface state file lives next to the WeChat bridge's other
+	// per-surface artifacts.
+	surfaceStatePath := filepath.Join(cfg.StorageDir, "weixin-bridge", "weixin_surface_state.json")
+	surfaceState, err := agent_session.NewSurfaceStateStore(surfaceStatePath)
+	if err != nil {
+		_ = repo.Close()
+		s2Client.Close()
+		pubmedClient.Close()
+		return nil, fmt.Errorf("init surface state: %w", err)
+	}
+
+	registry := commands.NewRegistry(
+		&commands.ClearCommand{},
+		&commands.ResetCommand{},
+		&commands.HelpCommand{},
+		&commands.StatusCommand{},
+		&commands.NoteCommand{Library: librarySvc},
+		&commands.RecentCommand{Lister: librarySvc, Limit: 5},
+		&commands.SearchCommand{Lister: librarySvc, Limit: 5},
+		&commands.FiguresCommand{Library: librarySvc},
+		&commands.RandomCommand{Picker: service.NewRandomFigureAdapter(librarySvc)},
+		&commands.PaperCommand{Lookup: librarySvc},
+		&commands.FigureCommand{Lookup: service.NewFigureLookupAdapter(repo.Figure)},
+		&commands.AskCommand{AI: aiSvc},
+		&commands.InterpretCommand{AI: aiSvc, Lookup: service.NewFigureLookupAdapter(repo.Figure)},
+		&commands.DOICommand{Importer: service.NewDOIImportAdapter(librarySvc)},
+	)
+	agentSvc := agent_session.New(
+		repo.AIConversation,
+		registry,
+		agent_session.NewAIConversationAdapter(aiServices.conversation),
+		surfaceState,
+		logger.With("component", "agent_session"),
+	)
+
+	if err := agent_session.MigrateLegacyWeixinContext(
+		filepath.Join(cfg.StorageDir, "weixin-bridge", "im_context.json"),
+		repo.AIConversation, surfaceState, logger,
+	); err != nil {
+		logger.Warn("legacy weixin context migration failed", "error", err)
+	}
+
 	bridgeCtx, bridgeCancel := context.WithCancel(context.Background())
 	bridgeDone := make(chan struct{})
 	bridge := service.NewWeixinIMBridge(
@@ -134,6 +187,8 @@ func NewServer(opts Options) (*Server, error) {
 		aiSvc,
 		logger.With("component", "weixin_im_bridge"),
 		cfg.StorageDir,
+		agentSvc,
+		surfaceState,
 	)
 
 	server.bridgeCancel = bridgeCancel
@@ -293,23 +348,26 @@ func (s *Server) logStartup(addr string) {
 	}
 }
 
-func buildHandler(
-	cfg *config.Config,
+// sharedAIServices bundles the AI-side wiring that both the HTTP handler and
+// the WeChat bridge need. Constructing it once in Run lets the bridge wire its
+// agent_session.Service against the same ai_conversation.Service that the
+// handler uses.
+type sharedAIServices struct {
+	research     *research.Service
+	external     *ai_external.Service
+	orchestrator *ai_assistant.Orchestrator
+	conversation *ai_conversation.Service
+}
+
+func buildAIServices(
+	_ *config.Config,
 	logger *slog.Logger,
 	librarySvc *service.LibraryService,
 	aiSvc *service.AIService,
 	repo *repository.LibraryRepository,
-	webRoot string,
 	s2Client *research.Client,
 	pubmedClient *pubmed.Client,
-) http.Handler {
-	versionSvc := service.NewVersionService()
-	paperHandler := handler.NewPaperHandler(librarySvc)
-	figureHandler := handler.NewFigureHandler(librarySvc)
-	paletteHandler := handler.NewPaletteHandler(librarySvc)
-	groupHandler := handler.NewGroupHandler(librarySvc)
-	tagHandler := handler.NewTagHandler(librarySvc)
-	aiHandler := handler.NewAIHandler(aiSvc)
+) sharedAIServices {
 	researchAdapter := &research.RepoAdapter{Repo: repo.Research}
 	researchSvc := research.NewService(s2Client, researchAdapter, research.ServiceConfig{})
 	aiExternalSvc := ai_external.NewService(aiExternalSettingsShim{librarySvc: librarySvc}, map[ai_external.SourceID]ai_external.Searcher{
@@ -327,7 +385,48 @@ func buildHandler(
 		FigureLookup:   ai_assistant.NewFigureLookupToolWithPapers(ai_assistant.NewRepositoryFigureSearcher(repo.Figure), repo.Paper),
 	})
 	aiConvService := ai_conversation.New(repo.AIConversation, repo.Paper, aiSvc, aiSvc, aiExternalSvc, logger.With("component", "ai_conversation"), assistantOrchestrator)
-	aiConversationHandler := handler.NewAIConversationHandler(aiConvService)
+	return sharedAIServices{
+		research:     researchSvc,
+		external:     aiExternalSvc,
+		orchestrator: assistantOrchestrator,
+		conversation: aiConvService,
+	}
+}
+
+func buildHandler(
+	cfg *config.Config,
+	logger *slog.Logger,
+	librarySvc *service.LibraryService,
+	aiSvc *service.AIService,
+	repo *repository.LibraryRepository,
+	webRoot string,
+	s2Client *research.Client,
+	pubmedClient *pubmed.Client,
+) http.Handler {
+	return buildHandlerWithAIServices(cfg, logger, librarySvc, aiSvc, repo, webRoot, s2Client, pubmedClient,
+		buildAIServices(cfg, logger, librarySvc, aiSvc, repo, s2Client, pubmedClient))
+}
+
+func buildHandlerWithAIServices(
+	cfg *config.Config,
+	logger *slog.Logger,
+	librarySvc *service.LibraryService,
+	aiSvc *service.AIService,
+	repo *repository.LibraryRepository,
+	webRoot string,
+	s2Client *research.Client,
+	pubmedClient *pubmed.Client,
+	aiServices sharedAIServices,
+) http.Handler {
+	versionSvc := service.NewVersionService()
+	paperHandler := handler.NewPaperHandler(librarySvc)
+	figureHandler := handler.NewFigureHandler(librarySvc)
+	paletteHandler := handler.NewPaletteHandler(librarySvc)
+	groupHandler := handler.NewGroupHandler(librarySvc)
+	tagHandler := handler.NewTagHandler(librarySvc)
+	aiHandler := handler.NewAIHandler(aiSvc)
+	researchSvc := aiServices.research
+	aiConversationHandler := handler.NewAIConversationHandler(aiServices.conversation)
 	settingsHandler := handler.NewSettingsHandler(librarySvc, versionSvc)
 	settingsHandler.SetResearchClient(s2Client, s2RuntimeSettings(cfg))
 	settingsHandler.SetPubMedClient(pubmedClient, pubmedRuntimeSettings(cfg, os.LookupEnv))
@@ -336,6 +435,7 @@ func buildHandler(
 	sessionManager := service.NewSessionManager(24 * time.Hour)
 	authHandler := handler.NewAuthHandler(librarySvc, sessionManager)
 
+	researchAdapter := &research.RepoAdapter{Repo: repo.Research}
 	basket := research.NewBasket(researchAdapter, researchSvc, librarySvcImporterShim{librarySvc})
 	researchHandler := handler.NewResearchHandler(researchSvc, basket, nil)
 

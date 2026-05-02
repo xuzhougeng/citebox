@@ -227,14 +227,14 @@ func newTestWeixinBridge(t *testing.T, svc *LibraryService, aiReader weixinAIRea
 	t.Helper()
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	return NewWeixinIMBridge(svc, aiReader, logger, storageDir)
+	return NewWeixinIMBridge(svc, aiReader, logger, storageDir, nil, nil)
 }
 
 func TestWeixinIMBridgeRunReportsDisabledState(t *testing.T) {
 	svc, _, cfg := newTestService(t)
 	var logs bytes.Buffer
 	logger := slog.New(slog.NewTextHandler(&logs, nil))
-	bridge := NewWeixinIMBridge(svc, &fakeWeixinAIReader{answer: "ok"}, logger, cfg.StorageDir)
+	bridge := NewWeixinIMBridge(svc, &fakeWeixinAIReader{answer: "ok"}, logger, cfg.StorageDir, nil, nil)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
@@ -267,7 +267,7 @@ func TestWeixinIMBridgeRunWarnsWhenBindingMissing(t *testing.T) {
 
 	var logs bytes.Buffer
 	logger := slog.New(slog.NewTextHandler(&logs, nil))
-	bridge := NewWeixinIMBridge(svc, &fakeWeixinAIReader{answer: "ok"}, logger, cfg.StorageDir)
+	bridge := NewWeixinIMBridge(svc, &fakeWeixinAIReader{answer: "ok"}, logger, cfg.StorageDir, nil, nil)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
@@ -314,7 +314,7 @@ func TestWeixinIMBridgeRunDisablesBridgeWhenSessionExpires(t *testing.T) {
 
 	var logs bytes.Buffer
 	logger := slog.New(slog.NewTextHandler(&logs, nil))
-	bridge := NewWeixinIMBridge(svc, &fakeWeixinAIReader{answer: "ok"}, logger, cfg.StorageDir)
+	bridge := NewWeixinIMBridge(svc, &fakeWeixinAIReader{answer: "ok"}, logger, cfg.StorageDir, nil, nil)
 
 	var pollCalls int
 	var pollCallsMu sync.Mutex
