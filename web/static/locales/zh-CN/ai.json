@@ -184,5 +184,12 @@
     "ai.note_heading": "AI 助手 · 第 ${n} 轮",
     "ai.note_question": "问题：${text}",
     "ai.note_time": "记录时间：${time}",
-    "ai.note_model": "模型：${meta}"
+    "ai.note_model": "模型：${meta}",
+
+    "ai.tts.read_aloud": "朗读",
+    "ai.tts.read_failed": "朗读失败",
+
+    "ai.doi.importing": "正在通过 DOI 导入文献：",
+    "ai.doi.imported": "已导入：",
+    "ai.doi.failed": "DOI 导入失败："
 }

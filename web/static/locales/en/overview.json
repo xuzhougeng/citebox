@@ -1,0 +1,29 @@
+{
+    "_title": "Overview - CiteBox",
+
+    "overview.brand": "CiteBox",
+    "overview.title": "Overview",
+
+    "overview.panel.research": "Research Dashboard",
+    "overview.panel.research_sub": "Recently imported",
+    "overview.panel.figure": "Figures",
+    "overview.panel.figure_sub": "Daily pick",
+    "overview.panel.status": "Status",
+    "overview.panel.status_sub": "Runtime",
+
+    "overview.empty.papers": "No papers imported yet.",
+    "overview.empty.figures": "Figure library is empty. Import a paper first.",
+
+    "overview.error.summary": "Failed to load recent papers: ",
+    "overview.error.figure": "Failed to load today's figure: ",
+    "overview.error.status": "Failed to load status: ",
+
+    "overview.label.untitled": "(untitled)",
+    "overview.label.server_time": "Server time",
+    "overview.label.weixin_bridge": "WeChat bridge",
+    "overview.label.weixin_enabled": "Enabled",
+    "overview.label.weixin_disabled": "Disabled",
+    "overview.label.daily_push": "Daily push",
+    "overview.label.daily_push_off": "Off",
+    "overview.label.default_time": "default time"
+}

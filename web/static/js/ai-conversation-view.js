@@ -867,13 +867,14 @@
         async _handleDOIImport(text) {
             const s = this._state;
             if (s.els && s.els.questionInput) s.els.questionInput.value = '';
-            this._appendNotice('正在通过 DOI 导入文献：' + text);
+            const tt = (typeof window.t === 'function') ? window.t : function (k, f) { return f || k; };
+            this._appendNotice(tt('ai.doi.importing', '正在通过 DOI 导入文献：') + text);
             try {
                 const paper = await API.importPaperByDOI({ doi: text });
-                this._appendNotice('已导入：#' + paper.id + ' ' + (paper.title || ''));
+                this._appendNotice(tt('ai.doi.imported', '已导入：') + '#' + paper.id + ' ' + (paper.title || ''));
             } catch (err) {
                 const msg = (err && err.message) || String(err);
-                this._appendNotice('DOI 导入失败：' + msg);
+                this._appendNotice(tt('ai.doi.failed', 'DOI 导入失败：') + msg);
             }
         },
 
