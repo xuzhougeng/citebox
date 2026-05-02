@@ -574,8 +574,10 @@ func (r *AIConversationRepository) ListPinnedPapers(conversationID int64) ([]AIP
 }
 
 // FindOrCreateByKind returns the conversation id for the given kind, creating it
-// (with surface_origin) on first use. The unique index on kind='main_wechat'
-// guarantees a single row per kind.
+// (with surface_origin) on first use. Only kind='main_wechat' is constrained by
+// the partial unique index idx_ai_conv_main_wechat; for other kinds this just
+// returns the first row matching kind (or inserts a new one if none exists).
+// On a concurrent UNIQUE-constraint race we re-SELECT and return the winner's id.
 func (r *AIConversationRepository) FindOrCreateByKind(kind, surfaceOrigin string) (int64, error) {
 	var id int64
 	err := r.db.QueryRow(`SELECT id FROM ai_conversations WHERE kind = ? LIMIT 1`, kind).Scan(&id)
@@ -589,7 +591,12 @@ func (r *AIConversationRepository) FindOrCreateByKind(kind, surfaceOrigin string
 		`INSERT INTO ai_conversations(title, kind, surface_origin) VALUES (?, ?, ?)`,
 		defaultTitleForKind(kind), kind, surfaceOrigin)
 	if err != nil {
-		// Concurrent insert raced us; re-select.
+		// Only recover on UNIQUE-constraint violations (concurrent insert raced
+		// us). The repo layer doesn't import the sqlite3 driver, so match by
+		// substring; any other failure must surface unchanged.
+		if !strings.Contains(err.Error(), "UNIQUE constraint failed") {
+			return 0, err
+		}
 		var id2 int64
 		if errSel := r.db.QueryRow(`SELECT id FROM ai_conversations WHERE kind = ?`, kind).Scan(&id2); errSel == nil {
 			return id2, nil
@@ -603,8 +610,10 @@ func defaultTitleForKind(kind string) string {
 	switch kind {
 	case "main_wechat":
 		return "微信主会话"
-	default:
+	case "default_web":
 		return ""
+	default:
+		return "会话"
 	}
 }
 
@@ -630,6 +639,9 @@ func (r *AIConversationRepository) SetClearBarrier(conversationID, barrier int64
 func (r *AIConversationRepository) ListMessagesAfterBarrier(conversationID int64, limit int) ([]AIMessage, error) {
 	if limit <= 0 {
 		limit = 10
+	}
+	if limit > 1000 {
+		limit = 1000
 	}
 	rows, err := r.db.Query(`
 		SELECT id, conversation_id, role, content,
