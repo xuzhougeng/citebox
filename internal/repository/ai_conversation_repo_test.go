@@ -608,3 +608,57 @@ func mustInsertTestPaper(t *testing.T, libRepo *LibraryRepository, title, doi st
 	id, _ := res.LastInsertId()
 	return id
 }
+
+func TestFindOrCreateByKindReturnsSameRow(t *testing.T) {
+	repo := newAIConversationRepoForTest(t)
+	id1, err := repo.FindOrCreateByKind("main_wechat", "wechat")
+	if err != nil {
+		t.Fatal(err)
+	}
+	id2, err := repo.FindOrCreateByKind("main_wechat", "wechat")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if id1 != id2 {
+		t.Fatalf("want same id, got %d vs %d", id1, id2)
+	}
+}
+
+func TestSetClearBarrierExcludesOlderMessages(t *testing.T) {
+	repo := newAIConversationRepoForTest(t)
+	cid, _ := repo.FindOrCreateByKind("main_wechat", "wechat")
+	m1, _ := repo.AddMessage(cid, "user", "old", AIMessageMeta{})
+	_, _ = repo.AddMessage(cid, "assistant", "old reply", AIMessageMeta{})
+	if err := repo.SetClearBarrier(cid, m1+1); err != nil {
+		t.Fatal(err)
+	}
+	m3, _ := repo.AddMessage(cid, "user", "new", AIMessageMeta{})
+	rows, err := repo.ListMessagesAfterBarrier(cid, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 || rows[0].ID != m3 {
+		t.Fatalf("want only new msg %d, got %v", m3, rows)
+	}
+}
+
+func TestListMessagesAfterBarrierLimitKeepsLatest(t *testing.T) {
+	repo := newAIConversationRepoForTest(t)
+	cid, _ := repo.FindOrCreateByKind("main_wechat", "wechat")
+	var ids []int64
+	for i := 0; i < 15; i++ {
+		id, _ := repo.AddMessage(cid, "user", "m", AIMessageMeta{})
+		ids = append(ids, id)
+	}
+	rows, err := repo.ListMessagesAfterBarrier(cid, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 10 {
+		t.Fatalf("want 10, got %d", len(rows))
+	}
+	if rows[0].ID != ids[5] || rows[9].ID != ids[14] {
+		t.Fatalf("want oldest-of-window=%d newest=%d, got %d..%d",
+			ids[5], ids[14], rows[0].ID, rows[9].ID)
+	}
+}
