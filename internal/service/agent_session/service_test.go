@@ -1,6 +1,13 @@
 package agent_session
 
-import "testing"
+import (
+	"context"
+	"strings"
+	"testing"
+
+	"github.com/xuzhougeng/citebox/internal/repository"
+	"github.com/xuzhougeng/citebox/internal/service/agent_session/commands"
+)
 
 func TestParseSlashRecognizesFullwidth(t *testing.T) {
 	cmd, arg, ok := parseSlash("／help")
@@ -23,6 +30,23 @@ func TestParseSlashRejectsPlainText(t *testing.T) {
 	}
 }
 
+func TestHandleFreeTextWithoutFreeTextHandlerReturnsError(t *testing.T) {
+	repo := repository.NewTestAIConversationRepo(t)
+	registry := commands.NewRegistry()
+	svc := New(repo, registry, nil, nil, nil)
+	_, err := svc.Handle(context.Background(), AgentRequest{
+		Surface:      SurfaceWeChat,
+		Conversation: ConversationRef{Kind: KindMainWeChat},
+		Input:        Input{Text: "free text question"},
+	})
+	if err == nil {
+		t.Fatal("expected error when freeText handler is nil")
+	}
+	if !strings.Contains(err.Error(), "AI 助手未配置") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestLooksLikeDOI(t *testing.T) {
 	cases := []struct {
 		in   string
@@ -37,6 +61,11 @@ func TestLooksLikeDOI(t *testing.T) {
 		{"/help", false},
 		{"", false},
 		{"just text mentioning 10.something", false},
+		// Sentences with embedded DOIs must NOT route to DOI import — the
+		// user is asking a question about a DOI, not pasting one.
+		{"请解释一下 10.1038/nature1234 的主要结论", false},
+		{"see 10.1038/nature1234 please", false},
+		{"10.1038/nature1234\nfollowed by another line", false},
 	}
 	for _, tc := range cases {
 		if got := looksLikeDOI(tc.in); got != tc.want {
