@@ -1137,3 +1137,24 @@
     color: var(--accent-deep);
     text-decoration: underline;
 }
+
+.ai-message-tts-btn {
+    margin-top: 0.4rem;
+    padding: 0.1rem 0.4rem;
+    font-size: 0.95rem;
+    line-height: 1;
+    background: transparent;
+    border: 1px solid rgba(var(--ink-rgb), 0.12);
+    border-radius: 999px;
+    cursor: pointer;
+    opacity: 0.6;
+    transition: opacity 0.15s ease, background 0.15s ease;
+}
+.ai-message-tts-btn:hover {
+    opacity: 1;
+    background: rgba(var(--ink-rgb), 0.04);
+}
+.ai-message-tts-btn[data-busy="1"] {
+    opacity: 1;
+    cursor: progress;
+}

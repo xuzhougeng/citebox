@@ -105,6 +105,41 @@ func (s *LibraryService) getTTSSettingsSummary() model.TTSSettings {
 	return *settings
 }
 
+// SynthesizeTTS turns the given text into audio using the saved TTS settings.
+// Used by the web AI assistant's per-message 🔊 button (T18). Returns the
+// audio bytes, a suggested filename, and the content type.
+func (s *LibraryService) SynthesizeTTS(ctx context.Context, text string) ([]byte, string, string, error) {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return nil, "", "", apperr.New(apperr.CodeInvalidArgument, "缺少要合成的文本")
+	}
+	cfg, err := s.GetTTSSettings()
+	if err != nil {
+		return nil, "", "", err
+	}
+	settings := normalizeTTSSettings(*cfg)
+	if err := validateTTSSettings(settings); err != nil {
+		return nil, "", "", apperr.New(apperr.CodeFailedPrecondition, "请先在设置中完善 TTS 配置")
+	}
+	if s.ttsAudioSynthesizer == nil {
+		return nil, "", "", apperr.New(apperr.CodeInternal, "TTS 合成器未初始化")
+	}
+	audio, extension, err := s.ttsAudioSynthesizer(ctx, text, settings)
+	if err != nil {
+		return nil, "", "", apperr.New(apperr.CodeUnavailable, fmt.Sprintf("TTS 合成失败：%v", err))
+	}
+	if len(audio) == 0 {
+		return nil, "", "", apperr.New(apperr.CodeUnavailable, "TTS 合成失败：返回了空音频")
+	}
+	filename := "tts.mp3"
+	contentType := "audio/mpeg"
+	if extension != "" && extension != ".mp3" {
+		filename = "tts" + extension
+		contentType = detectTTSAudioContentType(extension)
+	}
+	return audio, filename, contentType, nil
+}
+
 func (s *LibraryService) TestTTS(ctx context.Context, input model.TTSSettings) ([]byte, string, string, error) {
 	settings := normalizeTTSSettings(input)
 	if err := validateTTSSettings(settings); err != nil {
