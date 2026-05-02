@@ -522,26 +522,33 @@
 
 /* Standard pinned-paper chip */
 .ai-pin-chip {
-    padding: 0.25rem 0.65rem;
+    padding: 0.3rem 0.45rem 0.3rem 0.7rem;
     border-radius: 999px;
     background: var(--accent-soft);
     color: var(--accent-deep);
     font-size: 0.78rem;
     display: inline-flex;
     align-items: center;
-    gap: 0.3rem;
-    border: 1px solid transparent;
+    gap: 0.35rem;
+    border: 1px solid rgba(var(--accent-rgb), 0.2);
     font-weight: 500;
     line-height: 1.4;
-    max-width: 14rem;
-    white-space: nowrap;
+    max-width: 18rem;
+    transition: box-shadow 0.14s ease, border-color 0.14s ease;
+}
+
+/* Inner title span — needs min-width:0 so flex can shrink it,
+   plus the ellipsis triad to truncate cleanly. */
+.ai-pin-chip > span {
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
-    transition: box-shadow 0.14s ease;
+    white-space: nowrap;
 }
 
 .ai-pin-chip:hover {
     box-shadow: 0 2px 6px rgba(var(--accent-rgb), 0.18);
+    border-color: rgba(var(--accent-rgb), 0.4);
 }
 
 /* Remove button inside chip */
@@ -551,14 +558,22 @@
     color: inherit;
     cursor: pointer;
     padding: 0;
-    font-size: 0.95rem;
+    font-size: 1rem;
     line-height: 1;
-    opacity: 0.7;
+    width: 1.15rem;
+    height: 1.15rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    opacity: 0.6;
     flex-shrink: 0;
+    transition: opacity 0.14s ease, background 0.14s ease;
 }
 
 .ai-pin-chip-remove:hover {
     opacity: 1;
+    background: rgba(var(--accent-rgb), 0.2);
 }
 
 /* "Add paper" dashed chip */
@@ -573,6 +588,81 @@
 .ai-pin-chip.add:hover {
     border-color: var(--accent);
     color: var(--accent-deep);
+}
+
+/* Pin picker modal — search dialog opened from "+ pin" chip. */
+.ai-pin-picker .ai-pin-picker-dialog {
+    width: min(560px, 90vw);
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    gap: 0.7rem;
+}
+
+.ai-pin-picker .ai-pin-picker-dialog h3 {
+    margin: 0;
+    font-size: 1.05rem;
+    font-weight: 600;
+}
+
+.ai-pin-picker .ai-pin-picker-search {
+    width: 100%;
+}
+
+.ai-pin-picker-results {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    overflow-y: auto;
+    border: 1px solid rgba(var(--ink-rgb), 0.12);
+    border-radius: 8px;
+    background: var(--surface);
+    max-height: 50vh;
+}
+
+.ai-pin-picker-result {
+    padding: 0.6rem 0.85rem;
+    cursor: pointer;
+    border-bottom: 1px solid rgba(var(--ink-rgb), 0.08);
+    transition: background 0.12s ease;
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+}
+
+.ai-pin-picker-result:last-child {
+    border-bottom: 0;
+}
+
+.ai-pin-picker-result:hover,
+.ai-pin-picker-result:focus-visible {
+    background: rgba(var(--accent-rgb), 0.08);
+    outline: none;
+}
+
+.ai-pin-picker-result .title {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--ink);
+    line-height: 1.35;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+}
+
+.ai-pin-picker-result .meta {
+    font-size: 0.75rem;
+    color: var(--muted);
+    line-height: 1.3;
+}
+
+.ai-pin-picker-results > li.empty,
+.ai-pin-picker-results > li:not(.ai-pin-picker-result) {
+    padding: 1.1rem 0.85rem;
+    color: var(--muted);
+    text-align: center;
+    font-size: 0.85rem;
 }
 
 /* ------------------------------------------------------------------

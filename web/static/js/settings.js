@@ -23,7 +23,6 @@ const SettingsPage = {
         this.maxFiguresInput = document.getElementById('aiMaxFiguresInput');
         this.pinPapersLimitInput = document.getElementById('aiPinPapersLimitInput');
         this.contextBudgetTokensInput = document.getElementById('aiContextBudgetTokensInput');
-        this.aiExternalSourcePubMedInput = document.getElementById('aiExternalSourcePubMedInput');
         this.translationPrimaryLanguageInput = document.getElementById('aiTranslationPrimaryLanguageInput');
         this.translationTargetLanguageInput = document.getElementById('aiTranslationTargetLanguageInput');
         this.systemPromptInput = document.getElementById('aiSystemPromptInput');
@@ -1049,18 +1048,10 @@ const SettingsPage = {
         if (this.researchPubMedToolInput) {
             this.researchPubMedToolInput.value = data.pubmed_tool || 'citebox';
         }
-        if (this.aiExternalSourcePubMedInput) {
-            const sources = Array.isArray(data.sources) ? data.sources : ['pubmed'];
-            this.aiExternalSourcePubMedInput.checked = sources.includes('pubmed');
-        }
     },
 
     async saveResearchSettings() {
         if (!this.s2APIKeyInput) return;
-        const sources = [];
-        if (this.aiExternalSourcePubMedInput?.checked) {
-            sources.push('pubmed');
-        }
         const res = await fetch('/api/settings/research', {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
@@ -1069,7 +1060,6 @@ const SettingsPage = {
                 pubmed_api_key: this.researchPubMedAPIKeyInput?.value.trim() || '',
                 pubmed_email: this.researchPubMedEmailInput?.value.trim() || '',
                 pubmed_tool: this.researchPubMedToolInput?.value.trim() || 'citebox',
-                sources,
             }),
         });
         if (res.ok) {

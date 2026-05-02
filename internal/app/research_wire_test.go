@@ -45,6 +45,18 @@ func sourcesContain(sources []ai_external.SourceID, want ai_external.SourceID) b
 	return false
 }
 
+func TestEnabledExternalSourcesAlwaysIncludesPubMed(t *testing.T) {
+	shim, _ := newAIExternalSettingsShimForTest(t)
+
+	got, err := shim.EnabledExternalSources(context.Background())
+	if err != nil {
+		t.Fatalf("EnabledExternalSources() error = %v", err)
+	}
+	if !sourcesContain(got, ai_external.SourcePubMed) {
+		t.Fatalf("EnabledExternalSources() = %v, want pubmed always enabled", got)
+	}
+}
+
 func TestEnabledExternalSourcesIncludesSemanticScholarWhenAPIKeySet(t *testing.T) {
 	shim, svc := newAIExternalSettingsShimForTest(t)
 	if err := svc.UpsertAppSetting("s2_api_key", "user-s2-key"); err != nil {
@@ -72,12 +84,12 @@ func TestEnabledExternalSourcesExcludesSemanticScholarWhenAPIKeyEmpty(t *testing
 	}
 }
 
-func TestEnabledExternalSourcesIgnoresLegacySemanticScholarInSources(t *testing.T) {
+func TestEnabledExternalSourcesIgnoresLegacySourcesField(t *testing.T) {
 	shim, svc := newAIExternalSettingsShimForTest(t)
-	// Legacy data: a previously stored Sources slice containing semantic_scholar
-	// must not be enough on its own to enable the source — only the API key counts.
+	// Legacy data: a stored Sources slice (whatever it contains) is no longer
+	// the source of truth — credentials drive gating now.
 	if _, err := svc.UpdateAIExternalSearchSettings(model.AIExternalSearchSettings{
-		Sources: []string{model.AIExternalSourcePubMed, model.AIExternalSourceSemanticScholar},
+		Sources: []string{model.AIExternalSourceSemanticScholar},
 	}); err != nil {
 		t.Fatalf("UpdateAIExternalSearchSettings() error = %v", err)
 	}
@@ -90,6 +102,6 @@ func TestEnabledExternalSourcesIgnoresLegacySemanticScholarInSources(t *testing.
 		t.Fatalf("EnabledExternalSources() = %v, should ignore legacy semantic_scholar in Sources without API key", got)
 	}
 	if !sourcesContain(got, ai_external.SourcePubMed) {
-		t.Fatalf("EnabledExternalSources() = %v, want pubmed", got)
+		t.Fatalf("EnabledExternalSources() = %v, want pubmed always enabled", got)
 	}
 }

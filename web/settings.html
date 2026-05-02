@@ -777,14 +777,8 @@ User Prompt:
                             <input id="settings-pubmed-tool" class="form-input" type="text" autocomplete="off" />
                         </label>
                     </div>
-                    <p class="muted" data-i18n="settings.research.s2.hint">未填写时使用匿名速率（约 1 req/s）。</p>
-                    <p class="muted" data-i18n="settings.research.pubmed.hint">PubMed 可留空使用匿名访问；填写 NCBI API key 后可获得更高请求额度。</p>
-                    <div class="form-grid">
-                        <label class="field checkbox-field field-span-2">
-                            <input id="aiExternalSourcePubMedInput" type="checkbox">
-                            <span data-i18n-html="settings.ai.external_search.pubmed"><strong>启用 PubMed 用于 AI 外部搜索</strong><br>未勾选时 AI 助手不会向 PubMed 发起检索；Semantic Scholar 则由上方 API key 控制，非空即启用。</span>
-                        </label>
-                    </div>
+                    <p class="muted" data-i18n="settings.research.s2.hint">未填写时使用匿名速率（约 1 req/s）。Semantic Scholar 的启用由本字段控制，非空即启用。</p>
+                    <p class="muted" data-i18n="settings.research.pubmed.hint">PubMed 始终启用，可留空使用匿名访问；填写 NCBI API key 后可获得更高请求额度。</p>
                     <div class="submit-row">
                         <button class="btn btn-primary" type="submit" data-i18n="settings.research.save_btn">保存文献搜索配置</button>
                     </div>
@@ -827,7 +821,7 @@ User Prompt:
                 </div>
             </details>
 
-            <details class="manager-card danger-zone-card settings-collapsible" open>
+            <details class="manager-card danger-zone-card settings-collapsible">
                 <summary class="settings-collapsible-toggle">
                     <h2 data-i18n="settings.db.title">数据库管理</h2>
                     <p data-i18n="settings.db.desc">导出、导入或清空数据库。导入会覆盖现有数据，请谨慎操作。</p>

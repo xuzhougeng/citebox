@@ -24,16 +24,19 @@
                     this.settings = body || null;
                 }
             } catch (e) { /* offline / fresh install — leave settings null */ }
-            // Also cache the enabled external-search sources so the @ palette can
-            // gray out disabled rows. Best-effort: failure leaves the set null and
-            // the palette will treat all known sources as enabled.
+            // Derive enabled external-search sources from credentials so the @ palette
+            // matches the backend gate: PubMed is always enabled (anonymous works);
+            // Semantic Scholar is enabled when s2_api_key is non-empty. Best-effort:
+            // failure leaves the set null and the palette treats all sources as enabled.
             try {
-                const res = await fetch('/api/settings/ai-external-search');
+                const res = await fetch('/api/settings/research');
                 if (res.ok) {
                     const body = await res.json();
-                    this.externalSourcesEnabled = Array.isArray(body && body.sources)
-                        ? body.sources.map((s) => String(s || '').toLowerCase())
-                        : null;
+                    const enabled = ['pubmed'];
+                    if (body && String(body.s2_api_key || '').trim() !== '') {
+                        enabled.push('semantic_scholar');
+                    }
+                    this.externalSourcesEnabled = enabled;
                 }
             } catch (e) { /* offline — leave null */ }
             window.AIReader = window.AIReader || {};

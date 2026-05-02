@@ -46,7 +46,7 @@
             if (!s.container) return;
             const chips = list.map((p) =>
                 `<span class="ai-pin-chip" data-paper-id="${escapeHtml(p.paper_id)}">` +
-                  `<span>📌 ${escapeHtml(p.title || '未命名')}</span>` +
+                  `<span title="${escapeHtml(p.title || '未命名')}">📌 ${escapeHtml(p.title || '未命名')}</span>` +
                   `<button class="ai-pin-chip-remove" type="button" data-action="unpin" data-paper-id="${escapeHtml(p.paper_id)}" aria-label="移除">×</button>` +
                 `</span>`
             ).join('');
