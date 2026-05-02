@@ -237,6 +237,30 @@ func (r *FigureRepository) ListRandomFigureIDs(limit int) ([]int64, error) {
 	return ids, nil
 }
 
+// ListAllFigureIDs returns every figure id in the library, ordered by id
+// ascending. Used by the daily_figure picker so deterministic date-seeded
+// selection always operates on the same ordered set.
+func (r *FigureRepository) ListAllFigureIDs() ([]int64, error) {
+	rows, err := r.db.Query(`SELECT id FROM paper_figures ORDER BY id ASC`)
+	if err != nil {
+		return nil, wrapDBError(err, "枚举图片失败")
+	}
+	defer rows.Close()
+
+	ids := make([]int64, 0, 64)
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, wrapDBError(err, "枚举图片失败")
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, wrapDBError(err, "枚举图片失败")
+	}
+	return ids, nil
+}
+
 // UpdateFigure 更新图片信息
 func (r *FigureRepository) UpdateFigure(id int64, input FigureUpdateInput) (*model.Paper, error) {
 	tx, err := r.db.Begin()
