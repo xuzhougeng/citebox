@@ -22,3 +22,25 @@ func TestParseSlashRejectsPlainText(t *testing.T) {
 		t.Fatal("plain text should not be recognized as slash")
 	}
 }
+
+func TestLooksLikeDOI(t *testing.T) {
+	cases := []struct {
+		in   string
+		want bool
+	}{
+		{"10.1038/s41586-023-06000-1", true},
+		{"https://doi.org/10.1038/s41586-023-06000-1", true},
+		{"doi:10.1038/s41586-023-06000-1", true},
+		{"DOI:10.1000/xyz123", true},
+		{"  10.1234/abc.def  ", true},
+		{"hello world", false},
+		{"/help", false},
+		{"", false},
+		{"just text mentioning 10.something", false},
+	}
+	for _, tc := range cases {
+		if got := looksLikeDOI(tc.in); got != tc.want {
+			t.Errorf("looksLikeDOI(%q)=%v want %v", tc.in, got, tc.want)
+		}
+	}
+}
