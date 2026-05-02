@@ -20,6 +20,7 @@ import (
 
 	"github.com/xuzhougeng/citebox/internal/apperr"
 	"github.com/xuzhougeng/citebox/internal/model"
+	"github.com/xuzhougeng/citebox/internal/service/agent_session"
 	"github.com/xuzhougeng/citebox/internal/weixin"
 )
 
@@ -111,6 +112,8 @@ type weixinSearchReview struct {
 type WeixinIMBridge struct {
 	libraryService *LibraryService
 	aiService      weixinAIReader
+	agentSession   *agent_session.Service
+	surfaceState   *agent_session.SurfaceStateStore
 	logger         *slog.Logger
 	downloadFile   func(context.Context, weixin.MessageItem) (*weixin.DownloadedFile, error)
 	newClient      func(weixinBindingRecord) *weixin.Client
@@ -123,7 +126,13 @@ type WeixinIMBridge struct {
 	context weixinIMContext
 }
 
-func NewWeixinIMBridge(libraryService *LibraryService, aiService weixinAIReader, logger *slog.Logger, storageDir string) *WeixinIMBridge {
+// NewWeixinIMBridge wires the bridge with its agent_session collaborators.
+//
+// `agentSession` and `surfaceState` may be nil during early-boot wiring or in
+// unit tests that don't exercise the dispatch path; in that mode the bridge
+// falls back to returning the help text for any non-bridge-local input.
+func NewWeixinIMBridge(libraryService *LibraryService, aiService weixinAIReader, logger *slog.Logger,
+	storageDir string, agentSession *agent_session.Service, surfaceState *agent_session.SurfaceStateStore) *WeixinIMBridge {
 	if logger == nil {
 		logger = slog.Default()
 	}
@@ -131,6 +140,8 @@ func NewWeixinIMBridge(libraryService *LibraryService, aiService weixinAIReader,
 	bridge := &WeixinIMBridge{
 		libraryService: libraryService,
 		aiService:      aiService,
+		agentSession:   agentSession,
+		surfaceState:   surfaceState,
 		logger:         logger.With("component", "weixin_im_bridge"),
 		downloadFile: func(ctx context.Context, item weixin.MessageItem) (*weixin.DownloadedFile, error) {
 			return weixin.DownloadFileItem(ctx, item, nil, "")
@@ -462,20 +473,108 @@ func (b *WeixinIMBridge) handleIncomingTextReply(ctx context.Context, text strin
 		return weixinReplyEnvelope{}
 	}
 
-	if reply, handled := b.tryImportPaperByDOI(ctx, text); handled {
-		return weixinReplyEnvelope{Text: reply}
+	// Bridge-local commands stay here so we don't pay an LLM round-trip for a
+	// pure settings toggle and so /testvoice can attach a TTS envelope.
+	switch strings.ToLower(strings.SplitN(text, " ", 2)[0]) {
+	case "/voiceon":
+		return b.setWeixinVoiceOutputEnabledReply(true)
+	case "/voiceoff":
+		return b.setWeixinVoiceOutputEnabledReply(false)
+	case "/testvoice":
+		return b.buildWeixinTestVoiceReply()
 	}
 
-	command, arg, ok := parseWeixinSlashCommand(text)
-	if !ok {
-		planned := b.planWeixinPlainTextCommand(ctx, text)
-		if planned == nil {
-			return weixinReplyEnvelope{Text: weixinHelpText()}
+	if b.agentSession == nil {
+		return weixinReplyEnvelope{Text: weixinHelpText()}
+	}
+
+	// Map historical bridge aliases to the names the agent_session registry
+	// knows. Slash commands the registry doesn't recognize fall through to its
+	// "unknown command" error which the envelope renders verbatim.
+	dispatchText := rewriteBridgeAliases(text)
+
+	var sc agent_session.SurfaceContext
+	if b.surfaceState != nil {
+		raw, _ := b.surfaceState.Get("wechat")
+		sc = agent_session.SurfaceContext{
+			CurrentPaperID:        raw.CurrentPaperID,
+			CurrentPaperTitle:     raw.CurrentPaperTitle,
+			CurrentFigureID:       raw.CurrentFigureID,
+			RecentSearchPaperIDs:  raw.RecentSearchPaperIDs,
+			RecentSearchFigureIDs: raw.RecentSearchFigureIDs,
 		}
-		return b.executeWeixinCommandReply(ctx, planned.Command, planned.Arg)
 	}
 
-	return b.executeWeixinCommandReply(ctx, command, arg)
+	req := agent_session.AgentRequest{
+		UserID:         "default",
+		Surface:        agent_session.SurfaceWeChat,
+		Conversation:   agent_session.ConversationRef{Kind: agent_session.KindMainWeChat},
+		SurfaceContext: sc,
+		Input:          agent_session.Input{Text: dispatchText},
+	}
+	resp, err := b.agentSession.Handle(ctx, req)
+	if err != nil {
+		return weixinReplyEnvelope{Text: fmt.Sprintf("处理失败：%v", err)}
+	}
+
+	return chunksToWeixinEnvelope(resp.Chunks)
+}
+
+// rewriteBridgeAliases maps the WeChat-only command shortcuts onto the
+// canonical agent_session command names. /h → /help, /qa → /ask, and the
+// search target variants collapse onto /search (the unified /search command no
+// longer distinguishes paper-only vs figure-only — the underlying library
+// search returns papers, and figure-search shortcuts route via /random or
+// /figures from a selected paper).
+func rewriteBridgeAliases(text string) string {
+	if !strings.HasPrefix(text, "/") {
+		return text
+	}
+	parts := strings.SplitN(text, " ", 2)
+	cmd := strings.ToLower(parts[0])
+	switch cmd {
+	case "/h":
+		cmd = "/help"
+	case "/qa":
+		cmd = "/ask"
+	case "/search-papers", "/search-figures":
+		cmd = "/search"
+	default:
+		return text
+	}
+	if len(parts) == 2 {
+		return cmd + " " + parts[1]
+	}
+	return cmd
+}
+
+// chunksToWeixinEnvelope folds the agent_session response chunks into the
+// envelope shape the bridge's outbound send loop already understands. Text
+// chunks are joined with blank-line separators; any image chunk flips the
+// PreviewCurrentFigure flag so the existing send loop loads the preview from
+// the surface state's currently-selected figure id. Placeholder text chunks
+// are dropped because SendForSurface is currently synchronous — there's no
+// streaming break between placeholder and final text on this surface.
+func chunksToWeixinEnvelope(chunks []agent_session.OutboundChunk) weixinReplyEnvelope {
+	env := weixinReplyEnvelope{}
+	var lines []string
+	for _, c := range chunks {
+		switch c.Kind {
+		case agent_session.ChunkText:
+			if c.IsPlaceholder {
+				continue
+			}
+			if strings.TrimSpace(c.Text) != "" {
+				lines = append(lines, c.Text)
+			}
+		case agent_session.ChunkImage:
+			env.PreviewCurrentFigure = true
+		}
+	}
+	if len(lines) > 0 {
+		env.Text = strings.Join(lines, "\n\n")
+	}
+	return env
 }
 
 func (b *WeixinIMBridge) tryImportPaperByDOI(ctx context.Context, text string) (string, bool) {
