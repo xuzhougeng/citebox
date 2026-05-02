@@ -25,110 +25,6 @@
         return fallback || key;
     }
 
-    function inlineMarkdown(text) {
-        return escapeHtml(text)
-            .replace(/\*\*([^*\n]*?)\*([^*\n]+?)\*\*\*/g, '<strong>$1<em>$2</em></strong>')
-            .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-            .replace(/(^|[^*])\*([^*]+)\*(?!\*)/g, '$1<em>$2</em>')
-            .replace(/`([^`]+)`/g, '<code>$1</code>');
-    }
-
-    function isTableRow(line) {
-        const trimmed = String(line || '').trim();
-        return trimmed.startsWith('|') && trimmed.slice(1).includes('|');
-    }
-
-    function splitTableRow(line) {
-        return String(line || '')
-            .trim()
-            .replace(/^\|/, '')
-            .replace(/\|$/, '')
-            .split('|')
-            .map((cell) => cell.trim());
-    }
-
-    function isTableSeparator(line) {
-        if (!isTableRow(line)) return false;
-        const cells = splitTableRow(line);
-        return cells.length > 1 && cells.every((cell) => /^:?-{3,}:?$/.test(cell));
-    }
-
-    function renderTable(lines, startIndex) {
-        const headers = splitTableRow(lines[startIndex]);
-        let index = startIndex + 2;
-        const rows = [];
-        while (index < lines.length && isTableRow(lines[index]) && !isTableSeparator(lines[index])) {
-            rows.push(splitTableRow(lines[index]));
-            index += 1;
-        }
-        const cellCount = headers.length;
-        const renderCells = (cells, tag) => cells.slice(0, cellCount).map((cell) => (
-            '<' + tag + '>' + inlineMarkdown(cell) + '</' + tag + '>'
-        )).join('');
-        const body = rows.map((cells) => (
-            '<tr>' + renderCells(cells.concat(Array(cellCount).fill('')), 'td') + '</tr>'
-        )).join('');
-        return {
-            html: '<div class="ai-message-table-wrap"><table class="ai-message-table"><thead><tr>' +
-                renderCells(headers, 'th') +
-                '</tr></thead><tbody>' +
-                body +
-                '</tbody></table></div>',
-            nextIndex: index,
-        };
-    }
-
-    function renderAssistantMarkdown(text) {
-        const lines = String(text || '').split(/\r?\n/);
-        const html = [];
-        let listOpen = false;
-        const closeList = () => {
-            if (listOpen) {
-                html.push('</ul>');
-                listOpen = false;
-            }
-        };
-        let index = 0;
-        while (index < lines.length) {
-            const line = lines[index];
-            const trimmed = line.trim();
-            if (!trimmed) {
-                closeList();
-                index += 1;
-                continue;
-            }
-            if (isTableRow(trimmed) && index + 1 < lines.length && isTableSeparator(lines[index + 1])) {
-                closeList();
-                const table = renderTable(lines, index);
-                html.push(table.html);
-                index = table.nextIndex;
-                continue;
-            }
-            const heading = trimmed.match(/^(#{1,4})\s+(.+)$/);
-            if (heading) {
-                closeList();
-                html.push('<h3>' + inlineMarkdown(heading[2]) + '</h3>');
-                index += 1;
-                continue;
-            }
-            const item = trimmed.match(/^[-*]\s+(.+)$/);
-            if (item) {
-                if (!listOpen) {
-                    html.push('<ul>');
-                    listOpen = true;
-                }
-                html.push('<li>' + inlineMarkdown(item[1]) + '</li>');
-                index += 1;
-                continue;
-            }
-            closeList();
-            html.push('<p>' + inlineMarkdown(trimmed) + '</p>');
-            index += 1;
-        }
-        closeList();
-        return html.join('');
-    }
-
     const View = {
         _state: {
             els: null,
@@ -454,7 +350,9 @@
             const parts = this._ensureMessageParts(el);
             if (message && message.role === 'assistant' && !message.streaming) {
                 this._clearStreamingStatus(el);
-                parts.text.innerHTML = renderAssistantMarkdown(message.content || '');
+                parts.text.innerHTML = (typeof Utils !== 'undefined' && typeof Utils.renderMarkdown === 'function')
+                    ? Utils.renderMarkdown(message.content || '', {})
+                    : '<p class="markdown-paragraph">' + escapeHtml(message.content || '') + '</p>';
             } else if (message && message.role === 'assistant' && message.streaming && !String(message.content || '').trim()) {
                 this._setStreamingStatus(el, translate('ai.streaming_thinking', '思考中…'));
             } else {
@@ -484,7 +382,9 @@
             const parts = this._ensureMessageParts(el);
             this._clearStreamingStatus(el);
             if (markdown) {
-                parts.text.innerHTML = renderAssistantMarkdown(content || '');
+                parts.text.innerHTML = (typeof Utils !== 'undefined' && typeof Utils.renderMarkdown === 'function')
+                    ? Utils.renderMarkdown(content || '', {})
+                    : '<p class="markdown-paragraph">' + escapeHtml(content || '') + '</p>';
             } else {
                 parts.text.textContent = content || '';
             }

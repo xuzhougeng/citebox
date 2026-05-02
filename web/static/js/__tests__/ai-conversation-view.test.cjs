@@ -8,7 +8,7 @@ const vm = require('node:vm');
 
 const modulePath = path.resolve(__dirname, '..', 'ai-conversation-view.js');
 
-function loadView(parseToolTags) {
+function loadView(parseToolTags, utils) {
     const code = fs.readFileSync(modulePath, 'utf8');
     const context = {
         console: console,
@@ -40,7 +40,7 @@ function loadView(parseToolTags) {
                 this.detail = init && init.detail;
             }
         },
-        Utils: {},
+        Utils: utils || {},
         t(key, fallback) {
             return fallback || key;
         },
@@ -123,4 +123,31 @@ test('sendPayload preserves explicit search_goal_hint when parsed @ tags are als
         search_goal_hint: 'evidence',
         sources: ['pubmed'],
     });
+});
+
+test('_setAssistantText delegates markdown rendering to Utils.renderMarkdown', () => {
+    let renderCall = null;
+    const view = loadView(null, {
+        renderMarkdown(value, options) {
+            renderCall = { value, options };
+            return '<p class="from-utils">rendered</p>';
+        },
+    });
+    const subject = Object.create(view);
+    const parts = {
+        text: {
+            innerHTML: '',
+            textContent: '',
+        },
+    };
+
+    subject._ensureMessageParts = () => parts;
+    subject._clearStreamingStatus = () => {};
+
+    subject._setAssistantText({}, '```js\nconsole.log(1)\n```', true);
+
+    assert.ok(renderCall);
+    assert.equal(renderCall.value, '```js\nconsole.log(1)\n```');
+    assert.deepEqual(Object.keys(renderCall.options || {}), []);
+    assert.equal(parts.text.innerHTML, '<p class="from-utils">rendered</p>');
 });

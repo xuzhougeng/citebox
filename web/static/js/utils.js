@@ -809,6 +809,13 @@ const Utils = {
                 continue;
             }
 
+            if (Utils.isMarkdownTableStart(lines, index)) {
+                const table = Utils.consumeMarkdownTable(lines, index, options);
+                blocks.push(table.html);
+                index = table.nextIndex;
+                continue;
+            }
+
             const divider = Utils.renderMarkdownHorizontalRule(line);
             if (divider) {
                 blocks.push(divider);
@@ -1019,6 +1026,34 @@ const Utils = {
         return /^(-{3,}|\*{3,}|_{3,})$/.test(String(value || '').trim());
     },
 
+    isMarkdownTableCandidateLine(value = '') {
+        const trimmed = String(value || '').trim();
+        return trimmed.startsWith('|') && trimmed.slice(1).includes('|');
+    },
+
+    splitMarkdownTableRow(value = '') {
+        return String(value || '')
+            .trim()
+            .replace(/^\|/, '')
+            .replace(/\|$/, '')
+            .split('|')
+            .map((cell) => cell.trim());
+    },
+
+    isMarkdownTableSeparatorLine(value = '') {
+        if (!Utils.isMarkdownTableCandidateLine(value)) {
+            return false;
+        }
+        const cells = Utils.splitMarkdownTableRow(value);
+        return cells.length > 1 && cells.every((cell) => /^:?-{3,}:?$/.test(cell));
+    },
+
+    isMarkdownTableStart(lines = [], index = 0) {
+        return Utils.isMarkdownTableCandidateLine(lines[index])
+            && index + 1 < lines.length
+            && Utils.isMarkdownTableSeparatorLine(lines[index + 1]);
+    },
+
     isMarkdownImageOnlyLine(value = '') {
         return /^!\[([^\]]*)\]\(([^)\s]+)\)$/.test(String(value || '').trim());
     },
@@ -1034,6 +1069,7 @@ const Utils = {
     isMarkdownBlockBoundaryLine(value = '') {
         return Utils.isMarkdownPlaceholderLine(value)
             || Utils.isMarkdownHorizontalRuleLine(value)
+            || Utils.isMarkdownTableCandidateLine(value)
             || Utils.isMarkdownImageOnlyLine(value)
             || Utils.isMarkdownHeadingLine(value)
             || Utils.isMarkdownBlockquoteLine(value)
@@ -1046,6 +1082,56 @@ const Utils = {
 
     renderMarkdownHorizontalRule(value = '') {
         return Utils.isMarkdownHorizontalRuleLine(value) ? '<hr class="markdown-divider">' : '';
+    },
+
+    markdownTableAlignment(value = '') {
+        const normalized = String(value || '').trim();
+        if (/^:-+:$/.test(normalized)) return 'center';
+        if (/^-+:$/.test(normalized)) return 'right';
+        if (/^:-+$/.test(normalized)) return 'left';
+        return '';
+    },
+
+    consumeMarkdownTable(lines = [], startIndex = 0, options = {}) {
+        if (!Utils.isMarkdownTableStart(lines, startIndex)) {
+            return { html: '', nextIndex: startIndex };
+        }
+
+        const headers = Utils.splitMarkdownTableRow(lines[startIndex]);
+        const alignments = Utils.splitMarkdownTableRow(lines[startIndex + 1])
+            .slice(0, headers.length)
+            .map((cell) => Utils.markdownTableAlignment(cell));
+        const rows = [];
+        let index = startIndex + 2;
+
+        while (index < lines.length && Utils.isMarkdownTableCandidateLine(lines[index]) && !Utils.isMarkdownTableSeparatorLine(lines[index])) {
+            rows.push(Utils.splitMarkdownTableRow(lines[index]));
+            index += 1;
+        }
+
+        const cellCount = headers.length;
+        const normalizeRow = (cells = []) => cells.concat(Array(Math.max(cellCount - cells.length, 0)).fill('')).slice(0, cellCount);
+        const cellAttr = (tagName, cellIndex) => {
+            const classes = `markdown-table-cell markdown-table-cell-${tagName}`;
+            const align = alignments[cellIndex];
+            return align ? ` class="${classes}" style="text-align:${align}"` : ` class="${classes}"`;
+        };
+        const renderCells = (cells, tagName) => normalizeRow(cells).map((cell, cellIndex) => (
+            `<${tagName}${cellAttr(tagName, cellIndex)}>${Utils.renderMarkdownInline(cell, options)}</${tagName}>`
+        )).join('');
+        const bodyRows = rows.map((cells) => `<tr>${renderCells(cells, 'td')}</tr>`).join('');
+
+        return {
+            html: `
+                <div class="markdown-table-wrap">
+                    <table class="markdown-table">
+                        <thead><tr>${renderCells(headers, 'th')}</tr></thead>
+                        ${bodyRows ? `<tbody>${bodyRows}</tbody>` : ''}
+                    </table>
+                </div>
+            `,
+            nextIndex: index
+        };
     },
 
     renderMarkdownHeadingBlock(value = '', options = {}) {

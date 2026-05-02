@@ -286,6 +286,8 @@ html[lang^="zh"] .ai-config-details[open] .ai-collapsible-toggle::before {
 }
 
 .ai-message-assistant .ai-message-text {
+    display: grid;
+    gap: 0.9rem;
     white-space: normal;
 }
 

@@ -24,7 +24,8 @@
 .markdown-heading,
 .markdown-paragraph,
 .markdown-list,
-.markdown-blockquote {
+.markdown-blockquote,
+.markdown-table-wrap {
     margin: 0;
 }
 
@@ -82,6 +83,38 @@
     text-decoration: underline;
     text-decoration-thickness: 1px;
     text-underline-offset: 0.18rem;
+}
+
+.markdown-table-wrap {
+    overflow-x: auto;
+}
+
+.markdown-table {
+    width: 100%;
+    min-width: 20rem;
+    border-collapse: collapse;
+    border-spacing: 0;
+    border-radius: 16px;
+    overflow: hidden;
+    background: rgba(var(--surface-rgb), 0.92);
+    border: 1px solid rgba(var(--ink-rgb), 0.1);
+}
+
+.markdown-table-cell {
+    padding: 0.72rem 0.85rem;
+    border-bottom: 1px solid rgba(var(--ink-rgb), 0.08);
+    vertical-align: top;
+    text-align: left;
+    line-height: 1.65;
+}
+
+.markdown-table-cell-th {
+    background: rgba(var(--ink-rgb), 0.04);
+    font-weight: 700;
+}
+
+.markdown-table tbody tr:last-child .markdown-table-cell {
+    border-bottom: none;
 }
 
 .markdown-figure {
