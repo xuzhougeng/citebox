@@ -15,7 +15,7 @@ const AppNav = {
         this.bindGlobalDismiss();
     },
 
-    // Place "调研" (/research) immediately after "AI 助手" (/ai). The shared HTML
+    // Place "文献搜索" (/research) immediately after "AI 助手" (/ai). The shared HTML
     // template lists them in the opposite order; doing the move here keeps every
     // page's <nav> in sync without touching 13 separate files.
     reorderPrimary(navLinks) {

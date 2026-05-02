@@ -24,7 +24,6 @@ const SettingsPage = {
         this.pinPapersLimitInput = document.getElementById('aiPinPapersLimitInput');
         this.contextBudgetTokensInput = document.getElementById('aiContextBudgetTokensInput');
         this.aiExternalSourcePubMedInput = document.getElementById('aiExternalSourcePubMedInput');
-        this.aiExternalSourceS2Input = document.getElementById('aiExternalSourceS2Input');
         this.saveAIExternalSearchSettingsButton = document.getElementById('saveAIExternalSearchSettingsButton');
         this.aiExternalSearchSaveStatus = document.getElementById('aiExternalSearchSaveStatus');
         this.aiExternalSearchSettingsLoaded = false;
@@ -360,8 +359,7 @@ const SettingsPage = {
             await this.saveAIExternalSearchSettings();
         });
         [
-            this.aiExternalSourcePubMedInput,
-            this.aiExternalSourceS2Input
+            this.aiExternalSourcePubMedInput
         ].forEach((element) => {
             element?.addEventListener('input', () => this.handleAIExternalSearchSettingsChanged());
             element?.addEventListener('change', () => this.handleAIExternalSearchSettingsChanged());
@@ -1084,7 +1082,7 @@ const SettingsPage = {
             return [];
         }
 
-        const allowed = new Set(['pubmed', 'semantic_scholar']);
+        const allowed = new Set(['pubmed']);
         const seen = new Set();
         const normalized = [];
         sources.forEach((source) => {
@@ -1101,9 +1099,6 @@ const SettingsPage = {
         const sources = this.normalizeAIExternalSearchSources(settings.sources);
         if (this.aiExternalSourcePubMedInput) {
             this.aiExternalSourcePubMedInput.checked = sources.includes('pubmed');
-        }
-        if (this.aiExternalSourceS2Input) {
-            this.aiExternalSourceS2Input.checked = sources.includes('semantic_scholar');
         }
         this.isHydratingAIExternalSearchSettings = false;
     },
@@ -1123,9 +1118,6 @@ const SettingsPage = {
         const sources = [];
         if (this.aiExternalSourcePubMedInput?.checked) {
             sources.push('pubmed');
-        }
-        if (this.aiExternalSourceS2Input?.checked) {
-            sources.push('semantic_scholar');
         }
         return {
             sources
@@ -1203,7 +1195,7 @@ const SettingsPage = {
             }),
         });
         if (res.ok) {
-            Utils.showToast(t('settings.research.saved_toast', '研究数据库配置已保存'));
+            Utils.showToast(t('settings.research.saved_toast', '文献搜索服务配置已保存'));
         }
     },
 

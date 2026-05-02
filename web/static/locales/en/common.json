@@ -13,7 +13,7 @@
     "_title.manual": "Manual Extraction - CiteBox",
     "_title.viewer": "Viewer - CiteBox",
     "_title.login": "Login - CiteBox",
-    "_title.research": "Research - CiteBox",
+    "_title.research": "Literature Search - CiteBox",
 
     "nav.overview": "Overview",
     "nav.library": "Library",
@@ -22,7 +22,7 @@
     "nav.groups": "Groups",
     "nav.tags": "Tags",
     "nav.notes": "Notes",
-    "nav.research": "Research",
+    "nav.research": "Literature Search",
     "nav.ai": "AI Assistant",
     "nav.settings": "Settings",
     "nav.upload_pdf": "Upload PDF",

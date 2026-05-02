@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>调研 - CiteBox</title>
+    <title>文献搜索 - CiteBox</title>
     <link rel="icon" type="image/svg+xml" href="/static/img/citebox-icon.svg">
     <script>(function(){var d=document.documentElement;try{var t=localStorage.getItem("citebox_theme");if(t&&t!=="warm")d.setAttribute("data-theme",t);var l=localStorage.getItem("citebox_lang")||"zh-CN";d.lang=l;if(l!=="zh-CN")d.setAttribute("data-lang-loading","1");}catch(e){}})()</script>
     <link rel="stylesheet" href="/static/css/style.css">
@@ -20,7 +20,7 @@
                 <li><a href="/groups" data-i18n="nav.groups">分组</a></li>
                 <li><a href="/tags" data-i18n="nav.tags">标签</a></li>
                 <li><a href="/notes" data-i18n="nav.notes">笔记</a></li>
-                <li><a href="/research" class="active" data-i18n="nav.research">调研</a></li>
+                <li><a href="/research" class="active" data-i18n="nav.research">文献搜索</a></li>
                 <li><a href="/ai" data-i18n="nav.ai">AI 助手</a></li>
                 <li><a href="/settings" data-i18n="nav.settings">配置</a></li>
             </ul>
@@ -33,8 +33,8 @@
     <main class="page-shell">
         <section class="hero compact">
             <div>
-                <p class="eyebrow" data-i18n="research.hero_eyebrow">Research</p>
-                <h1 data-i18n="research.hero_title">基于 Semantic Scholar 的文献调研</h1>
+                <p class="eyebrow" data-i18n="research.hero_eyebrow">Literature Search</p>
+                <h1 data-i18n="research.hero_title">基于 Semantic Scholar 的文献搜索</h1>
                 <p class="hero-text" data-i18n="research.hero_text">
                     搜索关键词，点开结果查看引用、被引用与相似文献，把感兴趣的论文先放入候选列表，再统一导入文献库。
                 </p>
@@ -51,7 +51,7 @@
             <div class="filters-card-head">
                 <div>
                     <h2 data-i18n="research.toolbar_title">检索 / 设置种子</h2>
-                    <p data-i18n="research.toolbar_desc">输入关键词、DOI、arXiv ID 或 Semantic Scholar paperId 开始调研。</p>
+                    <p data-i18n="research.toolbar_desc">输入关键词、DOI、arXiv ID 或 Semantic Scholar paperId 开始搜索。</p>
                 </div>
                 <span id="research-rate-warning" class="research-rate-warning hidden" data-i18n="research.error.rateLimited">Semantic Scholar 限流，请稍后重试。</span>
             </div>
@@ -75,7 +75,7 @@
         <section class="research-layout">
             <article class="research-seed-pane manager-card" id="research-seed-pane">
                 <div id="research-empty-state" class="research-empty">
-                    <p data-i18n="research.empty.hint">在上方搜索框输入关键词或粘贴 DOI / arXiv ID 开始调研。</p>
+                    <p data-i18n="research.empty.hint">在上方搜索框输入关键词或粘贴 DOI / arXiv ID 开始搜索。</p>
                 </div>
             </article>
             <aside class="research-basket-pane manager-card" id="research-basket-pane">

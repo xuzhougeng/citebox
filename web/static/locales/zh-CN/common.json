@@ -13,7 +13,7 @@
     "_title.manual": "手工标注 - CiteBox",
     "_title.viewer": "查看 - CiteBox",
     "_title.login": "登录 - CiteBox",
-    "_title.research": "调研 - CiteBox",
+    "_title.research": "文献搜索 - CiteBox",
 
     "nav.overview": "总览",
     "nav.library": "文献库",
@@ -22,7 +22,7 @@
     "nav.groups": "分组",
     "nav.tags": "标签",
     "nav.notes": "笔记",
-    "nav.research": "调研",
+    "nav.research": "文献搜索",
     "nav.ai": "AI 助手",
     "nav.settings": "配置",
     "nav.upload_pdf": "上传 PDF",

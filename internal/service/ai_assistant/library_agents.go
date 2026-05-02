@@ -156,7 +156,7 @@ JSON 格式：
 - 不要加入“数据、文章、论文、文献、相关、查找、paper、data”等泛词。
 - 不要把窄问题扩大成泛化问题；用户问 ChIP-seq 时，不要改成所有 sequencing。`
 
-const externalPlannerSystemPrompt = `你是 CiteBox AI 助手的 Master Agent。你的任务是把用户的外部调研或出处查找请求改写成适合已启用外部来源的英文检索式。
+const externalPlannerSystemPrompt = `你是 CiteBox AI 助手的 Master Agent。你的任务是把用户的外部文献搜索或出处查找请求改写成适合已启用外部来源的英文检索式。
 只输出 JSON，不要输出 Markdown，不要解释思考过程。
 JSON 格式：
 {"search_goal":"discovery|evidence","must_match":["term 1","term 2"],"soft_preferences":["term 1","term 2"],"target_year":2024,"queries_by_source":{"pubmed":["query 1","query 2"],"semantic_scholar":["query 1","query 2"]},"rationale":"一句话说明检索式如何覆盖用户需求"}

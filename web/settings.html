@@ -20,7 +20,7 @@
                 <li><a href="/groups" data-i18n="nav.groups">分组</a></li>
                 <li><a href="/tags" data-i18n="nav.tags">标签</a></li>
                 <li><a href="/notes" data-i18n="nav.notes">笔记</a></li>
-                <li><a href="/research" data-i18n="nav.research">调研</a></li>
+                <li><a href="/research" data-i18n="nav.research">文献搜索</a></li>
                 <li><a href="/ai" data-i18n="nav.ai">AI 助手</a></li>
                 <li><a href="/settings" class="active" data-i18n="nav.settings">配置</a></li>
             </ul>
@@ -165,17 +165,13 @@
                             <div class="prompt-preset-head">
                                 <div>
                                     <h4 data-i18n="settings.ai.external_search.title">AI 外部搜索源</h4>
-                                    <p data-i18n="settings.ai.external_search.desc">选择 AI 助手执行外部检索时使用的学术搜索源。可启用多个来源，AI 会按来源生成检索词并合并结果。</p>
+                                    <p data-i18n="settings.ai.external_search.desc">选择 AI 助手执行外部检索时使用的学术搜索源。Semantic Scholar 由「文献搜索服务 API」中的 API key 控制，配置后自动启用。</p>
                                 </div>
                             </div>
                             <div class="form-grid">
                                 <label class="field checkbox-field field-span-2">
                                     <input id="aiExternalSourcePubMedInput" type="checkbox">
-                                    <span data-i18n-html="settings.ai.external_search.pubmed"><strong>PubMed</strong><br>默认来源；支持匿名访问，API 凭据在调研服务 API 中配置。</span>
-                                </label>
-                                <label class="field checkbox-field field-span-2">
-                                    <input id="aiExternalSourceS2Input" type="checkbox">
-                                    <span data-i18n-html="settings.ai.external_search.s2"><strong>Semantic Scholar</strong><br>适合跨学科调研；未配置 API key 时容易遇到匿名限流。</span>
+                                    <span data-i18n-html="settings.ai.external_search.pubmed"><strong>PubMed</strong><br>默认来源；支持匿名访问，API 凭据在文献搜索服务 API 中配置。</span>
                                 </label>
                             </div>
                             <div class="submit-row">
@@ -524,7 +520,7 @@ User Prompt:
                 </div>
             </details>
 
-            <details class="manager-card settings-collapsible" open>
+            <details class="manager-card settings-collapsible">
                 <summary class="settings-collapsible-toggle">
                     <h2 data-i18n="settings.extractor.title">PDF 提取配置</h2>
                     <p data-i18n="settings.extractor.desc">选择当前 PDF 提取方案。可切换为手工、内置 LLM 坐标提取，或标准 pdffigx。</p>
@@ -577,7 +573,7 @@ User Prompt:
                 </form>
             </details>
 
-            <details class="manager-card settings-collapsible" open>
+            <details class="manager-card settings-collapsible">
                 <summary class="settings-collapsible-toggle">
                     <h2 data-i18n="settings.weixin.title">微信配置</h2>
                     <p data-i18n="settings.weixin.desc">设置微信消息桥接、绑定状态，以及消息意图识别所使用的模型。</p>
@@ -644,7 +640,7 @@ User Prompt:
                 </div>
             </details>
 
-            <details class="manager-card settings-collapsible" open>
+            <details class="manager-card settings-collapsible">
                 <summary class="settings-collapsible-toggle">
                     <h2 data-i18n="settings.weixin.daily_title">今日推荐</h2>
                     <p data-i18n="settings.weixin.daily_desc">开启后会在每天设定时间随机发送一张已保存图片到绑定微信，也支持立即测试发图。</p>
@@ -673,7 +669,7 @@ User Prompt:
                 </div>
             </details>
 
-            <details class="manager-card settings-collapsible" open>
+            <details class="manager-card settings-collapsible">
                 <summary class="settings-collapsible-toggle">
                     <h2 data-i18n="settings.tts.title">TTS 配置</h2>
                     <p data-i18n="settings.tts.desc">独立维护豆包 TTS 配置；设置页可直接测试，当前实际用于微信 `/ask`、`/qa` 与 `/testvoice`。</p>
@@ -742,7 +738,7 @@ User Prompt:
                 </form>
             </details>
 
-            <details class="manager-card settings-collapsible" open>
+            <details class="manager-card settings-collapsible">
                 <summary class="settings-collapsible-toggle">
                     <h2 data-i18n="settings.wolai.title">Wolai 配置</h2>
                     <p data-i18n="settings.wolai.desc">配置 Wolai 授权信息和目标页面，将笔记同步到 Wolai。</p>
@@ -777,10 +773,10 @@ User Prompt:
                 </form>
             </details>
 
-            <details class="manager-card settings-collapsible" open>
+            <details class="manager-card settings-collapsible">
                 <summary class="settings-collapsible-toggle">
-                    <h2 data-i18n="settings.research.title">调研服务 API</h2>
-                    <p data-i18n="settings.research.desc">配置 Semantic Scholar 与 PubMed / NCBI 的访问凭据。Semantic Scholar 用于 /research 调研页；PubMed 用于 AI 助手外部搜索。</p>
+                    <h2 data-i18n="settings.research.title">文献搜索服务 API</h2>
+                    <p data-i18n="settings.research.desc">配置 Semantic Scholar 与 PubMed / NCBI 的访问凭据。Semantic Scholar 用于 /research 文献搜索页；PubMed 用于 AI 助手外部搜索。</p>
                 </summary>
                 <form id="researchSettingsForm" class="manager-form">
                     <div class="form-grid">
@@ -804,12 +800,12 @@ User Prompt:
                     <p class="muted" data-i18n="settings.research.s2.hint">未填写时使用匿名速率（约 1 req/s）。</p>
                     <p class="muted" data-i18n="settings.research.pubmed.hint">PubMed 可留空使用匿名访问；填写 NCBI API key 后可获得更高请求额度。</p>
                     <div class="submit-row">
-                        <button class="btn btn-primary" type="submit" data-i18n="settings.research.save_btn">保存调研配置</button>
+                        <button class="btn btn-primary" type="submit" data-i18n="settings.research.save_btn">保存文献搜索配置</button>
                     </div>
                 </form>
             </details>
 
-            <details class="manager-card settings-collapsible" open>
+            <details class="manager-card settings-collapsible">
                 <summary class="settings-collapsible-toggle">
                     <h2 data-i18n="settings.password.account_title">账号管理</h2>
                     <p data-i18n="settings.password.account_desc">修改密码、管理记住登录状态，或退出登录。</p>

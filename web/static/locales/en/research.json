@@ -1,6 +1,6 @@
 {
-    "research.title": "Research",
-    "research.hero_eyebrow": "Research",
+    "research.title": "Literature Search",
+    "research.hero_eyebrow": "Literature Search",
     "research.hero_title": "Literature exploration powered by Semantic Scholar",
     "research.hero_text": "Search by keyword, open a result to review its references, citations, and similar papers, then save interesting papers to a shortlist for library import.",
     "research.hero_aux_links": "Quick links:",
@@ -33,7 +33,7 @@
     "research.filter.sort": "Sort",
     "research.error.rateLimited": "Semantic Scholar rate limited; try again shortly.",
     "research.error.notFound": "Paper not found.",
-    "research.error.unknown": "Research service unavailable.",
+    "research.error.unknown": "Literature search service unavailable.",
     "research.empty.hint": "Enter a keyword or paste a DOI / arXiv ID above to start researching.",
     "research.empty.noResults": "No results",
     "research.empty.searchNoResults": "No search results",

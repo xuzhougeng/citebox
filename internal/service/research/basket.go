@@ -105,7 +105,7 @@ func (b *Basket) ExportMarkdown(ctx context.Context) (string, error) {
 		return "", err
 	}
 	var sb strings.Builder
-	sb.WriteString("# 调研篮\n\n")
+	sb.WriteString("# 文献搜索篮\n\n")
 	for _, p := range papers {
 		authors := make([]string, 0, len(p.Authors))
 		for _, a := range p.Authors {

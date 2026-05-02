@@ -255,7 +255,7 @@ func writeResearchError(w http.ResponseWriter, err error) {
 		sendError(w, apperr.New(apperr.CodeUnavailable, "Semantic Scholar 限流，请稍后再试"))
 	default:
 		slog.Default().Warn("research upstream error", "error", err.Error())
-		sendError(w, apperr.New(apperr.CodeUnavailable, "调研服务暂不可用: "+err.Error()))
+		sendError(w, apperr.New(apperr.CodeUnavailable, "文献搜索服务暂不可用: "+err.Error()))
 	}
 }
 
