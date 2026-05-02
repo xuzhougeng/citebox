@@ -48,15 +48,6 @@ func writeFigureFixture(t *testing.T, path string, width, height int) []byte {
 	return data
 }
 
-func containsKeyword(values []string, target string) bool {
-	for _, value := range values {
-		if value == target {
-			return true
-		}
-	}
-	return false
-}
-
 func TestAISettingsDefaultsAndPersistence(t *testing.T) {
 	_, repo, cfg := newTestService(t)
 	aiSvc := NewAIService(repo, cfg, nil)

@@ -3,13 +3,10 @@ package service
 import (
 	"bytes"
 	"context"
-	"errors"
-	"fmt"
 	"io"
 	"log/slog"
 	"mime/multipart"
 	"net/http"
-	"net/http/httptest"
 	"net/textproto"
 	"os"
 	"path/filepath"
@@ -23,121 +20,13 @@ import (
 	"github.com/xuzhougeng/citebox/internal/weixin"
 )
 
+// fakeWeixinAIReader implements the narrow weixinAIReader interface. After the
+// agent_session cutover the bridge only calls aiService for TTS rewrites; the
+// other tests just need a non-nil value to construct the bridge.
 type fakeWeixinAIReader struct {
-	mu             sync.Mutex
-	inputs         []model.AIReadRequest
-	answer         string
-	ttsRewrite     string
-	ttsRewriteErr  error
-	commandPlan    *weixinCommandPlan
-	commandPlanErr error
-	searchPlan     *weixinSearchPlan
-	searchPlanErr  error
-	searchReview   *weixinSearchReview
-}
-
-func (f *fakeWeixinAIReader) ReadPaper(_ context.Context, input model.AIReadRequest) (*model.AIReadResponse, error) {
-	f.mu.Lock()
-	f.inputs = append(f.inputs, input)
-	answer := f.answer
-	f.mu.Unlock()
-
-	return &model.AIReadResponse{
-		Success:  true,
-		Action:   input.Action,
-		PaperID:  input.PaperID,
-		Question: input.Question,
-		Answer:   answer,
-	}, nil
-}
-
-func (f *fakeWeixinAIReader) PlanWeixinCommand(_ context.Context, text string, context weixinIntentContext) (*weixinCommandPlan, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-
-	if f.commandPlanErr != nil {
-		return nil, f.commandPlanErr
-	}
-	if f.commandPlan != nil {
-		plan := *f.commandPlan
-		return &plan, nil
-	}
-
-	if context.CurrentPaperID > 0 {
-		return &weixinCommandPlan{Command: "/ask", Arg: text}, nil
-	}
-	return &weixinCommandPlan{Command: "/search", Arg: text}, nil
-}
-
-func (f *fakeWeixinAIReader) PlanWeixinSearch(_ context.Context, query, forcedTarget string) (*weixinSearchPlan, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-
-	if f.searchPlanErr != nil {
-		return nil, f.searchPlanErr
-	}
-	if f.searchPlan != nil {
-		plan := *f.searchPlan
-		plan.Keywords = append([]string(nil), plan.Keywords...)
-		if normalized := normalizeWeixinSearchTarget(forcedTarget); normalized != "" {
-			plan.Target = normalized
-		}
-		return &plan, nil
-	}
-
-	target := normalizeWeixinSearchTarget(forcedTarget)
-	if target == "" {
-		target = weixinSearchTargetPaper
-	}
-	plan := heuristicWeixinSearchPlan(query, target)
-	plan.Target = target
-	return plan, nil
-}
-
-func (f *fakeWeixinAIReader) ReviewWeixinPaperSearch(_ context.Context, _ string, _ []string, candidates []model.Paper) (*weixinSearchReview, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-
-	if f.searchReview != nil {
-		review := *f.searchReview
-		review.SelectedIDs = append([]int64(nil), review.SelectedIDs...)
-		return &review, nil
-	}
-
-	ids := make([]int64, 0, minInt(len(candidates), weixinSearchResultLimit))
-	for _, candidate := range candidates {
-		ids = append(ids, candidate.ID)
-		if len(ids) >= weixinSearchResultLimit {
-			break
-		}
-	}
-	return &weixinSearchReview{
-		Summary:     "已按候选顺序保留最可能结果。",
-		SelectedIDs: ids,
-	}, nil
-}
-
-func (f *fakeWeixinAIReader) ReviewWeixinFigureSearch(_ context.Context, _ string, _ []string, candidates []model.FigureListItem) (*weixinSearchReview, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-
-	if f.searchReview != nil {
-		review := *f.searchReview
-		review.SelectedIDs = append([]int64(nil), review.SelectedIDs...)
-		return &review, nil
-	}
-
-	ids := make([]int64, 0, minInt(len(candidates), weixinSearchResultLimit))
-	for _, candidate := range candidates {
-		ids = append(ids, candidate.ID)
-		if len(ids) >= weixinSearchResultLimit {
-			break
-		}
-	}
-	return &weixinSearchReview{
-		Summary:     "已按候选顺序保留最可能结果。",
-		SelectedIDs: ids,
-	}, nil
+	mu            sync.Mutex
+	ttsRewrite    string
+	ttsRewriteErr error
 }
 
 func (f *fakeWeixinAIReader) RewriteTextForTTS(_ context.Context, text string) (string, error) {
@@ -151,16 +40,6 @@ func (f *fakeWeixinAIReader) RewriteTextForTTS(_ context.Context, text string) (
 		return f.ttsRewrite, nil
 	}
 	return text, nil
-}
-
-func (f *fakeWeixinAIReader) lastInput() model.AIReadRequest {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-
-	if len(f.inputs) == 0 {
-		return model.AIReadRequest{}
-	}
-	return f.inputs[len(f.inputs)-1]
 }
 
 func createBridgePaper(t *testing.T, repo *repository.LibraryRepository, title, filename string) *model.Paper {
@@ -234,7 +113,7 @@ func TestWeixinIMBridgeRunReportsDisabledState(t *testing.T) {
 	svc, _, cfg := newTestService(t)
 	var logs bytes.Buffer
 	logger := slog.New(slog.NewTextHandler(&logs, nil))
-	bridge := NewWeixinIMBridge(svc, &fakeWeixinAIReader{answer: "ok"}, logger, cfg.StorageDir, nil, nil)
+	bridge := NewWeixinIMBridge(svc, &fakeWeixinAIReader{}, logger, cfg.StorageDir, nil, nil)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
@@ -267,7 +146,7 @@ func TestWeixinIMBridgeRunWarnsWhenBindingMissing(t *testing.T) {
 
 	var logs bytes.Buffer
 	logger := slog.New(slog.NewTextHandler(&logs, nil))
-	bridge := NewWeixinIMBridge(svc, &fakeWeixinAIReader{answer: "ok"}, logger, cfg.StorageDir, nil, nil)
+	bridge := NewWeixinIMBridge(svc, &fakeWeixinAIReader{}, logger, cfg.StorageDir, nil, nil)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
@@ -314,7 +193,7 @@ func TestWeixinIMBridgeRunDisablesBridgeWhenSessionExpires(t *testing.T) {
 
 	var logs bytes.Buffer
 	logger := slog.New(slog.NewTextHandler(&logs, nil))
-	bridge := NewWeixinIMBridge(svc, &fakeWeixinAIReader{answer: "ok"}, logger, cfg.StorageDir, nil, nil)
+	bridge := NewWeixinIMBridge(svc, &fakeWeixinAIReader{}, logger, cfg.StorageDir, nil, nil)
 
 	var pollCalls int
 	var pollCallsMu sync.Mutex
@@ -387,346 +266,20 @@ func TestWeixinIMBridgeRunDisablesBridgeWhenSessionExpires(t *testing.T) {
 	}
 }
 
-func TestWeixinIMBridgeSearchAndSelectPaperByResultNumber(t *testing.T) {
-	svc, repo, cfg := newTestService(t)
-	createBridgePaper(t, repo, "Atlas Alpha", "atlas-alpha.pdf")
-	createBridgePaper(t, repo, "Atlas Beta", "atlas-beta.pdf")
-	bridge := newTestWeixinBridge(t, svc, &fakeWeixinAIReader{answer: "ok"}, cfg.StorageDir)
-
-	reply := bridge.handleIncomingText(context.Background(), "/search Atlas")
-	if reply == "" {
-		t.Fatal("search reply is empty")
-	}
-
-	state := bridge.getContext()
-	if len(state.SearchPaperIDs) != 2 {
-		t.Fatalf("search result ids = %v, want 2 ids", state.SearchPaperIDs)
-	}
-
-	reply = bridge.handleIncomingText(context.Background(), "/paper 1")
-	if state.SearchPaperIDs[0] != bridge.getContext().CurrentPaperID {
-		t.Fatalf("current paper = %d, want %d from first search result", bridge.getContext().CurrentPaperID, state.SearchPaperIDs[0])
-	}
-	if reply == "" {
-		t.Fatal("select reply is empty")
-	}
-}
-
-func TestWeixinIMBridgeSmartPaperSearchUsesPlannedKeywords(t *testing.T) {
-	svc, repo, cfg := newTestService(t)
-	paper := createBridgePaper(t, repo, "Single-cell Atlas Review", "single-cell-atlas-review.pdf")
-	aiReader := &fakeWeixinAIReader{
-		answer: "ok",
-		searchPlan: &weixinSearchPlan{
-			Target:     weixinSearchTargetPaper,
-			KeywordsZH: []string{"单细胞图谱", "综述"},
-			KeywordsEN: []string{"single-cell atlas", "review"},
-			Keywords:   []string{"单细胞图谱", "综述", "single-cell atlas", "review"},
-		},
-	}
-	bridge := newTestWeixinBridge(t, svc, aiReader, cfg.StorageDir)
-
-	reply := bridge.handleIncomingText(context.Background(), "/search 我想找单细胞图谱综述")
-
-	if !containsAll(reply, "中文关键词", "英文关键词", "评估", "已自动选中文献") {
-		t.Fatalf("smart paper search reply = %q, want planned keyword summary and auto-selected paper", reply)
-	}
-	if bridge.getContext().CurrentPaperID != paper.ID {
-		t.Fatalf("current paper = %d, want %d", bridge.getContext().CurrentPaperID, paper.ID)
-	}
-}
-
-func TestWeixinIMBridgeFigureSearchFallsBackToHeuristics(t *testing.T) {
-	svc, repo, cfg := newTestService(t)
-	first := createBridgePaperWithFigureCaption(t, repo, "Differential Expression Study", "de-study.pdf", "Volcano plot of differential expression genes")
-	second := createBridgePaperWithFigureCaption(t, repo, "Heatmap Study", "heatmap-study.pdf", "Expression heatmap across samples")
-
-	bridge := newTestWeixinBridge(t, svc, &fakeWeixinAIReader{
-		answer:        "ok",
-		searchPlanErr: context.DeadlineExceeded,
-	}, cfg.StorageDir)
-
-	reply := bridge.handleIncomingText(context.Background(), "/search 我想要一张火山图")
-	if !containsAll(reply, "中文关键词", "英文关键词", "汇总后最可能的图片", "Volcano plot") {
-		t.Fatalf("figure search reply = %q, want heuristic keyword search result", reply)
-	}
-
-	state := bridge.getContext()
-	if len(state.SearchFigureIDs) == 0 || state.SearchFigureIDs[0] != first.Figures[0].ID {
-		t.Fatalf("search figure ids = %v, want first volcano figure id %d", state.SearchFigureIDs, first.Figures[0].ID)
-	}
-	if len(state.SearchFigureIDs) > 1 && state.SearchFigureIDs[1] == second.Figures[0].ID {
-		t.Fatalf("search figure ids = %v, unexpected heatmap ranked as top fallback result", state.SearchFigureIDs)
-	}
-
-	selectReply := bridge.handleIncomingText(context.Background(), "/figure 1")
-	if !containsAll(selectReply, "已选中图片", "所属文献") {
-		t.Fatalf("select figure reply = %q, want figure selection from search result", selectReply)
-	}
-	if bridge.getContext().CurrentFigureID != first.Figures[0].ID {
-		t.Fatalf("current figure = %d, want %d", bridge.getContext().CurrentFigureID, first.Figures[0].ID)
-	}
-}
-
-func TestWeixinIMBridgeAppendsPaperNote(t *testing.T) {
-	svc, repo, cfg := newTestService(t)
-	paper := createBridgePaper(t, repo, "Atlas Unique", "atlas-unique.pdf")
-	bridge := newTestWeixinBridge(t, svc, &fakeWeixinAIReader{answer: "ok"}, cfg.StorageDir)
-
-	_ = bridge.handleIncomingText(context.Background(), "/search Atlas Unique")
-	reply := bridge.handleIncomingText(context.Background(), "/note 这是从微信追加的笔记")
-	if reply == "" {
-		t.Fatal("note reply is empty")
-	}
-
-	reloaded, err := svc.GetPaper(paper.ID)
-	if err != nil {
-		t.Fatalf("GetPaper() error = %v", err)
-	}
-	if got := reloaded.PaperNotesText; got == "" || !containsAll(got, "[微信", "这是从微信追加的笔记") {
-		t.Fatalf("paper notes = %q, want appended weixin note", got)
-	}
-}
-
-func TestWeixinIMBridgeInterpretCurrentFigureUsesFigureAction(t *testing.T) {
-	svc, repo, cfg := newTestService(t)
-	createBridgePaper(t, repo, "Figure Atlas", "figure-atlas.pdf")
-	aiReader := &fakeWeixinAIReader{answer: "这是图片解读结果"}
-	bridge := newTestWeixinBridge(t, svc, aiReader, cfg.StorageDir)
-
-	_ = bridge.handleIncomingText(context.Background(), "/search Figure Atlas")
-	_ = bridge.handleIncomingText(context.Background(), "/figure 1")
-	reply := bridge.handleIncomingText(context.Background(), "/interpret 解释这张图")
-
-	if !containsAll(reply, "图片解读", "这是图片解读结果") {
-		t.Fatalf("interpret reply = %q, want figure interpretation answer", reply)
-	}
-
-	last := aiReader.lastInput()
-	if last.Action != model.AIActionFigureInterpretation {
-		t.Fatalf("AI action = %q, want %q", last.Action, model.AIActionFigureInterpretation)
-	}
-	if last.FigureID == 0 || last.PaperID == 0 {
-		t.Fatalf("AI request = %+v, want paper and figure ids", last)
-	}
-}
-
-func TestWeixinIMBridgeSelectFigureResolvesPreviewPath(t *testing.T) {
-	svc, repo, cfg := newTestService(t)
-	paper := createBridgePaper(t, repo, "Preview Atlas", "preview-atlas.pdf")
-	bridge := newTestWeixinBridge(t, svc, &fakeWeixinAIReader{answer: "ok"}, cfg.StorageDir)
-
-	figurePath := filepath.Join(cfg.FiguresDir(), paper.Figures[0].Filename)
-	if err := os.WriteFile(figurePath, []byte("preview-bytes"), 0o644); err != nil {
-		t.Fatalf("WriteFile() error = %v", err)
-	}
-
-	_ = bridge.handleIncomingText(context.Background(), "/search Preview Atlas")
-	reply := bridge.handleIncomingTextReply(context.Background(), "/figure 1")
-	previewPath, err := bridge.selectedFigurePreviewPath(weixin.Message{
-		ItemList: []weixin.MessageItem{
-			{
-				Type:     weixin.ItemTypeText,
-				TextItem: &weixin.TextItem{Text: "/figure 1"},
-			},
-		},
-	}, reply)
-	if err != nil {
-		t.Fatalf("selectedFigurePreviewPath() error = %v", err)
-	}
-	if previewPath != figurePath {
-		t.Fatalf("selectedFigurePreviewPath() path = %q, want %q", previewPath, figurePath)
-	}
-}
-
-func TestWeixinIMBridgeRandomSelectsFigureAndResolvesPreviewPath(t *testing.T) {
-	svc, repo, cfg := newTestService(t)
-	firstPaper := createBridgePaper(t, repo, "Random Atlas A", "random-atlas-a.pdf")
-	secondPaper := createBridgePaper(t, repo, "Random Atlas B", "random-atlas-b.pdf")
-	bridge := newTestWeixinBridge(t, svc, &fakeWeixinAIReader{answer: "ok"}, cfg.StorageDir)
-
-	firstFigurePath := filepath.Join(cfg.FiguresDir(), firstPaper.Figures[0].Filename)
-	secondFigurePath := filepath.Join(cfg.FiguresDir(), secondPaper.Figures[0].Filename)
-	writeTestPNGFile(t, firstFigurePath)
-	writeTestPNGFile(t, secondFigurePath)
-
-	reply := bridge.handleIncomingTextReply(context.Background(), "/random")
-	if !containsAll(reply.Text, "已随机选中图片", "所属文献") {
-		t.Fatalf("/random reply = %q, want random figure selection summary", reply.Text)
-	}
-
-	state := bridge.getContext()
-	if state.CurrentPaperID == 0 || state.CurrentFigureID == 0 {
-		t.Fatalf("context after /random = %+v, want selected paper and figure", state)
-	}
-	if state.CurrentFigureID != firstPaper.Figures[0].ID && state.CurrentFigureID != secondPaper.Figures[0].ID {
-		t.Fatalf("current figure id = %d, want one of seeded figures", state.CurrentFigureID)
-	}
-
-	previewPath, err := bridge.selectedFigurePreviewPath(weixin.Message{
-		ItemList: []weixin.MessageItem{
-			{
-				Type:     weixin.ItemTypeText,
-				TextItem: &weixin.TextItem{Text: "/random"},
-			},
-		},
-	}, reply)
-	if err != nil {
-		t.Fatalf("selectedFigurePreviewPath() error = %v", err)
-	}
-	if previewPath != firstFigurePath && previewPath != secondFigurePath {
-		t.Fatalf("selectedFigurePreviewPath() path = %q, want one of seeded figure paths", previewPath)
-	}
-}
-
-func TestWeixinIMBridgePlannedRandomResolvesPreviewPath(t *testing.T) {
-	svc, repo, cfg := newTestService(t)
-	firstPaper := createBridgePaper(t, repo, "Planned Random A", "planned-random-a.pdf")
-	secondPaper := createBridgePaper(t, repo, "Planned Random B", "planned-random-b.pdf")
-	bridge := newTestWeixinBridge(t, svc, &fakeWeixinAIReader{
-		answer:      "ok",
-		commandPlan: &weixinCommandPlan{Command: "/random"},
-	}, cfg.StorageDir)
-
-	firstFigurePath := filepath.Join(cfg.FiguresDir(), firstPaper.Figures[0].Filename)
-	secondFigurePath := filepath.Join(cfg.FiguresDir(), secondPaper.Figures[0].Filename)
-	writeTestPNGFile(t, firstFigurePath)
-	writeTestPNGFile(t, secondFigurePath)
-
-	reply := bridge.handleIncomingTextReply(context.Background(), "随机来一张图")
-	if !reply.PreviewCurrentFigure {
-		t.Fatalf("reply preview flag = false, want true for planned /random")
-	}
-	if !containsAll(reply.Text, "已随机选中图片", "所属文献") {
-		t.Fatalf("planned random reply = %q, want random figure selection summary", reply.Text)
-	}
-
-	previewPath, err := bridge.selectedFigurePreviewPath(weixin.Message{
-		ItemList: []weixin.MessageItem{
-			{
-				Type:     weixin.ItemTypeText,
-				TextItem: &weixin.TextItem{Text: "随机来一张图"},
-			},
-		},
-	}, reply)
-	if err != nil {
-		t.Fatalf("selectedFigurePreviewPath() error = %v", err)
-	}
-	if previewPath != firstFigurePath && previewPath != secondFigurePath {
-		t.Fatalf("selectedFigurePreviewPath() path = %q, want one of seeded figure paths", previewPath)
-	}
-}
-
-func TestWeixinIMBridgeQuestionCarriesHistory(t *testing.T) {
-	svc, repo, cfg := newTestService(t)
-	createBridgePaper(t, repo, "History Atlas", "history-atlas.pdf")
-	aiReader := &fakeWeixinAIReader{answer: "ok"}
-	bridge := newTestWeixinBridge(t, svc, aiReader, cfg.StorageDir)
-
-	_ = bridge.handleIncomingText(context.Background(), "/search History Atlas")
-	_ = bridge.handleIncomingText(context.Background(), "/ask 第一问")
-	_ = bridge.handleIncomingText(context.Background(), "/ask 第二问")
-
-	last := aiReader.lastInput()
-	if last.Action != model.AIActionPaperQA {
-		t.Fatalf("AI action = %q, want %q", last.Action, model.AIActionPaperQA)
-	}
-	if len(last.History) != 1 || last.History[0].Question != "第一问" {
-		t.Fatalf("AI history = %+v, want previous QA turn", last.History)
-	}
-}
-
-func TestWeixinIMBridgePlainTextSearchRoutesToBestCommand(t *testing.T) {
-	svc, repo, cfg := newTestService(t)
-	createBridgePaperWithFigureCaption(t, repo, "Volcano Atlas", "volcano-atlas.pdf", "Volcano plot for DE genes")
-	aiReader := &fakeWeixinAIReader{
-		answer:      "ok",
-		commandPlan: &weixinCommandPlan{Command: "/search-figures", Arg: "我想要一张火山图"},
-		searchPlan: &weixinSearchPlan{
-			Target:     weixinSearchTargetFigure,
-			KeywordsZH: []string{"火山图", "差异表达"},
-			KeywordsEN: []string{"volcano plot", "differential expression"},
-			Keywords:   []string{"火山图", "差异表达", "volcano plot", "differential expression"},
-		},
-	}
-	bridge := newTestWeixinBridge(t, svc, aiReader, cfg.StorageDir)
-
-	reply := bridge.handleIncomingText(context.Background(), "我想要一张火山图")
-
-	if !containsAll(reply, "中文关键词", "英文关键词", "汇总后最可能的图片") {
-		t.Fatalf("plain text reply = %q, want auto-routed search result", reply)
-	}
-	if len(bridge.getContext().SearchFigureIDs) == 0 {
-		t.Fatalf("search figure ids = %v, want auto-routed figure search results", bridge.getContext().SearchFigureIDs)
-	}
-}
-
-func TestWeixinIMBridgePlainTextSelectionRoutesToPaper(t *testing.T) {
-	svc, repo, cfg := newTestService(t)
-	createBridgePaper(t, repo, "Atlas Alpha", "atlas-alpha.pdf")
-	createBridgePaper(t, repo, "Atlas Beta", "atlas-beta.pdf")
-	createBridgePaper(t, repo, "Atlas Gamma", "atlas-gamma.pdf")
-	aiReader := &fakeWeixinAIReader{answer: "ok"}
-	bridge := newTestWeixinBridge(t, svc, aiReader, cfg.StorageDir)
-
-	_ = bridge.handleIncomingText(context.Background(), "/search Atlas")
-	state := bridge.getContext()
-	if len(state.SearchPaperIDs) < 3 {
-		t.Fatalf("search result ids = %v, want at least 3 results", state.SearchPaperIDs)
-	}
-
-	aiReader.commandPlan = &weixinCommandPlan{Command: "/paper", Arg: "3"}
-	reply := bridge.handleIncomingText(context.Background(), "我想看看第三篇文献")
-
-	if bridge.getContext().CurrentPaperID != state.SearchPaperIDs[2] {
-		t.Fatalf("current paper = %d, want third search result %d", bridge.getContext().CurrentPaperID, state.SearchPaperIDs[2])
-	}
-	selectedPaper, err := svc.GetPaper(state.SearchPaperIDs[2])
-	if err != nil {
-		t.Fatalf("GetPaper() error = %v", err)
-	}
-	if selectedPaper == nil {
-		t.Fatal("GetPaper() returned nil selected paper")
-	}
-	if !containsAll(reply, "已选中文献", selectedPaper.Title) {
-		t.Fatalf("plain text selection reply = %q, want selected third paper title %q", reply, selectedPaper.Title)
-	}
-}
-
-func TestWeixinIMBridgePlainTextQuestionRoutesToAsk(t *testing.T) {
-	svc, repo, cfg := newTestService(t)
-	createBridgePaper(t, repo, "Help Atlas", "help-atlas.pdf")
-	aiReader := &fakeWeixinAIReader{answer: "这是问答结果"}
-	bridge := newTestWeixinBridge(t, svc, aiReader, cfg.StorageDir)
-
-	_ = bridge.handleIncomingText(context.Background(), "/search Help Atlas")
-	reply := bridge.handleIncomingText(context.Background(), "第一问")
-
-	if !containsAll(reply, "文献问答", "这是问答结果") {
-		t.Fatalf("plain text reply = %q, want auto-routed ask result", reply)
-	}
-	last := aiReader.lastInput()
-	if last.Action != model.AIActionPaperQA {
-		t.Fatalf("AI action = %q, want auto-routed paper QA", last.Action)
-	}
-}
-
-func TestWeixinIMBridgeUnknownSlashCommandReturnsHelpWithoutIntentRouting(t *testing.T) {
+// TestWeixinIMBridgeUnknownSlashCommandReturnsHelpFallback exercises the
+// agentSession==nil fallback path: when the bridge has no agent_session wired
+// (early-boot or unit-test mode) any non-bridge-local input — including an
+// unknown slash command — should return weixinHelpText() rather than crash or
+// echo. Once T22 wires agent_session into bridge integration tests this can
+// be expanded to assert /unknown routes to the registry's "unknown command"
+// envelope.
+func TestWeixinIMBridgeUnknownSlashCommandReturnsHelpFallback(t *testing.T) {
 	svc, _, cfg := newTestService(t)
-	aiReader := &fakeWeixinAIReader{
-		answer:      "ok",
-		commandPlan: &weixinCommandPlan{Command: "/ask", Arg: "不应该触发"},
-	}
-	bridge := newTestWeixinBridge(t, svc, aiReader, cfg.StorageDir)
+	bridge := newTestWeixinBridge(t, svc, &fakeWeixinAIReader{}, cfg.StorageDir)
 
 	reply := bridge.handleIncomingText(context.Background(), "/unknown something")
 	if !containsAll(reply, "微信 IM 优先响应 slash 命令", "`/help`") {
 		t.Fatalf("unknown slash reply = %q, want help text", reply)
-	}
-
-	last := aiReader.lastInput()
-	if last.Action != "" {
-		t.Fatalf("AI action = %q, want no AI read call for unknown slash command", last.Action)
 	}
 }
 
@@ -742,7 +295,7 @@ func TestWeixinIMBridgeTestVoiceReturnsVoiceAttachment(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("UpdateTTSSettings() error = %v", err)
 	}
-	bridge := newTestWeixinBridge(t, svc, &fakeWeixinAIReader{answer: "ok"}, cfg.StorageDir)
+	bridge := newTestWeixinBridge(t, svc, &fakeWeixinAIReader{}, cfg.StorageDir)
 
 	voiceDir := t.TempDir()
 	voicePath := filepath.Join(voiceDir, "testvoice.mp3")
@@ -800,7 +353,7 @@ func TestWeixinIMBridgeTestVoiceReturnsVoiceAttachment(t *testing.T) {
 
 func TestWeixinIMBridgeVoiceToggleCommandsPersistSetting(t *testing.T) {
 	svc, _, cfg := newTestService(t)
-	bridge := newTestWeixinBridge(t, svc, &fakeWeixinAIReader{answer: "ok"}, cfg.StorageDir)
+	bridge := newTestWeixinBridge(t, svc, &fakeWeixinAIReader{}, cfg.StorageDir)
 
 	reply := bridge.handleIncomingText(context.Background(), "/voiceoff")
 	if !containsAll(reply, "已关闭微信 TTS 语音输出", "/ask", "/qa", "/testvoice") {
@@ -829,135 +382,6 @@ func TestWeixinIMBridgeVoiceToggleCommandsPersistSetting(t *testing.T) {
 	}
 }
 
-func TestWeixinIMBridgeAskReplyReturnsSynthesizedVoiceWhenTTSConfigured(t *testing.T) {
-	svc, _, cfg := newTestService(t)
-	if _, err := svc.UpdateWeixinBridgeSettings(model.WeixinBridgeSettings{Enabled: true}); err != nil {
-		t.Fatalf("UpdateWeixinBridgeSettings() error = %v", err)
-	}
-	if _, err := svc.UpdateTTSSettings(model.TTSSettings{
-		AppID:     "app-id",
-		AccessKey: "access-key",
-		Speaker:   "speaker-id",
-	}); err != nil {
-		t.Fatalf("UpdateTTSSettings() error = %v", err)
-	}
-
-	aiReader := &fakeWeixinAIReader{
-		answer:     "这是 Ask 的语音内容。",
-		ttsRewrite: "这是适合朗读的 Ask 语音内容。",
-	}
-	bridge := newTestWeixinBridge(t, svc, aiReader, cfg.StorageDir)
-	paper := createBridgePaper(t, svc.repo, "Ask TTS Paper", "ask-tts.pdf")
-	bridge.activatePaperContext(paper.ID, true)
-
-	voiceDir := t.TempDir()
-	voicePath := filepath.Join(voiceDir, "ask-reply.mp3")
-	if err := os.WriteFile(voicePath, []byte("tts-audio"), 0o644); err != nil {
-		t.Fatalf("WriteFile() error = %v", err)
-	}
-
-	synthCalled := false
-	bridge.synthesizeTTS = func(_ context.Context, text, uid string, settings model.TTSSettings) (string, func(), error) {
-		synthCalled = true
-		if text != "这是适合朗读的 Ask 语音内容。" {
-			t.Fatalf("synthesizeTTS() text = %q, want %q", text, "这是适合朗读的 Ask 语音内容。")
-		}
-		if uid != "user@im.wechat" {
-			t.Fatalf("synthesizeTTS() uid = %q, want %q", uid, "user@im.wechat")
-		}
-		if settings.AppID != "app-id" || settings.Speaker != "speaker-id" {
-			t.Fatalf("synthesizeTTS() settings = %+v, want persisted TTS config", settings)
-		}
-		return voicePath, func() {}, nil
-	}
-
-	reply := bridge.handleIncomingMessageReply(context.Background(), weixin.Message{
-		FromUserID: "user@im.wechat",
-		ItemList: []weixin.MessageItem{
-			{
-				Type:     weixin.ItemTypeText,
-				TextItem: &weixin.TextItem{Text: "/ask 总结一下这篇文献"},
-			},
-		},
-	})
-	if !containsAll(reply.Text, "文献问答", "这是 Ask 的语音内容。") {
-		t.Fatalf("handleIncomingMessageReply() = %+v, want ask answer text", reply)
-	}
-	if reply.VoicePendingNotice != "语音内容生成中，请稍后。" {
-		t.Fatalf("handleIncomingMessageReply() pending notice = %q, want %q", reply.VoicePendingNotice, "语音内容生成中，请稍后。")
-	}
-
-	selectedPath, cleanup, err := bridge.resolveVoiceReply(context.Background(), weixin.Message{
-		FromUserID: "user@im.wechat",
-	}, reply)
-	if err != nil {
-		t.Fatalf("resolveVoiceReply() error = %v", err)
-	}
-	cleanup()
-	if !synthCalled {
-		t.Fatal("resolveVoiceReply() did not trigger synthesizeTTS")
-	}
-	if selectedPath != voicePath {
-		t.Fatalf("resolveVoiceReply() path = %q, want %q", selectedPath, voicePath)
-	}
-}
-
-func TestWeixinIMBridgeAskReplySkipsVoiceWhenWeixinVoiceOutputDisabled(t *testing.T) {
-	svc, _, cfg := newTestService(t)
-	if _, err := svc.UpdateWeixinBridgeSettings(model.WeixinBridgeSettings{Enabled: true}); err != nil {
-		t.Fatalf("UpdateWeixinBridgeSettings() error = %v", err)
-	}
-	if _, err := svc.UpdateTTSSettings(model.TTSSettings{
-		AppID:                       "app-id",
-		AccessKey:                   "access-key",
-		Speaker:                     "speaker-id",
-		WeixinVoiceOutputEnabled:    false,
-		WeixinVoiceOutputEnabledSet: true,
-	}); err != nil {
-		t.Fatalf("UpdateTTSSettings() error = %v", err)
-	}
-
-	bridge := newTestWeixinBridge(t, svc, &fakeWeixinAIReader{
-		answer:     "这是 Ask 的文字答案。",
-		ttsRewrite: "这是 Ask 的语音答案。",
-	}, cfg.StorageDir)
-	paper := createBridgePaper(t, svc.repo, "Ask Voice Off Paper", "ask-voiceoff.pdf")
-	bridge.activatePaperContext(paper.ID, true)
-
-	synthCalled := false
-	bridge.synthesizeTTS = func(_ context.Context, text, uid string, settings model.TTSSettings) (string, func(), error) {
-		synthCalled = true
-		return "", func() {}, nil
-	}
-
-	reply := bridge.handleIncomingMessageReply(context.Background(), weixin.Message{
-		FromUserID: "user@im.wechat",
-		ItemList: []weixin.MessageItem{
-			{
-				Type:     weixin.ItemTypeText,
-				TextItem: &weixin.TextItem{Text: "/ask 总结一下"},
-			},
-		},
-	})
-	if !containsAll(reply.Text, "文献问答", "这是 Ask 的文字答案。") {
-		t.Fatalf("handleIncomingMessageReply() = %+v, want ask answer text", reply)
-	}
-
-	selectedPath, cleanup, err := bridge.resolveVoiceReply(context.Background(), weixin.Message{
-		FromUserID: "user@im.wechat",
-	}, reply)
-	if err != nil {
-		t.Fatalf("resolveVoiceReply() error = %v", err)
-	}
-	cleanup()
-	if synthCalled {
-		t.Fatal("resolveVoiceReply() synthesized voice even though weixin voice output is disabled")
-	}
-	if selectedPath != "" {
-		t.Fatalf("resolveVoiceReply() path = %q, want empty path when weixin voice output is disabled", selectedPath)
-	}
-}
-
 func TestWeixinIMBridgeTestVoiceReturnsHintWhenVoiceOutputDisabled(t *testing.T) {
 	svc, _, cfg := newTestService(t)
 	if _, err := svc.UpdateTTSSettings(model.TTSSettings{
@@ -969,7 +393,7 @@ func TestWeixinIMBridgeTestVoiceReturnsHintWhenVoiceOutputDisabled(t *testing.T)
 	}); err != nil {
 		t.Fatalf("UpdateTTSSettings() error = %v", err)
 	}
-	bridge := newTestWeixinBridge(t, svc, &fakeWeixinAIReader{answer: "ok"}, cfg.StorageDir)
+	bridge := newTestWeixinBridge(t, svc, &fakeWeixinAIReader{}, cfg.StorageDir)
 
 	reply := bridge.handleIncomingText(context.Background(), "/testvoice")
 	if !containsAll(reply, "微信 TTS 语音输出当前已关闭", "/voiceon", "/testvoice") {
@@ -1000,7 +424,6 @@ func TestWeixinIMBridgeVoiceRewriteFallbackSanitizesMarkdown(t *testing.T) {
 	}
 
 	aiReader := &fakeWeixinAIReader{
-		answer:        "ok",
 		ttsRewriteErr: context.DeadlineExceeded,
 	}
 	bridge := newTestWeixinBridge(t, svc, aiReader, cfg.StorageDir)
@@ -1113,7 +536,7 @@ func TestSplitWeixinReplyTextReturnsNilForBlankText(t *testing.T) {
 
 func TestWeixinIMBridgeImportsPDFFileAndSelectsPaper(t *testing.T) {
 	svc, _, cfg := newTestService(t)
-	bridge := newTestWeixinBridge(t, svc, &fakeWeixinAIReader{answer: "ok"}, cfg.StorageDir)
+	bridge := newTestWeixinBridge(t, svc, &fakeWeixinAIReader{}, cfg.StorageDir)
 	bridge.downloadFile = func(context.Context, weixin.MessageItem) (*weixin.DownloadedFile, error) {
 		return &weixin.DownloadedFile{
 			Filename:    "wechat-upload.bin",
@@ -1157,63 +580,6 @@ func TestWeixinIMBridgeImportsPDFFileAndSelectsPaper(t *testing.T) {
 	}
 }
 
-func TestWeixinIMBridgeImportsPaperFromDOIText(t *testing.T) {
-	svc, _, cfg := newTestService(t)
-	svc.config.OAContactEmail = "ops@example.com"
-	bridge := newTestWeixinBridge(t, svc, &fakeWeixinAIReader{
-		commandPlanErr: errors.New("doi import should bypass command planning"),
-	}, cfg.StorageDir)
-
-	var server *httptest.Server
-	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case strings.HasPrefix(r.URL.Path, "/unpaywall/v2/"):
-			w.Header().Set("Content-Type", "application/json")
-			fmt.Fprintf(w, `{"doi":"10.5555/wechat-doi","title":"WeChat DOI Import","best_oa_location":{"url_for_pdf":%q}}`, server.URL+"/files/wechat-doi.pdf")
-		case r.URL.Path == "/files/wechat-doi.pdf":
-			w.Header().Set("Content-Type", "application/pdf")
-			_, _ = w.Write(testPDFBytes())
-		default:
-			http.NotFound(w, r)
-		}
-	}))
-	defer server.Close()
-
-	originalUnpaywall := unpaywallAPIBaseURL
-	originalEuropePMC := europePMCSearchURL
-	originalPMCID := pmcIDConvURL
-	originalCrossref := crossrefWorksAPIBaseURL
-	unpaywallAPIBaseURL = server.URL + "/unpaywall/v2/"
-	europePMCSearchURL = server.URL + "/europe-pmc/search"
-	pmcIDConvURL = server.URL + "/pmc/idconv"
-	crossrefWorksAPIBaseURL = server.URL + "/crossref/works/"
-	defer func() {
-		unpaywallAPIBaseURL = originalUnpaywall
-		europePMCSearchURL = originalEuropePMC
-		pmcIDConvURL = originalPMCID
-		crossrefWorksAPIBaseURL = originalCrossref
-	}()
-
-	reply := bridge.handleIncomingText(context.Background(), "https://doi.org/10.5555/WECHAT-DOI")
-	if !containsAll(reply, "已通过 DOI 导入文献", "已选中文献") {
-		t.Fatalf("doi import reply = %q, want DOI import success message", reply)
-	}
-
-	result, err := svc.ListPapers(model.PaperFilter{})
-	if err != nil {
-		t.Fatalf("ListPapers() error = %v", err)
-	}
-	if result.Total != 1 || len(result.Papers) != 1 {
-		t.Fatalf("paper total = %d papers=%d, want 1", result.Total, len(result.Papers))
-	}
-	if got := result.Papers[0].DOI; got != "10.5555/wechat-doi" {
-		t.Fatalf("paper doi = %q, want %q", got, "10.5555/wechat-doi")
-	}
-	if bridge.getContext().CurrentPaperID != result.Papers[0].ID {
-		t.Fatalf("current paper = %d, want %d", bridge.getContext().CurrentPaperID, result.Papers[0].ID)
-	}
-}
-
 func TestWeixinIMBridgeImportsPDFFileBackfillsFullText(t *testing.T) {
 	svc, _, cfg := newTestService(t)
 	svc.startBackground = true
@@ -1221,7 +587,7 @@ func TestWeixinIMBridgeImportsPDFFileBackfillsFullText(t *testing.T) {
 		return "wechat imported full text", nil
 	}
 
-	bridge := newTestWeixinBridge(t, svc, &fakeWeixinAIReader{answer: "ok"}, cfg.StorageDir)
+	bridge := newTestWeixinBridge(t, svc, &fakeWeixinAIReader{}, cfg.StorageDir)
 	bridge.downloadFile = func(context.Context, weixin.MessageItem) (*weixin.DownloadedFile, error) {
 		return &weixin.DownloadedFile{
 			Filename:    "wechat-text.pdf",
@@ -1278,7 +644,7 @@ func TestWeixinIMBridgeReusesExistingPaperForDuplicatePDF(t *testing.T) {
 		t.Fatalf("UploadPaper() error = %v", err)
 	}
 
-	bridge := newTestWeixinBridge(t, svc, &fakeWeixinAIReader{answer: "ok"}, cfg.StorageDir)
+	bridge := newTestWeixinBridge(t, svc, &fakeWeixinAIReader{}, cfg.StorageDir)
 	bridge.downloadFile = func(context.Context, weixin.MessageItem) (*weixin.DownloadedFile, error) {
 		return &weixin.DownloadedFile{
 			Filename:    "wechat-duplicate.pdf",
@@ -1321,7 +687,7 @@ func TestWeixinIMBridgeReusesExistingPaperForDuplicatePDF(t *testing.T) {
 
 func TestWeixinIMBridgeRejectsNonPDFFiles(t *testing.T) {
 	svc, _, cfg := newTestService(t)
-	bridge := newTestWeixinBridge(t, svc, &fakeWeixinAIReader{answer: "ok"}, cfg.StorageDir)
+	bridge := newTestWeixinBridge(t, svc, &fakeWeixinAIReader{}, cfg.StorageDir)
 	bridge.downloadFile = func(context.Context, weixin.MessageItem) (*weixin.DownloadedFile, error) {
 		return &weixin.DownloadedFile{
 			Filename:    "notes.txt",
