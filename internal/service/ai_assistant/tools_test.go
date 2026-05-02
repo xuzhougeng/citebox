@@ -1156,6 +1156,138 @@ func TestExternalSearchToolEvidenceOnlyCitesStrongMatches(t *testing.T) {
 	}
 }
 
+func TestExternalSearchToolSearchGoalHintOverridesPlannerGoal(t *testing.T) {
+	strong := ai_external.Paper{
+		Source:        ai_external.SourceSemanticScholar,
+		SourcePaperID: "strong-1",
+		SourcePaperIDs: map[ai_external.SourceID]string{
+			ai_external.SourceSemanticScholar: "strong-1",
+		},
+		Sources:  []ai_external.SourceID{ai_external.SourceSemanticScholar},
+		Title:    "Strong match paper",
+		Abstract: "Direct evidence for the requested claim.",
+	}
+	weak := ai_external.Paper{
+		Source:        ai_external.SourceSemanticScholar,
+		SourcePaperID: "weak-1",
+		SourcePaperIDs: map[ai_external.SourceID]string{
+			ai_external.SourceSemanticScholar: "weak-1",
+		},
+		Sources:  []ai_external.SourceID{ai_external.SourceSemanticScholar},
+		Title:    "Weak match paper",
+		Abstract: "Related background discussion without a direct match.",
+	}
+	searcher := &queryRoutingExternalSearch{results: map[string][]ai_external.Paper{
+		"explicit goal override query": {strong, weak},
+	}}
+	planner := &stubExternalPlanner{plan: ExternalSearchPlan{
+		SearchGoal:  ExternalSearchGoalDiscovery,
+		SearchQuery: "explicit goal override query",
+	}}
+	classifier := &stubExternalClassifier{results: map[string]ExternalPaperClassificationResult{
+		"strong-1": {Tier: ExternalPaperTierStrongMatch, Reason: "Direct support."},
+		"weak-1":   {Tier: ExternalPaperTierWeakMatch, Reason: "Background support only."},
+	}}
+
+	res, err := NewExternalSearchToolWithAgents(searcher, planner, classifier).Run(context.Background(), ToolInput{
+		Query:          "Find evidence for the claim",
+		SearchGoalHint: ExternalSearchGoalEvidence,
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(res.Cards) != 1 {
+		t.Fatalf("cards = %+v, want explicit evidence hint to keep only strong_match", res.Cards)
+	}
+	card, ok := res.Cards[0].Payload.(ExternalPaperCard)
+	if !ok {
+		t.Fatalf("payload = %#v", res.Cards[0].Payload)
+	}
+	if got, want := card.S2PaperID, "strong-1"; got != want {
+		t.Fatalf("card id = %q, want %q", got, want)
+	}
+	if got, want := card.SearchGoal, ExternalSearchGoalEvidence; got != want {
+		t.Fatalf("card search goal = %q, want %q", got, want)
+	}
+	if len(res.Citations) != 1 || res.Citations[0].S2PaperID != "strong-1" {
+		t.Fatalf("citations = %+v, want only strong evidence citation", res.Citations)
+	}
+	if strings.Contains(res.AnswerContext, "Weak match paper") {
+		t.Fatalf("answer context = %q, want weak_match candidate omitted in evidence mode", res.AnswerContext)
+	}
+	for _, input := range classifier.inputs {
+		if got, want := input.SearchGoal, ExternalSearchGoalEvidence; got != want {
+			t.Fatalf("classifier search goal = %q, want %q", got, want)
+		}
+	}
+}
+
+func TestExternalSearchToolIgnoresInvalidSearchGoalHint(t *testing.T) {
+	strong := ai_external.Paper{
+		Source:        ai_external.SourceSemanticScholar,
+		SourcePaperID: "strong-1",
+		SourcePaperIDs: map[ai_external.SourceID]string{
+			ai_external.SourceSemanticScholar: "strong-1",
+		},
+		Sources:  []ai_external.SourceID{ai_external.SourceSemanticScholar},
+		Title:    "Strong match paper",
+		Abstract: "Direct evidence for the requested claim.",
+	}
+	weak := ai_external.Paper{
+		Source:        ai_external.SourceSemanticScholar,
+		SourcePaperID: "weak-1",
+		SourcePaperIDs: map[ai_external.SourceID]string{
+			ai_external.SourceSemanticScholar: "weak-1",
+		},
+		Sources:  []ai_external.SourceID{ai_external.SourceSemanticScholar},
+		Title:    "Weak match paper",
+		Abstract: "Related background discussion without a direct match.",
+	}
+	searcher := &queryRoutingExternalSearch{results: map[string][]ai_external.Paper{
+		"invalid explicit goal query": {strong, weak},
+	}}
+	planner := &stubExternalPlanner{plan: ExternalSearchPlan{
+		SearchGoal:  ExternalSearchGoalEvidence,
+		SearchQuery: "invalid explicit goal query",
+	}}
+	classifier := &stubExternalClassifier{results: map[string]ExternalPaperClassificationResult{
+		"strong-1": {Tier: ExternalPaperTierStrongMatch, Reason: "Direct support."},
+		"weak-1":   {Tier: ExternalPaperTierWeakMatch, Reason: "Background support only."},
+	}}
+
+	res, err := NewExternalSearchToolWithAgents(searcher, planner, classifier).Run(context.Background(), ToolInput{
+		Query:          "Find evidence for the claim",
+		SearchGoalHint: ExternalSearchGoal("unsupported"),
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(res.Cards) != 1 {
+		t.Fatalf("cards = %+v, want invalid hint ignored so planner evidence mode stays active", res.Cards)
+	}
+	card, ok := res.Cards[0].Payload.(ExternalPaperCard)
+	if !ok {
+		t.Fatalf("payload = %#v", res.Cards[0].Payload)
+	}
+	if got, want := card.S2PaperID, "strong-1"; got != want {
+		t.Fatalf("card id = %q, want %q", got, want)
+	}
+	if got, want := card.SearchGoal, ExternalSearchGoalEvidence; got != want {
+		t.Fatalf("card search goal = %q, want planner evidence goal preserved", got)
+	}
+	if len(res.Cards) != 1 || len(res.Citations) != 1 {
+		t.Fatalf("result = %+v, want evidence-mode surface unchanged by invalid hint", res)
+	}
+	if strings.Contains(res.AnswerContext, "Weak match paper") {
+		t.Fatalf("answer context = %q, want weak_match candidate omitted when planner evidence goal remains", res.AnswerContext)
+	}
+	for _, input := range classifier.inputs {
+		if got, want := input.SearchGoal, ExternalSearchGoalEvidence; got != want {
+			t.Fatalf("classifier search goal = %q, want planner evidence goal preserved", got)
+		}
+	}
+}
+
 func TestExternalSearchToolEvidenceZeroStrongDistinguishesNoSupportFromNoRecall(t *testing.T) {
 	weak := ai_external.Paper{
 		Source:        ai_external.SourceSemanticScholar,

@@ -222,6 +222,7 @@ func (t *ExternalSearchTool) Run(ctx context.Context, in ToolInput) (ToolResult,
 	if t != nil {
 		sourceQueries, plan, planErr = t.searchQueries(ctx, in.Query)
 	}
+	plan.SearchGoal = resolvedExternalSearchGoal(in.Query, plan.SearchGoal, in.SearchGoalHint)
 	var disabledRequested []ai_external.SourceID
 	if enabledSources, ok, err := enabledExternalSearchSources(ctx, t); err != nil {
 		searchQueries := flattenExternalSourceQueries(sourceQueries)
@@ -1017,6 +1018,27 @@ func normalizeExternalSearchGoal(raw string) ExternalSearchGoal {
 	default:
 		return ExternalSearchGoalDiscovery
 	}
+}
+
+func explicitExternalSearchGoal(raw ExternalSearchGoal) (ExternalSearchGoal, bool) {
+	switch strings.ToLower(strings.TrimSpace(string(raw))) {
+	case string(ExternalSearchGoalDiscovery):
+		return ExternalSearchGoalDiscovery, true
+	case string(ExternalSearchGoalEvidence):
+		return ExternalSearchGoalEvidence, true
+	default:
+		return "", false
+	}
+}
+
+func resolvedExternalSearchGoal(query string, planned ExternalSearchGoal, explicit ExternalSearchGoal) ExternalSearchGoal {
+	if goal, ok := explicitExternalSearchGoal(explicit); ok {
+		return goal
+	}
+	if isKnownExternalSearchGoal(string(planned)) {
+		return normalizeExternalSearchGoal(string(planned))
+	}
+	return fallbackExternalSearchGoal(query)
 }
 
 func parseExternalTargetYear(raw json.RawMessage) (int, error) {
