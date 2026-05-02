@@ -1,0 +1,29 @@
+{
+    "_title": "总览 - CiteBox",
+
+    "overview.brand": "CiteBox",
+    "overview.title": "总览",
+
+    "overview.panel.research": "Research Dashboard",
+    "overview.panel.research_sub": "最近导入",
+    "overview.panel.figure": "图片",
+    "overview.panel.figure_sub": "每日推荐",
+    "overview.panel.status": "Status",
+    "overview.panel.status_sub": "运行状态",
+
+    "overview.empty.papers": "尚未导入文献。",
+    "overview.empty.figures": "图片库为空，导入文献后再来。",
+
+    "overview.error.summary": "加载最近文献失败：",
+    "overview.error.figure": "加载今日图片失败：",
+    "overview.error.status": "加载状态失败：",
+
+    "overview.label.untitled": "(无标题)",
+    "overview.label.server_time": "服务时间",
+    "overview.label.weixin_bridge": "微信桥接",
+    "overview.label.weixin_enabled": "已启用",
+    "overview.label.weixin_disabled": "未启用",
+    "overview.label.daily_push": "每日推送",
+    "overview.label.daily_push_off": "关闭",
+    "overview.label.default_time": "默认时间"
+}

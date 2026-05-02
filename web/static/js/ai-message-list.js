@@ -1,6 +1,10 @@
 (function () {
     'use strict';
 
+    if (typeof window.t !== 'function') {
+        window.t = function (k, f) { return f || k; };
+    }
+
     const MessageList = {
         init(opts) {
             opts = opts || {};
@@ -33,7 +37,7 @@
             const btn = document.createElement('button');
             btn.type = 'button';
             btn.className = 'ai-message-tts-btn';
-            btn.title = '朗读';
+            btn.title = t('ai.tts.read_aloud', '朗读');
             btn.textContent = '🔊';
             btn.addEventListener('click', async () => {
                 if (btn.dataset.busy === '1') return;
@@ -47,7 +51,7 @@
                         body: JSON.stringify({ text }),
                     });
                     if (!r.ok) {
-                        let msg = '朗读失败';
+                        let msg = t('ai.tts.read_failed', '朗读失败');
                         try { const j = await r.json(); if (j && j.message) msg = j.message; } catch (_) {}
                         btn.title = msg;
                         return;

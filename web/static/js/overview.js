@@ -1,6 +1,10 @@
 (function () {
     'use strict';
 
+    if (typeof window.t !== 'function') {
+        window.t = function (k, f) { return f || k; };
+    }
+
     function el(tag, props, children) {
         const node = document.createElement(tag);
         if (props) {
@@ -33,18 +37,19 @@
             const body = await r.json();
             const papers = (body && body.recent_papers) || [];
             if (papers.length === 0) {
-                panel.replaceChildren(el('p', { className: 'overview-empty', text: '尚未导入文献。' }));
+                panel.replaceChildren(el('p', { className: 'overview-empty', text: t('overview.empty.papers', '尚未导入文献。') }));
                 return;
             }
+            const untitled = t('overview.label.untitled', '(无标题)');
             const list = el('ul', { className: 'overview-list' },
                 papers.map(p => el('li', null, [
                     el('span', { className: 'overview-paper-id', text: '#' + p.id }),
                     ' ',
-                    el('a', { className: 'overview-paper-title', href: '/?paper=' + p.id, text: p.title || '(无标题)' }),
+                    el('a', { className: 'overview-paper-title', href: '/?paper=' + p.id, text: p.title || untitled }),
                 ])));
             panel.replaceChildren(list);
         } catch (err) {
-            fail(panel, '加载最近文献失败：' + err.message);
+            fail(panel, t('overview.error.summary', '加载最近文献失败：') + err.message);
         }
     }
 
@@ -54,7 +59,7 @@
             const r = await fetch('/api/overview/daily-figure');
             if (!r.ok) {
                 if (r.status === 412) {
-                    panel.replaceChildren(el('p', { className: 'overview-empty', text: '图片库为空，导入文献后再来。' }));
+                    panel.replaceChildren(el('p', { className: 'overview-empty', text: t('overview.empty.figures', '图片库为空，导入文献后再来。') }));
                     return;
                 }
                 throw new Error('HTTP ' + r.status);
@@ -77,7 +82,7 @@
                 caption ? el('p', { className: 'overview-figure-caption', text: caption }) : null,
             );
         } catch (err) {
-            fail(panel, '加载今日图片失败：' + err.message);
+            fail(panel, t('overview.error.figure', '加载今日图片失败：') + err.message);
         }
     }
 
@@ -88,11 +93,21 @@
             if (!r.ok) throw new Error('HTTP ' + r.status);
             const status = await r.json();
             const rows = [];
-            rows.push(['服务时间', status.server_time || '?']);
+            rows.push([t('overview.label.server_time', '服务时间'), status.server_time || '?']);
             const wb = status.weixin_bridge || {};
-            rows.push(['微信桥接', wb.enabled ? '已启用' : '未启用']);
+            rows.push([
+                t('overview.label.weixin_bridge', '微信桥接'),
+                wb.enabled
+                    ? t('overview.label.weixin_enabled', '已启用')
+                    : t('overview.label.weixin_disabled', '未启用'),
+            ]);
             if (wb.enabled) {
-                rows.push(['每日推送', wb.daily_recommendation_on ? ('开启 · ' + (wb.daily_recommendation_at || '默认时间')) : '关闭']);
+                const dailyOn = wb.daily_recommendation_on;
+                const at = wb.daily_recommendation_at || t('overview.label.default_time', '默认时间');
+                rows.push([
+                    t('overview.label.daily_push', '每日推送'),
+                    dailyOn ? at : t('overview.label.daily_push_off', '关闭'),
+                ]);
             }
             const dl = el('dl', { className: 'overview-status-list' });
             for (const [k, v] of rows) {
@@ -101,7 +116,7 @@
             }
             panel.replaceChildren(dl);
         } catch (err) {
-            fail(panel, '加载状态失败：' + err.message);
+            fail(panel, t('overview.error.status', '加载状态失败：') + err.message);
         }
     }
 

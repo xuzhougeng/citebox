@@ -184,5 +184,12 @@
     "ai.note_heading": "AI Assistant - Turn ${n}",
     "ai.note_question": "Question: ${text}",
     "ai.note_time": "Recorded: ${time}",
-    "ai.note_model": "Model: ${meta}"
+    "ai.note_model": "Model: ${meta}",
+
+    "ai.tts.read_aloud": "Read aloud",
+    "ai.tts.read_failed": "Read aloud failed",
+
+    "ai.doi.importing": "Importing paper by DOI: ",
+    "ai.doi.imported": "Imported: ",
+    "ai.doi.failed": "DOI import failed: "
 }
