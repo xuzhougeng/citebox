@@ -240,6 +240,14 @@
         async sendPayload(payload) {
             const content = (payload && payload.content || '').trim();
             if (!content) return;
+
+            // T19: bare DOI in the chat input → import directly, surface a
+            // notice in the conversation pane, and skip the LLM round-trip.
+            if (looksLikeDOI(content)) {
+                await this._handleDOIImport(content);
+                return;
+            }
+
             const body = { content: content, context: this._currentContext() };
 
             // Parse @ tool tags out of the content. The text is left intact in
@@ -855,7 +863,44 @@
                 localStorage.setItem(EXTERNAL_EVIDENCE_KEY, on ? '1' : '0');
             } catch (e) { /* ignore */ }
         },
+
+        async _handleDOIImport(text) {
+            const s = this._state;
+            if (s.els && s.els.questionInput) s.els.questionInput.value = '';
+            this._appendNotice('正在通过 DOI 导入文献：' + text);
+            try {
+                const paper = await API.importPaperByDOI({ doi: text });
+                this._appendNotice('已导入：#' + paper.id + ' ' + (paper.title || ''));
+            } catch (err) {
+                const msg = (err && err.message) || String(err);
+                this._appendNotice('DOI 导入失败：' + msg);
+            }
+        },
+
+        _appendNotice(text) {
+            const s = this._state;
+            if (!s.els || !s.els.conversation) return;
+            const div = document.createElement('div');
+            div.className = 'ai-message ai-message-system';
+            const inner = document.createElement('div');
+            inner.className = 'ai-message-content';
+            inner.textContent = text;
+            div.appendChild(inner);
+            s.els.conversation.appendChild(div);
+            s.els.conversation.scrollTop = s.els.conversation.scrollHeight;
+        },
     };
+
+    const DOI_RE = /\b10\.\d{4,9}\/[-._;()/:A-Z0-9]+\b/i;
+    function looksLikeDOI(text) {
+        const trimmed = String(text || '').trim();
+        if (!trimmed) return false;
+        if (DOI_RE.test(trimmed)) return true;
+        const lower = trimmed.toLowerCase();
+        if (lower.startsWith('doi:')) return true;
+        if (lower.indexOf('doi.org/') !== -1) return true;
+        return false;
+    }
 
     if (typeof window !== 'undefined') {
         window.AIReader = window.AIReader || {};
