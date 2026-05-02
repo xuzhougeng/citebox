@@ -75,6 +75,7 @@ type SendMessageInput struct {
 	PaperIDs                []int64 // optional auto-pin (multi); takes precedence over PaperID when non-empty
 	IncludeExternalEvidence bool
 	IntentHint              string
+	SearchGoalHint          ai_assistant.ExternalSearchGoal
 	Sources                 []string
 	Context                 ai_assistant.RequestContext
 	OnEvent                 func(StreamEvent) error

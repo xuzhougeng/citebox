@@ -306,14 +306,16 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput, onDelta 
 	var runUsed bool
 	legacyEvidenceRequested := conv.StrictEvidence || in.IncludeExternalEvidence
 	explicitAssistantRequest := strings.TrimSpace(in.IntentHint) != "" ||
+		in.SearchGoalHint != "" ||
 		!requestContextEmpty(in.Context) ||
 		len(in.Sources) > 0
 	if s.orchestrator != nil && (!legacyEvidenceRequested || explicitAssistantRequest) {
 		out, orchErr := s.orchestrator.Run(ctx, ai_assistant.RunInput{
-			Content:    in.Content,
-			IntentHint: in.IntentHint,
-			Sources:    in.Sources,
-			Context:    in.Context,
+			Content:        in.Content,
+			IntentHint:     in.IntentHint,
+			SearchGoalHint: in.SearchGoalHint,
+			Sources:        in.Sources,
+			Context:        in.Context,
 		})
 		if orchErr != nil {
 			s.logger.Warn("ai_conversation: orchestrator failed", "error", orchErr)

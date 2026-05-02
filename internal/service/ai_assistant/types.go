@@ -25,11 +25,12 @@ type RouteInput struct {
 }
 
 type ToolInput struct {
-	Query      string         `json:"query"`
-	Context    RequestContext `json:"context,omitempty"`
-	Limit      int            `json:"limit,omitempty"`
-	IntentHint string         `json:"intent_hint,omitempty"`
-	Sources    []string       `json:"sources,omitempty"`
+	Query          string             `json:"query"`
+	Context        RequestContext     `json:"context,omitempty"`
+	Limit          int                `json:"limit,omitempty"`
+	IntentHint     string             `json:"intent_hint,omitempty"`
+	SearchGoalHint ExternalSearchGoal `json:"search_goal_hint,omitempty"`
+	Sources        []string           `json:"sources,omitempty"`
 }
 
 type RouteDecision struct {

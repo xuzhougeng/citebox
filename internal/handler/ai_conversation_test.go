@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/xuzhougeng/citebox/internal/service/ai_assistant"
 	"github.com/xuzhougeng/citebox/internal/service/ai_conversation"
 )
 
@@ -160,6 +161,23 @@ func TestAIConversationPostMessageDecodesSources(t *testing.T) {
 	want := []string{"pubmed", "semantic_scholar"}
 	if !reflect.DeepEqual(stub.sentInput.Sources, want) {
 		t.Fatalf("Sources = %+v, want %+v", stub.sentInput.Sources, want)
+	}
+}
+
+func TestAIConversationPostMessageDecodesSearchGoalHint(t *testing.T) {
+	stub := &stubAIConversationService{}
+	h := NewAIConversationHandler(stub)
+	body := strings.NewReader(`{"content":"找支持这个说法的证据","intent_hint":"external_search","search_goal_hint":"evidence"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/conversations/new/messages", body)
+	rec := httptest.NewRecorder()
+
+	h.PostMessage(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	if got, want := stub.sentInput.SearchGoalHint, ai_assistant.ExternalSearchGoalEvidence; got != want {
+		t.Fatalf("SearchGoalHint = %q, want %q", got, want)
 	}
 }
 

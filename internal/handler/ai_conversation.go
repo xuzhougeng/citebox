@@ -139,15 +139,16 @@ func (h *AIConversationHandler) PostMessage(w http.ResponseWriter, r *http.Reque
 	}
 
 	var body struct {
-		Content                 string                      `json:"content"`
-		PaperID                 int64                       `json:"paper_id,omitempty"`
-		PaperIDs                []int64                     `json:"paper_ids,omitempty"`
-		StrictEvidence          *bool                       `json:"strict_evidence,omitempty"`
-		IncludeExternalEvidence bool                        `json:"include_external_evidence,omitempty"`
-		IntentHint              string                      `json:"intent_hint,omitempty"`
-		Sources                 []string                    `json:"sources,omitempty"`
-		ReplaceLast             bool                        `json:"replace_last,omitempty"`
-		Context                 ai_assistant.RequestContext `json:"context,omitempty"`
+		Content                 string                          `json:"content"`
+		PaperID                 int64                           `json:"paper_id,omitempty"`
+		PaperIDs                []int64                         `json:"paper_ids,omitempty"`
+		StrictEvidence          *bool                           `json:"strict_evidence,omitempty"`
+		IncludeExternalEvidence bool                            `json:"include_external_evidence,omitempty"`
+		IntentHint              string                          `json:"intent_hint,omitempty"`
+		SearchGoalHint          ai_assistant.ExternalSearchGoal `json:"search_goal_hint,omitempty"`
+		Sources                 []string                        `json:"sources,omitempty"`
+		ReplaceLast             bool                            `json:"replace_last,omitempty"`
+		Context                 ai_assistant.RequestContext     `json:"context,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		sendError(w, apperr.New(apperr.CodeInvalidArgument, "请求体格式错误"))
@@ -196,6 +197,7 @@ func (h *AIConversationHandler) PostMessage(w http.ResponseWriter, r *http.Reque
 		PaperIDs:                body.PaperIDs,
 		IncludeExternalEvidence: body.IncludeExternalEvidence,
 		IntentHint:              body.IntentHint,
+		SearchGoalHint:          body.SearchGoalHint,
 		Sources:                 body.Sources,
 		Context:                 body.Context,
 		OnEvent: func(event ai_conversation.StreamEvent) error {

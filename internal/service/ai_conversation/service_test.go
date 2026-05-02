@@ -275,6 +275,35 @@ func (s *stubOrchestrator) Run(ctx context.Context, in ai_assistant.RunInput) (a
 	return s.out, s.err
 }
 
+func TestSendMessagePropagatesSearchGoalHintToOrchestrator(t *testing.T) {
+	svc, _, _ := newServiceForTest(t)
+	orch := &stubOrchestrator{
+		out: ai_assistant.RunOutput{
+			Intent:        ai_assistant.IntentExternalSearch,
+			AnswerContext: "外部证据上下文",
+		},
+	}
+	svc.orchestrator = orch
+	convID, _ := svc.CreateDraft()
+
+	_, err := svc.SendMessage(context.Background(), SendMessageInput{
+		ConversationID: convID,
+		Content:        "请找证据支持这个说法",
+		IntentHint:     ai_assistant.IntentExternalSearch,
+		SearchGoalHint: ai_assistant.ExternalSearchGoalEvidence,
+	}, func(string) error { return nil })
+	if err != nil {
+		t.Fatalf("SendMessage: %v", err)
+	}
+
+	if orch.calls != 1 {
+		t.Fatalf("orchestrator calls = %d, want 1", orch.calls)
+	}
+	if got, want := orch.in.SearchGoalHint, ai_assistant.ExternalSearchGoalEvidence; got != want {
+		t.Fatalf("SearchGoalHint = %q, want %q", got, want)
+	}
+}
+
 func TestStrictEvidenceUsesLegacyPathWhenOrchestratorConfiguredWithoutExplicitIntent(t *testing.T) {
 	svc, libRepo, caller := newServiceForTest(t)
 	orch := &stubOrchestrator{
