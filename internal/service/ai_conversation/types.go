@@ -88,3 +88,22 @@ type SendMessageResult struct {
 	AssistantMessage Message
 	GeneratedTitle   string // present only when title was just auto-generated
 }
+
+// SurfaceMessageInput is the agent_session entry shape — much simpler than
+// SendMessageInput because it drops auto-pin, evidence-injection, and
+// per-turn intent metadata in favor of a fixed-policy turn that obeys the
+// per-surface history cap.
+type SurfaceMessageInput struct {
+	ConversationID int64
+	Text           string
+	Surface        string // "wechat" or "web"
+}
+
+// SurfaceMessageResult mirrors the subset of SendMessageResult that callers
+// outside the streaming HTTP handler care about.
+type SurfaceMessageResult struct {
+	UserMessageID      int64
+	AssistantMessageID int64
+	AnswerText         string
+	PlaceholderText    string
+}

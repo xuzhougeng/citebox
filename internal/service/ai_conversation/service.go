@@ -460,6 +460,107 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput, onDelta 
 	return res, nil
 }
 
+// wechatHistoryRowCap is queried as 11 because SendForSurface inserts the new
+// user message before reading history; after dropping that one row from the
+// returned slice the history block sent to the LLM contains exactly 10 rows
+// (= 5 prior user/assistant pairs), matching the spec.
+const wechatHistoryRowCap = 11
+
+// SendForSurface is the simpler turn engine used by agent_session. It does NOT:
+//   - auto-pin any papers
+//   - inject evidence
+//   - emit stream events (placeholder/cards/citations); the caller fires the
+//     placeholder via onPlaceholder, then receives the final text in the
+//     return value
+//
+// For surface == "wechat" it uses ListMessagesAfterBarrier (capped at 5 turns
+// = 10 rows) and skips summarization entirely. For other surfaces it falls
+// back to the same window the legacy SendMessage uses.
+//
+// onPlaceholder may be nil; if non-nil it is called once with the placeholder
+// text before the synchronous LLM call. The returned PlaceholderText field
+// echoes the same string for callers that need it.
+func (s *Service) SendForSurface(ctx context.Context, in SurfaceMessageInput,
+	onPlaceholder func(string) error) (SurfaceMessageResult, error) {
+
+	if in.ConversationID <= 0 {
+		return SurfaceMessageResult{}, apperr.New(apperr.CodeInvalidArgument, "conversation_id 无效")
+	}
+	if strings.TrimSpace(in.Text) == "" {
+		return SurfaceMessageResult{}, apperr.New(apperr.CodeInvalidArgument, "消息内容为空")
+	}
+
+	placeholder := "正在思考……"
+	if onPlaceholder != nil {
+		_ = onPlaceholder(placeholder)
+	}
+
+	conv, err := s.repo.GetConversation(in.ConversationID)
+	if err != nil {
+		return SurfaceMessageResult{}, mapRepoErr(err)
+	}
+
+	userMsgID, err := s.repo.AddMessage(in.ConversationID, "user", in.Text, repository.AIMessageMeta{})
+	if err != nil {
+		return SurfaceMessageResult{}, err
+	}
+
+	settings, err := s.settings.GetSettings()
+	if err != nil {
+		return SurfaceMessageResult{}, err
+	}
+	masterSettings := assistantMasterSettings(*settings)
+
+	var history []repository.AIMessage
+	if in.Surface == "wechat" {
+		history, err = s.repo.ListMessagesAfterBarrier(in.ConversationID, wechatHistoryRowCap)
+	} else {
+		history, err = s.repo.ListMessages(in.ConversationID, conv.SummaryThroughMessageID.Int64, 1000)
+	}
+	if err != nil {
+		return SurfaceMessageResult{}, err
+	}
+	// Drop the just-inserted user msg from history (we'll append it explicitly).
+	if n := len(history); n > 0 && history[n-1].ID == userMsgID {
+		history = history[:n-1]
+	}
+
+	if in.Surface != "wechat" {
+		s.maybeSummarize(ctx, &conv, &history, assistantSubagentSettings(*settings))
+	}
+
+	pinned, err := s.repo.ListPinnedPapers(in.ConversationID)
+	if err != nil {
+		return SurfaceMessageResult{}, err
+	}
+	asm, err := s.assembleForTurn(conv, pinned, history, in.Text, masterSettings)
+	if err != nil {
+		return SurfaceMessageResult{}, err
+	}
+
+	answer, mode, err := s.caller.CallProviderStreamGeneric(ctx, masterSettings, asm.systemPrompt, asm.userPrompt, asm.images, func(string) error { return nil })
+	if err != nil {
+		return SurfaceMessageResult{}, err
+	}
+
+	asstID, err := s.repo.AddMessage(in.ConversationID, "assistant", answer, repository.AIMessageMeta{
+		Provider: string(masterSettings.Provider),
+		Model:    masterSettings.Model,
+		Mode:     mode,
+	})
+	if err != nil {
+		return SurfaceMessageResult{}, err
+	}
+	_ = s.repo.TouchConversation(in.ConversationID)
+
+	return SurfaceMessageResult{
+		UserMessageID:      userMsgID,
+		AssistantMessageID: asstID,
+		AnswerText:         answer,
+		PlaceholderText:    placeholder,
+	}, nil
+}
+
 func fallbackToolAnswer(userText string, out ai_assistant.RunOutput, providerErr error) string {
 	contextText := strings.TrimSpace(out.AnswerContext)
 	if contextText == "" {
