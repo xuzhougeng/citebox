@@ -547,6 +547,37 @@ func TestAIConversationRunArtifactsCascadeWithConversation(t *testing.T) {
 	}
 }
 
+func TestSchemaHasConversationSurfaceColumns(t *testing.T) {
+	libRepo, err := NewLibraryRepository(filepath.Join(t.TempDir(), "library.db"))
+	if err != nil {
+		t.Fatalf("NewLibraryRepository: %v", err)
+	}
+	t.Cleanup(func() { _ = libRepo.Close() })
+	db := libRepo.db
+
+	cols := map[string]string{}
+	rows, err := db.Query("PRAGMA table_info(ai_conversations)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var cid int
+		var name, ctype string
+		var notnull, pk int
+		var dflt sql.NullString
+		if err := rows.Scan(&cid, &name, &ctype, &notnull, &dflt, &pk); err != nil {
+			t.Fatal(err)
+		}
+		cols[name] = ctype
+	}
+	for _, want := range []string{"surface_origin", "kind", "clear_barrier_turn_id"} {
+		if _, ok := cols[want]; !ok {
+			t.Errorf("missing column %q", want)
+		}
+	}
+}
+
 // mustInsertTestPaper inserts a minimal papers row (FK target for pin test).
 func mustInsertTestPaper(t *testing.T, libRepo *LibraryRepository, title, doi string) int64 {
 	t.Helper()
