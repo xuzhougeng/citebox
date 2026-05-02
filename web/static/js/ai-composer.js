@@ -1,15 +1,15 @@
-(function (root, factory) {
+(function (browserRoot, factory) {
     'use strict';
 
-    const api = factory(root);
+    const api = factory(browserRoot);
     if (typeof module === 'object' && module.exports) {
         module.exports = api;
     }
-    if (root) {
-        root.AIReader = root.AIReader || {};
-        root.AIReader.composer = api.Composer;
+    if (browserRoot) {
+        browserRoot.AIReader = browserRoot.AIReader || {};
+        browserRoot.AIReader.composer = api.Composer;
     }
-})(typeof globalThis !== 'undefined' ? globalThis : this, function (root) {
+})(typeof window !== 'undefined' ? window : null, function (root) {
     'use strict';
 
     const SHORTCUT_SPECS = [
