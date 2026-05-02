@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8" />
+    <title>总览 — CiteBox</title>
+    <link rel="stylesheet" href="/static/css/overview.css" />
+</head>
+<body>
+    <header class="overview-topbar">
+        <a href="/" class="overview-brand">CiteBox</a>
+        <span class="overview-divider">·</span>
+        <span class="overview-title">总览</span>
+        <nav class="overview-nav">
+            <a href="/">文献库</a>
+            <a href="/figures.html">图片库</a>
+            <a href="/ai.html">AI 助手</a>
+            <a href="/research.html">文献搜索</a>
+        </nav>
+    </header>
+    <main class="overview-grid">
+        <section id="panel-research" class="overview-panel">
+            <header class="overview-panel-header">
+                <h2>Research Dashboard</h2>
+                <span class="overview-panel-sub">最近导入</span>
+            </header>
+            <div class="overview-panel-body" data-bind="recent-papers">
+                <p class="overview-loading">加载中…</p>
+            </div>
+        </section>
+        <section id="panel-figure" class="overview-panel">
+            <header class="overview-panel-header">
+                <h2>图片</h2>
+                <span class="overview-panel-sub">每日推荐</span>
+            </header>
+            <div class="overview-panel-body" data-bind="daily-figure">
+                <p class="overview-loading">加载中…</p>
+            </div>
+        </section>
+        <section id="panel-status" class="overview-panel">
+            <header class="overview-panel-header">
+                <h2>Status</h2>
+                <span class="overview-panel-sub">运行状态</span>
+            </header>
+            <div class="overview-panel-body" data-bind="status">
+                <p class="overview-loading">加载中…</p>
+            </div>
+        </section>
+    </main>
+    <script src="/static/js/overview.js"></script>
+</body>
+</html>

@@ -1136,6 +1136,8 @@ func buildHandlerWithAIServices(
 			http.ServeFile(w, r, filepath.Join(webRoot, "login.html"))
 		case "/research", "/research.html":
 			http.ServeFile(w, r, filepath.Join(webRoot, "research.html"))
+		case "/overview", "/overview.html":
+			http.ServeFile(w, r, filepath.Join(webRoot, "overview.html"))
 		default:
 			http.NotFound(w, r)
 		}
