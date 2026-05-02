@@ -1669,6 +1669,75 @@ OpenAI 兼容模型配置说明：
 
 - 打开 PDF
 
+### 总览 Overview
+
+#### `GET /api/overview/summary`
+
+用途：填充 `/overview` 页面的 Research Dashboard 面板。
+
+返回：
+
+```json
+{
+  "recent_papers": [
+    {"id": 42, "title": "Diffusion Models for ...", "created_at": "2026-05-02T10:11:12Z"}
+  ]
+}
+```
+
+#### `GET /api/overview/daily-figure`
+
+用途：填充 `/overview` 页面的「今日推荐图片」。
+
+返回：日期决定的同一张图（同一日多次请求结果相同）。
+
+```json
+{
+  "id": 199,
+  "caption": "Figure 3: ...",
+  "label": "图 3",
+  "paper": "Diffusion Models for ...",
+  "page": 5
+}
+```
+
+库为空时返回 `412 Precondition Failed`。
+
+#### `GET /api/overview/status`
+
+用途：填充 `/overview` 页面的 Status 面板。
+
+返回：
+
+```json
+{
+  "server_time": "2026-05-02T10:11:12Z",
+  "weixin_bridge": {
+    "enabled": true,
+    "daily_recommendation_on": true,
+    "daily_recommendation_at": "08:30"
+  }
+}
+```
+
+`weixin_bridge` 仅在桥接已启用时存在 `daily_recommendation_*` 字段。
+
+### TTS 合成
+
+#### `POST /api/ai/tts`
+
+用途：把任意文本合成为音频。供 AI 助手页的 🔊 按钮调用。
+
+请求：
+
+```json
+{ "text": "要朗读的文本" }
+```
+
+返回：`audio/mpeg`（或对应类型）二进制流。Content-Disposition 为 `inline`。
+
+需要在 设置 → TTS 配置中先填好 AppID / AccessKey / Speaker；否则返回 `412`。
+
 ### `GET /files/figures/{filename}`
 
 用途：

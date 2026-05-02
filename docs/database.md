@@ -532,6 +532,18 @@ CREATE TABLE entity_events (
 - 哪篇文献什么时候被重新解析
 - 哪张图的笔记被 AI 写入过什么内容
 
+## AI 会话统一层（surface unification, 2026-05）
+
+`ai_conversations` 增加了三列以支持桌面端和微信端共用同一套会话引擎：
+
+- `surface_origin TEXT NOT NULL DEFAULT 'web'` — 创建会话的来源：`'wechat'` / `'web'` / `'desktop'`
+- `kind TEXT NOT NULL DEFAULT 'default_web'` — 会话角色：`'main_wechat'`（每个绑定用户唯一）/ `'default_web'`（Web 默认会话）/ `'ad_hoc'`（任何具名会话）
+- `clear_barrier_turn_id INTEGER` — `/clear` 屏障；后续历史只读取 `id > clear_barrier_turn_id` 的 turn
+
+部分唯一索引 `idx_ai_conv_main_wechat` 限定 `kind = 'main_wechat'` 全表只允许一行（单租户简化；多租户化时改为 `(user_id, kind)`）。
+
+完整的 AI 会话表族（`ai_conversations`、`ai_messages`、`ai_conversation_papers`、`ai_turn_runs`、`ai_tool_calls`、`ai_result_cards`）定义在 `internal/repository/schema/schema.go`；该文件用 `ensureColumn` 实现增量列迁移，`ensureConversationSurfaceColumns` 是这次新增的。
+
 ## 当前最值得坚持的建模原则
 
 - 主实体和扩展实体分开：不要把一切都塞进 `papers`
