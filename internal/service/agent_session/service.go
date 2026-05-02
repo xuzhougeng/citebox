@@ -39,6 +39,21 @@ func (s *Service) Handle(ctx context.Context, req AgentRequest) (*AgentResponse,
 		return nil, err
 	}
 
+	if looksLikeDOI(req.Input.Text) {
+		cmdResp, err := s.cmds.Dispatch(ctx, ":doi", req.Input.Text, commands.RuntimeCtx{
+			ConversationID: convID,
+			Surface:        string(req.Surface),
+			UserID:         req.UserID,
+			SurfaceCtx:     toCommandsSurfaceContext(req.SurfaceContext),
+			State:          s.state,
+			Repo:           s.repo,
+		})
+		if err != nil {
+			return nil, err
+		}
+		return wrapCmdResp(cmdResp), nil
+	}
+
 	if cmd, arg, ok := parseSlash(req.Input.Text); ok {
 		cmdResp, err := s.cmds.Dispatch(ctx, cmd, arg, commands.RuntimeCtx{
 			ConversationID: convID,

@@ -70,6 +70,24 @@ func (e *DuplicatePaperError) Unwrap() error {
 	return e.Err
 }
 
+// DuplicatePaper exposes the existing paper for callers that match against a
+// narrow interface (e.g. the agent_session DOI command) and want to avoid
+// importing the service package directly.
+func (e *DuplicatePaperError) DuplicatePaper() *model.Paper {
+	if e == nil {
+		return nil
+	}
+	return e.Paper
+}
+
+// NormalizeDOI is a thin public wrapper around the package-private
+// normalizeDOIInput helper so callers outside the service package (such as the
+// agent_session commands subpackage) can validate and canonicalize a DOI
+// without re-implementing the parser.
+func (s *LibraryService) NormalizeDOI(input string) (string, error) {
+	return normalizeDOIInput(input)
+}
+
 type UploadPaperParams struct {
 	Title          string
 	DOI            string
