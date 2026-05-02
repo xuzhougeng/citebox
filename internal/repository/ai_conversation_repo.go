@@ -103,6 +103,10 @@ func NewAIConversationRepository(db *sql.DB) *AIConversationRepository {
 	return &AIConversationRepository{db: db}
 }
 
+// DB exposes the underlying *sql.DB so callers (e.g. the /clear shortcut) can
+// run small targeted queries without forcing a new repo method per query.
+func (r *AIConversationRepository) DB() *sql.DB { return r.db }
+
 // CreateConversation inserts a blank row and returns its id.
 func (r *AIConversationRepository) CreateConversation() (int64, error) {
 	res, err := r.db.Exec(`INSERT INTO ai_conversations DEFAULT VALUES`)
