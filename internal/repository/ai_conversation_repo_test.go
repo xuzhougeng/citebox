@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -639,6 +640,35 @@ func TestSetClearBarrierExcludesOlderMessages(t *testing.T) {
 	}
 	if len(rows) != 1 || rows[0].ID != m3 {
 		t.Fatalf("want only new msg %d, got %v", m3, rows)
+	}
+}
+
+func TestFindOrCreateByKindConcurrentRace(t *testing.T) {
+	repo := newAIConversationRepoForTest(t)
+	const goroutines = 8
+	var wg sync.WaitGroup
+	ids := make([]int64, goroutines)
+	errs := make([]error, goroutines)
+	start := make(chan struct{})
+	for i := 0; i < goroutines; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			<-start
+			ids[i], errs[i] = repo.FindOrCreateByKind("main_wechat", "wechat")
+		}(i)
+	}
+	close(start)
+	wg.Wait()
+	for i, err := range errs {
+		if err != nil {
+			t.Fatalf("goroutine %d failed: %v", i, err)
+		}
+	}
+	for i := 1; i < goroutines; i++ {
+		if ids[i] != ids[0] {
+			t.Fatalf("ids diverged: ids[0]=%d ids[%d]=%d", ids[0], i, ids[i])
+		}
 	}
 }
 
