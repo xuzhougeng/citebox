@@ -1158,3 +1158,13 @@
     opacity: 1;
     cursor: progress;
 }
+
+.ai-message-system {
+    align-self: center;
+    background: rgba(var(--ink-rgb), 0.04);
+    color: rgba(var(--ink-rgb), 0.72);
+    border: 1px dashed rgba(var(--ink-rgb), 0.12);
+    font-size: 0.85rem;
+    font-style: italic;
+    max-width: min(100%, 36rem);
+}
