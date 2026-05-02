@@ -25,6 +25,7 @@ import (
 	"github.com/xuzhougeng/citebox/internal/service/ai_assistant"
 	"github.com/xuzhougeng/citebox/internal/service/ai_conversation"
 	"github.com/xuzhougeng/citebox/internal/service/ai_external"
+	"github.com/xuzhougeng/citebox/internal/service/daily_figure"
 	"github.com/xuzhougeng/citebox/internal/service/pubmed"
 	"github.com/xuzhougeng/citebox/internal/service/research"
 )
@@ -438,6 +439,7 @@ func buildHandlerWithAIServices(
 	researchAdapter := &research.RepoAdapter{Repo: repo.Research}
 	basket := research.NewBasket(researchAdapter, researchSvc, librarySvcImporterShim{librarySvc})
 	researchHandler := handler.NewResearchHandler(researchSvc, basket, nil)
+	overviewHandler := handler.NewOverviewHandler(librarySvc, daily_figure.New(repo.Figure), librarySvc)
 
 	mux := http.NewServeMux()
 
@@ -854,6 +856,28 @@ func buildHandlerWithAIServices(
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
+	})
+
+	mux.HandleFunc("/api/overview/summary", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		overviewHandler.Summary(w, r)
+	})
+	mux.HandleFunc("/api/overview/daily-figure", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		overviewHandler.DailyFigure(w, r)
+	})
+	mux.HandleFunc("/api/overview/status", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		overviewHandler.Status(w, r)
 	})
 	mux.HandleFunc("/api/settings/tts/test", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {

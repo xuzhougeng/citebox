@@ -19,7 +19,7 @@ func (f *fakePool) ListAllFigureIDs() ([]int64, error) {
 	}
 	return f.ids, nil
 }
-func (f *fakePool) LoadFigure(id int64) (*model.FigureListItem, error) {
+func (f *fakePool) GetFigure(id int64) (*model.FigureListItem, error) {
 	if fig := f.loads[id]; fig != nil {
 		return fig, nil
 	}

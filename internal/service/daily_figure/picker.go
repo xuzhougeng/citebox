@@ -25,7 +25,7 @@ import (
 // (id int64) (*model.FigureListItem, error) shape after a small adapter).
 type FigurePool interface {
 	ListAllFigureIDs() ([]int64, error)
-	LoadFigure(id int64) (*model.FigureListItem, error)
+	GetFigure(id int64) (*model.FigureListItem, error)
 }
 
 // Picker chooses the per-date figure deterministically from a FigurePool.
@@ -52,7 +52,7 @@ func (p *Picker) pickWithCtx(_ context.Context, date time.Time) (*model.FigureLi
 		return nil, apperr.New(apperr.CodeFailedPrecondition, "图片库为空")
 	}
 	idx := dateIndex(date, len(ids))
-	return p.pool.LoadFigure(ids[idx])
+	return p.pool.GetFigure(ids[idx])
 }
 
 // dateIndex hashes the calendar date (YYYY-MM-DD) with FNV-1a and reduces it
