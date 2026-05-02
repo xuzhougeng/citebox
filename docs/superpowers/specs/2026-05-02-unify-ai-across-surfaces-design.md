@@ -84,7 +84,7 @@ New columns:
 - `kind TEXT NOT NULL` — `'main_wechat'`, `'default_web'`, `'ad_hoc'`
 - `clear_barrier_turn_id INTEGER` — nullable; when set, any turn with `id <= clear_barrier_turn_id` is excluded from prompt assembly
 
-Constraint: partial unique index on `(user_id)` where `kind = 'main_wechat'` to guarantee one WeChat thread per bound user.
+Constraint: partial unique index on `(kind)` where `kind = 'main_wechat'` to guarantee a single WeChat thread for the single-tenant deployment. (If multi-tenancy is added, this becomes `(user_id, kind)`.)
 
 ### `conversation_turns` (extends existing turn storage)
 
