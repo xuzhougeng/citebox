@@ -13,12 +13,13 @@ import (
 
 type stubResearchService struct {
 	searchResult research.PaperList
+	searchErr    error
 	getResult    research.Paper
 	getErr       error
 }
 
 func (s *stubResearchService) Search(ctx context.Context, q string, opts research.SearchOpts) (research.PaperList, error) {
-	return s.searchResult, nil
+	return s.searchResult, s.searchErr
 }
 func (s *stubResearchService) GetPaper(ctx context.Context, id string) (research.Paper, error) {
 	return s.getResult, s.getErr
@@ -104,5 +105,54 @@ func TestResearchHandlerGetPaperRoute(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), `"paperId":"p1"`) {
 		t.Fatalf("body = %s", rec.Body.String())
+	}
+}
+
+func TestResearchHandlerSearchRateLimitedReportsAPIKeyUsage(t *testing.T) {
+	stub := &stubResearchService{searchErr: &research.RateLimitedError{UsedAPIKey: true}}
+	h := NewResearchHandler(stub, nil, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/research/search?q=hello", nil)
+	rec := httptest.NewRecorder()
+	h.Search(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	var body struct {
+		Code       string `json:"code"`
+		Error      string `json:"error"`
+		UsedAPIKey *bool  `json:"used_api_key"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if body.Code == "" || body.Error == "" {
+		t.Fatalf("missing error payload: %+v", body)
+	}
+	if body.UsedAPIKey == nil || !*body.UsedAPIKey {
+		t.Fatalf("used_api_key = %+v, want true", body.UsedAPIKey)
+	}
+}
+
+func TestResearchHandlerSearchRateLimitedReportsAnonymousUsage(t *testing.T) {
+	stub := &stubResearchService{searchErr: &research.RateLimitedError{UsedAPIKey: false}}
+	h := NewResearchHandler(stub, nil, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/research/search?q=hello", nil)
+	rec := httptest.NewRecorder()
+	h.Search(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	var body struct {
+		UsedAPIKey *bool `json:"used_api_key"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if body.UsedAPIKey == nil || *body.UsedAPIKey {
+		t.Fatalf("used_api_key = %+v, want false", body.UsedAPIKey)
 	}
 }

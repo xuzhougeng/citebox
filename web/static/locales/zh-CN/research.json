@@ -32,6 +32,8 @@
     "research.filter.influentialOnly": "仅高影响力",
     "research.filter.sort": "排序",
     "research.error.rateLimited": "Semantic Scholar 限流，请稍后重试。",
+    "research.error.rateLimitedWithKey": "Semantic Scholar 限流，请稍后重试。本次请求已携带 API Key。",
+    "research.error.rateLimitedWithoutKey": "Semantic Scholar 限流，请稍后重试。本次请求未携带 API Key，请检查设置。",
     "research.error.notFound": "未找到对应论文。",
     "research.error.unknown": "文献搜索服务暂不可用。",
     "research.empty.hint": "在上方搜索框输入关键词或粘贴 DOI / arXiv ID 开始搜索。",

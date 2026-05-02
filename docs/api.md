@@ -841,6 +841,21 @@ AI 流式阅读通过：
 - 图文检索会先检索图片 caption、笔记、标签和来源文献标题；若没有命中且未限定单篇文献，会用同一组关键词做本地全文候选文献扫描，再返回候选文献下可供检查的图片，并在 `figure_result` 中附带全文证据。
 - 不使用 embedding，不使用向量数据库。
 - 外部搜索可以独立开启；在同时开启内部搜索时作为本地证据的补充。Semantic Scholar 限流或失败时，本地证据仍可继续用于回答。
+- `/api/research/*` 调研接口在 Semantic Scholar 返回 `429 Too Many Requests` 时，会返回标准错误壳，并在可判定时额外带上 `used_api_key` 布尔字段，帮助前端区分“本次请求已携带 API Key”还是“本次请求未携带 API Key”。
+
+示例：
+
+```json
+{
+  "success": false,
+  "code": "UNAVAILABLE",
+  "error": "Semantic Scholar 限流，请稍后再试",
+  "used_api_key": true
+}
+```
+
+- `used_api_key=true` 表示运行中的调研客户端这次请求会发送 `x-api-key`
+- `used_api_key=false` 表示这次请求走的是匿名额度，前端可提示用户检查 `/settings#settings-external-sources`
 - 助手消息的 `citations_json` 会保存本地或外部搜索证据片段，前端用 `[n]` 脚注展示。
 
 #### `POST /api/ai/settings/check-model`

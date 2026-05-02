@@ -17,6 +17,7 @@
     const SEARCH_HISTORY_LIMIT = 5;
     const AUTOCOMPLETE_DEBOUNCE_MS = 180;
     const AUTOCOMPLETE_MIN_LEN = 2;
+    let rateWarningTimer = null;
 
     const autocomplete = {
         items: [],
@@ -91,15 +92,40 @@
             ...opts,
             headers: { 'Content-Type': 'application/json', ...(opts.headers || {}) },
         });
-        if (res.status === 503) {
-            $('research-rate-warning').classList.remove('hidden');
-            setTimeout(() => $('research-rate-warning').classList.add('hidden'), 4000);
-        }
+        const text = await res.text();
         if (!res.ok) {
-            const text = await res.text();
-            throw new Error(`${res.status}: ${text}`);
+            const parsed = parseResearchError(res.status, text);
+            if (parsed.rateLimited) {
+                showRateWarning(parsed.message);
+            }
+            throw new Error(parsed.message);
         }
-        return res.json();
+        return text ? JSON.parse(text) : {};
+    }
+
+    function parseResearchError(status, bodyText) {
+        const parser = window.CiteBoxResearchErrors && window.CiteBoxResearchErrors.parseResearchErrorResponse;
+        if (typeof parser === 'function') {
+            return parser(status, bodyText, t);
+        }
+        return {
+            rateLimited: status === 503,
+            usedAPIKey: null,
+            message: bodyText || String(status),
+        };
+    }
+
+    function showRateWarning(message) {
+        const el = $('research-rate-warning');
+        if (!el) return;
+        el.textContent = message || t('research.error.rateLimited', 'Semantic Scholar 限流，请稍后重试。');
+        el.classList.remove('hidden');
+        if (rateWarningTimer) {
+            clearTimeout(rateWarningTimer);
+        }
+        rateWarningTimer = setTimeout(() => {
+            el.classList.add('hidden');
+        }, 4000);
     }
 
     function hideAutocomplete() {
