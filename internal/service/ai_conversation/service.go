@@ -306,7 +306,7 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput, onDelta 
 	var runUsed bool
 	legacyEvidenceRequested := conv.StrictEvidence || in.IncludeExternalEvidence
 	explicitAssistantRequest := strings.TrimSpace(in.IntentHint) != "" ||
-		in.SearchGoalHint != "" ||
+		hasExplicitSearchGoalHint(in.SearchGoalHint) ||
 		!requestContextEmpty(in.Context) ||
 		len(in.Sources) > 0
 	if s.orchestrator != nil && (!legacyEvidenceRequested || explicitAssistantRequest) {
@@ -540,6 +540,15 @@ func mapRepoErr(err error) error {
 		return apperr.New(apperr.CodeFailedPrecondition, "没有可重新发送的上一轮对话")
 	}
 	return err
+}
+
+func hasExplicitSearchGoalHint(goal ai_assistant.ExternalSearchGoal) bool {
+	switch strings.ToLower(strings.TrimSpace(string(goal))) {
+	case string(ai_assistant.ExternalSearchGoalDiscovery), string(ai_assistant.ExternalSearchGoalEvidence):
+		return true
+	default:
+		return false
+	}
 }
 
 func toPinnedPapers(rows []repository.AIPinnedPaper) []PinnedPaper {

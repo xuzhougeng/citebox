@@ -266,6 +266,7 @@
                 }
                 body.intent_hint = payload.intent_hint;
             }
+            if (payload && payload.search_goal_hint) body.search_goal_hint = payload.search_goal_hint;
             if (this._state.rewriteLast && this._state.conversationId) body.replace_last = true;
             await this._sendBody(body);
         },

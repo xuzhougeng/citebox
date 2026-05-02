@@ -356,6 +356,52 @@ func TestSendMessageSearchGoalHintAloneForcesOrchestratorWhenLegacyEvidenceIsAct
 	}
 }
 
+func TestSendMessageInvalidSearchGoalHintDoesNotForceOrchestrator(t *testing.T) {
+	svc, libRepo, caller := newServiceForTest(t)
+	orch := &stubOrchestrator{
+		out: ai_assistant.RunOutput{
+			Intent:        ai_assistant.IntentExternalSearch,
+			AnswerContext: "ORCH_CONTEXT_SHOULD_NOT_APPEAR\n\n用户问题：\n请找证据支持这个说法",
+		},
+	}
+	svc.orchestrator = orch
+	paperID := mustInsertPaperForTest(t, libRepo, "Strict Paper", "")
+	_, err := libRepo.DB().Exec(
+		`UPDATE papers SET pdf_text = ? WHERE id = ?`,
+		"The study uses scRNA-seq evidence for trajectory analysis.",
+		paperID,
+	)
+	if err != nil {
+		t.Fatalf("update pdf_text: %v", err)
+	}
+	convID, _ := svc.CreateDraft()
+	if err := svc.PinPaper(convID, paperID); err != nil {
+		t.Fatalf("PinPaper: %v", err)
+	}
+	if err := svc.UpdateStrictEvidence(convID, true); err != nil {
+		t.Fatalf("UpdateStrictEvidence: %v", err)
+	}
+
+	_, err = svc.SendMessage(context.Background(), SendMessageInput{
+		ConversationID: convID,
+		Content:        "请找证据支持这个说法",
+		SearchGoalHint: ai_assistant.ExternalSearchGoal("unsupported"),
+	}, func(string) error { return nil })
+	if err != nil {
+		t.Fatalf("SendMessage: %v", err)
+	}
+
+	if orch.calls != 0 {
+		t.Fatalf("orchestrator calls = %d, want 0", orch.calls)
+	}
+	if strings.Contains(caller.userSeen, "ORCH_CONTEXT_SHOULD_NOT_APPEAR") {
+		t.Fatalf("prompt used orchestrator context: %s", caller.userSeen)
+	}
+	if !strings.Contains(caller.userSeen, "内部搜索模式") || !strings.Contains(caller.userSeen, "证据不足") {
+		t.Fatalf("prompt missing legacy strict evidence: %s", caller.userSeen)
+	}
+}
+
 func TestStrictEvidenceUsesLegacyPathWhenOrchestratorConfiguredWithoutExplicitIntent(t *testing.T) {
 	svc, libRepo, caller := newServiceForTest(t)
 	orch := &stubOrchestrator{
