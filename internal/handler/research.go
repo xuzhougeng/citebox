@@ -39,23 +39,14 @@ type BasketStore interface {
 
 // ResearchHandler aggregates routes under /api/research/*.
 type ResearchHandler struct {
-	service            ResearchService
-	basket             BasketStore
-	rateLimitInspector researchRateLimitInspector
-}
-
-type researchRateLimitInspector interface {
-	HasAPIKey() bool
+	service ResearchService
+	basket  BasketStore
 }
 
 // NewResearchHandler builds a handler. The third parameter is reserved for an
 // optional library-existence checker (see ExistsByDOI) and is currently nil.
 func NewResearchHandler(service ResearchService, basket BasketStore, _ interface{}) *ResearchHandler {
 	return &ResearchHandler{service: service, basket: basket}
-}
-
-func (h *ResearchHandler) SetRateLimitInspector(inspector researchRateLimitInspector) {
-	h.rateLimitInspector = inspector
 }
 
 // Search → GET /api/research/search?q=...
@@ -266,8 +257,9 @@ func (h *ResearchHandler) writeResearchError(w http.ResponseWriter, err error) {
 			"code":    string(apperr.CodeUnavailable),
 			"error":   "Semantic Scholar 限流，请稍后再试",
 		}
-		if h.rateLimitInspector != nil {
-			body["used_api_key"] = h.rateLimitInspector.HasAPIKey()
+		var rateLimitErr *research.RateLimitedError
+		if errors.As(err, &rateLimitErr) {
+			body["used_api_key"] = rateLimitErr.UsedAPIKey
 		}
 		sendJSON(w, http.StatusServiceUnavailable, body)
 	default:

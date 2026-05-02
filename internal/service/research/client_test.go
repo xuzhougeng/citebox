@@ -3,6 +3,7 @@ package research
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -476,11 +477,32 @@ func TestClientPersistent429Surfaces(t *testing.T) {
 	defer stop()
 	c := newTestClient(srv.URL, "")
 	_, err := c.Get(context.Background(), "DOI:x", nil)
-	if err != ErrRateLimited {
+	if !errors.Is(err, ErrRateLimited) {
 		t.Fatalf("err = %v, want ErrRateLimited", err)
+	}
+	var rateLimitErr *RateLimitedError
+	if !errors.As(err, &rateLimitErr) || rateLimitErr.UsedAPIKey {
+		t.Fatalf("rateLimitErr = %#v, want anonymous 429 diagnostic", rateLimitErr)
 	}
 	if calls != 2 {
 		t.Fatalf("expected exactly 2 calls (initial + 1 retry), got %d", calls)
+	}
+}
+
+func TestClientPersistent429ReportsAPIKeyUsage(t *testing.T) {
+	srv, stop := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "rate limited", http.StatusTooManyRequests)
+	})
+	defer stop()
+
+	c := newTestClient(srv.URL, "secret")
+	_, err := c.Get(context.Background(), "DOI:x", nil)
+	if !errors.Is(err, ErrRateLimited) {
+		t.Fatalf("err = %v, want ErrRateLimited", err)
+	}
+	var rateLimitErr *RateLimitedError
+	if !errors.As(err, &rateLimitErr) || !rateLimitErr.UsedAPIKey {
+		t.Fatalf("rateLimitErr = %#v, want authenticated 429 diagnostic", rateLimitErr)
 	}
 }
 

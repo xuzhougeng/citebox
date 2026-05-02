@@ -21,6 +21,20 @@ var ErrPaperNotFound = errors.New("research: paper not found")
 // surfacing this error, so callers should treat it as a hard failure.
 var ErrRateLimited = errors.New("research: rate limited")
 
+// RateLimitedError captures whether the failed upstream request used x-api-key.
+// It still matches ErrRateLimited via errors.Is.
+type RateLimitedError struct {
+	UsedAPIKey bool
+}
+
+func (e *RateLimitedError) Error() string {
+	return ErrRateLimited.Error()
+}
+
+func (e *RateLimitedError) Is(target error) bool {
+	return target == ErrRateLimited
+}
+
 // paperBatchChunk is the upper bound on ids per /paper/batch call (S2 docs say ≤500).
 const paperBatchChunk = 500
 
@@ -94,11 +108,6 @@ func (c *Client) currentAPIKey() string {
 	c.apiKeyMu.RLock()
 	defer c.apiKeyMu.RUnlock()
 	return c.apiKey
-}
-
-// HasAPIKey reports whether subsequent upstream requests will send x-api-key.
-func (c *Client) HasAPIKey() bool {
-	return strings.TrimSpace(c.currentAPIKey()) != ""
 }
 
 func (c *Client) SetRateInterval(interval time.Duration) {
@@ -200,8 +209,9 @@ func (c *Client) doJSONOnce(ctx context.Context, path string, query url.Values, 
 	if err != nil {
 		return err
 	}
-	if k := c.currentAPIKey(); k != "" {
-		req.Header.Set("x-api-key", k)
+	apiKey := c.currentAPIKey()
+	if apiKey != "" {
+		req.Header.Set("x-api-key", apiKey)
 	}
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -215,7 +225,7 @@ func (c *Client) doJSONOnce(ctx context.Context, path string, query url.Values, 
 	case http.StatusNotFound:
 		return ErrPaperNotFound
 	case http.StatusTooManyRequests:
-		return ErrRateLimited
+		return &RateLimitedError{UsedAPIKey: apiKey != ""}
 	default:
 		body, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("research: unexpected status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
@@ -504,8 +514,9 @@ func (c *Client) RecommendationsForList(ctx context.Context, positive, negative 
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if k := c.currentAPIKey(); k != "" {
-		req.Header.Set("x-api-key", k)
+	apiKey := c.currentAPIKey()
+	if apiKey != "" {
+		req.Header.Set("x-api-key", apiKey)
 	}
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -516,7 +527,7 @@ func (c *Client) RecommendationsForList(ctx context.Context, positive, negative 
 		return nil, ErrPaperNotFound
 	}
 	if resp.StatusCode == http.StatusTooManyRequests {
-		return nil, ErrRateLimited
+		return nil, &RateLimitedError{UsedAPIKey: apiKey != ""}
 	}
 	if resp.StatusCode != http.StatusOK {
 		b, _ := io.ReadAll(resp.Body)
@@ -577,8 +588,9 @@ func (c *Client) postPaperBatch(ctx context.Context, ids []string, fields string
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if k := c.currentAPIKey(); k != "" {
-		req.Header.Set("x-api-key", k)
+	apiKey := c.currentAPIKey()
+	if apiKey != "" {
+		req.Header.Set("x-api-key", apiKey)
 	}
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -588,7 +600,7 @@ func (c *Client) postPaperBatch(ctx context.Context, ids []string, fields string
 	switch resp.StatusCode {
 	case http.StatusOK:
 	case http.StatusTooManyRequests:
-		return nil, ErrRateLimited
+		return nil, &RateLimitedError{UsedAPIKey: apiKey != ""}
 	default:
 		b, _ := io.ReadAll(resp.Body)
 		return nil, fmt.Errorf("research: unexpected status %d: %s", resp.StatusCode, strings.TrimSpace(string(b)))

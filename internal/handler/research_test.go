@@ -108,18 +108,9 @@ func TestResearchHandlerGetPaperRoute(t *testing.T) {
 	}
 }
 
-type stubResearchRateLimitInspector struct {
-	hasAPIKey bool
-}
-
-func (s stubResearchRateLimitInspector) HasAPIKey() bool {
-	return s.hasAPIKey
-}
-
 func TestResearchHandlerSearchRateLimitedReportsAPIKeyUsage(t *testing.T) {
-	stub := &stubResearchService{searchErr: research.ErrRateLimited}
+	stub := &stubResearchService{searchErr: &research.RateLimitedError{UsedAPIKey: true}}
 	h := NewResearchHandler(stub, nil, nil)
-	h.SetRateLimitInspector(stubResearchRateLimitInspector{hasAPIKey: true})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/research/search?q=hello", nil)
 	rec := httptest.NewRecorder()
@@ -145,9 +136,8 @@ func TestResearchHandlerSearchRateLimitedReportsAPIKeyUsage(t *testing.T) {
 }
 
 func TestResearchHandlerSearchRateLimitedReportsAnonymousUsage(t *testing.T) {
-	stub := &stubResearchService{searchErr: research.ErrRateLimited}
+	stub := &stubResearchService{searchErr: &research.RateLimitedError{UsedAPIKey: false}}
 	h := NewResearchHandler(stub, nil, nil)
-	h.SetRateLimitInspector(stubResearchRateLimitInspector{hasAPIKey: false})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/research/search?q=hello", nil)
 	rec := httptest.NewRecorder()
