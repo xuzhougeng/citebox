@@ -59,7 +59,7 @@ func NewLLMExternalSearchPlanner(settings AISettingsProvider, caller NonStreamCa
 	return &LLMExternalSearchPlanner{settings: settings, caller: caller}
 }
 
-func (p *LLMExternalSearchPlanner) PlanExternalSearch(ctx context.Context, query string) (ExternalSearchPlan, error) {
+func (p *LLMExternalSearchPlanner) PlanExternalSearch(ctx context.Context, query string, goalHint ExternalSearchGoal) (ExternalSearchPlan, error) {
 	if p == nil || p.settings == nil || p.caller == nil {
 		return ExternalSearchPlan{}, fmt.Errorf("external search planner not configured")
 	}
@@ -67,7 +67,7 @@ func (p *LLMExternalSearchPlanner) PlanExternalSearch(ctx context.Context, query
 	if err != nil {
 		return ExternalSearchPlan{}, err
 	}
-	out, _, err := p.caller.CallProviderGeneric(ctx, assistantMasterSettings(*settings), externalPlannerSystemPrompt, externalPlannerUserPrompt(query))
+	out, _, err := p.caller.CallProviderGeneric(ctx, assistantMasterSettings(*settings), externalPlannerSystemPrompt, externalPlannerUserPrompt(query, goalHint))
 	if err != nil {
 		return ExternalSearchPlan{}, err
 	}
@@ -179,8 +179,15 @@ func libraryPlannerUserPrompt(query string) string {
 	return "用户检索请求：\n" + strings.TrimSpace(query)
 }
 
-func externalPlannerUserPrompt(query string) string {
-	return "用户外部检索请求：\n" + strings.TrimSpace(query)
+func externalPlannerUserPrompt(query string, goalHint ExternalSearchGoal) string {
+	var b strings.Builder
+	b.WriteString("用户外部检索请求：\n")
+	b.WriteString(strings.TrimSpace(query))
+	if isKnownExternalSearchGoal(string(goalHint)) {
+		b.WriteString("\n\nexplicit_search_goal_hint: ")
+		b.WriteString(string(normalizeExternalSearchGoal(string(goalHint))))
+	}
+	return b.String()
 }
 
 const libraryClassifierSystemPrompt = `你是 CiteBox 的 Sub-Agent，负责逐篇判断全文扫描候选是否真正符合用户需求。

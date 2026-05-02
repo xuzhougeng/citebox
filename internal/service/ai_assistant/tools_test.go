@@ -228,10 +228,12 @@ type stubExternalPlanner struct {
 	plan    ExternalSearchPlan
 	err     error
 	queries []string
+	goals   []ExternalSearchGoal
 }
 
-func (p *stubExternalPlanner) PlanExternalSearch(ctx context.Context, query string) (ExternalSearchPlan, error) {
+func (p *stubExternalPlanner) PlanExternalSearch(ctx context.Context, query string, goalHint ExternalSearchGoal) (ExternalSearchPlan, error) {
 	p.queries = append(p.queries, query)
+	p.goals = append(p.goals, goalHint)
 	if p.err != nil {
 		return ExternalSearchPlan{}, p.err
 	}
@@ -546,7 +548,7 @@ func TestExternalPlannerReturnsQueriesBySource(t *testing.T) {
 	}`}
 	planner := NewLLMExternalSearchPlanner(stubAISettingsProvider{settings: model.DefaultAISettings()}, caller)
 
-	plan, err := planner.PlanExternalSearch(context.Background(), "查找 CRISPR 治疗副作用的出处")
+	plan, err := planner.PlanExternalSearch(context.Background(), "查找 CRISPR 治疗副作用的出处", "")
 	if err != nil {
 		t.Fatalf("PlanExternalSearch: %v", err)
 	}
@@ -580,7 +582,7 @@ func TestExternalPlannerReturnsGoalConstraintsAndTargetYear(t *testing.T) {
 	}`}
 	planner := NewLLMExternalSearchPlanner(stubAISettingsProvider{settings: model.DefaultAISettings()}, caller)
 
-	plan, err := planner.PlanExternalSearch(context.Background(), "Find evidence for CRISPR retinal degeneration therapy in 2024")
+	plan, err := planner.PlanExternalSearch(context.Background(), "Find evidence for CRISPR retinal degeneration therapy in 2024", "")
 	if err != nil {
 		t.Fatalf("PlanExternalSearch: %v", err)
 	}
@@ -610,6 +612,32 @@ func TestExternalPlannerReturnsGoalConstraintsAndTargetYear(t *testing.T) {
 	}
 }
 
+func TestExternalPlannerUserPromptIncludesExplicitSearchGoalHint(t *testing.T) {
+	caller := &stubNonStreamCaller{output: `{
+		"search_goal": "evidence",
+		"queries_by_source": {
+			"pubmed": ["CRISPR retinal degeneration AAV"],
+			"semantic_scholar": ["CRISPR retinal degeneration mouse model"]
+		}
+	}`}
+	planner := NewLLMExternalSearchPlanner(stubAISettingsProvider{settings: model.DefaultAISettings()}, caller)
+
+	plan, err := planner.PlanExternalSearch(
+		context.Background(),
+		"Find evidence for CRISPR retinal degeneration therapy in 2024",
+		ExternalSearchGoalEvidence,
+	)
+	if err != nil {
+		t.Fatalf("PlanExternalSearch: %v", err)
+	}
+	if got, want := plan.SearchGoal, ExternalSearchGoalEvidence; got != want {
+		t.Fatalf("search goal = %q, want %q", got, want)
+	}
+	if !strings.Contains(caller.userPrompt, "explicit_search_goal_hint: evidence") {
+		t.Fatalf("user prompt = %q, want explicit goal hint", caller.userPrompt)
+	}
+}
+
 func TestExternalPlannerAcceptsStringTargetYear(t *testing.T) {
 	caller := &stubNonStreamCaller{output: `{
 		"search_goal": "evidence",
@@ -621,7 +649,7 @@ func TestExternalPlannerAcceptsStringTargetYear(t *testing.T) {
 	}`}
 	planner := NewLLMExternalSearchPlanner(stubAISettingsProvider{settings: model.DefaultAISettings()}, caller)
 
-	plan, err := planner.PlanExternalSearch(context.Background(), "Find evidence for CRISPR retinal degeneration therapy in 2024")
+	plan, err := planner.PlanExternalSearch(context.Background(), "Find evidence for CRISPR retinal degeneration therapy in 2024", "")
 	if err != nil {
 		t.Fatalf("PlanExternalSearch: %v", err)
 	}
@@ -672,7 +700,7 @@ func TestExternalSearchQueriesPlannerFailureReturnsFallbackGoalPlan(t *testing.T
 		planner: &stubExternalPlanner{err: errors.New("planner unavailable")},
 	}
 
-	sourceQueries, plan, err := tool.searchQueries(context.Background(), query)
+	sourceQueries, plan, err := tool.searchQueries(context.Background(), query, "")
 	if err == nil {
 		t.Fatal("searchQueries error = nil, want planner failure")
 	}
@@ -702,7 +730,7 @@ func TestExternalSearchQueriesInvalidSearchGoalFallsBackToQueryHeuristic(t *test
 		}},
 	}
 
-	sourceQueries, plan, err := tool.searchQueries(context.Background(), query)
+	sourceQueries, plan, err := tool.searchQueries(context.Background(), query, "")
 	if err != nil {
 		t.Fatalf("searchQueries: %v", err)
 	}
@@ -729,7 +757,7 @@ func TestExternalSearchQueriesEmptySearchGoalFallsBackToQueryHeuristic(t *testin
 		}},
 	}
 
-	sourceQueries, plan, err := tool.searchQueries(context.Background(), query)
+	sourceQueries, plan, err := tool.searchQueries(context.Background(), query, "")
 	if err != nil {
 		t.Fatalf("searchQueries: %v", err)
 	}
@@ -1219,6 +1247,24 @@ func TestExternalSearchToolSearchGoalHintOverridesPlannerGoal(t *testing.T) {
 		if got, want := input.SearchGoal, ExternalSearchGoalEvidence; got != want {
 			t.Fatalf("classifier search goal = %q, want %q", got, want)
 		}
+	}
+}
+
+func TestExternalSearchToolPassesSearchGoalHintToPlanner(t *testing.T) {
+	planner := &stubExternalPlanner{plan: ExternalSearchPlan{
+		SearchGoal:  ExternalSearchGoalDiscovery,
+		SearchQuery: "explicit goal override query",
+	}}
+
+	_, err := NewExternalSearchToolWithPlanner(stubExternalSearch{}, planner).Run(context.Background(), ToolInput{
+		Query:          "Find evidence for the claim",
+		SearchGoalHint: ExternalSearchGoalEvidence,
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if got, want := planner.goals, []ExternalSearchGoal{ExternalSearchGoalEvidence}; !slices.Equal(got, want) {
+		t.Fatalf("planner goal hints = %+v, want %+v", got, want)
 	}
 }
 

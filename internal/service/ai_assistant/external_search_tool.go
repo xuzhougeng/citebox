@@ -28,7 +28,7 @@ type ExternalSourceLister interface {
 }
 
 type ExternalSearchPlanner interface {
-	PlanExternalSearch(ctx context.Context, query string) (ExternalSearchPlan, error)
+	PlanExternalSearch(ctx context.Context, query string, goalHint ExternalSearchGoal) (ExternalSearchPlan, error)
 }
 
 type ExternalPaperClassifier interface {
@@ -220,7 +220,7 @@ func (t *ExternalSearchTool) Run(ctx context.Context, in ToolInput) (ToolResult,
 	var planErr error
 	sourceQueries := externalSearchSourceQueries(fallbackQueries, plan)
 	if t != nil {
-		sourceQueries, plan, planErr = t.searchQueries(ctx, in.Query)
+		sourceQueries, plan, planErr = t.searchQueries(ctx, in.Query, in.SearchGoalHint)
 	}
 	plan.SearchGoal = resolvedExternalSearchGoal(in.Query, plan.SearchGoal, in.SearchGoalHint)
 	var disabledRequested []ai_external.SourceID
@@ -530,13 +530,13 @@ func (t *ExternalSearchTool) classifyCandidates(ctx context.Context, query strin
 	return filtered, counts, classified, failed
 }
 
-func (t *ExternalSearchTool) searchQueries(ctx context.Context, query string) (ai_external.SourceQueries, ExternalSearchPlan, error) {
+func (t *ExternalSearchTool) searchQueries(ctx context.Context, query string, goalHint ExternalSearchGoal) (ai_external.SourceQueries, ExternalSearchPlan, error) {
 	fallback := ExternalSearchQueries(query)
 	if t == nil || t.planner == nil {
 		plan := ExternalSearchPlan{SearchGoal: fallbackExternalSearchGoal(query)}
 		return externalSearchSourceQueries(fallback, plan), plan, nil
 	}
-	plan, err := t.planner.PlanExternalSearch(ctx, query)
+	plan, err := t.planner.PlanExternalSearch(ctx, query, goalHint)
 	if err != nil {
 		plan := ExternalSearchPlan{SearchGoal: fallbackExternalSearchGoal(query)}
 		return externalSearchSourceQueries(fallback, plan), plan, err
