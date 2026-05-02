@@ -229,7 +229,7 @@ const SettingsPage = {
         this.settingsCategoryList = catList;
         this.settingsAnchorList = subList;
 
-        this.applySettingsHash(window.location.hash, { scroll: true });
+        this.applySettingsHash(window.location.hash, { scroll: false });
         if (!this._settingsHashChangeBound) {
             this._settingsHashChangeBound = true;
             window.addEventListener('hashchange', () => {
@@ -652,6 +652,10 @@ const SettingsPage = {
             ]);
         } catch (error) {
             Utils.showToast(error.message, 'error');
+        } finally {
+            if (window.location.hash) {
+                this.applySettingsHash(window.location.hash, { scroll: true });
+            }
         }
     },
 
