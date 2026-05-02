@@ -325,6 +325,10 @@ func (m *Manager) ensureConversationSurfaceColumns() error {
 			return err
 		}
 	}
+	// Partial unique index on (kind) — constrains the database to a single
+	// main_wechat conversation globally because CiteBox is single-tenant
+	// today. If multi-tenancy is ever added, this index needs to become
+	// (user_id, kind) so each user gets their own WeChat thread.
 	_, err := m.db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_ai_conv_main_wechat
 		ON ai_conversations(kind) WHERE kind = 'main_wechat'`)
 	return err

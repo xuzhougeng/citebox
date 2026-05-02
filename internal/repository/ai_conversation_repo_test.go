@@ -3,6 +3,7 @@ package repository
 import (
 	"database/sql"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -575,6 +576,22 @@ func TestSchemaHasConversationSurfaceColumns(t *testing.T) {
 		if _, ok := cols[want]; !ok {
 			t.Errorf("missing column %q", want)
 		}
+	}
+
+	// Verify the partial unique index exists and includes the expected
+	// WHERE predicate. This guarantees both that the index is present and
+	// that it is partial (so non-main_wechat rows are not constrained).
+	var indexSQL sql.NullString
+	if err := db.QueryRow(
+		"SELECT sql FROM sqlite_master WHERE name = 'idx_ai_conv_main_wechat'",
+	).Scan(&indexSQL); err != nil {
+		t.Fatalf("query idx_ai_conv_main_wechat: %v", err)
+	}
+	if !indexSQL.Valid {
+		t.Fatal("idx_ai_conv_main_wechat: sql is NULL")
+	}
+	if !strings.Contains(strings.ToLower(indexSQL.String), "where kind = 'main_wechat'") {
+		t.Errorf("idx_ai_conv_main_wechat missing partial predicate; got: %s", indexSQL.String)
 	}
 }
 
