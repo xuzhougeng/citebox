@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/xuzhougeng/citebox/internal/model"
 	"github.com/xuzhougeng/citebox/internal/repository"
@@ -39,9 +40,9 @@ func (f *fakeAPI) Generate(_ context.Context, _ model.AIImageGenSettings, _ stri
 }
 
 type fakeInputs struct {
-	papers          []PaperContext
-	figures         []FigureContext
-	images          []model.AIImageInput
+	papers  []PaperContext
+	figures []FigureContext
+	images  []model.AIImageInput
 }
 
 func (f *fakeInputs) Load(ctx context.Context, paperIDs, figureIDs []int64) (VisionInputContext, []model.AIImageInput, error) {
@@ -110,6 +111,13 @@ func newServiceWithFakes(t *testing.T, vision VisionCaller, api APIClient) (*Ser
 		GetSettings: settingsEnabled,
 	})
 	return svc, repo, tmp
+}
+
+func TestNewService_DefaultImageTimeoutExceedsThreeMinutes(t *testing.T) {
+	svc := NewService(ServiceDeps{})
+	if svc.deps.ImageTimeout <= 180*time.Second {
+		t.Fatalf("ImageTimeout = %s, want > 180s", svc.deps.ImageTimeout)
+	}
 }
 
 func TestService_HappyPath_EmitsAllEventsAndPersists(t *testing.T) {

@@ -5,8 +5,10 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"strings"
 
@@ -57,13 +59,13 @@ func (c *Client) Generate(ctx context.Context, settings model.AIImageGenSettings
 
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return nil, apperr.Wrap(apperr.CodeUnavailable, "调用图像生成接口失败", err)
+		return nil, wrapImageAPITransportError("调用图像生成接口失败", err)
 	}
 	defer resp.Body.Close()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, apperr.Wrap(apperr.CodeUnavailable, "读取图像生成响应失败", err)
+		return nil, wrapImageAPITransportError("读取图像生成响应失败", err)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return nil, apperr.New(apperr.CodeUnavailable, fmt.Sprintf("图像生成接口返回 %d: %s", resp.StatusCode, extractAPIErrorMessage(respBody)))
@@ -101,4 +103,22 @@ func extractAPIErrorMessage(body []byte) string {
 		return nested.Error.Message
 	}
 	return string(body)
+}
+
+func wrapImageAPITransportError(message string, err error) error {
+	if err == nil {
+		return nil
+	}
+	if isImageAPITimeout(err) {
+		return apperr.Wrap(apperr.CodeDeadlineExceeded, "图像生成请求超时", err)
+	}
+	return apperr.Wrap(apperr.CodeUnavailable, message, err)
+}
+
+func isImageAPITimeout(err error) bool {
+	if errors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+	var netErr net.Error
+	return errors.As(err, &netErr) && netErr.Timeout()
 }

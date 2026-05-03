@@ -33,7 +33,7 @@ type ServiceDeps struct {
 	API         APIClient
 	LoadInputs  LoadInputsFn
 	GetSettings SettingsFn
-	// VisionTimeout / ImageTimeout cap each stage. Defaults: vision 60s, image 120s.
+	// VisionTimeout / ImageTimeout cap each stage. Defaults: vision 60s, image 300s.
 	VisionTimeout time.Duration
 	ImageTimeout  time.Duration
 }
@@ -47,7 +47,7 @@ func NewService(deps ServiceDeps) *Service {
 		deps.VisionTimeout = 60 * time.Second
 	}
 	if deps.ImageTimeout == 0 {
-		deps.ImageTimeout = 120 * time.Second
+		deps.ImageTimeout = 300 * time.Second
 	}
 	return &Service{deps: deps}
 }
