@@ -16,6 +16,7 @@ import (
 type imageRepoWriter interface {
 	InsertImage(repository.AIGeneratedImage) (int64, error)
 	AddResultCard(repository.AIResultCard) (int64, error)
+	DeleteImage(id int64) error
 }
 
 // LoadInputsFn loads paper + figure context and the base64 vision images for
@@ -139,11 +140,16 @@ func (s *Service) Generate(ctx context.Context, in GenerateInput) error {
 	}
 	cardJSON, err := jsonMarshal(cardPayload)
 	if err != nil {
+		_ = s.deps.Storage.Delete(relPath)
+		_ = s.deps.Repo.DeleteImage(imageID)
+		emit("image_failed", FailedEvent{TurnRunID: in.TurnRunID, Stage: "save", Reason: err.Error()})
 		return err
 	}
 	if _, err := s.deps.Repo.AddResultCard(repository.AIResultCard{
 		TurnRunID: in.TurnRunID, CardType: "generated_image", SortOrder: 0, PayloadJSON: cardJSON,
 	}); err != nil {
+		_ = s.deps.Storage.Delete(relPath)
+		_ = s.deps.Repo.DeleteImage(imageID)
 		emit("image_failed", FailedEvent{TurnRunID: in.TurnRunID, Stage: "save", Reason: err.Error()})
 		return err
 	}

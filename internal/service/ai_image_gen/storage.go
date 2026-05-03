@@ -43,6 +43,19 @@ func (s *Storage) Save(conversationID int64, pngBytes []byte) (string, error) {
 	return rel, nil
 }
 
+// Delete removes the file at relPath (relative to rootDir) from disk.
+// It is a no-op if relPath is empty or the file does not exist.
+func (s *Storage) Delete(relPath string) error {
+	if relPath == "" {
+		return nil
+	}
+	abs := filepath.Join(s.rootDir, relPath)
+	if err := os.Remove(abs); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
+}
+
 // randomULID returns a 16-byte hex token; we don't need true ULID monotonicity.
 func randomULID() (string, error) {
 	var b [16]byte

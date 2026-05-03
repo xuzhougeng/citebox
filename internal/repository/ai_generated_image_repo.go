@@ -87,6 +87,11 @@ func (r *AIGeneratedImageRepository) GetByID(id int64) (AIGeneratedImage, error)
 	return img, nil
 }
 
+func (r *AIGeneratedImageRepository) DeleteImage(id int64) error {
+	_, err := r.db.Exec(`DELETE FROM ai_generated_images WHERE id = ?`, id)
+	return err
+}
+
 func (r *AIGeneratedImageRepository) ListByConversation(conversationID int64) ([]AIGeneratedImage, error) {
 	rows, err := r.db.Query(`
 		SELECT id, turn_run_id, conversation_id, file_path, prompt,

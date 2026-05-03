@@ -49,9 +49,11 @@ func (f *fakeInputs) Load(ctx context.Context, paperIDs, figureIDs []int64) (Vis
 }
 
 type captureRepo struct {
-	mu     sync.Mutex
-	rows   []repository.AIGeneratedImage
-	cards  []repository.AIResultCard
+	mu        sync.Mutex
+	rows      []repository.AIGeneratedImage
+	cards     []repository.AIResultCard
+	cardErr   error
+	deleteErr error
 }
 
 func (c *captureRepo) InsertImage(img repository.AIGeneratedImage) (int64, error) {
@@ -65,9 +67,28 @@ func (c *captureRepo) InsertImage(img repository.AIGeneratedImage) (int64, error
 func (c *captureRepo) AddResultCard(card repository.AIResultCard) (int64, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if c.cardErr != nil {
+		return 0, c.cardErr
+	}
 	card.ID = int64(len(c.cards) + 1)
 	c.cards = append(c.cards, card)
 	return card.ID, nil
+}
+
+func (c *captureRepo) DeleteImage(id int64) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.deleteErr != nil {
+		return c.deleteErr
+	}
+	out := c.rows[:0]
+	for _, r := range c.rows {
+		if r.ID != id {
+			out = append(out, r)
+		}
+	}
+	c.rows = out
+	return nil
 }
 
 func newServiceWithFakes(t *testing.T, vision VisionCaller, api APIClient) (*Service, *captureRepo, string) {
@@ -171,5 +192,37 @@ func TestService_ImageAPIFailure_NoFileNoRow(t *testing.T) {
 	entries, _ := os.ReadDir(tmp)
 	if len(entries) != 0 {
 		t.Fatalf("no files expected, got %d", len(entries))
+	}
+}
+
+func TestService_AddResultCardFailure_CleansUpFileAndRow(t *testing.T) {
+	vision := &fakeVision{prompt: "x"}
+	api := &fakeAPI{bytes: []byte("\x89PNGfake")}
+	svc, repo, tmp := newServiceWithFakes(t, vision, api)
+	repo.cardErr = errors.New("card boom")
+
+	var failedStage string
+	err := svc.Generate(context.Background(), GenerateInput{
+		ConversationID: 7, TurnRunID: 99, PaperIDs: []int64{1}, UserText: "x",
+		OnEvent: func(e StreamEvent) error {
+			if e.Type == "image_failed" {
+				failedStage = e.Data.(FailedEvent).Stage
+			}
+			return nil
+		},
+	})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if failedStage != "save" {
+		t.Fatalf("stage = %q want save", failedStage)
+	}
+	// After cleanup: no DB row, no file on disk.
+	if len(repo.rows) != 0 {
+		t.Fatalf("expected 0 rows after cleanup, got %d", len(repo.rows))
+	}
+	entries, _ := os.ReadDir(filepath.Join(tmp, "7"))
+	if len(entries) != 0 {
+		t.Fatalf("expected 0 files after cleanup, got %d (dir contents: %v)", len(entries), entries)
 	}
 }
