@@ -77,6 +77,7 @@ type AIModelSettingsUpdate struct {
 	Translation         AITranslationConfig   `json:"translation"`
 	PinPapersLimit      int                   `json:"pin_papers_limit"`
 	ContextBudgetTokens int                   `json:"context_budget_tokens"`
+	ImageGen            *AIImageGenSettings   `json:"image_gen,omitempty"`
 }
 
 type AIPromptSettingsUpdate struct {

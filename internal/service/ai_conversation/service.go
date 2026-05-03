@@ -752,16 +752,8 @@ func (s *Service) dispatchImageGen(ctx context.Context, in SendMessageInput,
 	paperIDs, figureIDs := parseImageGenReferences(in)
 	// Backstop: if no paper IDs were found in the request, fall back to any
 	// papers already pinned on this conversation (established by earlier turns).
-	if len(paperIDs) == 0 {
-		if pinned, err := s.repo.ListPinnedPapers(in.ConversationID); err == nil {
-			ids := make([]int64, 0, len(pinned))
-			for _, p := range pinned {
-				if p.PaperID > 0 {
-					ids = append(ids, p.PaperID)
-				}
-			}
-			paperIDs = ids
-		}
+	if len(paperIDs) == 0 && len(figureIDs) == 0 {
+		paperIDs = fallbackImageGenPaperIDs(in.ConversationID, s.repo.ListPinnedPapers, s.logger)
 	}
 	if len(paperIDs) == 0 && len(figureIDs) == 0 {
 		return SendMessageResult{}, apperr.New(apperr.CodeInvalidArgument, "请引用至少一篇文献或一张图")
@@ -851,6 +843,23 @@ func parseImageGenReferences(in SendMessageInput) ([]int64, []int64) {
 		figureIDs = append(figureIDs, in.Context.FigureIDs...)
 	}
 	return dedupeInt64(paperIDs), dedupeInt64(figureIDs)
+}
+
+func fallbackImageGenPaperIDs(conversationID int64, listPinned func(int64) ([]repository.AIPinnedPaper, error), logger *slog.Logger) []int64 {
+	pinned, err := listPinned(conversationID)
+	if err != nil {
+		if logger != nil {
+			logger.Warn("ai_conversation: list pinned papers for image-gen fallback failed", "conversation_id", conversationID, "error", err)
+		}
+		return nil
+	}
+	ids := make([]int64, 0, len(pinned))
+	for _, p := range pinned {
+		if p.PaperID > 0 {
+			ids = append(ids, p.PaperID)
+		}
+	}
+	return dedupeInt64(ids)
 }
 
 func dedupeInt64(in []int64) []int64 {

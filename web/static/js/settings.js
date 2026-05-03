@@ -23,6 +23,12 @@ const SettingsPage = {
         this.maxFiguresInput = document.getElementById('aiMaxFiguresInput');
         this.pinPapersLimitInput = document.getElementById('aiPinPapersLimitInput');
         this.contextBudgetTokensInput = document.getElementById('aiContextBudgetTokensInput');
+        this.imageGenEnabledInput = document.getElementById('aiImageGenEnabledInput');
+        this.imageGenAPIKeyInput = document.getElementById('aiImageGenAPIKeyInput');
+        this.imageGenBaseURLInput = document.getElementById('aiImageGenBaseURLInput');
+        this.imageGenModelInput = document.getElementById('aiImageGenModelInput');
+        this.imageGenSizeSelect = document.getElementById('aiImageGenSizeSelect');
+        this.imageGenQualitySelect = document.getElementById('aiImageGenQualitySelect');
         this.translationPrimaryLanguageInput = document.getElementById('aiTranslationPrimaryLanguageInput');
         this.translationTargetLanguageInput = document.getElementById('aiTranslationTargetLanguageInput');
         this.systemPromptInput = document.getElementById('aiSystemPromptInput');
@@ -597,12 +603,24 @@ const SettingsPage = {
             this.maxFiguresInput,
             this.pinPapersLimitInput,
             this.contextBudgetTokensInput,
+            this.imageGenAPIKeyInput,
+            this.imageGenBaseURLInput,
+            this.imageGenModelInput,
             this.translationPrimaryLanguageInput,
             this.translationTargetLanguageInput
         ].forEach((element) => {
             element?.addEventListener('input', () => {
                 this.scheduleAIModelAutosave();
             });
+            element?.addEventListener('change', () => {
+                this.scheduleAIModelAutosave({ immediate: true });
+            });
+        });
+        [
+            this.imageGenEnabledInput,
+            this.imageGenSizeSelect,
+            this.imageGenQualitySelect
+        ].forEach((element) => {
             element?.addEventListener('change', () => {
                 this.scheduleAIModelAutosave({ immediate: true });
             });
@@ -695,6 +713,7 @@ const SettingsPage = {
         this.maxFiguresInput.value = settings.max_figures ?? 0;
         if (this.pinPapersLimitInput) this.pinPapersLimitInput.value = settings.pin_papers_limit || 5;
         if (this.contextBudgetTokensInput) this.contextBudgetTokensInput.value = settings.context_budget_tokens || 32000;
+        this.applyImageGenSettings(settings.image_gen || {});
         this.translationPrimaryLanguageInput.value = settings.translation?.primary_language || t('settings.ai.primary_language_default', '中文');
         this.translationTargetLanguageInput.value = settings.translation?.target_language || t('settings.ai.target_language_default', '英文');
 
@@ -751,10 +770,40 @@ const SettingsPage = {
             max_figures: Number(this.maxFiguresInput.value || 0),
             pin_papers_limit: parseInt(this.pinPapersLimitInput?.value, 10) || 5,
             context_budget_tokens: parseInt(this.contextBudgetTokensInput?.value, 10) || 32000,
+            image_gen: this.readImageGenSettings(),
             translation: {
                 primary_language: this.translationPrimaryLanguageInput.value.trim(),
                 target_language: this.translationTargetLanguageInput.value.trim()
             }
+        };
+    },
+
+    applyImageGenSettings(settings = {}) {
+        const defaults = {
+            enabled: false,
+            api_key: '',
+            base_url: 'https://api.openai.com',
+            model: 'gpt-image-2',
+            size: '1024x1024',
+            quality: 'high'
+        };
+        const next = { ...defaults, ...(settings || {}) };
+        if (this.imageGenEnabledInput) this.imageGenEnabledInput.checked = next.enabled === true;
+        if (this.imageGenAPIKeyInput) this.imageGenAPIKeyInput.value = next.api_key || '';
+        if (this.imageGenBaseURLInput) this.imageGenBaseURLInput.value = next.base_url || defaults.base_url;
+        if (this.imageGenModelInput) this.imageGenModelInput.value = next.model || defaults.model;
+        if (this.imageGenSizeSelect) this.imageGenSizeSelect.value = next.size || defaults.size;
+        if (this.imageGenQualitySelect) this.imageGenQualitySelect.value = next.quality || defaults.quality;
+    },
+
+    readImageGenSettings() {
+        return {
+            enabled: this.imageGenEnabledInput?.checked === true,
+            api_key: this.imageGenAPIKeyInput?.value.trim() || '',
+            base_url: this.imageGenBaseURLInput?.value.trim() || '',
+            model: this.imageGenModelInput?.value.trim() || '',
+            size: this.imageGenSizeSelect?.value || '',
+            quality: this.imageGenQualitySelect?.value || ''
         };
     },
 

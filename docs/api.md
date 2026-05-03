@@ -661,7 +661,7 @@ AI 流式阅读通过：
 
 用途：
 
-- 单独保存模型配置、场景绑定、温度、图片数量上限和翻译规则
+- 单独保存模型配置、场景绑定、温度、图片数量上限、上下文预算、单会话 pin 上限、翻译规则，以及 `@image-gen` 的图像生成配置
 
 请求体：
 
@@ -693,12 +693,28 @@ AI 流式阅读通过：
   },
   "temperature": 0.2,
   "max_figures": 0,
+  "pin_papers_limit": 5,
+  "context_budget_tokens": 32000,
+  "image_gen": {
+    "enabled": true,
+    "api_key": "sk-image",
+    "base_url": "https://api.openai.com",
+    "model": "gpt-image-2",
+    "size": "1024x1024",
+    "quality": "high"
+  },
   "translation": {
     "primary_language": "中文",
     "target_language": "英文"
   }
 }
 ```
+
+说明：
+
+- `image_gen` 为可选字段；如果本次请求未传，后端会保留当前已保存的图像生成配置。
+- `image_gen.size` 目前支持：`1024x1024`、`1024x1536`、`1536x1024`。
+- `image_gen.quality` 目前支持：`low`、`medium`、`high`。
 
 #### `PUT /api/ai/settings/prompts`
 

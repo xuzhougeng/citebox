@@ -121,3 +121,78 @@ func TestReadStreamReturnsJSONErrorBeforeStreamingStarts(t *testing.T) {
 		t.Fatalf("ReadStream() payload = %+v, want code and error", payload)
 	}
 }
+
+func TestUpdateModelSettingsAcceptsImageGenPayload(t *testing.T) {
+	handler, aiService, _, _ := newAIHandlerForTest(t)
+
+	if _, err := aiService.UpdateSettings(model.AISettings{
+		Models: []model.AIModelConfig{
+			{
+				ID:              "qa",
+				Name:            "QA",
+				Provider:        model.AIProviderOpenAI,
+				APIKey:          "test-key",
+				BaseURL:         "https://api.openai.com",
+				Model:           "gpt-4.1-mini",
+				MaxOutputTokens: 1200,
+			},
+		},
+		SceneModels: model.AISceneModelSelection{
+			DefaultModelID: "qa",
+			QAModelID:      "qa",
+		},
+		SystemPrompt: "system",
+		QAPrompt:     "qa",
+		ImageGen: model.AIImageGenSettings{
+			Enabled: false,
+			Model:   "gpt-image-2",
+			Size:    "1024x1024",
+			Quality: "high",
+		},
+	}); err != nil {
+		t.Fatalf("UpdateSettings() error = %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPut, "/api/ai/settings/models", bytes.NewBufferString(`{
+		"models":[{"id":"qa","name":"QA","provider":"openai","api_key":"test-key","base_url":"https://api.openai.com","model":"gpt-4.1-mini","max_output_tokens":1200}],
+		"scene_models":{"default_model_id":"qa","qa_model_id":"qa"},
+		"temperature":0.2,
+		"max_figures":0,
+		"translation":{"primary_language":"中文","target_language":"英文"},
+		"pin_papers_limit":5,
+		"context_budget_tokens":32000,
+		"image_gen":{
+			"enabled":true,
+			"api_key":" sk-image ",
+			"base_url":" https://images.example.com/ ",
+			"model":"gpt-image-2",
+			"size":"1536x1024",
+			"quality":"medium"
+		}
+	}`))
+	w := httptest.NewRecorder()
+
+	handler.UpdateModelSettings(w, req)
+
+	resp := w.Result()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("UpdateModelSettings() status = %d, want %d", resp.StatusCode, http.StatusOK)
+	}
+
+	settings, err := aiService.GetSettings()
+	if err != nil {
+		t.Fatalf("GetSettings() error = %v", err)
+	}
+	if !settings.ImageGen.Enabled {
+		t.Fatalf("image_gen.enabled = false, want true")
+	}
+	if settings.ImageGen.APIKey != "sk-image" {
+		t.Fatalf("image_gen.api_key = %q, want sk-image", settings.ImageGen.APIKey)
+	}
+	if settings.ImageGen.BaseURL != "https://images.example.com" {
+		t.Fatalf("image_gen.base_url = %q, want https://images.example.com", settings.ImageGen.BaseURL)
+	}
+	if settings.ImageGen.Size != "1536x1024" || settings.ImageGen.Quality != "medium" {
+		t.Fatalf("image_gen settings = %+v, want persisted payload", settings.ImageGen)
+	}
+}

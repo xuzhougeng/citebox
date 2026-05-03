@@ -105,6 +105,9 @@ func (s *AIService) UpdateModelSettings(input model.AIModelSettingsUpdate) (*mod
 	next.Translation = input.Translation
 	next.PinPapersLimit = input.PinPapersLimit
 	next.ContextBudgetTokens = input.ContextBudgetTokens
+	if input.ImageGen != nil {
+		next.ImageGen = *input.ImageGen
+	}
 	next.RolePrompts = nil
 
 	return s.UpdateSettings(next)
@@ -220,6 +223,7 @@ func normalizeAISettings(input model.AISettings) (model.AISettings, error) {
 	}
 	settings.Translation.PrimaryLanguage = strings.TrimSpace(settings.Translation.PrimaryLanguage)
 	settings.Translation.TargetLanguage = strings.TrimSpace(settings.Translation.TargetLanguage)
+	settings.ImageGen = normalizeAIImageGenSettings(settings.ImageGen, defaults.ImageGen)
 
 	models, err := normalizeAIModels(settings, defaults)
 	if err != nil {
@@ -257,6 +261,33 @@ func parseStoredAIRolePrompts(raw string) ([]model.AIRolePrompt, error) {
 	}
 
 	return normalizeAIRolePrompts(rolePrompts)
+}
+
+func normalizeAIImageGenSettings(input model.AIImageGenSettings, defaults model.AIImageGenSettings) model.AIImageGenSettings {
+	out := input
+	out.APIKey = strings.TrimSpace(out.APIKey)
+	out.BaseURL = strings.TrimRight(strings.TrimSpace(out.BaseURL), "/")
+	out.Model = strings.TrimSpace(out.Model)
+	out.Size = strings.TrimSpace(out.Size)
+	out.Quality = strings.ToLower(strings.TrimSpace(out.Quality))
+
+	if out.BaseURL == "" {
+		out.BaseURL = defaults.BaseURL
+	}
+	if out.Model == "" {
+		out.Model = defaults.Model
+	}
+	switch out.Size {
+	case "1024x1024", "1024x1536", "1536x1024":
+	default:
+		out.Size = defaults.Size
+	}
+	switch out.Quality {
+	case "low", "medium", "high":
+	default:
+		out.Quality = defaults.Quality
+	}
+	return out
 }
 
 func convertLegacyPromptPresetToRolePrompt(input legacyAIPromptPreset) model.AIRolePrompt {
