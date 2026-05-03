@@ -1198,3 +1198,64 @@ func TestSendMessage_ImageGenerationBypassedWhenNilGenerator(t *testing.T) {
 		t.Fatalf("expected LLM call when imageGen is nil")
 	}
 }
+
+func TestGetConversation_PinnedPapersIncludeFigures(t *testing.T) {
+	svc, libRepo, _ := newServiceForTest(t)
+
+	// Create a paper that has two figures.
+	seq := atomic.AddInt64(&testPaperSeq, 1)
+	fname := fmt.Sprintf("paper_fig_%d.pdf", seq)
+	res, err := libRepo.DB().Exec(
+		`INSERT INTO papers (title, doi, original_filename, stored_pdf_name) VALUES (?, ?, ?, ?)`,
+		"Figure Test Paper", "10.1/figtest", fname, fname)
+	if err != nil {
+		t.Fatalf("insert paper: %v", err)
+	}
+	paperID, _ := res.LastInsertId()
+
+	// Insert two top-level figures and one subfigure.
+	for i, caption := range []string{"Figure A caption", "Figure B caption"} {
+		_, err := libRepo.DB().Exec(
+			`INSERT INTO paper_figures (paper_id, filename, page_number, figure_index, caption) VALUES (?, ?, ?, ?, ?)`,
+			paperID, fmt.Sprintf("fig_%d.png", i+1), i+1, i+1, caption)
+		if err != nil {
+			t.Fatalf("insert figure %d: %v", i, err)
+		}
+	}
+	// Subfigure (parent_figure_id set) — should be excluded.
+	var parentFigID int64
+	_ = libRepo.DB().QueryRow(`SELECT id FROM paper_figures WHERE paper_id = ? LIMIT 1`, paperID).Scan(&parentFigID)
+	if parentFigID > 0 {
+		_, _ = libRepo.DB().Exec(
+			`INSERT INTO paper_figures (paper_id, filename, page_number, figure_index, caption, parent_figure_id) VALUES (?, ?, ?, ?, ?, ?)`,
+			paperID, "subfig.png", 1, 1, "subfig caption", parentFigID)
+	}
+
+	// Create a conversation and pin the paper.
+	convID, err := svc.CreateDraft()
+	if err != nil {
+		t.Fatalf("CreateDraft: %v", err)
+	}
+	if err := libRepo.AIConversation.PinPaper(convID, paperID); err != nil {
+		t.Fatalf("PinPaper: %v", err)
+	}
+
+	conv, err := svc.GetConversation(convID)
+	if err != nil {
+		t.Fatalf("GetConversation: %v", err)
+	}
+	if len(conv.PinnedPapers) != 1 {
+		t.Fatalf("expected 1 pinned paper, got %d", len(conv.PinnedPapers))
+	}
+	pp := conv.PinnedPapers[0]
+	// Only 2 top-level figures (subfigure excluded).
+	if len(pp.Figures) != 2 {
+		t.Fatalf("expected 2 figures, got %d: %+v", len(pp.Figures), pp.Figures)
+	}
+	if pp.Figures[0].Caption != "Figure A caption" {
+		t.Errorf("unexpected first figure caption: %q", pp.Figures[0].Caption)
+	}
+	if pp.Figures[1].Caption != "Figure B caption" {
+		t.Errorf("unexpected second figure caption: %q", pp.Figures[1].Caption)
+	}
+}

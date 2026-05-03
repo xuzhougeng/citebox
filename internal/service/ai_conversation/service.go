@@ -120,7 +120,7 @@ func (s *Service) GetConversation(id int64) (Conversation, error) {
 		StrictEvidence: row.StrictEvidence,
 		CreatedAt:      row.CreatedAt,
 		UpdatedAt:      row.UpdatedAt,
-		PinnedPapers:   toPinnedPapers(pinned),
+		PinnedPapers:   s.toPinnedPapersWithFigures(pinned),
 		RecentMessages: toMessages(msgs),
 		TurnRuns:       runs,
 	}, nil
@@ -670,6 +670,39 @@ func toPinnedPapers(rows []repository.AIPinnedPaper) []PinnedPaper {
 	out := make([]PinnedPaper, 0, len(rows))
 	for _, r := range rows {
 		out = append(out, PinnedPaper{PaperID: r.PaperID, Title: r.Title, DOI: r.DOI, PinnedAt: r.PinnedAt})
+	}
+	return out
+}
+
+// toPinnedPapersWithFigures builds a []PinnedPaper where each entry's Figures
+// slice is populated from the paper repository. Errors on individual figure
+// lookups are silently ignored so a single bad paper doesn't break the whole
+// GetConversation response.
+func (s *Service) toPinnedPapersWithFigures(rows []repository.AIPinnedPaper) []PinnedPaper {
+	out := make([]PinnedPaper, 0, len(rows))
+	for _, r := range rows {
+		pp := PinnedPaper{PaperID: r.PaperID, Title: r.Title, DOI: r.DOI, PinnedAt: r.PinnedAt}
+		if s.papers != nil {
+			if paper, err := s.papers.GetPaperDetail(r.PaperID); err == nil && paper != nil {
+				figs := make([]PinnedPaperFigure, 0, len(paper.Figures))
+				for _, f := range paper.Figures {
+					// Only top-level figures (no subfigures) to keep the palette lean.
+					if f.ParentFigureID != nil {
+						continue
+					}
+					figs = append(figs, PinnedPaperFigure{
+						ID:          f.ID,
+						PageNumber:  f.PageNumber,
+						FigureIndex: f.FigureIndex,
+						Caption:     f.Caption,
+					})
+				}
+				if len(figs) > 0 {
+					pp.Figures = figs
+				}
+			}
+		}
+		out = append(out, pp)
 	}
 	return out
 }

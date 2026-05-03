@@ -88,6 +88,7 @@
     "ai.role_prompt_hint": "Type @ to open the picker — switch papers or insert a role prompt.",
     "ai.role_prompt_hint_empty": "No role prompts configured. Add one in Settings, then use @ here.",
     "ai.question_placeholder": "Type @ to switch paper or invoke a role, e.g. @EvidenceReview explain the core conclusions.",
+    "ai.mention_section_figures": "Figures",
     "ai.mention_section_papers": "Papers",
     "ai.mention_section_roles": "Role Prompts",
     "ai.mention_section_tools": "Tools / Sources",

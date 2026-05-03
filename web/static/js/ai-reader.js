@@ -243,6 +243,23 @@
                             }
                         },
                         onPickRole: () => { /* role label inserted by mention module */ },
+                        getFigures: () => {
+                            const pinned = (view._state && view._state.pinnedPapers) || [];
+                            if (!pinned.length) return [];
+                            const out = [];
+                            pinned.forEach((p) => {
+                                const figs = (p.figures || []);
+                                figs.forEach((fig) => {
+                                    out.push({
+                                        id: fig.id,
+                                        label: 'figure-' + fig.id,
+                                        caption: fig.caption || '',
+                                        paper_title: p.title || '',
+                                    });
+                                });
+                            });
+                            return out;
+                        },
                     }
                 );
             }

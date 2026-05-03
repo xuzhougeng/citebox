@@ -146,6 +146,12 @@
 
             const body = { content: content, context: this._currentContext() };
 
+            // Extract @figure-<id> mentions and pass as context.figure_ids.
+            const figureIDs = extractFigureMentions(content);
+            if (figureIDs.length > 0) {
+                body.context.figure_ids = figureIDs;
+            }
+
             // Parse @ tool tags out of the content. The text is left intact in
             // body.content (so the model sees the user's literal input); the parsed
             // intent + sources ride alongside as routing hints.
@@ -791,6 +797,18 @@
             s.els.conversation.scrollTop = s.els.conversation.scrollHeight;
         },
     };
+
+    function extractFigureMentions(text) {
+        const re = /(^|\s)@figure-(\d+)\b/g;
+        const ids = [];
+        const seen = new Set();
+        let m;
+        while ((m = re.exec(text)) !== null) {
+            const id = parseInt(m[2], 10);
+            if (!seen.has(id)) { seen.add(id); ids.push(id); }
+        }
+        return ids;
+    }
 
     const DOI_RE = /\b10\.\d{4,9}\/[-._;()/:A-Z0-9]+\b/i;
     function looksLikeDOI(text) {

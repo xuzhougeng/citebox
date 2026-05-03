@@ -88,6 +88,7 @@
     "ai.role_prompt_hint": "输入 @ 唤起选择面板：可切换文献或调用角色 Prompt。",
     "ai.role_prompt_hint_empty": "还没有配置角色 Prompt。到配置页新增后，可以在这里用 @ 调用。",
     "ai.question_placeholder": "输入 @ 切换文献或调用角色，例如 @证据审查 请解释这篇文章的核心结论。",
+    "ai.mention_section_figures": "图片",
     "ai.mention_section_papers": "文献",
     "ai.mention_section_roles": "角色 Prompt",
     "ai.mention_section_tools": "工具/数据源",
