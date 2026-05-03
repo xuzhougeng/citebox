@@ -75,6 +75,10 @@
     "ai.result_verdict_partial": "Partially supported",
     "ai.result_verdict_unsupported": "Unsupported",
     "ai.result_image_unavailable": "Image unavailable",
+    "ai.image_gen_card_fallback": "Generated image",
+    "ai.image_gen_card_download": "Download",
+    "ai.image_gen_card_copy_prompt": "Copy prompt",
+    "ai.image_gen_card_prompt": "AI prompt",
     "ai.btn_delete_conversation": "Delete",
     "ai.confirm_delete_conversation_title": "Delete Conversation",
     "ai.confirm_delete_conversation": "This will remove the conversation and its message history.",
@@ -88,6 +92,7 @@
     "ai.role_prompt_hint": "Type @ to open the picker — switch papers or insert a role prompt.",
     "ai.role_prompt_hint_empty": "No role prompts configured. Add one in Settings, then use @ here.",
     "ai.question_placeholder": "Type @ to switch paper or invoke a role, e.g. @EvidenceReview explain the core conclusions.",
+    "ai.mention_section_figures": "Figures",
     "ai.mention_section_papers": "Papers",
     "ai.mention_section_roles": "Role Prompts",
     "ai.mention_section_tools": "Tools / Sources",
@@ -96,6 +101,9 @@
     "ai.tool_semantic_scholar_desc": "External source · Semantic Scholar",
     "ai.tool_library_desc": "Local text search (no figures)",
     "ai.tool_figure_desc": "Local figure search",
+    "ai.tool.image_gen.title": "image-gen",
+    "ai.tool.image_gen.description": "AI image generation (graphical abstract)",
+    "ai.tool.image_gen.disabled_reason": "Enable image generation in settings first",
     "ai.mention_empty": "No matching paper or role.",
     "ai.current_paper_empty": "No paper selected. Type @ below to search and switch.",
     "ai.btn_pick_paper": "Pick Paper",
@@ -191,5 +199,12 @@
 
     "ai.doi.importing": "Importing paper by DOI: ",
     "ai.doi.imported": "Imported: ",
-    "ai.doi.failed": "DOI import failed: "
+    "ai.doi.failed": "DOI import failed: ",
+
+    "ai.image_gen.status.drafting_prompt": "Analyzing paper and figures...",
+    "ai.image_gen.status.prompt_drafted": "Image prompt drafted",
+    "ai.image_gen.status.prompt_label": "View prompt",
+    "ai.image_gen.status.generating": "Generating image",
+    "ai.image_gen.status.done": "Image generated",
+    "ai.image_gen.status.failed": "Image generation failed"
 }

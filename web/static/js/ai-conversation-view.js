@@ -146,6 +146,12 @@
 
             const body = { content: content, context: this._currentContext() };
 
+            // Extract @figure-<id> mentions and pass as context.figure_ids.
+            const figureIDs = extractFigureMentions(content);
+            if (figureIDs.length > 0) {
+                body.context.figure_ids = figureIDs;
+            }
+
             // Parse @ tool tags out of the content. The text is left intact in
             // body.content (so the model sees the user's literal input); the parsed
             // intent + sources ride alongside as routing hints.
@@ -468,6 +474,16 @@
                 const citations = evt.citations || evt.data || [];
                 s.pendingCitations = citations;
                 if (s.streaming) s.streaming.pendingCitations = citations;
+            } else if (evt.type === 'image_prompt_drafting') {
+                this._setImageGenStatus('drafting', {});
+            } else if (evt.type === 'image_prompt_drafted') {
+                this._setImageGenStatus('drafted', { prompt: evt.data && evt.data.prompt });
+            } else if (evt.type === 'image_generating') {
+                this._setImageGenStatus('generating', evt.data || {});
+            } else if (evt.type === 'image_generated') {
+                this._setImageGenStatus('generated', { card: evt.data && evt.data.card });
+            } else if (evt.type === 'image_failed') {
+                this._setImageGenStatus('failed', { reason: evt.data && evt.data.reason, stage: evt.data && evt.data.stage });
             } else if (evt.type === 'final') {
                 if (assistantBubble) {
                     assistantBubble.classList.remove('is-streaming');
@@ -658,6 +674,56 @@
             this._scrollConversationToBottom();
         },
 
+        _setImageGenStatus(status, data) {
+            data = data || {};
+            const node = this._ensureImageGenStatusNode();
+            if (!node) return;
+            switch (status) {
+                case 'drafting':
+                    node.innerHTML = '<p class="ai-status-line">' + escapeHtml(translate('ai.image_gen.status.drafting_prompt', '正在分析文献和图片...')) + '</p>';
+                    break;
+                case 'drafted':
+                    node.innerHTML =
+                        '<p class="ai-status-line">' + escapeHtml(translate('ai.image_gen.status.prompt_drafted', '已生成图像 prompt')) + '</p>' +
+                        '<details><summary>' + escapeHtml(translate('ai.image_gen.status.prompt_label', '查看 prompt')) + '</summary>' +
+                        '<pre>' + escapeHtml(data.prompt || '') + '</pre></details>';
+                    break;
+                case 'generating': {
+                    const cost = (typeof data.cost_estimate_usd === 'number') ? ' ($' + data.cost_estimate_usd.toFixed(2) + ')' : '';
+                    node.innerHTML = '<p class="ai-status-line">' + escapeHtml(translate('ai.image_gen.status.generating', '正在生成图片') + cost) + '</p>';
+                    break;
+                }
+                case 'generated':
+                    if (window.AIReader && window.AIReader.resultCards && typeof window.AIReader.resultCards.render === 'function') {
+                        node.innerHTML = window.AIReader.resultCards.render([{ card_type: 'generated_image', payload: data.card }]);
+                    } else {
+                        node.innerHTML = '<p class="ai-status-line">' + escapeHtml(translate('ai.image_gen.status.done', '已生成图片')) + '</p>';
+                    }
+                    break;
+                case 'failed':
+                    node.innerHTML = '<p class="ai-status-error">' +
+                        escapeHtml(translate('ai.image_gen.status.failed', '图像生成失败')) + ': ' + escapeHtml(data.reason || '') +
+                    '</p>';
+                    break;
+            }
+            this._scrollConversationToBottom();
+        },
+
+        // Find or create a stable status node attached to the current streaming assistant bubble.
+        _ensureImageGenStatusNode() {
+            const s = this._state;
+            const bubble = s.streaming && s.streaming.assistantBubbleEl;
+            if (!bubble) return null;
+            const artifacts = this._ensureMessageParts(bubble).artifacts;
+            let node = artifacts.querySelector(':scope > .ai-image-gen-status');
+            if (!node) {
+                node = document.createElement('div');
+                node.className = 'ai-image-gen-status';
+                artifacts.appendChild(node);
+            }
+            return node;
+        },
+
         _hydrateFinalCitations(bubble, assistantMessage) {
             const s = this._state;
             const citations = assistantMessage && assistantMessage.citations_json ||
@@ -791,6 +857,18 @@
             s.els.conversation.scrollTop = s.els.conversation.scrollHeight;
         },
     };
+
+    function extractFigureMentions(text) {
+        const re = /(^|\s)@figure-(\d+)\b/g;
+        const ids = [];
+        const seen = new Set();
+        let m;
+        while ((m = re.exec(text)) !== null) {
+            const id = parseInt(m[2], 10);
+            if (!seen.has(id)) { seen.add(id); ids.push(id); }
+        }
+        return ids;
+    }
 
     const DOI_RE = /\b10\.\d{4,9}\/[-._;()/:A-Z0-9]+\b/i;
     function looksLikeDOI(text) {

@@ -25,6 +25,7 @@ import (
 	"github.com/xuzhougeng/citebox/internal/service/ai_assistant"
 	"github.com/xuzhougeng/citebox/internal/service/ai_conversation"
 	"github.com/xuzhougeng/citebox/internal/service/ai_external"
+	"github.com/xuzhougeng/citebox/internal/service/ai_image_gen"
 	"github.com/xuzhougeng/citebox/internal/service/daily_figure"
 	"github.com/xuzhougeng/citebox/internal/service/pubmed"
 	"github.com/xuzhougeng/citebox/internal/service/research"
@@ -358,10 +359,11 @@ type sharedAIServices struct {
 	external     *ai_external.Service
 	orchestrator *ai_assistant.Orchestrator
 	conversation *ai_conversation.Service
+	imageGen     *ai_image_gen.Service
 }
 
 func buildAIServices(
-	_ *config.Config,
+	cfg *config.Config,
 	logger *slog.Logger,
 	librarySvc *service.LibraryService,
 	aiSvc *service.AIService,
@@ -385,12 +387,31 @@ func buildAIServices(
 		PaperRead:      ai_assistant.NewPaperReadTool(repo.Paper),
 		FigureLookup:   ai_assistant.NewFigureLookupToolWithPapers(ai_assistant.NewRepositoryFigureSearcher(repo.Figure), repo.Paper),
 	})
-	aiConvService := ai_conversation.New(repo.AIConversation, repo.Paper, aiSvc, aiSvc, aiExternalSvc, logger.With("component", "ai_conversation"), assistantOrchestrator)
+	imageStorage := ai_image_gen.NewStorage(cfg.AIGeneratedDir())
+	imageGenService := ai_image_gen.NewService(ai_image_gen.ServiceDeps{
+		Repo:    aiGeneratedImageRepoAdapter{libRepo: repo},
+		Storage: imageStorage,
+		Vision:  visionAdapter{svc: aiSvc},
+		API:     ai_image_gen.NewClient(http.DefaultClient),
+		LoadInputs: aiSvc.LoadImageGenInputs,
+		GetSettings: func() (model.AIImageGenSettings, model.AISettings, error) {
+			s, err := aiSvc.GetSettings()
+			if err != nil {
+				return model.AIImageGenSettings{}, model.AISettings{}, err
+			}
+			return s.ImageGen, *s, nil
+		},
+	})
+	aiConvService := ai_conversation.New(repo.AIConversation, repo.Paper, aiSvc, aiSvc, aiExternalSvc, logger.With("component", "ai_conversation"), assistantOrchestrator).
+		WithImageGen(imageGenService).
+		WithImageStorage(imageStorage)
+
 	return sharedAIServices{
 		research:     researchSvc,
 		external:     aiExternalSvc,
 		orchestrator: assistantOrchestrator,
 		conversation: aiConvService,
+		imageGen:     imageGenService,
 	}
 }
 
@@ -435,6 +456,7 @@ func buildHandlerWithAIServices(
 	databaseHandler := handler.NewDatabaseHandler(librarySvc)
 	sessionManager := service.NewSessionManager(24 * time.Hour)
 	authHandler := handler.NewAuthHandler(librarySvc, sessionManager)
+	aiGeneratedImageHandler := handler.NewAIGeneratedImageHandler(repo.AIGeneratedImage, cfg.AIGeneratedDir())
 
 	researchAdapter := &research.RepoAdapter{Repo: repo.Research}
 	basket := research.NewBasket(researchAdapter, researchSvc, librarySvcImporterShim{librarySvc})
@@ -768,6 +790,14 @@ func buildHandlerWithAIServices(
 		default:
 			aiConversationHandler.Detail(w, r)
 		}
+	})
+
+	mux.HandleFunc("/api/ai-generated-images/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/file") {
+			aiGeneratedImageHandler.GetFile(w, r)
+			return
+		}
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 	})
 
 	mux.HandleFunc("/api/settings/extractor", func(w http.ResponseWriter, r *http.Request) {

@@ -19,16 +19,18 @@
     // Canonical tag list. Order matters — the popover renders tools in this
     // order so users see the same layout regardless of session.
     const KNOWN_TOOL_TAGS = [
-        { name: 'PubMed',          family: 'external', source: 'pubmed' },
-        { name: 'SemanticScholar', family: 'external', source: 'semantic_scholar' },
-        { name: 'Library',         family: 'library',  source: null },
-        { name: 'Figure',          family: 'figure',   source: null },
+        { name: 'PubMed',          family: 'external',   source: 'pubmed' },
+        { name: 'SemanticScholar', family: 'external',   source: 'semantic_scholar' },
+        { name: 'Library',         family: 'library',    source: null },
+        { name: 'Figure',          family: 'figure',     source: null },
+        { name: 'image-gen',       family: 'image_gen',  source: null },  // NEW
     ];
 
     const FAMILY_INTENT = {
-        external: 'external_search',
-        library:  'library_search',
-        figure:   'figure_lookup',
+        external:  'external_search',
+        library:   'library_search',
+        figure:    'figure_lookup',
+        image_gen: 'image_generation',  // NEW
     };
 
     const NAME_LOOKUP = {};
@@ -41,7 +43,7 @@
 
     // \b breaks at the boundary between word/non-word chars; we require either
     // start-of-string or whitespace before @ so emails ("foo@bar") never match.
-    const TAG_RE = /(^|\s)@(PubMed|SemanticScholar|Library|Figure)\b/gi;
+    const TAG_RE = /(^|\s)@(PubMed|SemanticScholar|Library|Figure|image-gen)\b/gi;
 
     function scanTags(text) {
         // Returns array of { name, family, source, start, end } in order of

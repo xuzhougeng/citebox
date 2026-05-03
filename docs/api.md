@@ -661,7 +661,7 @@ AI 流式阅读通过：
 
 用途：
 
-- 单独保存模型配置、场景绑定、温度、图片数量上限和翻译规则
+- 单独保存模型配置、场景绑定、温度、图片数量上限、上下文预算、单会话 pin 上限、翻译规则，以及 `@image-gen` 的图像生成配置
 
 请求体：
 
@@ -693,12 +693,28 @@ AI 流式阅读通过：
   },
   "temperature": 0.2,
   "max_figures": 0,
+  "pin_papers_limit": 5,
+  "context_budget_tokens": 32000,
+  "image_gen": {
+    "enabled": true,
+    "api_key": "sk-image",
+    "base_url": "https://api.openai.com",
+    "model": "gpt-image-2",
+    "size": "1024x1024",
+    "quality": "high"
+  },
   "translation": {
     "primary_language": "中文",
     "target_language": "英文"
   }
 }
 ```
+
+说明：
+
+- `image_gen` 为可选字段；如果本次请求未传，后端会保留当前已保存的图像生成配置。
+- `image_gen.size` 目前支持：`1024x1024`、`1024x1536`、`1536x1024`。
+- `image_gen.quality` 目前支持：`low`、`medium`、`high`。
 
 #### `PUT /api/ai/settings/prompts`
 
@@ -857,6 +873,53 @@ AI 流式阅读通过：
 - `used_api_key=true` 表示运行中的调研客户端这次请求会发送 `x-api-key`
 - `used_api_key=false` 表示这次请求走的是匿名额度，前端可提示用户检查 `/settings#settings-external-sources`
 - 助手消息的 `citations_json` 会保存本地或外部搜索证据片段，前端用 `[n]` 脚注展示。
+
+#### `GET /api/ai-generated-images/:id/file`
+
+用途：
+
+- 返回指定 AI 生成图片的原始 PNG 字节流。
+
+说明：
+
+- 需要登录鉴权（由全局 `authMiddleware` 覆盖）。
+- 若 `ai_generated_images` 表中不存在对应 `id` 的行，返回 `404`。
+- 路径参数 `id` 为 `ai_generated_images` 表的整数主键。
+- 响应头：`Content-Type: image/png`，`Cache-Control: private, max-age=86400`。
+
+#### 会话流式事件：图片生成
+
+当用户发送的消息中包含 `@image-gen` 标签时，会话流会按顺序额外发出以下事件类型：
+
+- `image_prompt_drafting` — 视觉理解阶段已启动。Payload：`{ "turn_run_id": <int> }`。
+- `image_prompt_drafted` — 视觉理解阶段已生成图片 Prompt。Payload：`{ "turn_run_id": <int>, "prompt": "<text>" }`。
+- `image_generating` — 即将调用图片生成 API。Payload：`{ "turn_run_id": <int>, "model": "<str>", "size": "<str>", "quality": "<str>", "cost_estimate_usd": <float> }`。
+- `image_generated`（成功）— 最终卡片已落盘。Payload：`{ "turn_run_id": <int>, "card": { ... } }`。
+- `image_failed`（任意失败）— Payload：`{ "turn_run_id": <int>, "stage": "vision|image_api|save", "reason": "<str>" }`。
+
+成功落盘的结果卡片 `card_type` 为 `"generated_image"`，Payload 结构如下：
+
+```json
+{
+  "image_id": 123,
+  "file_url": "/api/ai-generated-images/123/file",
+  "prompt": "...",
+  "model": "gpt-image-2",
+  "size": "1024x1024",
+  "quality": "high",
+  "source_paper_ids": [42],
+  "source_figure_ids": [],
+  "cost_estimate_usd": 0.19
+}
+```
+
+#### 已钉文献携带图片列表
+
+`GET /api/ai-conversations/:id` 现在会在每条已钉文献条目上附带 `figures` 数组，供前端 `@figure` 提及调板使用。每个条目包含 `id`、`page_number`、`figure_index`、`caption`。子图不在其中。
+
+#### 发送消息请求体扩展
+
+`POST /api/ai-conversations/:id/messages` 现在支持 `context.figure_ids: [<int>]`，当消息文本中包含 `@figure-<id>` 提及时由前端填充。每个 id 必须指向已钉文献下的图片。
 
 #### `POST /api/ai/settings/check-model`
 

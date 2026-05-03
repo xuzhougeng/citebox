@@ -111,7 +111,8 @@ func requestContextEmpty(ctx ai_assistant.RequestContext) bool {
 	return strings.TrimSpace(ctx.Source) == "" &&
 		ctx.PaperID == 0 &&
 		ctx.FigureID == 0 &&
-		len(ctx.PaperIDs) == 0
+		len(ctx.PaperIDs) == 0 &&
+		len(ctx.FigureIDs) == 0
 }
 
 func toResultCards(rows []repository.AIResultCard) []ResultCard {
