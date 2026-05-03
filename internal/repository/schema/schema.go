@@ -306,6 +306,22 @@ func (m *Manager) ensureAIOrchestrationSchema() error {
 		`CREATE INDEX IF NOT EXISTS idx_ai_turn_runs_user ON ai_turn_runs(user_message_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_ai_tool_calls_run ON ai_tool_calls(turn_run_id, id)`,
 		`CREATE INDEX IF NOT EXISTS idx_ai_result_cards_run ON ai_result_cards(turn_run_id, sort_order, id)`,
+		`CREATE TABLE IF NOT EXISTS ai_generated_images (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			turn_run_id INTEGER NOT NULL REFERENCES ai_turn_runs(id) ON DELETE CASCADE,
+			conversation_id INTEGER NOT NULL REFERENCES ai_conversations(id) ON DELETE CASCADE,
+			file_path TEXT NOT NULL,
+			prompt TEXT NOT NULL,
+			model TEXT NOT NULL,
+			size TEXT NOT NULL,
+			quality TEXT NOT NULL,
+			source_paper_ids TEXT NOT NULL DEFAULT '[]',
+			source_figure_ids TEXT NOT NULL DEFAULT '[]',
+			cost_estimate_usd REAL,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_ai_generated_images_conv ON ai_generated_images(conversation_id, id)`,
+		`CREATE INDEX IF NOT EXISTS idx_ai_generated_images_turn ON ai_generated_images(turn_run_id)`,
 	}
 	for _, stmt := range stmts {
 		if _, err := m.db.Exec(stmt); err != nil {
