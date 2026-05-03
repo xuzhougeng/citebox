@@ -196,5 +196,12 @@
 
     "ai.doi.importing": "Importing paper by DOI: ",
     "ai.doi.imported": "Imported: ",
-    "ai.doi.failed": "DOI import failed: "
+    "ai.doi.failed": "DOI import failed: ",
+
+    "ai.image_gen.status.drafting_prompt": "Analyzing paper and figures...",
+    "ai.image_gen.status.prompt_drafted": "Image prompt drafted",
+    "ai.image_gen.status.prompt_label": "View prompt",
+    "ai.image_gen.status.generating": "Generating image",
+    "ai.image_gen.status.done": "Image generated",
+    "ai.image_gen.status.failed": "Image generation failed"
 }

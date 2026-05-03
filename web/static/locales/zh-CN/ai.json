@@ -196,5 +196,12 @@
 
     "ai.doi.importing": "正在通过 DOI 导入文献：",
     "ai.doi.imported": "已导入：",
-    "ai.doi.failed": "DOI 导入失败："
+    "ai.doi.failed": "DOI 导入失败：",
+
+    "ai.image_gen.status.drafting_prompt": "正在分析文献和图片...",
+    "ai.image_gen.status.prompt_drafted": "已生成图像 prompt",
+    "ai.image_gen.status.prompt_label": "查看 prompt",
+    "ai.image_gen.status.generating": "正在生成图片",
+    "ai.image_gen.status.done": "已生成图片",
+    "ai.image_gen.status.failed": "图像生成失败"
 }
