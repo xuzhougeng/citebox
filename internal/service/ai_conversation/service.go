@@ -12,6 +12,7 @@ import (
 	"github.com/xuzhougeng/citebox/internal/model"
 	"github.com/xuzhougeng/citebox/internal/repository"
 	"github.com/xuzhougeng/citebox/internal/service/ai_assistant"
+	"github.com/xuzhougeng/citebox/internal/service/ai_image_gen"
 )
 
 // AISettingsProvider exposes the parts of *service.AIService we depend on.
@@ -41,6 +42,7 @@ type Service struct {
 	orchestrator  orchestrator
 	titleCaller   NonStreamCaller
 	summaryCaller NonStreamCaller
+	imageGen      ai_image_gen.Generator // optional; nil = image-gen disabled
 	logger        *slog.Logger
 }
 
@@ -56,6 +58,13 @@ func New(repo *repository.AIConversationRepository, papers *repository.PaperRepo
 		s.titleCaller = tc
 		s.summaryCaller = tc
 	}
+	return s
+}
+
+// WithImageGen attaches an optional image-generation backend. Calls are
+// chained so existing callers of New do not need to change.
+func (s *Service) WithImageGen(g ai_image_gen.Generator) *Service {
+	s.imageGen = g
 	return s
 }
 
@@ -265,6 +274,11 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput, onDelta 
 	userMsgID, err := s.repo.AddMessage(in.ConversationID, "user", in.Content, repository.AIMessageMeta{})
 	if err != nil {
 		return SendMessageResult{}, err
+	}
+
+	// Image-generation intent: bypass LLM and dispatch to ai_image_gen.Service.
+	if s.imageGen != nil && strings.EqualFold(strings.TrimSpace(in.IntentHint), "image_generation") {
+		return s.dispatchImageGen(ctx, in, conv, userMsgID)
 	}
 
 	settings, err := s.settings.GetSettings()
@@ -669,6 +683,102 @@ func toMessages(rows []repository.AIMessage) []Message {
 			IncludedFigures: r.IncludedFigures, CitationsJSON: r.CitationsJSON,
 			CreatedAt: r.CreatedAt,
 		})
+	}
+	return out
+}
+
+// dispatchImageGen handles the image_generation intent path. It is called by
+// SendMessage when s.imageGen != nil and in.IntentHint == "image_generation".
+// Auto-pin is already done by the time this is called (SendMessage does it
+// before AddMessage). This function creates a turn run, calls the image-gen
+// service, then persists the assistant summary message.
+func (s *Service) dispatchImageGen(ctx context.Context, in SendMessageInput,
+	_ repository.AIConversation, userMsgID int64) (SendMessageResult, error) {
+
+	paperIDs, figureIDs := parseImageGenReferences(in)
+	if len(paperIDs) == 0 && len(figureIDs) == 0 {
+		return SendMessageResult{}, apperr.New(apperr.CodeInvalidArgument, "请引用至少一篇文献或一张图")
+	}
+
+	turnID, err := s.repo.CreateTurnRun(repository.AITurnRun{
+		ConversationID: in.ConversationID,
+		UserMessageID:  userMsgID,
+		Intent:         "image_generation",
+		IntentHint:     in.IntentHint,
+		Status:         "running",
+	})
+	if err != nil {
+		return SendMessageResult{}, err
+	}
+
+	genErr := s.imageGen.Generate(ctx, ai_image_gen.GenerateInput{
+		ConversationID: in.ConversationID,
+		TurnRunID:      turnID,
+		PaperIDs:       paperIDs,
+		FigureIDs:      figureIDs,
+		UserText:       in.Content,
+		OnEvent: func(e ai_image_gen.StreamEvent) error {
+			return s.emitStreamEvent(in, StreamEvent{Type: e.Type, Data: e.Data})
+		},
+	})
+
+	finalStatus := "completed"
+	assistantText := "已生成图像。"
+	if genErr != nil {
+		finalStatus = "failed"
+		assistantText = fmt.Sprintf("图像生成失败：%s", genErr.Error())
+	}
+
+	asstID, err := s.repo.AddMessage(in.ConversationID, "assistant", assistantText, repository.AIMessageMeta{
+		Mode: finalStatus,
+	})
+	if err != nil {
+		return SendMessageResult{}, err
+	}
+	if err := s.repo.UpdateTurnRunAssistant(turnID, asstID, finalStatus); err != nil {
+		s.logger.Warn("ai_conversation: update image-gen turn run failed", "error", err)
+	}
+	_ = s.repo.TouchConversation(in.ConversationID)
+
+	if genErr != nil {
+		return SendMessageResult{}, genErr
+	}
+	return SendMessageResult{
+		ConversationID:   in.ConversationID,
+		UserMessage:      Message{ID: userMsgID, Role: "user", Content: in.Content},
+		AssistantMessage: Message{ID: asstID, Role: "assistant", Content: assistantText, Mode: finalStatus},
+	}, nil
+}
+
+// parseImageGenReferences extracts paper and figure IDs from the incoming
+// SendMessageInput for the image-generation path.
+func parseImageGenReferences(in SendMessageInput) ([]int64, []int64) {
+	paperIDs := append([]int64(nil), in.PaperIDs...)
+	if len(paperIDs) == 0 && in.PaperID > 0 {
+		paperIDs = []int64{in.PaperID}
+	}
+	figureIDs := []int64(nil)
+	if in.Context.FigureID > 0 {
+		figureIDs = append(figureIDs, in.Context.FigureID)
+	}
+	if len(in.Context.FigureIDs) > 0 {
+		figureIDs = append(figureIDs, in.Context.FigureIDs...)
+	}
+	return dedupeInt64(paperIDs), dedupeInt64(figureIDs)
+}
+
+func dedupeInt64(in []int64) []int64 {
+	seen := make(map[int64]struct{}, len(in))
+	out := in[:0]
+	for _, id := range in {
+		if id <= 0 {
+			continue
+		}
+		if _, dup := seen[id]; dup {
+			continue
+		}
+		seen[id] = struct{}{}
+		out = append(out, id)
 	}
 	return out
 }

@@ -387,8 +387,6 @@ func buildAIServices(
 		PaperRead:      ai_assistant.NewPaperReadTool(repo.Paper),
 		FigureLookup:   ai_assistant.NewFigureLookupToolWithPapers(ai_assistant.NewRepositoryFigureSearcher(repo.Figure), repo.Paper),
 	})
-	aiConvService := ai_conversation.New(repo.AIConversation, repo.Paper, aiSvc, aiSvc, aiExternalSvc, logger.With("component", "ai_conversation"), assistantOrchestrator)
-
 	imageGenService := ai_image_gen.NewService(ai_image_gen.ServiceDeps{
 		Repo:    aiGeneratedImageRepoAdapter{libRepo: repo},
 		Storage: ai_image_gen.NewStorage(cfg.AIGeneratedDir()),
@@ -403,6 +401,8 @@ func buildAIServices(
 			return s.ImageGen, *s, nil
 		},
 	})
+	aiConvService := ai_conversation.New(repo.AIConversation, repo.Paper, aiSvc, aiSvc, aiExternalSvc, logger.With("component", "ai_conversation"), assistantOrchestrator).
+		WithImageGen(imageGenService)
 
 	return sharedAIServices{
 		research:     researchSvc,

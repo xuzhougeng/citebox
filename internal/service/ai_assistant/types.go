@@ -12,10 +12,11 @@ const (
 )
 
 type RequestContext struct {
-	Source   string  `json:"source,omitempty"`
-	PaperID  int64   `json:"paper_id,omitempty"`
-	PaperIDs []int64 `json:"paper_ids,omitempty"`
-	FigureID int64   `json:"figure_id,omitempty"`
+	Source    string  `json:"source,omitempty"`
+	PaperID   int64   `json:"paper_id,omitempty"`
+	PaperIDs  []int64 `json:"paper_ids,omitempty"`
+	FigureID  int64   `json:"figure_id,omitempty"`
+	FigureIDs []int64 `json:"figure_ids,omitempty"`
 }
 
 type RouteInput struct {

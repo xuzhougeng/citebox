@@ -13,6 +13,7 @@ import (
 	"github.com/xuzhougeng/citebox/internal/model"
 	"github.com/xuzhougeng/citebox/internal/repository"
 	"github.com/xuzhougeng/citebox/internal/service/ai_assistant"
+	ai_image_gen_pkg "github.com/xuzhougeng/citebox/internal/service/ai_image_gen"
 	"github.com/xuzhougeng/citebox/internal/service/research"
 )
 
@@ -1016,4 +1017,184 @@ func stageByLabel(stages []ai_assistant.ProcessStage, label string) ai_assistant
 		}
 	}
 	return ai_assistant.ProcessStage{}
+}
+
+// ---------------------------------------------------------------------------
+// image_generation intent routing
+// ---------------------------------------------------------------------------
+
+type fakeImageGen struct {
+	fn func(context.Context, ai_image_gen_pkg.GenerateInput) error
+}
+
+func (f *fakeImageGen) Generate(ctx context.Context, in ai_image_gen_pkg.GenerateInput) error {
+	return f.fn(ctx, in)
+}
+
+func TestSendMessage_RoutesImageGenerationIntent(t *testing.T) {
+	svc, libRepo, _ := newServiceForTest(t)
+
+	// Seed a paper so PinPaper (inside SendMessage auto-pin) can find it.
+	paperID := mustInsertPaperForTest(t, libRepo, "Image Gen Paper", "10.1/imggen")
+
+	called := struct {
+		paperIDs  []int64
+		figureIDs []int64
+		userText  string
+		turnRunID int64
+	}{}
+	fake := &fakeImageGen{
+		fn: func(ctx context.Context, in ai_image_gen_pkg.GenerateInput) error {
+			called.paperIDs = in.PaperIDs
+			called.figureIDs = in.FigureIDs
+			called.userText = in.UserText
+			called.turnRunID = in.TurnRunID
+			_ = in.OnEvent(ai_image_gen_pkg.StreamEvent{Type: "image_generated"})
+			return nil
+		},
+	}
+	svc = svc.WithImageGen(fake)
+
+	convID, err := svc.CreateDraft()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var events []StreamEvent
+	res, err := svc.SendMessage(context.Background(), SendMessageInput{
+		ConversationID: convID,
+		Content:        "@image-gen draw it",
+		IntentHint:     "image_generation",
+		PaperIDs:       []int64{paperID},
+		OnEvent: func(e StreamEvent) error {
+			events = append(events, e)
+			return nil
+		},
+	}, func(string) error { return nil })
+	if err != nil {
+		t.Fatalf("SendMessage: %v", err)
+	}
+
+	// Verify the fake received the correct paperIDs and userText.
+	if len(called.paperIDs) != 1 || called.paperIDs[0] != paperID {
+		t.Fatalf("paperIDs: %v, want [%d]", called.paperIDs, paperID)
+	}
+	if len(called.figureIDs) != 0 {
+		t.Fatalf("figureIDs: %v, want []", called.figureIDs)
+	}
+	if called.userText != "@image-gen draw it" {
+		t.Fatalf("userText: %q", called.userText)
+	}
+
+	// Result should reflect a completed image-gen turn.
+	if res.AssistantMessage.Mode != "completed" {
+		t.Errorf("mode: %q, want completed", res.AssistantMessage.Mode)
+	}
+	if res.AssistantMessage.Content != "已生成图像。" {
+		t.Errorf("content: %q", res.AssistantMessage.Content)
+	}
+
+	// The stream event forwarded from the fake should be visible.
+	found := false
+	for _, e := range events {
+		if e.Type == "image_generated" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("image_generated event not emitted; events = %v", events)
+	}
+
+	// DB should have user + assistant messages persisted.
+	msgs, _ := libRepo.AIConversation.ListMessages(convID, 0, 10)
+	if len(msgs) != 2 || msgs[0].Role != "user" || msgs[1].Role != "assistant" {
+		t.Fatalf("persisted msgs = %+v", msgs)
+	}
+
+	// A turn run should exist with intent=image_generation and status=completed.
+	runs, _ := libRepo.AIConversation.ListTurnRuns(convID)
+	if len(runs) != 1 || runs[0].Intent != "image_generation" || runs[0].Status != "completed" {
+		t.Fatalf("runs = %+v", runs)
+	}
+	if !runs[0].AssistantMessageID.Valid || runs[0].AssistantMessageID.Int64 != msgs[1].ID {
+		t.Fatalf("turn run assistant_message_id not linked: %+v", runs[0])
+	}
+}
+
+func TestSendMessage_ImageGenerationFailure(t *testing.T) {
+	svc, libRepo, _ := newServiceForTest(t)
+	paperID := mustInsertPaperForTest(t, libRepo, "Image Gen Paper 2", "10.1/imggen2")
+
+	genErr := errors.New("image API unavailable")
+	fake := &fakeImageGen{
+		fn: func(ctx context.Context, in ai_image_gen_pkg.GenerateInput) error {
+			return genErr
+		},
+	}
+	svc = svc.WithImageGen(fake)
+
+	convID, _ := svc.CreateDraft()
+	_, err := svc.SendMessage(context.Background(), SendMessageInput{
+		ConversationID: convID,
+		Content:        "@image-gen draw it",
+		IntentHint:     "image_generation",
+		PaperIDs:       []int64{paperID},
+	}, func(string) error { return nil })
+	if !errors.Is(err, genErr) {
+		t.Fatalf("err = %v, want %v", err, genErr)
+	}
+
+	// Even on failure, the assistant message should be persisted with the error text.
+	msgs, _ := libRepo.AIConversation.ListMessages(convID, 0, 10)
+	if len(msgs) != 2 || msgs[1].Role != "assistant" || !strings.Contains(msgs[1].Content, "image API unavailable") {
+		t.Fatalf("persisted msgs = %+v", msgs)
+	}
+	runs, _ := libRepo.AIConversation.ListTurnRuns(convID)
+	if len(runs) != 1 || runs[0].Status != "failed" {
+		t.Fatalf("runs = %+v", runs)
+	}
+}
+
+func TestSendMessage_ImageGenerationNoRefsRejected(t *testing.T) {
+	svc, _, _ := newServiceForTest(t)
+	fake := &fakeImageGen{
+		fn: func(ctx context.Context, in ai_image_gen_pkg.GenerateInput) error {
+			return nil
+		},
+	}
+	svc = svc.WithImageGen(fake)
+
+	convID, _ := svc.CreateDraft()
+	_, err := svc.SendMessage(context.Background(), SendMessageInput{
+		ConversationID: convID,
+		Content:        "@image-gen draw it",
+		IntentHint:     "image_generation",
+		// No PaperIDs and no FigureIDs — should be rejected.
+	}, func(string) error { return nil })
+	if err == nil {
+		t.Fatal("expected error for missing refs, got nil")
+	}
+	if !strings.Contains(err.Error(), "请引用") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestSendMessage_ImageGenerationBypassedWhenNilGenerator(t *testing.T) {
+	// When imageGen is nil, image_generation intent falls through to normal LLM.
+	svc, _, caller := newServiceForTest(t)
+	// svc.imageGen is nil by default.
+
+	convID, _ := svc.CreateDraft()
+	_, err := svc.SendMessage(context.Background(), SendMessageInput{
+		ConversationID: convID,
+		Content:        "@image-gen draw it",
+		IntentHint:     "image_generation",
+	}, func(string) error { return nil })
+	if err != nil {
+		t.Fatalf("SendMessage: %v", err)
+	}
+	// LLM should have been called (falls back to normal path).
+	if caller.calls == 0 {
+		t.Fatalf("expected LLM call when imageGen is nil")
+	}
 }
