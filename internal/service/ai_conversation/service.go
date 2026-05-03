@@ -21,6 +21,12 @@ type AISettingsProvider interface {
 	GetSettings() (*model.AISettings, error)
 }
 
+// ImageStorageCleaner can remove all disk files for a conversation.
+// Satisfied by *ai_image_gen.Storage.
+type ImageStorageCleaner interface {
+	DeleteConversationFiles(conversationID int64) error
+}
+
 // StreamCaller is the minimal LLM streaming primitive we need.
 // Satisfied by service.AIService.CallProviderStreamGeneric (added in Task 1.6).
 type StreamCaller interface {
@@ -43,6 +49,7 @@ type Service struct {
 	titleCaller   NonStreamCaller
 	summaryCaller NonStreamCaller
 	imageGen      ai_image_gen.Generator // optional; nil = image-gen disabled
+	imageStorage  ImageStorageCleaner    // optional; nil = no disk cleanup on delete
 	logger        *slog.Logger
 }
 
@@ -65,6 +72,13 @@ func New(repo *repository.AIConversationRepository, papers *repository.PaperRepo
 // chained so existing callers of New do not need to change.
 func (s *Service) WithImageGen(g ai_image_gen.Generator) *Service {
 	s.imageGen = g
+	return s
+}
+
+// WithImageStorage attaches an optional storage cleaner so that deleting a
+// conversation also removes its PNG files from disk. Chained.
+func (s *Service) WithImageStorage(c ImageStorageCleaner) *Service {
+	s.imageStorage = c
 	return s
 }
 
@@ -182,8 +196,15 @@ func (s *Service) UpdateStrictEvidence(id int64, on bool) error {
 	return nil
 }
 
-// DeleteConversation hard-deletes (cascade).
+// DeleteConversation hard-deletes (cascade). If an image storage cleaner is
+// wired in, it removes the conversation's PNG directory first. File cleanup
+// failures are logged and do not abort the DB delete.
 func (s *Service) DeleteConversation(id int64) error {
+	if s.imageStorage != nil {
+		if err := s.imageStorage.DeleteConversationFiles(id); err != nil {
+			s.logger.Warn("ai_conversation: image cleanup failed; proceeding with DB delete", "error", err)
+		}
+	}
 	if err := s.repo.DeleteConversation(id); err != nil {
 		return mapRepoErr(err)
 	}

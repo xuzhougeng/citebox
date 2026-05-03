@@ -1199,6 +1199,68 @@ func TestSendMessage_ImageGenerationBypassedWhenNilGenerator(t *testing.T) {
 	}
 }
 
+// ---------------------------------------------------------------------------
+// DeleteConversation — image storage cleanup
+// ---------------------------------------------------------------------------
+
+type fakeImageStorageCleaner struct {
+	calls []int64
+	err   error
+}
+
+func (f *fakeImageStorageCleaner) DeleteConversationFiles(id int64) error {
+	f.calls = append(f.calls, id)
+	return f.err
+}
+
+func TestDeleteConversation_CallsImageStorageCleaner(t *testing.T) {
+	svc, libRepo, _ := newServiceForTest(t)
+	cleaner := &fakeImageStorageCleaner{}
+	svc = svc.WithImageStorage(cleaner)
+
+	convID, err := svc.CreateDraft()
+	if err != nil {
+		t.Fatalf("CreateDraft: %v", err)
+	}
+
+	if err := svc.DeleteConversation(convID); err != nil {
+		t.Fatalf("DeleteConversation: %v", err)
+	}
+
+	// The cleaner must have been called exactly once with the conversation ID.
+	if len(cleaner.calls) != 1 || cleaner.calls[0] != convID {
+		t.Fatalf("cleaner.calls = %v, want [%d]", cleaner.calls, convID)
+	}
+
+	// The conversation must be gone from the DB.
+	_, dbErr := libRepo.AIConversation.GetConversation(convID)
+	if dbErr == nil {
+		t.Fatalf("expected GetConversation to return error after delete")
+	}
+}
+
+func TestDeleteConversation_CleanerErrorDoesNotAbortDelete(t *testing.T) {
+	svc, libRepo, _ := newServiceForTest(t)
+	cleaner := &fakeImageStorageCleaner{err: errors.New("disk full")}
+	svc = svc.WithImageStorage(cleaner)
+
+	convID, err := svc.CreateDraft()
+	if err != nil {
+		t.Fatalf("CreateDraft: %v", err)
+	}
+
+	// Even with cleaner error, DeleteConversation should succeed.
+	if err := svc.DeleteConversation(convID); err != nil {
+		t.Fatalf("DeleteConversation: %v", err)
+	}
+
+	// DB row must still be gone.
+	_, dbErr := libRepo.AIConversation.GetConversation(convID)
+	if dbErr == nil {
+		t.Fatalf("expected GetConversation to return error after delete")
+	}
+}
+
 func TestGetConversation_PinnedPapersIncludeFigures(t *testing.T) {
 	svc, libRepo, _ := newServiceForTest(t)
 

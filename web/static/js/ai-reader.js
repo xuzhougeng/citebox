@@ -195,18 +195,33 @@
                                 SemanticScholar: ['ai.tool_semantic_scholar_desc', '外部源 · Semantic Scholar'],
                                 Library: ['ai.tool_library_desc', '本地文本检索（不含图）'],
                                 Figure: ['ai.tool_figure_desc', '本地图片检索'],
+                                'image-gen': ['ai.tool.image_gen.description', 'AI 生成图（graphical abstract）'],
                             };
                             return known.map((tag) => {
                                 const isExternal = tag.family === 'external';
-                                const isDisabled = isExternal && enabled !== null && !enabled.has(tag.source);
+                                let isDisabled = false;
+                                if (isExternal && enabled !== null) {
+                                    isDisabled = !enabled.has(tag.source);
+                                } else if (tag.family === 'image_gen') {
+                                    const imgEnabled = Reader.settings && Reader.settings.image_gen && Reader.settings.image_gen.enabled === true;
+                                    isDisabled = !imgEnabled;
+                                }
                                 const desc = descKeyMap[tag.name];
+                                let disabledReason = '';
+                                if (isDisabled) {
+                                    if (tag.family === 'image_gen') {
+                                        disabledReason = t('ai.tool.image_gen.disabled_reason', '请先在设置中启用图像生成');
+                                    } else {
+                                        disabledReason = t('ai.mention_tool_disabled', '未启用，前往设置 →');
+                                    }
+                                }
                                 return {
                                     name: tag.name,
                                     family: tag.family,
                                     source: tag.source,
                                     description: desc ? t(desc[0], desc[1]) : '',
                                     disabled: isDisabled,
-                                    disabledReason: isDisabled ? t('ai.mention_tool_disabled', '未启用，前往设置 →') : '',
+                                    disabledReason,
                                 };
                             });
                         },

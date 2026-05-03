@@ -56,6 +56,20 @@ func (s *Storage) Delete(relPath string) error {
 	return nil
 }
 
+// DeleteConversationFiles removes the conversation's directory and all PNGs in
+// it. Idempotent — no error if the directory does not exist.
+func (s *Storage) DeleteConversationFiles(conversationID int64) error {
+	if conversationID <= 0 {
+		return nil
+	}
+	dir := filepath.Join(s.rootDir, fmt.Sprintf("%d", conversationID))
+	err := os.RemoveAll(dir)
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
+}
+
 // randomULID returns a 16-byte hex token; we don't need true ULID monotonicity.
 func randomULID() (string, error) {
 	var b [16]byte
