@@ -25,6 +25,7 @@ import (
 	"github.com/xuzhougeng/citebox/internal/service/ai_assistant"
 	"github.com/xuzhougeng/citebox/internal/service/ai_conversation"
 	"github.com/xuzhougeng/citebox/internal/service/ai_external"
+	"github.com/xuzhougeng/citebox/internal/service/ai_image_gen"
 	"github.com/xuzhougeng/citebox/internal/service/daily_figure"
 	"github.com/xuzhougeng/citebox/internal/service/pubmed"
 	"github.com/xuzhougeng/citebox/internal/service/research"
@@ -358,10 +359,11 @@ type sharedAIServices struct {
 	external     *ai_external.Service
 	orchestrator *ai_assistant.Orchestrator
 	conversation *ai_conversation.Service
+	imageGen     *ai_image_gen.Service
 }
 
 func buildAIServices(
-	_ *config.Config,
+	cfg *config.Config,
 	logger *slog.Logger,
 	librarySvc *service.LibraryService,
 	aiSvc *service.AIService,
@@ -386,11 +388,28 @@ func buildAIServices(
 		FigureLookup:   ai_assistant.NewFigureLookupToolWithPapers(ai_assistant.NewRepositoryFigureSearcher(repo.Figure), repo.Paper),
 	})
 	aiConvService := ai_conversation.New(repo.AIConversation, repo.Paper, aiSvc, aiSvc, aiExternalSvc, logger.With("component", "ai_conversation"), assistantOrchestrator)
+
+	imageGenService := ai_image_gen.NewService(ai_image_gen.ServiceDeps{
+		Repo:    aiGeneratedImageRepoAdapter{libRepo: repo},
+		Storage: ai_image_gen.NewStorage(cfg.AIGeneratedDir()),
+		Vision:  visionAdapter{svc: aiSvc},
+		API:     ai_image_gen.NewClient(http.DefaultClient),
+		LoadInputs: aiSvc.LoadImageGenInputs,
+		GetSettings: func() (model.AIImageGenSettings, model.AISettings, error) {
+			s, err := aiSvc.GetSettings()
+			if err != nil {
+				return model.AIImageGenSettings{}, model.AISettings{}, err
+			}
+			return s.ImageGen, *s, nil
+		},
+	})
+
 	return sharedAIServices{
 		research:     researchSvc,
 		external:     aiExternalSvc,
 		orchestrator: assistantOrchestrator,
 		conversation: aiConvService,
+		imageGen:     imageGenService,
 	}
 }
 
