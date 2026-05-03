@@ -454,6 +454,7 @@ func buildHandlerWithAIServices(
 	databaseHandler := handler.NewDatabaseHandler(librarySvc)
 	sessionManager := service.NewSessionManager(24 * time.Hour)
 	authHandler := handler.NewAuthHandler(librarySvc, sessionManager)
+	aiGeneratedImageHandler := handler.NewAIGeneratedImageHandler(repo.AIGeneratedImage, cfg.AIGeneratedDir())
 
 	researchAdapter := &research.RepoAdapter{Repo: repo.Research}
 	basket := research.NewBasket(researchAdapter, researchSvc, librarySvcImporterShim{librarySvc})
@@ -787,6 +788,14 @@ func buildHandlerWithAIServices(
 		default:
 			aiConversationHandler.Detail(w, r)
 		}
+	})
+
+	mux.HandleFunc("/api/ai-generated-images/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/file") {
+			aiGeneratedImageHandler.GetFile(w, r)
+			return
+		}
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 	})
 
 	mux.HandleFunc("/api/settings/extractor", func(w http.ResponseWriter, r *http.Request) {
