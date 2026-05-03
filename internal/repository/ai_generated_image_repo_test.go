@@ -4,54 +4,42 @@ import (
 	"database/sql"
 	"testing"
 	"time"
-
-	"github.com/xuzhougeng/citebox/internal/repository/schema"
-	_ "modernc.org/sqlite"
 )
 
-func newTestDB(t *testing.T) *sql.DB {
+// seedConversationAndTurn creates a minimal conversation + turn_run row via
+// the AIConversation sub-repository and returns their IDs.
+func seedConversationAndTurn(t *testing.T, libRepo *LibraryRepository) (convID, turnID int64) {
 	t.Helper()
-	db, err := sql.Open("sqlite", ":memory:")
-	if err != nil {
-		t.Fatalf("open db: %v", err)
-	}
-	if _, err := db.Exec("PRAGMA foreign_keys = ON"); err != nil {
-		t.Fatalf("enable fk: %v", err)
-	}
-	if err := schema.NewManager(db).Initialize(); err != nil {
-		t.Fatalf("init schema: %v", err)
-	}
-	t.Cleanup(func() { _ = db.Close() })
-	return db
-}
+	convRepo := libRepo.AIConversation
 
-func seedConversationAndTurn(t *testing.T, db *sql.DB) (convID, turnID int64) {
-	t.Helper()
-	res, err := db.Exec(`INSERT INTO ai_conversations (title) VALUES (?)`, "test")
+	var err error
+	convID, err = convRepo.CreateConversation()
 	if err != nil {
 		t.Fatalf("seed conv: %v", err)
 	}
-	convID, _ = res.LastInsertId()
 
-	msg, err := db.Exec(`INSERT INTO ai_messages (conversation_id, role, content) VALUES (?, 'user', 'hi')`, convID)
+	msgID, err := convRepo.AddMessage(convID, "user", "hi", AIMessageMeta{})
 	if err != nil {
 		t.Fatalf("seed msg: %v", err)
 	}
-	msgID, _ := msg.LastInsertId()
 
-	tr, err := db.Exec(`INSERT INTO ai_turn_runs (conversation_id, user_message_id) VALUES (?, ?)`, convID, msgID)
+	turnID, err = convRepo.CreateTurnRun(AITurnRun{
+		ConversationID: convID,
+		UserMessageID:  msgID,
+		Intent:         "generate_image",
+		Status:         "completed",
+	})
 	if err != nil {
 		t.Fatalf("seed turn: %v", err)
 	}
-	turnID, _ = tr.LastInsertId()
 	return convID, turnID
 }
 
 func TestAIGeneratedImageRepository_RoundTrip(t *testing.T) {
-	db := newTestDB(t)
-	convID, turnID := seedConversationAndTurn(t, db)
+	libRepo := newTestRepository(t)
+	convID, turnID := seedConversationAndTurn(t, libRepo)
 
-	repo := NewAIGeneratedImageRepository(db)
+	repo := libRepo.AIGeneratedImage
 	id, err := repo.Insert(AIGeneratedImage{
 		TurnRunID:        turnID,
 		ConversationID:   convID,
@@ -87,10 +75,10 @@ func TestAIGeneratedImageRepository_RoundTrip(t *testing.T) {
 }
 
 func TestAIGeneratedImageRepository_CascadeOnTurnDelete(t *testing.T) {
-	db := newTestDB(t)
-	convID, turnID := seedConversationAndTurn(t, db)
+	libRepo := newTestRepository(t)
+	convID, turnID := seedConversationAndTurn(t, libRepo)
 
-	repo := NewAIGeneratedImageRepository(db)
+	repo := libRepo.AIGeneratedImage
 	id, err := repo.Insert(AIGeneratedImage{
 		TurnRunID: turnID, ConversationID: convID,
 		FilePath: "x.png", Prompt: "p", Model: "gpt-image-2",
@@ -100,7 +88,7 @@ func TestAIGeneratedImageRepository_CascadeOnTurnDelete(t *testing.T) {
 		t.Fatalf("insert: %v", err)
 	}
 
-	if _, err := db.Exec(`DELETE FROM ai_turn_runs WHERE id = ?`, turnID); err != nil {
+	if _, err := libRepo.DB().Exec(`DELETE FROM ai_turn_runs WHERE id = ?`, turnID); err != nil {
 		t.Fatalf("delete turn: %v", err)
 	}
 
