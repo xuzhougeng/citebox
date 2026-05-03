@@ -34,12 +34,14 @@ func (c *Client) Generate(ctx context.Context, settings model.AIImageGenSettings
 		return nil, apperr.New(apperr.CodeFailedPrecondition, "图像生成 API key 未配置")
 	}
 	payload := map[string]interface{}{
-		"model":           settings.Model,
-		"prompt":          prompt,
-		"size":            settings.Size,
-		"quality":         settings.Quality,
-		"n":               1,
-		"response_format": "b64_json",
+		"model":   settings.Model,
+		"prompt":  prompt,
+		"size":    settings.Size,
+		"quality": settings.Quality,
+		"n":       1,
+	}
+	if !strings.HasPrefix(strings.TrimSpace(settings.Model), "gpt-image-") {
+		payload["response_format"] = "b64_json"
 	}
 	body, err := json.Marshal(payload)
 	if err != nil {

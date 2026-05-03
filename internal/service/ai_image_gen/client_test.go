@@ -25,6 +25,9 @@ func TestClient_GenerateImage_Success(t *testing.T) {
 		if body["model"] != "gpt-image-2" {
 			t.Errorf("model: %v", body["model"])
 		}
+		if _, exists := body["response_format"]; exists {
+			t.Errorf("response_format should be omitted for gpt-image-2 payload: %v", body)
+		}
 		if body["size"] != "1024x1024" || body["quality"] != "high" || body["n"].(float64) != 1 {
 			t.Errorf("payload: %v", body)
 		}
