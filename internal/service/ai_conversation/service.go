@@ -12,12 +12,19 @@ import (
 	"github.com/xuzhougeng/citebox/internal/model"
 	"github.com/xuzhougeng/citebox/internal/repository"
 	"github.com/xuzhougeng/citebox/internal/service/ai_assistant"
+	"github.com/xuzhougeng/citebox/internal/service/ai_image_gen"
 )
 
 // AISettingsProvider exposes the parts of *service.AIService we depend on.
 // It is satisfied by *service.AIService.
 type AISettingsProvider interface {
 	GetSettings() (*model.AISettings, error)
+}
+
+// ImageStorageCleaner can remove all disk files for a conversation.
+// Satisfied by *ai_image_gen.Storage.
+type ImageStorageCleaner interface {
+	DeleteConversationFiles(conversationID int64) error
 }
 
 // StreamCaller is the minimal LLM streaming primitive we need.
@@ -41,6 +48,8 @@ type Service struct {
 	orchestrator  orchestrator
 	titleCaller   NonStreamCaller
 	summaryCaller NonStreamCaller
+	imageGen      ai_image_gen.Generator // optional; nil = image-gen disabled
+	imageStorage  ImageStorageCleaner    // optional; nil = no disk cleanup on delete
 	logger        *slog.Logger
 }
 
@@ -56,6 +65,20 @@ func New(repo *repository.AIConversationRepository, papers *repository.PaperRepo
 		s.titleCaller = tc
 		s.summaryCaller = tc
 	}
+	return s
+}
+
+// WithImageGen attaches an optional image-generation backend. Calls are
+// chained so existing callers of New do not need to change.
+func (s *Service) WithImageGen(g ai_image_gen.Generator) *Service {
+	s.imageGen = g
+	return s
+}
+
+// WithImageStorage attaches an optional storage cleaner so that deleting a
+// conversation also removes its PNG files from disk. Chained.
+func (s *Service) WithImageStorage(c ImageStorageCleaner) *Service {
+	s.imageStorage = c
 	return s
 }
 
@@ -111,7 +134,7 @@ func (s *Service) GetConversation(id int64) (Conversation, error) {
 		StrictEvidence: row.StrictEvidence,
 		CreatedAt:      row.CreatedAt,
 		UpdatedAt:      row.UpdatedAt,
-		PinnedPapers:   toPinnedPapers(pinned),
+		PinnedPapers:   s.toPinnedPapersWithFigures(pinned),
 		RecentMessages: toMessages(msgs),
 		TurnRuns:       runs,
 	}, nil
@@ -173,8 +196,15 @@ func (s *Service) UpdateStrictEvidence(id int64, on bool) error {
 	return nil
 }
 
-// DeleteConversation hard-deletes (cascade).
+// DeleteConversation hard-deletes (cascade). If an image storage cleaner is
+// wired in, it removes the conversation's PNG directory first. File cleanup
+// failures are logged and do not abort the DB delete.
 func (s *Service) DeleteConversation(id int64) error {
+	if s.imageStorage != nil {
+		if err := s.imageStorage.DeleteConversationFiles(id); err != nil {
+			s.logger.Warn("ai_conversation: image cleanup failed; proceeding with DB delete", "error", err)
+		}
+	}
 	if err := s.repo.DeleteConversation(id); err != nil {
 		return mapRepoErr(err)
 	}
@@ -265,6 +295,11 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput, onDelta 
 	userMsgID, err := s.repo.AddMessage(in.ConversationID, "user", in.Content, repository.AIMessageMeta{})
 	if err != nil {
 		return SendMessageResult{}, err
+	}
+
+	// Image-generation intent: bypass LLM and dispatch to ai_image_gen.Service.
+	if s.imageGen != nil && strings.EqualFold(strings.TrimSpace(in.IntentHint), "image_generation") {
+		return s.dispatchImageGen(ctx, in, conv, userMsgID)
 	}
 
 	settings, err := s.settings.GetSettings()
@@ -660,6 +695,39 @@ func toPinnedPapers(rows []repository.AIPinnedPaper) []PinnedPaper {
 	return out
 }
 
+// toPinnedPapersWithFigures builds a []PinnedPaper where each entry's Figures
+// slice is populated from the paper repository. Errors on individual figure
+// lookups are silently ignored so a single bad paper doesn't break the whole
+// GetConversation response.
+func (s *Service) toPinnedPapersWithFigures(rows []repository.AIPinnedPaper) []PinnedPaper {
+	out := make([]PinnedPaper, 0, len(rows))
+	for _, r := range rows {
+		pp := PinnedPaper{PaperID: r.PaperID, Title: r.Title, DOI: r.DOI, PinnedAt: r.PinnedAt}
+		if s.papers != nil {
+			if paper, err := s.papers.GetPaperDetail(r.PaperID); err == nil && paper != nil {
+				figs := make([]PinnedPaperFigure, 0, len(paper.Figures))
+				for _, f := range paper.Figures {
+					// Only top-level figures (no subfigures) to keep the palette lean.
+					if f.ParentFigureID != nil {
+						continue
+					}
+					figs = append(figs, PinnedPaperFigure{
+						ID:          f.ID,
+						PageNumber:  f.PageNumber,
+						FigureIndex: f.FigureIndex,
+						Caption:     f.Caption,
+					})
+				}
+				if len(figs) > 0 {
+					pp.Figures = figs
+				}
+			}
+		}
+		out = append(out, pp)
+	}
+	return out
+}
+
 func toMessages(rows []repository.AIMessage) []Message {
 	out := make([]Message, 0, len(rows))
 	for _, r := range rows {
@@ -669,6 +737,143 @@ func toMessages(rows []repository.AIMessage) []Message {
 			IncludedFigures: r.IncludedFigures, CitationsJSON: r.CitationsJSON,
 			CreatedAt: r.CreatedAt,
 		})
+	}
+	return out
+}
+
+// dispatchImageGen handles the image_generation intent path. It is called by
+// SendMessage when s.imageGen != nil and in.IntentHint == "image_generation".
+// Auto-pin is already done by the time this is called (SendMessage does it
+// before AddMessage). This function creates a turn run, calls the image-gen
+// service, then persists the assistant summary message.
+func (s *Service) dispatchImageGen(ctx context.Context, in SendMessageInput,
+	_ repository.AIConversation, userMsgID int64) (SendMessageResult, error) {
+
+	paperIDs, figureIDs := parseImageGenReferences(in)
+	// Backstop: if no paper IDs were found in the request, fall back to any
+	// papers already pinned on this conversation (established by earlier turns).
+	if len(paperIDs) == 0 && len(figureIDs) == 0 {
+		paperIDs = fallbackImageGenPaperIDs(in.ConversationID, s.repo.ListPinnedPapers, s.logger)
+	}
+	if len(paperIDs) == 0 && len(figureIDs) == 0 {
+		return SendMessageResult{}, apperr.New(apperr.CodeInvalidArgument, "请引用至少一篇文献或一张图")
+	}
+
+	turnID, err := s.repo.CreateTurnRun(repository.AITurnRun{
+		ConversationID: in.ConversationID,
+		UserMessageID:  userMsgID,
+		Intent:         "image_generation",
+		IntentHint:     in.IntentHint,
+		Status:         "running",
+	})
+	if err != nil {
+		return SendMessageResult{}, err
+	}
+
+	genErr := s.imageGen.Generate(ctx, ai_image_gen.GenerateInput{
+		ConversationID: in.ConversationID,
+		TurnRunID:      turnID,
+		PaperIDs:       paperIDs,
+		FigureIDs:      figureIDs,
+		UserText:       in.Content,
+		OnEvent: func(e ai_image_gen.StreamEvent) error {
+			return s.emitStreamEvent(in, StreamEvent{Type: e.Type, Data: e.Data})
+		},
+	})
+
+	finalStatus := "completed"
+	assistantText := "已生成图像。"
+	if genErr != nil {
+		finalStatus = "failed"
+		assistantText = fmt.Sprintf("图像生成失败：%s", genErr.Error())
+	}
+
+	asstID, err := s.repo.AddMessage(in.ConversationID, "assistant", assistantText, repository.AIMessageMeta{
+		Mode: finalStatus,
+	})
+	if err != nil {
+		return SendMessageResult{}, err
+	}
+	if err := s.repo.UpdateTurnRunAssistant(turnID, asstID, finalStatus); err != nil {
+		s.logger.Warn("ai_conversation: update image-gen turn run failed", "error", err)
+	}
+	_ = s.repo.TouchConversation(in.ConversationID)
+
+	if genErr != nil {
+		return SendMessageResult{}, genErr
+	}
+	return SendMessageResult{
+		ConversationID:   in.ConversationID,
+		UserMessage:      Message{ID: userMsgID, Role: "user", Content: in.Content},
+		AssistantMessage: Message{ID: asstID, Role: "assistant", Content: assistantText, Mode: finalStatus},
+	}, nil
+}
+
+// parseImageGenReferences extracts paper and figure IDs from the incoming
+// SendMessageInput for the image-generation path.
+//
+// Paper IDs are resolved from these sources, in priority order (first
+// non-empty source wins; deduplication is applied within the chosen source):
+//  1. in.PaperIDs — top-level slice (draft path)
+//  2. in.PaperID  — top-level singular (draft path)
+//  3. in.Context.PaperIDs — active-conversation slice sent by the frontend
+//  4. in.Context.PaperID  — active-conversation singular
+//
+// A fifth backstop (pinned papers from the DB) is applied by the caller
+// (dispatchImageGen) after this function returns an empty slice, since it
+// requires a repository call.
+func parseImageGenReferences(in SendMessageInput) ([]int64, []int64) {
+	var paperIDs []int64
+	switch {
+	case len(in.PaperIDs) > 0:
+		paperIDs = append([]int64(nil), in.PaperIDs...)
+	case in.PaperID > 0:
+		paperIDs = []int64{in.PaperID}
+	case len(in.Context.PaperIDs) > 0:
+		paperIDs = append([]int64(nil), in.Context.PaperIDs...)
+	case in.Context.PaperID > 0:
+		paperIDs = []int64{in.Context.PaperID}
+	}
+
+	figureIDs := []int64(nil)
+	if in.Context.FigureID > 0 {
+		figureIDs = append(figureIDs, in.Context.FigureID)
+	}
+	if len(in.Context.FigureIDs) > 0 {
+		figureIDs = append(figureIDs, in.Context.FigureIDs...)
+	}
+	return dedupeInt64(paperIDs), dedupeInt64(figureIDs)
+}
+
+func fallbackImageGenPaperIDs(conversationID int64, listPinned func(int64) ([]repository.AIPinnedPaper, error), logger *slog.Logger) []int64 {
+	pinned, err := listPinned(conversationID)
+	if err != nil {
+		if logger != nil {
+			logger.Warn("ai_conversation: list pinned papers for image-gen fallback failed", "conversation_id", conversationID, "error", err)
+		}
+		return nil
+	}
+	ids := make([]int64, 0, len(pinned))
+	for _, p := range pinned {
+		if p.PaperID > 0 {
+			ids = append(ids, p.PaperID)
+		}
+	}
+	return dedupeInt64(ids)
+}
+
+func dedupeInt64(in []int64) []int64 {
+	seen := make(map[int64]struct{}, len(in))
+	out := in[:0]
+	for _, id := range in {
+		if id <= 0 {
+			continue
+		}
+		if _, dup := seen[id]; dup {
+			continue
+		}
+		seen[id] = struct{}{}
+		out = append(out, id)
 	}
 	return out
 }

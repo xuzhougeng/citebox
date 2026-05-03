@@ -94,13 +94,53 @@
                 </div>
             </details>
 
-            <details class="manager-card settings-collapsible">
+            <details id="settings-ai" class="manager-card settings-collapsible">
                 <summary class="settings-collapsible-toggle">
                     <h2 data-i18n="settings.ai.model_title">模型配置</h2>
                     <p data-i18n="settings.ai.model_desc">添加或编辑 AI 模型。修改会自动保存。</p>
                 </summary>
                 <div class="manager-form">
                     <div id="aiModelList" class="manager-list"></div>
+                    <section class="settings-subsection">
+                        <h3 data-i18n="settings.ai.image_gen_title">图像生成</h3>
+                        <p data-i18n="settings.ai.image_gen_desc">控制 @image-gen 的启用状态，以及生成 graphical abstract 时使用的 API 配置。</p>
+                        <div class="settings-subsection-body">
+                            <div class="form-grid">
+                                <label class="field checkbox-field field-span-2">
+                                    <input id="aiImageGenEnabledInput" type="checkbox">
+                                    <span data-i18n="settings.ai.image_gen_enabled">启用 @image-gen 图像生成</span>
+                                </label>
+                                <label class="field field-span-2">
+                                    <span data-i18n="settings.ai.image_gen_api_key">图像生成 API Key</span>
+                                    <input id="aiImageGenAPIKeyInput" class="form-input" type="password" autocomplete="off" placeholder="sk-...">
+                                </label>
+                                <label class="field field-span-2">
+                                    <span data-i18n="settings.ai.image_gen_base_url">图像生成 Base URL</span>
+                                    <input id="aiImageGenBaseURLInput" class="form-input" type="text" data-i18n-placeholder="settings.ai.image_gen_base_url_placeholder" placeholder="默认使用官方地址；兼容网关时填自定义地址">
+                                </label>
+                                <label class="field">
+                                    <span data-i18n="settings.ai.image_gen_model">图像生成模型</span>
+                                    <input id="aiImageGenModelInput" class="form-input" type="text" placeholder="gpt-image-2">
+                                </label>
+                                <label class="field">
+                                    <span data-i18n="settings.ai.image_gen_size">图片尺寸</span>
+                                    <select id="aiImageGenSizeSelect" class="form-input">
+                                        <option value="1024x1024">1024 × 1024</option>
+                                        <option value="1024x1536">1024 × 1536</option>
+                                        <option value="1536x1024">1536 × 1024</option>
+                                    </select>
+                                </label>
+                                <label class="field">
+                                    <span data-i18n="settings.ai.image_gen_quality">生成质量</span>
+                                    <select id="aiImageGenQualitySelect" class="form-input">
+                                        <option value="low" data-i18n="settings.ai.image_gen_quality_low">低</option>
+                                        <option value="medium" data-i18n="settings.ai.image_gen_quality_medium">中</option>
+                                        <option value="high" data-i18n="settings.ai.image_gen_quality_high">高</option>
+                                    </select>
+                                </label>
+                            </div>
+                        </div>
+                    </section>
                     <div class="submit-row">
                         <button id="addAIModelButton" class="btn btn-outline" type="button" data-i18n="settings.ai.add_model">添加模型</button>
                     </div>

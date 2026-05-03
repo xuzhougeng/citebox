@@ -7,10 +7,10 @@ const path = require('node:path');
 const mod = require(path.join('..', 'ai-mention-tags.js'));
 const { parseToolTags, commitToolTag, KNOWN_TOOL_TAGS, familyOf } = mod;
 
-test('KNOWN_TOOL_TAGS lists the four MVP tags in canonical case', () => {
+test('KNOWN_TOOL_TAGS lists the five MVP tags in canonical case', () => {
     assert.deepEqual(
         KNOWN_TOOL_TAGS.map((t) => t.name),
-        ['PubMed', 'SemanticScholar', 'Library', 'Figure']
+        ['PubMed', 'SemanticScholar', 'Library', 'Figure', 'image-gen']
     );
 });
 
@@ -152,4 +152,18 @@ test('commitToolTag does not produce double space when residual starts with spac
         'Library'
     );
     assert.equal(r.value, '@Library bar');
+});
+
+test('parseToolTags @image-gen emits image_generation intent', () => {
+    const r = parseToolTags('@image-gen draw it');
+    assert.equal(r.intentHint, 'image_generation');
+    assert.deepEqual(r.sources, []);
+    assert.equal(r.conflict, null);
+});
+
+test('parseToolTags cross-family @Library then @image-gen is last-wins image_generation', () => {
+    const r = parseToolTags('@Library X @image-gen Y');
+    assert.equal(r.intentHint, 'image_generation');
+    assert.notEqual(r.conflict, null);
+    assert.deepEqual(r.conflict, { dropped: 'library', kept: 'image_gen' });
 });

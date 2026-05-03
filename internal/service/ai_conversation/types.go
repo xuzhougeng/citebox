@@ -24,10 +24,19 @@ type Conversation struct {
 
 // PinnedPaper mirrors AIPinnedPaper from the repo layer.
 type PinnedPaper struct {
-	PaperID  int64     `json:"paper_id"`
-	Title    string    `json:"title"`
-	DOI      string    `json:"doi,omitempty"`
-	PinnedAt time.Time `json:"pinned_at"`
+	PaperID  int64               `json:"paper_id"`
+	Title    string              `json:"title"`
+	DOI      string              `json:"doi,omitempty"`
+	PinnedAt time.Time           `json:"pinned_at"`
+	Figures  []PinnedPaperFigure `json:"figures,omitempty"` // populated by GetConversation
+}
+
+// PinnedPaperFigure is a lightweight summary of a figure belonging to a pinned paper.
+type PinnedPaperFigure struct {
+	ID          int64  `json:"id"`
+	PageNumber  int    `json:"page_number"`
+	FigureIndex int    `json:"figure_index"`
+	Caption     string `json:"caption,omitempty"`
 }
 
 // Message is a single user/assistant message.

@@ -323,6 +323,27 @@
                     });
                 });
 
+            // Figures (only when caller provides them — e.g. AI page with pinned papers).
+            const figures = typeof s.providers.getFigures === 'function'
+                ? s.providers.getFigures()
+                : [];
+            figures
+                .filter((fig) => {
+                    if (!q) return true;
+                    const haystack = [fig.label, fig.caption, fig.paper_title].filter(Boolean).join(' ').toLowerCase();
+                    return haystack.includes(q);
+                })
+                .slice(0, 12)
+                .forEach((fig) => {
+                    items.push({
+                        type: 'figure',
+                        id: fig.id,
+                        title: '@' + (fig.label || ('figure-' + fig.id)),
+                        meta: [fig.paper_title, fig.caption].filter(Boolean).join(' · ').slice(0, 80),
+                        _raw: fig,
+                    });
+                });
+
             return items;
         },
 
@@ -363,12 +384,15 @@
                 let icon = '📄';
                 if (item.type === 'role') icon = '@';
                 else if (item.type === 'tool') icon = '⚙';
+                else if (item.type === 'figure') icon = '🖼';
                 let dataset;
                 if (item.type === 'role') {
                     dataset = 'data-mention-type="role" data-role-name="' + escapeHTML(item.name) + '"';
                 } else if (item.type === 'tool') {
                     dataset = 'data-mention-type="tool" data-tool-name="' + escapeHTML(item.name) +
                               '" data-tool-disabled="' + (item.disabled ? '1' : '0') + '"';
+                } else if (item.type === 'figure') {
+                    dataset = 'data-mention-type="figure" data-figure-id="' + item.id + '"';
                 } else {
                     dataset = 'data-mention-type="paper" data-paper-id="' + item.id + '"';
                 }
@@ -387,6 +411,7 @@
             const toolItems = items.filter((it) => it.type === 'tool');
             const roleItems = items.filter((it) => it.type === 'role');
             const paperItems = items.filter((it) => it.type === 'paper');
+            const figureItems = items.filter((it) => it.type === 'figure');
             let cursor = 0;
 
             if (toolItems.length) {
@@ -419,6 +444,17 @@
                     escapeHTML(tr('ai.mention_section_papers', '文献')) +
                     '</div>' +
                     '<ul class="ai-mention-list" role="presentation">' + paperHTML + '</ul>' +
+                    '</div>'
+                );
+            }
+            if (figureItems.length) {
+                const figureHTML = figureItems.map((item) => renderItem(item, cursor++)).join('');
+                sections.push(
+                    '<div class="ai-mention-section" data-section="figures">' +
+                    '<div class="ai-mention-section-title">' +
+                    escapeHTML(tr('ai.mention_section_figures', '图片')) +
+                    '</div>' +
+                    '<ul class="ai-mention-list" role="presentation">' + figureHTML + '</ul>' +
                     '</div>'
                 );
             }
@@ -520,6 +556,11 @@
                 if (s.providers && typeof s.providers.onPickPaper === 'function') {
                     s.providers.onPickPaper(item._raw || { id: item.id, title: item.title });
                 }
+            } else if (item.type === 'figure') {
+                const mention = '@figure-' + item.id + ' ';
+                input.value = beforeAt + mention + after;
+                const newCaret = beforeAt.length + mention.length;
+                input.setSelectionRange(newCaret, newCaret);
             }
 
             this.dismiss();

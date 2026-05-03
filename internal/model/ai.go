@@ -51,6 +51,15 @@ type AITranslationConfig struct {
 	TargetLanguage  string `json:"target_language"`
 }
 
+type AIImageGenSettings struct {
+	Enabled bool   `json:"enabled"`
+	APIKey  string `json:"api_key"`
+	BaseURL string `json:"base_url"`
+	Model   string `json:"model"`
+	Size    string `json:"size"`
+	Quality string `json:"quality"`
+}
+
 type AIRolePrompt struct {
 	Name   string `json:"name"`
 	Prompt string `json:"prompt"`
@@ -68,6 +77,7 @@ type AIModelSettingsUpdate struct {
 	Translation         AITranslationConfig   `json:"translation"`
 	PinPapersLimit      int                   `json:"pin_papers_limit"`
 	ContextBudgetTokens int                   `json:"context_budget_tokens"`
+	ImageGen            *AIImageGenSettings   `json:"image_gen,omitempty"`
 }
 
 type AIPromptSettingsUpdate struct {
@@ -105,6 +115,7 @@ type AISettings struct {
 	RolePrompts         []AIRolePrompt        `json:"role_prompts"`
 	PinPapersLimit      int                   `json:"pin_papers_limit"`
 	ContextBudgetTokens int                   `json:"context_budget_tokens"`
+	ImageGen            AIImageGenSettings    `json:"image_gen"`
 }
 
 type AIReadRequest struct {
@@ -243,5 +254,13 @@ func DefaultAISettings() AISettings {
 		PinPapersLimit:      5,
 		ContextBudgetTokens: 32000,
 		RolePrompts:         []AIRolePrompt{},
+		ImageGen: AIImageGenSettings{
+			Enabled: false,
+			APIKey:  "",
+			BaseURL: "https://api.openai.com",
+			Model:   "gpt-image-2",
+			Size:    "1024x1024",
+			Quality: "high",
+		},
 	}
 }

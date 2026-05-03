@@ -29,6 +29,7 @@
 
 已完成
 
+- [x] AI 对话内通过 @image-gen 生成 graphical abstract（vision → image API → 落盘 → 卡片）
 - [x] 写入笔记在图片解读过程中应该被禁用，因为输出时无法正常保存
 - [x] 预设角色/Prompt, 自己可以保存常用的Prompt
 - [x] 桌面端支持 Windows 安装器发布和 macOS DMG 分发

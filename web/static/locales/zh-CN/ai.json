@@ -75,6 +75,10 @@
     "ai.result_verdict_partial": "部分支持",
     "ai.result_verdict_unsupported": "未支持",
     "ai.result_image_unavailable": "图片不可用",
+    "ai.image_gen_card_fallback": "生成图",
+    "ai.image_gen_card_download": "下载图片",
+    "ai.image_gen_card_copy_prompt": "复制 prompt",
+    "ai.image_gen_card_prompt": "AI prompt",
     "ai.btn_delete_conversation": "删除",
     "ai.confirm_delete_conversation_title": "删除对话",
     "ai.confirm_delete_conversation": "删除后会移除当前会话及其消息记录。",
@@ -88,6 +92,7 @@
     "ai.role_prompt_hint": "输入 @ 唤起选择面板：可切换文献或调用角色 Prompt。",
     "ai.role_prompt_hint_empty": "还没有配置角色 Prompt。到配置页新增后，可以在这里用 @ 调用。",
     "ai.question_placeholder": "输入 @ 切换文献或调用角色，例如 @证据审查 请解释这篇文章的核心结论。",
+    "ai.mention_section_figures": "图片",
     "ai.mention_section_papers": "文献",
     "ai.mention_section_roles": "角色 Prompt",
     "ai.mention_section_tools": "工具/数据源",
@@ -96,6 +101,9 @@
     "ai.tool_semantic_scholar_desc": "外部源 · Semantic Scholar",
     "ai.tool_library_desc": "本地文本检索（不含图）",
     "ai.tool_figure_desc": "本地图片检索",
+    "ai.tool.image_gen.title": "image-gen",
+    "ai.tool.image_gen.description": "AI 生成图（graphical abstract）",
+    "ai.tool.image_gen.disabled_reason": "请先在设置中启用图像生成",
     "ai.mention_empty": "没有匹配的文献或角色。",
     "ai.current_paper_empty": "尚未选中文献。在下方输入 @ 即可搜索切换。",
     "ai.btn_pick_paper": "选择文献",
@@ -191,5 +199,12 @@
 
     "ai.doi.importing": "正在通过 DOI 导入文献：",
     "ai.doi.imported": "已导入：",
-    "ai.doi.failed": "DOI 导入失败："
+    "ai.doi.failed": "DOI 导入失败：",
+
+    "ai.image_gen.status.drafting_prompt": "正在分析文献和图片...",
+    "ai.image_gen.status.prompt_drafted": "已生成图像 prompt",
+    "ai.image_gen.status.prompt_label": "查看 prompt",
+    "ai.image_gen.status.generating": "正在生成图片",
+    "ai.image_gen.status.done": "已生成图片",
+    "ai.image_gen.status.failed": "图像生成失败"
 }

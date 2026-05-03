@@ -269,6 +269,58 @@ func TestSplitAISettingsUpdatesPreserveOtherSections(t *testing.T) {
 	}
 }
 
+func TestAISettingsNormalizeImageGenOnReadAndWrite(t *testing.T) {
+	_, repo, cfg := newTestService(t)
+	aiSvc := NewAIService(repo, cfg, nil)
+
+	updated, err := aiSvc.UpdateSettings(model.AISettings{
+		Models: []model.AIModelConfig{
+			{ID: "qa", Name: "QA", Provider: model.AIProviderOpenAI, APIKey: "key-1", BaseURL: "https://api.openai.com", Model: "gpt-4.1-mini", MaxOutputTokens: 1200},
+		},
+		SceneModels: model.AISceneModelSelection{
+			DefaultModelID: "qa",
+			QAModelID:      "qa",
+		},
+		SystemPrompt: "system",
+		QAPrompt:     "qa",
+		ImageGen: model.AIImageGenSettings{
+			Enabled: true,
+			APIKey:  "  sk-image  ",
+			BaseURL: " https://images.example.com/ ",
+			Model:   " ",
+			Size:    "invalid-size",
+			Quality: "ULTRA",
+		},
+	})
+	if err != nil {
+		t.Fatalf("UpdateSettings() error = %v", err)
+	}
+
+	if updated.ImageGen.APIKey != "sk-image" {
+		t.Fatalf("UpdateSettings() image_gen.api_key = %q, want sk-image", updated.ImageGen.APIKey)
+	}
+	if updated.ImageGen.BaseURL != "https://images.example.com" {
+		t.Fatalf("UpdateSettings() image_gen.base_url = %q, want https://images.example.com", updated.ImageGen.BaseURL)
+	}
+	if updated.ImageGen.Model != model.DefaultAISettings().ImageGen.Model {
+		t.Fatalf("UpdateSettings() image_gen.model = %q, want %q", updated.ImageGen.Model, model.DefaultAISettings().ImageGen.Model)
+	}
+	if updated.ImageGen.Size != model.DefaultAISettings().ImageGen.Size {
+		t.Fatalf("UpdateSettings() image_gen.size = %q, want %q", updated.ImageGen.Size, model.DefaultAISettings().ImageGen.Size)
+	}
+	if updated.ImageGen.Quality != model.DefaultAISettings().ImageGen.Quality {
+		t.Fatalf("UpdateSettings() image_gen.quality = %q, want %q", updated.ImageGen.Quality, model.DefaultAISettings().ImageGen.Quality)
+	}
+
+	stored, err := aiSvc.GetSettings()
+	if err != nil {
+		t.Fatalf("GetSettings() error = %v", err)
+	}
+	if stored.ImageGen.APIKey != "sk-image" || stored.ImageGen.BaseURL != "https://images.example.com" {
+		t.Fatalf("GetSettings() image_gen = %+v, want normalized persisted settings", stored.ImageGen)
+	}
+}
+
 func TestResolveModelForActionUsesSceneSpecificModel(t *testing.T) {
 	settings := model.DefaultAISettings()
 	settings.Models = []model.AIModelConfig{

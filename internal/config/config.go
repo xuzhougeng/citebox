@@ -138,6 +138,10 @@ func (c *Config) FiguresDir() string {
 	return filepath.Join(c.StorageDir, "figures")
 }
 
+func (c *Config) AIGeneratedDir() string {
+	return filepath.Join(c.StorageDir, "ai_generated")
+}
+
 func (c *Config) EffectiveExtractorURL() string {
 	return normalizeExtractorEndpoint(c.ExtractorURL, "/api/v1/extract")
 }

@@ -544,6 +544,29 @@ CREATE TABLE entity_events (
 
 完整的 AI 会话表族（`ai_conversations`、`ai_messages`、`ai_conversation_papers`、`ai_turn_runs`、`ai_tool_calls`、`ai_result_cards`）定义在 `internal/repository/schema/schema.go`；该文件用 `ensureColumn` 实现增量列迁移，`ensureConversationSurfaceColumns` 是这次新增的。
 
+### `ai_generated_images`
+
+存储 AI 生成的 graphical abstract 图片元数据。PNG 文件本身保存在磁盘的 `<storage_dir>/ai_generated/<conversation_id>/` 目录下。
+
+父表 `ai_turn_runs` 或 `ai_conversations` 删除时级联删除对应记录。
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `id` | INTEGER PK | 自增主键 |
+| `turn_run_id` | INTEGER FK | `ai_turn_runs(id) ON DELETE CASCADE` |
+| `conversation_id` | INTEGER FK | `ai_conversations(id) ON DELETE CASCADE` |
+| `file_path` | TEXT | 相对于 `<storage_dir>/ai_generated` 的文件路径 |
+| `prompt` | TEXT | 视觉理解阶段生成的图片 Prompt |
+| `model` | TEXT | 图片生成 API 模型，例如 `gpt-image-2` |
+| `size` | TEXT | 图片尺寸，例如 `1024x1024` |
+| `quality` | TEXT | 图片质量，例如 `high` |
+| `source_paper_ids` | TEXT | JSON int64 数组，默认 `[]` |
+| `source_figure_ids` | TEXT | JSON int64 数组，默认 `[]` |
+| `cost_estimate_usd` | REAL | 费用估算，可为空 |
+| `created_at` | DATETIME | 服务器时间 |
+
+索引：`idx_ai_generated_images_conv (conversation_id, id)` 和 `idx_ai_generated_images_turn (turn_run_id)`。
+
 ## 当前最值得坚持的建模原则
 
 - 主实体和扩展实体分开：不要把一切都塞进 `papers`
