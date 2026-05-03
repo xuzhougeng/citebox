@@ -80,17 +80,8 @@ func (s *AIService) LoadImageGenInputs(ctx context.Context, paperIDs, figureIDs 
 		// Find the matching model.Figure within the paper (loadFigureInputs needs it for image loading).
 		figPtr := findFigureByID(paper.Figures, fid)
 		if figPtr == nil {
-			// Figure exists in the repo but the paper's embedded list doesn't contain it —
-			// treat as a lightweight context-only entry with no image.
-			out.IsolatedFigures = append(out.IsolatedFigures, ai_image_gen.FigureContext{
-				ID:          figItem.ID,
-				PaperTitle:  figItem.PaperTitle,
-				PageNumber:  figItem.PageNumber,
-				FigureIndex: figItem.FigureIndex,
-				Caption:     figItem.Caption,
-			})
-			includedFigureIDs[fid] = struct{}{}
-			continue
+			return ai_image_gen.VisionInputContext{}, nil,
+				apperr.New(apperr.CodeInternal, "figure found in repository but missing from paper detail — data inconsistency")
 		}
 		fig := *figPtr
 
@@ -110,6 +101,8 @@ func (s *AIService) LoadImageGenInputs(ctx context.Context, paperIDs, figureIDs 
 		includedFigureIDs[fid] = struct{}{}
 	}
 
+	// TODO: copies up to ~30 MB of base64 image data per call; eliminate by
+	// unifying aiImageInput with model.AIImageInput (cross-package work).
 	return out, toModelImageInputs(imageInputs), nil
 }
 
@@ -118,6 +111,8 @@ func (s *AIService) LoadImageGenInputs(ctx context.Context, paperIDs, figureIDs 
 // aiImageInput type and delegates to callTextProvider (non-streaming).
 func (s *AIService) CallVisionForImageGen(ctx context.Context, settings model.AISettings,
 	systemPrompt, userPrompt string, images []model.AIImageInput) (string, error) {
+	// TODO: copies up to ~30 MB of base64 image data per call; eliminate by
+	// unifying aiImageInput with model.AIImageInput (cross-package work).
 	internal := make([]aiImageInput, 0, len(images))
 	for _, img := range images {
 		internal = append(internal, aiImageInput{MIMEType: img.MIMEType, Data: img.Data})
@@ -135,6 +130,10 @@ func toModelImageInputs(in []aiImageInput) []model.AIImageInput {
 	return out
 }
 
+// truncateRunesForImageGen is intentionally duplicated from
+// internal/service/ai_conversation/context_assembler.go (truncateRunes).
+// We can't import that helper because it's package-private. Keep these in
+// sync if changing behavior.
 // truncateRunesForImageGen truncates s to at most n runes, appending "..." if
 // truncated. Local copy so this file has no dependency on ai_conversation.
 func truncateRunesForImageGen(s string, n int) string {
