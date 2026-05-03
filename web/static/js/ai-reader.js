@@ -226,8 +226,13 @@
                             });
                         },
                         onPickToolTag: () => { /* nothing — value is read on submit */ },
-                        onPickDisabledTag: () => {
-                            window.location.href = '/settings#settings-external-sources';
+                        onPickDisabledTag: (tag) => {
+                            const family = (tag && tag.family) || '';
+                            if (family === 'image_gen') {
+                                window.location.href = '/settings#settings-ai';
+                            } else {
+                                window.location.href = '/settings#settings-external-sources';
+                            }
                         },
                         // Auto-pin on first @-mention (β + γ flow per spec § 3).
                         // Active conversation: server-side pin via /papers POST.

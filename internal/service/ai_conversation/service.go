@@ -750,6 +750,19 @@ func (s *Service) dispatchImageGen(ctx context.Context, in SendMessageInput,
 	_ repository.AIConversation, userMsgID int64) (SendMessageResult, error) {
 
 	paperIDs, figureIDs := parseImageGenReferences(in)
+	// Backstop: if no paper IDs were found in the request, fall back to any
+	// papers already pinned on this conversation (established by earlier turns).
+	if len(paperIDs) == 0 {
+		if pinned, err := s.repo.ListPinnedPapers(in.ConversationID); err == nil {
+			ids := make([]int64, 0, len(pinned))
+			for _, p := range pinned {
+				if p.PaperID > 0 {
+					ids = append(ids, p.PaperID)
+				}
+			}
+			paperIDs = ids
+		}
+	}
 	if len(paperIDs) == 0 && len(figureIDs) == 0 {
 		return SendMessageResult{}, apperr.New(apperr.CodeInvalidArgument, "请引用至少一篇文献或一张图")
 	}
@@ -806,11 +819,30 @@ func (s *Service) dispatchImageGen(ctx context.Context, in SendMessageInput,
 
 // parseImageGenReferences extracts paper and figure IDs from the incoming
 // SendMessageInput for the image-generation path.
+//
+// Paper IDs are resolved from these sources, in priority order (first
+// non-empty source wins; deduplication is applied within the chosen source):
+//  1. in.PaperIDs — top-level slice (draft path)
+//  2. in.PaperID  — top-level singular (draft path)
+//  3. in.Context.PaperIDs — active-conversation slice sent by the frontend
+//  4. in.Context.PaperID  — active-conversation singular
+//
+// A fifth backstop (pinned papers from the DB) is applied by the caller
+// (dispatchImageGen) after this function returns an empty slice, since it
+// requires a repository call.
 func parseImageGenReferences(in SendMessageInput) ([]int64, []int64) {
-	paperIDs := append([]int64(nil), in.PaperIDs...)
-	if len(paperIDs) == 0 && in.PaperID > 0 {
+	var paperIDs []int64
+	switch {
+	case len(in.PaperIDs) > 0:
+		paperIDs = append([]int64(nil), in.PaperIDs...)
+	case in.PaperID > 0:
 		paperIDs = []int64{in.PaperID}
+	case len(in.Context.PaperIDs) > 0:
+		paperIDs = append([]int64(nil), in.Context.PaperIDs...)
+	case in.Context.PaperID > 0:
+		paperIDs = []int64{in.Context.PaperID}
 	}
+
 	figureIDs := []int64(nil)
 	if in.Context.FigureID > 0 {
 		figureIDs = append(figureIDs, in.Context.FigureID)

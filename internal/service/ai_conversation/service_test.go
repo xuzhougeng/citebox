@@ -1199,6 +1199,152 @@ func TestSendMessage_ImageGenerationBypassedWhenNilGenerator(t *testing.T) {
 	}
 }
 
+// TestSendMessage_ImageGenerationFallsBackToPinnedPapers verifies that when
+// no paper IDs are present in the request (neither top-level nor Context), the
+// dispatcher falls back to papers already pinned on the conversation.
+func TestSendMessage_ImageGenerationFallsBackToPinnedPapers(t *testing.T) {
+	svc, libRepo, _ := newServiceForTest(t)
+
+	// Insert paper and pin it before the @image-gen turn.
+	paperID := mustInsertPaperForTest(t, libRepo, "Pinned Paper 42", "10.1/pinned42")
+
+	var gotPaperIDs []int64
+	fake := &fakeImageGen{
+		fn: func(ctx context.Context, in ai_image_gen_pkg.GenerateInput) error {
+			gotPaperIDs = in.PaperIDs
+			return nil
+		},
+	}
+	svc = svc.WithImageGen(fake)
+
+	convID, err := svc.CreateDraft()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Pre-pin the paper (simulates a previous turn that pinned it).
+	if err := svc.PinPaper(convID, paperID); err != nil {
+		t.Fatalf("PinPaper: %v", err)
+	}
+
+	// Send @image-gen with NO top-level paper IDs and an empty Context.
+	_, err = svc.SendMessage(context.Background(), SendMessageInput{
+		ConversationID: convID,
+		Content:        "@image-gen draw from pinned",
+		IntentHint:     "image_generation",
+		// PaperID, PaperIDs, Context are all zero/empty.
+	}, func(string) error { return nil })
+	if err != nil {
+		t.Fatalf("SendMessage: %v", err)
+	}
+
+	if len(gotPaperIDs) != 1 || gotPaperIDs[0] != paperID {
+		t.Fatalf("image-gen got paperIDs %v, want [%d]", gotPaperIDs, paperID)
+	}
+}
+
+// TestSendMessage_ImageGenerationUsesContextPaperIDs verifies that paper IDs
+// carried under in.Context.PaperIDs (the active-conversation frontend path) are
+// passed through to the image-gen generator when no top-level IDs are set.
+func TestSendMessage_ImageGenerationUsesContextPaperIDs(t *testing.T) {
+	svc, libRepo, _ := newServiceForTest(t)
+
+	paper1 := mustInsertPaperForTest(t, libRepo, "Context Paper 1", "10.1/ctx1")
+	paper2 := mustInsertPaperForTest(t, libRepo, "Context Paper 2", "10.1/ctx2")
+
+	var gotPaperIDs []int64
+	fake := &fakeImageGen{
+		fn: func(ctx context.Context, in ai_image_gen_pkg.GenerateInput) error {
+			gotPaperIDs = in.PaperIDs
+			return nil
+		},
+	}
+	svc = svc.WithImageGen(fake)
+
+	convID, err := svc.CreateDraft()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Pin both papers so the auto-pin in SendMessage succeeds.
+	for _, pid := range []int64{paper1, paper2} {
+		if err := svc.PinPaper(convID, pid); err != nil {
+			t.Fatalf("PinPaper(%d): %v", pid, err)
+		}
+	}
+
+	// Send @image-gen with paper IDs only in Context (no top-level IDs).
+	_, err = svc.SendMessage(context.Background(), SendMessageInput{
+		ConversationID: convID,
+		Content:        "@image-gen draw from context",
+		IntentHint:     "image_generation",
+		// Top-level PaperID / PaperIDs intentionally absent.
+		Context: ai_assistant.RequestContext{
+			PaperIDs: []int64{paper1, paper2},
+		},
+	}, func(string) error { return nil })
+	if err != nil {
+		t.Fatalf("SendMessage: %v", err)
+	}
+
+	if len(gotPaperIDs) != 2 {
+		t.Fatalf("image-gen got paperIDs %v, want [%d %d]", gotPaperIDs, paper1, paper2)
+	}
+	found1, found2 := false, false
+	for _, id := range gotPaperIDs {
+		if id == paper1 {
+			found1 = true
+		}
+		if id == paper2 {
+			found2 = true
+		}
+	}
+	if !found1 || !found2 {
+		t.Fatalf("image-gen got paperIDs %v, want both %d and %d", gotPaperIDs, paper1, paper2)
+	}
+}
+
+// TestSendMessage_ImageGenerationUsesContextPaperID verifies that the singular
+// Context.PaperID field (active-conversation path, single paper) is used when
+// no top-level IDs or Context.PaperIDs are present.
+func TestSendMessage_ImageGenerationUsesContextPaperID(t *testing.T) {
+	svc, libRepo, _ := newServiceForTest(t)
+
+	paperID := mustInsertPaperForTest(t, libRepo, "Context Singular Paper", "10.1/ctxsingle")
+
+	var gotPaperIDs []int64
+	fake := &fakeImageGen{
+		fn: func(ctx context.Context, in ai_image_gen_pkg.GenerateInput) error {
+			gotPaperIDs = in.PaperIDs
+			return nil
+		},
+	}
+	svc = svc.WithImageGen(fake)
+
+	convID, err := svc.CreateDraft()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.PinPaper(convID, paperID); err != nil {
+		t.Fatalf("PinPaper: %v", err)
+	}
+
+	_, err = svc.SendMessage(context.Background(), SendMessageInput{
+		ConversationID: convID,
+		Content:        "@image-gen draw from context single",
+		IntentHint:     "image_generation",
+		Context: ai_assistant.RequestContext{
+			PaperID: paperID,
+		},
+	}, func(string) error { return nil })
+	if err != nil {
+		t.Fatalf("SendMessage: %v", err)
+	}
+
+	if len(gotPaperIDs) != 1 || gotPaperIDs[0] != paperID {
+		t.Fatalf("image-gen got paperIDs %v, want [%d]", gotPaperIDs, paperID)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // DeleteConversation — image storage cleanup
 // ---------------------------------------------------------------------------
