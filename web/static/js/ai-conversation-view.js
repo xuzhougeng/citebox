@@ -359,6 +359,14 @@
                 parts.text.innerHTML = (typeof Utils !== 'undefined' && typeof Utils.renderMarkdown === 'function')
                     ? Utils.renderMarkdown(message.content || '', {})
                     : '<p class="markdown-paragraph">' + escapeHtml(message.content || '') + '</p>';
+            } else if (message && message.role === 'user') {
+                this._clearStreamingStatus(el);
+                const renderMentions = window.AIReader && window.AIReader.toolTags && window.AIReader.toolTags.renderMentionHTML;
+                if (typeof renderMentions === 'function') {
+                    parts.text.innerHTML = renderMentions(message.content || '');
+                } else {
+                    parts.text.textContent = (message && message.content) || '';
+                }
             } else if (message && message.role === 'assistant' && message.streaming && !String(message.content || '').trim()) {
                 this._setStreamingStatus(el, translate('ai.streaming_thinking', '思考中…'));
             } else {

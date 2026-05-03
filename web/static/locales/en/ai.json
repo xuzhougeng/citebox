@@ -79,6 +79,7 @@
     "ai.image_gen_card_download": "Download",
     "ai.image_gen_card_copy_prompt": "Copy prompt",
     "ai.image_gen_card_prompt": "AI prompt",
+    "ai.result_view_large": "View full image",
     "ai.btn_delete_conversation": "Delete",
     "ai.confirm_delete_conversation_title": "Delete Conversation",
     "ai.confirm_delete_conversation": "This will remove the conversation and its message history.",

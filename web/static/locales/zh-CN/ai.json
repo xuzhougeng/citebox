@@ -79,6 +79,7 @@
     "ai.image_gen_card_download": "下载图片",
     "ai.image_gen_card_copy_prompt": "复制 prompt",
     "ai.image_gen_card_prompt": "AI prompt",
+    "ai.result_view_large": "查看大图",
     "ai.btn_delete_conversation": "删除",
     "ai.confirm_delete_conversation_title": "删除对话",
     "ai.confirm_delete_conversation": "删除后会移除当前会话及其消息记录。",

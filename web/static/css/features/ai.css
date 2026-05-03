@@ -459,6 +459,8 @@ html[lang^="zh"] .ai-config-details[open] .ai-collapsible-toggle::before {
     display: flex;
     align-items: center;
     justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 0.5rem;
 }
 
 .ai-result-card-collapsible-body {
@@ -608,6 +610,58 @@ html[lang^="zh"] .ai-config-details[open] .ai-collapsible-toggle::before {
     border-radius: 6px;
     border: 1px solid rgba(var(--ink-rgb), 0.1);
     background: rgba(var(--ink-rgb), 0.04);
+}
+
+.ai-generated-image-thumb {
+    display: block;
+    width: min(100%, 17rem);
+    aspect-ratio: 1 / 1;
+    padding: 0;
+    border: 1px solid rgba(var(--ink-rgb), 0.1);
+    border-radius: 14px;
+    overflow: hidden;
+    background: linear-gradient(180deg, rgba(var(--surface-rgb), 0.94), rgba(var(--bg-rgb), 0.92));
+    box-shadow: 0 14px 30px rgba(var(--shadow-rgb), 0.08);
+    cursor: zoom-in;
+    transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
+}
+
+.ai-generated-image-thumb:hover,
+.ai-generated-image-thumb:focus-visible {
+    transform: translateY(-1px);
+    border-color: rgba(var(--accent-rgb), 0.28);
+    box-shadow: 0 18px 34px rgba(var(--shadow-rgb), 0.12);
+    outline: none;
+}
+
+.ai-generated-image-thumb img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    background: rgba(var(--ink-rgb), 0.04);
+}
+
+.ai-image-preview-modal-dialog {
+    width: min(1024px, 100%);
+    padding: 1rem;
+}
+
+.ai-image-preview-modal-body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: min(72vh, 46rem);
+    padding: 1.6rem;
+}
+
+.ai-image-preview-modal-image {
+    display: block;
+    max-width: 100%;
+    max-height: min(72vh, 46rem);
+    border-radius: 18px;
+    box-shadow: 0 24px 60px rgba(var(--shadow-rgb), 0.16);
+    background: rgba(var(--surface-rgb), 0.96);
 }
 
 .ai-figure-missing {
@@ -1075,14 +1129,40 @@ html[lang^="zh"] .ai-config-details[open] .ai-collapsible-toggle::before {
     border-radius: 4px;
 }
 
-.ai-token-mention.ai-token-role {
-    background: rgba(var(--accent-rgb), 0.18);
-    color: var(--accent-deep);
+.ai-question-mirror .ai-token-mention {
+    background: linear-gradient(180deg, rgba(var(--info-rgb), 0.2), rgba(var(--accent-rgb), 0.16));
+    color: #215b8f;
+    box-shadow: inset 0 0 0 1px rgba(var(--info-rgb), 0.18);
 }
 
+.ai-message-user .ai-token-mention {
+    display: inline-flex;
+    align-items: center;
+    min-height: 1.5rem;
+    margin: 0 0.08rem;
+    padding: 0.02rem 0.46rem;
+    border-radius: 999px;
+    background: linear-gradient(135deg, rgba(var(--info-rgb), 0.18), rgba(var(--accent-rgb), 0.16));
+    box-shadow: inset 0 0 0 1px rgba(var(--info-rgb), 0.18);
+    color: #215b8f;
+    white-space: nowrap;
+}
+
+.ai-token-mention.ai-token-tool,
+.ai-token-mention.ai-token-figure,
+.ai-token-mention.ai-token-generic,
+.ai-token-mention.ai-token-role,
 .ai-token-mention.ai-token-paper {
-    background: rgba(65, 103, 136, 0.18);
-    color: var(--info);
+    color: #215b8f;
+}
+
+.ai-token-mention.ai-token-tool {
+    background: linear-gradient(135deg, rgba(var(--accent-rgb), 0.22), rgba(var(--info-rgb), 0.15));
+}
+
+.ai-token-mention.ai-token-image-gen {
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.24), rgba(14, 165, 233, 0.16));
+    color: #0f4c81;
 }
 
 .ai-mention-popover {

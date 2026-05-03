@@ -8,7 +8,7 @@ const vm = require('node:vm');
 
 const modulePath = path.resolve(__dirname, '..', 'ai-conversation-view.js');
 
-function loadView(parseToolTags, utils) {
+function loadView(parseToolTags, utils, renderMentionHTML) {
     const code = fs.readFileSync(modulePath, 'utf8');
     const context = {
         console: console,
@@ -19,6 +19,7 @@ function loadView(parseToolTags, utils) {
             AIReader: {
                 toolTags: {
                     parseToolTags: parseToolTags || (() => ({ intentHint: '', sources: [], conflict: null })),
+                    renderMentionHTML: renderMentionHTML || ((value) => value),
                 },
             },
         },
@@ -150,4 +151,28 @@ test('_setAssistantText delegates markdown rendering to Utils.renderMarkdown', (
     assert.equal(renderCall.value, '```js\nconsole.log(1)\n```');
     assert.deepEqual(Object.keys(renderCall.options || {}), []);
     assert.equal(parts.text.innerHTML, '<p class="from-utils">rendered</p>');
+});
+
+test('_renderMessageContent uses shared mention renderer for user messages', () => {
+    let mentionCall = null;
+    const view = loadView(null, null, (value) => {
+        mentionCall = value;
+        return '<span class="ai-token-mention ai-token-tool">@image-gen</span> hi';
+    });
+    const subject = Object.create(view);
+    const parts = {
+        text: {
+            innerHTML: '',
+            textContent: '',
+        },
+        artifacts: {},
+    };
+
+    subject._ensureMessageParts = () => parts;
+    subject._clearStreamingStatus = () => {};
+
+    subject._renderMessageContent({}, { role: 'user', content: '@image-gen hi' });
+
+    assert.equal(mentionCall, '@image-gen hi');
+    assert.equal(parts.text.innerHTML, '<span class="ai-token-mention ai-token-tool">@image-gen</span> hi');
 });

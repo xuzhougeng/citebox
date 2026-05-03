@@ -85,7 +85,13 @@
             const sync = () => {
                 // Trailing space avoids the last visible line collapsing when the
                 // textarea ends with a newline.
-                mirror.textContent = input.value + ' ';
+                const renderMentions = window.AIReader && window.AIReader.toolTags && window.AIReader.toolTags.renderMentionHTML;
+                const value = input.value + ' ';
+                if (typeof renderMentions === 'function') {
+                    mirror.innerHTML = renderMentions(value);
+                } else {
+                    mirror.textContent = value;
+                }
                 resizeToContent();
                 mirror.scrollTop = input.scrollTop;
             };

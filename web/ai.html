@@ -6,7 +6,7 @@
     <title>AI 助手 - CiteBox</title>
     <link rel="icon" type="image/svg+xml" href="/static/img/citebox-icon.svg">
     <script>(function(){var d=document.documentElement;try{var t=localStorage.getItem("citebox_theme");if(t&&t!=="warm")d.setAttribute("data-theme",t);var l=localStorage.getItem("citebox_lang")||"zh-CN";d.lang=l;if(l!=="zh-CN")d.setAttribute("data-lang-loading","1");}catch(e){}})()</script>
-    <link rel="stylesheet" href="/static/css/style.css?v=ai-20260501-p3-conversations">
+    <link rel="stylesheet" href="/static/css/style.css?v=ai-20260503-image-ui">
 </head>
 <body>
     <nav class="navbar">
@@ -99,6 +99,15 @@
         </div>
     </div>
 
+    <div id="aiGeneratedImageModal" class="modal-shell hidden">
+        <div class="modal-dialog ai-image-preview-modal-dialog">
+            <button class="modal-close" type="button" aria-label="关闭" data-ai-image-preview-close data-i18n-aria-label="ai.btn_close_modal">×</button>
+            <div class="ai-image-preview-modal-body">
+                <img id="aiGeneratedImagePreview" class="ai-image-preview-modal-image" alt="">
+            </div>
+        </div>
+    </div>
+
     <script src="/static/js/theme.js"></script>
     <script src="/static/js/i18n.js"></script>
     <script src="/static/js/utils.js?v=20260501-p3"></script>
@@ -107,17 +116,17 @@
     <script src="/static/js/figure-viewer.js"></script>
     <script src="/static/js/note-viewer.js"></script>
     <script src="/static/js/main.js"></script>
-    <script src="/static/js/ai-mention-tags.js?v=20260501-p4"></script>
+    <script src="/static/js/ai-mention-tags.js?v=20260503-ai-image-ui"></script>
     <script src="/static/js/ai-mention.js?v=20260501-p4"></script>
     <script src="/static/js/ai-pin.js"></script>
     <script src="/static/js/ai-conversations.js?v=20260501-p3-conversations"></script>
     <script src="/static/js/ai-composer.js"></script>
     <script src="/static/js/ai-message-list.js"></script>
     <script src="/static/js/ai-process-strip.js?v=20260501-1"></script>
-    <script src="/static/js/ai-result-cards.js?v=20260501-p3"></script>
-    <script src="/static/js/ai-conversation-view.js?v=20260501-p3-conversations"></script>
+    <script src="/static/js/ai-result-cards.js?v=20260503-ai-image-ui"></script>
+    <script src="/static/js/ai-conversation-view.js?v=20260503-ai-image-ui"></script>
     <script src="/static/js/ai-evidence.js"></script>
-    <script src="/static/js/ai-reader.js?v=20260502-s2-derived"></script>
+    <script src="/static/js/ai-reader.js?v=20260503-ai-image-ui"></script>
     <script src="/static/js/translate.js"></script>
 </body>
 </html>

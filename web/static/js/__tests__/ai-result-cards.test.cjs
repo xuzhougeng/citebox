@@ -31,7 +31,7 @@ function loadCards() {
 
 const render = loadCards();
 
-test('renderCard - generated_image: renders image, prompt, download and copy buttons', () => {
+test('renderCard - generated_image: renders thumbnail trigger, prompt, download and copy buttons', () => {
     const html = render([{
         card_type: 'generated_image',
         payload: {
@@ -45,6 +45,8 @@ test('renderCard - generated_image: renders image, prompt, download and copy but
         },
     }]);
     assert.ok(html.includes('/api/ai-generated-images/7/file'), 'should contain file URL');
+    assert.ok(html.includes('data-ai-image-preview='), 'should contain image preview trigger');
+    assert.ok(html.includes('ai-generated-image-thumb'), 'should contain thumbnail class');
     assert.ok(html.includes('a graphical abstract of CRISPR'), 'should contain prompt text');
     assert.ok(html.includes('gpt-image-2 · 1024x1024 · high · $0.19'), 'should contain meta line');
     assert.ok(html.includes('data-ai-image-gen-copy='), 'should contain copy button attribute');

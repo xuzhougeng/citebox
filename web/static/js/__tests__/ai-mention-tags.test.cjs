@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const path = require('node:path');
 
 const mod = require(path.join('..', 'ai-mention-tags.js'));
-const { parseToolTags, commitToolTag, KNOWN_TOOL_TAGS, familyOf } = mod;
+const { parseToolTags, commitToolTag, renderMentionHTML, KNOWN_TOOL_TAGS, familyOf } = mod;
 
 test('KNOWN_TOOL_TAGS lists the five MVP tags in canonical case', () => {
     assert.deepEqual(
@@ -166,4 +166,13 @@ test('parseToolTags cross-family @Library then @image-gen is last-wins image_gen
     assert.equal(r.intentHint, 'image_generation');
     assert.notEqual(r.conflict, null);
     assert.deepEqual(r.conflict, { dropped: 'library', kept: 'image_gen' });
+});
+
+test('renderMentionHTML highlights tool, figure, and generic mentions', () => {
+    const html = renderMentionHTML('@image-gen 配合 @CommonAlias 参考 @figure-3');
+    assert.match(html, /ai-token-tool/);
+    assert.match(html, /ai-token-image-gen/);
+    assert.match(html, /ai-token-generic/);
+    assert.match(html, /ai-token-figure/);
+    assert.match(html, /@CommonAlias/);
 });

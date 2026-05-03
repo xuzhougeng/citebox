@@ -169,10 +169,53 @@
         return t ? t.name : String(raw || '');
     }
 
+    function escapeHtml(value) {
+        return String(value == null ? '' : value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    const MENTION_RE = /(^|\s)(@([^\s@]+))/g;
+
+    function renderMentionHTML(text) {
+        const value = String(text || '');
+        let html = '';
+        let lastIndex = 0;
+        MENTION_RE.lastIndex = 0;
+        let match;
+        while ((match = MENTION_RE.exec(value)) !== null) {
+            const lead = match[1] || '';
+            const mention = match[2] || '';
+            const token = match[3] || '';
+            const mentionStart = match.index + lead.length;
+            html += escapeHtml(value.slice(lastIndex, mentionStart));
+            html += renderMentionToken(mention, token);
+            lastIndex = mentionStart + mention.length;
+        }
+        html += escapeHtml(value.slice(lastIndex));
+        return html;
+    }
+
+    function renderMentionToken(mention, token) {
+        const lower = String(token || '').toLowerCase();
+        let classes = 'ai-token-mention ai-token-generic';
+        const tool = NAME_LOOKUP[lower];
+        if (tool) {
+            classes = 'ai-token-mention ai-token-tool ai-token-' + lower.replace(/[^a-z0-9-]/g, '-');
+        } else if (/^figure-\d+$/i.test(token)) {
+            classes = 'ai-token-mention ai-token-figure';
+        }
+        return '<span class="' + classes + '">' + escapeHtml(mention) + '</span>';
+    }
+
     return {
         KNOWN_TOOL_TAGS: KNOWN_TOOL_TAGS,
         familyOf: familyOf,
         parseToolTags: parseToolTags,
         commitToolTag: commitToolTag,
+        renderMentionHTML: renderMentionHTML,
     };
 }));

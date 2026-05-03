@@ -308,9 +308,12 @@
         const downloadLabel = translate('ai.image_gen_card_download', '下载图片');
         const copyPromptLabel = translate('ai.image_gen_card_copy_prompt', '复制 prompt');
         const promptLabel = translate('ai.image_gen_card_prompt', 'AI prompt');
+        const previewLabel = translate('ai.result_view_large', '查看大图');
         return '<article class="ai-result-card ai-result-card-generated-image">' +
             (src
-                ? '<img src="' + escapeHtml(src) + '" alt="' + escapeHtml(fallback) + '" loading="lazy">'
+                ? '<button class="ai-generated-image-thumb" type="button" data-ai-image-preview="' + escapeHtml(src) + '" data-ai-image-alt="' + escapeHtml(fallback) + '" aria-label="' + escapeHtml(previewLabel) + '">' +
+                    '<img src="' + escapeHtml(src) + '" alt="' + escapeHtml(fallback) + '" loading="lazy">' +
+                  '</button>'
                 : '<div class="ai-figure-missing">' + escapeHtml(translate('ai.result_image_unavailable', '图片不可用')) + '</div>') +
             '<div class="ai-result-card-head">' +
                 '<h4>' + escapeHtml(fallback) + '</h4>' +
@@ -324,6 +327,32 @@
                 '<button class="btn btn-small" type="button" data-ai-image-gen-copy="' + escapeHtml(p.prompt || '') + '">' + escapeHtml(copyPromptLabel) + '</button>' +
             '</div>' +
         '</article>';
+    }
+
+    function openImagePreview(src, alt) {
+        if (typeof document === 'undefined') return;
+        const modal = document.getElementById('aiGeneratedImageModal');
+        const image = document.getElementById('aiGeneratedImagePreview');
+        if (!modal || !image) return;
+        image.src = src;
+        image.alt = alt || translate('ai.image_gen_card_fallback', '生成图');
+        modal.classList.remove('hidden');
+        if (document.body) document.body.classList.add('modal-open');
+    }
+
+    function closeImagePreview() {
+        if (typeof document === 'undefined') return;
+        const modal = document.getElementById('aiGeneratedImageModal');
+        const image = document.getElementById('aiGeneratedImagePreview');
+        if (!modal || modal.classList.contains('hidden')) return;
+        modal.classList.add('hidden');
+        if (image) {
+            image.removeAttribute('src');
+            image.alt = '';
+        }
+        if (!document.querySelector('.modal-shell:not(.hidden)')) {
+            document.body.classList.remove('modal-open');
+        }
     }
 
     function bindCollapsibleCards() {
@@ -346,6 +375,23 @@
             const text = btn.getAttribute('data-ai-image-gen-copy') || '';
             if (navigator.clipboard && navigator.clipboard.writeText) {
                 navigator.clipboard.writeText(text);
+            }
+        });
+        document.addEventListener('click', (event) => {
+            const trigger = event.target.closest('[data-ai-image-preview]');
+            if (trigger) {
+                openImagePreview(trigger.getAttribute('data-ai-image-preview') || '', trigger.getAttribute('data-ai-image-alt') || '');
+                return;
+            }
+            const modal = document.getElementById('aiGeneratedImageModal');
+            if (!modal || modal.classList.contains('hidden')) return;
+            if (event.target === modal || event.target.closest('[data-ai-image-preview-close]')) {
+                closeImagePreview();
+            }
+        });
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+                closeImagePreview();
             }
         });
     }
