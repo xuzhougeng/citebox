@@ -122,6 +122,8 @@
             return renderPaperRead(p, cardType(card));
         case 'figure_result':
             return renderFigureResult(p);
+        case 'generated_image':
+            return renderGeneratedImage(p);
         default:
             return '<article class="ai-result-card ai-result-card-fallback"><pre>' +
                 escapeHtml(JSON.stringify(p, null, 2)) +
@@ -293,6 +295,37 @@
         '</article>';
     }
 
+    function renderGeneratedImage(p) {
+        const src = safeUrl(p.file_url);
+        const fallback = translate('ai.image_gen_card_fallback', '生成图');
+        const cost = (typeof p.cost_estimate_usd === 'number') ? p.cost_estimate_usd.toFixed(2) : null;
+        const meta = [
+            p.model,
+            p.size,
+            p.quality,
+            cost ? '$' + cost : null,
+        ].filter(Boolean).join(' · ');
+        const downloadLabel = translate('ai.image_gen_card_download', '下载图片');
+        const copyPromptLabel = translate('ai.image_gen_card_copy_prompt', '复制 prompt');
+        const promptLabel = translate('ai.image_gen_card_prompt', 'AI prompt');
+        return '<article class="ai-result-card ai-result-card-generated-image">' +
+            (src
+                ? '<img src="' + escapeHtml(src) + '" alt="' + escapeHtml(fallback) + '" loading="lazy">'
+                : '<div class="ai-figure-missing">' + escapeHtml(translate('ai.result_image_unavailable', '图片不可用')) + '</div>') +
+            '<div class="ai-result-card-head">' +
+                '<h4>' + escapeHtml(fallback) + '</h4>' +
+                (meta ? '<p>' + escapeHtml(meta) + '</p>' : '') +
+            '</div>' +
+            '<details class="ai-image-gen-prompt"><summary>' + escapeHtml(promptLabel) + '</summary>' +
+                '<pre>' + escapeHtml(p.prompt || '') + '</pre>' +
+            '</details>' +
+            '<div class="ai-result-card-actions">' +
+                (src ? '<a class="btn btn-small btn-outline" href="' + escapeHtml(src) + '" download>' + escapeHtml(downloadLabel) + '</a>' : '') +
+                '<button class="btn btn-small" type="button" data-ai-image-gen-copy="' + escapeHtml(p.prompt || '') + '">' + escapeHtml(copyPromptLabel) + '</button>' +
+            '</div>' +
+        '</article>';
+    }
+
     function bindCollapsibleCards() {
         if (typeof document === 'undefined' || document.__citeboxAIResultCardsBound) return;
         document.__citeboxAIResultCardsBound = true;
@@ -306,6 +339,14 @@
             button.setAttribute('aria-expanded', isExpanded ? 'false' : 'true');
             card.classList.toggle('is-collapsed', isExpanded);
             if (body) body.hidden = isExpanded;
+        });
+        document.addEventListener('click', (event) => {
+            const btn = event.target.closest('[data-ai-image-gen-copy]');
+            if (!btn) return;
+            const text = btn.getAttribute('data-ai-image-gen-copy') || '';
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text);
+            }
         });
     }
 
