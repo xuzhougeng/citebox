@@ -575,7 +575,7 @@ const ResourceViewerPage = {
         const pageRect = pageElement?.getBoundingClientRect();
         if (!pageRect) return { text: '', rects: [], clientRect: null };
 
-        let hits = Array.from(textLayer.querySelectorAll('span'))
+        const items = Array.from(textLayer.querySelectorAll('span'))
             .map((span) => {
                 const text = String(span.textContent || '');
                 const rect = span.getBoundingClientRect();
@@ -583,33 +583,218 @@ const ResourceViewerPage = {
             })
             .filter((item) => item.text.trim()
                 && item.rect.width > 1
-                && item.rect.height > 1
-                && this.rectsIntersect(clientRect, item.rect))
+                && item.rect.height > 1);
+
+        const selectionLines = drag
+            ? this.collectPDFSelectionLinesFromDrag(items, pageRect, drag)
+            : this.collectPDFSelectionLinesFromArea(items, pageRect, clientRect);
+        if (!selectionLines.length) return { text: '', rects: [], clientRect: null };
+
+        const text = this.formatPDFSelectionText(selectionLines);
+        const rects = this.buildPDFSelectionRects(selectionLines, pageRect);
+        const clientBounds = this.pdfSelectionClientBounds(selectionLines);
+
+        return {
+            text,
+            rects,
+            clientRect: clientBounds
+        };
+    },
+
+    collectPDFSelectionLinesFromDrag(items, pageRect, drag) {
+        const lines = this.buildPDFTextLineSegments(items);
+        if (!lines.length) return [];
+
+        const anchorLine = this.findPDFLineAtPoint(lines, drag.startX, drag.startY);
+        if (!anchorLine) return [];
+
+        const columnLines = this.filterPDFLinesToAnchorColumn(lines, anchorLine)
             .sort((a, b) => {
-                const verticalTolerance = Math.max(4, Math.min(a.rect.height, b.rect.height) * 0.55);
-                if (Math.abs(a.rect.top - b.rect.top) <= verticalTolerance) {
-                    return a.rect.left - b.rect.left;
-                }
-                return a.rect.top - b.rect.top;
+                const topDelta = a.top - b.top;
+                return Math.abs(topDelta) > Math.max(2, Math.min(a.height, b.height) * 0.2)
+                    ? topDelta
+                    : a.left - b.left;
             });
+        const focusLine = this.findPDFLineAtPoint(columnLines, drag.currentX, drag.currentY) || anchorLine;
+        let start = {
+            line: anchorLine,
+            lineIndex: columnLines.indexOf(anchorLine),
+            x: drag.startX
+        };
+        let end = {
+            line: focusLine,
+            lineIndex: columnLines.indexOf(focusLine),
+            x: drag.currentX
+        };
+        if (start.lineIndex < 0 || end.lineIndex < 0) return [];
+        if (this.comparePDFSelectionPositions(start, end) > 0) {
+            [start, end] = [end, start];
+        }
 
-        hits = this.filterPDFHitsByDragColumn(hits, drag, pageRect);
-        if (!hits.length) return { text: '', rects: [], clientRect: null };
+        const selectedLines = [];
+        for (let index = start.lineIndex; index <= end.lineIndex; index += 1) {
+            const line = columnLines[index];
+            const singleLine = start.lineIndex === end.lineIndex;
+            const lowerX = singleLine ? Math.min(start.x, end.x) : start.x;
+            const upperX = singleLine ? Math.max(start.x, end.x) : end.x;
+            const leftBound = index === start.lineIndex
+                ? Math.max(line.left, lowerX)
+                : line.left;
+            const rightBound = index === end.lineIndex
+                ? Math.min(line.right, upperX)
+                : line.right;
+            const selectedItems = line.items.filter((item) => (
+                item.rect.right >= leftBound && item.rect.left <= rightBound
+            ));
+            if (!selectedItems.length) continue;
 
-        const lines = [];
-        hits.forEach((item) => {
-            const lastLine = lines[lines.length - 1];
-            const tolerance = Math.max(5, item.rect.height * 0.65);
-            if (!lastLine || Math.abs(item.rect.top - lastLine.top) > tolerance) {
-                lines.push({ top: item.rect.top, items: [item] });
+            const itemLeft = Math.min(...selectedItems.map((item) => item.rect.left));
+            const itemRight = Math.max(...selectedItems.map((item) => item.rect.right));
+            const itemTop = Math.min(...selectedItems.map((item) => item.rect.top));
+            const itemBottom = Math.max(...selectedItems.map((item) => item.rect.bottom));
+            selectedLines.push({
+                items: selectedItems,
+                left: index === start.lineIndex ? Math.max(leftBound, pageRect.left) : itemLeft,
+                right: index === end.lineIndex ? Math.min(rightBound, itemRight) : itemRight,
+                top: itemTop,
+                bottom: itemBottom
+            });
+        }
+        return selectedLines.filter((line) => line.right > line.left && line.bottom > line.top);
+    },
+
+    collectPDFSelectionLinesFromArea(items, pageRect, clientRect) {
+        const hits = items.filter((item) => this.rectsIntersect(clientRect, item.rect));
+        return this.buildPDFTextLineSegments(hits).map((line) => {
+            const left = Math.max(line.left, clientRect.left, pageRect.left);
+            const right = Math.min(line.right, clientRect.right);
+            return {
+                items: line.items.filter((item) => item.rect.right >= left && item.rect.left <= right),
+                left,
+                right,
+                top: line.top,
+                bottom: line.bottom
+            };
+        }).filter((line) => line.items.length && line.right > line.left);
+    },
+
+    buildPDFTextLineSegments(items) {
+        const medianHeight = this.medianNumber(items.map((item) => item.rect.height).filter((height) => height > 0)) || 12;
+        const rowTolerance = Math.max(4, medianHeight * 0.55);
+        const columnGap = Math.max(88, Math.min(180, medianHeight * 5.5));
+        const rows = [];
+
+        [...items].sort((a, b) => {
+            const aCenter = (a.rect.top + a.rect.bottom) / 2;
+            const bCenter = (b.rect.top + b.rect.bottom) / 2;
+            if (Math.abs(aCenter - bCenter) <= rowTolerance) {
+                return a.rect.left - b.rect.left;
+            }
+            return aCenter - bCenter;
+        }).forEach((item) => {
+            const centerY = (item.rect.top + item.rect.bottom) / 2;
+            const row = rows.find((candidate) => Math.abs(centerY - candidate.centerY) <= rowTolerance);
+            if (!row) {
+                rows.push({
+                    centerY,
+                    top: item.rect.top,
+                    bottom: item.rect.bottom,
+                    items: [item]
+                });
                 return;
             }
-            lastLine.items.push(item);
-            lastLine.top = Math.min(lastLine.top, item.rect.top);
+            row.items.push(item);
+            row.top = Math.min(row.top, item.rect.top);
+            row.bottom = Math.max(row.bottom, item.rect.bottom);
+            row.centerY = (row.centerY * (row.items.length - 1) + centerY) / row.items.length;
         });
 
-        const text = lines.map((line) => {
-            const items = line.items.sort((a, b) => a.rect.left - b.rect.left);
+        const segments = [];
+        rows.forEach((row) => {
+            const sortedItems = row.items.sort((a, b) => a.rect.left - b.rect.left);
+            let current = [];
+            sortedItems.forEach((item) => {
+                const previous = current[current.length - 1];
+                if (previous && item.rect.left - previous.rect.right > columnGap) {
+                    segments.push(this.createPDFTextLineSegment(current));
+                    current = [];
+                }
+                current.push(item);
+            });
+            if (current.length) {
+                segments.push(this.createPDFTextLineSegment(current));
+            }
+        });
+
+        return segments
+            .filter(Boolean)
+            .sort((a, b) => {
+                const topDelta = a.top - b.top;
+                return Math.abs(topDelta) > Math.max(2, Math.min(a.height, b.height) * 0.2)
+                    ? topDelta
+                    : a.left - b.left;
+            });
+    },
+
+    createPDFTextLineSegment(items) {
+        if (!items.length) return null;
+        const sortedItems = [...items].sort((a, b) => a.rect.left - b.rect.left);
+        const left = Math.min(...sortedItems.map((item) => item.rect.left));
+        const right = Math.max(...sortedItems.map((item) => item.rect.right));
+        const top = Math.min(...sortedItems.map((item) => item.rect.top));
+        const bottom = Math.max(...sortedItems.map((item) => item.rect.bottom));
+        return {
+            items: sortedItems,
+            left,
+            right,
+            top,
+            bottom,
+            width: right - left,
+            height: bottom - top,
+            centerY: (top + bottom) / 2
+        };
+    },
+
+    findPDFLineAtPoint(lines, x, y) {
+        return lines
+            .map((line) => {
+                const xDistance = this.pdfLineXDistance(line, x);
+                const yDistance = y >= line.top && y <= line.bottom
+                    ? 0
+                    : Math.min(Math.abs(y - line.top), Math.abs(y - line.bottom));
+                return { line, distance: yDistance * 4 + xDistance };
+            })
+            .sort((a, b) => a.distance - b.distance)[0]?.line || null;
+    },
+
+    pdfLineXDistance(line, x) {
+        if (x >= line.left && x <= line.right) return 0;
+        return Math.min(Math.abs(x - line.left), Math.abs(x - line.right));
+    },
+
+    filterPDFLinesToAnchorColumn(lines, anchorLine) {
+        const anchorCenter = (anchorLine.left + anchorLine.right) / 2;
+        const xPadding = Math.max(28, anchorLine.height * 2);
+        return lines.filter((line) => {
+            if (line === anchorLine) return true;
+            if (anchorCenter >= line.left - xPadding && anchorCenter <= line.right + xPadding) {
+                return true;
+            }
+            const overlap = Math.min(anchorLine.right, line.right) - Math.max(anchorLine.left, line.left);
+            return overlap > Math.min(anchorLine.width, line.width) * 0.3;
+        });
+    },
+
+    comparePDFSelectionPositions(a, b) {
+        if (a.lineIndex !== b.lineIndex) {
+            return a.lineIndex - b.lineIndex;
+        }
+        return a.x - b.x;
+    },
+
+    formatPDFSelectionText(lines) {
+        return lines.map((line) => {
+            const items = [...line.items].sort((a, b) => a.rect.left - b.rect.left);
             let lastRight = null;
             let lineText = '';
             items.forEach((item) => {
@@ -622,86 +807,30 @@ const ResourceViewerPage = {
             });
             return lineText.replace(/\s+/g, ' ').trim();
         }).filter(Boolean).join('\n').trim();
-
-        const rects = hits.map((item) => {
-            const left = item.rect.left;
-            const top = item.rect.top;
-            const right = item.rect.right;
-            const bottom = item.rect.bottom;
-            const clippedLeft = Math.max(left, clientRect.left);
-            const clippedRight = Math.min(right, clientRect.right);
-            return {
-                left: clippedLeft - pageRect.left,
-                top: top - pageRect.top,
-                width: Math.max(0, clippedRight - clippedLeft),
-                height: bottom - top
-            };
-        }).filter((rect) => rect.width > 0 && rect.height > 0);
-
-        const left = Math.min(...hits.map((item) => item.rect.left));
-        const top = Math.min(...hits.map((item) => item.rect.top));
-        const right = Math.max(...hits.map((item) => item.rect.right));
-        const bottom = Math.max(...hits.map((item) => item.rect.bottom));
-        return {
-            text,
-            rects,
-            clientRect: {
-                left,
-                top,
-                right,
-                bottom,
-                width: right - left,
-                height: bottom - top
-            }
-        };
     },
 
-    filterPDFHitsByDragColumn(hits, drag, pageRect) {
-        if (!drag || hits.length < 2) return hits;
+    buildPDFSelectionRects(lines, pageRect) {
+        return lines.map((line) => ({
+            left: line.left - pageRect.left,
+            top: line.top - pageRect.top,
+            width: Math.max(0, line.right - line.left),
+            height: Math.max(0, line.bottom - line.top)
+        })).filter((rect) => rect.width > 0 && rect.height > 0);
+    },
 
-        const dragHeight = Math.abs(drag.currentY - drag.startY);
-        const medianHeight = this.medianNumber(hits.map((item) => item.rect.height).filter((height) => height > 0));
-        if (dragHeight < Math.max(24, medianHeight * 2.2)) {
-            return hits;
-        }
-
-        const gapThreshold = Math.max(44, Math.min(120, pageRect.width * 0.075));
-        const sortedByLeft = [...hits].sort((a, b) => a.rect.left - b.rect.left);
-        const clusters = [];
-        sortedByLeft.forEach((item) => {
-            const last = clusters[clusters.length - 1];
-            if (!last || item.rect.left - last.right > gapThreshold) {
-                clusters.push({
-                    left: item.rect.left,
-                    right: item.rect.right,
-                    items: [item]
-                });
-                return;
-            }
-            last.right = Math.max(last.right, item.rect.right);
-            last.items.push(item);
-        });
-
-        const meaningfulClusters = clusters.filter((cluster) => cluster.items.length >= 2);
-        if (meaningfulClusters.length <= 1) {
-            return hits;
-        }
-
-        const startX = drag.startX;
-        const containingStart = meaningfulClusters.find((cluster) => (
-            startX >= cluster.left - gapThreshold * 0.5 && startX <= cluster.right + gapThreshold * 0.5
-        ));
-        if (containingStart) {
-            return containingStart.items;
-        }
-
-        const nearest = meaningfulClusters
-            .map((cluster) => ({
-                cluster,
-                distance: Math.min(Math.abs(startX - cluster.left), Math.abs(startX - cluster.right))
-            }))
-            .sort((a, b) => a.distance - b.distance)[0]?.cluster;
-        return nearest?.items || hits;
+    pdfSelectionClientBounds(lines) {
+        const left = Math.min(...lines.map((line) => line.left));
+        const top = Math.min(...lines.map((line) => line.top));
+        const right = Math.max(...lines.map((line) => line.right));
+        const bottom = Math.max(...lines.map((line) => line.bottom));
+        return {
+            left,
+            top,
+            right,
+            bottom,
+            width: right - left,
+            height: bottom - top
+        };
     },
 
     medianNumber(values) {
