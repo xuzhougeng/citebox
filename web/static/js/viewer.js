@@ -20,6 +20,7 @@ const ResourceViewerPage = {
         this.selectionMenu = document.getElementById('viewerSelectionMenu');
         this.closing = false;
         this.viewState = this.defaultViewState();
+        this.pdfLoadToken = 0;
         this.pdfState = this.defaultPDFState();
         this.dragState = null;
         this.resizeTimer = null;
@@ -187,6 +188,7 @@ const ResourceViewerPage = {
             eventBus: null,
             linkService: null,
             pdfViewer: null,
+            loadToken: 0,
             pageNumber: 1,
             pageCount: 0,
             scale: 1,
@@ -217,25 +219,31 @@ const ResourceViewerPage = {
         }
     },
 
-    async ensurePDFJSReady() {
+    async ensurePDFJSReady(loadToken = this.pdfState?.loadToken) {
         if (this.pdfState.pdfjsLib) {
             return this.pdfState.pdfjsLib;
         }
         const pdfjsLib = await import('/static/vendor/pdfjs/build/pdf.mjs');
         pdfjsLib.GlobalWorkerOptions.workerSrc = '/static/vendor/pdfjs/build/pdf.worker.mjs';
-        this.pdfState.pdfjsLib = pdfjsLib;
+        if (this.isCurrentPDFLoad(loadToken)) {
+            this.pdfState.pdfjsLib = pdfjsLib;
+        }
         return pdfjsLib;
     },
 
-    async ensurePDFViewerReady() {
-        const pdfjsLib = await this.ensurePDFJSReady();
-        if (!this.pdfState.pdfjsViewerLib) {
+    async ensurePDFViewerReady(loadToken = this.pdfState?.loadToken) {
+        const pdfjsLib = await this.ensurePDFJSReady(loadToken);
+        let pdfjsViewerLib = this.pdfState.pdfjsViewerLib;
+        if (!pdfjsViewerLib) {
             this.ensurePDFViewerStyles();
-            this.pdfState.pdfjsViewerLib = await import('/static/vendor/pdfjs/web/pdf_viewer.mjs');
+            pdfjsViewerLib = await import('/static/vendor/pdfjs/web/pdf_viewer.mjs');
+            if (this.isCurrentPDFLoad(loadToken)) {
+                this.pdfState.pdfjsViewerLib = pdfjsViewerLib;
+            }
         }
         return {
             pdfjsLib,
-            pdfjsViewerLib: this.pdfState.pdfjsViewerLib
+            pdfjsViewerLib
         };
     },
 
@@ -251,11 +259,14 @@ const ResourceViewerPage = {
     async renderPDFResource(resource) {
         this.togglePDFToolbar(true);
         const previousPDFState = this.pdfState || this.defaultPDFState();
+        const loadToken = (this.pdfLoadToken || 0) + 1;
+        this.pdfLoadToken = loadToken;
         this.pdfState = {
             ...this.defaultPDFState(),
             pdfjsLib: previousPDFState.pdfjsLib,
             pdfjsViewerLib: previousPDFState.pdfjsViewerLib,
             resource,
+            loadToken,
             pageNumber: this.initialPDFPageNumber(),
             scale: this.isNarrowPDFViewport() ? 0.9 : 1,
             fitMode: !this.isNarrowPDFViewport()
@@ -273,7 +284,10 @@ const ResourceViewerPage = {
             this.pdfDetailLink.hidden = false;
         }
 
-        await this.loadPDFDocument(resource.href);
+        const loaded = await this.loadPDFDocument(resource.href, loadToken);
+        if (!loaded || !this.isCurrentPDFLoad(loadToken)) {
+            return;
+        }
         const pdfViewer = this.pdfState.pdfViewer;
         const pageCount = Math.max(this.pdfState.pageCount || pdfViewer?.pagesCount || 0, 1);
         this.pdfState.pageNumber = Math.min(Math.max(this.pdfState.pageNumber, 1), pageCount);
@@ -292,8 +306,18 @@ const ResourceViewerPage = {
         return page > 0 ? Math.floor(page) : 1;
     },
 
-    async loadPDFDocument(href) {
-        const { pdfjsLib, pdfjsViewerLib } = await this.ensurePDFViewerReady();
+    isCurrentPDFLoad(loadToken, pdfViewer = null) {
+        if (!this.pdfState || this.pdfState.loadToken !== loadToken) {
+            return false;
+        }
+        return !pdfViewer || this.pdfState.pdfViewer === pdfViewer;
+    },
+
+    async loadPDFDocument(href, loadToken) {
+        const { pdfjsLib, pdfjsViewerLib } = await this.ensurePDFViewerReady(loadToken);
+        if (!this.isCurrentPDFLoad(loadToken)) {
+            return false;
+        }
         const scrollElement = this.stage?.querySelector('[data-pdf-scroll]');
         const viewerElement = this.stage?.querySelector('[data-pdf-viewer]');
         const loadingElement = this.stage?.querySelector('[data-pdf-loading]');
@@ -319,6 +343,7 @@ const ResourceViewerPage = {
         this.pdfState.pdfViewer = pdfViewer;
 
         eventBus.on('pagesinit', () => {
+            if (!this.isCurrentPDFLoad(loadToken, pdfViewer)) return;
             const pageCount = Math.max(pdfViewer.pagesCount || this.pdfState.pageCount || 0, 1);
             const pageNumber = Math.min(Math.max(this.pdfState.pageNumber || 1, 1), pageCount);
             this.pdfState.pageNumber = pageNumber;
@@ -332,15 +357,18 @@ const ResourceViewerPage = {
             }
         });
         eventBus.on('pagesloaded', () => {
+            if (!this.isCurrentPDFLoad(loadToken, pdfViewer)) return;
             this.pdfState.pageCount = pdfViewer.pagesCount || this.pdfState.pageCount;
             this.syncPDFToolbar();
         });
         eventBus.on('pagechanging', (event) => {
+            if (!this.isCurrentPDFLoad(loadToken, pdfViewer)) return;
             this.pdfState.pageNumber = event.pageNumber || pdfViewer.currentPageNumber || 1;
             this.clearPDFSelection();
             this.syncPDFToolbar();
         });
         eventBus.on('scalechanging', () => {
+            if (!this.isCurrentPDFLoad(loadToken, pdfViewer)) return;
             this.pdfState.scale = pdfViewer.currentScale || this.pdfState.scale || 1;
             this.clearPDFSelection();
             this.syncPDFToolbar();
@@ -354,12 +382,30 @@ const ResourceViewerPage = {
             wasmUrl: '/static/vendor/pdfjs/wasm/'
         });
         this.pdfState.loadingTask = loadingTask;
-        const pdfDocument = await loadingTask.promise;
+        let pdfDocument = null;
+        try {
+            pdfDocument = await loadingTask.promise;
+        } catch (error) {
+            if (!this.isCurrentPDFLoad(loadToken, pdfViewer)) {
+                return false;
+            }
+            throw error;
+        }
+        if (!this.isCurrentPDFLoad(loadToken, pdfViewer)) {
+            if (pdfDocument && typeof pdfDocument.destroy === 'function') {
+                pdfDocument.destroy().catch(() => {});
+            }
+            if (typeof loadingTask.destroy === 'function') {
+                loadingTask.destroy().catch(() => {});
+            }
+            return false;
+        }
         this.pdfState.pdfDocument = pdfDocument;
         this.pdfState.pageCount = pdfDocument.numPages || 0;
         pdfViewer.setDocument(pdfDocument);
         linkService.setDocument(pdfDocument, null);
         this.syncPDFToolbar();
+        return true;
     },
 
     isNarrowPDFViewport() {
@@ -448,6 +494,9 @@ const ResourceViewerPage = {
 
     destroyPDFState() {
         const previousPDFState = this.pdfState || this.defaultPDFState();
+        this.pdfLoadToken = (this.pdfLoadToken || 0) + 1;
+        window.clearTimeout(this.resizeTimer);
+        this.resizeTimer = null;
         if (previousPDFState.pdfViewer && typeof previousPDFState.pdfViewer.setDocument === 'function') {
             try {
                 previousPDFState.pdfViewer.setDocument(null);
@@ -469,7 +518,8 @@ const ResourceViewerPage = {
         this.pdfState = {
             ...this.defaultPDFState(),
             pdfjsLib,
-            pdfjsViewerLib
+            pdfjsViewerLib,
+            loadToken: this.pdfLoadToken
         };
     },
 

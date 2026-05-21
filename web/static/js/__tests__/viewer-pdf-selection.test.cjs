@@ -119,9 +119,25 @@ test('defaultPDFState uses official PDF.js viewer state fields', () => {
     assert.equal(state.eventBus, null);
     assert.equal(state.linkService, null);
     assert.equal(state.pdfViewer, null);
+    assert.equal(state.loadToken, 0);
     assert.equal(Object.hasOwn(state, 'renderTask'), false);
     assert.equal(Object.hasOwn(state, 'textLayer'), false);
     assert.equal(Object.hasOwn(state, 'selectionDrag'), false);
+});
+
+test('isCurrentPDFLoad checks load token and viewer identity', () => {
+    const viewer = loadViewerPage(null);
+    const pdfViewer = {};
+    viewer.pdfState = {
+        ...viewer.defaultPDFState(),
+        loadToken: 4,
+        pdfViewer,
+    };
+
+    assert.equal(viewer.isCurrentPDFLoad(4), true);
+    assert.equal(viewer.isCurrentPDFLoad(4, pdfViewer), true);
+    assert.equal(viewer.isCurrentPDFLoad(5), false);
+    assert.equal(viewer.isCurrentPDFLoad(4, {}), false);
 });
 
 test('currentPDFSelectionText ignores browser native selection outside the PDF viewer', () => {
