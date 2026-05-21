@@ -10,28 +10,25 @@
     <style>
         body.viewer-page {
             margin: 0;
-            min-height: 100vh;
-            background:
-                radial-gradient(circle at top left, rgba(164, 92, 64, 0.2), transparent 20rem),
-                linear-gradient(180deg, #2a211d 0%, #17120f 100%);
+            min-height: 100dvh;
+            background: #181410;
             color: #fffaf4;
         }
 
         .viewer-shell {
             display: flex;
-            min-height: 100vh;
+            min-height: 100dvh;
             flex-direction: column;
         }
 
         .viewer-toolbar {
-            display: flex;
+            display: grid;
+            grid-template-columns: auto minmax(10rem, 1fr) auto;
             align-items: center;
-            justify-content: space-between;
-            gap: 1rem;
-            padding: 1rem 1.25rem;
-            background: rgba(23, 18, 15, 0.74);
-            border-bottom: 1px solid rgba(255, 250, 244, 0.08);
-            backdrop-filter: blur(14px);
+            gap: 0.85rem;
+            padding: 0.75rem 1rem;
+            background: rgba(24, 20, 16, 0.96);
+            border-bottom: 1px solid rgba(255, 250, 244, 0.1);
         }
 
         .viewer-meta {
@@ -46,14 +43,14 @@
             color: rgba(255, 250, 244, 0.65);
             font-size: 0.82rem;
             text-transform: uppercase;
-            letter-spacing: 0.08em;
+            letter-spacing: 0;
         }
 
         .viewer-meta strong {
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
-            font-size: 1rem;
+            font-size: 0.98rem;
         }
 
         .viewer-toolbar-actions {
@@ -71,12 +68,30 @@
             display: none !important;
         }
 
+        .viewer-toolbar .btn,
+        .viewer-pdf-controls .btn {
+            min-height: 2.35rem;
+            padding: 0.55rem 0.9rem;
+            font-size: 0.9rem;
+            line-height: 1;
+            white-space: nowrap;
+        }
+
         .viewer-pdf-controls {
             display: flex;
             align-items: center;
             justify-content: flex-end;
-            gap: 0.55rem;
+            gap: 0.45rem;
             flex-wrap: wrap;
+        }
+
+        .viewer-pdf-control-group {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            padding: 0.2rem;
+            border-radius: 999px;
+            background: rgba(255, 250, 244, 0.06);
         }
 
         .viewer-pdf-page-control {
@@ -88,10 +103,11 @@
         }
 
         .viewer-pdf-page-input {
-            width: 4.5rem;
-            padding: 0.55rem 0.65rem;
+            width: 3.6rem;
+            min-height: 2.25rem;
+            padding: 0.35rem 0.45rem;
             border: 1px solid rgba(255, 250, 244, 0.18);
-            border-radius: 12px;
+            border-radius: 999px;
             background: rgba(255, 250, 244, 0.08);
             color: #fffaf4;
             font: inherit;
@@ -99,7 +115,7 @@
         }
 
         .viewer-pdf-zoom-label {
-            min-width: 4rem;
+            min-width: 3.5rem;
             color: rgba(255, 250, 244, 0.72);
             font-size: 0.88rem;
             text-align: center;
@@ -128,13 +144,16 @@
             justify-content: center;
             padding: 0;
             overflow: hidden;
+            min-height: 0;
+            background: #d6d0c7;
         }
 
         .viewer-pdf-scroll {
             width: 100%;
-            height: calc(100vh - 5.25rem);
+            height: 100%;
+            min-height: 0;
             overflow: auto;
-            padding: 1.5rem;
+            padding: 1.25rem;
             text-align: center;
         }
 
@@ -143,44 +162,74 @@
             display: inline-block;
             line-height: 0;
             background: #fff;
-            box-shadow: 0 36px 96px rgba(0, 0, 0, 0.32);
+            box-shadow: 0 14px 42px rgba(35, 26, 20, 0.22);
         }
 
         .viewer-pdf-canvas {
             display: block;
             background: #fff;
+            position: relative;
+            z-index: 0;
+        }
+
+        .viewer-pdf-selection-layer {
+            position: absolute;
+            inset: 0;
+            z-index: 1;
+            overflow: hidden;
+            pointer-events: none;
+        }
+
+        .viewer-pdf-selection-rect {
+            position: absolute;
+            border-radius: 2px;
+            background: rgba(255, 214, 0, 0.32);
+            mix-blend-mode: multiply;
         }
 
         .viewer-pdf-text-layer {
             position: absolute;
             inset: 0;
-            overflow: hidden;
-            line-height: 1;
-            text-align: left;
-            transform-origin: 0 0;
             z-index: 2;
+            line-height: 1;
+            overflow: hidden;
+            opacity: 1;
+            text-align: initial;
+            text-size-adjust: none;
+            transform-origin: 0 0;
+            forced-color-adjust: none;
+            pointer-events: auto;
+            user-select: none;
         }
 
-        .viewer-pdf-text-layer span {
+        .viewer-pdf-text-layer :is(span, br) {
             position: absolute;
+            margin: 0;
             color: transparent;
             white-space: pre;
             cursor: text;
             transform-origin: 0 0;
         }
 
+        .viewer-pdf-text-layer span {
+            pointer-events: auto;
+        }
+
         .viewer-pdf-text-layer br {
+            color: transparent;
+            cursor: text;
             user-select: none;
         }
 
-        .viewer-pdf-text-layer ::selection {
-            background: rgba(72, 126, 186, 0.34);
+        .viewer-pdf-text-layer ::selection,
+        .viewer-pdf-text-layer *::selection {
+            background: transparent;
         }
 
         .viewer-pdf-loading {
             position: absolute;
             inset: 0;
-            z-index: 3;
+            z-index: 4;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -283,16 +332,81 @@
 
         @media (max-width: 720px) {
             .viewer-toolbar {
-                align-items: flex-start;
-                flex-direction: column;
+                grid-template-columns: auto minmax(0, 1fr);
+                align-items: center;
+                gap: 0.7rem;
+                padding: 0.75rem;
+            }
+
+            .viewer-toolbar .btn,
+            .viewer-pdf-controls .btn {
+                min-height: 2.25rem;
+                padding: 0.5rem 0.75rem;
+                font-size: 0.86rem;
+            }
+
+            .viewer-meta {
+                gap: 0.12rem;
+            }
+
+            .viewer-meta span {
+                font-size: 0.72rem;
+            }
+
+            .viewer-meta strong {
+                font-size: 0.92rem;
             }
 
             .viewer-toolbar-actions {
+                grid-column: 1 / -1;
                 justify-content: flex-start;
+            }
+
+            .viewer-pdf-controls {
+                grid-column: 1 / -1;
+                width: 100%;
+                justify-content: flex-start;
+                gap: 0.45rem;
+            }
+
+            .viewer-pdf-control-group {
+                flex: 1 1 auto;
+                justify-content: center;
+                background: rgba(255, 250, 244, 0.045);
+            }
+
+            .viewer-pdf-page-control > span:first-child {
+                position: absolute;
+                width: 1px;
+                height: 1px;
+                overflow: hidden;
+                clip: rect(0, 0, 0, 0);
+                white-space: nowrap;
+            }
+
+            .viewer-pdf-page-input {
+                width: 3.25rem;
+                min-height: 2.15rem;
+            }
+
+            .viewer-pdf-zoom-label {
+                min-width: 3rem;
             }
 
             .viewer-stage {
                 padding: 1rem;
+            }
+
+            .viewer-stage.pdf-mode {
+                padding: 0;
+            }
+
+            .viewer-pdf-scroll {
+                padding: 0.75rem 0.5rem 1rem;
+            }
+
+            .viewer-pdf-page {
+                box-shadow: 0 8px 28px rgba(35, 26, 20, 0.2);
             }
 
             .viewer-image-viewport,
@@ -315,18 +429,24 @@
                 <button id="viewerResetButton" class="btn btn-outline" type="button" disabled data-i18n="viewer.reset_view">复原视图</button>
             </div>
             <div id="viewerPdfControls" class="viewer-pdf-controls" hidden>
-                <button id="viewerPdfPrevButton" class="btn btn-outline" type="button" data-i18n="viewer.pdf_prev">上一页</button>
-                <label class="viewer-pdf-page-control">
-                    <span data-i18n="viewer.pdf_page_label">页码</span>
-                    <input id="viewerPdfPageInput" class="viewer-pdf-page-input" type="number" min="1" value="1">
-                    <span id="viewerPdfPageTotal">/ 1</span>
-                </label>
-                <button id="viewerPdfNextButton" class="btn btn-outline" type="button" data-i18n="viewer.pdf_next">下一页</button>
-                <button id="viewerPdfZoomOutButton" class="btn btn-outline" type="button" data-i18n="viewer.pdf_zoom_out">缩小</button>
-                <span id="viewerPdfZoomLabel" class="viewer-pdf-zoom-label">100%</span>
-                <button id="viewerPdfZoomInButton" class="btn btn-outline" type="button" data-i18n="viewer.pdf_zoom_in">放大</button>
-                <button id="viewerPdfFitButton" class="btn btn-outline" type="button" data-i18n="viewer.pdf_fit_width">适合宽度</button>
-                <a id="viewerPdfDetailLink" class="btn btn-outline" href="/library" data-i18n="viewer.pdf_detail" hidden>详情页</a>
+                <div class="viewer-pdf-control-group">
+                    <button id="viewerPdfPrevButton" class="btn btn-outline" type="button" data-i18n="viewer.pdf_prev">上一页</button>
+                    <label class="viewer-pdf-page-control">
+                        <span data-i18n="viewer.pdf_page_label">页码</span>
+                        <input id="viewerPdfPageInput" class="viewer-pdf-page-input" type="number" min="1" value="1">
+                        <span id="viewerPdfPageTotal">/ 1</span>
+                    </label>
+                    <button id="viewerPdfNextButton" class="btn btn-outline" type="button" data-i18n="viewer.pdf_next">下一页</button>
+                </div>
+                <div class="viewer-pdf-control-group">
+                    <button id="viewerPdfZoomOutButton" class="btn btn-outline" type="button" data-i18n="viewer.pdf_zoom_out">缩小</button>
+                    <span id="viewerPdfZoomLabel" class="viewer-pdf-zoom-label">100%</span>
+                    <button id="viewerPdfZoomInButton" class="btn btn-outline" type="button" data-i18n="viewer.pdf_zoom_in">放大</button>
+                    <button id="viewerPdfFitButton" class="btn btn-outline" type="button" data-i18n="viewer.pdf_fit_width">适合宽度</button>
+                </div>
+                <div class="viewer-pdf-control-group">
+                    <a id="viewerPdfDetailLink" class="btn btn-outline" href="/library" data-i18n="viewer.pdf_detail" hidden>详情页</a>
+                </div>
             </div>
         </header>
         <main id="viewerStage" class="viewer-stage" aria-live="polite"></main>

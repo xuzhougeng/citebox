@@ -47,14 +47,20 @@ const ResourceViewerPage = {
             if (!viewport) return;
             this.beginImageDrag(event, viewport);
         });
+        this.stage?.addEventListener('pointerdown', (event) => {
+            this.beginPDFSelectionDrag(event);
+        });
         document.addEventListener('pointermove', (event) => {
             this.updateImageDrag(event);
+            this.updatePDFSelectionDrag(event);
         });
         document.addEventListener('pointerup', (event) => {
             this.endImageDrag(event);
+            this.endPDFSelectionDrag(event);
         });
         document.addEventListener('pointercancel', (event) => {
             this.endImageDrag(event);
+            this.cancelPDFSelectionDrag(event);
         });
         window.addEventListener('resize', () => {
             this.applyImageTransform();
@@ -163,17 +169,8 @@ const ResourceViewerPage = {
             }
         });
 
-        document.addEventListener('selectionchange', () => {
-            window.setTimeout(() => this.syncPDFSelectionMenu(), 0);
-        });
-        document.addEventListener('pointerup', () => {
-            window.setTimeout(() => this.syncPDFSelectionMenu(), 0);
-        });
-        document.addEventListener('keyup', () => {
-            window.setTimeout(() => this.syncPDFSelectionMenu(), 0);
-        });
         document.addEventListener('scroll', () => {
-            this.hidePDFSelectionMenu();
+            this.clearPDFSelection();
         }, true);
     },
 
@@ -197,7 +194,10 @@ const ResourceViewerPage = {
             fitMode: true,
             renderToken: 0,
             renderTask: null,
-            textLayer: null
+            textLayer: null,
+            selectionDrag: null,
+            selectionText: '',
+            selectionClientRect: null
         };
     },
 
@@ -239,13 +239,15 @@ const ResourceViewerPage = {
             pdfjsLib: this.pdfState.pdfjsLib,
             resource,
             pageNumber: this.initialPDFPageNumber(),
-            fitMode: true
+            scale: this.isNarrowPDFViewport() ? 0.9 : 1,
+            fitMode: !this.isNarrowPDFViewport()
         };
         this.stage.className = 'viewer-stage pdf-mode';
         this.stage.innerHTML = `
             <div class="viewer-pdf-scroll" data-pdf-scroll>
                 <div class="viewer-pdf-page" data-pdf-page>
                     <canvas class="viewer-pdf-canvas" data-pdf-canvas></canvas>
+                    <div class="viewer-pdf-selection-layer" data-pdf-selection-layer></div>
                     <div class="viewer-pdf-text-layer" data-pdf-text-layer></div>
                     <div class="viewer-pdf-loading" data-pdf-loading>${t('viewer.pdf_loading', '正在加载 PDF...')}</div>
                 </div>
@@ -300,11 +302,13 @@ const ResourceViewerPage = {
         const loadingElement = this.stage.querySelector('[data-pdf-loading]');
         if (!pageElement || !canvas || !textLayerElement) return;
 
+        this.clearPDFSelection();
         if (loadingElement) {
             loadingElement.hidden = false;
             loadingElement.textContent = t('viewer.pdf_rendering_page', '正在渲染第 {page} 页...').replace('{page}', pageNumber);
         }
         textLayerElement.innerHTML = '';
+        this.pdfState.textLayer = null;
 
         try {
             const page = await pdfDocument.getPage(pageNumber);
@@ -328,6 +332,8 @@ const ResourceViewerPage = {
             textLayerElement.style.setProperty('--total-scale-factor', scale);
             textLayerElement.style.width = `${viewport.width}px`;
             textLayerElement.style.height = `${viewport.height}px`;
+            textLayerElement.style.left = '0';
+            textLayerElement.style.top = '0';
 
             const renderTask = page.render({
                 canvasContext: context,
@@ -372,6 +378,10 @@ const ResourceViewerPage = {
         const viewport = page.getViewport({ scale: 1 });
         const availableWidth = Math.max(320, (scroll?.clientWidth || window.innerWidth || 960) - 48);
         return this.clampPDFScale(availableWidth / Math.max(1, viewport.width));
+    },
+
+    isNarrowPDFViewport() {
+        return (window.innerWidth || 0) <= 720;
     },
 
     clampPDFScale(scale) {
@@ -465,48 +475,261 @@ const ResourceViewerPage = {
     },
 
     currentPDFSelectionText() {
-        const selection = window.getSelection?.();
-        if (!selection || selection.rangeCount < 1) return '';
-        if (!this.selectionBelongsToPDF(selection)) return '';
-        return String(selection.toString() || '').trim();
+        return String(this.pdfState.selectionText || '').trim();
     },
 
-    selectionBelongsToPDF(selection) {
-        const textLayer = this.stage?.querySelector('[data-pdf-text-layer]');
-        if (!textLayer) return false;
-        return this.nodeBelongsToElement(selection.anchorNode, textLayer)
-            || this.nodeBelongsToElement(selection.focusNode, textLayer);
+    beginPDFSelectionDrag(event) {
+        if (event.button !== 0 || !this.pdfState?.pdfDocument) return;
+        const textLayer = event.target.closest?.('[data-pdf-text-layer]');
+        if (!textLayer || !this.stage?.contains(textLayer)) return;
+
+        event.preventDefault();
+        event.stopPropagation();
+        window.getSelection?.().removeAllRanges();
+        this.hidePDFSelectionMenu();
+        this.clearPDFSelection({ keepDrag: true });
+
+        this.pdfState.selectionDrag = {
+            pointerId: event.pointerId,
+            startX: event.clientX,
+            startY: event.clientY,
+            currentX: event.clientX,
+            currentY: event.clientY,
+            textLayer,
+            active: true
+        };
+        try {
+            textLayer.setPointerCapture(event.pointerId);
+        } catch (error) {
+            // Pointer capture can fail when the pointer already left the layer.
+        }
     },
 
-    nodeBelongsToElement(node, element) {
-        if (!node || !element) return false;
-        const candidate = node instanceof Element ? node : node.parentElement;
-        return Boolean(candidate && element.contains(candidate));
+    updatePDFSelectionDrag(event) {
+        const drag = this.pdfState?.selectionDrag;
+        if (!drag?.active) return;
+        drag.currentX = event.clientX;
+        drag.currentY = event.clientY;
+        if (event.cancelable) {
+            event.preventDefault();
+        }
+        this.updatePDFSelectionFromDrag();
     },
 
-    syncPDFSelectionMenu() {
-        const text = this.currentPDFSelectionText();
-        if (!text) {
-            this.hidePDFSelectionMenu();
+    endPDFSelectionDrag(event) {
+        const drag = this.pdfState?.selectionDrag;
+        if (!drag?.active) return;
+        drag.currentX = event.clientX;
+        drag.currentY = event.clientY;
+        drag.active = false;
+        this.updatePDFSelectionFromDrag();
+
+        const moved = Math.hypot(drag.currentX - drag.startX, drag.currentY - drag.startY);
+        if (moved < 4 || !this.pdfState.selectionText || !this.pdfState.selectionClientRect) {
+            this.clearPDFSelection();
             return;
         }
-
-        const rect = this.currentPDFSelectionRect();
-        if (!rect) {
-            this.hidePDFSelectionMenu();
-            return;
-        }
-        this.showPDFSelectionMenu(rect);
+        this.showPDFSelectionMenu(this.pdfState.selectionClientRect);
+        this.pdfState.selectionDrag = null;
     },
 
-    currentPDFSelectionRect() {
-        const selection = window.getSelection?.();
-        if (!selection || selection.rangeCount < 1) return null;
-        const range = selection.getRangeAt(0);
-        const rect = range.getBoundingClientRect();
-        if (rect.width || rect.height) return rect;
-        const firstRect = Array.from(range.getClientRects())[0];
-        return firstRect || null;
+    cancelPDFSelectionDrag(event) {
+        const drag = this.pdfState?.selectionDrag;
+        if (!drag?.active || drag.pointerId !== event.pointerId) return;
+        this.clearPDFSelection();
+    },
+
+    updatePDFSelectionFromDrag() {
+        const drag = this.pdfState?.selectionDrag;
+        if (!drag?.textLayer) return;
+        const clientRect = this.normalizedClientRect(drag.startX, drag.startY, drag.currentX, drag.currentY);
+        if (clientRect.width < 4 || clientRect.height < 4) {
+            this.renderPDFSelectionRects([]);
+            this.pdfState.selectionText = '';
+            this.pdfState.selectionClientRect = null;
+            return;
+        }
+        const selection = this.collectPDFSelectionFromClientRect(clientRect, drag.textLayer, drag);
+        this.pdfState.selectionText = selection.text;
+        this.pdfState.selectionClientRect = selection.clientRect;
+        this.renderPDFSelectionRects(selection.rects);
+    },
+
+    normalizedClientRect(startX, startY, endX, endY) {
+        const left = Math.min(startX, endX);
+        const top = Math.min(startY, endY);
+        const right = Math.max(startX, endX);
+        const bottom = Math.max(startY, endY);
+        return {
+            left,
+            top,
+            right,
+            bottom,
+            width: right - left,
+            height: bottom - top
+        };
+    },
+
+    collectPDFSelectionFromClientRect(clientRect, textLayer, drag = null) {
+        const pageElement = textLayer.closest('[data-pdf-page]');
+        const pageRect = pageElement?.getBoundingClientRect();
+        if (!pageRect) return { text: '', rects: [], clientRect: null };
+
+        let hits = Array.from(textLayer.querySelectorAll('span'))
+            .map((span) => {
+                const text = String(span.textContent || '');
+                const rect = span.getBoundingClientRect();
+                return { span, text, rect };
+            })
+            .filter((item) => item.text.trim()
+                && item.rect.width > 1
+                && item.rect.height > 1
+                && this.rectsIntersect(clientRect, item.rect))
+            .sort((a, b) => {
+                const verticalTolerance = Math.max(4, Math.min(a.rect.height, b.rect.height) * 0.55);
+                if (Math.abs(a.rect.top - b.rect.top) <= verticalTolerance) {
+                    return a.rect.left - b.rect.left;
+                }
+                return a.rect.top - b.rect.top;
+            });
+
+        hits = this.filterPDFHitsByDragColumn(hits, drag, pageRect);
+        if (!hits.length) return { text: '', rects: [], clientRect: null };
+
+        const lines = [];
+        hits.forEach((item) => {
+            const lastLine = lines[lines.length - 1];
+            const tolerance = Math.max(5, item.rect.height * 0.65);
+            if (!lastLine || Math.abs(item.rect.top - lastLine.top) > tolerance) {
+                lines.push({ top: item.rect.top, items: [item] });
+                return;
+            }
+            lastLine.items.push(item);
+            lastLine.top = Math.min(lastLine.top, item.rect.top);
+        });
+
+        const text = lines.map((line) => {
+            const items = line.items.sort((a, b) => a.rect.left - b.rect.left);
+            let lastRight = null;
+            let lineText = '';
+            items.forEach((item) => {
+                const gap = lastRight === null ? 0 : item.rect.left - lastRight;
+                if (gap > Math.max(1.2, item.rect.height * 0.08) && lineText && !lineText.endsWith(' ')) {
+                    lineText += ' ';
+                }
+                lineText += item.text;
+                lastRight = item.rect.right;
+            });
+            return lineText.replace(/\s+/g, ' ').trim();
+        }).filter(Boolean).join('\n').trim();
+
+        const rects = hits.map((item) => {
+            const left = item.rect.left;
+            const top = item.rect.top;
+            const right = item.rect.right;
+            const bottom = item.rect.bottom;
+            const clippedLeft = Math.max(left, clientRect.left);
+            const clippedRight = Math.min(right, clientRect.right);
+            return {
+                left: clippedLeft - pageRect.left,
+                top: top - pageRect.top,
+                width: Math.max(0, clippedRight - clippedLeft),
+                height: bottom - top
+            };
+        }).filter((rect) => rect.width > 0 && rect.height > 0);
+
+        const left = Math.min(...hits.map((item) => item.rect.left));
+        const top = Math.min(...hits.map((item) => item.rect.top));
+        const right = Math.max(...hits.map((item) => item.rect.right));
+        const bottom = Math.max(...hits.map((item) => item.rect.bottom));
+        return {
+            text,
+            rects,
+            clientRect: {
+                left,
+                top,
+                right,
+                bottom,
+                width: right - left,
+                height: bottom - top
+            }
+        };
+    },
+
+    filterPDFHitsByDragColumn(hits, drag, pageRect) {
+        if (!drag || hits.length < 2) return hits;
+
+        const dragHeight = Math.abs(drag.currentY - drag.startY);
+        const medianHeight = this.medianNumber(hits.map((item) => item.rect.height).filter((height) => height > 0));
+        if (dragHeight < Math.max(24, medianHeight * 2.2)) {
+            return hits;
+        }
+
+        const gapThreshold = Math.max(44, Math.min(120, pageRect.width * 0.075));
+        const sortedByLeft = [...hits].sort((a, b) => a.rect.left - b.rect.left);
+        const clusters = [];
+        sortedByLeft.forEach((item) => {
+            const last = clusters[clusters.length - 1];
+            if (!last || item.rect.left - last.right > gapThreshold) {
+                clusters.push({
+                    left: item.rect.left,
+                    right: item.rect.right,
+                    items: [item]
+                });
+                return;
+            }
+            last.right = Math.max(last.right, item.rect.right);
+            last.items.push(item);
+        });
+
+        const meaningfulClusters = clusters.filter((cluster) => cluster.items.length >= 2);
+        if (meaningfulClusters.length <= 1) {
+            return hits;
+        }
+
+        const startX = drag.startX;
+        const containingStart = meaningfulClusters.find((cluster) => (
+            startX >= cluster.left - gapThreshold * 0.5 && startX <= cluster.right + gapThreshold * 0.5
+        ));
+        if (containingStart) {
+            return containingStart.items;
+        }
+
+        const nearest = meaningfulClusters
+            .map((cluster) => ({
+                cluster,
+                distance: Math.min(Math.abs(startX - cluster.left), Math.abs(startX - cluster.right))
+            }))
+            .sort((a, b) => a.distance - b.distance)[0]?.cluster;
+        return nearest?.items || hits;
+    },
+
+    medianNumber(values) {
+        if (!values.length) return 0;
+        const sorted = [...values].sort((a, b) => a - b);
+        const middle = Math.floor(sorted.length / 2);
+        return sorted.length % 2 === 0
+            ? (sorted[middle - 1] + sorted[middle]) / 2
+            : sorted[middle];
+    },
+
+    rectsIntersect(a, b) {
+        return a.left <= b.right && a.right >= b.left && a.top <= b.bottom && a.bottom >= b.top;
+    },
+
+    renderPDFSelectionRects(rects) {
+        const layer = this.stage?.querySelector('[data-pdf-selection-layer]');
+        if (!layer) return;
+        layer.innerHTML = '';
+        rects.forEach((rect) => {
+            const element = document.createElement('div');
+            element.className = 'viewer-pdf-selection-rect';
+            element.style.left = `${Math.max(0, rect.left)}px`;
+            element.style.top = `${Math.max(0, rect.top)}px`;
+            element.style.width = `${Math.max(0, rect.width)}px`;
+            element.style.height = `${Math.max(0, rect.height)}px`;
+            layer.appendChild(element);
+        });
     },
 
     showPDFSelectionMenu(rect) {
@@ -530,10 +753,20 @@ const ResourceViewerPage = {
         this.selectionMenu.classList.add('hidden');
     },
 
+    clearPDFSelection(options = {}) {
+        this.hidePDFSelectionMenu();
+        this.renderPDFSelectionRects([]);
+        if (!options.keepDrag) {
+            this.pdfState.selectionDrag = null;
+        }
+        this.pdfState.selectionText = '';
+        this.pdfState.selectionClientRect = null;
+        window.getSelection?.().removeAllRanges();
+    },
+
     async copyPDFSelection() {
         const text = this.currentPDFSelectionText();
-        this.hidePDFSelectionMenu();
-        window.getSelection?.().removeAllRanges();
+        this.clearPDFSelection();
         if (!text) {
             return;
         }
@@ -551,8 +784,7 @@ const ResourceViewerPage = {
 
     async translatePDFSelection() {
         const text = this.currentPDFSelectionText();
-        this.hidePDFSelectionMenu();
-        window.getSelection?.().removeAllRanges();
+        this.clearPDFSelection();
         if (!text) {
             return;
         }
