@@ -105,9 +105,51 @@ test('PDF text line grouping keeps wide intra-line spaces but splits columns', (
     ].map((item) => ({
         text: item.textContent,
         rect: item.getBoundingClientRect(),
-    })));
+    })), rect(0, 0, 1500, 2000));
 
     assert.equal(segments.length, 2);
     assert.deepEqual(Array.from(segments, (item) => Math.round(item.left)), [189, 811]);
     assert.deepEqual(Array.from(segments, (item) => Math.round(item.right)), [668, 1128]);
+});
+
+test('PDF drag selection keeps justified right-column lines intact', () => {
+    const viewer = loadViewerPage();
+    const pageRect = rect(0, 0, 1500, 2000);
+    const textLayer = {
+        closest() {
+            return { getBoundingClientRect: () => pageRect };
+        },
+        querySelectorAll() {
+            return [
+                span('Among the genomic alterations', rect(811, 100, 1040, 126)),
+                span('observed in ER+ breast cancer,', rect(1320, 100, 1460, 126)),
+                span('mutations are often found in genes encoding the subunits of the', rect(811, 140, 1460, 166)),
+                span('SWI/SNF chromatin remodeling complexes, with', rect(811, 180, 1000, 206)),
+                span('ARID1A being', rect(1285, 180, 1460, 206)),
+                span('the most frequently mutated SWI/SNF subunit gene', rect(811, 220, 1220, 246)),
+                span('Left column text should stay out', rect(120, 140, 650, 166)),
+            ];
+        },
+    };
+    const drag = {
+        startX: 812,
+        startY: 112,
+        currentX: 1225,
+        currentY: 232,
+    };
+    const selection = viewer.collectPDFSelectionFromClientRect(
+        viewer.normalizedClientRect(drag.startX, drag.startY, drag.currentX, drag.currentY),
+        textLayer,
+        drag
+    );
+
+    assert.equal(selection.text, [
+        'Among the genomic alterations observed in ER+ breast cancer,',
+        'mutations are often found in genes encoding the subunits of the',
+        'SWI/SNF chromatin remodeling complexes, with ARID1A being',
+        'the most frequently mutated SWI/SNF subunit gene',
+    ].join('\n'));
+    assert.equal(selection.rects.length, 4);
+    assert.deepEqual(Array.from(selection.rects, (item) => Math.round(item.left)), [812, 811, 811, 811]);
+    assert.deepEqual(Array.from(selection.rects, (item) => Math.round(item.width)), [648, 649, 649, 409]);
 });

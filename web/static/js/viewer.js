@@ -602,7 +602,7 @@ const ResourceViewerPage = {
     },
 
     collectPDFSelectionLinesFromDrag(items, pageRect, drag) {
-        const lines = this.buildPDFTextLineSegments(items);
+        const lines = this.buildPDFTextLineSegments(items, pageRect);
         if (!lines.length) return [];
 
         const anchorLine = this.findPDFLineAtPoint(lines, drag.startX, drag.startY);
@@ -665,7 +665,7 @@ const ResourceViewerPage = {
 
     collectPDFSelectionLinesFromArea(items, pageRect, clientRect) {
         const hits = items.filter((item) => this.rectsIntersect(clientRect, item.rect));
-        return this.buildPDFTextLineSegments(hits).map((line) => {
+        return this.buildPDFTextLineSegments(hits, pageRect).map((line) => {
             const left = Math.max(line.left, clientRect.left, pageRect.left);
             const right = Math.min(line.right, clientRect.right);
             return {
@@ -678,10 +678,13 @@ const ResourceViewerPage = {
         }).filter((line) => line.items.length && line.right > line.left);
     },
 
-    buildPDFTextLineSegments(items) {
+    buildPDFTextLineSegments(items, pageRect = null) {
         const medianHeight = this.medianNumber(items.map((item) => item.rect.height).filter((height) => height > 0)) || 12;
         const rowTolerance = Math.max(4, medianHeight * 0.55);
         const columnGap = Math.max(88, Math.min(180, medianHeight * 5.5));
+        const pageMidX = pageRect
+            ? pageRect.left + pageRect.width / 2
+            : null;
         const rows = [];
 
         [...items].sort((a, b) => {
@@ -715,7 +718,9 @@ const ResourceViewerPage = {
             let current = [];
             sortedItems.forEach((item) => {
                 const previous = current[current.length - 1];
-                if (previous && item.rect.left - previous.rect.right > columnGap) {
+                const crossesPageMid = pageMidX === null
+                    || (previous && previous.rect.right < pageMidX && item.rect.left > pageMidX);
+                if (previous && item.rect.left - previous.rect.right > columnGap && crossesPageMid) {
                     segments.push(this.createPDFTextLineSegment(current));
                     current = [];
                 }
