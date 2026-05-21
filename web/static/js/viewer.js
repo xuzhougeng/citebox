@@ -595,8 +595,14 @@ const ResourceViewerPage = {
     refreshPDFSelectionMenu() {
         if (!this.pdfState?.pdfDocument) return;
         const selection = window.getSelection?.();
-        const text = this.currentPDFSelectionText(selection);
-        if (!text || !this.selectionBelongsToPDFViewer(selection)) {
+        if (!this.selectionBelongsToPDFViewer(selection)) {
+            this.hidePDFSelectionMenu();
+            this.pdfState.selectionText = '';
+            this.pdfState.selectionClientRect = null;
+            return;
+        }
+        const text = String(selection?.toString?.() || '').trim();
+        if (!text) {
             this.hidePDFSelectionMenu();
             this.pdfState.selectionText = '';
             this.pdfState.selectionClientRect = null;
@@ -605,6 +611,8 @@ const ResourceViewerPage = {
         const rect = this.pdfSelectionClientRect(selection);
         if (!rect) {
             this.hidePDFSelectionMenu();
+            this.pdfState.selectionText = '';
+            this.pdfState.selectionClientRect = null;
             return;
         }
         this.pdfState.selectionText = text;
@@ -637,7 +645,7 @@ const ResourceViewerPage = {
         this.hidePDFSelectionMenu();
         this.pdfState.selectionText = '';
         this.pdfState.selectionClientRect = null;
-        window.getSelection?.().removeAllRanges();
+        window.getSelection?.()?.removeAllRanges?.();
     },
 
     async copyPDFSelection() {

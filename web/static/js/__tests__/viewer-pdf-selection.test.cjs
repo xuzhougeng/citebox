@@ -262,6 +262,66 @@ test('refreshPDFSelectionMenu stores native selection text and bounds and shows 
     }
 });
 
+test('refreshPDFSelectionMenu hides and clears state for selections outside the PDF viewer', () => {
+    const scroll = createElement('scroll');
+    const outside = createElement('outside');
+    const selection = {
+        anchorNode: outside,
+        focusNode: outside,
+        rangeCount: 1,
+        toString() {
+            return 'outside page selection';
+        },
+    };
+    const viewer = loadViewerPage(selection);
+    viewer.stage = createElement('stage');
+    viewer.stage.pdfScroll = scroll;
+    viewer.selectionMenu = createElement('menu');
+    viewer.pdfState = {
+        ...viewer.defaultPDFState(),
+        pdfDocument: {},
+        selectionText: 'stored PDF selection',
+        selectionClientRect: rect(10, 20, 50, 40),
+    };
+
+    viewer.refreshPDFSelectionMenu();
+
+    assert.equal(viewer.selectionMenu.classList.contains('hidden'), true);
+    assert.equal(viewer.pdfState.selectionText, '');
+    assert.equal(viewer.pdfState.selectionClientRect, null);
+});
+
+test('refreshPDFSelectionMenu hides and clears state for empty PDF selections', () => {
+    const scroll = createElement('scroll');
+    const textLayer = createElement('textLayer');
+    const textNode = { nodeType: 3, parentElement: textLayer };
+    scroll.appendChild(textLayer);
+    const selection = {
+        anchorNode: textNode,
+        focusNode: textNode,
+        rangeCount: 0,
+        toString() {
+            return '';
+        },
+    };
+    const viewer = loadViewerPage(selection);
+    viewer.stage = createElement('stage');
+    viewer.stage.pdfScroll = scroll;
+    viewer.selectionMenu = createElement('menu');
+    viewer.pdfState = {
+        ...viewer.defaultPDFState(),
+        pdfDocument: {},
+        selectionText: 'stored PDF selection',
+        selectionClientRect: rect(10, 20, 50, 40),
+    };
+
+    viewer.refreshPDFSelectionMenu();
+
+    assert.equal(viewer.selectionMenu.classList.contains('hidden'), true);
+    assert.equal(viewer.pdfState.selectionText, '');
+    assert.equal(viewer.pdfState.selectionClientRect, null);
+});
+
 test('clearPDFSelection removes native browser ranges', () => {
     let removeAllRangesCount = 0;
     const selection = {
@@ -279,6 +339,32 @@ test('clearPDFSelection removes native browser ranges', () => {
     viewer.clearPDFSelection();
 
     assert.equal(removeAllRangesCount, 1);
+    assert.equal(viewer.pdfState.selectionText, '');
+    assert.equal(viewer.pdfState.selectionClientRect, null);
+});
+
+test('clearPDFSelection tolerates selections without removeAllRanges', () => {
+    const viewer = loadViewerPage({});
+    viewer.pdfState = {
+        ...viewer.defaultPDFState(),
+        selectionText: 'selected text',
+        selectionClientRect: rect(10, 20, 50, 40),
+    };
+
+    assert.doesNotThrow(() => viewer.clearPDFSelection());
+    assert.equal(viewer.pdfState.selectionText, '');
+    assert.equal(viewer.pdfState.selectionClientRect, null);
+});
+
+test('clearPDFSelection tolerates null browser selections', () => {
+    const viewer = loadViewerPage(null);
+    viewer.pdfState = {
+        ...viewer.defaultPDFState(),
+        selectionText: 'selected text',
+        selectionClientRect: rect(10, 20, 50, 40),
+    };
+
+    assert.doesNotThrow(() => viewer.clearPDFSelection());
     assert.equal(viewer.pdfState.selectionText, '');
     assert.equal(viewer.pdfState.selectionClientRect, null);
 });
