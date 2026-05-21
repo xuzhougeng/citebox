@@ -110,13 +110,17 @@ const Utils = {
         return true;
     },
 
-    resourceViewerURL(kind, src, back = window.location.href) {
+    resourceViewerURL(kind, src, back = window.location.href, options = {}) {
         const params = new URLSearchParams();
         params.set('kind', String(kind || ''));
         params.set('src', String(src || ''));
         const normalizedBack = String(back || '').trim();
         if (normalizedBack) {
             params.set('back', normalizedBack);
+        }
+        const paperId = Number(options.paperId || options.paper_id || 0);
+        if (paperId > 0) {
+            params.set('paper_id', String(paperId));
         }
         return `/viewer?${params.toString()}`;
     },
@@ -189,7 +193,7 @@ const Utils = {
 
     buildResourceViewerNavigationURL(kind, src, back = window.location.href, options = {}) {
         const resolvedBack = this.buildResourceViewerBackURL(back, options);
-        return this.resourceViewerURL(kind, src, resolvedBack || back);
+        return this.resourceViewerURL(kind, src, resolvedBack || back, options);
     },
 
     openResourceViewer(kind, src, back = window.location.href, options = {}) {
@@ -222,7 +226,8 @@ const Utils = {
             return {
                 kind,
                 src,
-                back: String(url.searchParams.get('back') || window.location.href).trim()
+                back: String(url.searchParams.get('back') || window.location.href).trim(),
+                paperId: Number(url.searchParams.get('paper_id') || 0)
             };
         } catch (error) {
             return null;
@@ -260,7 +265,7 @@ const Utils = {
             }
 
             event.preventDefault();
-            this.openResourceViewer(resource.kind, resource.src, resource.back);
+            this.openResourceViewer(resource.kind, resource.src, resource.back, { paperId: resource.paperId });
         });
     },
 

@@ -50,6 +50,7 @@
     "library.empty_default": "Upload a PDF first, or adjust the current filters.",
 
     "library.meta_click_detail": "Click to view details",
+    "library.meta_click_pdf": "Click to read PDF",
     "library.meta_file": "File",
     "library.meta_group": "Group",
     "library.meta_no_group": "Ungrouped",
@@ -57,6 +58,7 @@
     "library.meta_figures": "Figures",
     "library.meta_updated": "Updated",
     "library.meta_no_tags": "No tags",
+    "library.btn_detail": "Details",
     "library.btn_manual": "Manual Annotate",
     "library.btn_reextract": "Re-extract",
     "library.btn_rename": "Rename",

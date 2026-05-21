@@ -4,6 +4,7 @@
     "manual.page_title": "Manual Figure Extraction",
     "manual.page_subtitle": "When auto-parsing is unavailable, fails, or misses figures, you can select regions directly on PDF pages.",
     "manual.open_pdf": "Open PDF",
+    "manual.detail_page": "Details",
     "manual.fulltext_title": "PDF Full Text Extraction",
     "manual.fulltext_status_empty": "No full text saved yet. Click the button to extract and save for AI Assistant and search.",
     "manual.extract_text_btn": "Extract & Save Full Text",

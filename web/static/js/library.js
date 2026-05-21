@@ -166,6 +166,9 @@ const LibraryPage = {
             if (!card) return;
 
             const paperId = Number(card.dataset.paperId);
+            if (action.dataset.action === 'open-pdf') {
+                this.openPaperPDF(paperId);
+            }
             if (action.dataset.action === 'open') {
                 await this.openPaperModal(paperId);
             }
@@ -374,7 +377,7 @@ const LibraryPage = {
                             </div>
                         </div>
                         <div class="paper-list-meta">
-                            <span class="paper-list-meta-item paper-list-meta-file" data-action="open" role="button" title="${t('library.meta_click_detail', '点击查看详情')}">
+                            <span class="paper-list-meta-item paper-list-meta-file" data-action="open-pdf" role="button" title="${t('library.meta_click_pdf', '点击阅读 PDF')}">
                                 <span class="paper-list-meta-label">${t('library.meta_file', '文件')}</span>
                                 <span class="paper-list-meta-value">${Utils.escapeHTML(paper.original_filename)}</span>
                             </span>
@@ -403,6 +406,7 @@ const LibraryPage = {
                     <div class="paper-list-footer">
                         <div class="paper-list-tags">${tags || `<span class="muted">${t('library.meta_no_tags', '无标签')}</span>`}</div>
                         <div class="paper-list-footer-actions">
+                            <button class="btn btn-outline" type="button" data-action="open">${t('library.btn_detail', '详情页')}</button>
                             <a class="btn btn-outline" href="/manual?paper_id=${paper.id}">${t('library.btn_manual', '手动标注')}</a>
                             ${(paper.extraction_status === 'failed' || paper.extraction_status === 'cancelled') ? `<button class="btn btn-outline" type="button" data-action="reextract">${t('library.btn_reextract', '重新解析')}</button>` : ''}
                         </div>
@@ -592,6 +596,15 @@ const LibraryPage = {
         await PaperViewer.open(id, async () => {
             await Promise.all([this.loadGroups(), this.loadTags(), this.loadPapers()]);
         });
+    },
+
+    openPaperPDF(id) {
+        const paper = (this.state.papers || []).find((item) => Number(item.id) === Number(id));
+        if (!paper?.pdf_url) {
+            Utils.showToast(t('shared.paper.no_pdf_url', '当前文献缺少 PDF 文件地址'), 'error');
+            return;
+        }
+        window.location.href = Utils.resourceViewerURL('pdf', paper.pdf_url, window.location.href, { paperId: id });
     },
 
     async deletePaper(id) {

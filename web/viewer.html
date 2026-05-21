@@ -64,6 +64,47 @@
             flex-wrap: wrap;
         }
 
+        .viewer-toolbar-actions[hidden],
+        .viewer-pdf-controls[hidden],
+        .viewer-pdf-loading[hidden],
+        .viewer-selection-menu[hidden] {
+            display: none !important;
+        }
+
+        .viewer-pdf-controls {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 0.55rem;
+            flex-wrap: wrap;
+        }
+
+        .viewer-pdf-page-control {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            color: rgba(255, 250, 244, 0.72);
+            font-size: 0.88rem;
+        }
+
+        .viewer-pdf-page-input {
+            width: 4.5rem;
+            padding: 0.55rem 0.65rem;
+            border: 1px solid rgba(255, 250, 244, 0.18);
+            border-radius: 12px;
+            background: rgba(255, 250, 244, 0.08);
+            color: #fffaf4;
+            font: inherit;
+            text-align: center;
+        }
+
+        .viewer-pdf-zoom-label {
+            min-width: 4rem;
+            color: rgba(255, 250, 244, 0.72);
+            font-size: 0.88rem;
+            text-align: center;
+        }
+
         .viewer-image-hint {
             color: rgba(255, 250, 244, 0.68);
             font-size: 0.82rem;
@@ -80,6 +121,99 @@
 
         .viewer-stage.image-mode {
             cursor: default;
+        }
+
+        .viewer-stage.pdf-mode {
+            align-items: stretch;
+            justify-content: center;
+            padding: 0;
+            overflow: hidden;
+        }
+
+        .viewer-pdf-scroll {
+            width: 100%;
+            height: calc(100vh - 5.25rem);
+            overflow: auto;
+            padding: 1.5rem;
+            text-align: center;
+        }
+
+        .viewer-pdf-page {
+            position: relative;
+            display: inline-block;
+            line-height: 0;
+            background: #fff;
+            box-shadow: 0 36px 96px rgba(0, 0, 0, 0.32);
+        }
+
+        .viewer-pdf-canvas {
+            display: block;
+            background: #fff;
+        }
+
+        .viewer-pdf-text-layer {
+            position: absolute;
+            inset: 0;
+            overflow: hidden;
+            line-height: 1;
+            text-align: left;
+            transform-origin: 0 0;
+            z-index: 2;
+        }
+
+        .viewer-pdf-text-layer span {
+            position: absolute;
+            color: transparent;
+            white-space: pre;
+            cursor: text;
+            transform-origin: 0 0;
+        }
+
+        .viewer-pdf-text-layer br {
+            user-select: none;
+        }
+
+        .viewer-pdf-text-layer ::selection {
+            background: rgba(72, 126, 186, 0.34);
+        }
+
+        .viewer-pdf-loading {
+            position: absolute;
+            inset: 0;
+            z-index: 3;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255, 255, 255, 0.86);
+            color: #3d332d;
+            font-size: 0.95rem;
+            line-height: 1.5;
+        }
+
+        .viewer-selection-menu {
+            position: fixed;
+            z-index: 1200;
+            display: flex;
+            gap: 0.35rem;
+            padding: 0.35rem;
+            border-radius: 12px;
+            background: rgba(23, 18, 15, 0.94);
+            border: 1px solid rgba(255, 250, 244, 0.14);
+            box-shadow: 0 18px 46px rgba(0, 0, 0, 0.26);
+        }
+
+        .viewer-selection-menu button {
+            border: none;
+            border-radius: 9px;
+            padding: 0.45rem 0.7rem;
+            background: transparent;
+            color: #fffaf4;
+            font: inherit;
+            cursor: pointer;
+        }
+
+        .viewer-selection-menu button:hover {
+            background: rgba(255, 250, 244, 0.12);
         }
 
         .viewer-image-viewport {
@@ -180,12 +314,33 @@
                 <span id="viewerImageHint" class="viewer-image-hint" data-i18n="viewer.image_hint">滚轮缩放，按住左键或中键拖动</span>
                 <button id="viewerResetButton" class="btn btn-outline" type="button" disabled data-i18n="viewer.reset_view">复原视图</button>
             </div>
+            <div id="viewerPdfControls" class="viewer-pdf-controls" hidden>
+                <button id="viewerPdfPrevButton" class="btn btn-outline" type="button" data-i18n="viewer.pdf_prev">上一页</button>
+                <label class="viewer-pdf-page-control">
+                    <span data-i18n="viewer.pdf_page_label">页码</span>
+                    <input id="viewerPdfPageInput" class="viewer-pdf-page-input" type="number" min="1" value="1">
+                    <span id="viewerPdfPageTotal">/ 1</span>
+                </label>
+                <button id="viewerPdfNextButton" class="btn btn-outline" type="button" data-i18n="viewer.pdf_next">下一页</button>
+                <button id="viewerPdfZoomOutButton" class="btn btn-outline" type="button" data-i18n="viewer.pdf_zoom_out">缩小</button>
+                <span id="viewerPdfZoomLabel" class="viewer-pdf-zoom-label">100%</span>
+                <button id="viewerPdfZoomInButton" class="btn btn-outline" type="button" data-i18n="viewer.pdf_zoom_in">放大</button>
+                <button id="viewerPdfFitButton" class="btn btn-outline" type="button" data-i18n="viewer.pdf_fit_width">适合宽度</button>
+                <a id="viewerPdfDetailLink" class="btn btn-outline" href="/library" data-i18n="viewer.pdf_detail" hidden>详情页</a>
+            </div>
         </header>
         <main id="viewerStage" class="viewer-stage" aria-live="polite"></main>
     </div>
+    <div id="viewerSelectionMenu" class="viewer-selection-menu hidden">
+        <button type="button" data-pdf-selection-action="copy" data-i18n="viewer.pdf_copy_selection">复制</button>
+        <button type="button" data-pdf-selection-action="translate" data-i18n="viewer.pdf_translate_selection">翻译</button>
+    </div>
 
-    <script src="/static/js/viewer.js"></script>
     <script src="/static/js/theme.js"></script>
     <script src="/static/js/i18n.js"></script>
+    <script src="/static/js/utils.js"></script>
+    <script src="/static/js/api.js"></script>
+    <script src="/static/js/translate.js"></script>
+    <script src="/static/js/viewer.js"></script>
 </body>
 </html>

@@ -4,6 +4,7 @@
     "manual.page_title": "上传后人工框选提取图片",
     "manual.page_subtitle": "当自动解析不可用、解析失败或仍有遗漏时，可以直接在 PDF 页面上框选需要的图片区域。",
     "manual.open_pdf": "打开原 PDF",
+    "manual.detail_page": "详情页",
     "manual.fulltext_title": "PDF 全文提取",
     "manual.fulltext_status_empty": "当前还没有保存全文。点击右侧按钮即可提取并保存，供 AI 助手和检索使用。",
     "manual.extract_text_btn": "提取全文并保存",

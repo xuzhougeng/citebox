@@ -50,6 +50,7 @@
     "library.empty_default": "先上传 PDF，或者调整当前的筛选条件。",
 
     "library.meta_click_detail": "点击查看详情",
+    "library.meta_click_pdf": "点击阅读 PDF",
     "library.meta_file": "文件",
     "library.meta_group": "分组",
     "library.meta_no_group": "未分组",
@@ -57,6 +58,7 @@
     "library.meta_figures": "图片",
     "library.meta_updated": "更新",
     "library.meta_no_tags": "无标签",
+    "library.btn_detail": "详情页",
     "library.btn_manual": "手动标注",
     "library.btn_reextract": "重新解析",
     "library.btn_rename": "改名",

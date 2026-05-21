@@ -43,6 +43,7 @@ const ManualPage = {
         this.pageSubtitle = document.getElementById('manualPageSubtitle');
         this.summaryStrip = document.getElementById('manualSummaryStrip');
         this.openPDFLink = document.getElementById('manualOpenPDFLink');
+        this.detailLink = document.getElementById('manualDetailLink');
         this.backLibraryLink = document.getElementById('manualBackLibraryLink');
         this.previewFrame = document.getElementById('manualPreviewFrame');
         this.previewCanvas = document.getElementById('manualPreviewCanvas');
@@ -211,7 +212,10 @@ const ManualPage = {
                 : paper.extractor_message)
             : t('manual.msg_default_subtitle', '在页面上框选图片区域，提交后会追加到当前文献。');
 
-        this.openPDFLink.href = paper.pdf_url ? Utils.resourceViewerURL('pdf', paper.pdf_url) : '/';
+        this.openPDFLink.href = paper.pdf_url ? Utils.resourceViewerURL('pdf', paper.pdf_url, window.location.href, { paperId: paper.id }) : '/';
+        if (this.detailLink) {
+            this.detailLink.href = `/library?paper_id=${encodeURIComponent(paper.id)}`;
+        }
         this.backLibraryLink.href = `/library?paper_id=${encodeURIComponent(paper.id)}`;
         this.pageIndicator.textContent = this.state.pageCount
             ? t('manual.page_indicator', '第 {current} / {total} 页').replace('{current}', this.state.currentPage).replace('{total}', this.state.pageCount)
