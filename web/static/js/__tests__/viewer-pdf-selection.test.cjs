@@ -39,6 +39,7 @@ function createElement(name) {
 
 function loadViewerPage(selection, options = {}) {
     const code = `${fs.readFileSync(modulePath, 'utf8')}\nglobalThis.__RESOURCE_VIEWER_PAGE__ = ResourceViewerPage;`;
+    const translateDialog = options.translateDialog || null;
     const context = {
         console,
         Map: options.Map || Map,
@@ -67,6 +68,12 @@ function loadViewerPage(selection, options = {}) {
             addEventListener() {},
             createElement(tagName) {
                 return createElement(tagName);
+            },
+            querySelector(selector) {
+                if (selector === '.translate-dialog-overlay:not(.hidden)') {
+                    return translateDialog;
+                }
+                return null;
             },
             head: createElement('head'),
         },
@@ -189,6 +196,27 @@ test('Escape clears an open PDF selection menu before closing the viewer', () =>
     viewer.handleEscapeKey(event);
 
     assert.equal(cleared, true);
+    assert.equal(closed, false);
+});
+
+test('Escape does not close the PDF reader while translation dialog is open', () => {
+    const translateDialog = createElement('translateDialog');
+    const { viewer } = loadViewerPage(null, { translateDialog });
+    let closed = false;
+    const event = {
+        key: 'Escape',
+        preventDefault() {},
+        stopPropagation() {},
+        stopImmediatePropagation() {},
+    };
+    viewer.selectionMenu = createElement('menu');
+    viewer.selectionMenu.classList.add('hidden');
+    viewer.close = () => {
+        closed = true;
+    };
+
+    viewer.handleEscapeKey(event);
+
     assert.equal(closed, false);
 });
 

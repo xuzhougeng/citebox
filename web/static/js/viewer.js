@@ -84,7 +84,14 @@ const ResourceViewerPage = {
             this.clearPDFSelection();
             return;
         }
+        if (this.hasOpenTranslateDialog()) {
+            return;
+        }
         this.close({ deferNavigation: true });
+    },
+
+    hasOpenTranslateDialog() {
+        return Boolean(document.querySelector?.('.translate-dialog-overlay:not(.hidden)'));
     },
 
     async render() {

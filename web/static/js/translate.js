@@ -216,6 +216,7 @@ const DesktopTranslate = {
 
         const overlay = document.createElement('div');
         overlay.className = 'dialog-overlay translate-dialog-overlay';
+        overlay.setAttribute('tabindex', '-1');
         overlay.innerHTML = `
             <div class="dialog-box translate-dialog-box">
                 <div class="dialog-header translate-dialog-header">
@@ -254,8 +255,17 @@ const DesktopTranslate = {
             }
         });
 
+        overlay.addEventListener('keydown', (event) => {
+            if (event.key !== 'Escape') return;
+            event.preventDefault();
+            event.stopPropagation();
+            event.stopImmediatePropagation?.();
+            this.closeResultDialog();
+        });
+
         document.body.appendChild(overlay);
         this.resultDialog = overlay;
+        overlay.focus?.({ preventScroll: true });
     },
 
     renderSubtitle(state = {}) {
