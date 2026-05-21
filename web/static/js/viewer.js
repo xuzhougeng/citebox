@@ -519,13 +519,6 @@ const ResourceViewerPage = {
             width: right - left,
             height: bottom - top
         };
-        const rectPrototype = Object.getPrototypeOf(rects[0]);
-        const objectPrototype = Object.getPrototypeOf({});
-        if (rectPrototype
-            && rectPrototype !== objectPrototype
-            && rectPrototype.constructor?.name === 'Object') {
-            Object.setPrototypeOf(result, rectPrototype);
-        }
         return result;
     },
 

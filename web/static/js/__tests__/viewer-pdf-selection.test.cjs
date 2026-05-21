@@ -153,6 +153,9 @@ test('pdfSelectionClientRect unions visible native selection rects', () => {
         toString() { return 'two selected lines'; },
     };
     const viewer = loadViewerPage(selection);
+    const actual = viewer.pdfSelectionClientRect(selection);
 
-    assert.deepEqual(viewer.pdfSelectionClientRect(selection), rect(38, 80, 220, 136));
+    for (const [field, value] of Object.entries(rect(38, 80, 220, 136))) {
+        assert.equal(actual[field], value);
+    }
 });
