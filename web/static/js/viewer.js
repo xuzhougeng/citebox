@@ -804,7 +804,10 @@ const ResourceViewerPage = {
             let lineText = '';
             items.forEach((item) => {
                 const gap = lastRight === null ? 0 : item.rect.left - lastRight;
-                if (gap > Math.max(1.2, item.rect.height * 0.08) && lineText && !lineText.endsWith(' ')) {
+                if (gap > Math.max(1.2, item.rect.height * 0.08)
+                    && lineText
+                    && !lineText.endsWith(' ')
+                    && !this.shouldJoinPDFTextWithoutLeadingSpace(item.text)) {
                     lineText += ' ';
                 }
                 lineText += item.text;
@@ -812,6 +815,10 @@ const ResourceViewerPage = {
             });
             return lineText.replace(/\s+/g, ' ').trim();
         }).filter(Boolean).join('\n').trim();
+    },
+
+    shouldJoinPDFTextWithoutLeadingSpace(text) {
+        return /^[+.,;:!?%)\]}]/.test(String(text || '').trimStart());
     },
 
     buildPDFSelectionRects(lines, pageRect) {

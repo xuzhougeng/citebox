@@ -122,7 +122,9 @@ test('PDF drag selection keeps justified right-column lines intact', () => {
         querySelectorAll() {
             return [
                 span('Among the genomic alterations', rect(811, 100, 1040, 126)),
-                span('observed in ER+ breast cancer,', rect(1320, 100, 1460, 126)),
+                span('observed in ER', rect(1220, 100, 1300, 126)),
+                span('+', rect(1307, 100, 1316, 126)),
+                span('breast cancer,', rect(1324, 100, 1460, 126)),
                 span('mutations are often found in genes encoding the subunits of the', rect(811, 140, 1460, 166)),
                 span('SWI/SNF chromatin remodeling complexes, with', rect(811, 180, 1000, 206)),
                 span('ARID1A being', rect(1285, 180, 1460, 206)),
