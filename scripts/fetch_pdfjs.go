@@ -191,6 +191,7 @@ func assetsReady(targetDir string) (bool, error) {
 		filepath.Join(targetDir, "legacy/build/pdf.worker.min.mjs"),
 		filepath.Join(targetDir, "web/pdf_viewer.mjs"),
 		filepath.Join(targetDir, "web/pdf_viewer.css"),
+		filepath.Join(targetDir, "web/images/loading-icon.gif"),
 		filepath.Join(targetDir, "cmaps/LICENSE"),
 		filepath.Join(targetDir, "standard_fonts/LiberationSans-Regular.ttf"),
 		filepath.Join(targetDir, "wasm/qcms_bg.wasm"),

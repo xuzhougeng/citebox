@@ -55,6 +55,7 @@ func TestAssetsReadyRequiresOfficialViewerAssets(t *testing.T) {
 		"legacy/build/pdf.worker.min.mjs",
 		"web/pdf_viewer.mjs",
 		"web/pdf_viewer.css",
+		"web/images/loading-icon.gif",
 		"cmaps/LICENSE",
 		"standard_fonts/LiberationSans-Regular.ttf",
 		"wasm/qcms_bg.wasm",
