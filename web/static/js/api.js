@@ -2,7 +2,7 @@ if (typeof window.t !== 'function') window.t = function(k,f){return f||k};
 const API_BASE = '/api';
 
 function apiPathID(id) {
-    return encodeURIComponent(String(id || '').trim());
+    return encodeURIComponent(String(id ?? '').trim());
 }
 
 function clearLegacyAuthState() {

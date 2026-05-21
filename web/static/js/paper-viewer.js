@@ -245,7 +245,7 @@ const PaperNoteViewer = {
                     <div class="note-lightbox-actions">
                         <button class="btn btn-outline" type="button" data-paper-note-action="open-paper">${t("shared.paper.view_paper_detail", "查看文献详情")}</button>
                         <button class="btn btn-outline" type="button" data-paper-note-action="open-ai">${t("shared.paper.go_ai_reading", "去 AI 助手")}</button>
-                        <a class="btn btn-outline" href="${Utils.resourceViewerURL('pdf', paper.pdf_url)}">${t('shared.paper.open_pdf', '打开 PDF')}</a>
+                        <a class="btn btn-outline" href="${Utils.resourceViewerURL('pdf', paper.pdf_url, window.location.href, { paperId: paper.id })}">${t('shared.paper.open_pdf', '打开 PDF')}</a>
                     </div>
                 </aside>
             </div>

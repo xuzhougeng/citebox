@@ -234,6 +234,10 @@ const Utils = {
         }
     },
 
+    entityID(value) {
+        return String(value ?? '').trim();
+    },
+
     bindResourceViewerLinks() {
         if (this.resourceViewerLinksBound) {
             return;
@@ -273,30 +277,30 @@ const Utils = {
         if (typeof NoteViewer !== 'undefined' && this.isVisibleModal(NoteViewer.modal) && NoteViewer.currentFigure?.id && NoteViewer.currentFigure?.paper_id) {
             return {
                 modal: 'figure-note',
-                paperId: Number(NoteViewer.currentFigure.paper_id),
-                figureId: Number(NoteViewer.currentFigure.id)
+                paperId: this.entityID(NoteViewer.currentFigure.paper_id),
+                figureId: this.entityID(NoteViewer.currentFigure.id)
             };
         }
 
         if (typeof FigureViewer !== 'undefined' && this.isVisibleModal(FigureViewer.modal) && FigureViewer.currentFigure?.id && FigureViewer.currentFigure?.paper_id) {
             return {
                 modal: 'figure',
-                paperId: Number(FigureViewer.currentFigure.paper_id),
-                figureId: Number(FigureViewer.currentFigure.id)
+                paperId: this.entityID(FigureViewer.currentFigure.paper_id),
+                figureId: this.entityID(FigureViewer.currentFigure.id)
             };
         }
 
         if (typeof PaperNoteViewer !== 'undefined' && this.isVisibleModal(PaperNoteViewer.modal) && PaperNoteViewer.paper?.id) {
             return {
                 modal: 'paper-note',
-                paperId: Number(PaperNoteViewer.paper.id)
+                paperId: this.entityID(PaperNoteViewer.paper.id)
             };
         }
 
         if (typeof PaperViewer !== 'undefined' && this.isVisibleModal(PaperViewer.modal) && PaperViewer.paper?.id) {
             return {
                 modal: 'paper',
-                paperId: Number(PaperViewer.paper.id)
+                paperId: this.entityID(PaperViewer.paper.id)
             };
         }
 
@@ -355,33 +359,33 @@ const Utils = {
         }
 
         const modal = String(state.modal || '').trim();
-        const paperId = Number(state.paperId);
-        const figureId = Number(state.figureId);
+        const paperId = this.entityID(state.paperId);
+        const figureId = this.entityID(state.figureId);
 
         if (modal === 'figure-note') {
             return typeof NoteViewer !== 'undefined'
                 && this.isVisibleModal(NoteViewer.modal)
-                && Number(NoteViewer.currentFigure?.id) === figureId
-                && Number(NoteViewer.currentFigure?.paper_id) === paperId;
+                && this.entityID(NoteViewer.currentFigure?.id) === figureId
+                && this.entityID(NoteViewer.currentFigure?.paper_id) === paperId;
         }
 
         if (modal === 'figure') {
             return typeof FigureViewer !== 'undefined'
                 && this.isVisibleModal(FigureViewer.modal)
-                && Number(FigureViewer.currentFigure?.id) === figureId
-                && Number(FigureViewer.currentFigure?.paper_id) === paperId;
+                && this.entityID(FigureViewer.currentFigure?.id) === figureId
+                && this.entityID(FigureViewer.currentFigure?.paper_id) === paperId;
         }
 
         if (modal === 'paper-note') {
             return typeof PaperNoteViewer !== 'undefined'
                 && this.isVisibleModal(PaperNoteViewer.modal)
-                && Number(PaperNoteViewer.paper?.id) === paperId;
+                && this.entityID(PaperNoteViewer.paper?.id) === paperId;
         }
 
         if (modal === 'paper') {
             return typeof PaperViewer !== 'undefined'
                 && this.isVisibleModal(PaperViewer.modal)
-                && Number(PaperViewer.paper?.id) === paperId;
+                && this.entityID(PaperViewer.paper?.id) === paperId;
         }
 
         return false;
@@ -396,7 +400,7 @@ const Utils = {
             return true;
         }
 
-        const paperId = Number(state.paperId);
+        const paperId = this.entityID(state.paperId);
         if (!paperId || !document.getElementById('paperModal')) {
             return false;
         }
@@ -417,9 +421,9 @@ const Utils = {
                 return true;
             }
 
-            const figureId = Number(state.figureId);
+            const figureId = this.entityID(state.figureId);
             const figures = PaperViewer.paper?.figures || [];
-            const figureIndex = figures.findIndex((figure) => Number(figure.id) === figureId);
+            const figureIndex = figures.findIndex((figure) => this.entityID(figure.id) === figureId);
             if (figureIndex < 0) {
                 return true;
             }

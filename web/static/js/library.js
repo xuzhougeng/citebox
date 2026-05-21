@@ -165,7 +165,7 @@ const LibraryPage = {
             const card = event.target.closest('[data-paper-id]');
             if (!card) return;
 
-            const paperId = Number(card.dataset.paperId);
+            const paperId = String(card.dataset.paperId ?? '').trim();
             if (action.dataset.action === 'open-pdf') {
                 this.openPaperPDF(paperId);
             }
@@ -599,12 +599,13 @@ const LibraryPage = {
     },
 
     openPaperPDF(id) {
-        const paper = (this.state.papers || []).find((item) => Number(item.id) === Number(id));
+        const paperId = String(id ?? '').trim();
+        const paper = (this.state.papers || []).find((item) => String(item.id ?? '').trim() === paperId);
         if (!paper?.pdf_url) {
             Utils.showToast(t('shared.paper.no_pdf_url', '当前文献缺少 PDF 文件地址'), 'error');
             return;
         }
-        window.location.href = Utils.resourceViewerURL('pdf', paper.pdf_url, window.location.href, { paperId: id });
+        window.location.href = Utils.resourceViewerURL('pdf', paper.pdf_url, window.location.href, { paperId });
     },
 
     async deletePaper(id) {

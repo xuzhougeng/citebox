@@ -8,7 +8,7 @@ const vm = require('node:vm');
 
 const modulePath = path.resolve(__dirname, '..', 'utils.js');
 
-function loadUtils() {
+function loadUtilsContext() {
     const code = fs.readFileSync(modulePath, 'utf8') + '\nglobalThis.__TEST_UTILS__ = Utils;';
     const context = {
         console: console,
@@ -39,6 +39,9 @@ function loadUtils() {
             readyState: 'complete',
             body: {},
             addEventListener() {},
+            getElementById() {
+                return null;
+            },
             querySelectorAll() {
                 return [];
             },
@@ -49,7 +52,11 @@ function loadUtils() {
     };
     context.globalThis = context;
     vm.runInNewContext(code, context, { filename: modulePath });
-    return context.__TEST_UTILS__;
+    return { Utils: context.__TEST_UTILS__, context };
+}
+
+function loadUtils() {
+    return loadUtilsContext().Utils;
 }
 
 test('resourceViewerURL includes paper metadata for PDF reader links', () => {
@@ -84,4 +91,41 @@ test('resource viewer URLs preserve large paper identifiers as strings', () => {
 
     assert.equal(new URL(href, 'http://localhost').searchParams.get('paper_id'), paperId);
     assert.equal(parsed.paperId, paperId);
+});
+
+test('modal restore state preserves large paper identifiers as strings', async () => {
+    const { Utils, context } = loadUtilsContext();
+    const paperId = '1777519479295165603';
+    const visibleModal = {
+        classList: {
+            contains() { return false; },
+        },
+    };
+    const hiddenModal = {
+        classList: {
+            contains() { return true; },
+        },
+    };
+    let openedPaperId = '';
+
+    context.PaperViewer = {
+        modal: visibleModal,
+        paper: { id: paperId, figures: [] },
+        open(id) {
+            openedPaperId = id;
+            return Promise.resolve();
+        },
+    };
+    context.document.getElementById = (id) => (id === 'paperModal' ? {} : null);
+
+    const state = Utils.captureModalRestoreState();
+
+    assert.equal(state.paperId, paperId);
+    assert.equal(typeof state.paperId, 'string');
+    assert.equal(Utils.isModalRestoreStateActive({ modal: 'paper', paperId }), true);
+
+    context.PaperViewer.modal = hiddenModal;
+    assert.equal(await Utils.restoreModalState({ modal: 'paper', paperId }), true);
+    assert.equal(openedPaperId, paperId);
+    assert.equal(typeof openedPaperId, 'string');
 });

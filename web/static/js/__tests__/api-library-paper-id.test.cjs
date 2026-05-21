@@ -46,8 +46,9 @@ function loadAPI() {
     return { API: context.__TEST_API__, requests };
 }
 
-function loadLibraryWithSearch(search) {
+function loadLibraryContext(search) {
     const code = `${fs.readFileSync(libraryModulePath, 'utf8')}\nglobalThis.__TEST_LIBRARY__ = LibraryPage;`;
+    const viewerURLs = [];
     const context = {
         console,
         URL,
@@ -65,17 +66,31 @@ function loadLibraryWithSearch(search) {
         document: {
             addEventListener() {},
         },
+        Utils: {
+            resourceViewerURL(kind, src, back, options = {}) {
+                viewerURLs.push({ kind, src, back, options });
+                const params = new URLSearchParams({ kind, src });
+                if (back) params.set('back', back);
+                if (options.paperId) params.set('paper_id', options.paperId);
+                return `/viewer?${params.toString()}`;
+            },
+            showToast() {},
+        },
         t(key, fallback) {
             return fallback || key;
         },
     };
     context.globalThis = context;
     vm.runInNewContext(code, context, { filename: libraryModulePath });
-    return context.__TEST_LIBRARY__;
+    return { LibraryPage: context.__TEST_LIBRARY__, context, viewerURLs };
 }
 
-function loadPaperViewerWithAPI(api) {
-    const code = `${fs.readFileSync(paperViewerModulePath, 'utf8')}\nglobalThis.__TEST_PAPER_VIEWER__ = PaperViewer;`;
+function loadLibraryWithSearch(search) {
+    return loadLibraryContext(search).LibraryPage;
+}
+
+function loadPaperViewerContext(api) {
+    const code = `${fs.readFileSync(paperViewerModulePath, 'utf8')}\nglobalThis.__TEST_PAPER_VIEWER__ = PaperViewer;\nglobalThis.__TEST_PAPER_NOTE_VIEWER__ = PaperNoteViewer;`;
     const createTestElement = () => ({
         className: '',
         id: '',
@@ -96,6 +111,9 @@ function loadPaperViewerWithAPI(api) {
             if (typeof callback === 'function') callback();
         },
         window: {
+            location: {
+                href: 'http://localhost/library',
+            },
             t(key, fallback) { return fallback || key; },
             open() {},
         },
@@ -130,7 +148,12 @@ function loadPaperViewerWithAPI(api) {
             joinTags() { return ''; },
             mergeScopedTagCatalog() {},
             renderMarkdown(value) { return String(value || ''); },
-            resourceViewerURL(kind, src) { return `/viewer?kind=${kind}&src=${src || ''}`; },
+            resourceViewerURL(kind, src, back, options = {}) {
+                const params = new URLSearchParams({ kind, src: src || '' });
+                if (back) params.set('back', back);
+                if (options.paperId) params.set('paper_id', options.paperId);
+                return `/viewer?${params.toString()}`;
+            },
             showToast() {},
             splitTags() { return []; },
             statusLabel(value) { return value || ''; },
@@ -142,7 +165,15 @@ function loadPaperViewerWithAPI(api) {
     };
     context.globalThis = context;
     vm.runInNewContext(code, context, { filename: paperViewerModulePath });
-    return context.__TEST_PAPER_VIEWER__;
+    return {
+        PaperViewer: context.__TEST_PAPER_VIEWER__,
+        PaperNoteViewer: context.__TEST_PAPER_NOTE_VIEWER__,
+        context,
+    };
+}
+
+function loadPaperViewerWithAPI(api) {
+    return loadPaperViewerContext(api).PaperViewer;
 }
 
 test('API paper paths preserve large string identifiers', async () => {
@@ -164,6 +195,25 @@ test('library launch state preserves large paper identifiers as strings', () => 
 
     assert.equal(LibraryPage.launchState.paperId, paperId);
     assert.equal(LibraryPage.launchState.fromDuplicate, true);
+});
+
+test('library PDF opener preserves large paper identifiers as strings', () => {
+    const paperId = '1777519479295165603';
+    const { LibraryPage, context, viewerURLs } = loadLibraryContext('');
+
+    LibraryPage.state = {
+        papers: [
+            {
+                id: paperId,
+                pdf_url: '/files/papers/paper.pdf',
+            },
+        ],
+    };
+    LibraryPage.openPaperPDF(paperId);
+
+    assert.equal(viewerURLs[0].options.paperId, paperId);
+    assert.equal(typeof viewerURLs[0].options.paperId, 'string');
+    assert.match(context.window.location.href, new RegExp(`paper_id=${paperId}`));
 });
 
 test('paper detail viewer keeps requested large paper id after loading rounded JSON id', async () => {
@@ -201,4 +251,22 @@ test('paper detail viewer keeps current large paper id when payloads contain rou
 
     assert.equal(paper.id, paperId);
     assert.equal(paper.title, 'Updated');
+});
+
+test('paper note PDF opener includes large paper identifier for reader detail link', () => {
+    const paperId = '1777519479295165603';
+    const { PaperNoteViewer } = loadPaperViewerContext({});
+
+    PaperNoteViewer.open({
+        paper: {
+            id: paperId,
+            title: 'Paper note',
+            original_filename: 'paper.pdf',
+            extraction_status: 'completed',
+            pdf_url: '/files/papers/paper.pdf',
+            tags: [],
+        },
+    });
+
+    assert.match(PaperNoteViewer.body.innerHTML, new RegExp(`paper_id=${paperId}`));
 });
