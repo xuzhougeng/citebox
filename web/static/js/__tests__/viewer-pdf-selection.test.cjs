@@ -110,6 +110,20 @@ test('currentPDFSelectionText reads the browser native selection text', () => {
     );
 });
 
+test('defaultPDFState uses official PDF.js viewer state fields', () => {
+    const viewer = loadViewerPage(null);
+    const state = viewer.defaultPDFState();
+
+    assert.equal(state.pdfjsLib, null);
+    assert.equal(state.pdfjsViewerLib, null);
+    assert.equal(state.eventBus, null);
+    assert.equal(state.linkService, null);
+    assert.equal(state.pdfViewer, null);
+    assert.equal(Object.hasOwn(state, 'renderTask'), false);
+    assert.equal(Object.hasOwn(state, 'textLayer'), false);
+    assert.equal(Object.hasOwn(state, 'selectionDrag'), false);
+});
+
 test('currentPDFSelectionText ignores browser native selection outside the PDF viewer', () => {
     const scroll = createElement('scroll');
     const outside = createElement('outside');

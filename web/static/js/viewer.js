@@ -47,20 +47,14 @@ const ResourceViewerPage = {
             if (!viewport) return;
             this.beginImageDrag(event, viewport);
         });
-        this.stage?.addEventListener('pointerdown', (event) => {
-            this.beginPDFSelectionDrag(event);
-        });
         document.addEventListener('pointermove', (event) => {
             this.updateImageDrag(event);
-            this.updatePDFSelectionDrag(event);
         });
         document.addEventListener('pointerup', (event) => {
             this.endImageDrag(event);
-            this.endPDFSelectionDrag(event);
         });
         document.addEventListener('pointercancel', (event) => {
             this.endImageDrag(event);
-            this.cancelPDFSelectionDrag(event);
         });
         window.addEventListener('resize', () => {
             this.applyImageTransform();
@@ -151,7 +145,8 @@ const ResourceViewerPage = {
         });
         this.pdfFitButton?.addEventListener('click', async () => {
             this.pdfState.fitMode = true;
-            await this.renderPDFPage();
+            this.applyPDFViewerScale();
+            this.syncPDFToolbar();
         });
     },
 
@@ -185,17 +180,17 @@ const ResourceViewerPage = {
     defaultPDFState() {
         return {
             pdfjsLib: null,
+            pdfjsViewerLib: null,
             loadingTask: null,
             pdfDocument: null,
             resource: null,
+            eventBus: null,
+            linkService: null,
+            pdfViewer: null,
             pageNumber: 1,
             pageCount: 0,
             scale: 1,
             fitMode: true,
-            renderToken: 0,
-            renderTask: null,
-            textLayer: null,
-            selectionDrag: null,
             selectionText: '',
             selectionClientRect: null
         };
@@ -226,17 +221,40 @@ const ResourceViewerPage = {
         if (this.pdfState.pdfjsLib) {
             return this.pdfState.pdfjsLib;
         }
-        const pdfjsLib = await import('/static/vendor/pdfjs/legacy/build/pdf.min.mjs');
-        pdfjsLib.GlobalWorkerOptions.workerSrc = '/static/vendor/pdfjs/legacy/build/pdf.worker.min.mjs';
+        const pdfjsLib = await import('/static/vendor/pdfjs/build/pdf.mjs');
+        pdfjsLib.GlobalWorkerOptions.workerSrc = '/static/vendor/pdfjs/build/pdf.worker.mjs';
         this.pdfState.pdfjsLib = pdfjsLib;
         return pdfjsLib;
     },
 
+    async ensurePDFViewerReady() {
+        const pdfjsLib = await this.ensurePDFJSReady();
+        if (!this.pdfState.pdfjsViewerLib) {
+            this.ensurePDFViewerStyles();
+            this.pdfState.pdfjsViewerLib = await import('/static/vendor/pdfjs/web/pdf_viewer.mjs');
+        }
+        return {
+            pdfjsLib,
+            pdfjsViewerLib: this.pdfState.pdfjsViewerLib
+        };
+    },
+
+    ensurePDFViewerStyles() {
+        if (document.getElementById?.('pdfjsViewerStylesheet')) return;
+        const link = document.createElement('link');
+        link.id = 'pdfjsViewerStylesheet';
+        link.rel = 'stylesheet';
+        link.href = '/static/vendor/pdfjs/web/pdf_viewer.css';
+        document.head.appendChild(link);
+    },
+
     async renderPDFResource(resource) {
         this.togglePDFToolbar(true);
+        const previousPDFState = this.pdfState || this.defaultPDFState();
         this.pdfState = {
             ...this.defaultPDFState(),
-            pdfjsLib: this.pdfState.pdfjsLib,
+            pdfjsLib: previousPDFState.pdfjsLib,
+            pdfjsViewerLib: previousPDFState.pdfjsViewerLib,
             resource,
             pageNumber: this.initialPDFPageNumber(),
             scale: this.isNarrowPDFViewport() ? 0.9 : 1,
@@ -244,13 +262,9 @@ const ResourceViewerPage = {
         };
         this.stage.className = 'viewer-stage pdf-mode';
         this.stage.innerHTML = `
-            <div class="viewer-pdf-scroll" data-pdf-scroll>
-                <div class="viewer-pdf-page" data-pdf-page>
-                    <canvas class="viewer-pdf-canvas" data-pdf-canvas></canvas>
-                    <div class="viewer-pdf-selection-layer" data-pdf-selection-layer></div>
-                    <div class="viewer-pdf-text-layer" data-pdf-text-layer></div>
-                    <div class="viewer-pdf-loading" data-pdf-loading>${t('viewer.pdf_loading', '正在加载 PDF...')}</div>
-                </div>
+            <div class="viewer-pdf-scroll" data-pdf-scroll tabindex="0">
+                <div class="pdfViewer viewer-pdf-official" data-pdf-viewer></div>
+                <div class="viewer-pdf-loading" data-pdf-loading>${t('viewer.pdf_loading', '正在加载 PDF...')}</div>
             </div>
         `;
 
@@ -260,8 +274,17 @@ const ResourceViewerPage = {
         }
 
         await this.loadPDFDocument(resource.href);
-        this.pdfState.pageNumber = Math.min(Math.max(this.pdfState.pageNumber, 1), Math.max(this.pdfState.pageCount, 1));
-        await this.renderPDFPage();
+        const pdfViewer = this.pdfState.pdfViewer;
+        const pageCount = Math.max(this.pdfState.pageCount || pdfViewer?.pagesCount || 0, 1);
+        this.pdfState.pageNumber = Math.min(Math.max(this.pdfState.pageNumber, 1), pageCount);
+        if (pdfViewer) {
+            try {
+                pdfViewer.currentPageNumber = this.pdfState.pageNumber;
+            } catch (error) {
+                // PDF.js may reject page changes before pagesinit; page state is synced by events.
+            }
+        }
+        this.syncPDFToolbar();
     },
 
     initialPDFPageNumber() {
@@ -270,7 +293,59 @@ const ResourceViewerPage = {
     },
 
     async loadPDFDocument(href) {
-        const pdfjsLib = await this.ensurePDFJSReady();
+        const { pdfjsLib, pdfjsViewerLib } = await this.ensurePDFViewerReady();
+        const scrollElement = this.stage?.querySelector('[data-pdf-scroll]');
+        const viewerElement = this.stage?.querySelector('[data-pdf-viewer]');
+        const loadingElement = this.stage?.querySelector('[data-pdf-loading]');
+        if (!scrollElement || !viewerElement) {
+            throw new Error(t('viewer.err_invalid_resource', '资源地址无效或不受支持。'));
+        }
+
+        const eventBus = new pdfjsViewerLib.EventBus();
+        const linkService = new pdfjsViewerLib.PDFLinkService({ eventBus });
+        const textLayerMode = pdfjsViewerLib.TextLayerMode?.ENABLE ?? 1;
+        const pdfViewer = new pdfjsViewerLib.PDFViewer({
+            container: scrollElement,
+            viewer: viewerElement,
+            eventBus,
+            linkService,
+            textLayerMode,
+            annotationMode: pdfjsLib.AnnotationMode?.ENABLE,
+        });
+        linkService.setViewer(pdfViewer);
+
+        this.pdfState.eventBus = eventBus;
+        this.pdfState.linkService = linkService;
+        this.pdfState.pdfViewer = pdfViewer;
+
+        eventBus.on('pagesinit', () => {
+            const pageCount = Math.max(pdfViewer.pagesCount || this.pdfState.pageCount || 0, 1);
+            const pageNumber = Math.min(Math.max(this.pdfState.pageNumber || 1, 1), pageCount);
+            this.pdfState.pageNumber = pageNumber;
+            if (pdfViewer.currentPageNumber !== pageNumber) {
+                pdfViewer.currentPageNumber = pageNumber;
+            }
+            this.applyPDFViewerScale();
+            this.syncPDFToolbar();
+            if (loadingElement) {
+                loadingElement.hidden = true;
+            }
+        });
+        eventBus.on('pagesloaded', () => {
+            this.pdfState.pageCount = pdfViewer.pagesCount || this.pdfState.pageCount;
+            this.syncPDFToolbar();
+        });
+        eventBus.on('pagechanging', (event) => {
+            this.pdfState.pageNumber = event.pageNumber || pdfViewer.currentPageNumber || 1;
+            this.clearPDFSelection();
+            this.syncPDFToolbar();
+        });
+        eventBus.on('scalechanging', () => {
+            this.pdfState.scale = pdfViewer.currentScale || this.pdfState.scale || 1;
+            this.clearPDFSelection();
+            this.syncPDFToolbar();
+        });
+
         const loadingTask = pdfjsLib.getDocument({
             url: href,
             cMapUrl: '/static/vendor/pdfjs/cmaps/',
@@ -282,102 +357,9 @@ const ResourceViewerPage = {
         const pdfDocument = await loadingTask.promise;
         this.pdfState.pdfDocument = pdfDocument;
         this.pdfState.pageCount = pdfDocument.numPages || 0;
+        pdfViewer.setDocument(pdfDocument);
+        linkService.setDocument(pdfDocument, null);
         this.syncPDFToolbar();
-    },
-
-    async renderPDFPage() {
-        const pdfDocument = this.pdfState.pdfDocument;
-        if (!pdfDocument || !this.stage) return;
-
-        const token = ++this.pdfState.renderToken;
-        this.cancelPDFRenderTask();
-        this.hidePDFSelectionMenu();
-        const pageNumber = Math.min(Math.max(Number(this.pdfState.pageNumber) || 1, 1), Math.max(this.pdfState.pageCount, 1));
-        this.pdfState.pageNumber = pageNumber;
-        this.syncPDFToolbar();
-
-        const pageElement = this.stage.querySelector('[data-pdf-page]');
-        const canvas = this.stage.querySelector('[data-pdf-canvas]');
-        const textLayerElement = this.stage.querySelector('[data-pdf-text-layer]');
-        const loadingElement = this.stage.querySelector('[data-pdf-loading]');
-        if (!pageElement || !canvas || !textLayerElement) return;
-
-        this.clearPDFSelection();
-        if (loadingElement) {
-            loadingElement.hidden = false;
-            loadingElement.textContent = t('viewer.pdf_rendering_page', '正在渲染第 {page} 页...').replace('{page}', pageNumber);
-        }
-        textLayerElement.innerHTML = '';
-        this.pdfState.textLayer = null;
-
-        try {
-            const page = await pdfDocument.getPage(pageNumber);
-            if (token !== this.pdfState.renderToken) return;
-
-            if (this.pdfState.fitMode) {
-                this.pdfState.scale = this.calculatePDFPageFitScale(page);
-            }
-            const scale = this.clampPDFScale(this.pdfState.scale);
-            this.pdfState.scale = scale;
-            const viewport = page.getViewport({ scale });
-            const outputScale = Math.max(1, window.devicePixelRatio || 1);
-            const context = canvas.getContext('2d', { alpha: false });
-
-            canvas.width = Math.ceil(viewport.width * outputScale);
-            canvas.height = Math.ceil(viewport.height * outputScale);
-            canvas.style.width = `${viewport.width}px`;
-            canvas.style.height = `${viewport.height}px`;
-            pageElement.style.width = `${viewport.width}px`;
-            pageElement.style.height = `${viewport.height}px`;
-            textLayerElement.style.setProperty('--total-scale-factor', scale);
-            textLayerElement.style.width = `${viewport.width}px`;
-            textLayerElement.style.height = `${viewport.height}px`;
-            textLayerElement.style.left = '0';
-            textLayerElement.style.top = '0';
-
-            const renderTask = page.render({
-                canvasContext: context,
-                viewport,
-                transform: outputScale !== 1 ? [outputScale, 0, 0, outputScale, 0, 0] : null
-            });
-            this.pdfState.renderTask = renderTask;
-            await renderTask.promise;
-            if (token !== this.pdfState.renderToken) return;
-
-            const textContent = await page.getTextContent();
-            if (token !== this.pdfState.renderToken) return;
-            const textLayer = new this.pdfState.pdfjsLib.TextLayer({
-                textContentSource: textContent,
-                container: textLayerElement,
-                viewport
-            });
-            this.pdfState.textLayer = textLayer;
-            await textLayer.render();
-            if (loadingElement) {
-                loadingElement.hidden = true;
-            }
-            this.syncPDFToolbar();
-        } catch (error) {
-            if (this.isPDFRenderCancelledError(error) || token !== this.pdfState.renderToken) {
-                return;
-            }
-            if (loadingElement) {
-                loadingElement.hidden = false;
-                loadingElement.textContent = t('viewer.pdf_render_failed', 'PDF 页面渲染失败');
-            }
-            throw error;
-        } finally {
-            if (this.pdfState.renderTask) {
-                this.pdfState.renderTask = null;
-            }
-        }
-    },
-
-    calculatePDFPageFitScale(page) {
-        const scroll = this.stage?.querySelector('[data-pdf-scroll]');
-        const viewport = page.getViewport({ scale: 1 });
-        const availableWidth = Math.max(320, (scroll?.clientWidth || window.innerWidth || 960) - 48);
-        return this.clampPDFScale(availableWidth / Math.max(1, viewport.width));
     },
 
     isNarrowPDFViewport() {
@@ -389,27 +371,54 @@ const ResourceViewerPage = {
     },
 
     async goToPDFPage(pageNumber) {
-        if (!this.pdfState.pdfDocument) return;
-        const nextPage = Math.min(Math.max(Math.floor(Number(pageNumber) || 1), 1), Math.max(this.pdfState.pageCount, 1));
-        if (nextPage === this.pdfState.pageNumber) {
+        const pdfViewer = this.pdfState.pdfViewer;
+        if (!pdfViewer) return;
+        const pageCount = pdfViewer.pagesCount || this.pdfState.pageCount || 0;
+        const nextPage = Math.min(Math.max(Math.floor(Number(pageNumber) || 1), 1), Math.max(pageCount, 1));
+        if (nextPage === this.pdfState.pageNumber && pdfViewer.currentPageNumber === nextPage) {
             this.syncPDFToolbar();
             return;
         }
         this.pdfState.pageNumber = nextPage;
-        await this.renderPDFPage();
+        pdfViewer.currentPageNumber = nextPage;
+        this.clearPDFSelection();
+        this.syncPDFToolbar();
     },
 
     async setPDFScale(scale) {
-        if (!this.pdfState.pdfDocument) return;
+        if (!this.pdfState.pdfViewer) return;
         this.pdfState.fitMode = false;
         this.pdfState.scale = this.clampPDFScale(scale);
-        await this.renderPDFPage();
+        this.applyPDFViewerScale();
+        this.clearPDFSelection();
+        this.syncPDFToolbar();
+    },
+
+    applyPDFViewerScale() {
+        const pdfViewer = this.pdfState.pdfViewer;
+        if (!pdfViewer) return;
+        if (this.pdfState.fitMode) {
+            pdfViewer.currentScaleValue = 'page-width';
+            this.pdfState.scale = pdfViewer.currentScale || this.pdfState.scale || 1;
+            return;
+        }
+        pdfViewer.currentScale = this.clampPDFScale(this.pdfState.scale);
+        this.pdfState.scale = pdfViewer.currentScale || this.pdfState.scale || 1;
     },
 
     syncPDFToolbar() {
         if (!this.pdfControls || this.pdfControls.hidden) return;
-        const pageCount = this.pdfState.pageCount || 0;
-        const pageNumber = Math.min(Math.max(this.pdfState.pageNumber || 1, 1), Math.max(pageCount, 1));
+        const pdfViewer = this.pdfState.pdfViewer;
+        const pageCount = pdfViewer?.pagesCount || this.pdfState.pageCount || 0;
+        const currentPage = pdfViewer?.pagesCount
+            ? pdfViewer.currentPageNumber || this.pdfState.pageNumber || 1
+            : this.pdfState.pageNumber || 1;
+        const pageNumber = Math.min(Math.max(currentPage, 1), Math.max(pageCount, 1));
+        this.pdfState.pageCount = pageCount;
+        this.pdfState.pageNumber = pageNumber;
+        if (pdfViewer?.currentScale) {
+            this.pdfState.scale = pdfViewer.currentScale;
+        }
         if (this.pdfPageInput) {
             this.pdfPageInput.max = String(Math.max(pageCount, 1));
             this.pdfPageInput.value = String(pageNumber);
@@ -429,49 +438,39 @@ const ResourceViewerPage = {
     },
 
     schedulePDFRerender() {
-        if (!this.pdfState?.pdfDocument || !this.pdfState.fitMode) return;
+        if (!this.pdfState?.pdfViewer || !this.pdfState.fitMode) return;
         window.clearTimeout(this.resizeTimer);
         this.resizeTimer = window.setTimeout(() => {
-            this.renderPDFPage();
+            this.applyPDFViewerScale();
+            this.syncPDFToolbar();
         }, 120);
     },
 
-    cancelPDFRenderTask() {
-        if (this.pdfState.textLayer && typeof this.pdfState.textLayer.cancel === 'function') {
-            try {
-                this.pdfState.textLayer.cancel();
-            } catch (error) {
-                // Ignore cancellation races.
-            }
-            this.pdfState.textLayer = null;
-        }
-        if (this.pdfState.renderTask && typeof this.pdfState.renderTask.cancel === 'function') {
-            try {
-                this.pdfState.renderTask.cancel();
-            } catch (error) {
-                // Ignore cancellation races.
-            }
-        }
-    },
-
     destroyPDFState() {
-        this.cancelPDFRenderTask();
-        if (this.pdfState.loadingTask && typeof this.pdfState.loadingTask.destroy === 'function') {
-            this.pdfState.loadingTask.destroy().catch(() => {});
+        const previousPDFState = this.pdfState || this.defaultPDFState();
+        if (previousPDFState.pdfViewer && typeof previousPDFState.pdfViewer.setDocument === 'function') {
+            try {
+                previousPDFState.pdfViewer.setDocument(null);
+            } catch (error) {
+                // Ignore PDF.js teardown races while navigating away.
+            }
         }
-        const pdfjsLib = this.pdfState.pdfjsLib;
+        if (previousPDFState.linkService && typeof previousPDFState.linkService.setDocument === 'function') {
+            try {
+                previousPDFState.linkService.setDocument(null, null);
+            } catch (error) {
+                // Ignore PDF.js teardown races while navigating away.
+            }
+        }
+        if (previousPDFState.loadingTask && typeof previousPDFState.loadingTask.destroy === 'function') {
+            previousPDFState.loadingTask.destroy().catch(() => {});
+        }
+        const { pdfjsLib, pdfjsViewerLib } = previousPDFState;
         this.pdfState = {
             ...this.defaultPDFState(),
-            pdfjsLib
+            pdfjsLib,
+            pdfjsViewerLib
         };
-    },
-
-    isPDFRenderCancelledError(error) {
-        const name = String(error?.name || '');
-        const message = String(error?.message || '');
-        return name === 'RenderingCancelledException'
-            || name === 'AbortException'
-            || message.toLowerCase().includes('cancelled');
     },
 
     currentPDFSelectionText(selection = window.getSelection?.()) {
@@ -526,401 +525,6 @@ const ResourceViewerPage = {
         return result;
     },
 
-    beginPDFSelectionDrag(event) {
-        if (event.button !== 0 || !this.pdfState?.pdfDocument) return;
-        const textLayer = event.target.closest?.('[data-pdf-text-layer]');
-        if (!textLayer || !this.stage?.contains(textLayer)) return;
-
-        event.preventDefault();
-        event.stopPropagation();
-        window.getSelection?.().removeAllRanges();
-        this.hidePDFSelectionMenu();
-        this.clearPDFSelection({ keepDrag: true });
-
-        this.pdfState.selectionDrag = {
-            pointerId: event.pointerId,
-            startX: event.clientX,
-            startY: event.clientY,
-            currentX: event.clientX,
-            currentY: event.clientY,
-            textLayer,
-            active: true
-        };
-        try {
-            textLayer.setPointerCapture(event.pointerId);
-        } catch (error) {
-            // Pointer capture can fail when the pointer already left the layer.
-        }
-    },
-
-    updatePDFSelectionDrag(event) {
-        const drag = this.pdfState?.selectionDrag;
-        if (!drag?.active) return;
-        drag.currentX = event.clientX;
-        drag.currentY = event.clientY;
-        if (event.cancelable) {
-            event.preventDefault();
-        }
-        this.updatePDFSelectionFromDrag();
-    },
-
-    endPDFSelectionDrag(event) {
-        const drag = this.pdfState?.selectionDrag;
-        if (!drag?.active) return;
-        drag.currentX = event.clientX;
-        drag.currentY = event.clientY;
-        drag.active = false;
-        this.updatePDFSelectionFromDrag();
-
-        const moved = Math.hypot(drag.currentX - drag.startX, drag.currentY - drag.startY);
-        if (moved < 4 || !this.pdfState.selectionText || !this.pdfState.selectionClientRect) {
-            this.clearPDFSelection();
-            return;
-        }
-        this.showPDFSelectionMenu(this.pdfState.selectionClientRect);
-        this.pdfState.selectionDrag = null;
-    },
-
-    cancelPDFSelectionDrag(event) {
-        const drag = this.pdfState?.selectionDrag;
-        if (!drag?.active || drag.pointerId !== event.pointerId) return;
-        this.clearPDFSelection();
-    },
-
-    updatePDFSelectionFromDrag() {
-        const drag = this.pdfState?.selectionDrag;
-        if (!drag?.textLayer) return;
-        const clientRect = this.normalizedClientRect(drag.startX, drag.startY, drag.currentX, drag.currentY);
-        if (clientRect.width < 4 || clientRect.height < 4) {
-            this.renderPDFSelectionRects([]);
-            this.pdfState.selectionText = '';
-            this.pdfState.selectionClientRect = null;
-            return;
-        }
-        const selection = this.collectPDFSelectionFromClientRect(clientRect, drag.textLayer, drag);
-        this.pdfState.selectionText = selection.text;
-        this.pdfState.selectionClientRect = selection.clientRect;
-        this.renderPDFSelectionRects(selection.rects);
-    },
-
-    normalizedClientRect(startX, startY, endX, endY) {
-        const left = Math.min(startX, endX);
-        const top = Math.min(startY, endY);
-        const right = Math.max(startX, endX);
-        const bottom = Math.max(startY, endY);
-        return {
-            left,
-            top,
-            right,
-            bottom,
-            width: right - left,
-            height: bottom - top
-        };
-    },
-
-    collectPDFSelectionFromClientRect(clientRect, textLayer, drag = null) {
-        const pageElement = textLayer.closest('[data-pdf-page]');
-        const pageRect = pageElement?.getBoundingClientRect();
-        if (!pageRect) return { text: '', rects: [], clientRect: null };
-
-        const items = Array.from(textLayer.querySelectorAll('span'))
-            .map((span) => {
-                const text = String(span.textContent || '');
-                const rect = span.getBoundingClientRect();
-                return { span, text, rect };
-            })
-            .filter((item) => item.text.trim()
-                && item.rect.width > 1
-                && item.rect.height > 1);
-
-        const selectionLines = drag
-            ? this.collectPDFSelectionLinesFromDrag(items, pageRect, drag)
-            : this.collectPDFSelectionLinesFromArea(items, pageRect, clientRect);
-        if (!selectionLines.length) return { text: '', rects: [], clientRect: null };
-
-        const text = this.formatPDFSelectionText(selectionLines);
-        const rects = this.buildPDFSelectionRects(selectionLines, pageRect);
-        const clientBounds = this.pdfSelectionClientBounds(selectionLines);
-
-        return {
-            text,
-            rects,
-            clientRect: clientBounds
-        };
-    },
-
-    collectPDFSelectionLinesFromDrag(items, pageRect, drag) {
-        const lines = this.buildPDFTextLineSegments(items, pageRect);
-        if (!lines.length) return [];
-
-        const anchorLine = this.findPDFLineAtPoint(lines, drag.startX, drag.startY);
-        if (!anchorLine) return [];
-
-        const columnLines = this.filterPDFLinesToAnchorColumn(lines, anchorLine)
-            .sort((a, b) => {
-                const topDelta = a.top - b.top;
-                return Math.abs(topDelta) > Math.max(2, Math.min(a.height, b.height) * 0.2)
-                    ? topDelta
-                    : a.left - b.left;
-            });
-        const focusLine = this.findPDFLineAtPoint(columnLines, drag.currentX, drag.currentY) || anchorLine;
-        let start = {
-            line: anchorLine,
-            lineIndex: columnLines.indexOf(anchorLine),
-            x: drag.startX
-        };
-        let end = {
-            line: focusLine,
-            lineIndex: columnLines.indexOf(focusLine),
-            x: drag.currentX
-        };
-        if (start.lineIndex < 0 || end.lineIndex < 0) return [];
-        if (this.comparePDFSelectionPositions(start, end) > 0) {
-            [start, end] = [end, start];
-        }
-
-        const selectedLines = [];
-        for (let index = start.lineIndex; index <= end.lineIndex; index += 1) {
-            const line = columnLines[index];
-            const singleLine = start.lineIndex === end.lineIndex;
-            const lowerX = singleLine ? Math.min(start.x, end.x) : start.x;
-            const upperX = singleLine ? Math.max(start.x, end.x) : end.x;
-            const leftBound = index === start.lineIndex
-                ? Math.max(line.left, lowerX)
-                : line.left;
-            const rightBound = index === end.lineIndex
-                ? Math.min(line.right, upperX)
-                : line.right;
-            const selectedItems = line.items.filter((item) => (
-                item.rect.right >= leftBound && item.rect.left <= rightBound
-            ));
-            if (!selectedItems.length) continue;
-
-            const itemLeft = Math.min(...selectedItems.map((item) => item.rect.left));
-            const itemRight = Math.max(...selectedItems.map((item) => item.rect.right));
-            const itemTop = Math.min(...selectedItems.map((item) => item.rect.top));
-            const itemBottom = Math.max(...selectedItems.map((item) => item.rect.bottom));
-            selectedLines.push({
-                items: selectedItems,
-                left: index === start.lineIndex ? Math.max(leftBound, pageRect.left) : itemLeft,
-                right: index === end.lineIndex ? Math.min(rightBound, itemRight) : itemRight,
-                top: itemTop,
-                bottom: itemBottom
-            });
-        }
-        return selectedLines.filter((line) => line.right > line.left && line.bottom > line.top);
-    },
-
-    collectPDFSelectionLinesFromArea(items, pageRect, clientRect) {
-        const hits = items.filter((item) => this.rectsIntersect(clientRect, item.rect));
-        return this.buildPDFTextLineSegments(hits, pageRect).map((line) => {
-            const left = Math.max(line.left, clientRect.left, pageRect.left);
-            const right = Math.min(line.right, clientRect.right);
-            return {
-                items: line.items.filter((item) => item.rect.right >= left && item.rect.left <= right),
-                left,
-                right,
-                top: line.top,
-                bottom: line.bottom
-            };
-        }).filter((line) => line.items.length && line.right > line.left);
-    },
-
-    buildPDFTextLineSegments(items, pageRect = null) {
-        const medianHeight = this.medianNumber(items.map((item) => item.rect.height).filter((height) => height > 0)) || 12;
-        const rowTolerance = Math.max(4, medianHeight * 0.55);
-        const columnGap = Math.max(88, Math.min(180, medianHeight * 5.5));
-        const pageMidX = pageRect
-            ? pageRect.left + pageRect.width / 2
-            : null;
-        const rows = [];
-
-        [...items].sort((a, b) => {
-            const aCenter = (a.rect.top + a.rect.bottom) / 2;
-            const bCenter = (b.rect.top + b.rect.bottom) / 2;
-            if (Math.abs(aCenter - bCenter) <= rowTolerance) {
-                return a.rect.left - b.rect.left;
-            }
-            return aCenter - bCenter;
-        }).forEach((item) => {
-            const centerY = (item.rect.top + item.rect.bottom) / 2;
-            const row = rows.find((candidate) => Math.abs(centerY - candidate.centerY) <= rowTolerance);
-            if (!row) {
-                rows.push({
-                    centerY,
-                    top: item.rect.top,
-                    bottom: item.rect.bottom,
-                    items: [item]
-                });
-                return;
-            }
-            row.items.push(item);
-            row.top = Math.min(row.top, item.rect.top);
-            row.bottom = Math.max(row.bottom, item.rect.bottom);
-            row.centerY = (row.centerY * (row.items.length - 1) + centerY) / row.items.length;
-        });
-
-        const segments = [];
-        rows.forEach((row) => {
-            const sortedItems = row.items.sort((a, b) => a.rect.left - b.rect.left);
-            let current = [];
-            sortedItems.forEach((item) => {
-                const previous = current[current.length - 1];
-                const crossesPageMid = pageMidX === null
-                    || (previous && previous.rect.right < pageMidX && item.rect.left > pageMidX);
-                if (previous && item.rect.left - previous.rect.right > columnGap && crossesPageMid) {
-                    segments.push(this.createPDFTextLineSegment(current));
-                    current = [];
-                }
-                current.push(item);
-            });
-            if (current.length) {
-                segments.push(this.createPDFTextLineSegment(current));
-            }
-        });
-
-        return segments
-            .filter(Boolean)
-            .sort((a, b) => {
-                const topDelta = a.top - b.top;
-                return Math.abs(topDelta) > Math.max(2, Math.min(a.height, b.height) * 0.2)
-                    ? topDelta
-                    : a.left - b.left;
-            });
-    },
-
-    createPDFTextLineSegment(items) {
-        if (!items.length) return null;
-        const sortedItems = [...items].sort((a, b) => a.rect.left - b.rect.left);
-        const left = Math.min(...sortedItems.map((item) => item.rect.left));
-        const right = Math.max(...sortedItems.map((item) => item.rect.right));
-        const top = Math.min(...sortedItems.map((item) => item.rect.top));
-        const bottom = Math.max(...sortedItems.map((item) => item.rect.bottom));
-        return {
-            items: sortedItems,
-            left,
-            right,
-            top,
-            bottom,
-            width: right - left,
-            height: bottom - top,
-            centerY: (top + bottom) / 2
-        };
-    },
-
-    findPDFLineAtPoint(lines, x, y) {
-        return lines
-            .map((line) => {
-                const xDistance = this.pdfLineXDistance(line, x);
-                const yDistance = y >= line.top && y <= line.bottom
-                    ? 0
-                    : Math.min(Math.abs(y - line.top), Math.abs(y - line.bottom));
-                return { line, distance: yDistance * 4 + xDistance };
-            })
-            .sort((a, b) => a.distance - b.distance)[0]?.line || null;
-    },
-
-    pdfLineXDistance(line, x) {
-        if (x >= line.left && x <= line.right) return 0;
-        return Math.min(Math.abs(x - line.left), Math.abs(x - line.right));
-    },
-
-    filterPDFLinesToAnchorColumn(lines, anchorLine) {
-        const anchorCenter = (anchorLine.left + anchorLine.right) / 2;
-        const xPadding = Math.max(28, anchorLine.height * 2);
-        return lines.filter((line) => {
-            if (line === anchorLine) return true;
-            if (anchorCenter >= line.left - xPadding && anchorCenter <= line.right + xPadding) {
-                return true;
-            }
-            const overlap = Math.min(anchorLine.right, line.right) - Math.max(anchorLine.left, line.left);
-            return overlap > Math.min(anchorLine.width, line.width) * 0.3;
-        });
-    },
-
-    comparePDFSelectionPositions(a, b) {
-        if (a.lineIndex !== b.lineIndex) {
-            return a.lineIndex - b.lineIndex;
-        }
-        return a.x - b.x;
-    },
-
-    formatPDFSelectionText(lines) {
-        return lines.map((line) => {
-            const items = [...line.items].sort((a, b) => a.rect.left - b.rect.left);
-            let lastRight = null;
-            let lineText = '';
-            items.forEach((item) => {
-                const gap = lastRight === null ? 0 : item.rect.left - lastRight;
-                if (gap > Math.max(1.2, item.rect.height * 0.08)
-                    && lineText
-                    && !lineText.endsWith(' ')
-                    && !this.shouldJoinPDFTextWithoutLeadingSpace(item.text)) {
-                    lineText += ' ';
-                }
-                lineText += item.text;
-                lastRight = item.rect.right;
-            });
-            return lineText.replace(/\s+/g, ' ').trim();
-        }).filter(Boolean).join('\n').trim();
-    },
-
-    shouldJoinPDFTextWithoutLeadingSpace(text) {
-        return /^[+.,;:!?%)\]}]/.test(String(text || '').trimStart());
-    },
-
-    buildPDFSelectionRects(lines, pageRect) {
-        return lines.map((line) => ({
-            left: line.left - pageRect.left,
-            top: line.top - pageRect.top,
-            width: Math.max(0, line.right - line.left),
-            height: Math.max(0, line.bottom - line.top)
-        })).filter((rect) => rect.width > 0 && rect.height > 0);
-    },
-
-    pdfSelectionClientBounds(lines) {
-        const left = Math.min(...lines.map((line) => line.left));
-        const top = Math.min(...lines.map((line) => line.top));
-        const right = Math.max(...lines.map((line) => line.right));
-        const bottom = Math.max(...lines.map((line) => line.bottom));
-        return {
-            left,
-            top,
-            right,
-            bottom,
-            width: right - left,
-            height: bottom - top
-        };
-    },
-
-    medianNumber(values) {
-        if (!values.length) return 0;
-        const sorted = [...values].sort((a, b) => a - b);
-        const middle = Math.floor(sorted.length / 2);
-        return sorted.length % 2 === 0
-            ? (sorted[middle - 1] + sorted[middle]) / 2
-            : sorted[middle];
-    },
-
-    rectsIntersect(a, b) {
-        return a.left <= b.right && a.right >= b.left && a.top <= b.bottom && a.bottom >= b.top;
-    },
-
-    renderPDFSelectionRects(rects) {
-        const layer = this.stage?.querySelector('[data-pdf-selection-layer]');
-        if (!layer) return;
-        layer.innerHTML = '';
-        rects.forEach((rect) => {
-            const element = document.createElement('div');
-            element.className = 'viewer-pdf-selection-rect';
-            element.style.left = `${Math.max(0, rect.left)}px`;
-            element.style.top = `${Math.max(0, rect.top)}px`;
-            element.style.width = `${Math.max(0, rect.width)}px`;
-            element.style.height = `${Math.max(0, rect.height)}px`;
-            layer.appendChild(element);
-        });
-    },
-
     showPDFSelectionMenu(rect) {
         if (!this.selectionMenu) return;
         this.selectionMenu.classList.remove('hidden');
@@ -942,12 +546,8 @@ const ResourceViewerPage = {
         this.selectionMenu.classList.add('hidden');
     },
 
-    clearPDFSelection(options = {}) {
+    clearPDFSelection() {
         this.hidePDFSelectionMenu();
-        this.renderPDFSelectionRects([]);
-        if (!options.keepDrag) {
-            this.pdfState.selectionDrag = null;
-        }
         this.pdfState.selectionText = '';
         this.pdfState.selectionClientRect = null;
         window.getSelection?.().removeAllRanges();
