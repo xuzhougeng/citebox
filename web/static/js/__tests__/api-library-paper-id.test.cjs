@@ -8,6 +8,7 @@ const vm = require('node:vm');
 
 const apiModulePath = path.resolve(__dirname, '..', 'api.js');
 const libraryModulePath = path.resolve(__dirname, '..', 'library.js');
+const paperViewerModulePath = path.resolve(__dirname, '..', 'paper-viewer.js');
 
 function loadAPI() {
     const requests = [];
@@ -73,6 +74,77 @@ function loadLibraryWithSearch(search) {
     return context.__TEST_LIBRARY__;
 }
 
+function loadPaperViewerWithAPI(api) {
+    const code = `${fs.readFileSync(paperViewerModulePath, 'utf8')}\nglobalThis.__TEST_PAPER_VIEWER__ = PaperViewer;`;
+    const createTestElement = () => ({
+        className: '',
+        id: '',
+        innerHTML: '',
+        classList: {
+            add() {},
+            contains() { return false; },
+            remove() {},
+        },
+        addEventListener() {},
+        querySelector() { return createTestElement(); },
+    });
+    const modal = createTestElement();
+    const body = createTestElement();
+    const context = {
+        console,
+        requestAnimationFrame(callback) {
+            if (typeof callback === 'function') callback();
+        },
+        window: {
+            t(key, fallback) { return fallback || key; },
+            open() {},
+        },
+        document: {
+            body: {
+                appendChild() {},
+                classList: {
+                    add() {},
+                    remove() {},
+                },
+            },
+            addEventListener() {},
+            createElement() {
+                return createTestElement();
+            },
+            getElementById(id) {
+                if (id === 'paperModal') return modal;
+                if (id === 'paperModalBody') return body;
+                if (id === 'closePaperModal') return { addEventListener() {} };
+                return null;
+            },
+            querySelector() { return null; },
+        },
+        API: api,
+        Utils: {
+            bindCommaSeparatedTagInputAutocomplete() { return null; },
+            escapeHTML(value) { return String(value ?? ''); },
+            formatDate(value) { return String(value || ''); },
+            formatFileSize(value) { return `${value}`; },
+            formatPartialDate(value) { return String(value || ''); },
+            isProcessingStatus() { return false; },
+            joinTags() { return ''; },
+            mergeScopedTagCatalog() {},
+            renderMarkdown(value) { return String(value || ''); },
+            resourceViewerURL(kind, src) { return `/viewer?kind=${kind}&src=${src || ''}`; },
+            showToast() {},
+            splitTags() { return []; },
+            statusLabel(value) { return value || ''; },
+            statusTone() { return 'default'; },
+        },
+        t(key, fallback) {
+            return fallback || key;
+        },
+    };
+    context.globalThis = context;
+    vm.runInNewContext(code, context, { filename: paperViewerModulePath });
+    return context.__TEST_PAPER_VIEWER__;
+}
+
 test('API paper paths preserve large string identifiers', async () => {
     const { API, requests } = loadAPI();
     const paperId = '1777519479295165603';
@@ -92,4 +164,41 @@ test('library launch state preserves large paper identifiers as strings', () => 
 
     assert.equal(LibraryPage.launchState.paperId, paperId);
     assert.equal(LibraryPage.launchState.fromDuplicate, true);
+});
+
+test('paper detail viewer keeps requested large paper id after loading rounded JSON id', async () => {
+    const paperId = '1777519479295165603';
+    const requests = [];
+    const PaperViewer = loadPaperViewerWithAPI({
+        getPaper(id) {
+            requests.push(id);
+            return Promise.resolve({
+                id: 1777519479295165700,
+                title: 'Rounded response',
+                original_filename: 'paper.pdf',
+                extraction_status: 'completed',
+                pdf_url: '/files/papers/paper.pdf',
+                figures: [],
+                tags: [],
+            });
+        },
+        listGroups() {
+            return Promise.resolve({ groups: [] });
+        },
+    });
+
+    await PaperViewer.open(paperId);
+
+    assert.deepEqual(requests, [paperId]);
+    assert.equal(PaperViewer.paper.id, paperId);
+    assert.equal(typeof PaperViewer.paper.id, 'string');
+});
+
+test('paper detail viewer keeps current large paper id when payloads contain rounded ids', () => {
+    const paperId = '1777519479295165603';
+    const PaperViewer = loadPaperViewerWithAPI({});
+    const paper = PaperViewer.normalizePaperIdentity({ id: 1777519479295165700, title: 'Updated' }, paperId);
+
+    assert.equal(paper.id, paperId);
+    assert.equal(paper.title, 'Updated');
 });

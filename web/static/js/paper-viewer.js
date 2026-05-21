@@ -89,7 +89,7 @@ const PaperNoteViewer = {
 
     open(options = {}) {
         this.init();
-        this.paper = options.paper || null;
+        this.paper = PaperViewer.normalizePaperIdentity(options.paper, options.paper?.id) || null;
         this.onChanged = options.onChanged;
         this.onOpenPaper = options.onOpenPaper;
         this.noteDraft = this.paper?.paper_notes_text || '';
@@ -121,7 +121,7 @@ const PaperNoteViewer = {
                     paper_notes_text: this.currentNotesDraft()
                 })
             );
-            this.paper = payload.paper;
+            this.paper = PaperViewer.normalizePaperIdentity(payload.paper, this.paper?.id);
             this.noteDraft = this.paper.paper_notes_text || '';
             if (!this.noteMode || !this.noteDraft.trim()) {
                 this.noteMode = 'write';
@@ -129,7 +129,7 @@ const PaperNoteViewer = {
             Utils.showToast(t('shared.paper.note_saved', '文献笔记已保存'));
             this.render();
             if (typeof this.onChanged === 'function') {
-                await this.onChanged(payload.paper);
+                await this.onChanged(this.paper);
             }
         } catch (error) {
             Utils.showToast(error.message, 'error');
@@ -328,7 +328,11 @@ const PaperPDFTextViewer = {
                 return;
             }
             if (button.dataset.paperPdfAction === 'open-pdf' && this.paper?.pdf_url) {
-                window.open(Utils.resourceViewerURL('pdf', this.paper.pdf_url), '_blank', 'noopener,noreferrer');
+                window.open(
+                    Utils.resourceViewerURL('pdf', this.paper.pdf_url, window.location.href, { paperId: this.paper.id }),
+                    '_blank',
+                    'noopener,noreferrer'
+                );
             }
         });
         this.body.addEventListener('keydown', async (event) => {
@@ -342,7 +346,7 @@ const PaperPDFTextViewer = {
 
     open(options = {}) {
         this.init();
-        this.paper = options.paper || null;
+        this.paper = PaperViewer.normalizePaperIdentity(options.paper, options.paper?.id) || null;
         this.onChanged = options.onChanged;
         this.textDraft = this.paper?.pdf_text || '';
         this.textMode = 'write';
@@ -385,12 +389,12 @@ const PaperPDFTextViewer = {
                     pdf_text: this.currentTextDraft()
                 })
             );
-            this.paper = payload.paper;
+            this.paper = PaperViewer.normalizePaperIdentity(payload.paper, this.paper?.id);
             this.textDraft = this.paper.pdf_text || '';
             Utils.showToast(t('shared.paper.pdf_text_saved', 'PDF 原文已保存'));
             this.render();
             if (typeof this.onChanged === 'function') {
-                await this.onChanged(payload.paper);
+                await this.onChanged(this.paper);
             }
         } catch (error) {
             Utils.showToast(error.message, 'error');
@@ -634,15 +638,30 @@ const PaperViewer = {
         };
     },
 
+    normalizePaperIdentity(paper, preferredID = '') {
+        if (!paper) return paper;
+
+        const normalizedPreferredID = String(preferredID ?? '').trim();
+        if (normalizedPreferredID) {
+            return { ...paper, id: normalizedPreferredID };
+        }
+
+        if (paper.id === undefined || paper.id === null) {
+            return paper;
+        }
+        return { ...paper, id: String(paper.id) };
+    },
+
     async open(id, onChanged) {
         this.init();
         this.onChanged = onChanged;
         this.extractingPDFText = false;
         this.extractingPDFTextPage = 0;
         this.refreshingDOIMetadata = false;
+        const requestedPaperID = String(id ?? '').trim();
         try {
-            const [paper, groupsPayload] = await Promise.all([API.getPaper(id), API.listGroups()]);
-            this.paper = paper;
+            const [paper, groupsPayload] = await Promise.all([API.getPaper(requestedPaperID || id), API.listGroups()]);
+            this.paper = this.normalizePaperIdentity(paper, requestedPaperID);
             this.groups = groupsPayload.groups || [];
             this.render();
             this.modal.classList.remove('hidden');
@@ -800,7 +819,7 @@ const PaperViewer = {
                         ${(paper.extraction_status === 'failed' || paper.extraction_status === 'cancelled') ? '<button class="btn btn-outline" type="button" data-modal-action="reextract-paper">${t("shared.paper.reparse", "重新解析")}</button>' : ''}
                         <button class="btn btn-outline danger" type="button" data-modal-action="delete-paper">${t("shared.paper.delete_paper", "删除文献")}</button>
                         <a class="btn btn-outline" href="/ai?paper_id=${paper.id}">${t('shared.paper.ask_ai', '在 AI 中追问 →')}</a>
-                        <a class="btn btn-outline" href="${Utils.resourceViewerURL('pdf', paper.pdf_url)}">${t('shared.paper.open_pdf', '打开 PDF')}</a>
+                        <a class="btn btn-outline" href="${Utils.resourceViewerURL('pdf', paper.pdf_url, window.location.href, { paperId: paper.id })}">${t('shared.paper.open_pdf', '打开 PDF')}</a>
                     </div>
                 </form>
             </section>
@@ -882,7 +901,7 @@ const PaperViewer = {
             },
             onMetaChanged: async (paper) => {
                 if (!paper) return;
-                this.paper = paper;
+                this.paper = this.normalizePaperIdentity(paper, this.paper?.id);
                 this.render();
                 if (typeof this.onChanged === 'function') {
                     await this.onChanged();
@@ -907,7 +926,7 @@ const PaperViewer = {
                     tags: Utils.splitTags(document.getElementById('paperViewerTags').value)
                 })
             );
-            this.paper = payload.paper;
+            this.paper = this.normalizePaperIdentity(payload.paper, this.paper?.id);
             Utils.mergeScopedTagCatalog?.('paper', payload.paper?.tags || []);
             Utils.showToast(t('shared.paper.info_updated', '文献信息已更新'));
             this.render();
@@ -938,7 +957,7 @@ const PaperViewer = {
     async reextract() {
         try {
             const payload = await API.reextractPaper(this.paper.id);
-            this.paper = payload.paper;
+            this.paper = this.normalizePaperIdentity(payload.paper, this.paper?.id);
             Utils.showToast(t('shared.paper.reparse_submitted', '文献已重新提交解析'), 'info');
             this.render();
             if (typeof this.onChanged === 'function') {
@@ -955,7 +974,7 @@ const PaperViewer = {
 
         try {
             const payload = await API.deleteFigure(figureID);
-            this.paper = payload.paper;
+            this.paper = this.normalizePaperIdentity(payload.paper, this.paper?.id);
             Utils.showToast(t('shared.paper.figure_deleted', '图片已删除'));
             this.render();
             if (typeof this.onChanged === 'function') {
@@ -971,7 +990,7 @@ const PaperViewer = {
             paper: this.paper,
             onChanged: async (paper) => {
                 if (!paper) return;
-                this.paper = paper;
+                this.paper = this.normalizePaperIdentity(paper, this.paper?.id);
                 this.render();
                 if (typeof this.onChanged === 'function') {
                     await this.onChanged();
@@ -980,7 +999,7 @@ const PaperViewer = {
             onOpenPaper: async (paperID) => {
                 if (!paperID) return;
                 const nextPaper = await API.getPaper(paperID);
-                this.paper = nextPaper;
+                this.paper = this.normalizePaperIdentity(nextPaper, paperID);
                 this.render();
             }
         });
@@ -1077,7 +1096,7 @@ const PaperViewer = {
             paper: this.paper,
             onChanged: async (paper) => {
                 if (!paper) return;
-                this.paper = paper;
+                this.paper = this.normalizePaperIdentity(paper, this.paper?.id);
                 this.render();
                 if (typeof this.onChanged === 'function') {
                     await this.onChanged();
@@ -1166,7 +1185,7 @@ const PaperViewer = {
 
         try {
             const payload = await API.refreshPaperDOIMetadata(this.paper.id, { doi });
-            this.paper = payload.paper;
+            this.paper = this.normalizePaperIdentity(payload.paper, this.paper?.id);
             this.render();
             this.restoreFormDraft(draft, { preserveDOIMetadata: false });
             Utils.showToast(t('shared.paper.refresh_doi_metadata_done', '已按 DOI 补全文献信息'));
@@ -1217,7 +1236,7 @@ const PaperViewer = {
                 })
             );
 
-            this.paper = payload.paper;
+            this.paper = this.normalizePaperIdentity(payload.paper, this.paper?.id);
             this.render();
             this.restoreFormDraft(draft);
             Utils.showToast(t('shared.paper.pdf_text_extracted_saved', '已从 PDF 提取并保存原文（{count} 字）').replace('{count}', pdfText.length.toLocaleString()));
