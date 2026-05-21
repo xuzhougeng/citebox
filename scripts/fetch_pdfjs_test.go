@@ -19,6 +19,7 @@ func TestSelectedPathIncludesOfficialViewerAssets(t *testing.T) {
 		{name: "modern build", tarPath: "package/build/pdf.mjs", wantPath: "build/pdf.mjs", wantOK: true},
 		{name: "modern worker", tarPath: "package/build/pdf.worker.mjs", wantPath: "build/pdf.worker.mjs", wantOK: true},
 		{name: "legacy build remains available", tarPath: "package/legacy/build/pdf.min.mjs", wantPath: "legacy/build/pdf.min.mjs", wantOK: true},
+		{name: "legacy worker remains available", tarPath: "package/legacy/build/pdf.worker.min.mjs", wantPath: "legacy/build/pdf.worker.min.mjs", wantOK: true},
 		{name: "official viewer module", tarPath: "package/web/pdf_viewer.mjs", wantPath: "web/pdf_viewer.mjs", wantOK: true},
 		{name: "official viewer css", tarPath: "package/web/pdf_viewer.css", wantPath: "web/pdf_viewer.css", wantOK: true},
 		{name: "viewer image asset", tarPath: "package/web/images/loading-icon.gif", wantPath: "web/images/loading-icon.gif", wantOK: true},
