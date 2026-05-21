@@ -658,6 +658,10 @@ const PaperViewer = {
         this.extractingPDFText = false;
         this.extractingPDFTextPage = 0;
         this.refreshingDOIMetadata = false;
+        this.openScrollPosition = {
+            x: window.scrollX || 0,
+            y: window.scrollY || 0
+        };
         const requestedPaperID = String(id ?? '').trim();
         try {
             const [paper, groupsPayload] = await Promise.all([API.getPaper(requestedPaperID || id), API.listGroups()]);
@@ -679,6 +683,17 @@ const PaperViewer = {
         if (!document.querySelector('.modal-shell:not(.hidden)')) {
             document.body.classList.remove('modal-open');
         }
+        this.restoreOpenScrollPosition();
+    },
+
+    restoreOpenScrollPosition() {
+        if (!this.openScrollPosition) return;
+
+        const position = this.openScrollPosition;
+        this.openScrollPosition = null;
+        requestAnimationFrame(() => {
+            window.scrollTo(position.x || 0, position.y || 0);
+        });
     },
 
     render() {

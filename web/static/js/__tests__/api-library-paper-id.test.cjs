@@ -114,6 +114,9 @@ function loadPaperViewerContext(api) {
             location: {
                 href: 'http://localhost/library',
             },
+            scrollX: 0,
+            scrollY: 0,
+            scrollTo() {},
             t(key, fallback) { return fallback || key; },
             open() {},
         },
@@ -269,4 +272,36 @@ test('paper note PDF opener includes large paper identifier for reader detail li
     });
 
     assert.match(PaperNoteViewer.body.innerHTML, new RegExp(`paper_id=${paperId}`));
+});
+
+test('paper detail viewer restores the library scroll position after closing', async () => {
+    const paperId = '1777519479295165603';
+    let restoredPosition = null;
+    const { PaperViewer, context } = loadPaperViewerContext({
+        getPaper() {
+            return Promise.resolve({
+                id: paperId,
+                title: 'Scroll restoration',
+                original_filename: 'paper.pdf',
+                extraction_status: 'completed',
+                pdf_url: '/files/papers/paper.pdf',
+                figures: [],
+                tags: [],
+            });
+        },
+        listGroups() {
+            return Promise.resolve({ groups: [] });
+        },
+    });
+    context.window.scrollX = 12;
+    context.window.scrollY = 2400;
+    context.window.scrollTo = (x, y) => {
+        restoredPosition = { x, y };
+    };
+
+    await PaperViewer.open(paperId);
+    context.window.scrollY = 0;
+    PaperViewer.close();
+
+    assert.deepEqual(restoredPosition, { x: 12, y: 2400 });
 });
