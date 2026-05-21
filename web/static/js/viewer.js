@@ -475,7 +475,11 @@ const ResourceViewerPage = {
     },
 
     currentPDFSelectionText(selection = window.getSelection?.()) {
-        return String(selection?.toString?.() || this.pdfState.selectionText || '').trim();
+        const nativeText = String(selection?.toString?.() || '').trim();
+        if (nativeText && this.selectionBelongsToPDFViewer(selection)) {
+            return nativeText;
+        }
+        return String(this.pdfState?.selectionText || '').trim();
     },
 
     selectionBelongsToPDFViewer(selection = window.getSelection?.()) {

@@ -89,17 +89,44 @@ function rect(left, top, right, bottom) {
 }
 
 test('currentPDFSelectionText reads the browser native selection text', () => {
+    const scroll = createElement('scroll');
+    const textLayer = createElement('textLayer');
+    const textNode = { nodeType: 3, parentElement: textLayer };
+    scroll.appendChild(textLayer);
     const selection = {
+        anchorNode: textNode,
+        focusNode: textNode,
         toString() {
             return '  Among the genomic alterations observed in ER+ breast cancer,\nARID1A being  ';
         },
     };
     const viewer = loadViewerPage(selection);
+    viewer.stage = createElement('stage');
+    viewer.stage.pdfScroll = scroll;
 
     assert.equal(
         viewer.currentPDFSelectionText(),
         'Among the genomic alterations observed in ER+ breast cancer,\nARID1A being'
     );
+});
+
+test('currentPDFSelectionText ignores browser native selection outside the PDF viewer', () => {
+    const scroll = createElement('scroll');
+    const outside = createElement('outside');
+    const selection = {
+        anchorNode: outside,
+        focusNode: outside,
+        toString() {
+            return 'outside page selection';
+        },
+    };
+    const viewer = loadViewerPage(selection);
+    viewer.stage = createElement('stage');
+    viewer.stage.pdfScroll = scroll;
+    viewer.pdfState = viewer.defaultPDFState();
+    viewer.pdfState.selectionText = '  stored PDF selection  ';
+
+    assert.equal(viewer.currentPDFSelectionText(), 'stored PDF selection');
 });
 
 test('selectionBelongsToPDFViewer accepts selections inside the PDF scroll area', () => {
