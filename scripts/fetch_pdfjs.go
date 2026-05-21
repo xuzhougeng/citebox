@@ -92,8 +92,12 @@ func extractAssets(source io.Reader, targetDir string) error {
 	tarReader := tar.NewReader(gzipReader)
 	required := map[string]bool{
 		"LICENSE":                         false,
+		"build/pdf.mjs":                   false,
+		"build/pdf.worker.mjs":            false,
 		"legacy/build/pdf.min.mjs":        false,
 		"legacy/build/pdf.worker.min.mjs": false,
+		"web/pdf_viewer.mjs":              false,
+		"web/pdf_viewer.css":              false,
 	}
 	copied := 0
 
@@ -153,10 +157,20 @@ func selectedPath(tarPath string) (string, bool) {
 	switch {
 	case tarPath == "package/LICENSE":
 		return "LICENSE", true
+	case tarPath == "package/build/pdf.mjs":
+		return "build/pdf.mjs", true
+	case tarPath == "package/build/pdf.worker.mjs":
+		return "build/pdf.worker.mjs", true
 	case tarPath == "package/legacy/build/pdf.min.mjs":
 		return "legacy/build/pdf.min.mjs", true
 	case tarPath == "package/legacy/build/pdf.worker.min.mjs":
 		return "legacy/build/pdf.worker.min.mjs", true
+	case tarPath == "package/web/pdf_viewer.mjs":
+		return "web/pdf_viewer.mjs", true
+	case tarPath == "package/web/pdf_viewer.css":
+		return "web/pdf_viewer.css", true
+	case strings.HasPrefix(tarPath, "package/web/images/"):
+		return strings.TrimPrefix(tarPath, "package/"), true
 	case strings.HasPrefix(tarPath, "package/cmaps/"):
 		return strings.TrimPrefix(tarPath, "package/"), true
 	case strings.HasPrefix(tarPath, "package/standard_fonts/"):
@@ -171,8 +185,12 @@ func selectedPath(tarPath string) (string, bool) {
 func assetsReady(targetDir string) (bool, error) {
 	required := []string{
 		filepath.Join(targetDir, "LICENSE"),
+		filepath.Join(targetDir, "build/pdf.mjs"),
+		filepath.Join(targetDir, "build/pdf.worker.mjs"),
 		filepath.Join(targetDir, "legacy/build/pdf.min.mjs"),
 		filepath.Join(targetDir, "legacy/build/pdf.worker.min.mjs"),
+		filepath.Join(targetDir, "web/pdf_viewer.mjs"),
+		filepath.Join(targetDir, "web/pdf_viewer.css"),
 		filepath.Join(targetDir, "cmaps/LICENSE"),
 		filepath.Join(targetDir, "standard_fonts/LiberationSans-Regular.ttf"),
 		filepath.Join(targetDir, "wasm/qcms_bg.wasm"),
