@@ -37,10 +37,11 @@ function createElement(name) {
     };
 }
 
-function loadViewerPage(selection) {
+function loadViewerPage(selection, options = {}) {
     const code = `${fs.readFileSync(modulePath, 'utf8')}\nglobalThis.__RESOURCE_VIEWER_PAGE__ = ResourceViewerPage;`;
     const context = {
         console,
+        Map: options.Map || Map,
         URL,
         URLSearchParams,
         Node: { TEXT_NODE: 3 },
@@ -74,7 +75,10 @@ function loadViewerPage(selection) {
     };
     context.globalThis = context;
     vm.runInNewContext(code, context, { filename: modulePath });
-    return context.__RESOURCE_VIEWER_PAGE__;
+    return {
+        context,
+        viewer: context.__RESOURCE_VIEWER_PAGE__
+    };
 }
 
 function rect(left, top, right, bottom) {
@@ -100,7 +104,7 @@ test('currentPDFSelectionText reads the browser native selection text', () => {
             return '  Among the genomic alterations observed in ER+ breast cancer,\nARID1A being  ';
         },
     };
-    const viewer = loadViewerPage(selection);
+    const { viewer } = loadViewerPage(selection);
     viewer.stage = createElement('stage');
     viewer.stage.pdfScroll = scroll;
 
@@ -111,7 +115,7 @@ test('currentPDFSelectionText reads the browser native selection text', () => {
 });
 
 test('defaultPDFState uses official PDF.js viewer state fields', () => {
-    const viewer = loadViewerPage(null);
+    const { viewer } = loadViewerPage(null);
     const state = viewer.defaultPDFState();
 
     assert.equal(state.pdfjsLib, null);
@@ -126,7 +130,7 @@ test('defaultPDFState uses official PDF.js viewer state fields', () => {
 });
 
 test('isCurrentPDFLoad checks load token and viewer identity', () => {
-    const viewer = loadViewerPage(null);
+    const { viewer } = loadViewerPage(null);
     const pdfViewer = {};
     viewer.pdfState = {
         ...viewer.defaultPDFState(),
@@ -140,6 +144,28 @@ test('isCurrentPDFLoad checks load token and viewer identity', () => {
     assert.equal(viewer.isCurrentPDFLoad(4, {}), false);
 });
 
+test('ensurePDFViewerCompatibility adds Map getOrInsertComputed for bundled PDF.js viewer', () => {
+    class TestMap extends Map {}
+    const { context, viewer } = loadViewerPage(null, { Map: TestMap });
+    assert.equal(typeof context.Map.prototype.getOrInsertComputed, 'undefined');
+
+    viewer.ensurePDFViewerCompatibility();
+    const map = new context.Map();
+    let calls = 0;
+    const first = map.getOrInsertComputed('key', (key) => {
+        calls += 1;
+        return `${key}-value`;
+    });
+    const second = map.getOrInsertComputed('key', () => {
+        calls += 1;
+        return 'ignored';
+    });
+
+    assert.equal(first, 'key-value');
+    assert.equal(second, 'key-value');
+    assert.equal(calls, 1);
+});
+
 test('currentPDFSelectionText ignores browser native selection outside the PDF viewer', () => {
     const scroll = createElement('scroll');
     const outside = createElement('outside');
@@ -150,7 +176,7 @@ test('currentPDFSelectionText ignores browser native selection outside the PDF v
             return 'outside page selection';
         },
     };
-    const viewer = loadViewerPage(selection);
+    const { viewer } = loadViewerPage(selection);
     viewer.stage = createElement('stage');
     viewer.stage.pdfScroll = scroll;
     viewer.pdfState = viewer.defaultPDFState();
@@ -169,7 +195,7 @@ test('selectionBelongsToPDFViewer accepts selections inside the PDF scroll area'
         focusNode: textNode,
         toString() { return 'ER+ breast cancer'; },
     };
-    const viewer = loadViewerPage(selection);
+    const { viewer } = loadViewerPage(selection);
     viewer.stage = createElement('stage');
     viewer.stage.pdfScroll = scroll;
 
@@ -184,7 +210,7 @@ test('selectionBelongsToPDFViewer rejects selections outside the PDF scroll area
         focusNode: outside,
         toString() { return 'outside text'; },
     };
-    const viewer = loadViewerPage(selection);
+    const { viewer } = loadViewerPage(selection);
     viewer.stage = createElement('stage');
     viewer.stage.pdfScroll = scroll;
 
@@ -209,7 +235,7 @@ test('pdfSelectionClientRect unions visible native selection rects', () => {
         },
         toString() { return 'two selected lines'; },
     };
-    const viewer = loadViewerPage(selection);
+    const { viewer } = loadViewerPage(selection);
     const actual = viewer.pdfSelectionClientRect(selection);
 
     for (const [field, value] of Object.entries(rect(38, 80, 220, 136))) {
@@ -241,7 +267,7 @@ test('refreshPDFSelectionMenu stores native selection text and bounds and shows 
             return '  selected PDF text  ';
         },
     };
-    const viewer = loadViewerPage(selection);
+    const { viewer } = loadViewerPage(selection);
     viewer.stage = createElement('stage');
     viewer.stage.pdfScroll = scroll;
     viewer.pdfState = {
@@ -273,7 +299,7 @@ test('refreshPDFSelectionMenu hides and clears state for selections outside the 
             return 'outside page selection';
         },
     };
-    const viewer = loadViewerPage(selection);
+    const { viewer } = loadViewerPage(selection);
     viewer.stage = createElement('stage');
     viewer.stage.pdfScroll = scroll;
     viewer.selectionMenu = createElement('menu');
@@ -304,7 +330,7 @@ test('refreshPDFSelectionMenu hides and clears state for empty PDF selections', 
             return '';
         },
     };
-    const viewer = loadViewerPage(selection);
+    const { viewer } = loadViewerPage(selection);
     viewer.stage = createElement('stage');
     viewer.stage.pdfScroll = scroll;
     viewer.selectionMenu = createElement('menu');
@@ -329,7 +355,7 @@ test('clearPDFSelection removes native browser ranges', () => {
             removeAllRangesCount += 1;
         },
     };
-    const viewer = loadViewerPage(selection);
+    const { viewer } = loadViewerPage(selection);
     viewer.pdfState = {
         ...viewer.defaultPDFState(),
         selectionText: 'selected text',
@@ -344,7 +370,7 @@ test('clearPDFSelection removes native browser ranges', () => {
 });
 
 test('clearPDFSelection tolerates selections without removeAllRanges', () => {
-    const viewer = loadViewerPage({});
+    const { viewer } = loadViewerPage({});
     viewer.pdfState = {
         ...viewer.defaultPDFState(),
         selectionText: 'selected text',
@@ -357,7 +383,7 @@ test('clearPDFSelection tolerates selections without removeAllRanges', () => {
 });
 
 test('clearPDFSelection tolerates null browser selections', () => {
-    const viewer = loadViewerPage(null);
+    const { viewer } = loadViewerPage(null);
     viewer.pdfState = {
         ...viewer.defaultPDFState(),
         selectionText: 'selected text',

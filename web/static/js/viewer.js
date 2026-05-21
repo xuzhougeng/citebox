@@ -242,6 +242,7 @@ const ResourceViewerPage = {
         const pdfjsLib = await this.ensurePDFJSReady(loadToken);
         let pdfjsViewerLib = this.pdfState.pdfjsViewerLib;
         if (!pdfjsViewerLib) {
+            this.ensurePDFViewerCompatibility();
             this.ensurePDFViewerStyles();
             pdfjsViewerLib = await import('/static/vendor/pdfjs/web/pdf_viewer.mjs');
             if (this.isCurrentPDFLoad(loadToken)) {
@@ -252,6 +253,22 @@ const ResourceViewerPage = {
             pdfjsLib,
             pdfjsViewerLib
         };
+    },
+
+    ensurePDFViewerCompatibility() {
+        if (typeof Map === 'undefined' || typeof Map.prototype.getOrInsertComputed === 'function') return;
+        Object.defineProperty(Map.prototype, 'getOrInsertComputed', {
+            configurable: true,
+            writable: true,
+            value(key, callback) {
+                if (this.has(key)) {
+                    return this.get(key);
+                }
+                const value = callback(key);
+                this.set(key, value);
+                return value;
+            }
+        });
     },
 
     ensurePDFViewerStyles() {
