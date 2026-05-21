@@ -3,6 +3,7 @@ if (typeof window.t !== 'function') window.t = function(k,f){return f||k};
 const Utils = {
     modalRestoreParam: 'restore_modal',
     modalRestoreStoragePrefix: 'citebox.modalRestore.',
+    scrollRestoreDelays: Object.freeze([0, 80, 240, 600, 1200]),
     defaultFigureTagPresets: Object.freeze(['图 1', '图 2', '图 3', '图 4', '图 5', '图 6', '图 7', '附图', '图片摘要']),
     tagCatalogs: new Map(),
     tagCatalogPromises: new Map(),
@@ -132,7 +133,7 @@ const Utils = {
             return '';
         }
 
-        const restoreState = this.captureModalRestoreState();
+        const restoreState = this.captureResourceViewerReturnState();
         if (!restoreState) {
             return normalizedBack;
         }
@@ -194,6 +195,33 @@ const Utils = {
     buildResourceViewerNavigationURL(kind, src, back = window.location.href, options = {}) {
         const resolvedBack = this.buildResourceViewerBackURL(back, options);
         return this.resourceViewerURL(kind, src, resolvedBack || back, options);
+    },
+
+    captureResourceViewerReturnState() {
+        const modalState = this.captureModalRestoreState();
+        const scrollState = this.captureScrollRestoreState();
+        if (!modalState && !scrollState) {
+            return null;
+        }
+        return {
+            ...(modalState || {}),
+            ...(scrollState || {})
+        };
+    },
+
+    captureScrollRestoreState() {
+        const scrollX = Number(window.scrollX ?? window.pageXOffset ?? 0);
+        const scrollY = Number(window.scrollY ?? window.pageYOffset ?? 0);
+        if (!Number.isFinite(scrollX) || !Number.isFinite(scrollY)) {
+            return null;
+        }
+        if (Math.abs(scrollX) < 1 && Math.abs(scrollY) < 1) {
+            return null;
+        }
+        return {
+            scrollX: Math.max(0, Math.round(scrollX)),
+            scrollY: Math.max(0, Math.round(scrollY))
+        };
     },
 
     openResourceViewer(kind, src, back = window.location.href, options = {}) {
@@ -391,9 +419,52 @@ const Utils = {
         return false;
     },
 
-    async restoreModalState(state) {
-        if (!state || typeof PaperViewer === 'undefined') {
+    restoreScrollPosition(state) {
+        const scrollX = Number(state?.scrollX ?? 0);
+        const scrollY = Number(state?.scrollY ?? 0);
+        if (!Number.isFinite(scrollX) || !Number.isFinite(scrollY)) {
             return false;
+        }
+        if (Math.abs(scrollX) < 1 && Math.abs(scrollY) < 1) {
+            return false;
+        }
+
+        const position = {
+            x: Math.max(0, Math.round(scrollX)),
+            y: Math.max(0, Math.round(scrollY))
+        };
+        const apply = () => {
+            if (typeof window.scrollTo === 'function') {
+                window.scrollTo(position.x, position.y);
+            }
+        };
+        apply();
+        const scheduleTimer = typeof window.setTimeout === 'function' ? window.setTimeout.bind(window) : setTimeout;
+        for (const delay of this.scrollRestoreDelays) {
+            if (delay <= 0) {
+                if (typeof window.requestAnimationFrame === 'function') {
+                    window.requestAnimationFrame(apply);
+                } else if (typeof requestAnimationFrame === 'function') {
+                    requestAnimationFrame(apply);
+                } else {
+                    apply();
+                }
+                continue;
+            }
+            scheduleTimer(apply, delay);
+        }
+        return true;
+    },
+
+    async restoreModalState(state) {
+        if (!state) {
+            return false;
+        }
+
+        const restoredScroll = this.restoreScrollPosition(state);
+        const modal = String(state.modal || '').trim();
+        if (!modal || typeof PaperViewer === 'undefined') {
+            return restoredScroll;
         }
 
         if (this.isModalRestoreStateActive(state)) {
@@ -402,7 +473,7 @@ const Utils = {
 
         const paperId = this.entityID(state.paperId);
         if (!paperId || !document.getElementById('paperModal')) {
-            return false;
+            return restoredScroll;
         }
 
         try {

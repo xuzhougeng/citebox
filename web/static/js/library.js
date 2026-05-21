@@ -605,6 +605,10 @@ const LibraryPage = {
             Utils.showToast(t('shared.paper.no_pdf_url', '当前文献缺少 PDF 文件地址'), 'error');
             return;
         }
+        if (typeof Utils.openResourceViewer === 'function') {
+            Utils.openResourceViewer('pdf', paper.pdf_url, window.location.href, { paperId });
+            return;
+        }
         window.location.href = Utils.resourceViewerURL('pdf', paper.pdf_url, window.location.href, { paperId });
     },
 

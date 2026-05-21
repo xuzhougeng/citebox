@@ -49,6 +49,7 @@ function loadAPI() {
 function loadLibraryContext(search) {
     const code = `${fs.readFileSync(libraryModulePath, 'utf8')}\nglobalThis.__TEST_LIBRARY__ = LibraryPage;`;
     const viewerURLs = [];
+    const openedViewerURLs = [];
     const context = {
         console,
         URL,
@@ -74,6 +75,12 @@ function loadLibraryContext(search) {
                 if (options.paperId) params.set('paper_id', options.paperId);
                 return `/viewer?${params.toString()}`;
             },
+            openResourceViewer(kind, src, back, options = {}) {
+                openedViewerURLs.push({ kind, src, back, options });
+                const href = this.resourceViewerURL(kind, src, back, options);
+                context.window.location.href = href;
+                return href;
+            },
             showToast() {},
         },
         t(key, fallback) {
@@ -82,7 +89,7 @@ function loadLibraryContext(search) {
     };
     context.globalThis = context;
     vm.runInNewContext(code, context, { filename: libraryModulePath });
-    return { LibraryPage: context.__TEST_LIBRARY__, context, viewerURLs };
+    return { LibraryPage: context.__TEST_LIBRARY__, context, viewerURLs, openedViewerURLs };
 }
 
 function loadLibraryWithSearch(search) {
@@ -202,7 +209,7 @@ test('library launch state preserves large paper identifiers as strings', () => 
 
 test('library PDF opener preserves large paper identifiers as strings', () => {
     const paperId = '1777519479295165603';
-    const { LibraryPage, context, viewerURLs } = loadLibraryContext('');
+    const { LibraryPage, context, openedViewerURLs } = loadLibraryContext('');
 
     LibraryPage.state = {
         papers: [
@@ -214,8 +221,8 @@ test('library PDF opener preserves large paper identifiers as strings', () => {
     };
     LibraryPage.openPaperPDF(paperId);
 
-    assert.equal(viewerURLs[0].options.paperId, paperId);
-    assert.equal(typeof viewerURLs[0].options.paperId, 'string');
+    assert.equal(openedViewerURLs[0].options.paperId, paperId);
+    assert.equal(typeof openedViewerURLs[0].options.paperId, 'string');
     assert.match(context.window.location.href, new RegExp(`paper_id=${paperId}`));
 });
 

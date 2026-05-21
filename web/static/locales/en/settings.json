@@ -166,7 +166,7 @@
     "settings.ai.group_prompt_placeholder": "Supplementary requirements for group assignment, e.g. prefer reusing existing groups before suggesting new ones",
     "settings.ai.translate_prompt_label": "Translation Prompt",
     "settings.ai.translate_prompt_help": "For desktop text selection translation. The system auto-detects translation direction and provides source text and target language.",
-    "settings.ai.translate_prompt_placeholder": "e.g. return only the translated text, preserve line breaks, terms, abbreviations and units",
+    "settings.ai.translate_prompt_placeholder": "e.g. return only the translated text, merge soft PDF line wraps inside paragraphs, preserve natural paragraphs, terms, abbreviations and units",
     "settings.ai.save_translate_prompt": "Save Translation Prompt",
     "settings.ai.translate_prompt_save_hint": "Click Save after editing translation prompt.",
     "settings.ai.translate_prompt_modified": "Translation prompt modified. Click \"Save Translation Prompt\" to apply.",

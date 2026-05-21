@@ -8,12 +8,18 @@ const vm = require('node:vm');
 
 const modulePath = path.resolve(__dirname, '..', 'utils.js');
 
-function loadUtilsContext() {
+function loadUtilsContext(options = {}) {
     const code = fs.readFileSync(modulePath, 'utf8') + '\nglobalThis.__TEST_UTILS__ = Utils;';
+    const storage = new Map();
+    const replacedURLs = [];
+    const scrollCalls = [];
     const context = {
         console: console,
         setTimeout,
         clearTimeout,
+        requestAnimationFrame(callback) {
+            if (typeof callback === 'function') callback();
+        },
         URL,
         URLSearchParams,
         MutationObserver: class MutationObserver {
@@ -25,14 +31,24 @@ function loadUtilsContext() {
                 href: 'http://localhost/library',
                 origin: 'http://localhost',
             },
+            scrollX: options.scrollX ?? 0,
+            scrollY: options.scrollY ?? 0,
+            requestAnimationFrame(callback) {
+                if (typeof callback === 'function') callback();
+            },
+            scrollTo(x, y) {
+                scrollCalls.push({ x, y });
+            },
             history: {
-                replaceState() {},
+                replaceState(_state, _title, url) {
+                    replacedURLs.push(String(url || ''));
+                },
             },
             open() {},
             sessionStorage: {
-                getItem() { return null; },
-                setItem() {},
-                removeItem() {},
+                getItem(key) { return storage.get(key) || null; },
+                setItem(key, value) { storage.set(key, String(value)); },
+                removeItem(key) { storage.delete(key); },
             },
         },
         document: {
@@ -52,7 +68,7 @@ function loadUtilsContext() {
     };
     context.globalThis = context;
     vm.runInNewContext(code, context, { filename: modulePath });
-    return { Utils: context.__TEST_UTILS__, context };
+    return { Utils: context.__TEST_UTILS__, context, storage, replacedURLs, scrollCalls };
 }
 
 function loadUtils() {
@@ -128,4 +144,36 @@ test('modal restore state preserves large paper identifiers as strings', async (
     assert.equal(await Utils.restoreModalState({ modal: 'paper', paperId }), true);
     assert.equal(openedPaperId, paperId);
     assert.equal(typeof openedPaperId, 'string');
+});
+
+test('resource viewer navigation URL stores scroll restore state for returning pages', () => {
+    const { Utils, storage, replacedURLs } = loadUtilsContext({ scrollX: 8, scrollY: 1840 });
+
+    const href = Utils.buildResourceViewerNavigationURL(
+        'pdf',
+        '/files/papers/a.pdf',
+        'http://localhost/manual?paper_id=42',
+        { replaceCurrentHistory: true, paperId: 42 }
+    );
+
+    const viewerURL = new URL(href, 'http://localhost');
+    const backURL = new URL(viewerURL.searchParams.get('back'), 'http://localhost');
+    const token = backURL.searchParams.get('restore_modal');
+
+    assert.equal(viewerURL.pathname, '/viewer');
+    assert.ok(token);
+    assert.equal(new URL(replacedURLs[0], 'http://localhost').searchParams.get('restore_modal'), token);
+
+    const stored = JSON.parse(storage.get(`citebox.modalRestore.${token}`));
+    assert.equal(stored.scrollX, 8);
+    assert.equal(stored.scrollY, 1840);
+});
+
+test('restoreModalState restores scroll-only viewer return state', async () => {
+    const { Utils, scrollCalls } = loadUtilsContext();
+
+    const restored = await Utils.restoreModalState({ scrollX: 12, scrollY: 2200 });
+
+    assert.equal(restored, true);
+    assert.deepEqual(scrollCalls.at(-1), { x: 12, y: 2200 });
 });

@@ -504,6 +504,26 @@ func TestTranslateUsesSceneModelAndReturnsTranslation(t *testing.T) {
 	}
 }
 
+func TestBuildAITranslatePromptsTreatsPDFLineWrapsAsSoftBreaks(t *testing.T) {
+	settings := model.DefaultAISettings()
+	_, userPrompt := buildAITranslatePrompts(
+		settings,
+		"其他语言",
+		"中文",
+		"A cross-species single-cell atlas\nhighlights a core subset of cell-type\nfoundational genes.\n\nSecond paragraph.",
+	)
+
+	if !strings.Contains(userPrompt, "段落内由 PDF 排版产生的单个换行") {
+		t.Fatalf("translate prompt missing soft line-wrap instruction: %s", userPrompt)
+	}
+	if !strings.Contains(userPrompt, "连续空行") {
+		t.Fatalf("translate prompt missing paragraph-break instruction: %s", userPrompt)
+	}
+	if strings.Contains(userPrompt, "保留原文中的换行") {
+		t.Fatalf("translate prompt still asks the model to preserve every line break: %s", userPrompt)
+	}
+}
+
 func TestRewriteTextForTTSUsesSceneModelAndPrompt(t *testing.T) {
 	_, repo, cfg := newTestService(t)
 	aiSvc := NewAIService(repo, cfg, nil)

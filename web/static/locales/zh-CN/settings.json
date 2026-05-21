@@ -166,7 +166,7 @@
     "settings.ai.group_prompt_placeholder": "用于整篇文献分组判断的补充要求，例如：优先复用已有分组，必要时再提新分组",
     "settings.ai.translate_prompt_label": "划词翻译 Prompt",
     "settings.ai.translate_prompt_help": "用于桌面端划词翻译。系统会自动判断翻译方向，并附带原文和目标语言。",
-    "settings.ai.translate_prompt_placeholder": "例如：只返回译文正文，保留换行、术语、缩写和数字单位",
+    "settings.ai.translate_prompt_placeholder": "例如：只返回译文正文，合并 PDF 段落内软换行，保留自然段、术语、缩写和数字单位",
     "settings.ai.save_translate_prompt": "保存翻译 Prompt",
     "settings.ai.translate_prompt_save_hint": "翻译 Prompt 修改后需点击保存。",
     "settings.ai.translate_prompt_modified": "翻译 Prompt 已修改，点击「保存翻译 Prompt」后生效。",
