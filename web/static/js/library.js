@@ -52,9 +52,9 @@ const LibraryPage = {
 
     readLaunchState() {
         const params = new URLSearchParams(window.location.search);
-        const paperId = Number(params.get('paper_id') || 0);
+        const paperId = String(params.get('paper_id') || '').trim();
         this.launchState = {
-            paperId: paperId > 0 ? paperId : 0,
+            paperId: paperId && paperId !== '0' ? paperId : '',
             fromDuplicate: params.get('from') === 'duplicate'
         };
     },
@@ -76,7 +76,7 @@ const LibraryPage = {
         url.searchParams.delete('paper_id');
         url.searchParams.delete('from');
         window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
-        this.launchState = { paperId: 0, fromDuplicate: false };
+        this.launchState = { paperId: '', fromDuplicate: false };
     },
 
     cacheElements() {

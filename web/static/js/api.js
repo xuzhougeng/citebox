@@ -1,6 +1,10 @@
 if (typeof window.t !== 'function') window.t = function(k,f){return f||k};
 const API_BASE = '/api';
 
+function apiPathID(id) {
+    return encodeURIComponent(String(id || '').trim());
+}
+
 function clearLegacyAuthState() {
     sessionStorage.removeItem('citebox_auth');
     localStorage.removeItem('citebox_auth');
@@ -110,7 +114,7 @@ const API = {
     },
 
     getPaper(id) {
-        return requestJSON(`${API_BASE}/papers/${id}`);
+        return requestJSON(`${API_BASE}/papers/${apiPathID(id)}`);
     },
 
     uploadPaper(formData) {
@@ -131,7 +135,7 @@ const API = {
     },
 
     updatePaper(id, data) {
-        return requestJSON(`${API_BASE}/papers/${id}`, {
+        return requestJSON(`${API_BASE}/papers/${apiPathID(id)}`, {
             method: 'PUT',
             headers: {
                 'Content-Type': 'application/json'
@@ -141,7 +145,7 @@ const API = {
     },
 
     refreshPaperDOIMetadata(id, data = {}) {
-        return requestJSON(`${API_BASE}/papers/${id}/refresh-doi-metadata`, {
+        return requestJSON(`${API_BASE}/papers/${apiPathID(id)}/refresh-doi-metadata`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -151,7 +155,7 @@ const API = {
     },
 
     updatePaperPDFText(id, data) {
-        return requestJSON(`${API_BASE}/papers/${id}/pdf-text`, {
+        return requestJSON(`${API_BASE}/papers/${apiPathID(id)}/pdf-text`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -161,27 +165,27 @@ const API = {
     },
 
     deletePaper(id) {
-        return requestJSON(`${API_BASE}/papers/${id}`, {
+        return requestJSON(`${API_BASE}/papers/${apiPathID(id)}`, {
             method: 'DELETE'
         });
     },
 
     reextractPaper(id) {
-        return requestJSON(`${API_BASE}/papers/${id}/reextract`, {
+        return requestJSON(`${API_BASE}/papers/${apiPathID(id)}/reextract`, {
             method: 'POST'
         });
     },
 
     getManualExtractionWorkspace(id) {
-        return requestJSON(`${API_BASE}/papers/${id}/manual-extraction`);
+        return requestJSON(`${API_BASE}/papers/${apiPathID(id)}/manual-extraction`);
     },
 
     manualPreviewURL(id, page) {
-        return `${API_BASE}/papers/${id}/manual-preview?page=${encodeURIComponent(page)}`;
+        return `${API_BASE}/papers/${apiPathID(id)}/manual-preview?page=${encodeURIComponent(page)}`;
     },
 
     manualExtractFigures(id, data) {
-        return requestJSON(`${API_BASE}/papers/${id}/manual-extraction`, {
+        return requestJSON(`${API_BASE}/papers/${apiPathID(id)}/manual-extraction`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'

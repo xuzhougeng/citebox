@@ -32,11 +32,7 @@ const ResourceViewerPage = {
             this.applyImageTransform();
         });
         document.addEventListener('keydown', (event) => {
-            if (event.key !== 'Escape') return;
-            event.preventDefault();
-            event.stopPropagation();
-            event.stopImmediatePropagation();
-            this.close({ deferNavigation: true });
+            this.handleEscapeKey(event);
         });
         this.stage?.addEventListener('wheel', (event) => {
             const viewport = event.target.closest('[data-viewer-viewport]');
@@ -77,6 +73,18 @@ const ResourceViewerPage = {
         });
 
         this.render();
+    },
+
+    handleEscapeKey(event) {
+        if (event.key !== 'Escape') return;
+        event.preventDefault();
+        event.stopPropagation?.();
+        event.stopImmediatePropagation?.();
+        if (this.selectionMenu && !this.selectionMenu.classList.contains('hidden')) {
+            this.clearPDFSelection();
+            return;
+        }
+        this.close({ deferNavigation: true });
     },
 
     async render() {
@@ -359,7 +367,7 @@ const ResourceViewerPage = {
             eventBus,
             linkService,
             textLayerMode,
-            annotationMode: pdfjsLib.AnnotationMode?.ENABLE,
+            annotationMode: pdfjsLib.AnnotationMode?.DISABLE ?? 0
         });
         linkService.setViewer(pdfViewer);
 

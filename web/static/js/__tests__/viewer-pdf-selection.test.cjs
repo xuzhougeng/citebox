@@ -55,6 +55,7 @@ function loadViewerPage(selection, options = {}) {
             history: { length: 1 },
             innerWidth: 1280,
             innerHeight: 800,
+            requestAnimationFrame(callback) { return callback(); },
             setTimeout,
             clearTimeout,
             getSelection() {
@@ -164,6 +165,31 @@ test('ensurePDFViewerCompatibility adds Map getOrInsertComputed for bundled PDF.
     assert.equal(first, 'key-value');
     assert.equal(second, 'key-value');
     assert.equal(calls, 1);
+});
+
+test('Escape clears an open PDF selection menu before closing the viewer', () => {
+    const { viewer } = loadViewerPage(null);
+    let closed = false;
+    let cleared = false;
+    const event = {
+        key: 'Escape',
+        preventDefault() {},
+        stopPropagation() {},
+        stopImmediatePropagation() {},
+    };
+    viewer.selectionMenu = createElement('menu');
+    viewer.close = () => {
+        closed = true;
+    };
+    viewer.clearPDFSelection = () => {
+        cleared = true;
+        viewer.selectionMenu.classList.add('hidden');
+    };
+
+    viewer.handleEscapeKey(event);
+
+    assert.equal(cleared, true);
+    assert.equal(closed, false);
 });
 
 test('currentPDFSelectionText ignores browser native selection outside the PDF viewer', () => {
