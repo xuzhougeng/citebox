@@ -151,81 +151,34 @@
         .viewer-pdf-scroll {
             position: absolute;
             inset: 0;
-            width: auto;
-            height: auto;
+            width: 100%;
+            height: 100%;
             min-height: 0;
             overflow: auto;
-            padding: 1.25rem;
-            text-align: center;
+            padding: 1.25rem 0;
+            background: #d6d0c7;
+            scrollbar-gutter: stable both-edges;
         }
 
-        .viewer-pdf-page {
+        .viewer-pdf-official {
+            --scale-factor: 1;
             position: relative;
-            display: inline-block;
-            line-height: 0;
+            min-height: 100%;
+        }
+
+        .viewer-pdf-scroll .page {
+            margin: 0 auto 1rem;
+            border: none;
             background: #fff;
-            box-shadow: 0 14px 42px rgba(35, 26, 20, 0.22);
+            box-shadow: 0 12px 34px rgba(35, 26, 20, 0.2);
         }
 
-        .viewer-pdf-canvas {
-            display: block;
-            background: #fff;
-            position: relative;
-            z-index: 0;
-        }
-
-        .viewer-pdf-selection-layer {
-            position: absolute;
-            inset: 0;
-            z-index: 1;
-            overflow: hidden;
-            pointer-events: none;
-        }
-
-        .viewer-pdf-selection-rect {
-            position: absolute;
-            border-radius: 2px;
-            background: rgba(255, 214, 0, 0.24);
-            mix-blend-mode: multiply;
-        }
-
-        .viewer-pdf-text-layer {
-            position: absolute;
-            inset: 0;
-            z-index: 2;
-            line-height: 1;
-            overflow: hidden;
+        .viewer-pdf-scroll .textLayer {
             opacity: 1;
-            text-align: initial;
-            text-size-adjust: none;
-            transform-origin: 0 0;
-            forced-color-adjust: none;
-            pointer-events: auto;
-            user-select: none;
         }
 
-        .viewer-pdf-text-layer :is(span, br) {
-            position: absolute;
-            margin: 0;
-            color: transparent;
-            white-space: pre;
-            cursor: text;
-            transform-origin: 0 0;
-        }
-
-        .viewer-pdf-text-layer span {
-            pointer-events: auto;
-        }
-
-        .viewer-pdf-text-layer br {
-            color: transparent;
-            cursor: text;
-            user-select: none;
-        }
-
-        .viewer-pdf-text-layer ::selection,
-        .viewer-pdf-text-layer *::selection {
-            background: transparent;
+        .viewer-pdf-scroll .textLayer ::selection {
+            background: rgba(255, 212, 0, 0.32);
         }
 
         .viewer-pdf-loading {
@@ -235,7 +188,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            background: rgba(255, 255, 255, 0.86);
+            background: rgba(214, 208, 199, 0.88);
             color: #3d332d;
             font-size: 0.95rem;
             line-height: 1.5;
@@ -404,11 +357,12 @@
             }
 
             .viewer-pdf-scroll {
-                padding: 0.75rem 0.5rem 1rem;
+                padding: 0.75rem 0;
             }
 
-            .viewer-pdf-page {
-                box-shadow: 0 8px 28px rgba(35, 26, 20, 0.2);
+            .viewer-pdf-scroll .page {
+                margin-bottom: 0.75rem;
+                box-shadow: 0 8px 24px rgba(35, 26, 20, 0.18);
             }
 
             .viewer-image-viewport,
