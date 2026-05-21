@@ -118,9 +118,9 @@ const Utils = {
         if (normalizedBack) {
             params.set('back', normalizedBack);
         }
-        const paperId = Number(options.paperId || options.paper_id || 0);
-        if (paperId > 0) {
-            params.set('paper_id', String(paperId));
+        const paperId = String(options.paperId ?? options.paper_id ?? '').trim();
+        if (paperId && paperId !== '0') {
+            params.set('paper_id', paperId);
         }
         return `/viewer?${params.toString()}`;
     },
@@ -227,7 +227,7 @@ const Utils = {
                 kind,
                 src,
                 back: String(url.searchParams.get('back') || window.location.href).trim(),
-                paperId: Number(url.searchParams.get('paper_id') || 0)
+                paperId: String(url.searchParams.get('paper_id') || '').trim()
             };
         } catch (error) {
             return null;

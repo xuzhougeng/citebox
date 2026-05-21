@@ -303,8 +303,9 @@ const ResourceViewerPage = {
             </div>
         `;
 
-        if (this.pdfDetailLink && resource.paperId > 0) {
-            this.pdfDetailLink.href = `/library?paper_id=${encodeURIComponent(resource.paperId)}`;
+        const paperId = String(resource.paperId || '').trim();
+        if (this.pdfDetailLink && paperId) {
+            this.pdfDetailLink.href = `/library?paper_id=${encodeURIComponent(paperId)}`;
             this.pdfDetailLink.hidden = false;
         }
 
@@ -864,7 +865,7 @@ const ResourceViewerPage = {
                 href: url.href,
                 label: t('viewer.label_pdf', 'PDF 查看'),
                 name: this.filenameFromURL(url) || t('viewer.label_pdf_default', 'PDF 文档'),
-                paperId: Number(params.get('paper_id') || 0)
+                paperId: String(params.get('paper_id') || '').trim()
             };
         }
 

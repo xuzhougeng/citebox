@@ -72,6 +72,16 @@ test('parseResourceViewerNavigationURL returns paper metadata', () => {
         kind: 'pdf',
         src: '/files/papers/a.pdf',
         back: '/library',
-        paperId: 42,
+        paperId: '42',
     });
+});
+
+test('resource viewer URLs preserve large paper identifiers as strings', () => {
+    const Utils = loadUtils();
+    const paperId = '1777519479295165603';
+    const href = Utils.resourceViewerURL('pdf', '/files/papers/a.pdf', '/library', { paperId });
+    const parsed = Utils.parseResourceViewerNavigationURL(href);
+
+    assert.equal(new URL(href, 'http://localhost').searchParams.get('paper_id'), paperId);
+    assert.equal(parsed.paperId, paperId);
 });
