@@ -474,8 +474,59 @@ const ResourceViewerPage = {
             || message.toLowerCase().includes('cancelled');
     },
 
-    currentPDFSelectionText() {
-        return String(this.pdfState.selectionText || '').trim();
+    currentPDFSelectionText(selection = window.getSelection?.()) {
+        return String(selection?.toString?.() || this.pdfState.selectionText || '').trim();
+    },
+
+    selectionBelongsToPDFViewer(selection = window.getSelection?.()) {
+        const scroll = this.stage?.querySelector?.('[data-pdf-scroll]');
+        if (!scroll || !selection) return false;
+        return this.nodeBelongsToElement(selection.anchorNode, scroll)
+            && this.nodeBelongsToElement(selection.focusNode, scroll);
+    },
+
+    nodeBelongsToElement(node, element) {
+        if (!node || !element) return false;
+        const textNodeType = typeof Node !== 'undefined' ? Node.TEXT_NODE : 3;
+        const candidate = node.nodeType === textNodeType ? node.parentElement : node;
+        return !!candidate && typeof element.contains === 'function' && element.contains(candidate);
+    },
+
+    pdfSelectionClientRect(selection = window.getSelection?.()) {
+        if (!selection?.rangeCount) return null;
+        const rects = [];
+        for (let index = 0; index < selection.rangeCount; index += 1) {
+            const range = selection.getRangeAt(index);
+            const clientRects = Array.from(range.getClientRects?.() || []);
+            rects.push(...clientRects.filter((rect) => rect.width > 0 && rect.height > 0));
+            if (!clientRects.length) {
+                const bounds = range.getBoundingClientRect?.();
+                if (bounds?.width > 0 && bounds?.height > 0) {
+                    rects.push(bounds);
+                }
+            }
+        }
+        if (!rects.length) return null;
+        const left = Math.min(...rects.map((rect) => rect.left));
+        const top = Math.min(...rects.map((rect) => rect.top));
+        const right = Math.max(...rects.map((rect) => rect.right));
+        const bottom = Math.max(...rects.map((rect) => rect.bottom));
+        const result = {
+            left,
+            top,
+            right,
+            bottom,
+            width: right - left,
+            height: bottom - top
+        };
+        const rectPrototype = Object.getPrototypeOf(rects[0]);
+        const objectPrototype = Object.getPrototypeOf({});
+        if (rectPrototype
+            && rectPrototype !== objectPrototype
+            && rectPrototype.constructor?.name === 'Object') {
+            Object.setPrototypeOf(result, rectPrototype);
+        }
+        return result;
     },
 
     beginPDFSelectionDrag(event) {

@@ -8,12 +8,43 @@ const vm = require('node:vm');
 
 const modulePath = path.resolve(__dirname, '..', 'viewer.js');
 
-function loadViewerPage() {
+function createElement(name) {
+    return {
+        name,
+        children: new Set(),
+        classList: {
+            classes: new Set(),
+            add(value) { this.classes.add(value); },
+            remove(value) { this.classes.delete(value); },
+            contains(value) { return this.classes.has(value); },
+        },
+        style: {},
+        contains(node) {
+            if (node === this) return true;
+            return this.children.has(node) || this.children.has(node?.parentElement);
+        },
+        appendChild(child) {
+            child.parentElement = this;
+            this.children.add(child);
+        },
+        querySelector(selector) {
+            if (selector === '[data-pdf-scroll]') return this.pdfScroll || null;
+            return null;
+        },
+        getBoundingClientRect() {
+            return { left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 };
+        },
+    };
+}
+
+function loadViewerPage(selection) {
     const code = `${fs.readFileSync(modulePath, 'utf8')}\nglobalThis.__RESOURCE_VIEWER_PAGE__ = ResourceViewerPage;`;
     const context = {
         console,
         URL,
         URLSearchParams,
+        Node: { TEXT_NODE: 3 },
+        navigator: {},
         window: {
             location: {
                 href: 'http://localhost/viewer?kind=pdf&src=%2Fpaper.pdf',
@@ -21,16 +52,24 @@ function loadViewerPage() {
                 search: '?kind=pdf&src=%2Fpaper.pdf',
             },
             history: { length: 1 },
+            innerWidth: 1280,
+            innerHeight: 800,
             setTimeout,
             clearTimeout,
-            requestAnimationFrame(callback) { return callback(); },
             getSelection() {
-                return { removeAllRanges() {} };
+                return selection;
             },
         },
         document: {
             referrer: '',
             addEventListener() {},
+            createElement(tagName) {
+                return createElement(tagName);
+            },
+            head: createElement('head'),
+        },
+        t(key, fallback) {
+            return fallback || key;
         },
     };
     context.globalThis = context;
@@ -49,109 +88,71 @@ function rect(left, top, right, bottom) {
     };
 }
 
-function span(text, bounds) {
-    return {
-        textContent: text,
-        getBoundingClientRect() {
-            return bounds;
+test('currentPDFSelectionText reads the browser native selection text', () => {
+    const selection = {
+        toString() {
+            return '  Among the genomic alterations observed in ER+ breast cancer,\nARID1A being  ';
         },
     };
-}
+    const viewer = loadViewerPage(selection);
 
-test('PDF drag selection follows text flow and renders one highlight per selected line', () => {
-    const viewer = loadViewerPage();
-    const pageRect = rect(0, 0, 800, 1000);
-    const textLayer = {
-        closest() {
-            return { getBoundingClientRect: () => pageRect };
-        },
-        querySelectorAll() {
-            return [
-                span('based', rect(120, 100, 210, 126)),
-                span('on', rect(222, 100, 252, 126)),
-                span('the', rect(264, 100, 308, 126)),
-                span('the', rect(62, 140, 104, 166)),
-                span('amplification', rect(116, 140, 282, 166)),
-                span('of', rect(294, 140, 322, 166)),
-                span('ERBB2', rect(334, 140, 420, 166)),
-            ];
-        },
-    };
-    const drag = {
-        startX: 118,
-        startY: 112,
-        currentX: 430,
-        currentY: 152,
-    };
-    const selection = viewer.collectPDFSelectionFromClientRect(
-        viewer.normalizedClientRect(drag.startX, drag.startY, drag.currentX, drag.currentY),
-        textLayer,
-        drag
+    assert.equal(
+        viewer.currentPDFSelectionText(),
+        'Among the genomic alterations observed in ER+ breast cancer,\nARID1A being'
     );
-
-    assert.equal(selection.text, 'based on the\nthe amplification of ERBB2');
-    assert.equal(selection.rects.length, 2);
-    assert.deepEqual(Array.from(selection.rects, (item) => Math.round(item.left)), [120, 62]);
-    assert.deepEqual(Array.from(selection.rects, (item) => Math.round(item.width)), [188, 358]);
 });
 
-test('PDF text line grouping keeps wide intra-line spaces but splits columns', () => {
-    const viewer = loadViewerPage();
-    const segments = viewer.buildPDFTextLineSegments([
-        span('the amplification of', rect(189, 1237, 315, 1253)),
-        span('ERBB2', rect(390, 1237, 440, 1253)),
-        span('(also known as HER2) that dic-', rect(465, 1237, 668, 1253)),
-        span('SWI/SNF chromatin remodeling complexes, with', rect(811, 1237, 1128, 1253)),
-    ].map((item) => ({
-        text: item.textContent,
-        rect: item.getBoundingClientRect(),
-    })), rect(0, 0, 1500, 2000));
+test('selectionBelongsToPDFViewer accepts selections inside the PDF scroll area', () => {
+    const scroll = createElement('scroll');
+    const textLayer = createElement('textLayer');
+    const textNode = { nodeType: 3, parentElement: textLayer };
+    scroll.appendChild(textLayer);
+    const selection = {
+        anchorNode: textNode,
+        focusNode: textNode,
+        toString() { return 'ER+ breast cancer'; },
+    };
+    const viewer = loadViewerPage(selection);
+    viewer.stage = createElement('stage');
+    viewer.stage.pdfScroll = scroll;
 
-    assert.equal(segments.length, 2);
-    assert.deepEqual(Array.from(segments, (item) => Math.round(item.left)), [189, 811]);
-    assert.deepEqual(Array.from(segments, (item) => Math.round(item.right)), [668, 1128]);
+    assert.equal(viewer.selectionBelongsToPDFViewer(selection), true);
 });
 
-test('PDF drag selection keeps justified right-column lines intact', () => {
-    const viewer = loadViewerPage();
-    const pageRect = rect(0, 0, 1500, 2000);
-    const textLayer = {
-        closest() {
-            return { getBoundingClientRect: () => pageRect };
-        },
-        querySelectorAll() {
-            return [
-                span('Among the genomic alterations', rect(811, 100, 1040, 126)),
-                span('observed in ER', rect(1220, 100, 1300, 126)),
-                span('+', rect(1307, 100, 1316, 126)),
-                span('breast cancer,', rect(1324, 100, 1460, 126)),
-                span('mutations are often found in genes encoding the subunits of the', rect(811, 140, 1460, 166)),
-                span('SWI/SNF chromatin remodeling complexes, with', rect(811, 180, 1000, 206)),
-                span('ARID1A being', rect(1285, 180, 1460, 206)),
-                span('the most frequently mutated SWI/SNF subunit gene', rect(811, 220, 1220, 246)),
-                span('Left column text should stay out', rect(120, 140, 650, 166)),
-            ];
-        },
+test('selectionBelongsToPDFViewer rejects selections outside the PDF scroll area', () => {
+    const scroll = createElement('scroll');
+    const outside = createElement('outside');
+    const selection = {
+        anchorNode: outside,
+        focusNode: outside,
+        toString() { return 'outside text'; },
     };
-    const drag = {
-        startX: 812,
-        startY: 112,
-        currentX: 1225,
-        currentY: 232,
-    };
-    const selection = viewer.collectPDFSelectionFromClientRect(
-        viewer.normalizedClientRect(drag.startX, drag.startY, drag.currentX, drag.currentY),
-        textLayer,
-        drag
-    );
+    const viewer = loadViewerPage(selection);
+    viewer.stage = createElement('stage');
+    viewer.stage.pdfScroll = scroll;
 
-    assert.equal(selection.text, [
-        'Among the genomic alterations observed in ER+ breast cancer,',
-        'mutations are often found in genes encoding the subunits of the',
-        'SWI/SNF chromatin remodeling complexes, with ARID1A being',
-        'the most frequently mutated SWI/SNF subunit gene',
-    ].join('\n'));
-    assert.equal(selection.rects.length, 4);
-    assert.deepEqual(Array.from(selection.rects, (item) => Math.round(item.left)), [812, 811, 811, 811]);
-    assert.deepEqual(Array.from(selection.rects, (item) => Math.round(item.width)), [648, 649, 649, 409]);
+    assert.equal(viewer.selectionBelongsToPDFViewer(selection), false);
+});
+
+test('pdfSelectionClientRect unions visible native selection rects', () => {
+    const selection = {
+        rangeCount: 1,
+        getRangeAt() {
+            return {
+                getClientRects() {
+                    return [
+                        rect(40, 80, 140, 104),
+                        rect(38, 112, 220, 136),
+                    ];
+                },
+                getBoundingClientRect() {
+                    return rect(40, 80, 220, 136);
+                },
+            };
+        },
+        toString() { return 'two selected lines'; },
+    };
+    const viewer = loadViewerPage(selection);
+
+    assert.deepEqual(viewer.pdfSelectionClientRect(selection), rect(38, 80, 220, 136));
 });
