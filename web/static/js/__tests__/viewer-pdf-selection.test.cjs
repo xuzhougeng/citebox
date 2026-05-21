@@ -216,3 +216,69 @@ test('pdfSelectionClientRect unions visible native selection rects', () => {
         assert.equal(actual[field], value);
     }
 });
+
+test('refreshPDFSelectionMenu stores native selection text and bounds and shows the menu', () => {
+    const scroll = createElement('scroll');
+    const textLayer = createElement('textLayer');
+    const textNode = { nodeType: 3, parentElement: textLayer };
+    const selectionRect = rect(24, 48, 180, 72);
+    scroll.appendChild(textLayer);
+    const selection = {
+        anchorNode: textNode,
+        focusNode: textNode,
+        rangeCount: 1,
+        getRangeAt() {
+            return {
+                getClientRects() {
+                    return [selectionRect];
+                },
+                getBoundingClientRect() {
+                    return selectionRect;
+                },
+            };
+        },
+        toString() {
+            return '  selected PDF text  ';
+        },
+    };
+    const viewer = loadViewerPage(selection);
+    viewer.stage = createElement('stage');
+    viewer.stage.pdfScroll = scroll;
+    viewer.pdfState = {
+        ...viewer.defaultPDFState(),
+        pdfDocument: {},
+    };
+    let shownRect = null;
+    viewer.showPDFSelectionMenu = (menuRect) => {
+        shownRect = menuRect;
+    };
+
+    viewer.refreshPDFSelectionMenu();
+
+    assert.equal(viewer.pdfState.selectionText, 'selected PDF text');
+    for (const [field, value] of Object.entries(selectionRect)) {
+        assert.equal(viewer.pdfState.selectionClientRect[field], value);
+        assert.equal(shownRect[field], value);
+    }
+});
+
+test('clearPDFSelection removes native browser ranges', () => {
+    let removeAllRangesCount = 0;
+    const selection = {
+        removeAllRanges() {
+            removeAllRangesCount += 1;
+        },
+    };
+    const viewer = loadViewerPage(selection);
+    viewer.pdfState = {
+        ...viewer.defaultPDFState(),
+        selectionText: 'selected text',
+        selectionClientRect: rect(10, 20, 50, 40),
+    };
+
+    viewer.clearPDFSelection();
+
+    assert.equal(removeAllRangesCount, 1);
+    assert.equal(viewer.pdfState.selectionText, '');
+    assert.equal(viewer.pdfState.selectionClientRect, null);
+});

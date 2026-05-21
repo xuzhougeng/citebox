@@ -24,6 +24,7 @@ const ResourceViewerPage = {
         this.pdfState = this.defaultPDFState();
         this.dragState = null;
         this.resizeTimer = null;
+        this.pdfSelectionTimer = null;
 
         this.closeButton?.addEventListener('click', () => this.close());
         this.resetButton?.addEventListener('click', () => {
@@ -56,6 +57,12 @@ const ResourceViewerPage = {
         });
         document.addEventListener('pointercancel', (event) => {
             this.endImageDrag(event);
+        });
+        document.addEventListener('selectionchange', () => {
+            this.schedulePDFSelectionMenuRefresh();
+        });
+        document.addEventListener('pointerup', () => {
+            this.schedulePDFSelectionMenuRefresh();
         });
         window.addEventListener('resize', () => {
             this.applyImageTransform();
@@ -497,6 +504,8 @@ const ResourceViewerPage = {
         this.pdfLoadToken = (this.pdfLoadToken || 0) + 1;
         window.clearTimeout(this.resizeTimer);
         this.resizeTimer = null;
+        window.clearTimeout(this.pdfSelectionTimer);
+        this.pdfSelectionTimer = null;
         if (previousPDFState.pdfViewer && typeof previousPDFState.pdfViewer.setDocument === 'function') {
             try {
                 previousPDFState.pdfViewer.setDocument(null);
@@ -573,6 +582,34 @@ const ResourceViewerPage = {
             height: bottom - top
         };
         return result;
+    },
+
+    schedulePDFSelectionMenuRefresh() {
+        if (!this.pdfState?.pdfDocument) return;
+        window.clearTimeout(this.pdfSelectionTimer);
+        this.pdfSelectionTimer = window.setTimeout(() => {
+            this.refreshPDFSelectionMenu();
+        }, 0);
+    },
+
+    refreshPDFSelectionMenu() {
+        if (!this.pdfState?.pdfDocument) return;
+        const selection = window.getSelection?.();
+        const text = this.currentPDFSelectionText(selection);
+        if (!text || !this.selectionBelongsToPDFViewer(selection)) {
+            this.hidePDFSelectionMenu();
+            this.pdfState.selectionText = '';
+            this.pdfState.selectionClientRect = null;
+            return;
+        }
+        const rect = this.pdfSelectionClientRect(selection);
+        if (!rect) {
+            this.hidePDFSelectionMenu();
+            return;
+        }
+        this.pdfState.selectionText = text;
+        this.pdfState.selectionClientRect = rect;
+        this.showPDFSelectionMenu(rect);
     },
 
     showPDFSelectionMenu(rect) {
