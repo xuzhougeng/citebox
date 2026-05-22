@@ -182,6 +182,10 @@ func NormalizeSettings(input model.AISettings) (model.AISettings, error) {
 	return settings, nil
 }
 
+func modelSupportsImages(config model.AIModelConfig) bool {
+	return config.SupportsImages == nil || *config.SupportsImages
+}
+
 func normalizeModels(settings model.AISettings, defaults model.AISettings) ([]model.AIModelConfig, error) {
 	fallbackModel := defaults.Models[0]
 	if settings.MaxOutputTokens > 0 {
@@ -256,6 +260,10 @@ func normalizeModelConfig(input model.AIModelConfig, fallback model.AIModelConfi
 	}
 	if config.MaxOutputTokens > 16384 {
 		return model.AIModelConfig{}, apperr.New(apperr.CodeInvalidArgument, "max_output_tokens 过大")
+	}
+	if config.SupportsImages == nil {
+		supportsImages := modelSupportsImages(fallback)
+		config.SupportsImages = &supportsImages
 	}
 	if config.Name == "" {
 		config.Name = fmt.Sprintf("%s / %s", strings.ToUpper(string(config.Provider)), config.Model)

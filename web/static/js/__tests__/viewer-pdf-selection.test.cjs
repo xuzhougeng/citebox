@@ -332,6 +332,7 @@ test('PDF selection AI ask uses transient read stream API', async () => {
 
     assert.equal(request.paper_id, 42);
     assert.equal(request.action, 'paper_qa');
+    assert.equal(request.include_figures, false);
     assert.match(request.question, /Among the genomic alterations observed in ER\+ breast cancer/);
     assert.match(request.question, /为什么这里强调 ARID1A？/);
     assert.equal(dialogState.answer, 'answer');

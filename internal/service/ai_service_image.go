@@ -20,6 +20,10 @@ import (
 )
 
 func (s *AIService) loadFigureInputs(paper *model.Paper, figures []model.Figure, action model.AIAction) ([]aiImageInput, []string, error) {
+	return s.loadFigureInputsWithOptions(paper, figures, action, true)
+}
+
+func (s *AIService) loadFigureInputsWithOptions(paper *model.Paper, figures []model.Figure, action model.AIAction, includeImagePayloads bool) ([]aiImageInput, []string, error) {
 	images := make([]aiImageInput, 0, len(figures))
 	summaries := make([]string, 0, len(figures))
 	totalBytes := 0
@@ -28,6 +32,9 @@ func (s *AIService) loadFigureInputs(paper *model.Paper, figures []model.Figure,
 		summary := buildAIFigureSummary(figure, action)
 		summaries = append(summaries, summary)
 
+		if !includeImagePayloads {
+			continue
+		}
 		if budgetReached {
 			continue
 		}

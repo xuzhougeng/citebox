@@ -84,6 +84,31 @@ test('settings page exposes image generation controls in HTML', () => {
     }
 });
 
+test('settings page exposes per-model image input capability control in HTML', () => {
+    const html = fs.readFileSync(settingsHTMLPath, 'utf8');
+
+    assert.match(html, /id="aiModelSupportsImagesInput"/);
+    assert.match(html, /data-i18n="settings\.ai\.supports_images"/);
+});
+
+test('getAIPayloadModels preserves per-model image input capability', () => {
+    const SettingsPage = loadSettingsPage();
+    const subject = Object.create(SettingsPage);
+
+    const payload = subject.getAIPayloadModels([
+        {
+            id: 'qa',
+            name: 'QA',
+            provider: 'openai',
+            model: 'text-only',
+            max_output_tokens: 1200,
+            supports_images: false,
+        },
+    ]);
+
+    assert.equal(payload[0].supports_images, false);
+});
+
 test('buildAIModelSettingsPayload includes image generation settings', () => {
     const subject = makeSettingsSubject();
     subject.imageGenEnabledInput.checked = true;

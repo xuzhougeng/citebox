@@ -302,6 +302,143 @@ func TestReadPaperStreamSupportsPaperQA(t *testing.T) {
 	}
 }
 
+func TestPrepareReadPaperQACanOmitFigures(t *testing.T) {
+	_, repo, cfg := newTestService(t)
+	aiSvc := NewAIService(repo, cfg, nil)
+	paper := createTestPaper(t, repo)
+	writeFigureFixture(t, filepath.Join(cfg.FiguresDir(), paper.Figures[0].Filename), 320, 220)
+
+	if _, err := aiSvc.UpdateSettings(model.AISettings{
+		Models: []model.AIModelConfig{
+			{
+				ID:              "qa",
+				Name:            "QA Text",
+				Provider:        model.AIProviderOpenAI,
+				APIKey:          "test-key",
+				BaseURL:         "https://api.openai.com",
+				Model:           "text-only-model",
+				MaxOutputTokens: 1200,
+			},
+		},
+		SceneModels: model.AISceneModelSelection{
+			DefaultModelID: "qa",
+			QAModelID:      "qa",
+		},
+		MaxFigures:   1,
+		SystemPrompt: "system",
+		QAPrompt:     "qa",
+	}); err != nil {
+		t.Fatalf("UpdateSettings() error = %v", err)
+	}
+
+	includeFigures := false
+	prepared, err := aiSvc.prepareRead(model.AIReadRequest{
+		PaperID:        paper.ID,
+		Action:         model.AIActionPaperQA,
+		Question:       "请解释划选内容。",
+		IncludeFigures: &includeFigures,
+	}, true)
+	if err != nil {
+		t.Fatalf("prepareRead() error = %v", err)
+	}
+
+	if prepared.includedFigures != 0 || len(prepared.images) != 0 {
+		t.Fatalf("prepareRead() included=%d images=%d, want 0/0", prepared.includedFigures, len(prepared.images))
+	}
+	if strings.Contains(prepared.userPrompt, "caption=Figure") {
+		t.Fatalf("prepareRead() prompt includes figure summaries despite include_figures=false\n%s", prepared.userPrompt)
+	}
+}
+
+func TestPrepareReadPaperQAOmitImagesForTextOnlyModel(t *testing.T) {
+	_, repo, cfg := newTestService(t)
+	aiSvc := NewAIService(repo, cfg, nil)
+	paper := createTestPaper(t, repo)
+	writeFigureFixture(t, filepath.Join(cfg.FiguresDir(), paper.Figures[0].Filename), 320, 220)
+
+	supportsImages := false
+	if _, err := aiSvc.UpdateSettings(model.AISettings{
+		Models: []model.AIModelConfig{
+			{
+				ID:              "qa",
+				Name:            "QA Text",
+				Provider:        model.AIProviderOpenAI,
+				APIKey:          "test-key",
+				BaseURL:         "https://api.openai.com",
+				Model:           "text-only-model",
+				MaxOutputTokens: 1200,
+				SupportsImages:  &supportsImages,
+			},
+		},
+		SceneModels: model.AISceneModelSelection{
+			DefaultModelID: "qa",
+			QAModelID:      "qa",
+		},
+		MaxFigures:   1,
+		SystemPrompt: "system",
+		QAPrompt:     "qa",
+	}); err != nil {
+		t.Fatalf("UpdateSettings() error = %v", err)
+	}
+
+	prepared, err := aiSvc.prepareRead(model.AIReadRequest{
+		PaperID:  paper.ID,
+		Action:   model.AIActionPaperQA,
+		Question: "请总结这篇文献。",
+	}, true)
+	if err != nil {
+		t.Fatalf("prepareRead() error = %v", err)
+	}
+
+	if prepared.includedFigures != 0 || len(prepared.images) != 0 {
+		t.Fatalf("prepareRead() included=%d images=%d, want 0/0 for text-only model", prepared.includedFigures, len(prepared.images))
+	}
+}
+
+func TestPrepareReadRejectsImageRequiredActionForTextOnlyModel(t *testing.T) {
+	_, repo, cfg := newTestService(t)
+	aiSvc := NewAIService(repo, cfg, nil)
+	paper := createTestPaper(t, repo)
+	writeFigureFixture(t, filepath.Join(cfg.FiguresDir(), paper.Figures[0].Filename), 320, 220)
+
+	supportsImages := false
+	if _, err := aiSvc.UpdateSettings(model.AISettings{
+		Models: []model.AIModelConfig{
+			{
+				ID:              "figure",
+				Name:            "Figure Text",
+				Provider:        model.AIProviderOpenAI,
+				APIKey:          "test-key",
+				BaseURL:         "https://api.openai.com",
+				Model:           "text-only-model",
+				MaxOutputTokens: 1200,
+				SupportsImages:  &supportsImages,
+			},
+		},
+		SceneModels: model.AISceneModelSelection{
+			DefaultModelID: "figure",
+			FigureModelID:  "figure",
+		},
+		SystemPrompt: "system",
+		FigurePrompt: "figure",
+	}); err != nil {
+		t.Fatalf("UpdateSettings() error = %v", err)
+	}
+
+	_, err := aiSvc.prepareRead(model.AIReadRequest{
+		PaperID:  paper.ID,
+		FigureID: paper.Figures[0].ID,
+		Action:   model.AIActionFigureInterpretation,
+		Question: "请解读这张图。",
+	}, true)
+	if !apperr.IsCode(err, apperr.CodeFailedPrecondition) {
+		t.Fatalf("prepareRead() code = %q, want %q", apperr.CodeOf(err), apperr.CodeFailedPrecondition)
+	}
+	if !strings.Contains(err.Error(), "图片输入") {
+		t.Fatalf("prepareRead() error = %v, want image input hint", err)
+	}
+}
+
 func TestCallProviderStreamGenericUsesResponsesDoneSnapshot(t *testing.T) {
 	_, repo, cfg := newTestService(t)
 	aiSvc := NewAIService(repo, cfg, nil)

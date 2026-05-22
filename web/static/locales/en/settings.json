@@ -186,6 +186,8 @@
     "settings.ai.model_max_tokens_placeholder": "e.g. 1200",
     "settings.ai.base_url_placeholder": "Uses official endpoint by default; enter custom URL for compatible gateways",
     "settings.ai.legacy_mode": "Use legacy OpenAI mode (Chat Completions) for compatibility with other OpenAI-style gateways",
+    "settings.ai.supports_images": "Supports image input",
+    "settings.ai.text_only_badge": "Text only",
     "settings.ai.omit_temperature": "Do not send temperature",
     "settings.ai.thinking_enabled": "Enable thinking parameter",
     "settings.ai.reasoning_effort": "Reasoning Effort",

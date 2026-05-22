@@ -62,6 +62,9 @@ func TestAISettingsDefaultsAndPersistence(t *testing.T) {
 	if len(defaults.Models) != 1 || defaults.SceneModels.DefaultModelID == "" {
 		t.Fatalf("GetSettings() defaults = %+v, want default model pool and scene bindings", defaults)
 	}
+	if !aiModelSupportsImages(defaults.Models[0]) {
+		t.Fatalf("GetSettings() default model supports_images = false, want true")
+	}
 	if defaults.SceneModels.IMIntentModelID == "" {
 		t.Fatalf("GetSettings() defaults scene_models = %+v, want IM intent model default", defaults.SceneModels)
 	}
@@ -119,6 +122,9 @@ func TestAISettingsDefaultsAndPersistence(t *testing.T) {
 	}
 	if reloaded.Models[0].MaxOutputTokens != 900 {
 		t.Fatalf("GetSettings() reload model max_output_tokens = %d, want 900", reloaded.Models[0].MaxOutputTokens)
+	}
+	if !aiModelSupportsImages(reloaded.Models[0]) {
+		t.Fatalf("GetSettings() reload legacy model supports_images = false, want true default")
 	}
 	if reloaded.TranslatePrompt != "custom translate" || reloaded.Translation.PrimaryLanguage != "中文" || reloaded.Translation.TargetLanguage != "英文" {
 		t.Fatalf("GetSettings() reload translate settings = %+v, want persisted translate config", reloaded)

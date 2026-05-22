@@ -59,6 +59,7 @@ const SettingsPage = {
         this.aiModelBaseURLInput = document.getElementById('aiModelBaseURLInput');
         this.aiModelAPIKeyInput = document.getElementById('aiModelAPIKeyInput');
         this.aiModelLegacyModeInput = document.getElementById('aiModelLegacyModeInput');
+        this.aiModelSupportsImagesInput = document.getElementById('aiModelSupportsImagesInput');
         this.aiModelOmitTemperatureInput = document.getElementById('aiModelOmitTemperatureInput');
         this.aiModelThinkingInput = document.getElementById('aiModelThinkingInput');
         this.aiModelReasoningEffortInput = document.getElementById('aiModelReasoningEffortInput');
@@ -636,6 +637,7 @@ const SettingsPage = {
             this.aiModelBaseURLInput,
             this.aiModelAPIKeyInput,
             this.aiModelLegacyModeInput,
+            this.aiModelSupportsImagesInput,
             this.aiModelOmitTemperatureInput,
             this.aiModelThinkingInput,
             this.aiModelReasoningEffortInput
@@ -2131,6 +2133,7 @@ const SettingsPage = {
             api_key: '',
             max_output_tokens: 1200,
             openai_legacy_mode: false,
+            supports_images: true,
             omit_temperature: false,
             thinking_enabled: false,
             reasoning_effort: '',
@@ -2159,7 +2162,8 @@ const SettingsPage = {
     aiModelButtonMeta(model) {
         const provider = model.provider || 'openai';
         const modelName = model.model || t('settings.ai.unnamed_model_id', '未填写模型名');
-        return `${provider} / ${modelName}`;
+        const capability = model.supports_images === false ? ` / ${t('settings.ai.text_only_badge', '纯文本')}` : '';
+        return `${provider} / ${modelName}${capability}`;
     },
 
     async addAIModel() {
@@ -2197,6 +2201,7 @@ const SettingsPage = {
         this.aiModelBaseURLInput.value = model.base_url || '';
         this.aiModelAPIKeyInput.value = model.api_key || '';
         this.aiModelLegacyModeInput.checked = Boolean(model.openai_legacy_mode);
+        this.aiModelSupportsImagesInput.checked = model.supports_images !== false;
         this.aiModelOmitTemperatureInput.checked = Boolean(model.omit_temperature);
         this.aiModelThinkingInput.checked = Boolean(model.thinking_enabled);
         this.aiModelReasoningEffortInput.value = model.reasoning_effort || '';
@@ -2245,6 +2250,7 @@ const SettingsPage = {
             base_url: this.aiModelBaseURLInput.value.trim(),
             api_key: this.aiModelAPIKeyInput.value.trim(),
             openai_legacy_mode: this.aiModelLegacyModeInput.checked,
+            supports_images: this.aiModelSupportsImagesInput.checked,
             omit_temperature: this.aiModelOmitTemperatureInput.checked,
             thinking_enabled: this.aiModelThinkingInput.checked,
             reasoning_effort: this.aiModelReasoningEffortInput.value,
@@ -2569,6 +2575,7 @@ const SettingsPage = {
             base_url: item.base_url || '',
             api_key: item.api_key || '',
             openai_legacy_mode: Boolean(item.openai_legacy_mode),
+            supports_images: item.supports_images !== false,
             omit_temperature: Boolean(item.omit_temperature),
             thinking_enabled: Boolean(item.thinking_enabled),
             reasoning_effort: item.reasoning_effort || ''
@@ -2591,6 +2598,7 @@ const SettingsPage = {
                 base_url: model.base_url,
                 api_key: model.api_key,
                 openai_legacy_mode: model.openai_legacy_mode,
+                supports_images: model.supports_images !== false,
                 omit_temperature: model.omit_temperature,
                 thinking_enabled: model.thinking_enabled,
                 reasoning_effort: model.reasoning_effort || ''

@@ -153,6 +153,9 @@ func (s *AIService) prepareRead(input model.AIReadRequest, structuredOutput bool
 	if err != nil {
 		return nil, err
 	}
+	if requiresImageInput(action) && !aiModelSupportsImages(modelConfig) {
+		return nil, apperr.New(apperr.CodeFailedPrecondition, "当前场景选择的模型未启用图片输入，请在 AI 设置中更换支持图片的模型，或打开该模型的图片输入能力")
+	}
 	if strings.TrimSpace(modelConfig.APIKey) == "" {
 		return nil, apperr.New(apperr.CodeFailedPrecondition, "请先在 AI 页面为当前场景配置可用模型和 API Key")
 	}
@@ -193,12 +196,17 @@ func (s *AIService) prepareRead(input model.AIReadRequest, structuredOutput bool
 		return nil, err
 	}
 
-	selectedFigures, err := selectFiguresForAI(paper, action, input.FigureID, settings.MaxFigures)
-	if err != nil {
-		return nil, err
+	includeFigures := includeFiguresForRead(input, action)
+	includeImagePayloads := includeFigures && aiModelSupportsImages(modelConfig)
+	var selectedFigures []model.Figure
+	if includeFigures {
+		selectedFigures, err = selectFiguresForAI(paper, action, input.FigureID, settings.MaxFigures)
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	images, figureSummaries, err := s.loadFigureInputs(paper, selectedFigures, action)
+	images, figureSummaries, err := s.loadFigureInputsWithOptions(paper, selectedFigures, action, includeImagePayloads)
 	if err != nil {
 		return nil, err
 	}
@@ -228,6 +236,17 @@ func (s *AIService) prepareRead(input model.AIReadRequest, structuredOutput bool
 		includedFigures:   len(images),
 		images:            images,
 	}, nil
+}
+
+func includeFiguresForRead(input model.AIReadRequest, action model.AIAction) bool {
+	if action == model.AIActionPaperQA && input.IncludeFigures != nil {
+		return *input.IncludeFigures
+	}
+	return true
+}
+
+func requiresImageInput(action model.AIAction) bool {
+	return action == model.AIActionFigureInterpretation || action == model.AIActionTagSuggestion
 }
 
 func buildAIReadResponse(prepared *aiReadPrepared, mode, rawText string) *model.AIReadResponse {

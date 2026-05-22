@@ -676,7 +676,8 @@ AI 流式阅读通过：
       "base_url": "https://api.openai.com",
       "model": "gpt-4.1-mini",
       "max_output_tokens": 1200,
-      "openai_legacy_mode": false
+      "openai_legacy_mode": false,
+      "supports_images": true
     }
   ],
   "scene_models": {
@@ -939,6 +940,7 @@ AI 流式阅读通过：
   "model": "gpt-4.1-mini",
   "max_output_tokens": 1200,
   "openai_legacy_mode": false,
+  "supports_images": true,
   "omit_temperature": false,
   "thinking_enabled": false,
   "reasoning_effort": ""
@@ -948,6 +950,7 @@ AI 流式阅读通过：
 OpenAI 兼容模型配置说明：
 
 - `openai_legacy_mode=true` 时使用 Chat Completions，适合 DeepSeek 等兼容网关。
+- `supports_images=false` 时，该模型不会接收 PDF 图片输入；`paper_qa` 会自动降级为文本问答，图片解读等必须视觉输入的场景会提示更换模型或打开该能力。
 - `omit_temperature=true` 会跳过 `temperature` 字段；`gpt-5*`、`o1*`、`o3*`、`o4*`、`o5*` 模型也会自动跳过，避免模型检查返回 `Unsupported parameter: 'temperature'`。
 - `thinking_enabled=true` 在 Chat Completions 请求体加入 `{"thinking":{"type":"enabled"}}`；在 Responses 模式下会启用 `reasoning` 对象，未设置 `reasoning_effort` 时默认使用 `medium`。
 - `reasoning_effort` 可填 `minimal`、`low`、`medium`、`high`、`xhigh`；Chat Completions 发送为 `reasoning_effort`，Responses 发送为 `reasoning.effort`。
@@ -968,6 +971,7 @@ OpenAI 兼容模型配置说明：
   "figure_id": 12,
   "action": "paper_qa",
   "question": "请总结这篇文章",
+  "include_figures": false,
   "history": [
     {
       "question": "上一轮问题",
@@ -983,6 +987,10 @@ OpenAI 兼容模型配置说明：
 - `figure_interpretation`
 - `tag_suggestion`
 - `group_suggestion`
+
+可选字段：
+
+- `include_figures`: 仅 `paper_qa` 支持。设为 `false` 时，本次问答不附带论文图片，适合 PDF 划选解释或只支持文本的模型；省略时保持默认行为，按“图像数量上限”附带图片。
 
 #### `POST /api/ai/translate`
 

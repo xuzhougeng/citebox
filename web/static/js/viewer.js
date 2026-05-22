@@ -850,6 +850,7 @@ const ResourceViewerPage = {
             await API.readPaperWithAIStream({
                 paper_id: dialogState.paperId,
                 action: 'paper_qa',
+                include_figures: false,
                 question: prompt
             }, {
                 signal: dialogState.abortController.signal,

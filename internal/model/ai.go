@@ -31,6 +31,7 @@ type AIModelConfig struct {
 	OmitTemperature  bool       `json:"omit_temperature"`
 	ThinkingEnabled  bool       `json:"thinking_enabled"`
 	ReasoningEffort  string     `json:"reasoning_effort,omitempty"`
+	SupportsImages   *bool      `json:"supports_images,omitempty"`
 }
 
 type AISceneModelSelection struct {
@@ -119,11 +120,12 @@ type AISettings struct {
 }
 
 type AIReadRequest struct {
-	PaperID  int64                `json:"paper_id"`
-	FigureID int64                `json:"figure_id,omitempty"`
-	Action   AIAction             `json:"action"`
-	Question string               `json:"question"`
-	History  []AIConversationTurn `json:"history,omitempty"`
+	PaperID        int64                `json:"paper_id"`
+	FigureID       int64                `json:"figure_id,omitempty"`
+	Action         AIAction             `json:"action"`
+	Question       string               `json:"question"`
+	History        []AIConversationTurn `json:"history,omitempty"`
+	IncludeFigures *bool                `json:"include_figures,omitempty"`
 }
 
 type AIReadExportRequest struct {
@@ -209,6 +211,7 @@ type AITranslateResponse struct {
 }
 
 func DefaultAISettings() AISettings {
+	supportsImages := true
 	defaultModel := AIModelConfig{
 		ID:               "default-openai",
 		Name:             "OpenAI Default",
@@ -217,6 +220,7 @@ func DefaultAISettings() AISettings {
 		Model:            "gpt-4.1-mini",
 		MaxOutputTokens:  1200,
 		OpenAILegacyMode: false,
+		SupportsImages:   &supportsImages,
 	}
 
 	return AISettings{

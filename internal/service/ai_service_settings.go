@@ -421,6 +421,10 @@ func normalizeAIModelConfig(input model.AIModelConfig, fallback model.AIModelCon
 	if config.MaxOutputTokens > 16384 {
 		return model.AIModelConfig{}, apperr.New(apperr.CodeInvalidArgument, "max_output_tokens 过大")
 	}
+	if config.SupportsImages == nil {
+		supportsImages := aiModelSupportsImages(fallback)
+		config.SupportsImages = &supportsImages
+	}
 	if config.Name == "" {
 		config.Name = fmt.Sprintf("%s / %s", strings.ToUpper(string(config.Provider)), config.Model)
 	}
@@ -527,6 +531,10 @@ func applyAIModelConfig(settings *model.AISettings, config model.AIModelConfig) 
 	settings.OmitTemperature = config.OmitTemperature
 	settings.ThinkingEnabled = config.ThinkingEnabled
 	settings.ReasoningEffort = config.ReasoningEffort
+}
+
+func aiModelSupportsImages(config model.AIModelConfig) bool {
+	return config.SupportsImages == nil || *config.SupportsImages
 }
 
 func isSupportedAIProvider(provider model.AIProvider) bool {
