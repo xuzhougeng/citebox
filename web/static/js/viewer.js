@@ -235,6 +235,7 @@ const ResourceViewerPage = {
             highlights: [],
             targetAnnotationId: '',
             targetAnnotationApplied: false,
+            targetAnnotationHighlightActive: false,
             targetAnnotationTimer: null
         };
     },
@@ -331,6 +332,7 @@ const ResourceViewerPage = {
             highlights: [],
             targetAnnotationId: this.initialPDFAnnotationID(resource),
             targetAnnotationApplied: false,
+            targetAnnotationHighlightActive: false,
             targetAnnotationTimer: null
         };
         this.stage.className = 'viewer-stage pdf-mode';
@@ -1001,22 +1003,27 @@ const ResourceViewerPage = {
 
     applyPDFTargetAnnotation() {
         const targetID = String(this.pdfState?.targetAnnotationId || '').trim();
-        if (!targetID || this.pdfState?.targetAnnotationApplied) return false;
+        if (!targetID) return false;
         const marker = this.findPDFTargetMarker(targetID);
         if (!marker) return false;
 
         const state = this.pdfState;
-        state.targetAnnotationApplied = true;
-        const scrollTarget = typeof marker.scrollIntoView === 'function' ? marker : marker.parentElement;
-        scrollTarget?.scrollIntoView?.({ block: 'center', inline: 'nearest', behavior: 'smooth' });
+        if (!state.targetAnnotationApplied) {
+            state.targetAnnotationApplied = true;
+            state.targetAnnotationHighlightActive = true;
+            const scrollTarget = typeof marker.scrollIntoView === 'function' ? marker : marker.parentElement;
+            scrollTarget?.scrollIntoView?.({ block: 'center', inline: 'nearest', behavior: 'smooth' });
+            window.clearTimeout(state.targetAnnotationTimer);
+            state.targetAnnotationTimer = window.setTimeout(() => {
+                state.targetAnnotationHighlightActive = false;
+                if (this.pdfState === state) {
+                    this.findPDFTargetMarker(targetID)?.classList?.remove('is-target-highlight');
+                    state.targetAnnotationTimer = null;
+                }
+            }, 2200);
+        }
+        if (!state.targetAnnotationHighlightActive) return false;
         marker.classList?.add('is-target-highlight');
-        window.clearTimeout(state.targetAnnotationTimer);
-        state.targetAnnotationTimer = window.setTimeout(() => {
-            marker.classList?.remove('is-target-highlight');
-            if (this.pdfState === state) {
-                state.targetAnnotationTimer = null;
-            }
-        }, 2200);
         return true;
     },
 

@@ -888,6 +888,53 @@ test('PDF target annotation scrolls matching rendered highlight into view', () =
     assert.equal(viewer.pdfState.targetAnnotationApplied, true);
 });
 
+test('PDF target annotation keeps visual marker active across highlight rerenders without rescrolling', () => {
+    const { viewer } = loadViewerPage(null);
+    const page = createElement('page');
+    page.classList.add('page');
+    page.dataset.pageNumber = '3';
+    page.getBoundingClientRect = () => rect(0, 0, 1000, 1200);
+    const pdfViewer = createElement('pdfViewer');
+    pdfViewer.appendChild(page);
+    const stage = createElement('stage');
+    stage.pdfViewer = pdfViewer;
+
+    let scrollCount = 0;
+    viewer.stage = stage;
+    viewer.pdfState = {
+        ...viewer.defaultPDFState(),
+        targetAnnotationId: '11',
+        targetAnnotationApplied: false,
+        highlights: [{
+            id: 11,
+            quote_text: 'target highlight',
+            fragments: [{ page: 3, left: 0.1, top: 0.2, width: 0.3, height: 0.04 }],
+        }],
+    };
+    page.appendChild = function appendChild(child) {
+        child.parentElement = this;
+        this.children.add(child);
+        child.scrollIntoView = function scrollIntoView(options) {
+            if (options?.block === 'center') {
+                scrollCount += 1;
+            }
+        };
+    };
+
+    viewer.renderPDFHighlights();
+    let marker = stage.querySelector('[data-highlight-id="11"]');
+    assert.equal(scrollCount, 1);
+    assert.equal(marker.classList.contains('is-target-highlight'), true);
+
+    viewer.renderPDFHighlights();
+    marker = stage.querySelector('[data-highlight-id="11"]');
+
+    assert.equal(scrollCount, 1);
+    assert.equal(marker.classList.contains('is-target-highlight'), true);
+    assert.equal(viewer.pdfState.targetAnnotationApplied, true);
+    assert.equal(viewer.pdfState.targetAnnotationHighlightActive, true);
+});
+
 test('PDF target annotation lookup handles unsafe selector IDs without CSS.escape', () => {
     const { context, viewer } = loadViewerPage(null);
     assert.equal(context.CSS, undefined);
