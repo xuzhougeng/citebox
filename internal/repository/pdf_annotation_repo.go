@@ -3,6 +3,8 @@ package repository
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
+	"strings"
 
 	"github.com/xuzhougeng/citebox/internal/apperr"
 	"github.com/xuzhougeng/citebox/internal/model"
@@ -75,6 +77,88 @@ func (r *PDFAnnotationRepository) ListByPaperID(paperID int64) ([]model.PDFAnnot
 	return annotations, nil
 }
 
+func (r *PDFAnnotationRepository) ListGlobal(filter PDFAnnotationListFilter) ([]model.PDFAnnotationListItem, int, error) {
+	page := filter.Page
+	if page < 1 {
+		page = 1
+	}
+	pageSize := filter.PageSize
+	if pageSize < 1 {
+		pageSize = 50
+	}
+	offset := (page - 1) * pageSize
+
+	whereSQL, args := pdfAnnotationGlobalWhere(filter.Query)
+	countSQL := `
+		SELECT COUNT(*)
+		FROM pdf_annotations a
+		JOIN papers p ON p.id = a.paper_id
+	` + whereSQL
+	var total int
+	if err := r.db.QueryRow(countSQL, args...).Scan(&total); err != nil {
+		return nil, 0, wrapDBError(err, "统计 PDF 标注失败")
+	}
+
+	orderSQL := pdfAnnotationGlobalOrder(filter.Sort)
+	queryArgs := append([]interface{}{}, args...)
+	queryArgs = append(queryArgs, pageSize, offset)
+	rows, err := r.db.Query(fmt.Sprintf(`
+		SELECT
+			a.id, a.paper_id, p.title, p.original_filename, p.stored_pdf_name,
+			a.type, a.page_start, a.page_end, a.quote_text, a.color,
+			a.fragments_json, a.note_text, a.created_at, a.updated_at
+		FROM pdf_annotations a
+		JOIN papers p ON p.id = a.paper_id
+		%s
+		ORDER BY %s
+		LIMIT ? OFFSET ?
+	`, whereSQL, orderSQL), queryArgs...)
+	if err != nil {
+		return nil, 0, wrapDBError(err, "查询 PDF 标注库失败")
+	}
+	defer rows.Close()
+
+	items := []model.PDFAnnotationListItem{}
+	for rows.Next() {
+		item, err := scanPDFAnnotationListItem(rows)
+		if err != nil {
+			return nil, 0, err
+		}
+		items = append(items, *item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, wrapDBError(err, "读取 PDF 标注库失败")
+	}
+	return items, total, nil
+}
+
+func pdfAnnotationGlobalWhere(query string) (string, []interface{}) {
+	normalized := strings.ToLower(strings.TrimSpace(query))
+	if normalized == "" {
+		return "", nil
+	}
+	like := "%" + normalized + "%"
+	return `
+		WHERE lower(a.quote_text) LIKE ?
+			OR lower(p.title) LIKE ?
+			OR lower(p.original_filename) LIKE ?
+			OR lower(COALESCE(p.doi, '')) LIKE ?
+	`, []interface{}{like, like, like, like}
+}
+
+func pdfAnnotationGlobalOrder(sort string) string {
+	switch strings.TrimSpace(sort) {
+	case "updated_asc":
+		return "a.updated_at ASC, a.id ASC"
+	case "created_desc":
+		return "a.created_at DESC, a.id DESC"
+	case "created_asc":
+		return "a.created_at ASC, a.id ASC"
+	default:
+		return "a.updated_at DESC, a.id DESC"
+	}
+}
+
 func (r *PDFAnnotationRepository) GetByID(paperID, annotationID int64) (*model.PDFAnnotation, error) {
 	row := r.db.QueryRow(`
 		SELECT id, paper_id, type, page_start, page_end, quote_text, color, fragments_json, note_text, created_at, updated_at
@@ -127,6 +211,38 @@ func scanPDFAnnotation(scanner interface {
 		annotation.Fragments = []model.PDFAnnotationFragment{}
 	}
 	return &annotation, nil
+}
+
+func scanPDFAnnotationListItem(scanner interface {
+	Scan(dest ...interface{}) error
+}) (*model.PDFAnnotationListItem, error) {
+	var item model.PDFAnnotationListItem
+	var fragmentsJSON string
+	if err := scanner.Scan(
+		&item.ID,
+		&item.PaperID,
+		&item.PaperTitle,
+		&item.PaperOriginalFilename,
+		&item.PaperStoredPDFName,
+		&item.Type,
+		&item.PageStart,
+		&item.PageEnd,
+		&item.QuoteText,
+		&item.Color,
+		&fragmentsJSON,
+		&item.NoteText,
+		&item.CreatedAt,
+		&item.UpdatedAt,
+	); err != nil {
+		return nil, err
+	}
+	if err := json.Unmarshal([]byte(fragmentsJSON), &item.Fragments); err != nil {
+		return nil, apperr.Wrap(apperr.CodeInternal, "解析 PDF 标注位置失败", err)
+	}
+	if item.Fragments == nil {
+		item.Fragments = []model.PDFAnnotationFragment{}
+	}
+	return &item, nil
 }
 
 func pdfAnnotationPageRange(fragments []model.PDFAnnotationFragment) (int, int) {

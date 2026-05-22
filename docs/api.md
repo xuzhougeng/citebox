@@ -298,6 +298,10 @@ AI 流式阅读通过：
 
 - PDF 阅读器加载某篇文献已有高亮
 
+说明：
+
+- 响应中的 `id` 和 `paper_id` 为字符串，避免浏览器端处理大整数 ID 时丢失精度
+
 返回：
 
 ```json
@@ -305,8 +309,8 @@ AI 流式阅读通过：
   "success": true,
   "annotations": [
     {
-      "id": 10,
-      "paper_id": 42,
+      "id": "10",
+      "paper_id": "42",
       "type": "highlight",
       "page_start": 3,
       "page_end": 3,
@@ -356,8 +360,8 @@ AI 流式阅读通过：
 {
   "success": true,
   "annotation": {
-    "id": 11,
-    "paper_id": 42,
+    "id": "11",
+    "paper_id": "42",
     "type": "highlight",
     "page_start": 3,
     "page_end": 3,
@@ -369,6 +373,60 @@ AI 流式阅读通过：
     "note_text": "",
     "created_at": "2026-05-22T10:00:00Z",
     "updated_at": "2026-05-22T10:00:00Z"
+  }
+}
+```
+
+#### `GET /api/pdf-annotations`
+
+用途：
+
+- 全局高亮库按文献和高亮内容搜索所有 PDF 高亮
+- 供 `/highlights` 页面展示、分页和跳转回 PDF 原文位置
+
+查询参数：
+
+- `query`：可选关键词，会匹配高亮文本、文献标题、原始文件名和 DOI
+- `sort`：可选排序方式，支持 `updated_desc`、`updated_asc`、`created_desc`、`created_asc`，默认 `updated_desc`
+- `page`：可选页码，从 1 开始，默认 1
+- `page_size`：可选每页数量，默认 50，最大 100
+
+说明：
+
+- 当前只返回 PDF 高亮类型标注
+- `id` 和 `paper_id` 为字符串，避免浏览器端处理大整数 ID 时丢失精度
+- `paper_pdf_url` 存在时可用于打开 PDF；前端跳转时会附带 `paper_id`、`page` 和 `annotation_id`
+
+返回：
+
+```json
+{
+  "success": true,
+  "annotations": [
+    {
+      "id": "11",
+      "paper_id": "42",
+      "paper_title": "Paper title",
+      "paper_original_filename": "paper.pdf",
+      "paper_pdf_url": "/files/papers/paper.pdf",
+      "type": "highlight",
+      "page_start": 3,
+      "page_end": 3,
+      "quote_text": "selected text",
+      "color": "yellow",
+      "fragments": [
+        { "page": 3, "left": 0.12, "top": 0.34, "width": 0.28, "height": 0.018 }
+      ],
+      "note_text": "",
+      "created_at": "2026-05-22T10:00:00Z",
+      "updated_at": "2026-05-22T10:00:00Z"
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "page_size": 50,
+    "total": 1,
+    "total_pages": 1
   }
 }
 ```

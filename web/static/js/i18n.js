@@ -10,6 +10,7 @@ var CiteBoxI18n = {
     _page: {},
     _shared: {},
     _ready: false,
+    _initPromise: null,
 
     get: function() {
         try { return localStorage.getItem(this.STORAGE_KEY) || this.DEFAULT_LANG; }
@@ -123,8 +124,9 @@ var CiteBoxI18n = {
     },
 
     init: function() {
+        if (this._initPromise) return this._initPromise;
         var self = this;
-        return this.loadLocale().catch(function() {
+        this._initPromise = this.loadLocale().catch(function() {
             self._ready = true;
         }).then(function() {
             window.t = self.t.bind(self);
@@ -133,6 +135,12 @@ var CiteBoxI18n = {
         }).finally(function() {
             document.documentElement.removeAttribute('data-lang-loading');
         });
+        return this._initPromise;
+    },
+
+    whenReady: function() {
+        if (this._ready) return Promise.resolve();
+        return this._initPromise || this.init();
     }
 };
 

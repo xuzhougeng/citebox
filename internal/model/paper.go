@@ -82,6 +82,36 @@ type PDFAnnotation struct {
 	UpdatedAt time.Time               `json:"updated_at"`
 }
 
+type PDFAnnotationListItem struct {
+	ID                    int64                   `json:"id"`
+	PaperID               int64                   `json:"paper_id"`
+	PaperTitle            string                  `json:"paper_title"`
+	PaperOriginalFilename string                  `json:"paper_original_filename"`
+	PaperStoredPDFName    string                  `json:"-"`
+	PaperPDFURL           string                  `json:"paper_pdf_url,omitempty"`
+	Type                  string                  `json:"type"`
+	PageStart             int                     `json:"page_start"`
+	PageEnd               int                     `json:"page_end"`
+	QuoteText             string                  `json:"quote_text"`
+	Color                 string                  `json:"color"`
+	Fragments             []PDFAnnotationFragment `json:"fragments"`
+	NoteText              string                  `json:"note_text"`
+	CreatedAt             time.Time               `json:"created_at"`
+	UpdatedAt             time.Time               `json:"updated_at"`
+}
+
+type PDFAnnotationListPagination struct {
+	Page       int `json:"page"`
+	PageSize   int `json:"page_size"`
+	Total      int `json:"total"`
+	TotalPages int `json:"total_pages"`
+}
+
+type PDFAnnotationListResponse struct {
+	Annotations []PDFAnnotationListItem     `json:"annotations"`
+	Pagination  PDFAnnotationListPagination `json:"pagination"`
+}
+
 type PaperListResponse struct {
 	Papers     []Paper `json:"papers"`
 	Total      int     `json:"total"`

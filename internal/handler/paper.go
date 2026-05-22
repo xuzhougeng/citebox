@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/xuzhougeng/citebox/internal/apperr"
 	"github.com/xuzhougeng/citebox/internal/model"
@@ -15,6 +16,37 @@ import (
 
 type PaperHandler struct {
 	service *service.LibraryService
+}
+
+type pdfAnnotationResponse struct {
+	ID        string                        `json:"id"`
+	PaperID   string                        `json:"paper_id"`
+	Type      string                        `json:"type"`
+	PageStart int                           `json:"page_start"`
+	PageEnd   int                           `json:"page_end"`
+	QuoteText string                        `json:"quote_text"`
+	Color     string                        `json:"color"`
+	Fragments []model.PDFAnnotationFragment `json:"fragments"`
+	NoteText  string                        `json:"note_text"`
+	CreatedAt time.Time                     `json:"created_at"`
+	UpdatedAt time.Time                     `json:"updated_at"`
+}
+
+type pdfAnnotationListItemResponse struct {
+	ID                    string                        `json:"id"`
+	PaperID               string                        `json:"paper_id"`
+	PaperTitle            string                        `json:"paper_title"`
+	PaperOriginalFilename string                        `json:"paper_original_filename"`
+	PaperPDFURL           string                        `json:"paper_pdf_url,omitempty"`
+	Type                  string                        `json:"type"`
+	PageStart             int                           `json:"page_start"`
+	PageEnd               int                           `json:"page_end"`
+	QuoteText             string                        `json:"quote_text"`
+	Color                 string                        `json:"color"`
+	Fragments             []model.PDFAnnotationFragment `json:"fragments"`
+	NoteText              string                        `json:"note_text"`
+	CreatedAt             time.Time                     `json:"created_at"`
+	UpdatedAt             time.Time                     `json:"updated_at"`
 }
 
 func NewPaperHandler(svc *service.LibraryService) *PaperHandler {
@@ -290,6 +322,74 @@ func (h *PaperHandler) RefreshDOIMetadata(w http.ResponseWriter, r *http.Request
 	})
 }
 
+func (h *PaperHandler) ListPDFAnnotationsGlobal(w http.ResponseWriter, r *http.Request) {
+	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+	pageSize, _ := strconv.Atoi(r.URL.Query().Get("page_size"))
+	result, err := h.service.ListPDFAnnotationsGlobal(service.ListPDFAnnotationsParams{
+		Query:    r.URL.Query().Get("query"),
+		Sort:     r.URL.Query().Get("sort"),
+		Page:     page,
+		PageSize: pageSize,
+	})
+	if err != nil {
+		sendError(w, err)
+		return
+	}
+
+	sendJSON(w, http.StatusOK, map[string]interface{}{
+		"success":     true,
+		"annotations": pdfAnnotationListItemResponses(result.Annotations),
+		"pagination":  result.Pagination,
+	})
+}
+
+func pdfAnnotationResponseFrom(annotation model.PDFAnnotation) pdfAnnotationResponse {
+	return pdfAnnotationResponse{
+		ID:        strconv.FormatInt(annotation.ID, 10),
+		PaperID:   strconv.FormatInt(annotation.PaperID, 10),
+		Type:      annotation.Type,
+		PageStart: annotation.PageStart,
+		PageEnd:   annotation.PageEnd,
+		QuoteText: annotation.QuoteText,
+		Color:     annotation.Color,
+		Fragments: annotation.Fragments,
+		NoteText:  annotation.NoteText,
+		CreatedAt: annotation.CreatedAt,
+		UpdatedAt: annotation.UpdatedAt,
+	}
+}
+
+func pdfAnnotationResponses(annotations []model.PDFAnnotation) []pdfAnnotationResponse {
+	result := make([]pdfAnnotationResponse, 0, len(annotations))
+	for _, annotation := range annotations {
+		result = append(result, pdfAnnotationResponseFrom(annotation))
+	}
+	return result
+}
+
+func pdfAnnotationListItemResponses(items []model.PDFAnnotationListItem) []pdfAnnotationListItemResponse {
+	result := make([]pdfAnnotationListItemResponse, 0, len(items))
+	for _, item := range items {
+		result = append(result, pdfAnnotationListItemResponse{
+			ID:                    strconv.FormatInt(item.ID, 10),
+			PaperID:               strconv.FormatInt(item.PaperID, 10),
+			PaperTitle:            item.PaperTitle,
+			PaperOriginalFilename: item.PaperOriginalFilename,
+			PaperPDFURL:           item.PaperPDFURL,
+			Type:                  item.Type,
+			PageStart:             item.PageStart,
+			PageEnd:               item.PageEnd,
+			QuoteText:             item.QuoteText,
+			Color:                 item.Color,
+			Fragments:             item.Fragments,
+			NoteText:              item.NoteText,
+			CreatedAt:             item.CreatedAt,
+			UpdatedAt:             item.UpdatedAt,
+		})
+	}
+	return result
+}
+
 func (h *PaperHandler) ListPDFAnnotations(w http.ResponseWriter, r *http.Request) {
 	paperID, err := parseIDWithSuffix(strings.TrimRight(r.URL.Path, "/"), "/api/papers/", "/pdf-annotations")
 	if err != nil {
@@ -305,7 +405,7 @@ func (h *PaperHandler) ListPDFAnnotations(w http.ResponseWriter, r *http.Request
 
 	sendJSON(w, http.StatusOK, map[string]interface{}{
 		"success":     true,
-		"annotations": annotations,
+		"annotations": pdfAnnotationResponses(annotations),
 	})
 }
 
@@ -330,7 +430,7 @@ func (h *PaperHandler) CreatePDFAnnotation(w http.ResponseWriter, r *http.Reques
 
 	sendJSON(w, http.StatusOK, map[string]interface{}{
 		"success":    true,
-		"annotation": annotation,
+		"annotation": pdfAnnotationResponseFrom(*annotation),
 	})
 }
 
