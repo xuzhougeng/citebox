@@ -183,8 +183,9 @@ const HighlightLibraryPage = {
 };
 
 document.addEventListener('DOMContentLoaded', () => {
-    if (window.CiteBoxI18n && typeof CiteBoxI18n.init === 'function') {
-        CiteBoxI18n.init().then(() => HighlightLibraryPage.init());
+    const i18n = window.CiteBoxI18n;
+    if (i18n && typeof i18n.whenReady === 'function') {
+        i18n.whenReady().then(() => HighlightLibraryPage.init());
     } else {
         HighlightLibraryPage.init();
     }

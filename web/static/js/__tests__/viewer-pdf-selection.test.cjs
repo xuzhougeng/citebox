@@ -180,6 +180,14 @@ function rect(left, top, right, bottom) {
     };
 }
 
+function flushAsync(times = 1) {
+    let chain = Promise.resolve();
+    for (let i = 0; i < times; i += 1) {
+        chain = chain.then(() => new Promise((resolve) => setImmediate(resolve)));
+    }
+    return chain;
+}
+
 test('currentPDFSelectionText reads the browser native selection text', () => {
     const scroll = createElement('scroll');
     const textLayer = createElement('textLayer');
@@ -217,6 +225,20 @@ test('defaultPDFState uses official PDF.js viewer state fields', () => {
     assert.equal(Object.hasOwn(state, 'renderTask'), false);
     assert.equal(Object.hasOwn(state, 'textLayer'), false);
     assert.equal(Object.hasOwn(state, 'selectionDrag'), false);
+});
+
+test('normalizePDFHighlight stores annotation identifiers as strings', () => {
+    const { viewer } = loadViewerPage(null);
+
+    const highlight = viewer.normalizePDFHighlight({
+        id: 11,
+        paper_id: 42,
+        quote_text: 'highlight me',
+        fragments: [{ page: 1, left: 0.1, top: 0.2, width: 0.3, height: 0.04 }],
+    });
+
+    assert.equal(highlight.id, '11');
+    assert.equal(highlight.paper_id, '42');
 });
 
 test('isCurrentPDFLoad checks load token and viewer identity', () => {
@@ -516,7 +538,7 @@ test('highlightPDFSelection creates API annotation and renders the returned PDF 
     assert.equal(apiCalls[0].payload.color, 'yellow');
     assert.deepEqual(JSON.parse(JSON.stringify(apiCalls[0].payload.fragments)), [{ page: 1, left: 0.1, top: 0.15, width: 0.5, height: 0.1 }]);
     assert.equal(viewer.pdfState.highlights.length, 1);
-    assert.equal(viewer.pdfState.highlights[0].id, 11);
+    assert.equal(viewer.pdfState.highlights[0].id, '11');
     assert.equal(viewer.pdfState.highlights[0].quote_text, 'highlight me');
     assert.equal(page.querySelectorAll('.viewer-pdf-highlight-layer').length, 1);
 });
@@ -886,6 +908,85 @@ test('PDF target annotation scrolls matching rendered highlight into view', () =
     const marker = stage.querySelector('[data-highlight-id="11"]');
     assert.equal(marker.classList.contains('is-target-highlight'), true);
     assert.equal(viewer.pdfState.targetAnnotationApplied, true);
+});
+
+test('PDF annotations loaded from API preserve unsafe string IDs for target and delete', async () => {
+    const unsafePaperID = '9007199254740995';
+    const unsafeAnnotationID = '9007199254740993';
+    const listCalls = [];
+    const deleted = [];
+    const { viewer } = loadViewerPage(null, {
+        Utils: {
+            confirm() {
+                return Promise.resolve(true);
+            },
+            showToast() {},
+        },
+        API: {
+            listPDFAnnotations(paperId) {
+                listCalls.push(paperId);
+                return Promise.resolve({
+                    annotations: [{
+                        id: unsafeAnnotationID,
+                        paper_id: unsafePaperID,
+                        type: 'highlight',
+                        page_start: 3,
+                        page_end: 3,
+                        quote_text: 'unsafe string id highlight',
+                        color: 'yellow',
+                        fragments: [{ page: 3, left: 0.1, top: 0.2, width: 0.3, height: 0.04 }],
+                        note_text: '',
+                        created_at: '2026-05-22T10:00:00Z',
+                        updated_at: '2026-05-22T10:00:00Z',
+                    }],
+                });
+            },
+            deletePDFAnnotation(paperId, annotationId) {
+                deleted.push({ paperId, annotationId });
+                return Promise.resolve({ success: true });
+            },
+        },
+    });
+    const page = createElement('page');
+    page.classList.add('page');
+    page.dataset.pageNumber = '3';
+    page.getBoundingClientRect = () => rect(0, 0, 1000, 1200);
+    const pdfViewer = createElement('pdfViewer');
+    pdfViewer.appendChild(page);
+    const stage = createElement('stage');
+    stage.pdfViewer = pdfViewer;
+    page.appendChild = function appendChild(child) {
+        child.parentElement = this;
+        this.children.add(child);
+        child.scrollIntoView = function scrollIntoView() {};
+    };
+    viewer.stage = stage;
+    viewer.pdfState = {
+        ...viewer.defaultPDFState(),
+        loadToken: 7,
+        resource: { paperId: unsafePaperID },
+        targetAnnotationId: unsafeAnnotationID,
+        targetAnnotationApplied: false,
+        highlights: [],
+    };
+
+    await viewer.loadPDFAnnotations(viewer.pdfState.resource, 7);
+
+    assert.deepEqual(listCalls, [unsafePaperID]);
+    assert.equal(viewer.pdfState.highlights[0].id, unsafeAnnotationID);
+    assert.equal(viewer.pdfState.highlights[0].paper_id, unsafePaperID);
+    const marker = stage.querySelectorAll('[data-highlight-id]')
+        .find((node) => node.dataset.highlightId === unsafeAnnotationID);
+    assert.ok(marker);
+    assert.equal(marker.classList.contains('is-target-highlight'), true);
+
+    marker.listeners.click({
+        preventDefault() {},
+        stopPropagation() {},
+    });
+    await flushAsync(2);
+
+    assert.deepEqual(deleted, [{ paperId: unsafePaperID, annotationId: unsafeAnnotationID }]);
 });
 
 test('PDF target annotation keeps visual marker active across highlight rerenders without rescrolling', () => {

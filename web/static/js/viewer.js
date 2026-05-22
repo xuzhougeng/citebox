@@ -765,8 +765,8 @@ const ResourceViewerPage = {
         if (!fragments.length) return null;
         const quoteText = String(highlight.quote_text || highlight.text || '').slice(0, 10000);
         return {
-            id: highlight.id,
-            paper_id: highlight.paper_id,
+            id: String(highlight.id ?? '').trim(),
+            paper_id: String(highlight.paper_id ?? '').trim(),
             type: String(highlight.type || 'highlight'),
             page_start: Math.floor(Number(highlight.page_start) || fragments[0].page || 1),
             page_end: Math.floor(Number(highlight.page_end) || fragments[fragments.length - 1].page || 1),

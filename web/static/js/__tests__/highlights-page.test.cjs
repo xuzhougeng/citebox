@@ -73,6 +73,7 @@ function loadPage(options = {}) {
         URLSearchParams,
         window: {
             location: { href: 'http://localhost/highlights' },
+            CiteBoxI18n: options.CiteBoxI18n,
         },
         document: {
             addEventListener(type, handler) {
@@ -123,6 +124,43 @@ test('highlight library renders annotations and opens target PDF URL', async () 
         annotationId: 11,
         page: 3,
     });
+});
+
+test('highlight library waits for existing i18n readiness without reinitializing it', async () => {
+    let initCalls = 0;
+    let readyCalls = 0;
+    let listCalls = 0;
+    const ready = createDeferred();
+    const { elements } = loadPage({
+        CiteBoxI18n: {
+            init() {
+                initCalls += 1;
+                return Promise.resolve();
+            },
+            whenReady() {
+                readyCalls += 1;
+                return ready.promise;
+            },
+        },
+        listPDFAnnotationsGlobal() {
+            listCalls += 1;
+            return Promise.resolve({
+                annotations: [annotation({ quote_text: 'loaded after i18n' })],
+                pagination: { page: 1, page_size: 50, total: 1, total_pages: 1 },
+            });
+        },
+    });
+
+    await flushAsync();
+    assert.equal(initCalls, 0);
+    assert.equal(readyCalls, 1);
+    assert.equal(listCalls, 0);
+
+    ready.resolve();
+    await flushAsync(2);
+
+    assert.equal(listCalls, 1);
+    assert.match(elements.highlightList.innerHTML, /loaded after i18n/);
 });
 
 test('highlight library opens unsafe integer-sized string IDs without precision loss', async () => {
