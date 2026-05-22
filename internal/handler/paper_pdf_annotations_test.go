@@ -151,9 +151,14 @@ func TestPaperHandlerListPDFAnnotationsGlobal(t *testing.T) {
 	}
 
 	var body struct {
-		Success     bool                              `json:"success"`
-		Annotations []model.PDFAnnotationListItem     `json:"annotations"`
-		Pagination  model.PDFAnnotationListPagination `json:"pagination"`
+		Success     bool `json:"success"`
+		Annotations []struct {
+			ID          string `json:"id"`
+			PaperID     string `json:"paper_id"`
+			PaperTitle  string `json:"paper_title"`
+			PaperPDFURL string `json:"paper_pdf_url"`
+		} `json:"annotations"`
+		Pagination model.PDFAnnotationListPagination `json:"pagination"`
 	}
 	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
 		t.Fatalf("Decode() error = %v", err)
@@ -161,10 +166,57 @@ func TestPaperHandlerListPDFAnnotationsGlobal(t *testing.T) {
 	if !body.Success || len(body.Annotations) != 1 {
 		t.Fatalf("body = %+v", body)
 	}
+	if body.Annotations[0].ID == "" || body.Annotations[0].PaperID != strconv.FormatInt(paper.ID, 10) {
+		t.Fatalf("annotation ids = %+v", body.Annotations[0])
+	}
 	if body.Annotations[0].PaperTitle != "Handler Paper" || body.Annotations[0].PaperPDFURL != "/files/papers/handler.pdf" {
 		t.Fatalf("annotation paper fields = %+v", body.Annotations[0])
 	}
 	if body.Pagination.Page != 1 || body.Pagination.PageSize != 25 || body.Pagination.Total != 1 {
 		t.Fatalf("pagination = %+v", body.Pagination)
+	}
+}
+
+func TestPaperHandlerListPDFAnnotationsGlobalSerializesIDsAsStrings(t *testing.T) {
+	h, repo := newPaperHandlerForTest(t)
+	const paperID int64 = 9007199254740995
+	const annotationID int64 = 9007199254740993
+	if _, err := repo.DB().Exec(`
+		INSERT INTO papers (
+			id, title, original_filename, stored_pdf_name, file_size, content_type
+		) VALUES (?, ?, ?, ?, ?, ?)
+	`, paperID, "Unsafe ID Paper", "unsafe.pdf", "unsafe.pdf", 128, "application/pdf"); err != nil {
+		t.Fatalf("insert paper error = %v", err)
+	}
+	if _, err := repo.DB().Exec(`
+		INSERT INTO pdf_annotations (
+			id, paper_id, type, page_start, page_end, quote_text, color, fragments_json, note_text
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, annotationID, paperID, "highlight", 2, 2, "unsafe id text", "yellow", `[{"page":2,"left":0.1,"top":0.2,"width":0.3,"height":0.04}]`, ""); err != nil {
+		t.Fatalf("insert annotation error = %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/pdf-annotations?query=unsafe", nil)
+	rec := httptest.NewRecorder()
+	h.ListPDFAnnotationsGlobal(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body = %s", rec.Code, rec.Body.String())
+	}
+
+	var body struct {
+		Success     bool `json:"success"`
+		Annotations []struct {
+			ID      string `json:"id"`
+			PaperID string `json:"paper_id"`
+		} `json:"annotations"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+		t.Fatalf("Decode() error = %v body = %s", err, rec.Body.String())
+	}
+	if !body.Success || len(body.Annotations) != 1 {
+		t.Fatalf("body = %+v", body)
+	}
+	if body.Annotations[0].ID != strconv.FormatInt(annotationID, 10) || body.Annotations[0].PaperID != strconv.FormatInt(paperID, 10) {
+		t.Fatalf("ids = %+v, want annotation %d paper %d", body.Annotations[0], annotationID, paperID)
 	}
 }

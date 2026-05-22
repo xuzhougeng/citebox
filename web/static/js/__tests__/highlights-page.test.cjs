@@ -125,6 +125,31 @@ test('highlight library renders annotations and opens target PDF URL', async () 
     });
 });
 
+test('highlight library opens unsafe integer-sized string IDs without precision loss', async () => {
+    const { page, context, viewerURLs } = loadPage({
+        listPDFAnnotationsGlobal() {
+            return Promise.resolve({
+                annotations: [annotation({
+                    id: '9007199254740993',
+                    paper_id: '9007199254740995',
+                    quote_text: 'unsafe id highlight',
+                })],
+                pagination: { page: 1, page_size: 50, total: 1, total_pages: 1 },
+            });
+        },
+    });
+    await flushAsync();
+
+    page.openHighlight('9007199254740993');
+
+    assert.equal(context.window.location.href, '/viewer?kind=pdf&src=%2Ffiles%2Fpapers%2Fexample.pdf&paper_id=9007199254740995&page=3&annotation_id=9007199254740993');
+    assert.deepEqual(viewerURLs[0].options, {
+        paperId: '9007199254740995',
+        annotationId: '9007199254740993',
+        page: 3,
+    });
+});
+
 test('out-of-range empty page reloads the last valid page', async () => {
     const requests = [];
     const { page, elements } = loadPage({

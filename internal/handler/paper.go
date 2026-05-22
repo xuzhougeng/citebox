@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/xuzhougeng/citebox/internal/apperr"
 	"github.com/xuzhougeng/citebox/internal/model"
@@ -15,6 +16,23 @@ import (
 
 type PaperHandler struct {
 	service *service.LibraryService
+}
+
+type pdfAnnotationListItemResponse struct {
+	ID                    string                        `json:"id"`
+	PaperID               string                        `json:"paper_id"`
+	PaperTitle            string                        `json:"paper_title"`
+	PaperOriginalFilename string                        `json:"paper_original_filename"`
+	PaperPDFURL           string                        `json:"paper_pdf_url,omitempty"`
+	Type                  string                        `json:"type"`
+	PageStart             int                           `json:"page_start"`
+	PageEnd               int                           `json:"page_end"`
+	QuoteText             string                        `json:"quote_text"`
+	Color                 string                        `json:"color"`
+	Fragments             []model.PDFAnnotationFragment `json:"fragments"`
+	NoteText              string                        `json:"note_text"`
+	CreatedAt             time.Time                     `json:"created_at"`
+	UpdatedAt             time.Time                     `json:"updated_at"`
 }
 
 func NewPaperHandler(svc *service.LibraryService) *PaperHandler {
@@ -306,9 +324,32 @@ func (h *PaperHandler) ListPDFAnnotationsGlobal(w http.ResponseWriter, r *http.R
 
 	sendJSON(w, http.StatusOK, map[string]interface{}{
 		"success":     true,
-		"annotations": result.Annotations,
+		"annotations": pdfAnnotationListItemResponses(result.Annotations),
 		"pagination":  result.Pagination,
 	})
+}
+
+func pdfAnnotationListItemResponses(items []model.PDFAnnotationListItem) []pdfAnnotationListItemResponse {
+	result := make([]pdfAnnotationListItemResponse, 0, len(items))
+	for _, item := range items {
+		result = append(result, pdfAnnotationListItemResponse{
+			ID:                    strconv.FormatInt(item.ID, 10),
+			PaperID:               strconv.FormatInt(item.PaperID, 10),
+			PaperTitle:            item.PaperTitle,
+			PaperOriginalFilename: item.PaperOriginalFilename,
+			PaperPDFURL:           item.PaperPDFURL,
+			Type:                  item.Type,
+			PageStart:             item.PageStart,
+			PageEnd:               item.PageEnd,
+			QuoteText:             item.QuoteText,
+			Color:                 item.Color,
+			Fragments:             item.Fragments,
+			NoteText:              item.NoteText,
+			CreatedAt:             item.CreatedAt,
+			UpdatedAt:             item.UpdatedAt,
+		})
+	}
+	return result
 }
 
 func (h *PaperHandler) ListPDFAnnotations(w http.ResponseWriter, r *http.Request) {
