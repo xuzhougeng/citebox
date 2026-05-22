@@ -1,6 +1,8 @@
 if (typeof window.t !== 'function') window.t = function(k,f){return f||k};
 
 const HighlightLibraryPage = {
+    nextLoadRequestId: 0,
+
     state: {
         query: '',
         sort: 'updated_desc',
@@ -58,25 +60,43 @@ const HighlightLibraryPage = {
         this.load();
     },
 
-    async load() {
+    async load(options = {}) {
         if (typeof API === 'undefined' || typeof API.listPDFAnnotationsGlobal !== 'function') return;
+        const requestId = this.nextLoadRequestId + 1;
+        this.nextLoadRequestId = requestId;
+        const requestedPage = this.state.page;
         this.state.loading = true;
         try {
             const payload = await API.listPDFAnnotationsGlobal({
                 query: this.state.query,
                 sort: this.state.sort,
-                page: this.state.page,
+                page: requestedPage,
                 page_size: this.state.pageSize,
             });
-            this.state.annotations = Array.isArray(payload.annotations) ? payload.annotations : [];
-            this.state.pagination = payload.pagination || { page: 1, page_size: this.state.pageSize, total: 0, total_pages: 0 };
+
+            if (requestId !== this.nextLoadRequestId) return;
+
+            const annotations = Array.isArray(payload.annotations) ? payload.annotations : [];
+            const pagination = payload.pagination || { page: 1, page_size: this.state.pageSize, total: 0, total_pages: 0 };
+            const totalPages = Number(pagination.total_pages || 0);
+            if (!options.clampedReload && annotations.length === 0 && totalPages > 0 && requestedPage > totalPages) {
+                this.state.page = totalPages;
+                await this.load({ clampedReload: true });
+                return;
+            }
+
+            this.state.annotations = annotations;
+            this.state.pagination = pagination;
             this.state.page = Number(this.state.pagination.page) || this.state.page;
             this.render();
         } catch (error) {
+            if (requestId !== this.nextLoadRequestId) return;
             Utils.showToast?.(t('highlights.load_failed', '高亮库加载失败'), 'error');
             this.render();
         } finally {
-            this.state.loading = false;
+            if (requestId === this.nextLoadRequestId) {
+                this.state.loading = false;
+            }
         }
     },
 
@@ -111,8 +131,8 @@ const HighlightLibraryPage = {
                     </div>
                 </div>
                 <div class="highlight-card-actions">
-                    <button class="btn btn-outline" type="button" data-highlight-action="open" data-annotation-id="${Utils.escapeHTML(id)}">${t('highlights.open_pdf', '打开 PDF')}</button>
-                    <button class="btn btn-outline" type="button" data-highlight-action="delete" data-paper-id="${Utils.escapeHTML(paperId)}" data-annotation-id="${Utils.escapeHTML(id)}">${t('highlights.delete', '删除')}</button>
+                    <button class="btn btn-outline" type="button" data-highlight-action="open" data-annotation-id="${Utils.escapeHTML(id)}">${Utils.escapeHTML(t('highlights.open_pdf', '打开 PDF'))}</button>
+                    <button class="btn btn-outline" type="button" data-highlight-action="delete" data-paper-id="${Utils.escapeHTML(paperId)}" data-annotation-id="${Utils.escapeHTML(id)}">${Utils.escapeHTML(t('highlights.delete', '删除'))}</button>
                 </div>
             </article>
         `;
