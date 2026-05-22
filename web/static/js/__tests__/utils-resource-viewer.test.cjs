@@ -87,15 +87,31 @@ test('resourceViewerURL includes paper metadata for PDF reader links', () => {
     assert.equal(url.searchParams.get('paper_id'), '42');
 });
 
+test('resourceViewerURL includes target annotation metadata for PDF reader links', () => {
+    const Utils = loadUtils();
+    const href = Utils.resourceViewerURL('pdf', '/files/papers/a.pdf', '/highlights', {
+        paperId: 42,
+        annotationId: 99,
+        page: 7,
+    });
+    const url = new URL(href, 'http://localhost');
+
+    assert.equal(url.searchParams.get('paper_id'), '42');
+    assert.equal(url.searchParams.get('annotation_id'), '99');
+    assert.equal(url.searchParams.get('page'), '7');
+});
+
 test('parseResourceViewerNavigationURL returns paper metadata', () => {
     const Utils = loadUtils();
-    const parsed = Utils.parseResourceViewerNavigationURL('/viewer?kind=pdf&src=%2Ffiles%2Fpapers%2Fa.pdf&back=%2Flibrary&paper_id=42');
+    const parsed = Utils.parseResourceViewerNavigationURL('/viewer?kind=pdf&src=%2Ffiles%2Fpapers%2Fa.pdf&back=%2Flibrary&paper_id=42&page=7&annotation_id=99');
 
     assert.deepEqual(JSON.parse(JSON.stringify(parsed)), {
         kind: 'pdf',
         src: '/files/papers/a.pdf',
         back: '/library',
         paperId: '42',
+        page: '7',
+        annotationId: '99',
     });
 });
 

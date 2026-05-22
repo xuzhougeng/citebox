@@ -232,7 +232,10 @@ const ResourceViewerPage = {
             fitMode: true,
             selectionText: '',
             selectionClientRect: null,
-            highlights: []
+            highlights: [],
+            targetAnnotationId: '',
+            targetAnnotationApplied: false,
+            targetAnnotationTimer: null
         };
     },
 
@@ -325,7 +328,10 @@ const ResourceViewerPage = {
             pageNumber: this.initialPDFPageNumber(),
             scale: this.isNarrowPDFViewport() ? 0.9 : 1,
             fitMode: !this.isNarrowPDFViewport(),
-            highlights: []
+            highlights: [],
+            targetAnnotationId: this.initialPDFAnnotationID(resource),
+            targetAnnotationApplied: false,
+            targetAnnotationTimer: null
         };
         this.stage.className = 'viewer-stage pdf-mode';
         this.stage.innerHTML = `
@@ -362,6 +368,13 @@ const ResourceViewerPage = {
     initialPDFPageNumber() {
         const page = Number(new URLSearchParams(window.location.search).get('page') || 1);
         return page > 0 ? Math.floor(page) : 1;
+    },
+
+    initialPDFAnnotationID(resource = null) {
+        const fromResource = String(resource?.annotationId || resource?.annotation_id || '').trim();
+        if (fromResource && fromResource !== '0') return fromResource;
+        const fromURL = String(new URLSearchParams(window.location.search).get('annotation_id') || '').trim();
+        return fromURL && fromURL !== '0' ? fromURL : '';
     },
 
     isCurrentPDFLoad(loadToken, pdfViewer = null) {
@@ -571,6 +584,7 @@ const ResourceViewerPage = {
         this.pdfSelectionTimer = null;
         window.clearTimeout(this.pdfHighlightRenderTimer);
         this.pdfHighlightRenderTimer = null;
+        window.clearTimeout(previousPDFState.targetAnnotationTimer);
         if (previousPDFState.pdfViewer && typeof previousPDFState.pdfViewer.setDocument === 'function') {
             try {
                 previousPDFState.pdfViewer.setDocument(null);
@@ -982,6 +996,31 @@ const ResourceViewerPage = {
                 layer.appendChild(marker);
             });
         });
+        this.applyPDFTargetAnnotation();
+    },
+
+    applyPDFTargetAnnotation() {
+        const targetID = String(this.pdfState?.targetAnnotationId || '').trim();
+        if (!targetID || this.pdfState?.targetAnnotationApplied) return false;
+        const escapedID = typeof CSS !== 'undefined' && typeof CSS.escape === 'function'
+            ? CSS.escape(targetID)
+            : targetID.replace(/["\\]/g, '\\$&');
+        const marker = this.stage?.querySelector?.(`[data-highlight-id="${escapedID}"]`);
+        if (!marker) return false;
+
+        const state = this.pdfState;
+        state.targetAnnotationApplied = true;
+        const scrollTarget = typeof marker.scrollIntoView === 'function' ? marker : marker.parentElement;
+        scrollTarget?.scrollIntoView?.({ block: 'center', inline: 'nearest', behavior: 'smooth' });
+        marker.classList?.add('is-target-highlight');
+        window.clearTimeout(state.targetAnnotationTimer);
+        state.targetAnnotationTimer = window.setTimeout(() => {
+            marker.classList?.remove('is-target-highlight');
+            if (this.pdfState === state) {
+                state.targetAnnotationTimer = null;
+            }
+        }, 2200);
+        return true;
     },
 
     async copyPDFSelection() {
@@ -1387,7 +1426,8 @@ const ResourceViewerPage = {
                 href: url.href,
                 label: t('viewer.label_pdf', 'PDF 查看'),
                 name: this.filenameFromURL(url) || t('viewer.label_pdf_default', 'PDF 文档'),
-                paperId: String(params.get('paper_id') || '').trim()
+                paperId: String(params.get('paper_id') || '').trim(),
+                annotationId: String(params.get('annotation_id') || '').trim()
             };
         }
 

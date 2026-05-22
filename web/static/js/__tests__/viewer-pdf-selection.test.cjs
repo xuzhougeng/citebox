@@ -49,6 +49,20 @@ function createElement(name) {
         querySelector(selector) {
             if (selector === '[data-pdf-scroll]') return this.pdfScroll || null;
             if (selector === '[data-pdf-viewer]') return this.pdfViewer || null;
+            if (selector.startsWith('[data-highlight-id="')) {
+                const id = selector.match(/\[data-highlight-id="([^"]+)"\]/)?.[1] || '';
+                const stack = [
+                    ...Array.from(this.children),
+                    this.pdfScroll,
+                    this.pdfViewer,
+                ].filter(Boolean);
+                while (stack.length) {
+                    const node = stack.shift();
+                    if (String(node?.dataset?.highlightId || '') === id) return node;
+                    stack.push(...Array.from(node?.children || []));
+                }
+                return null;
+            }
             return null;
         },
         querySelectorAll(selector) {
@@ -817,4 +831,43 @@ test('clearPDFSelection tolerates null browser selections', () => {
     assert.doesNotThrow(() => viewer.clearPDFSelection());
     assert.equal(viewer.pdfState.selectionText, '');
     assert.equal(viewer.pdfState.selectionClientRect, null);
+});
+
+test('PDF target annotation scrolls matching rendered highlight into view', () => {
+    const { viewer } = loadViewerPage(null);
+    const page = createElement('page');
+    page.classList.add('page');
+    page.dataset.pageNumber = '3';
+    page.getBoundingClientRect = () => rect(0, 0, 1000, 1200);
+    const pdfViewer = createElement('pdfViewer');
+    pdfViewer.appendChild(page);
+    const stage = createElement('stage');
+    stage.pdfViewer = pdfViewer;
+
+    let scrolled = false;
+    viewer.stage = stage;
+    viewer.pdfState = {
+        ...viewer.defaultPDFState(),
+        targetAnnotationId: '11',
+        targetAnnotationApplied: false,
+        highlights: [{
+            id: 11,
+            quote_text: 'target highlight',
+            fragments: [{ page: 3, left: 0.1, top: 0.2, width: 0.3, height: 0.04 }],
+        }],
+    };
+    page.appendChild = function appendChild(child) {
+        child.parentElement = this;
+        this.children.add(child);
+        child.scrollIntoView = function scrollIntoView(options) {
+            scrolled = options?.block === 'center';
+        };
+    };
+
+    viewer.renderPDFHighlights();
+
+    assert.equal(scrolled, true);
+    const marker = stage.querySelector('[data-highlight-id="11"]');
+    assert.equal(marker.classList.contains('is-target-highlight'), true);
+    assert.equal(viewer.pdfState.targetAnnotationApplied, true);
 });
