@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>高亮库 - CiteBox</title>
+    <link rel="icon" type="image/svg+xml" href="/static/img/citebox-icon.svg">
+    <script>(function(){var d=document.documentElement;try{var t=localStorage.getItem("citebox_theme");if(t&&t!=="warm")d.setAttribute("data-theme",t);var l=localStorage.getItem("citebox_lang")||"zh-CN";d.lang=l;if(l!=="zh-CN")d.setAttribute("data-lang-loading","1");}catch(e){}})()</script>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="navbar-content">
+            <a href="/" class="logo">CiteBox</a>
+            <ul class="nav-links">
+                <li><a href="/" data-i18n="nav.overview">总览</a></li>
+                <li><a href="/library" data-i18n="nav.library">文献库</a></li>
+                <li><a href="/figures" data-i18n="nav.figures">图片库</a></li>
+                <li><a href="/palettes" data-i18n="nav.palettes">配色库</a></li>
+                <li><a href="/groups" data-i18n="nav.groups">分组</a></li>
+                <li><a href="/tags" data-i18n="nav.tags">标签</a></li>
+                <li><a href="/notes" data-i18n="nav.notes">笔记</a></li>
+                <li><a href="/highlights" class="active" data-i18n="nav.highlights">高亮库</a></li>
+                <li><a href="/research" data-i18n="nav.research">文献搜索</a></li>
+                <li><a href="/ai" data-i18n="nav.ai">AI 助手</a></li>
+                <li><a href="/settings" data-i18n="nav.settings">配置</a></li>
+            </ul>
+            <div class="nav-actions">
+                <a href="/upload" class="nav-cta" data-i18n="nav.upload_pdf">上传 PDF</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="page-shell">
+        <section class="hero compact">
+            <div>
+                <p class="eyebrow" data-i18n="highlights.hero_eyebrow">Highlights</p>
+                <h1 data-i18n="highlights.hero_title">高亮库</h1>
+                <p class="hero-text" data-i18n="highlights.hero_text">集中查看所有 PDF 阅读高亮，点击回到原文位置。</p>
+            </div>
+        </section>
+
+        <section class="filters-card highlights-filter-card">
+            <div class="filters-grid highlights-filters-grid">
+                <label class="field">
+                    <span data-i18n="highlights.search_label">搜索高亮</span>
+                    <input id="highlightQuery" class="form-input" type="text" data-i18n-placeholder="highlights.search_placeholder" placeholder="高亮文本、文献标题、文件名或 DOI">
+                </label>
+                <label class="field">
+                    <span data-i18n="highlights.sort_label">排序</span>
+                    <select id="highlightSort" class="form-input">
+                        <option value="updated_desc" data-i18n="highlights.sort_updated_desc">最近更新优先</option>
+                        <option value="updated_asc" data-i18n="highlights.sort_updated_asc">最早更新优先</option>
+                        <option value="created_desc" data-i18n="highlights.sort_created_desc">最近创建优先</option>
+                        <option value="created_asc" data-i18n="highlights.sort_created_asc">最早创建优先</option>
+                    </select>
+                </label>
+            </div>
+        </section>
+
+        <section class="library-shell highlights-shell">
+            <div id="highlightResultMeta" class="library-result-meta"></div>
+            <div id="highlightList" class="highlight-list"></div>
+            <div id="highlightPagination" class="pagination"></div>
+        </section>
+    </main>
+
+    <script src="/static/js/theme.js"></script>
+    <script src="/static/js/i18n.js"></script>
+    <script src="/static/js/utils.js"></script>
+    <script src="/static/js/api.js"></script>
+    <script src="/static/js/highlights.js"></script>
+    <script src="/static/js/translate.js"></script>
+    <script src="/static/js/main.js"></script>
+</body>
+</html>
