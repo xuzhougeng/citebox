@@ -494,6 +494,15 @@ func buildHandlerWithAIServices(
 		}
 	})
 
+	mux.HandleFunc("/api/pdf-annotations", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			paperHandler.ListPDFAnnotationsGlobal(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
 	mux.HandleFunc("/api/papers/", func(w http.ResponseWriter, r *http.Request) {
 		trimmedPath := strings.TrimRight(r.URL.Path, "/")
 		if strings.Contains(trimmedPath, "/pdf-annotations") {

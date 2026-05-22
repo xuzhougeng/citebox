@@ -128,3 +128,43 @@ func TestPaperHandlerPDFAnnotationRejectsBadJSON(t *testing.T) {
 		t.Fatalf("status = %d body = %s", rec.Code, rec.Body.String())
 	}
 }
+
+func TestPaperHandlerListPDFAnnotationsGlobal(t *testing.T) {
+	h, repo := newPaperHandlerForTest(t)
+	paper := createHandlerTestPaper(t, repo)
+	if _, err := repo.PDFAnnotation.Create(paper.ID, repository.PDFAnnotationCreateInput{
+		Type:      "highlight",
+		QuoteText: "handler global text",
+		Color:     "yellow",
+		Fragments: []model.PDFAnnotationFragment{
+			{Page: 6, Left: 0.12, Top: 0.34, Width: 0.28, Height: 0.018},
+		},
+	}); err != nil {
+		t.Fatalf("Create annotation error = %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/pdf-annotations?query=global&page=1&page_size=25&sort=created_desc", nil)
+	rec := httptest.NewRecorder()
+	h.ListPDFAnnotationsGlobal(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body = %s", rec.Code, rec.Body.String())
+	}
+
+	var body struct {
+		Success     bool                              `json:"success"`
+		Annotations []model.PDFAnnotationListItem     `json:"annotations"`
+		Pagination  model.PDFAnnotationListPagination `json:"pagination"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+		t.Fatalf("Decode() error = %v", err)
+	}
+	if !body.Success || len(body.Annotations) != 1 {
+		t.Fatalf("body = %+v", body)
+	}
+	if body.Annotations[0].PaperTitle != "Handler Paper" || body.Annotations[0].PaperPDFURL != "/files/papers/handler.pdf" {
+		t.Fatalf("annotation paper fields = %+v", body.Annotations[0])
+	}
+	if body.Pagination.Page != 1 || body.Pagination.PageSize != 25 || body.Pagination.Total != 1 {
+		t.Fatalf("pagination = %+v", body.Pagination)
+	}
+}

@@ -2,6 +2,7 @@ package service
 
 import (
 	"math"
+	"net/url"
 	"strings"
 
 	"github.com/xuzhougeng/citebox/internal/apperr"
@@ -16,11 +17,47 @@ type CreatePDFAnnotationParams struct {
 	Fragments []model.PDFAnnotationFragment `json:"fragments"`
 }
 
+type ListPDFAnnotationsParams struct {
+	Query    string
+	Sort     string
+	Page     int
+	PageSize int
+}
+
 func (s *LibraryService) ListPDFAnnotations(paperID int64) ([]model.PDFAnnotation, error) {
 	if _, err := s.GetPaper(paperID); err != nil {
 		return nil, err
 	}
 	return s.repo.PDFAnnotation.ListByPaperID(paperID)
+}
+
+func (s *LibraryService) ListPDFAnnotationsGlobal(params ListPDFAnnotationsParams) (*model.PDFAnnotationListResponse, error) {
+	filter, err := normalizePDFAnnotationListFilter(params)
+	if err != nil {
+		return nil, err
+	}
+	items, total, err := s.repo.PDFAnnotation.ListGlobal(filter)
+	if err != nil {
+		return nil, err
+	}
+	for i := range items {
+		if items[i].PaperStoredPDFName != "" {
+			items[i].PaperPDFURL = "/files/papers/" + url.PathEscape(items[i].PaperStoredPDFName)
+		}
+	}
+	totalPages := 0
+	if total > 0 {
+		totalPages = int(math.Ceil(float64(total) / float64(filter.PageSize)))
+	}
+	return &model.PDFAnnotationListResponse{
+		Annotations: items,
+		Pagination: model.PDFAnnotationListPagination{
+			Page:       filter.Page,
+			PageSize:   filter.PageSize,
+			Total:      total,
+			TotalPages: totalPages,
+		},
+	}, nil
 }
 
 func (s *LibraryService) CreatePDFAnnotation(paperID int64, params CreatePDFAnnotationParams) (*model.PDFAnnotation, error) {
@@ -43,6 +80,37 @@ func (s *LibraryService) DeletePDFAnnotation(paperID, annotationID int64) error 
 		return err
 	}
 	return s.repo.PDFAnnotation.Delete(paperID, annotationID)
+}
+
+func normalizePDFAnnotationListFilter(params ListPDFAnnotationsParams) (repository.PDFAnnotationListFilter, error) {
+	sort := strings.TrimSpace(params.Sort)
+	if sort == "" {
+		sort = "updated_desc"
+	}
+	switch sort {
+	case "updated_desc", "updated_asc", "created_desc", "created_asc":
+	default:
+		return repository.PDFAnnotationListFilter{}, apperr.New(apperr.CodeInvalidArgument, "PDF 标注排序方式无效")
+	}
+
+	page := params.Page
+	if page < 1 {
+		page = 1
+	}
+	pageSize := params.PageSize
+	if pageSize < 1 {
+		pageSize = 50
+	}
+	if pageSize > 100 {
+		pageSize = 100
+	}
+
+	return repository.PDFAnnotationListFilter{
+		Query:    strings.TrimSpace(params.Query),
+		Sort:     sort,
+		Page:     page,
+		PageSize: pageSize,
+	}, nil
 }
 
 func normalizePDFAnnotationCreateInput(params CreatePDFAnnotationParams) (repository.PDFAnnotationCreateInput, error) {

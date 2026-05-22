@@ -290,6 +290,27 @@ func (h *PaperHandler) RefreshDOIMetadata(w http.ResponseWriter, r *http.Request
 	})
 }
 
+func (h *PaperHandler) ListPDFAnnotationsGlobal(w http.ResponseWriter, r *http.Request) {
+	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+	pageSize, _ := strconv.Atoi(r.URL.Query().Get("page_size"))
+	result, err := h.service.ListPDFAnnotationsGlobal(service.ListPDFAnnotationsParams{
+		Query:    r.URL.Query().Get("query"),
+		Sort:     r.URL.Query().Get("sort"),
+		Page:     page,
+		PageSize: pageSize,
+	})
+	if err != nil {
+		sendError(w, err)
+		return
+	}
+
+	sendJSON(w, http.StatusOK, map[string]interface{}{
+		"success":     true,
+		"annotations": result.Annotations,
+		"pagination":  result.Pagination,
+	})
+}
+
 func (h *PaperHandler) ListPDFAnnotations(w http.ResponseWriter, r *http.Request) {
 	paperID, err := parseIDWithSuffix(strings.TrimRight(r.URL.Path, "/"), "/api/papers/", "/pdf-annotations")
 	if err != nil {
