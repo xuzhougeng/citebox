@@ -123,6 +123,14 @@ const Utils = {
         if (paperId && paperId !== '0') {
             params.set('paper_id', paperId);
         }
+        const page = String(options.page ?? '').trim();
+        if (page && page !== '0') {
+            params.set('page', page);
+        }
+        const annotationId = String(options.annotationId ?? options.annotation_id ?? '').trim();
+        if (annotationId && annotationId !== '0') {
+            params.set('annotation_id', annotationId);
+        }
         return `/viewer?${params.toString()}`;
     },
 
@@ -255,7 +263,9 @@ const Utils = {
                 kind,
                 src,
                 back: String(url.searchParams.get('back') || window.location.href).trim(),
-                paperId: String(url.searchParams.get('paper_id') || '').trim()
+                paperId: String(url.searchParams.get('paper_id') || '').trim(),
+                page: String(url.searchParams.get('page') || '').trim(),
+                annotationId: String(url.searchParams.get('annotation_id') || '').trim()
             };
         } catch (error) {
             return null;
@@ -297,7 +307,11 @@ const Utils = {
             }
 
             event.preventDefault();
-            this.openResourceViewer(resource.kind, resource.src, resource.back, { paperId: resource.paperId });
+            this.openResourceViewer(resource.kind, resource.src, resource.back, {
+                paperId: resource.paperId,
+                page: resource.page,
+                annotationId: resource.annotationId
+            });
         });
     },
 

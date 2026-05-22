@@ -78,6 +78,13 @@ type PDFAnnotationCreateInput struct {
 	NoteText  string
 }
 
+type PDFAnnotationListFilter struct {
+	Query    string
+	Sort     string
+	Page     int
+	PageSize int
+}
+
 // TagUpsertInput 标签创建/更新输入
 type TagUpsertInput struct {
 	Scope model.TagScope

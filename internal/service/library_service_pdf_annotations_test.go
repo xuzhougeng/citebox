@@ -132,3 +132,47 @@ func TestDeletePDFAnnotationRequiresPaperOwnership(t *testing.T) {
 		t.Fatalf("annotations after failed delete = %d, want 1", len(annotations))
 	}
 }
+
+func TestListPDFAnnotationsGlobalDefaultsAndDecoratesPDFURL(t *testing.T) {
+	svc, repo, _ := newTestService(t)
+	paper := createTestPaper(t, repo)
+	if _, err := svc.CreatePDFAnnotation(paper.ID, CreatePDFAnnotationParams{
+		QuoteText: "global selected text",
+		Fragments: []model.PDFAnnotationFragment{
+			{Page: 5, Left: 0.1, Top: 0.2, Width: 0.3, Height: 0.04},
+		},
+	}); err != nil {
+		t.Fatalf("CreatePDFAnnotation() error = %v", err)
+	}
+
+	result, err := svc.ListPDFAnnotationsGlobal(ListPDFAnnotationsParams{})
+	if err != nil {
+		t.Fatalf("ListPDFAnnotationsGlobal() error = %v", err)
+	}
+
+	if result.Pagination.Page != 1 || result.Pagination.PageSize != 50 || result.Pagination.Total != 1 || result.Pagination.TotalPages != 1 {
+		t.Fatalf("pagination = %+v, want page 1 size 50 total 1 total_pages 1", result.Pagination)
+	}
+	if len(result.Annotations) != 1 {
+		t.Fatalf("annotations = %d, want 1", len(result.Annotations))
+	}
+	got := result.Annotations[0]
+	if got.PaperTitle != paper.Title || got.PaperPDFURL != "/files/papers/"+paper.StoredPDFName || got.PageStart != 5 {
+		t.Fatalf("annotation item = %+v", got)
+	}
+}
+
+func TestListPDFAnnotationsGlobalValidationAndPageSizeCap(t *testing.T) {
+	svc, _, _ := newTestService(t)
+	if _, err := svc.ListPDFAnnotationsGlobal(ListPDFAnnotationsParams{Sort: "bad"}); !apperr.IsCode(err, apperr.CodeInvalidArgument) {
+		t.Fatalf("bad sort code = %q, want %q (err=%v)", apperr.CodeOf(err), apperr.CodeInvalidArgument, err)
+	}
+
+	result, err := svc.ListPDFAnnotationsGlobal(ListPDFAnnotationsParams{Page: -3, PageSize: 1000, Sort: "created_asc"})
+	if err != nil {
+		t.Fatalf("ListPDFAnnotationsGlobal(capped) error = %v", err)
+	}
+	if result.Pagination.Page != 1 || result.Pagination.PageSize != 100 {
+		t.Fatalf("pagination = %+v, want page 1 size 100", result.Pagination)
+	}
+}

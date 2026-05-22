@@ -1,7 +1,7 @@
 if (typeof window.t !== 'function') window.t = function(k,f){return f||k};
 
 const AppNav = {
-    SECONDARY_HREFS: ['/palettes', '/groups', '/tags', '/settings'],
+    SECONDARY_HREFS: ['/highlights', '/palettes', '/groups', '/tags', '/settings'],
 
     init() {
         const navLinks = document.querySelector('.nav-links');

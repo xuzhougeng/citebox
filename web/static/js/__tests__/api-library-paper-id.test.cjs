@@ -221,6 +221,19 @@ test('API PDF annotation helpers use paper-scoped JSON routes', async () => {
     assert.equal(requestOptions[2].method, 'DELETE');
 });
 
+test('global PDF annotation list API builds query string', async () => {
+    const { API, requests } = loadAPI();
+
+    await API.listPDFAnnotationsGlobal({
+        query: 'immune',
+        sort: 'created_desc',
+        page: 2,
+        page_size: 25,
+    });
+
+    assert.equal(requests[0], '/api/pdf-annotations?query=immune&sort=created_desc&page=2&page_size=25');
+});
+
 test('library launch state preserves large paper identifiers as strings', () => {
     const paperId = '1777519479295165603';
     const LibraryPage = loadLibraryWithSearch(`?paper_id=${paperId}&from=duplicate`);
