@@ -72,6 +72,22 @@ function createElement(name) {
             if (selector === '.viewer-pdf-highlight-layer') {
                 return Array.from(this.children).filter((child) => child.classList?.contains('viewer-pdf-highlight-layer'));
             }
+            if (selector === '[data-highlight-id]') {
+                const nodes = [];
+                const stack = [
+                    ...Array.from(this.children),
+                    this.pdfScroll,
+                    this.pdfViewer,
+                ].filter(Boolean);
+                while (stack.length) {
+                    const node = stack.shift();
+                    if (String(node?.dataset?.highlightId || '')) {
+                        nodes.push(node);
+                    }
+                    stack.push(...Array.from(node?.children || []));
+                }
+                return nodes;
+            }
             return [];
         },
         getBoundingClientRect() {
@@ -868,6 +884,56 @@ test('PDF target annotation scrolls matching rendered highlight into view', () =
 
     assert.equal(scrolled, true);
     const marker = stage.querySelector('[data-highlight-id="11"]');
+    assert.equal(marker.classList.contains('is-target-highlight'), true);
+    assert.equal(viewer.pdfState.targetAnnotationApplied, true);
+});
+
+test('PDF target annotation lookup handles unsafe selector IDs without CSS.escape', () => {
+    const { context, viewer } = loadViewerPage(null);
+    assert.equal(context.CSS, undefined);
+
+    const targetID = 'target\n11';
+    const page = createElement('page');
+    page.classList.add('page');
+    page.dataset.pageNumber = '3';
+    page.getBoundingClientRect = () => rect(0, 0, 1000, 1200);
+    const pdfViewer = createElement('pdfViewer');
+    pdfViewer.appendChild(page);
+    const stage = createElement('stage');
+    stage.pdfViewer = pdfViewer;
+    const querySelector = stage.querySelector;
+    stage.querySelector = function guardedQuerySelector(selector) {
+        if (String(selector).startsWith('[data-highlight-id')) {
+            throw new Error('invalid selector');
+        }
+        return querySelector.call(this, selector);
+    };
+
+    let scrolled = false;
+    viewer.stage = stage;
+    viewer.pdfState = {
+        ...viewer.defaultPDFState(),
+        targetAnnotationId: targetID,
+        targetAnnotationApplied: false,
+        highlights: [{
+            id: targetID,
+            quote_text: 'unsafe target highlight',
+            fragments: [{ page: 3, left: 0.1, top: 0.2, width: 0.3, height: 0.04 }],
+        }],
+    };
+    page.appendChild = function appendChild(child) {
+        child.parentElement = this;
+        this.children.add(child);
+        child.scrollIntoView = function scrollIntoView(options) {
+            scrolled = options?.block === 'center';
+        };
+    };
+
+    assert.doesNotThrow(() => viewer.renderPDFHighlights());
+
+    const marker = stage.querySelectorAll('[data-highlight-id]')
+        .find((node) => node.dataset.highlightId === targetID);
+    assert.equal(scrolled, true);
     assert.equal(marker.classList.contains('is-target-highlight'), true);
     assert.equal(viewer.pdfState.targetAnnotationApplied, true);
 });

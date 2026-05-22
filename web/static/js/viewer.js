@@ -1002,10 +1002,7 @@ const ResourceViewerPage = {
     applyPDFTargetAnnotation() {
         const targetID = String(this.pdfState?.targetAnnotationId || '').trim();
         if (!targetID || this.pdfState?.targetAnnotationApplied) return false;
-        const escapedID = typeof CSS !== 'undefined' && typeof CSS.escape === 'function'
-            ? CSS.escape(targetID)
-            : targetID.replace(/["\\]/g, '\\$&');
-        const marker = this.stage?.querySelector?.(`[data-highlight-id="${escapedID}"]`);
+        const marker = this.findPDFTargetMarker(targetID);
         if (!marker) return false;
 
         const state = this.pdfState;
@@ -1021,6 +1018,13 @@ const ResourceViewerPage = {
             }
         }, 2200);
         return true;
+    },
+
+    findPDFTargetMarker(targetID) {
+        const id = String(targetID || '').trim();
+        if (!id) return null;
+        return Array.from(this.stage?.querySelectorAll?.('[data-highlight-id]') || [])
+            .find((node) => String(node?.dataset?.highlightId || '') === id) || null;
     },
 
     async copyPDFSelection() {
