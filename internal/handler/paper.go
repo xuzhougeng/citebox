@@ -18,6 +18,20 @@ type PaperHandler struct {
 	service *service.LibraryService
 }
 
+type pdfAnnotationResponse struct {
+	ID        string                        `json:"id"`
+	PaperID   string                        `json:"paper_id"`
+	Type      string                        `json:"type"`
+	PageStart int                           `json:"page_start"`
+	PageEnd   int                           `json:"page_end"`
+	QuoteText string                        `json:"quote_text"`
+	Color     string                        `json:"color"`
+	Fragments []model.PDFAnnotationFragment `json:"fragments"`
+	NoteText  string                        `json:"note_text"`
+	CreatedAt time.Time                     `json:"created_at"`
+	UpdatedAt time.Time                     `json:"updated_at"`
+}
+
 type pdfAnnotationListItemResponse struct {
 	ID                    string                        `json:"id"`
 	PaperID               string                        `json:"paper_id"`
@@ -329,6 +343,30 @@ func (h *PaperHandler) ListPDFAnnotationsGlobal(w http.ResponseWriter, r *http.R
 	})
 }
 
+func pdfAnnotationResponseFrom(annotation model.PDFAnnotation) pdfAnnotationResponse {
+	return pdfAnnotationResponse{
+		ID:        strconv.FormatInt(annotation.ID, 10),
+		PaperID:   strconv.FormatInt(annotation.PaperID, 10),
+		Type:      annotation.Type,
+		PageStart: annotation.PageStart,
+		PageEnd:   annotation.PageEnd,
+		QuoteText: annotation.QuoteText,
+		Color:     annotation.Color,
+		Fragments: annotation.Fragments,
+		NoteText:  annotation.NoteText,
+		CreatedAt: annotation.CreatedAt,
+		UpdatedAt: annotation.UpdatedAt,
+	}
+}
+
+func pdfAnnotationResponses(annotations []model.PDFAnnotation) []pdfAnnotationResponse {
+	result := make([]pdfAnnotationResponse, 0, len(annotations))
+	for _, annotation := range annotations {
+		result = append(result, pdfAnnotationResponseFrom(annotation))
+	}
+	return result
+}
+
 func pdfAnnotationListItemResponses(items []model.PDFAnnotationListItem) []pdfAnnotationListItemResponse {
 	result := make([]pdfAnnotationListItemResponse, 0, len(items))
 	for _, item := range items {
@@ -367,7 +405,7 @@ func (h *PaperHandler) ListPDFAnnotations(w http.ResponseWriter, r *http.Request
 
 	sendJSON(w, http.StatusOK, map[string]interface{}{
 		"success":     true,
-		"annotations": annotations,
+		"annotations": pdfAnnotationResponses(annotations),
 	})
 }
 
@@ -392,7 +430,7 @@ func (h *PaperHandler) CreatePDFAnnotation(w http.ResponseWriter, r *http.Reques
 
 	sendJSON(w, http.StatusOK, map[string]interface{}{
 		"success":    true,
-		"annotation": annotation,
+		"annotation": pdfAnnotationResponseFrom(*annotation),
 	})
 }
 

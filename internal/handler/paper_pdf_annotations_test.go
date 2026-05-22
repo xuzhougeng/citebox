@@ -72,13 +72,20 @@ func TestPaperHandlerPDFAnnotationsCreateListDelete(t *testing.T) {
 		t.Fatalf("create status = %d body = %s", createRec.Code, createRec.Body.String())
 	}
 	var createdBody struct {
-		Success    bool                `json:"success"`
-		Annotation model.PDFAnnotation `json:"annotation"`
+		Success    bool `json:"success"`
+		Annotation struct {
+			ID      string `json:"id"`
+			PaperID string `json:"paper_id"`
+		} `json:"annotation"`
 	}
 	if err := json.NewDecoder(createRec.Body).Decode(&createdBody); err != nil {
 		t.Fatalf("Decode(create) error = %v", err)
 	}
-	if !createdBody.Success || createdBody.Annotation.ID == 0 || createdBody.Annotation.PaperID != paper.ID {
+	createdAnnotationID, err := strconv.ParseInt(createdBody.Annotation.ID, 10, 64)
+	if err != nil {
+		t.Fatalf("created annotation id = %q, parse error = %v", createdBody.Annotation.ID, err)
+	}
+	if !createdBody.Success || createdAnnotationID == 0 || createdBody.Annotation.PaperID != paperID {
 		t.Fatalf("created body = %+v", createdBody)
 	}
 
@@ -89,17 +96,20 @@ func TestPaperHandlerPDFAnnotationsCreateListDelete(t *testing.T) {
 		t.Fatalf("list status = %d body = %s", listRec.Code, listRec.Body.String())
 	}
 	var listBody struct {
-		Success     bool                  `json:"success"`
-		Annotations []model.PDFAnnotation `json:"annotations"`
+		Success     bool `json:"success"`
+		Annotations []struct {
+			ID      string `json:"id"`
+			PaperID string `json:"paper_id"`
+		} `json:"annotations"`
 	}
 	if err := json.NewDecoder(listRec.Body).Decode(&listBody); err != nil {
 		t.Fatalf("Decode(list) error = %v", err)
 	}
-	if len(listBody.Annotations) != 1 || listBody.Annotations[0].ID != createdBody.Annotation.ID {
+	if len(listBody.Annotations) != 1 || listBody.Annotations[0].ID != createdBody.Annotation.ID || listBody.Annotations[0].PaperID != paperID {
 		t.Fatalf("list body = %+v", listBody)
 	}
 
-	deletePath := "/api/papers/" + paperID + "/pdf-annotations/" + strconv.FormatInt(createdBody.Annotation.ID, 10)
+	deletePath := "/api/papers/" + paperID + "/pdf-annotations/" + createdBody.Annotation.ID
 	deleteReq := httptest.NewRequest(http.MethodDelete, deletePath, nil)
 	deleteRec := httptest.NewRecorder()
 	h.DeletePDFAnnotation(deleteRec, deleteReq)
@@ -113,6 +123,50 @@ func TestPaperHandlerPDFAnnotationsCreateListDelete(t *testing.T) {
 	}
 	if len(afterDelete) != 0 {
 		t.Fatalf("annotations after delete = %d, want 0", len(afterDelete))
+	}
+}
+
+func TestPaperHandlerPDFAnnotationsSerializesIDsAsStrings(t *testing.T) {
+	h, repo := newPaperHandlerForTest(t)
+	const paperID int64 = 9007199254740995
+	const annotationID int64 = 9007199254740993
+	if _, err := repo.DB().Exec(`
+		INSERT INTO papers (
+			id, title, original_filename, stored_pdf_name, file_size, content_type
+		) VALUES (?, ?, ?, ?, ?, ?)
+	`, paperID, "Unsafe Scoped ID Paper", "unsafe-scoped.pdf", "unsafe-scoped.pdf", 128, "application/pdf"); err != nil {
+		t.Fatalf("insert paper error = %v", err)
+	}
+	if _, err := repo.DB().Exec(`
+		INSERT INTO pdf_annotations (
+			id, paper_id, type, page_start, page_end, quote_text, color, fragments_json, note_text
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, annotationID, paperID, "highlight", 2, 2, "unsafe scoped id text", "yellow", `[{"page":2,"left":0.1,"top":0.2,"width":0.3,"height":0.04}]`, ""); err != nil {
+		t.Fatalf("insert annotation error = %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/papers/"+strconv.FormatInt(paperID, 10)+"/pdf-annotations", nil)
+	rec := httptest.NewRecorder()
+	h.ListPDFAnnotations(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body = %s", rec.Code, rec.Body.String())
+	}
+
+	var body struct {
+		Success     bool `json:"success"`
+		Annotations []struct {
+			ID      string `json:"id"`
+			PaperID string `json:"paper_id"`
+		} `json:"annotations"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+		t.Fatalf("Decode() error = %v body = %s", err, rec.Body.String())
+	}
+	if !body.Success || len(body.Annotations) != 1 {
+		t.Fatalf("body = %+v", body)
+	}
+	if body.Annotations[0].ID != strconv.FormatInt(annotationID, 10) || body.Annotations[0].PaperID != strconv.FormatInt(paperID, 10) {
+		t.Fatalf("ids = %+v, want annotation %d paper %d", body.Annotations[0], annotationID, paperID)
 	}
 }
 
