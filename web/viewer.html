@@ -220,6 +220,103 @@
             background: rgba(255, 250, 244, 0.12);
         }
 
+        .viewer-ai-ask-box {
+            width: min(920px, 100%);
+            display: grid;
+            gap: 1rem;
+            color: var(--ink);
+        }
+
+        .viewer-ai-ask-head {
+            display: grid;
+            gap: 0.45rem;
+            padding-right: 3rem;
+        }
+
+        .viewer-ai-ask-badge {
+            width: fit-content;
+            padding: 0.35rem 0.75rem;
+            border-radius: 999px;
+            background: rgba(var(--accent-rgb), 0.12);
+            color: var(--accent-deep);
+            font-size: 0.78rem;
+            font-weight: 800;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+
+        .viewer-ai-ask-head h3 {
+            margin: 0;
+            font-size: clamp(1.6rem, 3vw, 2.4rem);
+        }
+
+        .viewer-ai-ask-head p {
+            margin: 0;
+            color: var(--muted);
+            line-height: 1.6;
+        }
+
+        .viewer-ai-ask-section {
+            display: grid;
+            gap: 0.55rem;
+        }
+
+        .viewer-ai-ask-label {
+            color: var(--muted);
+            font-size: 0.9rem;
+            font-weight: 800;
+        }
+
+        .viewer-ai-ask-selection {
+            max-height: min(24vh, 13rem);
+            overflow: auto;
+            margin: 0;
+            padding: 1rem 1.1rem;
+            border-left: 3px solid var(--accent);
+            border-radius: 0 18px 18px 0;
+            background: rgba(var(--accent-rgb), 0.08);
+            white-space: pre-wrap;
+            line-height: 1.75;
+            color: var(--ink);
+            font-family: inherit;
+            font-size: 0.98rem;
+        }
+
+        .viewer-ai-ask-answer {
+            min-height: 5rem;
+            max-height: min(34vh, 18rem);
+            overflow: auto;
+            padding: 1rem 1.1rem;
+            border: 1px solid rgba(var(--ink-rgb), 0.1);
+            border-radius: 18px;
+            background: rgba(var(--surface-rgb), 0.94);
+            line-height: 1.75;
+        }
+
+        .viewer-ai-ask-answer.is-muted {
+            color: var(--muted);
+        }
+
+        .viewer-ai-ask-answer.is-error {
+            border-color: rgba(var(--error-rgb), 0.18);
+            color: var(--error);
+        }
+
+        .viewer-ai-ask-actions {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            justify-content: space-between;
+            flex-wrap: wrap;
+        }
+
+        .viewer-ai-ask-actions-main {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+        }
+
         .viewer-image-viewport {
             position: relative;
             display: flex;
@@ -401,7 +498,7 @@
                     <button id="viewerPdfFitButton" class="btn btn-outline" type="button" data-i18n="viewer.pdf_fit_width">适合宽度</button>
                 </div>
                 <div class="viewer-pdf-control-group">
-                    <a id="viewerPdfDetailLink" class="btn btn-outline" href="/library" data-i18n="viewer.pdf_detail" hidden>详情页</a>
+                    <a id="viewerPdfDetailLink" class="btn btn-outline" href="/ai" data-i18n="viewer.pdf_ask_ai" hidden>在 AI 中追问</a>
                 </div>
             </div>
         </header>
@@ -410,6 +507,7 @@
     <div id="viewerSelectionMenu" class="viewer-selection-menu hidden">
         <button type="button" data-pdf-selection-action="copy" data-i18n="viewer.pdf_copy_selection">复制</button>
         <button type="button" data-pdf-selection-action="translate" data-i18n="viewer.pdf_translate_selection">翻译</button>
+        <button type="button" data-pdf-selection-action="ask-ai" data-i18n="viewer.pdf_ask_selection">AI 提问</button>
     </div>
 
     <script src="/static/js/theme.js"></script>

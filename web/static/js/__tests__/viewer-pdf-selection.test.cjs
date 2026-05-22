@@ -12,6 +12,7 @@ function createElement(name) {
     return {
         name,
         children: new Set(),
+        listeners: {},
         classList: {
             classes: new Set(),
             add(value) { this.classes.add(value); },
@@ -26,6 +27,9 @@ function createElement(name) {
         appendChild(child) {
             child.parentElement = this;
             this.children.add(child);
+        },
+        addEventListener(type, handler) {
+            this.listeners[type] = handler;
         },
         querySelector(selector) {
             if (selector === '[data-pdf-scroll]') return this.pdfScroll || null;
@@ -42,6 +46,7 @@ function loadViewerPage(selection, options = {}) {
     const translateDialog = options.translateDialog || null;
     const context = {
         console,
+        AbortController,
         Map: options.Map || Map,
         URL,
         URLSearchParams,
@@ -72,6 +77,9 @@ function loadViewerPage(selection, options = {}) {
             querySelector(selector) {
                 if (selector === '.translate-dialog-overlay:not(.hidden)') {
                     return translateDialog;
+                }
+                if (selector === '.viewer-ai-ask-overlay:not(.hidden)') {
+                    return options.aiAskDialog || null;
                 }
                 return null;
             },
@@ -152,6 +160,21 @@ test('isCurrentPDFLoad checks load token and viewer identity', () => {
     assert.equal(viewer.isCurrentPDFLoad(4, {}), false);
 });
 
+test('PDF toolbar paper action opens AI with the current paper id', async () => {
+    const { viewer } = loadViewerPage(null);
+    viewer.stage = { className: '', innerHTML: '' };
+    viewer.pdfDetailLink = { href: '', hidden: true };
+    viewer.loadPDFDocument = async () => false;
+
+    await viewer.renderPDFResource({
+        href: 'http://localhost/files/papers/paper.pdf',
+        paperId: '42',
+    });
+
+    assert.equal(viewer.pdfDetailLink.href, '/ai?paper_id=42');
+    assert.equal(viewer.pdfDetailLink.hidden, false);
+});
+
 test('ensurePDFViewerCompatibility adds Map getOrInsertComputed for bundled PDF.js viewer', () => {
     class TestMap extends Map {}
     const { context, viewer } = loadViewerPage(null, { Map: TestMap });
@@ -218,6 +241,100 @@ test('Escape does not close the PDF reader while translation dialog is open', ()
     viewer.handleEscapeKey(event);
 
     assert.equal(closed, false);
+});
+
+test('Escape does not close the PDF reader while PDF AI ask dialog is open', () => {
+    const aiAskDialog = createElement('aiAskDialog');
+    const { viewer } = loadViewerPage(null, { aiAskDialog });
+    let closed = false;
+    const event = {
+        key: 'Escape',
+        preventDefault() {},
+        stopPropagation() {},
+        stopImmediatePropagation() {},
+    };
+    viewer.selectionMenu = createElement('menu');
+    viewer.selectionMenu.classList.add('hidden');
+    viewer.close = () => {
+        closed = true;
+    };
+
+    viewer.handleEscapeKey(event);
+
+    assert.equal(closed, false);
+});
+
+test('PDF selection menu routes ask-ai action to the AI ask dialog', async () => {
+    const { viewer } = loadViewerPage(null);
+    const menu = createElement('menu');
+    let asked = false;
+    viewer.selectionMenu = menu;
+    viewer.openPDFSelectionAIAsk = async () => {
+        asked = true;
+    };
+
+    viewer.bindPDFSelectionMenu();
+    await menu.listeners.click({
+        target: {
+            closest(selector) {
+                return selector === '[data-pdf-selection-action]'
+                    ? { dataset: { pdfSelectionAction: 'ask-ai' } }
+                    : null;
+            },
+        },
+        preventDefault() {},
+        stopPropagation() {},
+    });
+
+    assert.equal(asked, true);
+});
+
+test('PDF selection AI question includes selected passage and user question', () => {
+    const { viewer } = loadViewerPage(null);
+    const prompt = viewer.buildPDFSelectionAIQuestion(
+        'Among the genomic alterations observed in ER+ breast cancer',
+        '为什么这里强调 ARID1A？'
+    );
+
+    assert.match(prompt, /请只围绕下面这段 PDF 划选内容回答/);
+    assert.match(prompt, /Among the genomic alterations observed in ER\+ breast cancer/);
+    assert.match(prompt, /为什么这里强调 ARID1A？/);
+});
+
+test('PDF selection AI ask uses transient read stream API', async () => {
+    const { context, viewer } = loadViewerPage(null);
+    let request = null;
+    context.API = {
+        async readPaperWithAIStream(data, options) {
+            request = data;
+            options.onEvent({ type: 'delta', delta: 'answer' });
+        },
+    };
+    const questionInput = { value: '为什么这里强调 ARID1A？' };
+    const submitButton = { disabled: false, textContent: '' };
+    const dialogState = {
+        overlay: {
+            querySelector(selector) {
+                if (selector === '.viewer-ai-ask-question') return questionInput;
+                if (selector === '[data-pdf-ai-ask-action="submit"]') return submitButton;
+                return null;
+            },
+        },
+        selectionText: 'Among the genomic alterations observed in ER+ breast cancer',
+        paperId: 42,
+        loading: false,
+        answer: '',
+    };
+    viewer.pdfAIAskDialog = dialogState;
+    viewer.renderPDFSelectionAIAnswer = () => {};
+
+    await viewer.submitPDFSelectionAIAsk(dialogState);
+
+    assert.equal(request.paper_id, 42);
+    assert.equal(request.action, 'paper_qa');
+    assert.match(request.question, /Among the genomic alterations observed in ER\+ breast cancer/);
+    assert.match(request.question, /为什么这里强调 ARID1A？/);
+    assert.equal(dialogState.answer, 'answer');
 });
 
 test('currentPDFSelectionText ignores browser native selection outside the PDF viewer', () => {

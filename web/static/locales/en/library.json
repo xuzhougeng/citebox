@@ -59,6 +59,7 @@
     "library.meta_updated": "Updated",
     "library.meta_no_tags": "No tags",
     "library.btn_detail": "Details",
+    "library.btn_read_pdf": "Read PDF",
     "library.btn_manual": "Manual Annotate",
     "library.btn_reextract": "Re-extract",
     "library.btn_rename": "Rename",

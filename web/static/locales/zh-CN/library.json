@@ -59,6 +59,7 @@
     "library.meta_updated": "更新",
     "library.meta_no_tags": "无标签",
     "library.btn_detail": "详情页",
+    "library.btn_read_pdf": "阅读 PDF",
     "library.btn_manual": "手动标注",
     "library.btn_reextract": "重新解析",
     "library.btn_rename": "改名",

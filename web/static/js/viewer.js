@@ -18,6 +18,7 @@ const ResourceViewerPage = {
         this.pdfFitButton = document.getElementById('viewerPdfFitButton');
         this.pdfDetailLink = document.getElementById('viewerPdfDetailLink');
         this.selectionMenu = document.getElementById('viewerSelectionMenu');
+        this.pdfAIAskDialog = null;
         this.closing = false;
         this.viewState = this.defaultViewState();
         this.pdfLoadToken = 0;
@@ -87,11 +88,18 @@ const ResourceViewerPage = {
         if (this.hasOpenTranslateDialog()) {
             return;
         }
+        if (this.hasOpenPDFAIAskDialog()) {
+            return;
+        }
         this.close({ deferNavigation: true });
     },
 
     hasOpenTranslateDialog() {
         return Boolean(document.querySelector?.('.translate-dialog-overlay:not(.hidden)'));
+    },
+
+    hasOpenPDFAIAskDialog() {
+        return Boolean(document.querySelector?.('.viewer-ai-ask-overlay:not(.hidden)'));
     },
 
     async render() {
@@ -184,6 +192,9 @@ const ResourceViewerPage = {
             }
             if (button.dataset.pdfSelectionAction === 'translate') {
                 await this.translatePDFSelection();
+            }
+            if (button.dataset.pdfSelectionAction === 'ask-ai') {
+                await this.openPDFSelectionAIAsk();
             }
         });
 
@@ -320,7 +331,7 @@ const ResourceViewerPage = {
 
         const paperId = String(resource.paperId || '').trim();
         if (this.pdfDetailLink && paperId) {
-            this.pdfDetailLink.href = `/library?paper_id=${encodeURIComponent(paperId)}`;
+            this.pdfDetailLink.href = `/ai?paper_id=${encodeURIComponent(paperId)}`;
             this.pdfDetailLink.hidden = false;
         }
 
@@ -714,6 +725,209 @@ const ResourceViewerPage = {
         await DesktopTranslate.translateText(text, {
             title: t('viewer.pdf_translate_title', 'PDF 划选翻译')
         });
+    },
+
+    async openPDFSelectionAIAsk() {
+        const text = this.currentPDFSelectionText();
+        const paperId = Number(this.pdfState?.resource?.paperId || 0);
+        this.clearPDFSelection();
+        if (!text) {
+            if (typeof Utils !== 'undefined' && typeof Utils.showToast === 'function') {
+                Utils.showToast(t('viewer.pdf_ai_ask_no_selection', '请先划选需要提问的 PDF 内容'), 'error');
+            }
+            return;
+        }
+        if (!Number.isFinite(paperId) || paperId <= 0) {
+            if (typeof Utils !== 'undefined' && typeof Utils.showToast === 'function') {
+                Utils.showToast(t('viewer.pdf_ai_ask_no_paper', '当前 PDF 缺少文献 ID，无法发起 AI 提问'), 'error');
+            }
+            return;
+        }
+        this.renderPDFSelectionAIAskDialog(text, paperId);
+    },
+
+    renderPDFSelectionAIAskDialog(selectionText, paperId) {
+        this.closePDFSelectionAIAskDialog();
+        const overlay = document.createElement('div');
+        overlay.className = 'dialog-overlay viewer-ai-ask-overlay';
+        overlay.setAttribute('tabindex', '-1');
+        overlay.innerHTML = `
+            <div class="dialog-box viewer-ai-ask-box">
+                <button class="modal-close" type="button" data-pdf-ai-ask-action="close" aria-label="${t('viewer.pdf_ai_ask_close', '关闭')}">×</button>
+                <div class="viewer-ai-ask-head">
+                    <span class="viewer-ai-ask-badge">${t('viewer.pdf_ai_ask_badge', 'PDF AI')}</span>
+                    <h3>${t('viewer.pdf_ai_ask_title', 'AI 提问')}</h3>
+                    <p>${t('viewer.pdf_ai_ask_intro', '基于你刚才划选的 PDF 内容，做一轮临时解释或追问。')}</p>
+                </div>
+                <section class="viewer-ai-ask-section">
+                    <span class="viewer-ai-ask-label">${t('viewer.pdf_ai_ask_selected_label', '你划选的内容')}</span>
+                    <pre class="viewer-ai-ask-selection" data-native-context-menu="true">${this.escapeHTML(selectionText)}</pre>
+                </section>
+                <label class="viewer-ai-ask-section">
+                    <span class="viewer-ai-ask-label">${t('viewer.pdf_ai_ask_question_label', '你的问题')}</span>
+                    <textarea class="form-textarea viewer-ai-ask-question" rows="4" data-native-context-menu="true" placeholder="${t('viewer.pdf_ai_ask_placeholder', '例如：这段话是什么意思？为什么这里要这样做？不输入则默认解释这段内容。')}"></textarea>
+                </label>
+                <section class="viewer-ai-ask-section">
+                    <div class="viewer-ai-ask-actions">
+                        <span class="viewer-ai-ask-label">${t('viewer.pdf_ai_ask_answer_label', 'AI 回答')}</span>
+                        <div class="viewer-ai-ask-actions-main">
+                            <button class="btn btn-outline" type="button" data-pdf-ai-ask-action="close">${t('viewer.pdf_ai_ask_close', '关闭')}</button>
+                            <button class="btn btn-primary" type="button" data-pdf-ai-ask-action="submit">${t('viewer.pdf_ai_ask_submit', '开始答疑')}</button>
+                        </div>
+                    </div>
+                    <div class="viewer-ai-ask-answer is-muted" data-pdf-ai-ask-answer>${t('viewer.pdf_ai_ask_waiting', '等待提问')}</div>
+                </section>
+            </div>
+        `;
+
+        const dialogState = {
+            overlay,
+            selectionText,
+            paperId,
+            abortController: null,
+            loading: false,
+            answer: ''
+        };
+        this.pdfAIAskDialog = dialogState;
+
+        overlay.addEventListener('click', async (event) => {
+            if (event.target === overlay) {
+                this.closePDFSelectionAIAskDialog();
+                return;
+            }
+            const target = event.target instanceof Element ? event.target : null;
+            const button = target?.closest('[data-pdf-ai-ask-action]');
+            if (!button) return;
+
+            if (button.dataset.pdfAiAskAction === 'close') {
+                this.closePDFSelectionAIAskDialog();
+                return;
+            }
+            if (button.dataset.pdfAiAskAction === 'submit') {
+                await this.submitPDFSelectionAIAsk(dialogState);
+            }
+        });
+        overlay.addEventListener('keydown', async (event) => {
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                event.stopPropagation();
+                event.stopImmediatePropagation?.();
+                this.closePDFSelectionAIAskDialog();
+                return;
+            }
+            if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+                event.preventDefault();
+                await this.submitPDFSelectionAIAsk(dialogState);
+            }
+        });
+
+        document.body.appendChild(overlay);
+        overlay.focus?.({ preventScroll: true });
+        overlay.querySelector('.viewer-ai-ask-question')?.focus?.({ preventScroll: true });
+    },
+
+    async submitPDFSelectionAIAsk(dialogState) {
+        if (!dialogState || dialogState.loading) return;
+        if (typeof API === 'undefined' || typeof API.readPaperWithAIStream !== 'function') {
+            this.renderPDFSelectionAIAnswer(dialogState, t('viewer.pdf_ai_ask_api_missing', '当前环境无法调用 AI 阅读接口'), { error: true });
+            return;
+        }
+
+        const questionInput = dialogState.overlay.querySelector('.viewer-ai-ask-question');
+        const submitButton = dialogState.overlay.querySelector('[data-pdf-ai-ask-action="submit"]');
+        const question = String(questionInput?.value || '').trim();
+        const prompt = this.buildPDFSelectionAIQuestion(dialogState.selectionText, question);
+        dialogState.abortController = new AbortController();
+        dialogState.loading = true;
+        dialogState.answer = '';
+        if (submitButton) {
+            submitButton.disabled = true;
+            submitButton.textContent = t('viewer.pdf_ai_ask_submitting', '答疑中...');
+        }
+        this.renderPDFSelectionAIAnswer(dialogState, t('viewer.pdf_ai_ask_loading', '正在调用 AI，请稍候。'), { muted: true });
+
+        try {
+            await API.readPaperWithAIStream({
+                paper_id: dialogState.paperId,
+                action: 'paper_qa',
+                question: prompt
+            }, {
+                signal: dialogState.abortController.signal,
+                onEvent: (event) => {
+                    if (this.pdfAIAskDialog !== dialogState) return;
+                    if (event.type === 'error') {
+                        throw new Error(event.error || t('shared.api.stream_error', '流式解读失败'));
+                    }
+                    if (event.type === 'delta') {
+                        dialogState.answer += event.delta || '';
+                        this.renderPDFSelectionAIAnswer(dialogState, dialogState.answer);
+                        return;
+                    }
+                    if (event.type === 'final' && event.result && !dialogState.answer.trim()) {
+                        dialogState.answer = event.result.answer || '';
+                        this.renderPDFSelectionAIAnswer(dialogState, dialogState.answer || t('viewer.pdf_ai_ask_empty_answer', '模型没有返回文本结果。'));
+                    }
+                }
+            });
+            if (!dialogState.answer.trim()) {
+                this.renderPDFSelectionAIAnswer(dialogState, t('viewer.pdf_ai_ask_empty_answer', '模型没有返回文本结果。'));
+            }
+        } catch (error) {
+            if (error?.name !== 'AbortError' && this.pdfAIAskDialog === dialogState) {
+                this.renderPDFSelectionAIAnswer(dialogState, error.message || t('viewer.pdf_ai_ask_failed', 'AI 答疑失败'), { error: true });
+            }
+        } finally {
+            if (this.pdfAIAskDialog === dialogState) {
+                dialogState.loading = false;
+                dialogState.abortController = null;
+                if (submitButton) {
+                    submitButton.disabled = false;
+                    submitButton.textContent = t('viewer.pdf_ai_ask_submit', '开始答疑');
+                }
+            }
+        }
+    },
+
+    buildPDFSelectionAIQuestion(selectionText, userQuestion = '') {
+        const selected = String(selectionText || '').trim();
+        const question = String(userQuestion || '').trim() || '请解释这段内容的核心意思、背景和它在论文论证中的作用。';
+        return [
+            '请只围绕下面这段 PDF 划选内容回答；不要泛泛总结整篇论文，除非需要用论文上下文解释这段话。',
+            '',
+            '【PDF 划选内容】',
+            selected,
+            '',
+            '【我的问题】',
+            question
+        ].join('\n');
+    },
+
+    renderPDFSelectionAIAnswer(dialogState, text, options = {}) {
+        const answer = dialogState?.overlay?.querySelector?.('[data-pdf-ai-ask-answer]');
+        if (!answer) return;
+        answer.classList.toggle('is-muted', Boolean(options.muted));
+        answer.classList.toggle('is-error', Boolean(options.error));
+        const content = String(text || '').trim();
+        if (!content) {
+            answer.textContent = t('viewer.pdf_ai_ask_waiting', '等待提问');
+            answer.classList.add('is-muted');
+            return;
+        }
+        if (options.muted || options.error || typeof Utils === 'undefined' || typeof Utils.renderMarkdown !== 'function') {
+            answer.textContent = content;
+            return;
+        }
+        answer.innerHTML = Utils.renderMarkdown(content);
+    },
+
+    closePDFSelectionAIAskDialog() {
+        const dialogState = this.pdfAIAskDialog;
+        if (!dialogState) return;
+        if (dialogState.abortController) {
+            dialogState.abortController.abort();
+        }
+        dialogState.overlay?.remove?.();
+        this.pdfAIAskDialog = null;
     },
 
     async writeClipboardText(text) {

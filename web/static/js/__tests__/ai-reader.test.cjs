@@ -72,6 +72,52 @@ function loadBoot(renderMentionHTML) {
     return { boot: context.window.AIReader.boot, input, mirror };
 }
 
+function loadBootForDispatch(options = {}) {
+    const code = fs.readFileSync(modulePath, 'utf8');
+    const loadDraftCalls = [];
+    const activeCalls = [];
+    const context = {
+        console,
+        document: {
+            getElementById() { return null; },
+            addEventListener() {},
+        },
+        window: {
+            location: {
+                search: options.search || '',
+            },
+            AIReader: {
+                view: {
+                    loadDraft(paperId, paper) {
+                        loadDraftCalls.push({ paperId, paper });
+                    },
+                    load() {},
+                },
+                conversations: {
+                    _state: { items: [] },
+                    async refresh() {},
+                    setActive(value) {
+                        activeCalls.push(value);
+                    },
+                },
+            },
+        },
+        API: {
+            async getPaper(id) {
+                return options.paper || { id, title: `Paper ${id}` };
+            },
+        },
+        URLSearchParams,
+    };
+    context.globalThis = context;
+    vm.runInNewContext(code, context, { filename: modulePath });
+    return {
+        boot: context.window.AIReader.boot,
+        loadDraftCalls,
+        activeCalls,
+    };
+}
+
 test('_bindQuestionMirror uses shared mention HTML renderer', () => {
     let seen = null;
     const { boot, input, mirror } = loadBoot((value) => {
@@ -85,4 +131,17 @@ test('_bindQuestionMirror uses shared mention HTML renderer', () => {
 
     assert.equal(seen, '@image-gen draw it ');
     assert.equal(mirror.innerHTML, '<span class="tokenized">@image-gen</span>');
+});
+
+test('paper_id entry loads a draft with paper metadata for pinning', async () => {
+    const paper = { id: 42, title: 'ARID1A determines luminal identity' };
+    const { boot, loadDraftCalls, activeCalls } = loadBootForDispatch({
+        search: '?paper_id=42',
+        paper,
+    });
+
+    await boot._dispatchEntry();
+
+    assert.deepEqual(loadDraftCalls, [{ paperId: 42, paper }]);
+    assert.deepEqual(activeCalls, [null]);
 });

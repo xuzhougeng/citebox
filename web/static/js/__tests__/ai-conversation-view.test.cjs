@@ -100,6 +100,27 @@ test('sendPayload does not invent search_goal_hint for ordinary payloads', async
     assert.ok(!Object.prototype.hasOwnProperty.call(sentBody, 'search_goal_hint'));
 });
 
+test('loadDraft pins the deep-linked paper when paper metadata is available', () => {
+    const view = loadView();
+    const subject = Object.create(view);
+    subject._state = {};
+    subject._renderAll = () => {};
+
+    subject.loadDraft(42, {
+        id: 42,
+        title: 'ARID1A determines luminal identity',
+    });
+
+    assert.deepEqual(JSON.parse(JSON.stringify(subject._state.pinnedPapers)), [{
+        paper_id: 42,
+        title: 'ARID1A determines luminal identity',
+    }]);
+    assert.deepEqual(JSON.parse(JSON.stringify(subject._currentContext())), {
+        source: 'ai',
+        paper_id: 42,
+    });
+});
+
 test('sendPayload preserves explicit search_goal_hint when parsed @ tags are also present', async () => {
     const subject = createSubject(() => ({
         intentHint: 'external_search',

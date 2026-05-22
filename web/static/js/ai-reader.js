@@ -100,6 +100,24 @@
             sync();
         },
 
+        async _loadDraftPaper(paperId) {
+            const id = Number(paperId || 0);
+            if (!Number.isFinite(id) || id <= 0) return null;
+
+            const cached = (this._allPapers || []).find((paper) => Number(paper?.id || 0) === id);
+            if (cached) return cached;
+
+            if (typeof API !== 'undefined' && API && typeof API.getPaper === 'function') {
+                try {
+                    return await API.getPaper(id);
+                } catch (e) {
+                    return null;
+                }
+            }
+
+            return null;
+        },
+
         _initModules() {
             const conversations = window.AIReader && window.AIReader.conversations;
             const view = window.AIReader && window.AIReader.view;
@@ -367,7 +385,8 @@
                 return;
             }
             if (Number.isFinite(paperParam) && paperParam > 0) {
-                view.loadDraft(paperParam);
+                const paper = await this._loadDraftPaper(paperParam);
+                view.loadDraft(paperParam, paper);
                 conversations.setActive(null);
                 return;
             }

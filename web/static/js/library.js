@@ -377,7 +377,7 @@ const LibraryPage = {
                             </div>
                         </div>
                         <div class="paper-list-meta">
-                            <span class="paper-list-meta-item paper-list-meta-file" data-action="open-pdf" role="button" title="${t('library.meta_click_pdf', '点击阅读 PDF')}">
+                            <span class="paper-list-meta-item paper-list-meta-file" data-action="open" role="button" title="${t('library.meta_click_detail', '点击查看详情')}">
                                 <span class="paper-list-meta-label">${t('library.meta_file', '文件')}</span>
                                 <span class="paper-list-meta-value">${Utils.escapeHTML(paper.original_filename)}</span>
                             </span>
@@ -406,7 +406,7 @@ const LibraryPage = {
                     <div class="paper-list-footer">
                         <div class="paper-list-tags">${tags || `<span class="muted">${t('library.meta_no_tags', '无标签')}</span>`}</div>
                         <div class="paper-list-footer-actions">
-                            <button class="btn btn-outline" type="button" data-action="open">${t('library.btn_detail', '详情页')}</button>
+                            <button class="btn btn-outline" type="button" data-action="open-pdf">${t('library.btn_read_pdf', '阅读 PDF')}</button>
                             <a class="btn btn-outline" href="/manual?paper_id=${paper.id}">${t('library.btn_manual', '手动标注')}</a>
                             ${(paper.extraction_status === 'failed' || paper.extraction_status === 'cancelled') ? `<button class="btn btn-outline" type="button" data-action="reextract">${t('library.btn_reextract', '重新解析')}</button>` : ''}
                         </div>

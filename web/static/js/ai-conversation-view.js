@@ -111,17 +111,33 @@
             this._renderAll();
         },
 
-        loadDraft(prefilledPaperId) {
+        loadDraft(prefilledPaperId, prefilledPaper = null) {
             const s = this._state;
+            const draftPaperId = this._paperID(prefilledPaperId || prefilledPaper?.id || prefilledPaper?.paper_id);
             s.conversationId = null;
             s.meta = { title: '', strict_evidence: false, title_locked: false };
-            s.pinnedPapers = [];
+            s.pinnedPapers = this._draftPinnedPapers(draftPaperId, prefilledPaper);
             s.messages = [];
             s.turnRuns = [];
             s.pendingCitations = [];
             this._clearRewriteMode({ keepInput: true });
-            s._draftPaperId = prefilledPaperId || 0;
+            s._draftPaperId = draftPaperId;
             this._renderAll();
+        },
+
+        _paperID(value) {
+            const id = Number(value || 0);
+            return Number.isFinite(id) && id > 0 ? id : 0;
+        },
+
+        _draftPinnedPapers(paperId, paper = null) {
+            const id = this._paperID(paper?.paper_id || paper?.id || paperId);
+            if (!id) return [];
+            const title = String(paper?.title || paper?.original_filename || '').trim() || `#${id}`;
+            return [{
+                paper_id: id,
+                title,
+            }];
         },
 
         async sendCurrentInput() {
