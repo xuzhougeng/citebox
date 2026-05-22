@@ -85,6 +85,20 @@ func (m *Manager) initSchema() error {
 		PRIMARY KEY (paper_id, tag_id)
 	);
 
+	CREATE TABLE IF NOT EXISTS pdf_annotations (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		paper_id INTEGER NOT NULL REFERENCES papers(id) ON DELETE CASCADE,
+		type TEXT NOT NULL DEFAULT 'highlight' CHECK (type IN ('highlight')),
+		page_start INTEGER NOT NULL DEFAULT 1,
+		page_end INTEGER NOT NULL DEFAULT 1,
+		quote_text TEXT NOT NULL DEFAULT '',
+		color TEXT NOT NULL DEFAULT 'yellow',
+		fragments_json TEXT NOT NULL DEFAULT '[]',
+		note_text TEXT NOT NULL DEFAULT '',
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
+
 	CREATE TABLE IF NOT EXISTS paper_figures (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		paper_id INTEGER NOT NULL REFERENCES papers(id) ON DELETE CASCADE,
@@ -200,6 +214,8 @@ func (m *Manager) initSchema() error {
 	CREATE INDEX IF NOT EXISTS idx_papers_group_id ON papers(group_id);
 	CREATE INDEX IF NOT EXISTS idx_papers_created_at ON papers(created_at);
 	CREATE INDEX IF NOT EXISTS idx_papers_status ON papers(extraction_status);
+	CREATE INDEX IF NOT EXISTS idx_pdf_annotations_paper_id ON pdf_annotations(paper_id, id);
+	CREATE INDEX IF NOT EXISTS idx_pdf_annotations_paper_page ON pdf_annotations(paper_id, page_start, page_end);
 	CREATE INDEX IF NOT EXISTS idx_paper_figures_paper_id ON paper_figures(paper_id);
 	CREATE INDEX IF NOT EXISTS idx_color_palettes_paper_id ON color_palettes(paper_id);
 	CREATE INDEX IF NOT EXISTS idx_paper_tags_tag_id ON paper_tags(tag_id);
@@ -593,6 +609,8 @@ func (m *Manager) ensureIndexes() error {
 	}
 
 	for _, statement := range []string{
+		"CREATE INDEX IF NOT EXISTS idx_pdf_annotations_paper_id ON pdf_annotations(paper_id, id)",
+		"CREATE INDEX IF NOT EXISTS idx_pdf_annotations_paper_page ON pdf_annotations(paper_id, page_start, page_end)",
 		"CREATE INDEX IF NOT EXISTS idx_paper_figures_updated_at ON paper_figures(updated_at)",
 		"CREATE INDEX IF NOT EXISTS idx_paper_figures_parent_figure_id ON paper_figures(parent_figure_id)",
 		"CREATE UNIQUE INDEX IF NOT EXISTS idx_paper_figures_parent_label_unique ON paper_figures(parent_figure_id, subfigure_label) WHERE parent_figure_id IS NOT NULL AND COALESCE(TRIM(subfigure_label), '') <> ''",

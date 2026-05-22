@@ -290,6 +290,67 @@ func (h *PaperHandler) RefreshDOIMetadata(w http.ResponseWriter, r *http.Request
 	})
 }
 
+func (h *PaperHandler) ListPDFAnnotations(w http.ResponseWriter, r *http.Request) {
+	paperID, err := parseIDWithSuffix(strings.TrimRight(r.URL.Path, "/"), "/api/papers/", "/pdf-annotations")
+	if err != nil {
+		sendError(w, apperr.New(apperr.CodeInvalidArgument, "paper id 无效"))
+		return
+	}
+
+	annotations, err := h.service.ListPDFAnnotations(paperID)
+	if err != nil {
+		sendError(w, err)
+		return
+	}
+
+	sendJSON(w, http.StatusOK, map[string]interface{}{
+		"success":     true,
+		"annotations": annotations,
+	})
+}
+
+func (h *PaperHandler) CreatePDFAnnotation(w http.ResponseWriter, r *http.Request) {
+	paperID, err := parseIDWithSuffix(strings.TrimRight(r.URL.Path, "/"), "/api/papers/", "/pdf-annotations")
+	if err != nil {
+		sendError(w, apperr.New(apperr.CodeInvalidArgument, "paper id 无效"))
+		return
+	}
+
+	var req service.CreatePDFAnnotationParams
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		sendError(w, apperr.New(apperr.CodeInvalidArgument, "请求体格式错误"))
+		return
+	}
+
+	annotation, err := h.service.CreatePDFAnnotation(paperID, req)
+	if err != nil {
+		sendError(w, err)
+		return
+	}
+
+	sendJSON(w, http.StatusOK, map[string]interface{}{
+		"success":    true,
+		"annotation": annotation,
+	})
+}
+
+func (h *PaperHandler) DeletePDFAnnotation(w http.ResponseWriter, r *http.Request) {
+	paperID, annotationID, err := parsePDFAnnotationIDs(r.URL.Path)
+	if err != nil {
+		sendError(w, apperr.New(apperr.CodeInvalidArgument, "PDF 标注路径无效"))
+		return
+	}
+
+	if err := h.service.DeletePDFAnnotation(paperID, annotationID); err != nil {
+		sendError(w, err)
+		return
+	}
+
+	sendJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+	})
+}
+
 func (h *PaperHandler) Update(w http.ResponseWriter, r *http.Request) {
 	id, err := parseIDFromPath(r.URL.Path, "/api/papers/")
 	if err != nil {
@@ -367,6 +428,24 @@ func (h *PaperHandler) Purge(w http.ResponseWriter, r *http.Request) {
 		Success: true,
 		Message: "数据库已清空",
 	})
+}
+
+func parsePDFAnnotationIDs(path string) (int64, int64, error) {
+	value := strings.TrimPrefix(path, "/api/papers/")
+	value = strings.Trim(value, "/")
+	parts := strings.Split(value, "/")
+	if len(parts) != 3 || parts[1] != "pdf-annotations" {
+		return 0, 0, strconv.ErrSyntax
+	}
+	paperID, err := strconv.ParseInt(parts[0], 10, 64)
+	if err != nil {
+		return 0, 0, err
+	}
+	annotationID, err := strconv.ParseInt(parts[2], 10, 64)
+	if err != nil {
+		return 0, 0, err
+	}
+	return paperID, annotationID, nil
 }
 
 func optionalInt64(value string) (*int64, error) {

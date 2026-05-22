@@ -26,6 +26,7 @@ const ResourceViewerPage = {
         this.dragState = null;
         this.resizeTimer = null;
         this.pdfSelectionTimer = null;
+        this.pdfHighlightRenderTimer = null;
 
         this.closeButton?.addEventListener('click', () => this.close());
         this.resetButton?.addEventListener('click', () => {
@@ -193,6 +194,9 @@ const ResourceViewerPage = {
             if (button.dataset.pdfSelectionAction === 'translate') {
                 await this.translatePDFSelection();
             }
+            if (button.dataset.pdfSelectionAction === 'highlight') {
+                await this.highlightPDFSelection();
+            }
             if (button.dataset.pdfSelectionAction === 'ask-ai') {
                 await this.openPDFSelectionAIAsk();
             }
@@ -227,7 +231,8 @@ const ResourceViewerPage = {
             scale: 1,
             fitMode: true,
             selectionText: '',
-            selectionClientRect: null
+            selectionClientRect: null,
+            highlights: []
         };
     },
 
@@ -319,7 +324,8 @@ const ResourceViewerPage = {
             loadToken,
             pageNumber: this.initialPDFPageNumber(),
             scale: this.isNarrowPDFViewport() ? 0.9 : 1,
-            fitMode: !this.isNarrowPDFViewport()
+            fitMode: !this.isNarrowPDFViewport(),
+            highlights: []
         };
         this.stage.className = 'viewer-stage pdf-mode';
         this.stage.innerHTML = `
@@ -334,6 +340,7 @@ const ResourceViewerPage = {
             this.pdfDetailLink.href = `/ai?paper_id=${encodeURIComponent(paperId)}`;
             this.pdfDetailLink.hidden = false;
         }
+        this.loadPDFAnnotations(resource, loadToken);
 
         const loaded = await this.loadPDFDocument(resource.href, loadToken);
         if (!loaded || !this.isCurrentPDFLoad(loadToken)) {
@@ -406,23 +413,35 @@ const ResourceViewerPage = {
             if (loadingElement) {
                 loadingElement.hidden = true;
             }
+            this.renderPDFHighlights();
         });
         eventBus.on('pagesloaded', () => {
             if (!this.isCurrentPDFLoad(loadToken, pdfViewer)) return;
             this.pdfState.pageCount = pdfViewer.pagesCount || this.pdfState.pageCount;
             this.syncPDFToolbar();
+            this.renderPDFHighlights();
         });
         eventBus.on('pagechanging', (event) => {
             if (!this.isCurrentPDFLoad(loadToken, pdfViewer)) return;
             this.pdfState.pageNumber = event.pageNumber || pdfViewer.currentPageNumber || 1;
             this.clearPDFSelection();
             this.syncPDFToolbar();
+            this.renderPDFHighlights();
         });
         eventBus.on('scalechanging', () => {
             if (!this.isCurrentPDFLoad(loadToken, pdfViewer)) return;
             this.pdfState.scale = pdfViewer.currentScale || this.pdfState.scale || 1;
             this.clearPDFSelection();
             this.syncPDFToolbar();
+            this.schedulePDFHighlightsRender();
+        });
+        eventBus.on('pagerendered', () => {
+            if (!this.isCurrentPDFLoad(loadToken, pdfViewer)) return;
+            this.renderPDFHighlights();
+        });
+        eventBus.on('textlayerrendered', () => {
+            if (!this.isCurrentPDFLoad(loadToken, pdfViewer)) return;
+            this.renderPDFHighlights();
         });
 
         const loadingTask = pdfjsLib.getDocument({
@@ -550,6 +569,8 @@ const ResourceViewerPage = {
         this.resizeTimer = null;
         window.clearTimeout(this.pdfSelectionTimer);
         this.pdfSelectionTimer = null;
+        window.clearTimeout(this.pdfHighlightRenderTimer);
+        this.pdfHighlightRenderTimer = null;
         if (previousPDFState.pdfViewer && typeof previousPDFState.pdfViewer.setDocument === 'function') {
             try {
                 previousPDFState.pdfViewer.setDocument(null);
@@ -598,7 +619,7 @@ const ResourceViewerPage = {
         return !!candidate && typeof element.contains === 'function' && element.contains(candidate);
     },
 
-    pdfSelectionClientRect(selection = window.getSelection?.()) {
+    pdfSelectionClientRects(selection = window.getSelection?.()) {
         if (!selection?.rangeCount) return null;
         const rects = [];
         for (let index = 0; index < selection.rangeCount; index += 1) {
@@ -612,6 +633,11 @@ const ResourceViewerPage = {
                 }
             }
         }
+        return rects;
+    },
+
+    pdfSelectionClientRect(selection = window.getSelection?.()) {
+        const rects = this.pdfSelectionClientRects(selection) || [];
         if (!rects.length) return null;
         const left = Math.min(...rects.map((rect) => rect.left));
         const top = Math.min(...rects.map((rect) => rect.top));
@@ -690,6 +716,272 @@ const ResourceViewerPage = {
         this.pdfState.selectionText = '';
         this.pdfState.selectionClientRect = null;
         window.getSelection?.()?.removeAllRanges?.();
+    },
+
+    currentPDFPaperID(resource = this.pdfState?.resource) {
+        return String(resource?.paperId || '').trim();
+    },
+
+    async loadPDFAnnotations(resource = this.pdfState?.resource, loadToken = this.pdfState?.loadToken) {
+        const paperId = this.currentPDFPaperID(resource);
+        if (!paperId || typeof API === 'undefined' || typeof API.listPDFAnnotations !== 'function') return;
+        try {
+            const response = await API.listPDFAnnotations(paperId);
+            if (!this.isCurrentPDFLoad(loadToken)) return;
+            const annotations = Array.isArray(response?.annotations) ? response.annotations : [];
+            this.pdfState.highlights = annotations
+                .map((annotation) => this.normalizePDFHighlight(annotation))
+                .filter(Boolean);
+            this.renderPDFHighlights();
+        } catch (error) {
+            if (!this.isCurrentPDFLoad(loadToken)) return;
+            if (typeof Utils !== 'undefined' && typeof Utils.showToast === 'function') {
+                Utils.showToast(t('viewer.pdf_highlight_load_failed', '高亮加载失败'), 'error');
+            }
+        }
+    },
+
+    normalizePDFHighlight(highlight) {
+        if (!highlight || typeof highlight !== 'object') return null;
+        const fragments = Array.isArray(highlight.fragments)
+            ? highlight.fragments.map((fragment) => this.normalizePDFHighlightFragment(fragment)).filter(Boolean)
+            : [];
+        if (!fragments.length) return null;
+        const quoteText = String(highlight.quote_text || highlight.text || '').slice(0, 10000);
+        return {
+            id: highlight.id,
+            paper_id: highlight.paper_id,
+            type: String(highlight.type || 'highlight'),
+            page_start: Math.floor(Number(highlight.page_start) || fragments[0].page || 1),
+            page_end: Math.floor(Number(highlight.page_end) || fragments[fragments.length - 1].page || 1),
+            quote_text: quoteText,
+            color: String(highlight.color || 'yellow'),
+            note_text: String(highlight.note_text || ''),
+            created_at: String(highlight.created_at || ''),
+            updated_at: String(highlight.updated_at || ''),
+            fragments
+        };
+    },
+
+    normalizePDFHighlightFragment(fragment) {
+        if (!fragment || typeof fragment !== 'object') return null;
+        const page = Math.floor(Number(fragment.page) || 0);
+        const left = this.roundPDFHighlightValue(Number(fragment.left));
+        const top = this.roundPDFHighlightValue(Number(fragment.top));
+        const width = this.roundPDFHighlightValue(Number(fragment.width));
+        const height = this.roundPDFHighlightValue(Number(fragment.height));
+        if (page <= 0 || !Number.isFinite(left) || !Number.isFinite(top)
+            || !Number.isFinite(width) || !Number.isFinite(height)
+            || width <= 0 || height <= 0) {
+            return null;
+        }
+        return {
+            page,
+            left: this.clampPDFHighlightUnit(left),
+            top: this.clampPDFHighlightUnit(top),
+            width: this.clampPDFHighlightUnit(width),
+            height: this.clampPDFHighlightUnit(height)
+        };
+    },
+
+    clampPDFHighlightUnit(value) {
+        return Math.min(1, Math.max(0, Number(value) || 0));
+    },
+
+    roundPDFHighlightValue(value) {
+        return Math.round((Number(value) || 0) * 1000000) / 1000000;
+    },
+
+    pdfPageElements() {
+        const viewerElement = this.stage?.querySelector?.('[data-pdf-viewer]');
+        return Array.from(viewerElement?.querySelectorAll?.('.page[data-page-number], .page') || []);
+    },
+
+    pdfPageNumber(pageElement, fallbackIndex = 0) {
+        const raw = pageElement?.dataset?.pageNumber
+            || pageElement?.getAttribute?.('data-page-number')
+            || '';
+        const pageNumber = Math.floor(Number(raw) || 0);
+        return pageNumber > 0 ? pageNumber : fallbackIndex + 1;
+    },
+
+    pdfPageElementForClientRect(clientRect, pageElements = this.pdfPageElements()) {
+        let best = null;
+        let bestArea = 0;
+        pageElements.forEach((pageElement, index) => {
+            const pageRect = pageElement.getBoundingClientRect?.();
+            if (!pageRect?.width || !pageRect?.height) return;
+            const left = Math.max(clientRect.left, pageRect.left);
+            const top = Math.max(clientRect.top, pageRect.top);
+            const right = Math.min(clientRect.right, pageRect.right);
+            const bottom = Math.min(clientRect.bottom, pageRect.bottom);
+            const area = Math.max(0, right - left) * Math.max(0, bottom - top);
+            if (area > bestArea) {
+                bestArea = area;
+                best = {
+                    pageElement,
+                    pageNumber: this.pdfPageNumber(pageElement, index)
+                };
+            }
+        });
+        return best;
+    },
+
+    normalizePDFHighlightClientRect(clientRect, pageElement) {
+        const pageRect = pageElement?.getBoundingClientRect?.();
+        if (!pageRect?.width || !pageRect?.height) return null;
+        const left = Math.max(clientRect.left, pageRect.left);
+        const top = Math.max(clientRect.top, pageRect.top);
+        const right = Math.min(clientRect.right, pageRect.right);
+        const bottom = Math.min(clientRect.bottom, pageRect.bottom);
+        const width = right - left;
+        const height = bottom - top;
+        if (width <= 0 || height <= 0) return null;
+        return {
+            left: this.roundPDFHighlightValue((left - pageRect.left) / pageRect.width),
+            top: this.roundPDFHighlightValue((top - pageRect.top) / pageRect.height),
+            width: this.roundPDFHighlightValue(width / pageRect.width),
+            height: this.roundPDFHighlightValue(height / pageRect.height)
+        };
+    },
+
+    buildPDFHighlightFromSelection(selection = window.getSelection?.()) {
+        if (!this.selectionBelongsToPDFViewer(selection)) return null;
+        const text = String(selection?.toString?.() || '').trim();
+        if (!text) return null;
+        const clientRects = this.pdfSelectionClientRects(selection) || [];
+        const pageElements = this.pdfPageElements();
+        const fragments = clientRects.map((clientRect) => {
+            const page = this.pdfPageElementForClientRect(clientRect, pageElements);
+            if (!page) return null;
+            const normalized = this.normalizePDFHighlightClientRect(clientRect, page.pageElement);
+            if (!normalized) return null;
+            return {
+                page: page.pageNumber,
+                ...normalized
+            };
+        }).filter(Boolean);
+        if (!fragments.length) return null;
+        return {
+            type: 'highlight',
+            quote_text: text,
+            color: 'yellow',
+            fragments
+        };
+    },
+
+    async highlightPDFSelection() {
+        const highlight = this.buildPDFHighlightFromSelection(window.getSelection?.());
+        this.clearPDFSelection();
+        if (!highlight) {
+            if (typeof Utils !== 'undefined' && typeof Utils.showToast === 'function') {
+                Utils.showToast(t('viewer.pdf_highlight_no_selection', '请先划选需要高亮的 PDF 内容'), 'error');
+            }
+            return;
+        }
+        const paperId = this.currentPDFPaperID();
+        if (!paperId || typeof API === 'undefined' || typeof API.createPDFAnnotation !== 'function') {
+            if (typeof Utils !== 'undefined' && typeof Utils.showToast === 'function') {
+                Utils.showToast(t('viewer.pdf_highlight_requires_paper', '当前 PDF 缺少文献 ID，无法保存高亮'), 'error');
+            }
+            return;
+        }
+        try {
+            const response = await API.createPDFAnnotation(paperId, highlight);
+            const annotation = this.normalizePDFHighlight(response?.annotation);
+            if (!annotation) {
+                throw new Error('invalid annotation response');
+            }
+            const current = Array.isArray(this.pdfState.highlights) ? this.pdfState.highlights : [];
+            this.pdfState.highlights = [...current, annotation];
+            this.renderPDFHighlights();
+            if (typeof Utils !== 'undefined' && typeof Utils.showToast === 'function') {
+                Utils.showToast(t('viewer.pdf_highlight_added', '已高亮所选内容'));
+            }
+        } catch (error) {
+            if (typeof Utils !== 'undefined' && typeof Utils.showToast === 'function') {
+                Utils.showToast(t('viewer.pdf_highlight_save_failed', '高亮保存失败'), 'error');
+            }
+        }
+    },
+
+    async deletePDFHighlight(annotationID) {
+        const paperId = this.currentPDFPaperID();
+        const id = String(annotationID || '').trim();
+        if (!paperId || !id || typeof API === 'undefined' || typeof API.deletePDFAnnotation !== 'function') return;
+        if (typeof Utils === 'undefined' || typeof Utils.confirm !== 'function') return;
+        const confirmed = await Utils.confirm(t('viewer.pdf_highlight_delete_confirm', '删除这条高亮？'));
+        if (!confirmed) {
+            return;
+        }
+        try {
+            await API.deletePDFAnnotation(paperId, id);
+            const current = Array.isArray(this.pdfState.highlights) ? this.pdfState.highlights : [];
+            this.pdfState.highlights = current.filter((highlight) => String(highlight.id) !== id);
+            this.renderPDFHighlights();
+            if (typeof Utils !== 'undefined' && typeof Utils.showToast === 'function') {
+                Utils.showToast(t('viewer.pdf_highlight_deleted', '高亮已删除'));
+            }
+        } catch (error) {
+            if (typeof Utils !== 'undefined' && typeof Utils.showToast === 'function') {
+                Utils.showToast(t('viewer.pdf_highlight_delete_failed', '高亮删除失败'), 'error');
+            }
+        }
+    },
+
+    schedulePDFHighlightsRender() {
+        window.clearTimeout(this.pdfHighlightRenderTimer);
+        this.pdfHighlightRenderTimer = window.setTimeout(() => {
+            this.pdfHighlightRenderTimer = null;
+            this.renderPDFHighlights();
+        }, 0);
+    },
+
+    renderPDFHighlights() {
+        const pageElements = this.pdfPageElements();
+        if (!pageElements.length) return;
+        pageElements.forEach((pageElement) => {
+            Array.from(pageElement.querySelectorAll?.('.viewer-pdf-highlight-layer') || [])
+                .forEach((layer) => layer.remove?.());
+        });
+        const highlights = Array.isArray(this.pdfState?.highlights) ? this.pdfState.highlights : [];
+        if (!highlights.length) return;
+        const pageIndex = new Map(pageElements.map((pageElement, index) => [
+            this.pdfPageNumber(pageElement, index),
+            pageElement
+        ]));
+        const layers = new Map();
+        highlights.forEach((highlight) => {
+            const fragments = Array.isArray(highlight.fragments) ? highlight.fragments : [];
+            fragments.forEach((fragment) => {
+                const pageElement = pageIndex.get(Math.floor(Number(fragment.page) || 0));
+                if (!pageElement) return;
+                let layer = layers.get(pageElement);
+                if (!layer) {
+                    layer = document.createElement('div');
+                    layer.className = 'viewer-pdf-highlight-layer';
+                    layer.classList?.add('viewer-pdf-highlight-layer');
+                    layer.setAttribute?.('aria-hidden', 'true');
+                    pageElement.appendChild(layer);
+                    layers.set(pageElement, layer);
+                }
+                const marker = document.createElement('span');
+                marker.className = 'viewer-pdf-highlight-fragment';
+                marker.classList?.add('viewer-pdf-highlight-fragment');
+                marker.dataset.highlightId = String(highlight.id || '');
+                marker.title = highlight.quote_text || '';
+                marker.style.left = `${this.clampPDFHighlightUnit(fragment.left) * 100}%`;
+                marker.style.top = `${this.clampPDFHighlightUnit(fragment.top) * 100}%`;
+                marker.style.width = `${this.clampPDFHighlightUnit(fragment.width) * 100}%`;
+                marker.style.height = `${this.clampPDFHighlightUnit(fragment.height) * 100}%`;
+                marker.addEventListener?.('click', (event) => {
+                    event.preventDefault?.();
+                    event.stopPropagation?.();
+                    this.deletePDFHighlight(highlight.id);
+                });
+                layer.appendChild(marker);
+            });
+        });
     },
 
     async copyPDFSelection() {

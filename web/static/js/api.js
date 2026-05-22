@@ -164,6 +164,26 @@ const API = {
         });
     },
 
+    listPDFAnnotations(paperId) {
+        return requestJSON(`${API_BASE}/papers/${apiPathID(paperId)}/pdf-annotations`);
+    },
+
+    createPDFAnnotation(paperId, data) {
+        return requestJSON(`${API_BASE}/papers/${apiPathID(paperId)}/pdf-annotations`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        });
+    },
+
+    deletePDFAnnotation(paperId, annotationId) {
+        return requestJSON(`${API_BASE}/papers/${apiPathID(paperId)}/pdf-annotations/${apiPathID(annotationId)}`, {
+            method: 'DELETE'
+        });
+    },
+
     deletePaper(id) {
         return requestJSON(`${API_BASE}/papers/${apiPathID(id)}`, {
             method: 'DELETE'

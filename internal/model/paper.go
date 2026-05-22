@@ -60,6 +60,28 @@ type Paper struct {
 	UpdatedAt        time.Time       `json:"updated_at"`
 }
 
+type PDFAnnotationFragment struct {
+	Page   int     `json:"page"`
+	Left   float64 `json:"left"`
+	Top    float64 `json:"top"`
+	Width  float64 `json:"width"`
+	Height float64 `json:"height"`
+}
+
+type PDFAnnotation struct {
+	ID        int64                   `json:"id"`
+	PaperID   int64                   `json:"paper_id"`
+	Type      string                  `json:"type"`
+	PageStart int                     `json:"page_start"`
+	PageEnd   int                     `json:"page_end"`
+	QuoteText string                  `json:"quote_text"`
+	Color     string                  `json:"color"`
+	Fragments []PDFAnnotationFragment `json:"fragments"`
+	NoteText  string                  `json:"note_text"`
+	CreatedAt time.Time               `json:"created_at"`
+	UpdatedAt time.Time               `json:"updated_at"`
+}
+
 type PaperListResponse struct {
 	Papers     []Paper `json:"papers"`
 	Total      int     `json:"total"`

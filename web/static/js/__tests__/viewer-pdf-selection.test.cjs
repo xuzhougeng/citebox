@@ -7,22 +7,37 @@ const path = require('node:path');
 const vm = require('node:vm');
 
 const modulePath = path.resolve(__dirname, '..', 'viewer.js');
+const viewerHTMLPath = path.resolve(__dirname, '..', '..', '..', 'viewer.html');
 
 function createElement(name) {
     return {
         name,
         children: new Set(),
         listeners: {},
+        dataset: {},
+        attributes: {},
         classList: {
             classes: new Set(),
             add(value) { this.classes.add(value); },
             remove(value) { this.classes.delete(value); },
             contains(value) { return this.classes.has(value); },
         },
+        setAttribute(name, value) {
+            this.attributes[name] = String(value);
+            if (name.startsWith('data-')) {
+                const key = name.slice(5).replace(/-([a-z])/g, (_, char) => char.toUpperCase());
+                this.dataset[key] = String(value);
+            }
+        },
+        getAttribute(name) {
+            return this.attributes[name] || null;
+        },
         style: {},
         contains(node) {
             if (node === this) return true;
-            return this.children.has(node) || this.children.has(node?.parentElement);
+            const candidate = node?.nodeType === 3 ? node.parentElement : node;
+            if (this.children.has(candidate)) return true;
+            return Array.from(this.children).some((child) => child.contains?.(candidate));
         },
         appendChild(child) {
             child.parentElement = this;
@@ -33,10 +48,24 @@ function createElement(name) {
         },
         querySelector(selector) {
             if (selector === '[data-pdf-scroll]') return this.pdfScroll || null;
+            if (selector === '[data-pdf-viewer]') return this.pdfViewer || null;
             return null;
+        },
+        querySelectorAll(selector) {
+            if (selector === '.page[data-page-number], .page') {
+                return Array.from(this.children).filter((child) => child.classList?.contains('page'));
+            }
+            if (selector === '.viewer-pdf-highlight-layer') {
+                return Array.from(this.children).filter((child) => child.classList?.contains('viewer-pdf-highlight-layer'));
+            }
+            return [];
         },
         getBoundingClientRect() {
             return { left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 };
+        },
+        remove() {
+            this.removed = true;
+            this.parentElement?.children?.delete?.(this);
         },
     };
 }
@@ -52,6 +81,11 @@ function loadViewerPage(selection, options = {}) {
         URLSearchParams,
         Node: { TEXT_NODE: 3 },
         navigator: {},
+        localStorage: options.localStorage || {
+            getItem() { return null; },
+            setItem() {},
+            removeItem() {},
+        },
         window: {
             location: {
                 href: 'http://localhost/viewer?kind=pdf&src=%2Fpaper.pdf',
@@ -64,8 +98,14 @@ function loadViewerPage(selection, options = {}) {
             requestAnimationFrame(callback) { return callback(); },
             setTimeout,
             clearTimeout,
+            confirm: options.confirm,
             getSelection() {
                 return selection;
+            },
+            localStorage: options.localStorage || {
+                getItem() { return null; },
+                setItem() {},
+                removeItem() {},
             },
         },
         document: {
@@ -85,6 +125,8 @@ function loadViewerPage(selection, options = {}) {
             },
             head: createElement('head'),
         },
+        API: options.API || {},
+        Utils: options.Utils,
         t(key, fallback) {
             return fallback || key;
         },
@@ -140,6 +182,8 @@ test('defaultPDFState uses official PDF.js viewer state fields', () => {
     assert.equal(state.linkService, null);
     assert.equal(state.pdfViewer, null);
     assert.equal(state.loadToken, 0);
+    assert.equal(Array.isArray(state.highlights), true);
+    assert.equal(state.highlights.length, 0);
     assert.equal(Object.hasOwn(state, 'renderTask'), false);
     assert.equal(Object.hasOwn(state, 'textLayer'), false);
     assert.equal(Object.hasOwn(state, 'selectionDrag'), false);
@@ -287,6 +331,214 @@ test('PDF selection menu routes ask-ai action to the AI ask dialog', async () =>
     });
 
     assert.equal(asked, true);
+});
+
+test('PDF selection menu routes highlight action to PDF highlighter', async () => {
+    const { viewer } = loadViewerPage(null);
+    const menu = createElement('menu');
+    let highlighted = false;
+    viewer.selectionMenu = menu;
+    viewer.highlightPDFSelection = async () => {
+        highlighted = true;
+    };
+
+    viewer.bindPDFSelectionMenu();
+    await menu.listeners.click({
+        target: {
+            closest(selector) {
+                return selector === '[data-pdf-selection-action]'
+                    ? { dataset: { pdfSelectionAction: 'highlight' } }
+                    : null;
+            },
+        },
+        preventDefault() {},
+        stopPropagation() {},
+    });
+
+    assert.equal(highlighted, true);
+});
+
+test('buildPDFHighlightFromSelection normalizes selected rects by PDF page', () => {
+    const scroll = createElement('scroll');
+    const pdfViewer = createElement('pdfViewer');
+    const page = createElement('page');
+    const textLayer = createElement('textLayer');
+    const textNode = { nodeType: 3, parentElement: textLayer };
+    const selectionRect = rect(120, 240, 320, 264);
+    page.classList.add('page');
+    page.setAttribute('data-page-number', '3');
+    page.getBoundingClientRect = () => rect(100, 200, 500, 700);
+    page.appendChild(textLayer);
+    pdfViewer.appendChild(page);
+    scroll.appendChild(pdfViewer);
+    const selection = {
+        anchorNode: textNode,
+        focusNode: textNode,
+        rangeCount: 1,
+        getRangeAt() {
+            return {
+                getClientRects() {
+                    return [selectionRect];
+                },
+                getBoundingClientRect() {
+                    return selectionRect;
+                },
+            };
+        },
+        toString() {
+            return 'selected PDF text';
+        },
+    };
+    const { viewer } = loadViewerPage(selection);
+    viewer.stage = createElement('stage');
+    viewer.stage.pdfScroll = scroll;
+    viewer.stage.pdfViewer = pdfViewer;
+
+    const highlight = viewer.buildPDFHighlightFromSelection(selection);
+
+    assert.equal(highlight.quote_text, 'selected PDF text');
+    assert.equal(highlight.fragments.length, 1);
+    assert.equal(highlight.fragments[0].page, 3);
+    assert.equal(highlight.fragments[0].left, 0.05);
+    assert.equal(highlight.fragments[0].top, 0.08);
+    assert.equal(highlight.fragments[0].width, 0.5);
+    assert.equal(highlight.fragments[0].height, 0.048);
+});
+
+test('highlightPDFSelection creates API annotation and renders the returned PDF highlight', async () => {
+    const scroll = createElement('scroll');
+    const pdfViewer = createElement('pdfViewer');
+    const page = createElement('page');
+    const textLayer = createElement('textLayer');
+    const textNode = { nodeType: 3, parentElement: textLayer };
+    const selectionRect = rect(20, 30, 120, 50);
+    const apiCalls = [];
+    page.classList.add('page');
+    page.setAttribute('data-page-number', '1');
+    page.getBoundingClientRect = () => rect(0, 0, 200, 200);
+    page.appendChild(textLayer);
+    pdfViewer.appendChild(page);
+    scroll.appendChild(pdfViewer);
+    const selection = {
+        anchorNode: textNode,
+        focusNode: textNode,
+        rangeCount: 1,
+        getRangeAt() {
+            return {
+                getClientRects() {
+                    return [selectionRect];
+                },
+                getBoundingClientRect() {
+                    return selectionRect;
+                },
+            };
+        },
+        toString() {
+            return 'highlight me';
+        },
+        removeAllRanges() {},
+    };
+    const { viewer } = loadViewerPage(selection, {
+        API: {
+            createPDFAnnotation(paperId, payload) {
+                apiCalls.push({ paperId, payload });
+                return Promise.resolve({
+                    success: true,
+                    annotation: {
+                        id: 11,
+                        paper_id: paperId,
+                        type: 'highlight',
+                        page_start: 1,
+                        page_end: 1,
+                        quote_text: 'highlight me',
+                        color: 'yellow',
+                        fragments: [{ page: 1, left: 0.1, top: 0.15, width: 0.5, height: 0.1 }],
+                        note_text: '',
+                        created_at: '2026-05-22T10:00:00Z',
+                        updated_at: '2026-05-22T10:00:00Z',
+                    },
+                });
+            },
+        },
+        localStorage: {
+            getItem() { throw new Error('pdf highlights must not use localStorage'); },
+            setItem() { throw new Error('pdf highlights must not use localStorage'); },
+            removeItem() { throw new Error('pdf highlights must not use localStorage'); },
+        },
+    });
+    viewer.stage = createElement('stage');
+    viewer.stage.pdfScroll = scroll;
+    viewer.stage.pdfViewer = pdfViewer;
+    viewer.selectionMenu = createElement('menu');
+    viewer.pdfState = {
+        ...viewer.defaultPDFState(),
+        pdfDocument: {},
+        resource: { paperId: '42' },
+        highlights: [],
+    };
+
+    await viewer.highlightPDFSelection();
+
+    assert.equal(apiCalls.length, 1);
+    assert.equal(apiCalls[0].paperId, '42');
+    assert.equal(apiCalls[0].payload.quote_text, 'highlight me');
+    assert.equal(apiCalls[0].payload.type, 'highlight');
+    assert.equal(apiCalls[0].payload.color, 'yellow');
+    assert.deepEqual(JSON.parse(JSON.stringify(apiCalls[0].payload.fragments)), [{ page: 1, left: 0.1, top: 0.15, width: 0.5, height: 0.1 }]);
+    assert.equal(viewer.pdfState.highlights.length, 1);
+    assert.equal(viewer.pdfState.highlights[0].id, 11);
+    assert.equal(viewer.pdfState.highlights[0].quote_text, 'highlight me');
+    assert.equal(page.querySelectorAll('.viewer-pdf-highlight-layer').length, 1);
+});
+
+test('deletePDFHighlight uses the CiteBox modal confirm instead of browser confirm', async () => {
+    const deleted = [];
+    const confirmed = [];
+    const { viewer } = loadViewerPage(null, {
+        confirm() {
+            throw new Error('browser confirm should not be used');
+        },
+        Utils: {
+            confirm(message) {
+                confirmed.push(message);
+                return Promise.resolve(true);
+            },
+            showToast() {},
+        },
+        API: {
+            deletePDFAnnotation(paperId, annotationId) {
+                deleted.push({ paperId, annotationId });
+                return Promise.resolve({ success: true });
+            },
+        },
+    });
+    viewer.stage = createElement('stage');
+    viewer.pdfState = {
+        ...viewer.defaultPDFState(),
+        resource: { paperId: '42' },
+        highlights: [{
+            id: 11,
+            quote_text: 'highlight me',
+            fragments: [{ page: 1, left: 0.1, top: 0.2, width: 0.3, height: 0.04 }],
+        }],
+    };
+
+    await viewer.deletePDFHighlight(11);
+
+    assert.equal(confirmed.length, 1);
+    assert.deepEqual(deleted, [{ paperId: '42', annotationId: '11' }]);
+    assert.equal(viewer.pdfState.highlights.length, 0);
+});
+
+test('PDF highlight fragments use a light visual treatment', () => {
+    const html = fs.readFileSync(viewerHTMLPath, 'utf8');
+    const match = html.match(/\.viewer-pdf-highlight-fragment\s*\{(?<body>[^}]+)\}/);
+    assert.ok(match?.groups?.body, 'viewer-pdf-highlight-fragment style not found');
+    const body = match.groups.body;
+    const color = body.match(/background:\s*rgba\(\s*255\s*,\s*(?:213|221)\s*,\s*(?:0|65)\s*,\s*(?<alpha>0?\.\d+)\s*\)/);
+    assert.ok(color?.groups?.alpha, `highlight background rgba alpha not found in: ${body}`);
+    assert.ok(Number(color.groups.alpha) <= 0.24, `highlight alpha ${color.groups.alpha} is too dark`);
+    assert.doesNotMatch(body, /mix-blend-mode:\s*multiply/);
 });
 
 test('PDF selection AI question includes selected passage and user question', () => {

@@ -70,6 +70,14 @@ type PaletteUpsertInput struct {
 	ColorsJSON string
 }
 
+type PDFAnnotationCreateInput struct {
+	Type      string
+	QuoteText string
+	Color     string
+	Fragments []model.PDFAnnotationFragment
+	NoteText  string
+}
+
 // TagUpsertInput 标签创建/更新输入
 type TagUpsertInput struct {
 	Scope model.TagScope

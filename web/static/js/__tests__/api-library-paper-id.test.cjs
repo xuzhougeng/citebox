@@ -12,13 +12,15 @@ const paperViewerModulePath = path.resolve(__dirname, '..', 'paper-viewer.js');
 
 function loadAPI() {
     const requests = [];
+    const requestOptions = [];
     const code = `${fs.readFileSync(apiModulePath, 'utf8')}\nglobalThis.__TEST_API__ = API;`;
     const context = {
         console,
         URL,
         URLSearchParams,
-        fetch(path) {
+        fetch(path, options = {}) {
             requests.push(path);
+            requestOptions.push(options);
             return Promise.resolve({
                 ok: true,
                 status: 200,
@@ -43,7 +45,7 @@ function loadAPI() {
     };
     context.globalThis = context;
     vm.runInNewContext(code, context, { filename: apiModulePath });
-    return { API: context.__TEST_API__, requests };
+    return { API: context.__TEST_API__, requests, requestOptions };
 }
 
 function loadLibraryContext(search) {
@@ -195,6 +197,28 @@ test('API paper paths preserve large string identifiers', async () => {
 
     assert.equal(requests[0], `/api/papers/${paperId}`);
     assert.equal(requests[1], `/api/papers/${paperId}/reextract`);
+});
+
+test('API PDF annotation helpers use paper-scoped JSON routes', async () => {
+    const { API, requests, requestOptions } = loadAPI();
+    const payload = {
+        type: 'highlight',
+        quote_text: 'selected text',
+        color: 'yellow',
+        fragments: [{ page: 3, left: 0.12, top: 0.34, width: 0.28, height: 0.018 }],
+    };
+
+    await API.listPDFAnnotations('42');
+    await API.createPDFAnnotation('42', payload);
+    await API.deletePDFAnnotation('42', '11');
+
+    assert.equal(requests[0], '/api/papers/42/pdf-annotations');
+    assert.equal(requests[1], '/api/papers/42/pdf-annotations');
+    assert.equal(requestOptions[1].method, 'POST');
+    assert.equal(requestOptions[1].headers['Content-Type'], 'application/json');
+    assert.deepEqual(JSON.parse(requestOptions[1].body), payload);
+    assert.equal(requests[2], '/api/papers/42/pdf-annotations/11');
+    assert.equal(requestOptions[2].method, 'DELETE');
 });
 
 test('library launch state preserves large paper identifiers as strings', () => {

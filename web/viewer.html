@@ -181,6 +181,22 @@
             background: rgba(255, 212, 0, 0.32);
         }
 
+        .viewer-pdf-highlight-layer {
+            position: absolute;
+            inset: 0;
+            z-index: 3;
+            pointer-events: none;
+        }
+
+        .viewer-pdf-highlight-fragment {
+            position: absolute;
+            border-radius: 2px;
+            background: rgba(255, 221, 65, 0.2);
+            box-shadow: 0 0 0 1px rgba(204, 158, 0, 0.08);
+            cursor: pointer;
+            pointer-events: auto;
+        }
+
         .viewer-pdf-loading {
             position: absolute;
             inset: 0;
@@ -507,6 +523,7 @@
     <div id="viewerSelectionMenu" class="viewer-selection-menu hidden">
         <button type="button" data-pdf-selection-action="copy" data-i18n="viewer.pdf_copy_selection">复制</button>
         <button type="button" data-pdf-selection-action="translate" data-i18n="viewer.pdf_translate_selection">翻译</button>
+        <button type="button" data-pdf-selection-action="highlight" data-i18n="viewer.pdf_highlight_selection">高亮</button>
         <button type="button" data-pdf-selection-action="ask-ai" data-i18n="viewer.pdf_ask_selection">AI 提问</button>
     </div>
 

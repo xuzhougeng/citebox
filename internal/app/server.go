@@ -389,10 +389,10 @@ func buildAIServices(
 	})
 	imageStorage := ai_image_gen.NewStorage(cfg.AIGeneratedDir())
 	imageGenService := ai_image_gen.NewService(ai_image_gen.ServiceDeps{
-		Repo:    aiGeneratedImageRepoAdapter{libRepo: repo},
-		Storage: imageStorage,
-		Vision:  visionAdapter{svc: aiSvc},
-		API:     ai_image_gen.NewClient(http.DefaultClient),
+		Repo:       aiGeneratedImageRepoAdapter{libRepo: repo},
+		Storage:    imageStorage,
+		Vision:     visionAdapter{svc: aiSvc},
+		API:        ai_image_gen.NewClient(http.DefaultClient),
 		LoadInputs: aiSvc.LoadImageGenInputs,
 		GetSettings: func() (model.AIImageGenSettings, model.AISettings, error) {
 			s, err := aiSvc.GetSettings()
@@ -495,6 +495,27 @@ func buildHandlerWithAIServices(
 	})
 
 	mux.HandleFunc("/api/papers/", func(w http.ResponseWriter, r *http.Request) {
+		trimmedPath := strings.TrimRight(r.URL.Path, "/")
+		if strings.Contains(trimmedPath, "/pdf-annotations") {
+			if strings.HasSuffix(trimmedPath, "/pdf-annotations") {
+				switch r.Method {
+				case http.MethodGet:
+					paperHandler.ListPDFAnnotations(w, r)
+				case http.MethodPost:
+					paperHandler.CreatePDFAnnotation(w, r)
+				default:
+					http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+				}
+				return
+			}
+			switch r.Method {
+			case http.MethodDelete:
+				paperHandler.DeletePDFAnnotation(w, r)
+			default:
+				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			}
+			return
+		}
 		if r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/refresh-doi-metadata") {
 			paperHandler.RefreshDOIMetadata(w, r)
 			return

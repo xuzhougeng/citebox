@@ -5,7 +5,7 @@
 ## 概览
 
 - 数据库类型：SQLite
-- 主要业务表：`groups`、`papers`、`paper_figures`、`color_palettes`、`tags`
+- 主要业务表：`groups`、`papers`、`pdf_annotations`、`paper_figures`、`color_palettes`、`tags`
 - 关系表：`paper_tags`、`figure_tags`
 - 配置表：`app_settings`
 - 全文检索：`papers_fts`、`figures_fts`（FTS5，`trigram` tokenizer）
@@ -16,6 +16,7 @@
 erDiagram
     groups ||--o{ papers : contains
     papers ||--o{ paper_figures : has
+    papers ||--o{ pdf_annotations : annotated_by
     papers ||--o{ color_palettes : has
     papers ||--o{ paper_tags : tagged_by
     tags ||--o{ paper_tags : applied_to
@@ -74,6 +75,20 @@ erDiagram
         DATETIME updated_at
     }
 
+    pdf_annotations {
+        INTEGER id PK
+        INTEGER paper_id FK
+        TEXT type
+        INTEGER page_start
+        INTEGER page_end
+        TEXT quote_text
+        TEXT color
+        TEXT fragments_json
+        TEXT note_text
+        DATETIME created_at
+        DATETIME updated_at
+    }
+
     tags {
         INTEGER id PK
         TEXT scope
@@ -117,6 +132,7 @@ erDiagram
 - `papers.notes_text` 是文献级管理笔记，适合保存迁移说明、整理备注和管理信息
 - `papers.paper_notes_text` 是文献级内容笔记，适合保存 AI伴读结果、阅读结论和结构化摘要
 - `paper_figures.notes_text` 是图片级笔记，用于图片库、笔记页和全文检索
+- `pdf_annotations` 保存 PDF 阅读器内的持久高亮，随文献删除级联删除
 - `color_palettes` 把一组配色绑定到某张具体图片；当前前端只允许对子图提取配色，因此它天然能回溯到来源大图和原始文献
 - `app_settings` 当前除了提取器配置外，也会保存 `ai_settings`、`weixin_binding`、`weixin_bridge_settings` 以及角色 Prompt 等 JSON 设置项；历史上的 `ai_prompt_presets` 键现在承载角色 Prompt 数据
 - 历史升级时，旧的 `papers.notes_text` 会迁移到 `papers.paper_notes_text`，避免原有 AI 内容继续混在管理笔记里
@@ -182,6 +198,20 @@ CREATE TABLE paper_tags (
     PRIMARY KEY (paper_id, tag_id)
 );
 
+CREATE TABLE pdf_annotations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    paper_id INTEGER NOT NULL REFERENCES papers(id) ON DELETE CASCADE,
+    type TEXT NOT NULL DEFAULT 'highlight' CHECK (type IN ('highlight')),
+    page_start INTEGER NOT NULL DEFAULT 1,
+    page_end INTEGER NOT NULL DEFAULT 1,
+    quote_text TEXT NOT NULL DEFAULT '',
+    color TEXT NOT NULL DEFAULT 'yellow',
+    fragments_json TEXT NOT NULL DEFAULT '[]',
+    note_text TEXT NOT NULL DEFAULT '',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE paper_figures (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     paper_id INTEGER NOT NULL REFERENCES papers(id) ON DELETE CASCADE,
@@ -242,6 +272,9 @@ CREATE INDEX idx_papers_status ON papers(extraction_status);
 CREATE UNIQUE INDEX idx_papers_stored_pdf_name_unique ON papers(stored_pdf_name);
 CREATE UNIQUE INDEX idx_papers_doi_unique ON papers(doi) WHERE COALESCE(TRIM(doi), '') <> '';
 CREATE UNIQUE INDEX idx_papers_pdf_sha256_unique ON papers(pdf_sha256) WHERE COALESCE(TRIM(pdf_sha256), '') <> '';
+
+CREATE INDEX idx_pdf_annotations_paper_id ON pdf_annotations(paper_id, id);
+CREATE INDEX idx_pdf_annotations_paper_page ON pdf_annotations(paper_id, page_start, page_end);
 
 CREATE INDEX idx_paper_figures_paper_id ON paper_figures(paper_id);
 CREATE INDEX idx_paper_figures_updated_at ON paper_figures(updated_at);
@@ -338,6 +371,24 @@ CREATE UNIQUE INDEX idx_tags_scope_name ON tags(scope, name);
 | `bbox_json` | 图片框坐标或定位信息；一级图通常记录 PDF 页面定位，子图通常记录相对父图的裁切区域 |
 | `created_at` | 图片记录创建时间 |
 | `updated_at` | 图片最近修改时间；笔记、标签更新时会刷新 |
+
+### `pdf_annotations`
+
+PDF 阅读器内的持久标注表。当前第一版只保存黄色高亮，不保存评论、搜索索引或同步状态。
+
+| 字段 | 用途 |
+| --- | --- |
+| `id` | PDF 标注主键 |
+| `paper_id` | 所属文献 ID，随文献删除级联删除 |
+| `type` | 标注类型，当前固定为 `highlight` |
+| `page_start` | 服务端按片段计算出的起始页码 |
+| `page_end` | 服务端按片段计算出的结束页码 |
+| `quote_text` | 划选原文，服务层限制最多 10,000 字符 |
+| `color` | 高亮颜色，当前固定为 `yellow` |
+| `fragments_json` | 归一化页面矩形数组，例如 `[{"page":3,"left":0.12,"top":0.34,"width":0.28,"height":0.018}]` |
+| `note_text` | 预留评论字段，当前为空字符串 |
+| `created_at` | 标注创建时间 |
+| `updated_at` | 标注最近更新时间 |
 
 ### `tags`
 

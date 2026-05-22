@@ -292,6 +292,103 @@ AI 流式阅读通过：
 - 只更新 `pdf_text`，不会改动标题、标签、笔记或分组。
 - `pdf_text` 不能为空字符串。
 
+#### `GET /api/papers/{id}/pdf-annotations`
+
+用途：
+
+- PDF 阅读器加载某篇文献已有高亮
+
+返回：
+
+```json
+{
+  "success": true,
+  "annotations": [
+    {
+      "id": 10,
+      "paper_id": 42,
+      "type": "highlight",
+      "page_start": 3,
+      "page_end": 3,
+      "quote_text": "selected text",
+      "color": "yellow",
+      "fragments": [
+        { "page": 3, "left": 0.12, "top": 0.34, "width": 0.28, "height": 0.018 }
+      ],
+      "note_text": "",
+      "created_at": "2026-05-22T10:00:00Z",
+      "updated_at": "2026-05-22T10:00:00Z"
+    }
+  ]
+}
+```
+
+#### `POST /api/papers/{id}/pdf-annotations`
+
+用途：
+
+- PDF 阅读器保存一次划选高亮
+
+请求体：
+
+```json
+{
+  "type": "highlight",
+  "quote_text": "selected text",
+  "color": "yellow",
+  "fragments": [
+    { "page": 3, "left": 0.12, "top": 0.34, "width": 0.28, "height": 0.018 }
+  ]
+}
+```
+
+说明：
+
+- `type` 可省略，默认 `highlight`；当前只允许 `highlight`
+- `color` 可省略，默认 `yellow`；当前只允许 `yellow`
+- `quote_text` 会 trim，不能为空，最多 10,000 字符
+- `fragments` 必须包含 1 到 200 个归一化矩形；页码从 1 开始，坐标和宽高必须落在页面范围内
+- `page_start` / `page_end` 由后端根据 `fragments` 计算，不信任客户端传值
+
+返回：
+
+```json
+{
+  "success": true,
+  "annotation": {
+    "id": 11,
+    "paper_id": 42,
+    "type": "highlight",
+    "page_start": 3,
+    "page_end": 3,
+    "quote_text": "selected text",
+    "color": "yellow",
+    "fragments": [
+      { "page": 3, "left": 0.12, "top": 0.34, "width": 0.28, "height": 0.018 }
+    ],
+    "note_text": "",
+    "created_at": "2026-05-22T10:00:00Z",
+    "updated_at": "2026-05-22T10:00:00Z"
+  }
+}
+```
+
+#### `DELETE /api/papers/{id}/pdf-annotations/{annotation_id}`
+
+用途：
+
+- 删除当前文献下的一条 PDF 高亮
+
+说明：
+
+- 后端会校验 `annotation_id` 属于路径中的文献 ID；不属于时返回 `NOT_FOUND`
+
+返回：
+
+```json
+{ "success": true }
+```
+
 #### `DELETE /api/papers/{id}`
 
 用途：
