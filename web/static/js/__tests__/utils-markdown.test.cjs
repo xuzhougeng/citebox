@@ -60,3 +60,15 @@ test('renderMarkdown renders pipe tables through the shared markdown entrypoint'
     assert.match(html, /<tbody>/);
     assert.match(html, /<code class="markdown-inline-code">x<\/code>/);
 });
+
+test('renderMarkdown handles nested bold italic text inside table cells', () => {
+    const Utils = loadUtils();
+    const html = Utils.renderMarkdown([
+        '| 文章 | 证据 |',
+        '|---|---|',
+        '| **Xu et al., 2020, *ARID1A determines luminal identity...*** | ChIP-seq [1] |',
+    ].join('\n'));
+
+    assert.match(html, /<strong>Xu et al\., 2020, <em>ARID1A determines luminal identity\.\.\.<\/em><\/strong>/);
+    assert.doesNotMatch(html, /\*\*Xu/);
+});

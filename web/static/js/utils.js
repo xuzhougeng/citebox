@@ -1246,6 +1246,9 @@ const Utils = {
             placeholders.push({ token, html });
             return token;
         };
+        const renderItalic = (source) => String(source || '')
+            .replace(/(^|[^*])\*([^*]+)\*(?!\*)/g, '$1<em>$2</em>')
+            .replace(/(^|[^_])_([^_]+)_(?!_)/g, '$1<em>$2</em>');
 
         text = text.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, (_, altText, src) => {
             return stash(
@@ -1261,10 +1264,10 @@ const Utils = {
             }
             return stash(`<a class="markdown-link" href="${safeHref}" target="_blank" rel="noreferrer">${label}</a>`);
         });
+        text = text.replace(/\*\*([^*]*(?:\*[^*]+\*)[^*]*)\*\*/g, (_, inner) => `<strong>${renderItalic(inner)}</strong>`);
         text = text.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
         text = text.replace(/__([^_]+)__/g, '<strong>$1</strong>');
-        text = text.replace(/(^|[^*])\*([^*]+)\*(?!\*)/g, '$1<em>$2</em>');
-        text = text.replace(/(^|[^_])_([^_]+)_(?!_)/g, '$1<em>$2</em>');
+        text = renderItalic(text);
         text = text.replace(/~~([^~]+)~~/g, '<del>$1</del>');
         placeholders.forEach(({ token, html }) => {
             text = text.replaceAll(token, html);

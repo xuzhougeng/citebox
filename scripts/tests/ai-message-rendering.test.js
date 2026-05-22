@@ -4,26 +4,45 @@ const path = require('node:path');
 const test = require('node:test');
 const vm = require('node:vm');
 
-function loadAssistantMarkdownRenderer() {
-    let source = fs.readFileSync(path.join(__dirname, '../../web/static/js/ai-conversation-view.js'), 'utf8');
-    source = source.replace(
-        '    const View = {',
-        '    window.__renderAssistantMarkdown = renderAssistantMarkdown;\n\n    const View = {'
-    );
+function loadMarkdownRenderer() {
+    const source = fs.readFileSync(path.join(__dirname, '../../web/static/js/utils.js'), 'utf8') + '\nglobalThis.__TEST_UTILS__ = Utils;';
     const context = {
         console,
+        setTimeout,
+        clearTimeout,
+        URL,
+        URLSearchParams,
+        MutationObserver: class MutationObserver {
+            observe() {}
+            disconnect() {}
+        },
         localStorage: {
             getItem() { return null; },
             setItem() {},
         },
         window: {
-            AIReader: {},
             location: { href: 'http://localhost/ai' },
+            history: {
+                replaceState() {},
+            },
+            open() {},
+        },
+        document: {
+            readyState: 'complete',
+            body: {},
+            addEventListener() {},
+            querySelectorAll() {
+                return [];
+            },
+        },
+        t(key, fallback) {
+            return fallback || key;
         },
     };
+    context.globalThis = context;
     vm.createContext(context);
-    vm.runInContext(source, context, { filename: 'ai-conversation-view.js' });
-    return context.window.__renderAssistantMarkdown;
+    vm.runInContext(source, context, { filename: 'utils.js' });
+    return context.__TEST_UTILS__.renderMarkdown.bind(context.__TEST_UTILS__);
 }
 
 function loadResultCardsRenderer() {
@@ -42,7 +61,7 @@ function loadResultCardsRenderer() {
 }
 
 test('assistant markdown renders pipe tables as table markup', () => {
-    const render = loadAssistantMarkdownRenderer();
+    const render = loadMarkdownRenderer();
     const html = render([
         '根据结果：',
         '',
@@ -52,14 +71,14 @@ test('assistant markdown renders pipe tables as table markup', () => {
         '| s41586 | Windows for ChIP-seq [2] |',
     ].join('\n'));
 
-    assert.match(html, /<table class="ai-message-table">/);
-    assert.match(html, /<th>文章<\/th>/);
-    assert.match(html, /<td><strong>Xu et al\.<\/strong><\/td>/);
+    assert.match(html, /<table class="markdown-table">/);
+    assert.match(html, /<th class="markdown-table-cell markdown-table-cell-th">文章<\/th>/);
+    assert.match(html, /<td class="markdown-table-cell markdown-table-cell-td"><strong>Xu et al\.<\/strong><\/td>/);
     assert.doesNotMatch(html, /<p>\| 文章 \| 证据 \|<\/p>/);
 });
 
 test('assistant markdown keeps truncated pipe rows inside the preceding table', () => {
-    const render = loadAssistantMarkdownRenderer();
+    const render = loadMarkdownRenderer();
     const html = render([
         '| 文章 | 证据 |',
         '|---|---|',
@@ -67,20 +86,20 @@ test('assistant markdown keeps truncated pipe rows inside the preceding table', 
         '| **s41586** | 结果卡片中提到：“',
     ].join('\n'));
 
-    assert.match(html, /<table class="ai-message-table">/);
-    assert.match(html, /<td><strong>s41586<\/strong><\/td><td>结果卡片中提到：“<\/td>/);
+    assert.match(html, /<table class="markdown-table">/);
+    assert.match(html, /<td class="markdown-table-cell markdown-table-cell-td"><strong>s41586<\/strong><\/td><td class="markdown-table-cell markdown-table-cell-td">结果卡片中提到：“<\/td>/);
     assert.doesNotMatch(html, /<p>\| <strong>s41586<\/strong>/);
 });
 
 test('assistant markdown handles nested bold italic table cells without raw markers', () => {
-    const render = loadAssistantMarkdownRenderer();
+    const render = loadMarkdownRenderer();
     const html = render([
         '| 文章 | 证据 |',
         '|---|---|',
         '| **Xu et al., 2020, *ARID1A determines luminal identity...*** | ChIP-seq [1] |',
     ].join('\n'));
 
-    assert.match(html, /<td><strong>Xu et al\., 2020, <em>ARID1A determines luminal identity\.\.\.<\/em><\/strong><\/td>/);
+    assert.match(html, /<td class="markdown-table-cell markdown-table-cell-td"><strong>Xu et al\., 2020, <em>ARID1A determines luminal identity\.\.\.<\/em><\/strong><\/td>/);
     assert.doesNotMatch(html, /\*\*Xu/);
 });
 
