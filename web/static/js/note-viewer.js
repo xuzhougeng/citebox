@@ -90,6 +90,10 @@ const NoteViewer = {
                 await this.saveNotesToWolai(button);
                 return;
             }
+            if (button.dataset.noteAction === 'save-notion') {
+                await this.saveNotesToNotion(button);
+                return;
+            }
             if (button.dataset.noteAction === 'open-preview') {
                 await this.openPreview();
                 return;
@@ -252,6 +256,31 @@ const NoteViewer = {
         }
     },
 
+    async saveNotesToNotion(button) {
+        if (!this.currentFigure) return;
+
+        const actionButton = button instanceof HTMLElement ? button : null;
+        const originalLabel = actionButton?.textContent || t('shared.note.save_to_notion', '保存到 Notion');
+        if (actionButton) {
+            actionButton.disabled = true;
+            actionButton.textContent = t('shared.note.saving', '保存中...');
+        }
+
+        try {
+            const result = await API.saveFigureNoteToNotion(this.currentFigure.id, {
+                notes_text: this.currentFigureNotesDraft()
+            });
+            Utils.showToast(result.message || t('shared.note.notes_saved_to_notion', '图片与笔记已保存到 Notion'));
+        } catch (error) {
+            Utils.showToast(error.message, 'error');
+        } finally {
+            if (actionButton) {
+                actionButton.disabled = false;
+                actionButton.textContent = originalLabel;
+            }
+        }
+    },
+
     async updateCurrentFigureNotes(notesText, successMessage) {
         if (!this.currentFigure) return;
 
@@ -376,6 +405,7 @@ const NoteViewer = {
                         <div class="figure-notes-actions">
                             <span class="muted">${isPreviewMode ? t('shared.note.preview_hint', '预览基于当前草稿渲染；切回编辑可继续修改。') : t('shared.note.save_hint', '支持多行内容，按 Ctrl/Cmd + Enter 可快速保存。')}</span>
                             <div style="display:flex;gap:0.6rem;flex-wrap:wrap">
+                                <button class="btn btn-outline" type="button" data-note-action="save-notion">${t('shared.note.save_to_notion', '保存到 Notion')}</button>
                                 <button class="btn btn-outline" type="button" data-note-action="save-wolai">${t('shared.note.save_to_wolai', '保存到 Wolai')}</button>
                                 <button class="btn btn-primary" type="button" data-note-action="save-notes">${t('shared.note.save_notes', '保存笔记')}</button>
                             </div>

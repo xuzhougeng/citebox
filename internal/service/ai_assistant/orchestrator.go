@@ -14,6 +14,7 @@ type ToolSet struct {
 	ExternalSearch Tool
 	PaperRead      Tool
 	FigureLookup   Tool
+	RemoteMCP      Tool
 }
 
 type Orchestrator struct {
@@ -87,6 +88,8 @@ func (o *Orchestrator) toolForIntent(intent string) Tool {
 		return o.tools.PaperRead
 	case IntentFigureLookup:
 		return o.tools.FigureLookup
+	case IntentRemoteMCP:
+		return o.tools.RemoteMCP
 	default:
 		return nil
 	}

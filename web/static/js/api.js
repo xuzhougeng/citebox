@@ -541,6 +541,50 @@ const API = {
         return requestJSON(`${API_BASE}/settings/wolai`);
     },
 
+    getMCPSettings() {
+        return requestJSON(`${API_BASE}/settings/mcp`);
+    },
+
+    startMCPAuthorization(data) {
+        return requestJSON(`${API_BASE}/settings/mcp/oauth/start`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+    },
+
+    getMCPAuthorizationStatus(flowId) {
+        return requestJSON(`${API_BASE}/settings/mcp/oauth/status?flow_id=${encodeURIComponent(flowId)}`);
+    },
+
+    disconnectMCP() {
+        return requestJSON(`${API_BASE}/settings/mcp`, { method: 'DELETE' });
+    },
+
+    getNotionAPISettings() {
+        return requestJSON(`${API_BASE}/settings/notion-api`);
+    },
+
+    testNotionAPIToken(token) {
+        return requestJSON(`${API_BASE}/settings/notion-api/test`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token })
+        });
+    },
+
+    saveNotionAPIToken(token) {
+        return requestJSON(`${API_BASE}/settings/notion-api`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token })
+        });
+    },
+
+    deleteNotionAPIToken() {
+        return requestJSON(`${API_BASE}/settings/notion-api`, { method: 'DELETE' });
+    },
+
     updateWolaiSettings(data) {
         return requestJSON(`${API_BASE}/settings/wolai`, {
             method: 'PUT',
@@ -678,6 +722,16 @@ const API = {
 
     saveFigureNoteToWolai(id, data) {
         return requestJSON(`${API_BASE}/wolai/figures/${id}/notes`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        });
+    },
+
+    saveFigureNoteToNotion(id, data) {
+        return requestJSON(`${API_BASE}/notion/figures/${id}/notes`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'

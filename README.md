@@ -19,7 +19,7 @@ CiteBox 是一个面向论文整理与图片阅读的本地优先工作台，基
 - 多种提取模式：支持外部自动提取、内置多模态坐标识别和纯手工标注三种流程。
 - 文献工作台：文献库、图片库、分组、标签、笔记、配色和手工补图页面均已内置。
 - AI 阅读：支持围绕正文和图片做问答、图片解读、Tag 建议、流式输出和导出。
-- 集成能力：支持 Wolai 笔记写回、微信 IM 桥接、TTS 配置和版本检查。
+- 集成能力：支持 Notion MCP、Notion 原图笔记导出、Wolai 笔记写回、微信 IM 桥接、TTS 配置和版本检查。
 - 双端运行：既可作为本地 Web 服务运行，也可作为嵌入式桌面应用运行。
 
 ### 调研 / Research panel
@@ -99,6 +99,21 @@ make prepare-web-assets
 - 外部自动提取：对接外部提取服务，适合标准自动提图流程。
 - 内置多模态识别：使用已配置的多模态模型识别图片坐标，正文优先由 `pdf.js` 提取。
 - 手工模式：不自动提图，但仍支持保存 PDF 全文，之后可进入手工标注页补录图片。
+
+### Notion 集成
+
+CiteBox 的 Notion 配置包含两个彼此独立的入口：
+
+- **Notion MCP**：通过 OAuth 连接 `https://mcp.notion.com/mcp`，供 AI 助手中的 `@Notion` 调用 Notion 工具。
+- **Notion API**：使用个人访问令牌，通过 Notion File Upload API 把图片笔记中的原始图片、说明和笔记写入 Notion。同一篇文献的图片笔记会归档到同一个页面。
+
+个人访问令牌的简化配置步骤：
+
+1. 打开 [Notion Developer Portal 的“个人访问令牌”](https://app.notion.com/developers/tokens)。不要进入“连接 → 新连接”；本地 CiteBox 使用的是你本人的 Notion 权限，不需要创建独立机器人连接。
+2. 点击“新建令牌 / New token”，名称可填写 `CiteBox-Notion-File-Upload`，选择需要使用的工作区，勾选 **Notion API**；不需要 Workers。有效期可选 7、30、90、180 天或 1 年，未选择时默认为 1 年。
+3. 点击“创建令牌 / Create token”后立即复制 `ntn_...` 令牌。完整值只显示一次；请勿提交到 Git 或发送给他人。然后在 CiteBox 的“设置 → Notion → Notion API”中测试并保存。
+
+MCP OAuth 凭据和 API 令牌均只保存在本机；设置接口不会回显已保存的 API 令牌。
 
 ## 文档
 

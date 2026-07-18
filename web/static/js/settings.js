@@ -95,6 +95,21 @@ const SettingsPage = {
         this.wolaiResultLink = document.getElementById('wolaiResultLink');
         this.testWolaiButton = document.getElementById('testWolaiButton');
         this.testWolaiInsertButton = document.getElementById('testWolaiInsertButton');
+        this.mcpSettingsForm = document.getElementById('mcpSettingsForm');
+        this.mcpNameInput = document.getElementById('mcpNameInput');
+        this.mcpURLInput = document.getElementById('mcpURLInput');
+        this.mcpAuthMethodSelect = document.getElementById('mcpAuthMethodSelect');
+        this.mcpEnabledInput = document.getElementById('mcpEnabledInput');
+        this.mcpSummary = document.getElementById('mcpSummary');
+        this.mcpStatus = document.getElementById('mcpStatus');
+        this.testMCPButton = document.getElementById('testMCPButton');
+        this.disconnectMCPButton = document.getElementById('disconnectMCPButton');
+        this.notionAPISettingsForm = document.getElementById('notionAPISettingsForm');
+        this.notionAPITokenInput = document.getElementById('notionAPITokenInput');
+        this.notionAPISummary = document.getElementById('notionAPISummary');
+        this.notionAPIStatus = document.getElementById('notionAPIStatus');
+        this.testNotionAPITokenButton = document.getElementById('testNotionAPITokenButton');
+        this.removeNotionAPITokenButton = document.getElementById('removeNotionAPITokenButton');
         this.desktopCloseSettingsSection = document.getElementById('desktopCloseSettingsSection');
         this.desktopCloseActionSelect = document.getElementById('desktopCloseActionSelect');
         this.desktopCloseSummary = document.getElementById('desktopCloseSummary');
@@ -182,6 +197,7 @@ const SettingsPage = {
             'settings.weixin.daily_title':         'integrations',
             'settings.tts.title':                  'integrations',
             'settings.wolai.title':                'integrations',
+            'settings.mcp.title':                  'integrations',
             'settings.research.title':             'integrations',
             'settings.password.account_title':     'account',
             'settings.db.title':                   'system',
@@ -491,6 +507,26 @@ const SettingsPage = {
             event.preventDefault();
             await this.saveWolaiSettings();
         });
+        this.mcpSettingsForm?.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            await this.authorizeMCP('save');
+        });
+        this.testMCPButton?.addEventListener('click', async () => {
+            await this.authorizeMCP('test');
+        });
+        this.disconnectMCPButton?.addEventListener('click', async () => {
+            await this.disconnectMCP();
+        });
+        this.notionAPISettingsForm?.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            await this.saveNotionAPIToken();
+        });
+        this.testNotionAPITokenButton?.addEventListener('click', async () => {
+            await this.testNotionAPIToken();
+        });
+        this.removeNotionAPITokenButton?.addEventListener('click', async () => {
+            await this.removeNotionAPIToken();
+        });
         this.researchSettingsForm?.addEventListener('submit', async (event) => {
             event.preventDefault();
             await this.saveResearchSettings();
@@ -664,6 +700,8 @@ const SettingsPage = {
                 this.loadAISettings(),
                 this.loadExtractorSettings(),
                 this.loadWolaiSettings(),
+                this.loadMCPSettings(),
+                this.loadNotionAPISettings(),
                 this.loadDesktopCloseSettings(),
                 this.loadVersionStatus(),
                 this.loadAuthSettings(),
@@ -1210,6 +1248,174 @@ const SettingsPage = {
         this.renderWolaiSummary(settings);
         this.setWolaiStatus('');
         this.renderWolaiResultLink('');
+    },
+
+    async loadMCPSettings() {
+        const settings = await API.getMCPSettings();
+        if (this.mcpNameInput) this.mcpNameInput.value = settings.name || 'Notion MCP';
+        if (this.mcpURLInput) this.mcpURLInput.value = settings.url || 'https://mcp.notion.com/mcp';
+        if (this.mcpAuthMethodSelect) this.mcpAuthMethodSelect.value = settings.auth_method || 'oauth';
+        if (this.mcpEnabledInput) this.mcpEnabledInput.checked = Boolean(settings.enabled);
+        this.renderMCPSummary(settings);
+        this.setMCPStatus('');
+    },
+
+    mcpSettingsPayload() {
+        return {
+            name: this.mcpNameInput?.value.trim() || '',
+            url: this.mcpURLInput?.value.trim() || '',
+            auth_method: this.mcpAuthMethodSelect?.value || 'oauth',
+            enabled: Boolean(this.mcpEnabledInput?.checked)
+        };
+    },
+
+    async authorizeMCP(mode) {
+        const button = mode === 'test' ? this.testMCPButton : this.mcpSettingsForm?.querySelector('button[type="submit"]');
+        const originalLabel = button?.textContent || '';
+        const browserWindow = !Utils.canOpenExternalURL() ? window.open('about:blank', '_blank') : null;
+        let browserNavigated = false;
+        if (button) {
+            button.disabled = true;
+            button.textContent = t('settings.mcp.authorizing', '等待授权...');
+        }
+        this.setMCPStatus(t('settings.mcp.opening_browser', '正在准备 OAuth，并将打开浏览器授权页面...'), 'saving');
+        try {
+            const start = await API.startMCPAuthorization({ ...this.mcpSettingsPayload(), mode });
+            if (browserWindow) {
+                browserWindow.opener = null;
+                browserWindow.location.href = start.authorization_url;
+                browserNavigated = true;
+            } else {
+                await Utils.openExternalURL(start.authorization_url);
+            }
+            const result = await this.pollMCPAuthorization(start.flow_id);
+            this.setMCPStatus(result.message || t('settings.mcp.connected', 'MCP 连接成功'), 'success');
+            Utils.showToast(result.message || t('settings.mcp.connected', 'MCP 连接成功'));
+            if (mode === 'save') await this.loadMCPSettings();
+            else this.renderMCPSummary({ ...this.mcpSettingsPayload(), authorized: false, tool_names: result.tool_names || [] });
+        } catch (error) {
+            if (browserWindow && !browserNavigated && !browserWindow.closed) browserWindow.close();
+            this.setMCPStatus(error.message, 'error');
+            Utils.showToast(error.message, 'error');
+        } finally {
+            if (button) {
+                button.disabled = false;
+                button.textContent = originalLabel;
+            }
+        }
+    },
+
+    async pollMCPAuthorization(flowId) {
+        const deadline = Date.now() + 10 * 60 * 1000;
+        while (Date.now() < deadline) {
+            const status = await API.getMCPAuthorizationStatus(flowId);
+            if (status.status === 'complete') return status;
+            if (status.status === 'error') throw new Error(status.message || t('settings.mcp.auth_failed', 'MCP OAuth 授权失败'));
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+        }
+        throw new Error(t('settings.mcp.auth_timeout', 'MCP OAuth 授权等待超时'));
+    },
+
+    async disconnectMCP() {
+        try {
+            await API.disconnectMCP();
+            await this.loadMCPSettings();
+            this.setMCPStatus(t('settings.mcp.disconnected', 'MCP 已断开连接。'), 'success');
+            Utils.showToast(t('settings.mcp.disconnected', 'MCP 已断开连接。'));
+        } catch (error) {
+            this.setMCPStatus(error.message, 'error');
+            Utils.showToast(error.message, 'error');
+        }
+    },
+
+    renderMCPSummary(settings = {}) {
+        if (!this.mcpSummary) return;
+        const tools = Array.isArray(settings.tool_names) ? settings.tool_names : [];
+        this.mcpSummary.innerHTML = `
+            <div><span>${t('settings.mcp.summary_service', '服务')}</span><strong>${Utils.escapeHTML(settings.name || '-')}</strong></div>
+            <div><span>${t('settings.mcp.summary_url', 'URL')}</span><strong>${Utils.escapeHTML(settings.url || '-')}</strong></div>
+            <div><span>${t('settings.mcp.summary_auth', '认证')}</span><strong>${Utils.escapeHTML(settings.auth_method || 'oauth')}</strong></div>
+            <div><span>${t('settings.mcp.summary_enabled', '启用')}</span><strong>${settings.enabled ? t('settings.mcp.enabled_yes', '已启用') : t('settings.mcp.enabled_no', '未启用')}</strong></div>
+            <div><span>${t('settings.mcp.summary_status', '状态')}</span><strong>${settings.authorized ? t('settings.mcp.authorized', '已授权') : t('settings.mcp.not_authorized', '未授权')}</strong></div>
+            <div><span>${t('settings.mcp.summary_tools', '工具')}</span><strong>${tools.length}</strong></div>`;
+    },
+
+    setMCPStatus(message, tone = '') {
+        if (!this.mcpStatus) return;
+        this.mcpStatus.textContent = message || t('settings.mcp.status_hint', '修改后可测试或保存；此时才会打开 OAuth 授权页面。');
+        this.mcpStatus.className = `settings-inline-status${tone ? ` is-${tone}` : ''}`;
+    },
+
+    async loadNotionAPISettings() {
+        const settings = await API.getNotionAPISettings();
+        if (this.notionAPITokenInput) this.notionAPITokenInput.value = '';
+        this.renderNotionAPISummary(settings);
+        this.setNotionAPIStatus('');
+    },
+
+    async testNotionAPIToken() {
+        const button = this.testNotionAPITokenButton;
+        if (button) button.disabled = true;
+        this.setNotionAPIStatus(t('settings.notion_api.testing', '正在验证 Notion API 令牌...'), 'saving');
+        try {
+            const result = await API.testNotionAPIToken(this.notionAPITokenInput?.value.trim() || '');
+            this.setNotionAPIStatus(result.message || t('settings.notion_api.test_success', 'Notion API 连接成功'), 'success');
+            Utils.showToast(result.message || t('settings.notion_api.test_success', 'Notion API 连接成功'));
+        } catch (error) {
+            this.setNotionAPIStatus(error.message, 'error');
+            Utils.showToast(error.message, 'error');
+        } finally {
+            if (button) button.disabled = false;
+        }
+    },
+
+    async saveNotionAPIToken() {
+        const button = document.getElementById('saveNotionAPITokenButton');
+        const token = this.notionAPITokenInput?.value.trim() || '';
+        if (button) button.disabled = true;
+        this.setNotionAPIStatus(t('settings.notion_api.saving', '正在验证并保存令牌...'), 'saving');
+        try {
+            const result = await API.saveNotionAPIToken(token);
+            if (this.notionAPITokenInput) this.notionAPITokenInput.value = '';
+            await this.loadNotionAPISettings();
+            this.setNotionAPIStatus(result.message || t('settings.notion_api.save_success', 'Notion API 令牌已保存'), 'success');
+            Utils.showToast(result.message || t('settings.notion_api.save_success', 'Notion API 令牌已保存'));
+        } catch (error) {
+            this.setNotionAPIStatus(error.message, 'error');
+            Utils.showToast(error.message, 'error');
+        } finally {
+            if (button) button.disabled = false;
+        }
+    },
+
+    async removeNotionAPIToken() {
+        const button = this.removeNotionAPITokenButton;
+        if (button) button.disabled = true;
+        try {
+            await API.deleteNotionAPIToken();
+            await this.loadNotionAPISettings();
+            this.setNotionAPIStatus(t('settings.notion_api.removed', 'Notion API 令牌已移除。'), 'success');
+            Utils.showToast(t('settings.notion_api.removed', 'Notion API 令牌已移除。'));
+        } catch (error) {
+            this.setNotionAPIStatus(error.message, 'error');
+            Utils.showToast(error.message, 'error');
+        } finally {
+            if (button) button.disabled = false;
+        }
+    },
+
+    renderNotionAPISummary(settings = {}) {
+        if (!this.notionAPISummary) return;
+        const user = settings.user_name || settings.user_id || '-';
+        this.notionAPISummary.innerHTML = `
+            <div><span>${t('settings.notion_api.summary_status', '状态')}</span><strong>${settings.configured ? t('settings.notion_api.configured', '已配置') : t('settings.notion_api.not_configured', '未配置')}</strong></div>
+            <div><span>${t('settings.notion_api.summary_user', '用户')}</span><strong>${Utils.escapeHTML(user)}</strong></div>`;
+    },
+
+    setNotionAPIStatus(message, tone = '') {
+        if (!this.notionAPIStatus) return;
+        this.notionAPIStatus.textContent = message || t('settings.notion_api.status_hint', '填写令牌后可测试或保存；保存后可直接导出原图。');
+        this.notionAPIStatus.className = `settings-inline-status${tone ? ` is-${tone}` : ''}`;
     },
 
     async loadResearchSettings() {
