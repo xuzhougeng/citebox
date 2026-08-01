@@ -593,6 +593,90 @@ AI 流式阅读通过：
 - 对主图直接返回原始图片文件
 - 对子图按父图坐标动态裁剪并返回预览图
 
+#### `GET /api/figures/{id}/transfer-package`
+
+用途：
+
+- 导出单张主图或子图的 Figure Transfer Package
+- 返回 `application/zip` 附件，文件名为 `citebox-figure-{id}-transfer-package.zip`
+- 供 ScientificFigureLibrary、个人 Gallery 或其他策展工具消费；CiteBox 不在此接口生成 R 代码或写入外部图库
+
+ZIP 固定包含两个文件：
+
+```text
+citebox-figure-{id}-transfer-package.zip
+├── manifest.json
+└── figure.<ext>
+```
+
+当前 manifest schema 名为 `citebox.figure-transfer-package`，版本为 `1.0`。示例：
+
+```json
+{
+  "schema": {
+    "name": "citebox.figure-transfer-package",
+    "version": "1.0"
+  },
+  "source": {
+    "system": "citebox",
+    "id": "citebox:figure:42",
+    "extraction_method": "auto",
+    "url": "https://doi.org/10.1234/example"
+  },
+  "figure": {
+    "id": 42,
+    "parent_id": null,
+    "parent_source_id": null,
+    "kind": "figure",
+    "number": 2,
+    "display_label": "Fig 2",
+    "subfigure_label": "",
+    "caption": "Figure caption",
+    "page_number": 7
+  },
+  "paper": {
+    "id": 9,
+    "title": "Paper title",
+    "authors": "Ada Lovelace, Alan Turing",
+    "year": 2024,
+    "published_at": "2024-06-03",
+    "journal": "Journal name",
+    "doi": "10.1234/example",
+    "url": "https://doi.org/10.1234/example"
+  },
+  "image": {
+    "filename": "figure.png",
+    "media_type": "image/png",
+    "byte_size": 12345,
+    "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+  },
+  "rights": {
+    "license": "unknown",
+    "statement": "unknown"
+  },
+  "export": {
+    "exported_at": "2026-08-01T02:03:04Z",
+    "citebox_version": "v0.31.0"
+  }
+}
+```
+
+字段与兼容规则：
+
+- `source.id` 是同一 CiteBox 文献库内稳定的 `citebox:figure:{id}` 标识；重复导出同一 Figure 时保持不变
+- `kind` 为 `figure` 或 `subfigure`；子图会同时保留自身 `id`、`subfigure_label`、`parent_id` 和 `parent_source_id`
+- `paper.authors` 保留 CiteBox 现有作者文本，不拆分可能含逗号的人名；无法从 `published_at` 读取年份时 `year` 为 `null`
+- DOI 存在且格式有效时，`source.url` 与 `paper.url` 使用 DOI 解析地址；否则显式为空字符串
+- CiteBox 当前没有论文级授权字段，因此 `rights.license` 与 `rights.statement` 显式为 `unknown`，不会推断授权状态
+- 包内不包含原始文件名、机器绝对路径、数据库路径、本地 PDF 地址或 `/files/...` 私有位置
+
+校验规则：
+
+- ZIP 必须只包含 `manifest.json` 和 manifest 指定的 `figure.<ext>`，且不得包含目录、重复项或路径穿越项
+- manifest 必须严格匹配 schema `1.0`，主图与子图的父子字段必须自洽
+- 消费方必须同时核对 `image.byte_size` 和 `image.sha256`；不匹配时必须拒绝该包
+- CiteBox 在响应前会执行同样的结构、字节数和 SHA-256 校验；无法生成有效包时返回错误，不发送损坏附件
+
 #### `POST /api/figures/{id}/palette`
 
 用途：
