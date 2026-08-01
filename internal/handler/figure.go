@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -118,6 +119,25 @@ func (h *FigureHandler) ServeImage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", contentType)
 	w.Header().Set("Cache-Control", "private, max-age=300")
 	_, _ = w.Write(data)
+}
+
+func (h *FigureHandler) ExportTransferPackage(w http.ResponseWriter, r *http.Request) {
+	id, err := parseIDWithSuffix(r.URL.Path, "/api/figures/", "/transfer-package")
+	if err != nil {
+		sendError(w, apperr.New(apperr.CodeInvalidArgument, "figure id 无效"))
+		return
+	}
+
+	pkg, err := h.service.ExportFigureTransferPackage(id)
+	if err != nil {
+		sendError(w, err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/zip")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, pkg.Filename))
+	w.Header().Set("Content-Length", strconv.Itoa(len(pkg.Data)))
+	_, _ = w.Write(pkg.Data)
 }
 
 func (h *FigureHandler) CreatePalette(w http.ResponseWriter, r *http.Request) {

@@ -575,6 +575,15 @@ func buildHandlerWithAIServices(
 	})
 
 	mux.HandleFunc("/api/figures/", func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/transfer-package") {
+			switch r.Method {
+			case http.MethodGet:
+				figureHandler.ExportTransferPackage(w, r)
+			default:
+				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			}
+			return
+		}
 		if strings.HasSuffix(r.URL.Path, "/image") {
 			switch r.Method {
 			case http.MethodGet:
