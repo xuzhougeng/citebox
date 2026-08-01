@@ -7,10 +7,10 @@ const path = require('node:path');
 const mod = require(path.join('..', 'ai-mention-tags.js'));
 const { parseToolTags, commitToolTag, renderMentionHTML, KNOWN_TOOL_TAGS, familyOf } = mod;
 
-test('KNOWN_TOOL_TAGS lists the five MVP tags in canonical case', () => {
+test('KNOWN_TOOL_TAGS lists built-in and Notion tags in canonical case', () => {
     assert.deepEqual(
         KNOWN_TOOL_TAGS.map((t) => t.name),
-        ['PubMed', 'SemanticScholar', 'Library', 'Figure', 'image-gen']
+        ['PubMed', 'SemanticScholar', 'Library', 'Figure', 'image-gen', 'Notion']
     );
 });
 
@@ -19,6 +19,7 @@ test('familyOf maps each tag to its routing family', () => {
     assert.equal(familyOf('SemanticScholar'), 'external');
     assert.equal(familyOf('Library'), 'library');
     assert.equal(familyOf('Figure'), 'figure');
+    assert.equal(familyOf('Notion'), 'mcp');
     assert.equal(familyOf('Unknown'), null);
 });
 
@@ -157,6 +158,13 @@ test('commitToolTag does not produce double space when residual starts with spac
 test('parseToolTags @image-gen emits image_generation intent', () => {
     const r = parseToolTags('@image-gen draw it');
     assert.equal(r.intentHint, 'image_generation');
+    assert.deepEqual(r.sources, []);
+    assert.equal(r.conflict, null);
+});
+
+test('parseToolTags @Notion emits remote_mcp intent', () => {
+    const r = parseToolTags('@Notion search my workspace');
+    assert.equal(r.intentHint, 'remote_mcp');
     assert.deepEqual(r.sources, []);
     assert.equal(r.conflict, null);
 });

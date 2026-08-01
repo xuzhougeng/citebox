@@ -19,7 +19,7 @@ The project is intentionally optimized around a narrow workflow instead of tryin
 - Three extraction paths: external automatic extraction, built-in multimodal coordinate detection, or manual figure extraction.
 - Built-in workspaces for library, figures, groups, tags, notes, palettes, and manual backfill.
 - AI Reader with paper Q&A, figure interpretation, tag suggestions, streaming output, and export.
-- Integrations for Wolai note export, WeChat IM bridge, TTS settings, and release checks.
+- Integrations for Notion MCP, native Notion figure-note export, Wolai note export, WeChat IM bridge, TTS settings, and release checks.
 - Web and desktop runtime modes backed by the same SQLite and local-file data model.
 
 ### Research panel
@@ -99,6 +99,21 @@ Most runtime settings can be managed from the in-app Settings page. If you want 
 - External automatic extraction: uses an external service for standard automatic figure extraction.
 - Built-in multimodal detection: uses a configured multimodal model to detect figure regions, while full text is primarily extracted via `pdf.js`.
 - Manual mode: skips auto figure extraction, but still allows full-text persistence and later manual figure backfill.
+
+### Notion integration
+
+CiteBox exposes two separate Notion integrations:
+
+- **Notion MCP** uses OAuth with `https://mcp.notion.com/mcp` and powers `@Notion` tools in the AI assistant.
+- **Notion API** uses a personal access token and the File Upload API to export original figure images, captions, and notes. Figure notes from the same paper are grouped on one Notion page.
+
+To configure the API token:
+
+1. Open [Personal access tokens in the Notion Developer Portal](https://app.notion.com/developers/tokens). Do not use Connections → New connection; local CiteBox should act with your own Notion permissions.
+2. Select New token, use a generic name such as `CiteBox-Notion-File-Upload`, choose the workspace, enable **Notion API**, and leave Workers disabled. Expiration can be 7, 30, 90, or 180 days, or 1 year; the default is 1 year.
+3. Create and immediately copy the `ntn_...` value because the complete token is shown only once. Do not commit or share it. Test and save it under Settings → Notion → Notion API in CiteBox.
+
+MCP OAuth credentials and the API token are stored only on the local device. The settings API never returns the saved API token.
 
 ## Docs
 

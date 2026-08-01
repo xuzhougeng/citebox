@@ -149,6 +149,68 @@
                 </div>
             </details>
 
+            <details id="settings-mcp" class="manager-card settings-collapsible">
+                <summary class="settings-collapsible-toggle">
+                    <h2 data-i18n="settings.mcp.title">Notion</h2>
+                    <p data-i18n="settings.mcp.desc">配置 AI 助手使用的 Notion MCP，以及原图笔记导出使用的 Notion API。</p>
+                </summary>
+                <div class="manager-form">
+                    <section class="settings-subsection">
+                        <h3 data-i18n="settings.mcp.mcp_title">Notion MCP</h3>
+                        <p class="muted" data-i18n="settings.mcp.mcp_desc">通过 OAuth 连接远程 MCP，供 AI 助手中的 @Notion 使用。</p>
+                        <form id="mcpSettingsForm" class="settings-subsection-body">
+                            <div class="form-grid">
+                                <label class="field field-span-2">
+                                    <span data-i18n="settings.mcp.name">名称</span>
+                                    <input id="mcpNameInput" class="form-input" type="text" autocomplete="off" placeholder="Notion MCP">
+                                </label>
+                                <label class="field field-span-2">
+                                    <span data-i18n="settings.mcp.url">远程 URL</span>
+                                    <input id="mcpURLInput" class="form-input" type="url" autocomplete="off" placeholder="https://mcp.notion.com/mcp">
+                                </label>
+                                <label class="field field-span-2">
+                                    <span data-i18n="settings.mcp.auth">认证方式</span>
+                                    <select id="mcpAuthMethodSelect" class="form-input">
+                                        <option value="oauth">OAuth</option>
+                                    </select>
+                                </label>
+                                <label class="field checkbox-field field-span-2">
+                                    <input id="mcpEnabledInput" type="checkbox">
+                                    <span data-i18n="settings.mcp.enabled">启用此 MCP 服务</span>
+                                </label>
+                            </div>
+                            <p class="muted" data-i18n="settings.mcp.usage_hint">授权成功并启用后，在 AI 助手中输入 @Notion 来选择该服务。测试不会保存连接或凭据；保存会在授权成功后写入配置。</p>
+                            <div id="mcpSummary" class="settings-summary-box"></div>
+                            <p id="mcpStatus" class="settings-inline-status" data-i18n="settings.mcp.status_hint">修改后可测试或保存；此时才会打开 OAuth 授权页面。</p>
+                            <div class="submit-row">
+                                <button id="disconnectMCPButton" class="btn btn-outline" type="button" data-i18n="settings.mcp.disconnect">断开连接</button>
+                                <button id="testMCPButton" class="btn btn-outline" type="button" data-i18n="settings.mcp.test">测试</button>
+                                <button class="btn btn-primary" type="submit" data-i18n="settings.mcp.save">保存</button>
+                            </div>
+                        </form>
+                    </section>
+
+                    <section class="settings-subsection">
+                        <h3 data-i18n="settings.notion_api.title">Notion API</h3>
+                        <p class="muted" data-i18n="settings.notion_api.desc">使用个人访问令牌，通过 Notion File Upload API 保存原始图片和图片笔记。</p>
+                        <form id="notionAPISettingsForm" class="settings-subsection-body">
+                            <label class="field">
+                                <span data-i18n="settings.notion_api.token">个人访问令牌</span>
+                                <input id="notionAPITokenInput" class="form-input" type="password" autocomplete="new-password" placeholder="ntn_...">
+                            </label>
+                            <p class="muted" data-i18n="settings.notion_api.token_hint">令牌只保存在本机，不会回显。图片笔记导出需要 Notion API 权限。</p>
+                            <div id="notionAPISummary" class="settings-summary-box"></div>
+                            <p id="notionAPIStatus" class="settings-inline-status" data-i18n="settings.notion_api.status_hint">填写令牌后可测试或保存；保存后可直接导出原图。</p>
+                            <div class="submit-row">
+                                <button id="removeNotionAPITokenButton" class="btn btn-outline" type="button" data-i18n="settings.notion_api.remove">移除令牌</button>
+                                <button id="testNotionAPITokenButton" class="btn btn-outline" type="button" data-i18n="settings.notion_api.test">测试 API</button>
+                                <button id="saveNotionAPITokenButton" class="btn btn-primary" type="submit" data-i18n="settings.notion_api.save">保存令牌</button>
+                            </div>
+                        </form>
+                    </section>
+                </div>
+            </details>
+
             <details class="manager-card settings-collapsible">
                 <summary class="settings-collapsible-toggle">
                     <h2 data-i18n="settings.ai.scene_title">场景绑定</h2>

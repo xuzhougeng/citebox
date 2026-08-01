@@ -360,6 +360,7 @@ type sharedAIServices struct {
 	orchestrator *ai_assistant.Orchestrator
 	conversation *ai_conversation.Service
 	imageGen     *ai_image_gen.Service
+	remoteMCP    *service.RemoteMCPService
 }
 
 func buildAIServices(
@@ -381,11 +382,13 @@ func buildAIServices(
 	libraryClassifier := ai_assistant.NewLLMLibraryPaperClassifier(aiSvc, aiSvc)
 	externalPlanner := ai_assistant.NewLLMExternalSearchPlanner(aiSvc, aiSvc)
 	externalClassifier := ai_assistant.NewLLMExternalPaperClassifier(aiSvc, aiSvc)
+	remoteMCP := service.NewRemoteMCPService(repo.Setting, cfg.StorageDir)
 	assistantOrchestrator := ai_assistant.NewOrchestrator(ai_assistant.ToolSet{
 		LibrarySearch:  ai_assistant.NewLibrarySearchToolWithAgents(repo.Paper, libraryPlanner, libraryClassifier),
 		ExternalSearch: ai_assistant.NewExternalSearchToolWithAgents(aiExternalSvc, externalPlanner, externalClassifier),
 		PaperRead:      ai_assistant.NewPaperReadTool(repo.Paper),
 		FigureLookup:   ai_assistant.NewFigureLookupToolWithPapers(ai_assistant.NewRepositoryFigureSearcher(repo.Figure), repo.Paper),
+		RemoteMCP:      ai_assistant.NewMCPTool(remoteMCP, aiSvc, aiSvc),
 	})
 	imageStorage := ai_image_gen.NewStorage(cfg.AIGeneratedDir())
 	imageGenService := ai_image_gen.NewService(ai_image_gen.ServiceDeps{
@@ -412,6 +415,7 @@ func buildAIServices(
 		orchestrator: assistantOrchestrator,
 		conversation: aiConvService,
 		imageGen:     imageGenService,
+		remoteMCP:    remoteMCP,
 	}
 }
 
@@ -453,10 +457,13 @@ func buildHandlerWithAIServices(
 	settingsHandler.SetResearchClient(s2Client, s2RuntimeSettings(cfg))
 	settingsHandler.SetPubMedClient(pubmedClient, pubmedRuntimeSettings(cfg, os.LookupEnv))
 	wolaiHandler := handler.NewWolaiHandler(librarySvc)
+	notionAPIService := service.NewNotionAPIService(repo.Setting, cfg.StorageDir)
+	notionHandler := handler.NewNotionHandler(librarySvc, notionAPIService)
 	databaseHandler := handler.NewDatabaseHandler(librarySvc)
 	sessionManager := service.NewSessionManager(24 * time.Hour)
 	authHandler := handler.NewAuthHandler(librarySvc, sessionManager)
 	aiGeneratedImageHandler := handler.NewAIGeneratedImageHandler(repo.AIGeneratedImage, cfg.AIGeneratedDir())
+	mcpHandler := handler.NewMCPHandler(aiServices.remoteMCP)
 
 	researchAdapter := &research.RepoAdapter{Repo: repo.Research}
 	basket := research.NewBasket(researchAdapter, researchSvc, librarySvcImporterShim{librarySvc})
@@ -870,6 +877,13 @@ func buildHandlerWithAIServices(
 		}
 	})
 
+	mux.HandleFunc("/api/settings/mcp", mcpHandler.Settings)
+	mux.HandleFunc("/api/settings/mcp/oauth/start", mcpHandler.StartAuthorization)
+	mux.HandleFunc("/api/settings/mcp/oauth/status", mcpHandler.AuthorizationStatus)
+	mux.HandleFunc("/api/settings/mcp/oauth/callback", mcpHandler.OAuthCallback)
+	mux.HandleFunc("/api/settings/notion-api", notionHandler.Settings)
+	mux.HandleFunc("/api/settings/notion-api/test", notionHandler.TestToken)
+
 	mux.HandleFunc("/api/settings/desktop-close", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
@@ -968,6 +982,14 @@ func buildHandlerWithAIServices(
 	mux.HandleFunc("/api/wolai/figures/", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/notes") {
 			wolaiHandler.SaveFigureNote(w, r)
+			return
+		}
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	})
+
+	mux.HandleFunc("/api/notion/figures/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/notes") {
+			notionHandler.SaveFigureNote(w, r)
 			return
 		}
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -1209,6 +1231,7 @@ func buildHandlerWithAIServices(
 		{Path: "/login", Prefix: false},
 		{Path: "/login.html", Prefix: false},
 		{Path: "/api/auth/login", Prefix: false},
+		{Path: "/api/settings/mcp/oauth/callback", Prefix: false},
 		{Path: "/static/", Prefix: true},
 	}, cfg.DisableAuth)
 

@@ -24,6 +24,7 @@
         { name: 'Library',         family: 'library',    source: null },
         { name: 'Figure',          family: 'figure',     source: null },
         { name: 'image-gen',       family: 'image_gen',  source: null },  // NEW
+        { name: 'Notion',          family: 'mcp',        source: null },
     ];
 
     const FAMILY_INTENT = {
@@ -31,6 +32,7 @@
         library:   'library_search',
         figure:    'figure_lookup',
         image_gen: 'image_generation',  // NEW
+        mcp:       'remote_mcp',
     };
 
     const NAME_LOOKUP = {};
@@ -43,7 +45,7 @@
 
     // \b breaks at the boundary between word/non-word chars; we require either
     // start-of-string or whitespace before @ so emails ("foo@bar") never match.
-    const TAG_RE = /(^|\s)@(PubMed|SemanticScholar|Library|Figure|image-gen)\b/gi;
+    const TAG_RE = /(^|\s)@(PubMed|SemanticScholar|Library|Figure|image-gen|Notion)\b/gi;
 
     function scanTags(text) {
         // Returns array of { name, family, source, start, end } in order of

@@ -32,6 +32,9 @@
   - 微信桥接设置：`/api/settings/weixin-bridge`
   - 今日推荐测试发图：`/api/settings/weixin-bridge/daily-recommendation/test`
   - Wolai 设置：`/api/settings/wolai`
+  - Notion MCP 设置与 OAuth：`/api/settings/mcp/...`
+  - Notion API 个人令牌设置：`/api/settings/notion-api/...`
+  - Notion 图片笔记导出：`/api/notion/...`
   - Wolai 笔记导出：`/api/wolai/...`
   - 数据库备份导入导出：`/api/database/...`
   - 鉴权：`/api/auth/...`
@@ -978,7 +981,7 @@ AI 流式阅读通过：
 
 - `content`：用户问题或主张。
 - `paper_id`：可选，仅用于新会话或发送时自动 pin 当前文献。
-- `intent_hint`：可选的一次性路由提示。支持 `library_search`（查全库）、`external_search`（查外部）、`paper_read`（读文献）、`figure_lookup`（看图/图文）。省略时由后端按内容和上下文自动判断。前端在用户输入 `@PubMed` / `@SemanticScholar` / `@Library` / `@Figure` 等工具标签时会自动填充该字段。
+- `intent_hint`：可选的一次性路由提示。支持 `library_search`（查全库）、`external_search`（查外部）、`paper_read`（读文献）、`figure_lookup`（看图/图文）、`remote_mcp`（调用已配置的 Notion MCP）。省略时由后端按内容和上下文自动判断。前端在用户输入 `@PubMed` / `@SemanticScholar` / `@Library` / `@Figure` / `@Notion` 等工具标签时会自动填充该字段。
 - `search_goal_hint`：可选字符串。支持 `discovery` 和 `evidence`；用于显式指定外部搜索目标，优先级高于 planner 推断出的 `search_goal`。`discovery` 适合找方向、找综述、扩展候选，`evidence` 适合核查具体断言、找直接出处。前端快捷入口通常会和 `intent_hint == "external_search"` 一起发送；后端也会把合法的 `search_goal_hint` 视为显式工具请求信号，用它优先走 orchestrator 而不是旧外部证据注入路径。非法值会被安全忽略，仍按 planner / 默认回退逻辑执行。
 - `sources`：可选字符串数组，仅在 `intent_hint == "external_search"` 时被读取。取值为外部源 ID 子集，例如 `["pubmed"]`、`["semantic_scholar"]` 或 `["pubmed","semantic_scholar"]`。当用户在输入框打了 `@PubMed`/`@SemanticScholar` 显式指定外部源时，前端会带上此字段；后端会与设置中"已启用源"取交集执行检索，被显式指定但未启用的源会以 `ErrSourceDisabled` 写入失败列表，并在 `Process.Note` 中提示"用户显式指定但未启用的源: …（请前往设置页启用）"。省略或为空数组时，等同当前默认行为（跑所有已启用源）。
 - `context`：可选上下文对象，支持 `source`、`paper_id`、`paper_ids`、`figure_id`。用于指定当前文献、对比文献或图片上下文。当 `intent_hint == "library_search"` 且 `paper_ids` 非空时（典型场景：用户同时输入 `@Library @<paper>`），后端会把候选集裁剪到该 PaperIDs 集合内。
@@ -1524,6 +1527,94 @@ OpenAI 兼容模型配置说明：
   "message": "Wolai 测试页面已创建，并写入测试文本与图片导出 TODO",
   "target_block_id": "page-or-block-id",
   "target_block_url": "https://www.wolai.com/..."
+}
+```
+
+### Notion MCP 与 OAuth
+
+Notion MCP 使用 Streamable HTTP。连接元数据保存在应用设置中，OAuth access/refresh token 保存在 `STORAGE_DIR/mcp/oauth-credentials.json`（目录权限 `0700`、文件权限 `0600`），不会写入数据库或返回前端。
+
+#### `GET /api/settings/mcp`
+
+返回 Notion MCP 的名称、URL、启用状态、认证方式、授权状态与已发现工具名。默认 URL 为 `https://mcp.notion.com/mcp`。
+
+#### `POST /api/settings/mcp/oauth/start`
+
+仅在用户点击“测试”或“保存”时调用。后端依次完成 OAuth Protected Resource Metadata、Authorization Server Metadata 和动态客户端注册，然后返回浏览器授权地址。
+
+```json
+{
+  "mode": "test",
+  "name": "Notion MCP",
+  "url": "https://mcp.notion.com/mcp",
+  "auth_method": "oauth",
+  "enabled": true
+}
+```
+
+响应包含 `flow_id` 与 `authorization_url`。`mode=test` 只验证授权和 `tools/list`，不会保存配置或凭据；`mode=save` 在授权和 MCP 握手成功后保存连接。
+
+#### `GET /api/settings/mcp/oauth/status?flow_id=...`
+
+前端授权期间轮询。`status` 为 `pending`、`complete` 或 `error`；成功时同时返回 `tool_names`。
+
+#### `GET /api/settings/mcp/oauth/callback`
+
+OAuth 服务重定向到此公开回调。回调通过一次性 `state` 关联内存中的授权流程，并返回可安全关闭的 HTML 页面。该接口无需 CiteBox 会话 Cookie，但只有匹配、未过期的 `state` 才能完成授权。
+
+#### `DELETE /api/settings/mcp`
+
+删除保存的 OAuth 凭据并禁用连接。
+
+### Notion API 与原图导出
+
+Notion API 使用用户在 Notion Developer Portal 创建的个人访问令牌。令牌只保存在 `STORAGE_DIR/notion-api/personal-access-token.json`（目录权限 `0700`、文件权限 `0600`），不会写入数据库、返回前端或回填到令牌输入框。该令牌只用于“保存到 Notion”的原图与笔记导出；AI 助手中的 `@Notion` 仍使用上面的 MCP OAuth 连接。
+
+#### `GET /api/settings/notion-api`
+
+返回是否已配置，以及验证令牌时取得的 Notion 用户 ID/名称；响应不包含令牌。
+
+#### `POST /api/settings/notion-api/test`
+
+验证请求体中的 `token`。当 `token` 为空时测试本机已保存的令牌。测试不会写入凭据。
+
+#### `PUT /api/settings/notion-api`
+
+先通过 `GET /v1/users/me` 验证 `token`，成功后再保存到本机凭据文件。
+
+```json
+{
+  "token": "ntn_..."
+}
+```
+
+#### `DELETE /api/settings/notion-api`
+
+删除本机保存的 Notion API 个人访问令牌。
+
+#### `POST /api/notion/figures/{id}/notes`
+
+把当前图片及图片笔记保存到 Notion。请求体：
+
+```json
+{
+  "notes_text": "当前编辑器里的图片笔记草稿"
+}
+```
+
+后端使用 Notion File Upload API 上传原始图片字节，并把文件作为原生 `image` block 写入页面。单张图片使用 `single_part` 直接上传，当前限制为 20 MB；不再压缩图片、不再生成 HTML attachment，也不需要公网图床。
+
+后端会自动创建工作区级私有顶层页面 `CiteBox 图片笔记`，并为每篇 CiteBox 文献创建一个子页面。同一 `paper_id` 后续导出的原图和图片笔记会追加到同一个 Notion 文献页面。页面映射按个人令牌对应的 Notion 用户保存到应用设置 `notion_api_export_pages`；若目录或文献页被删除/归档，会自动重建映射。
+
+成功响应：
+
+```json
+{
+  "success": true,
+  "message": "原始图片与笔记已保存到 Notion",
+  "target_page_id": "notion-page-id",
+  "target_page_url": "https://www.notion.so/...",
+  "image_embedded": true
 }
 ```
 

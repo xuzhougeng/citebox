@@ -38,7 +38,7 @@ func RouteIntent(in RouteInput) RouteDecision {
 
 func isKnownIntent(intent string) bool {
 	switch intent {
-	case IntentLibrarySearch, IntentExternalSearch, IntentPaperRead, IntentFigureLookup:
+	case IntentLibrarySearch, IntentExternalSearch, IntentPaperRead, IntentFigureLookup, IntentRemoteMCP:
 		return true
 	default:
 		return false

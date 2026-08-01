@@ -57,6 +57,10 @@ func (s *LibraryService) ListFigures(filter model.FigureFilter) (*model.FigureLi
 	}, nil
 }
 
+func (s *LibraryService) GetFigure(id int64) (*model.FigureListItem, error) {
+	return s.repo.GetFigure(id)
+}
+
 func (s *LibraryService) ListPalettes(filter model.PaletteFilter) (*model.PaletteListResponse, error) {
 	if filter.Page < 1 {
 		filter.Page = 1

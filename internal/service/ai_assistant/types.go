@@ -8,6 +8,7 @@ const (
 	IntentExternalSearch = "external_search"
 	IntentPaperRead      = "paper_read"
 	IntentFigureLookup   = "figure_lookup"
+	IntentRemoteMCP      = "remote_mcp"
 	IntentChat           = "chat"
 )
 
