@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/xuzhougeng/citebox/internal/apperr"
 	"github.com/xuzhougeng/citebox/internal/model"
@@ -174,6 +175,57 @@ func (r *PDFAnnotationRepository) GetByID(paperID, annotationID int64) (*model.P
 		return nil, err
 	}
 	return annotation, nil
+}
+
+// GetByAnnotationID 按标注 ID 查询单条 PDF 标注（不限定文献）
+func (r *PDFAnnotationRepository) GetByAnnotationID(annotationID int64) (*model.PDFAnnotation, error) {
+	row := r.db.QueryRow(`
+		SELECT id, paper_id, type, page_start, page_end, quote_text, color, fragments_json, note_text, created_at, updated_at
+		FROM pdf_annotations
+		WHERE id = ?
+	`, annotationID)
+
+	annotation, err := scanPDFAnnotation(row)
+	if err == sql.ErrNoRows {
+		return nil, apperr.New(apperr.CodeNotFound, "pdf annotation not found")
+	}
+	if err != nil {
+		return nil, err
+	}
+	return annotation, nil
+}
+
+// ListChangedSince 按更新时间增量查询 PDF 标注（keyset 分页，按 updated_at、id 升序）
+func (r *PDFAnnotationRepository) ListChangedSince(since time.Time, afterID int64, limit int) ([]model.PDFAnnotation, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	sinceValue := changedSinceValue(since)
+
+	rows, err := r.db.Query(`
+		SELECT id, paper_id, type, page_start, page_end, quote_text, color, fragments_json, note_text, created_at, updated_at
+		FROM pdf_annotations
+		WHERE updated_at > ? OR (updated_at = ? AND id > ?)
+		ORDER BY updated_at ASC, id ASC
+		LIMIT ?
+	`, sinceValue, sinceValue, afterID, limit)
+	if err != nil {
+		return nil, wrapDBError(err, "增量查询 PDF 标注失败")
+	}
+	defer rows.Close()
+
+	annotations := []model.PDFAnnotation{}
+	for rows.Next() {
+		annotation, err := scanPDFAnnotation(rows)
+		if err != nil {
+			return nil, err
+		}
+		annotations = append(annotations, *annotation)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, wrapDBError(err, "读取 PDF 标注失败")
+	}
+	return annotations, nil
 }
 
 func (r *PDFAnnotationRepository) Delete(paperID, annotationID int64) error {

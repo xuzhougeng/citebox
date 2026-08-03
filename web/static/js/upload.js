@@ -557,13 +557,14 @@ const UploadPage = {
         this.setPDFTextSyncState(paper.id, 'running', t('upload.sync_extracting_text', '正在提取全文，完成后会自动保存到当前文献。'));
 
         try {
-            const pdfText = await this.extractFullTextFromFile(file);
+            const { text: pdfText, pages: pdfPageTexts } = await this.extractFullTextFromFile(file);
             if (!pdfText) {
                 throw new Error(t('upload.sync_no_text', '没有从当前 PDF 中提取到可用全文'));
             }
 
             const payload = await API.updatePaperPDFText(paper.id, {
-                pdf_text: pdfText
+                pdf_text: pdfText,
+                pdf_page_texts: pdfPageTexts
             });
 
             this.currentPaper = payload.paper;
@@ -748,7 +749,7 @@ const UploadPage = {
                 }
             }
 
-            return pages.join('\n\n').trim();
+            return { text: pages.join('\n\n').trim(), pages };
         } finally {
             URL.revokeObjectURL(objectURL);
         }

@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/xuzhougeng/citebox/internal/apperr"
 	"github.com/xuzhougeng/citebox/internal/model"
@@ -29,6 +30,7 @@ type LibraryRepository struct {
 	PDFAnnotation    *PDFAnnotationRepository
 	AIConversation   *AIConversationRepository
 	AIGeneratedImage *AIGeneratedImageRepository
+	Integration      *IntegrationTokenRepository
 }
 
 // NewLibraryRepository 创建图书馆仓库
@@ -68,6 +70,7 @@ func NewLibraryRepository(dbPath string) (*LibraryRepository, error) {
 	pdfAnnotationRepo := NewPDFAnnotationRepository(db)
 	aiConversationRepo := NewAIConversationRepository(db)
 	aiGeneratedImageRepo := NewAIGeneratedImageRepository(db)
+	integrationRepo := NewIntegrationTokenRepository(db)
 
 	repo := &LibraryRepository{
 		db:               db,
@@ -81,6 +84,7 @@ func NewLibraryRepository(dbPath string) (*LibraryRepository, error) {
 		PDFAnnotation:    pdfAnnotationRepo,
 		AIConversation:   aiConversationRepo,
 		AIGeneratedImage: aiGeneratedImageRepo,
+		Integration:      integrationRepo,
 	}
 
 	return repo, nil
@@ -112,6 +116,16 @@ func (r *LibraryRepository) UpdatePaperPDFText(id int64, pdfText string) (*model
 	return r.Paper.UpdatePaperPDFText(id, pdfText)
 }
 
+// UpdatePaperPDFTextWithPages 更新文献 PDF 全文及逐页文本（委托给 Paper 仓库）
+func (r *LibraryRepository) UpdatePaperPDFTextWithPages(paperID int64, pdfText string, pageTexts []string) error {
+	return r.Paper.UpdatePaperPDFTextWithPages(paperID, pdfText, pageTexts)
+}
+
+// GetPaperPDFPageTexts 查询文献逐页 PDF 文本（委托给 Paper 仓库）
+func (r *LibraryRepository) GetPaperPDFPageTexts(paperID int64) ([]string, error) {
+	return r.Paper.GetPaperPDFPageTexts(paperID)
+}
+
 // DeletePaper 删除文献（委托给 Paper 仓库）
 func (r *LibraryRepository) DeletePaper(id int64) error {
 	return r.Paper.DeletePaper(id)
@@ -130,6 +144,26 @@ func (r *LibraryRepository) ListPapers(filter model.PaperFilter) ([]model.Paper,
 // ListPapersByExtractionStatuses 根据解析状态查询文献（委托给 Paper 仓库）
 func (r *LibraryRepository) ListPapersByExtractionStatuses(statuses []string) ([]model.Paper, error) {
 	return r.Paper.ListPapersByExtractionStatuses(statuses)
+}
+
+// ListPapersChangedSince 按更新时间增量查询文献（委托给 Paper 仓库）
+func (r *LibraryRepository) ListPapersChangedSince(since time.Time, afterID int64, limit int) ([]model.Paper, error) {
+	return r.Paper.ListPapersChangedSince(since, afterID, limit)
+}
+
+// ListFiguresChangedSince 按更新时间增量查询图片（委托给 Figure 仓库）
+func (r *LibraryRepository) ListFiguresChangedSince(since time.Time, afterID int64, limit int) ([]model.Figure, error) {
+	return r.Figure.ListFiguresChangedSince(since, afterID, limit)
+}
+
+// ListPDFAnnotationsChangedSince 按更新时间增量查询 PDF 标注（委托给 PDFAnnotation 仓库）
+func (r *LibraryRepository) ListPDFAnnotationsChangedSince(since time.Time, afterID int64, limit int) ([]model.PDFAnnotation, error) {
+	return r.PDFAnnotation.ListChangedSince(since, afterID, limit)
+}
+
+// GetPDFAnnotation 按标注 ID 查询单条 PDF 标注（委托给 PDFAnnotation 仓库）
+func (r *LibraryRepository) GetPDFAnnotation(id int64) (*model.PDFAnnotation, error) {
+	return r.PDFAnnotation.GetByAnnotationID(id)
 }
 
 // FindPaperByPDFSHA256 根据 PDF SHA256 查找文献（委托给 Paper 仓库）
@@ -372,6 +406,12 @@ func ensureRowsAffected(result sql.Result, notFoundMessage string) error {
 
 func notFoundError(message string) error {
 	return apperr.New(apperr.CodeNotFound, message)
+}
+
+// changedSinceValue 把增量同步的起始时间格式化为 SQLite DATETIME 的存储格式（UTC、秒级精度），
+// 保证与 CURRENT_TIMESTAMP 写入的值可以按字符串直接比较
+func changedSinceValue(since time.Time) string {
+	return since.UTC().Format("2006-01-02 15:04:05")
 }
 
 // ftsEscapeKeyword escapes special FTS5 characters and wraps the keyword

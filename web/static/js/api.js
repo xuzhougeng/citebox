@@ -589,6 +589,28 @@ const API = {
         return requestJSON(`${API_BASE}/settings/notion-api`, { method: 'DELETE' });
     },
 
+    getIntegrationSettings() {
+        return requestJSON(`${API_BASE}/settings/integration`);
+    },
+
+    updateIntegrationSettings(data) {
+        return requestJSON(`${API_BASE}/settings/integration`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        });
+    },
+
+    rotateIntegrationToken() {
+        return requestJSON(`${API_BASE}/settings/integration/token/rotate`, { method: 'POST' });
+    },
+
+    deleteIntegrationToken() {
+        return requestJSON(`${API_BASE}/settings/integration/token`, { method: 'DELETE' });
+    },
+
     updateWolaiSettings(data) {
         return requestJSON(`${API_BASE}/settings/wolai`, {
             method: 'PUT',

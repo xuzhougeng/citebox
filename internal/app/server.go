@@ -15,7 +15,9 @@ import (
 	"github.com/xuzhougeng/citebox/internal/apperr"
 	"github.com/xuzhougeng/citebox/internal/config"
 	"github.com/xuzhougeng/citebox/internal/handler"
+	"github.com/xuzhougeng/citebox/internal/integration"
 	"github.com/xuzhougeng/citebox/internal/logging"
+	"github.com/xuzhougeng/citebox/internal/mcpserver"
 	"github.com/xuzhougeng/citebox/internal/middleware"
 	"github.com/xuzhougeng/citebox/internal/model"
 	"github.com/xuzhougeng/citebox/internal/repository"
@@ -47,6 +49,7 @@ type Server struct {
 	bridgeDone   chan struct{}
 	s2Client     *research.Client
 	pubmedClient *pubmed.Client
+	mcpServer    *mcpserver.Server
 }
 
 func NewServer(opts Options) (*Server, error) {
@@ -119,10 +122,11 @@ func NewServer(opts Options) (*Server, error) {
 	// HTTP handler is even constructed. The handler then receives the same
 	// instances and registers its routes against them.
 	aiServices := buildAIServices(cfg, logger, librarySvc, aiSvc, repo, s2Client, pubmedClient)
+	integrationSvcs := buildIntegrationServices(logger, librarySvc, repo)
 
 	httpServer := &http.Server{
 		Addr:    ":" + cfg.ServerPort,
-		Handler: buildHandlerWithAIServices(cfg, logger, librarySvc, aiSvc, repo, absoluteWebRoot, s2Client, pubmedClient, aiServices),
+		Handler: buildHandlerWithAIServices(cfg, logger, librarySvc, aiSvc, repo, absoluteWebRoot, s2Client, pubmedClient, aiServices, integrationSvcs),
 	}
 
 	server := &Server{
@@ -133,6 +137,7 @@ func NewServer(opts Options) (*Server, error) {
 		httpServer:   httpServer,
 		s2Client:     s2Client,
 		pubmedClient: pubmedClient,
+		mcpServer:    integrationSvcs.mcp,
 	}
 
 	logger.Info("resolved web root", "web_root", absoluteWebRoot)
@@ -202,6 +207,13 @@ func NewServer(opts Options) (*Server, error) {
 			logger.Error("weixin IM bridge stopped", "error", err)
 		}
 	}()
+
+	// 外部集成 MCP 服务默认关闭；启用时启动失败不影响主服务
+	if integrationSvcs.settings.Get().Enabled {
+		if err := integrationSvcs.mcp.Start(); err != nil {
+			logger.Error("integration MCP server failed to start", "error", err)
+		}
+	}
 
 	return server, nil
 }
@@ -308,6 +320,14 @@ func (s *Server) Close() error {
 		case <-time.After(3 * time.Second):
 			s.logger.Warn("timeout waiting for weixin IM bridge shutdown")
 		}
+	}
+
+	if s.mcpServer != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		if err := s.mcpServer.Stop(ctx); err != nil {
+			s.logger.Warn("integration MCP server shutdown failed", "error", err)
+		}
+		cancel()
 	}
 
 	var serverErr error
@@ -419,6 +439,31 @@ func buildAIServices(
 	}
 }
 
+// integrationServices bundles the external-integration (embedded MCP server)
+// wiring shared by the HTTP handler (settings routes) and the server lifecycle.
+type integrationServices struct {
+	settings *integration.Service
+	tokens   *integration.TokenService
+	assets   *integration.AssetStore
+	facade   *integration.Facade
+	mcp      *mcpserver.Server
+}
+
+func buildIntegrationServices(logger *slog.Logger, librarySvc *service.LibraryService, repo *repository.LibraryRepository) integrationServices {
+	settings := integration.NewService(repo.Setting)
+	tokens := integration.NewTokenService(repo.Integration)
+	assets := integration.NewAssetStore()
+	facade := integration.NewFacade(librarySvc, repo, assets, settings)
+	mcp := mcpserver.New(facade, tokens, assets, settings, logger.With("component", "mcp_server"))
+	return integrationServices{
+		settings: settings,
+		tokens:   tokens,
+		assets:   assets,
+		facade:   facade,
+		mcp:      mcp,
+	}
+}
+
 func buildHandler(
 	cfg *config.Config,
 	logger *slog.Logger,
@@ -430,7 +475,8 @@ func buildHandler(
 	pubmedClient *pubmed.Client,
 ) http.Handler {
 	return buildHandlerWithAIServices(cfg, logger, librarySvc, aiSvc, repo, webRoot, s2Client, pubmedClient,
-		buildAIServices(cfg, logger, librarySvc, aiSvc, repo, s2Client, pubmedClient))
+		buildAIServices(cfg, logger, librarySvc, aiSvc, repo, s2Client, pubmedClient),
+		buildIntegrationServices(logger, librarySvc, repo))
 }
 
 func buildHandlerWithAIServices(
@@ -443,6 +489,7 @@ func buildHandlerWithAIServices(
 	s2Client *research.Client,
 	pubmedClient *pubmed.Client,
 	aiServices sharedAIServices,
+	integrationSvcs integrationServices,
 ) http.Handler {
 	versionSvc := service.NewVersionService()
 	paperHandler := handler.NewPaperHandler(librarySvc)
@@ -464,6 +511,7 @@ func buildHandlerWithAIServices(
 	authHandler := handler.NewAuthHandler(librarySvc, sessionManager)
 	aiGeneratedImageHandler := handler.NewAIGeneratedImageHandler(repo.AIGeneratedImage, cfg.AIGeneratedDir())
 	mcpHandler := handler.NewMCPHandler(aiServices.remoteMCP)
+	integrationHandler := handler.NewIntegrationHandler(integrationSvcs.settings, integrationSvcs.tokens, integrationSvcs.mcp)
 
 	researchAdapter := &research.RepoAdapter{Repo: repo.Research}
 	basket := research.NewBasket(researchAdapter, researchSvc, librarySvcImporterShim{librarySvc})
@@ -890,6 +938,9 @@ func buildHandlerWithAIServices(
 	mux.HandleFunc("/api/settings/mcp/oauth/start", mcpHandler.StartAuthorization)
 	mux.HandleFunc("/api/settings/mcp/oauth/status", mcpHandler.AuthorizationStatus)
 	mux.HandleFunc("/api/settings/mcp/oauth/callback", mcpHandler.OAuthCallback)
+	mux.HandleFunc("/api/settings/integration", integrationHandler.Settings)
+	mux.HandleFunc("/api/settings/integration/token/rotate", integrationHandler.RotateToken)
+	mux.HandleFunc("/api/settings/integration/token", integrationHandler.DeleteToken)
 	mux.HandleFunc("/api/settings/notion-api", notionHandler.Settings)
 	mux.HandleFunc("/api/settings/notion-api/test", notionHandler.TestToken)
 

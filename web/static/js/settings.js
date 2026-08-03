@@ -110,6 +110,22 @@ const SettingsPage = {
         this.notionAPIStatus = document.getElementById('notionAPIStatus');
         this.testNotionAPITokenButton = document.getElementById('testNotionAPITokenButton');
         this.removeNotionAPITokenButton = document.getElementById('removeNotionAPITokenButton');
+        this.integrationSettingsForm = document.getElementById('integrationSettingsForm');
+        this.integrationEnabledInput = document.getElementById('integrationEnabledInput');
+        this.integrationPortInput = document.getElementById('integrationPortInput');
+        this.integrationSummary = document.getElementById('integrationSummary');
+        this.integrationStatus = document.getElementById('integrationStatus');
+        this.integrationTokenSummary = document.getElementById('integrationTokenSummary');
+        this.integrationTokenReveal = document.getElementById('integrationTokenReveal');
+        this.integrationTokenValueInput = document.getElementById('integrationTokenValueInput');
+        this.integrationTokenStatus = document.getElementById('integrationTokenStatus');
+        this.rotateIntegrationTokenButton = document.getElementById('rotateIntegrationTokenButton');
+        this.revokeIntegrationTokenButton = document.getElementById('revokeIntegrationTokenButton');
+        this.copyIntegrationTokenButton = document.getElementById('copyIntegrationTokenButton');
+        this.copyIntegrationConfigButton = document.getElementById('copyIntegrationConfigButton');
+        this.integrationCopyConfigHint = document.getElementById('integrationCopyConfigHint');
+        this.integrationFreshToken = '';
+        this.integrationSettings = null;
         this.desktopCloseSettingsSection = document.getElementById('desktopCloseSettingsSection');
         this.desktopCloseActionSelect = document.getElementById('desktopCloseActionSelect');
         this.desktopCloseSummary = document.getElementById('desktopCloseSummary');
@@ -198,6 +214,7 @@ const SettingsPage = {
             'settings.tts.title':                  'integrations',
             'settings.wolai.title':                'integrations',
             'settings.mcp.title':                  'integrations',
+            'settings.integration.title':          'integrations',
             'settings.research.title':             'integrations',
             'settings.password.account_title':     'account',
             'settings.db.title':                   'system',
@@ -527,6 +544,22 @@ const SettingsPage = {
         this.removeNotionAPITokenButton?.addEventListener('click', async () => {
             await this.removeNotionAPIToken();
         });
+        this.integrationSettingsForm?.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            await this.saveIntegrationSettings();
+        });
+        this.rotateIntegrationTokenButton?.addEventListener('click', async () => {
+            await this.rotateIntegrationToken();
+        });
+        this.revokeIntegrationTokenButton?.addEventListener('click', async () => {
+            await this.revokeIntegrationToken();
+        });
+        this.copyIntegrationTokenButton?.addEventListener('click', async () => {
+            await this.copyIntegrationToken();
+        });
+        this.copyIntegrationConfigButton?.addEventListener('click', async () => {
+            await this.copyIntegrationConfig();
+        });
         this.researchSettingsForm?.addEventListener('submit', async (event) => {
             event.preventDefault();
             await this.saveResearchSettings();
@@ -702,6 +735,7 @@ const SettingsPage = {
                 this.loadWolaiSettings(),
                 this.loadMCPSettings(),
                 this.loadNotionAPISettings(),
+                this.loadIntegrationSettings(),
                 this.loadDesktopCloseSettings(),
                 this.loadVersionStatus(),
                 this.loadAuthSettings(),
@@ -1416,6 +1450,198 @@ const SettingsPage = {
         if (!this.notionAPIStatus) return;
         this.notionAPIStatus.textContent = message || t('settings.notion_api.status_hint', '填写令牌后可测试或保存；保存后可直接导出原图。');
         this.notionAPIStatus.className = `settings-inline-status${tone ? ` is-${tone}` : ''}`;
+    },
+
+    async loadIntegrationSettings() {
+        const settings = await API.getIntegrationSettings();
+        this.clearIntegrationFreshToken();
+        this.applyIntegrationSettings(settings || {});
+        this.setIntegrationStatus('');
+        this.setIntegrationTokenStatus('');
+    },
+
+    applyIntegrationSettings(settings = {}) {
+        this.integrationSettings = settings;
+        if (this.integrationEnabledInput) this.integrationEnabledInput.checked = Boolean(settings.enabled);
+        if (this.integrationPortInput) this.integrationPortInput.value = settings.port || 19831;
+        this.renderIntegrationSummary(settings);
+        this.renderIntegrationTokenSummary(settings);
+        this.syncIntegrationTokenControls();
+    },
+
+    integrationSettingsPayload() {
+        return {
+            enabled: Boolean(this.integrationEnabledInput?.checked),
+            port: Number.parseInt(this.integrationPortInput?.value, 10) || 19831
+        };
+    },
+
+    async saveIntegrationSettings() {
+        const payload = this.integrationSettingsPayload();
+        if (payload.port < 1 || payload.port > 65535) {
+            this.setIntegrationStatus(t('settings.integration.port_invalid', '端口需在 1-65535 之间。'), 'error');
+            return;
+        }
+        const button = this.integrationSettingsForm?.querySelector('button[type="submit"]');
+        if (button) button.disabled = true;
+        this.setIntegrationStatus(t('settings.integration.saving', '正在保存集成设置...'), 'saving');
+        try {
+            const settings = await API.updateIntegrationSettings(payload);
+            this.applyIntegrationSettings(settings);
+            this.setIntegrationStatus(t('settings.integration.save_success', '集成设置已保存。'), 'success');
+            Utils.showToast(t('settings.integration.save_success', '集成设置已保存。'));
+        } catch (error) {
+            this.setIntegrationStatus(error.message, 'error');
+            Utils.showToast(error.message, 'error');
+        } finally {
+            if (button) button.disabled = false;
+        }
+    },
+
+    async rotateIntegrationToken() {
+        if (this.integrationSettings?.token?.active) {
+            const confirmed = await Utils.confirm(t('settings.integration.rotate_confirm', '轮换后旧 Token 将立即失效，使用它的工具需要更新配置。确定要轮换吗？'));
+            if (!confirmed) return;
+        }
+        const button = this.rotateIntegrationTokenButton;
+        if (button) button.disabled = true;
+        this.setIntegrationTokenStatus(t('settings.integration.rotating', '正在生成新 Token...'), 'saving');
+        try {
+            const settings = await API.rotateIntegrationToken();
+            this.applyIntegrationSettings(settings);
+            this.integrationFreshToken = settings.new_token || '';
+            this.revealIntegrationFreshToken();
+            this.setIntegrationTokenStatus(t('settings.integration.rotate_success', '新 Token 已生成，请立即复制保存。'), 'success');
+            Utils.showToast(t('settings.integration.rotate_success', '新 Token 已生成，请立即复制保存。'));
+        } catch (error) {
+            this.setIntegrationTokenStatus(error.message, 'error');
+            Utils.showToast(error.message, 'error');
+        } finally {
+            if (button) button.disabled = false;
+        }
+    },
+
+    async revokeIntegrationToken() {
+        const confirmed = await Utils.confirm(t('settings.integration.revoke_confirm', '吊销后使用该 Token 的外部工具将无法访问本服务。确定要吊销吗？'));
+        if (!confirmed) return;
+        const button = this.revokeIntegrationTokenButton;
+        if (button) button.disabled = true;
+        this.setIntegrationTokenStatus(t('settings.integration.revoking', '正在吊销 Token...'), 'saving');
+        try {
+            await API.deleteIntegrationToken();
+            await this.loadIntegrationSettings();
+            this.setIntegrationTokenStatus(t('settings.integration.revoke_success', 'Token 已吊销。'), 'success');
+            Utils.showToast(t('settings.integration.revoke_success', 'Token 已吊销。'));
+        } catch (error) {
+            this.setIntegrationTokenStatus(error.message, 'error');
+            Utils.showToast(error.message, 'error');
+        } finally {
+            if (button) button.disabled = false;
+        }
+    },
+
+    revealIntegrationFreshToken() {
+        if (this.integrationTokenValueInput) this.integrationTokenValueInput.value = this.integrationFreshToken;
+        this.integrationTokenReveal?.classList.remove('hidden');
+        this.syncIntegrationTokenControls();
+    },
+
+    clearIntegrationFreshToken() {
+        this.integrationFreshToken = '';
+        if (this.integrationTokenValueInput) this.integrationTokenValueInput.value = '';
+        this.integrationTokenReveal?.classList.add('hidden');
+        this.syncIntegrationTokenControls();
+    },
+
+    syncIntegrationTokenControls() {
+        const hasFreshToken = Boolean(this.integrationFreshToken);
+        const hasActiveToken = Boolean(this.integrationSettings?.token?.active);
+        if (this.copyIntegrationTokenButton) this.copyIntegrationTokenButton.disabled = !hasFreshToken;
+        if (this.copyIntegrationConfigButton) this.copyIntegrationConfigButton.disabled = !hasFreshToken;
+        if (this.revokeIntegrationTokenButton) this.revokeIntegrationTokenButton.disabled = !hasActiveToken;
+        this.integrationCopyConfigHint?.classList.toggle('hidden', hasFreshToken);
+    },
+
+    integrationWispConfigPayload() {
+        if (!this.integrationFreshToken) return null;
+        return {
+            url: this.integrationSettings?.url || '',
+            headers: {
+                Authorization: `Bearer ${this.integrationFreshToken}`
+            }
+        };
+    },
+
+    async copyIntegrationToken() {
+        if (!this.integrationFreshToken) return;
+        try {
+            await navigator.clipboard.writeText(this.integrationFreshToken);
+            Utils.showToast(t('settings.integration.copied', '已复制'));
+        } catch (error) {
+            this.setIntegrationTokenStatus(t('settings.integration.copy_failed', '复制失败，请手动选择复制。'), 'error');
+            Utils.showToast(t('settings.integration.copy_failed', '复制失败，请手动选择复制。'), 'error');
+        }
+    },
+
+    async copyIntegrationConfig() {
+        const config = this.integrationWispConfigPayload();
+        if (!config) {
+            this.setIntegrationTokenStatus(t('settings.integration.config_need_token', '请先生成新 Token，再复制连接配置。'), 'error');
+            return;
+        }
+        try {
+            await navigator.clipboard.writeText(JSON.stringify(config, null, 2));
+            Utils.showToast(t('settings.integration.config_copied', 'Wisp 连接配置已复制'));
+        } catch (error) {
+            this.setIntegrationTokenStatus(t('settings.integration.copy_failed', '复制失败，请手动选择复制。'), 'error');
+            Utils.showToast(t('settings.integration.copy_failed', '复制失败，请手动选择复制。'), 'error');
+        }
+    },
+
+    renderIntegrationSummary(settings = {}) {
+        if (!this.integrationSummary) return;
+        const enabled = Boolean(settings.enabled);
+        this.integrationSummary.innerHTML = `
+            <div><span>${t('settings.integration.summary_enabled', '启用')}</span><strong>${enabled ? t('settings.integration.enabled_yes', '已启用') : t('settings.integration.enabled_no', '未启用')}</strong></div>
+            <div><span>${t('settings.integration.summary_port', '端口')}</span><strong>${settings.port || 19831}</strong></div>
+            <div><span>${t('settings.integration.summary_url', 'URL')}</span><strong>${enabled ? Utils.escapeHTML(settings.url || '-') : '-'}</strong></div>
+            <div><span>${t('settings.integration.summary_status', '状态')}</span><strong>${enabled ? t('settings.integration.running', '运行中') : t('settings.integration.stopped', '已停止')}</strong></div>`;
+    },
+
+    renderIntegrationTokenSummary(settings = {}) {
+        if (!this.integrationTokenSummary) return;
+        const token = settings.token && settings.token.active ? settings.token : null;
+        if (!token) {
+            this.integrationTokenSummary.innerHTML = `
+            <div><span>${t('settings.integration.summary_token', 'Token')}</span><strong>${t('settings.integration.token_none', '尚未生成 Token')}</strong></div>`;
+            return;
+        }
+        const lastUsed = token.last_used_at
+            ? this.formatIntegrationTime(token.last_used_at)
+            : t('settings.integration.token_never_used', '从未使用');
+        this.integrationTokenSummary.innerHTML = `
+            <div><span>${t('settings.integration.summary_token', 'Token')}</span><strong>${t('settings.integration.token_active', '已激活')}</strong></div>
+            <div><span>${t('settings.integration.token_created', '创建时间')}</span><strong>${Utils.escapeHTML(this.formatIntegrationTime(token.created_at))}</strong></div>
+            <div><span>${t('settings.integration.token_last_used', '最近使用')}</span><strong>${Utils.escapeHTML(lastUsed)}</strong></div>`;
+    },
+
+    formatIntegrationTime(value) {
+        if (!value) return '-';
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) return '-';
+        return Utils.formatDate(value);
+    },
+
+    setIntegrationStatus(message, tone = '') {
+        if (!this.integrationStatus) return;
+        this.integrationStatus.textContent = message || t('settings.integration.status_hint', '修改后需点击保存才会生效。');
+        this.integrationStatus.className = `settings-inline-status${tone ? ` is-${tone}` : ''}`;
+    },
+
+    setIntegrationTokenStatus(message, tone = '') {
+        if (!this.integrationTokenStatus) return;
+        this.integrationTokenStatus.textContent = message || t('settings.integration.token_status_hint', '生成 Token 后，外部工具才能访问本服务。');
+        this.integrationTokenStatus.className = `settings-inline-status${tone ? ` is-${tone}` : ''}`;
     },
 
     async loadResearchSettings() {

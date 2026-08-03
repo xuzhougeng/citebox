@@ -134,7 +134,7 @@ erDiagram
 - `paper_figures.notes_text` 是图片级笔记，用于图片库、笔记页和全文检索
 - `pdf_annotations` 保存 PDF 阅读器内的持久高亮，随文献删除级联删除
 - `color_palettes` 把一组配色绑定到某张具体图片；当前前端只允许对子图提取配色，因此它天然能回溯到来源大图和原始文献
-- `app_settings` 当前除了提取器配置外，也会保存 `ai_settings`、`weixin_binding`、`weixin_bridge_settings` 以及角色 Prompt 等 JSON 设置项；历史上的 `ai_prompt_presets` 键现在承载角色 Prompt 数据
+- `app_settings` 当前除了提取器配置外，也会保存 `ai_settings`、`weixin_binding`、`weixin_bridge_settings`、`integration_settings`（内置 MCP 服务的开关与端口）以及角色 Prompt 等 JSON 设置项；历史上的 `ai_prompt_presets` 键现在承载角色 Prompt 数据
 - 历史升级时，旧的 `papers.notes_text` 会迁移到 `papers.paper_notes_text`，避免原有 AI 内容继续混在管理笔记里
 - `papers_fts` / `figures_fts` 是全文索引表，不是业务真表
 
@@ -179,6 +179,7 @@ CREATE TABLE papers (
     file_size INTEGER DEFAULT 0,
     content_type TEXT DEFAULT 'application/pdf',
     pdf_text TEXT DEFAULT '',
+    pdf_page_texts TEXT,
     abstract_text TEXT DEFAULT '',
     notes_text TEXT DEFAULT '',
     paper_notes_text TEXT DEFAULT '',
@@ -320,7 +321,7 @@ CREATE UNIQUE INDEX idx_tags_scope_name ON tags(scope, name);
 
 | 字段 | 用途 |
 | --- | --- |
-| `key` | 设置项名称，例如 `ai_settings`、`weixin_binding`、`weixin_bridge_settings`、历史兼容键 `ai_prompt_presets`、提取器配置项 |
+| `key` | 设置项名称，例如 `ai_settings`、`weixin_binding`、`weixin_bridge_settings`、`integration_settings`（内置 MCP 服务的开关与端口）、历史兼容键 `ai_prompt_presets`、提取器配置项 |
 | `value` | 对应设置的字符串或 JSON 内容 |
 | `created_at` | 创建时间 |
 | `updated_at` | 最近修改时间 |
@@ -341,6 +342,7 @@ CREATE UNIQUE INDEX idx_tags_scope_name ON tags(scope, name);
 | `file_size` | 文件大小 |
 | `content_type` | MIME 类型，默认 `application/pdf` |
 | `pdf_text` | PDF 提取出的全文文本；也允许手动整理为 Markdown，主要用于检索、AI伴读和原文预览 |
+| `pdf_page_texts` | 逐页 PDF 文本，JSON 字符串数组，可空；由浏览器端 pdf.js 提取流程随 `pdf_text` 一并写入（经 `ensureColumn` 增量迁移加入） |
 | `abstract_text` | 文献摘要 |
 | `notes_text` | 文献级管理笔记；适合保存整理说明、迁移备注、归档提示 |
 | `paper_notes_text` | 文献级内容笔记；适合保存 AI伴读结果、阅读结论和 Markdown 笔记 |
@@ -617,6 +619,28 @@ CREATE TABLE entity_events (
 | `created_at` | DATETIME | 服务器时间 |
 
 索引：`idx_ai_generated_images_conv (conversation_id, id)` 和 `idx_ai_generated_images_turn (turn_run_id)`。
+
+## 外部集成（research-context integration, 2026-08）
+
+### `integration_tokens`
+
+外部集成访问令牌，数据库只保存令牌哈希，不保存明文。由 `internal/repository/schema/schema.go` 的 `ensureIntegrationSchema` 创建。
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `id` | INTEGER PK | 自增主键 |
+| `name` | TEXT | 令牌名称，默认 `''` |
+| `token_hash` | TEXT UNIQUE | 令牌明文（`cbx_` 前缀）的 SHA-256 哈希，小写十六进制 |
+| `scopes` | TEXT | 权限范围，JSON 字符串数组，默认 `'[]'` |
+| `created_at` | DATETIME | 创建时间 |
+| `last_used_at` | DATETIME | 最近使用时间，可空 |
+| `revoked_at` | DATETIME | 吊销时间，可空；非空即视为已吊销 |
+
+索引：`idx_integration_tokens_token_hash (token_hash)`。
+
+### 增量同步查询
+
+`papers` / `paper_figures` / `pdf_annotations` 提供按 `(updated_at, id)` 的 keyset 增量查询（`ListPapersChangedSince`、`ListFiguresChangedSince`、`ListPDFAnnotationsChangedSince`），供外部集成做增量拉取。`updated_at` 是秒级精度的 UTC 字符串，相同时间戳的记录靠 `id` 续页，调用方需保存最后一条记录的 `(updated_at, id)` 作为下一次的游标。
 
 ## 当前最值得坚持的建模原则
 

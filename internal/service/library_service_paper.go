@@ -191,6 +191,26 @@ func (s *LibraryService) UpdatePaperPDFText(id int64, pdfText string) (*model.Pa
 	return paper, nil
 }
 
+// UpdatePaperPDFTextWithPages 保存 PDF 全文及逐页文本；pageTexts 为 nil 时保留原有逐页文本
+func (s *LibraryService) UpdatePaperPDFTextWithPages(id int64, pdfText string, pageTexts []string) (*model.Paper, error) {
+	normalized := strings.TrimSpace(pdfText)
+	if normalized == "" {
+		return nil, apperr.New(apperr.CodeInvalidArgument, "PDF 全文不能为空")
+	}
+
+	if err := s.repo.UpdatePaperPDFTextWithPages(id, normalized, pageTexts); err != nil {
+		return nil, err
+	}
+
+	paper, err := s.repo.GetPaperDetail(id)
+	if err != nil {
+		return nil, err
+	}
+
+	s.decoratePaper(paper)
+	return paper, nil
+}
+
 func (s *LibraryService) RefreshPaperDOIMetadata(ctx context.Context, id int64, params RefreshPaperDOIMetadataParams) (*model.Paper, error) {
 	paper, err := s.repo.GetPaperDetail(id)
 	if err != nil {

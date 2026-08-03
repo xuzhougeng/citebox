@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"strings"
+	"time"
 
 	"github.com/xuzhougeng/citebox/internal/apperr"
 	"github.com/xuzhougeng/citebox/internal/model"
@@ -167,6 +168,60 @@ func (r *PaperRepository) UpdatePaperPDFText(id int64, pdfText string) (*model.P
 	}
 
 	return r.GetPaperDetail(id)
+}
+
+// UpdatePaperPDFTextWithPages 更新文献 PDF 全文及逐页文本；pageTexts 为 nil 时保留原有逐页文本
+func (r *PaperRepository) UpdatePaperPDFTextWithPages(paperID int64, text string, pageTexts []string) error {
+	if pageTexts == nil {
+		result, err := r.db.Exec(`
+			UPDATE papers
+			SET pdf_text = ?, updated_at = CURRENT_TIMESTAMP
+			WHERE id = ?
+		`, text, paperID)
+		if err != nil {
+			return wrapDBError(err, "更新 PDF 全文失败")
+		}
+		return ensureRowsAffected(result, "paper not found")
+	}
+
+	pageTextsJSON, err := json.Marshal(pageTexts)
+	if err != nil {
+		return apperr.Wrap(apperr.CodeInternal, "编码 PDF 逐页文本失败", err)
+	}
+	result, err := r.db.Exec(`
+		UPDATE papers
+		SET pdf_text = ?, pdf_page_texts = ?, updated_at = CURRENT_TIMESTAMP
+		WHERE id = ?
+	`, text, string(pageTextsJSON), paperID)
+	if err != nil {
+		return wrapDBError(err, "更新 PDF 全文失败")
+	}
+	return ensureRowsAffected(result, "paper not found")
+}
+
+// GetPaperPDFPageTexts 查询文献逐页 PDF 文本；从未存储过时返回 nil, nil
+func (r *PaperRepository) GetPaperPDFPageTexts(paperID int64) ([]string, error) {
+	var pageTextsJSON sql.NullString
+	err := r.db.QueryRow(`
+		SELECT pdf_page_texts
+		FROM papers
+		WHERE id = ?
+	`, paperID).Scan(&pageTextsJSON)
+	if err == sql.ErrNoRows {
+		return nil, notFoundError("paper not found")
+	}
+	if err != nil {
+		return nil, wrapDBError(err, "查询 PDF 逐页文本失败")
+	}
+	if !pageTextsJSON.Valid || strings.TrimSpace(pageTextsJSON.String) == "" {
+		return nil, nil
+	}
+
+	var pageTexts []string
+	if err := json.Unmarshal([]byte(pageTextsJSON.String), &pageTexts); err != nil {
+		return nil, apperr.Wrap(apperr.CodeInternal, "解析 PDF 逐页文本失败", err)
+	}
+	return pageTexts, nil
 }
 
 // DeletePaper 删除文献
@@ -418,6 +473,47 @@ func (r *PaperRepository) ListPapersByExtractionStatuses(statuses []string) ([]m
 
 	if err := rows.Err(); err != nil {
 		return nil, wrapDBError(err, "查询待恢复文献失败")
+	}
+
+	return papers, nil
+}
+
+// ListPapersChangedSince 按更新时间增量查询文献（keyset 分页，按 updated_at、id 升序）
+func (r *PaperRepository) ListPapersChangedSince(since time.Time, afterID int64, limit int) ([]model.Paper, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	sinceValue := changedSinceValue(since)
+
+	rows, err := r.db.Query(`
+		SELECT
+			p.id, p.title, p.doi, p.authors_text, p.journal, p.published_at, p.original_filename, p.stored_pdf_name, p.file_size, p.content_type,
+			'', p.abstract_text, p.notes_text, p.paper_notes_text, '', p.extraction_status, p.extractor_message, p.extractor_job_id,
+			p.group_id, COALESCE(g.name, ''),
+			p.created_at, p.updated_at,
+			(SELECT COUNT(*) FROM paper_figures pf WHERE pf.paper_id = p.id AND pf.parent_figure_id IS NULL)
+		FROM papers p
+		LEFT JOIN groups g ON g.id = p.group_id
+		WHERE p.updated_at > ? OR (p.updated_at = ? AND p.id > ?)
+		ORDER BY p.updated_at ASC, p.id ASC
+		LIMIT ?
+	`, sinceValue, sinceValue, afterID, limit)
+	if err != nil {
+		return nil, wrapDBError(err, "增量查询文献失败")
+	}
+	defer rows.Close()
+
+	papers := []model.Paper{}
+	for rows.Next() {
+		paper, err := scanPaper(rows, false)
+		if err != nil {
+			return nil, wrapDBError(err, "增量查询文献失败")
+		}
+		papers = append(papers, *paper)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, wrapDBError(err, "增量查询文献失败")
 	}
 
 	return papers, nil

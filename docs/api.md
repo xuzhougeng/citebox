@@ -32,6 +32,7 @@
   - 微信桥接设置：`/api/settings/weixin-bridge`
   - 今日推荐测试发图：`/api/settings/weixin-bridge/daily-recommendation/test`
   - Wolai 设置：`/api/settings/wolai`
+  - 外部集成（内置 MCP 服务）：`/api/settings/integration/...`
   - Notion MCP 设置与 OAuth：`/api/settings/mcp/...`
   - Notion API 个人令牌设置：`/api/settings/notion-api/...`
   - Notion 图片笔记导出：`/api/notion/...`
@@ -286,7 +287,8 @@ AI 流式阅读通过：
 
 ```json
 {
-  "pdf_text": "从 PDF 提取出的完整全文"
+  "pdf_text": "从 PDF 提取出的完整全文",
+  "pdf_page_texts": ["第 1 页文本", "第 2 页文本"]
 }
 ```
 
@@ -294,6 +296,7 @@ AI 流式阅读通过：
 
 - 只更新 `pdf_text`，不会改动标题、标签、笔记或分组。
 - `pdf_text` 不能为空字符串。
+- `pdf_page_texts` 为可选字段；浏览器端 pdf.js 提取流程会一并提交逐页文本，后端将其以 JSON 数组存入 `papers.pdf_page_texts`。不传该字段时保留已有逐页文本；go-fitz 内置解析和外部提取器链路仍只写 `pdf_text`。
 
 #### `GET /api/papers/{id}/pdf-annotations`
 
@@ -1606,6 +1609,70 @@ OpenAI 兼容模型配置说明：
   "message": "Wolai 测试页面已创建，并写入测试文本与图片导出 TODO",
   "target_block_id": "page-or-block-id",
   "target_block_url": "https://www.wolai.com/..."
+}
+```
+
+### 外部集成（内置 MCP 服务）
+
+CiteBox 内置一个默认关闭、只监听 `127.0.0.1` 的 MCP 服务，把文献库研究上下文以只读方式暴露给 Wisp 等外部工具。这里的接口走主服务的同源 Cookie 会话，用于管理 MCP 服务的开关、端口和访问令牌；外部工具实际使用的 MCP 协议与工具说明见 [research-context-api.md](research-context-api.md)。
+
+#### `GET /api/settings/integration`
+
+返回内置 MCP 服务的启用状态、端口、连接地址和当前生效令牌（不含明文）。未创建令牌时 `token` 为 `null`。
+
+```json
+{
+  "enabled": true,
+  "port": 19831,
+  "url": "http://127.0.0.1:19831/mcp",
+  "token": {
+    "active": true,
+    "created_at": "2026-08-01T09:00:00Z",
+    "last_used_at": "2026-08-03T11:20:00Z",
+    "scopes": ["library:read", "notes:read", "annotations:read", "assets:read"]
+  }
+}
+```
+
+`last_used_at` 在令牌从未使用时为 `null`。
+
+#### `PUT /api/settings/integration`
+
+保存开关与端口，并按新设置重启 MCP 服务（启用、停止或重新绑定端口）。`port` 必须在 1–65535 之间。响应与 `GET` 相同。
+
+```json
+{
+  "enabled": true,
+  "port": 19831
+}
+```
+
+#### `POST /api/settings/integration/token/rotate`
+
+吊销所有现有令牌并签发新令牌。响应为设置视图外加 `new_token` 字段——**明文仅在此响应中出现一次**，服务端只保存 SHA-256 哈希，之后无法找回。
+
+```json
+{
+  "enabled": true,
+  "port": 19831,
+  "url": "http://127.0.0.1:19831/mcp",
+  "token": {
+    "active": true,
+    "created_at": "2026-08-03T12:00:00Z",
+    "last_used_at": null,
+    "scopes": ["library:read", "notes:read", "annotations:read", "assets:read"]
+  },
+  "new_token": "cbx_9f2c1e4a7b3d40f8a1c5e6d2b8a09f31..."
+}
+```
+
+#### `DELETE /api/settings/integration/token`
+
+吊销全部集成令牌，此后所有 MCP 请求都会得到 `401 {"error": "unauthorized"}`。
+
+```json
+{
+  "success": true
 }
 ```
 
