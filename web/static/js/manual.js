@@ -820,13 +820,14 @@ const ManualPage = {
         this.renderActionButtons();
 
         try {
-            const pdfText = await this.extractFullTextFromPDF();
+            const { text: pdfText, pages: pdfPageTexts } = await this.extractFullTextFromPDF();
             if (!pdfText) {
                 throw new Error(t('manual.err_no_text_extracted', '没有从当前 PDF 中提取到可用全文'));
             }
 
             const payload = await API.updatePaperPDFText(this.state.paperId, {
-                pdf_text: pdfText
+                pdf_text: pdfText,
+                pdf_page_texts: pdfPageTexts
             });
 
             this.state.paper = payload.paper;
@@ -856,7 +857,7 @@ const ManualPage = {
             }
         }
 
-        return pages.join('\n\n').trim();
+        return { text: pages.join('\n\n').trim(), pages };
     },
 
     extractPageText(textContent) {

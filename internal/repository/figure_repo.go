@@ -3,6 +3,7 @@ package repository
 import (
 	"database/sql"
 	"strings"
+	"time"
 
 	"github.com/xuzhougeng/citebox/internal/apperr"
 	"github.com/xuzhougeng/citebox/internal/model"
@@ -259,6 +260,64 @@ func (r *FigureRepository) ListAllFigureIDs() ([]int64, error) {
 		return nil, wrapDBError(err, "枚举图片失败")
 	}
 	return ids, nil
+}
+
+// ListFiguresChangedSince 按更新时间增量查询图片（keyset 分页，按 updated_at、id 升序）
+func (r *FigureRepository) ListFiguresChangedSince(since time.Time, afterID int64, limit int) ([]model.Figure, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	sinceValue := changedSinceValue(since)
+
+	rows, err := r.db.Query(`
+		SELECT
+			pf.id, pf.filename, pf.original_name, pf.content_type, pf.page_number, pf.figure_index,
+			pf.parent_figure_id, pf.subfigure_label, pf.source, pf.caption, pf.notes_text, pf.bbox_json,
+			pf.created_at, pf.updated_at
+		FROM paper_figures pf
+		WHERE pf.updated_at > ? OR (pf.updated_at = ? AND pf.id > ?)
+		ORDER BY pf.updated_at ASC, pf.id ASC
+		LIMIT ?
+	`, sinceValue, sinceValue, afterID, limit)
+	if err != nil {
+		return nil, wrapDBError(err, "增量查询图片失败")
+	}
+	defer rows.Close()
+
+	figures := []model.Figure{}
+	for rows.Next() {
+		var figure model.Figure
+		var bboxJSON string
+		var parentFigureID sql.NullInt64
+		if err := rows.Scan(
+			&figure.ID,
+			&figure.Filename,
+			&figure.OriginalName,
+			&figure.ContentType,
+			&figure.PageNumber,
+			&figure.FigureIndex,
+			&parentFigureID,
+			&figure.SubfigureLabel,
+			&figure.Source,
+			&figure.Caption,
+			&figure.NotesText,
+			&bboxJSON,
+			&figure.CreatedAt,
+			&figure.UpdatedAt,
+		); err != nil {
+			return nil, wrapDBError(err, "增量查询图片失败")
+		}
+		if parentFigureID.Valid {
+			figure.ParentFigureID = &parentFigureID.Int64
+		}
+		figure.BBox = rawJSON(bboxJSON)
+		figure.Tags = []model.Tag{}
+		figures = append(figures, figure)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, wrapDBError(err, "增量查询图片失败")
+	}
+	return figures, nil
 }
 
 // UpdateFigure 更新图片信息

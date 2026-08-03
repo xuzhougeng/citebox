@@ -2,7 +2,7 @@
 
 ## Project Structure & Module Organization
 
-CiteBox is a Go + SQLite application with a native HTML/CSS/JavaScript frontend. Main entrypoints live in `cmd/server` and `cmd/desktop`. Core backend layers are under `internal/`: `handler` (HTTP), `service` (business logic), `repository` (SQLite), `model`, `config`, and shared app wiring in `internal/app`. Frontend pages are in `web/`, with shared assets in `web/static/`. Packaging scripts live in `scripts/`, build targets in `Makefile`, and longer-form docs in `docs/`.
+CiteBox is a Go + SQLite application with a native HTML/CSS/JavaScript frontend. Main entrypoints live in `cmd/server` and `cmd/desktop`. Core backend layers are under `internal/`: `handler` (HTTP), `service` (business logic), `repository` (SQLite), `model`, `config`, and shared app wiring in `internal/app`. External-tool integration adds `internal/integration` (read-only research-context facade, tokens, settings) and `internal/mcpserver` (loopback-only HTTP MCP adapter exposing that facade). Frontend pages are in `web/`, with shared assets in `web/static/`. Packaging scripts live in `scripts/`, build targets in `Makefile`, and longer-form docs in `docs/`.
 
 ## Build, Test, and Development Commands
 

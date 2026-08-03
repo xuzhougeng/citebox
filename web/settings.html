@@ -211,6 +211,68 @@
                 </div>
             </details>
 
+            <details id="settings-integration" class="manager-card settings-collapsible">
+                <summary class="settings-collapsible-toggle">
+                    <h2 data-i18n="settings.integration.title">研究上下文集成</h2>
+                    <p data-i18n="settings.integration.desc">在本机嵌入 MCP 服务，供 Wisp 等外部工具读取文献库上下文。</p>
+                </summary>
+                <div class="manager-form">
+                    <section class="settings-subsection">
+                        <h3 data-i18n="settings.integration.service_title">本地 MCP 服务</h3>
+                        <p class="muted" data-i18n="settings.integration.service_desc">启用后，CiteBox 会在本机端口提供 MCP 接口（仅监听 127.0.0.1）。</p>
+                        <form id="integrationSettingsForm" class="settings-subsection-body">
+                            <div class="form-grid">
+                                <label class="field checkbox-field field-span-2">
+                                    <input id="integrationEnabledInput" type="checkbox">
+                                    <span data-i18n="settings.integration.enable">启用本地 MCP 服务</span>
+                                </label>
+                                <label class="field field-span-2">
+                                    <span data-i18n="settings.integration.port">端口</span>
+                                    <input id="integrationPortInput" class="form-input" type="number" min="1" max="65535" step="1" placeholder="19831">
+                                </label>
+                            </div>
+                            <div id="integrationSummary" class="settings-summary-box"></div>
+                            <p id="integrationStatus" class="settings-inline-status" data-i18n="settings.integration.status_hint">修改后需点击保存才会生效。</p>
+                            <div class="submit-row">
+                                <button class="btn btn-primary" type="submit" data-i18n="settings.integration.save">保存</button>
+                            </div>
+                        </form>
+                    </section>
+
+                    <section class="settings-subsection">
+                        <h3 data-i18n="settings.integration.token_title">访问 Token</h3>
+                        <p class="muted" data-i18n="settings.integration.token_desc">外部工具使用 Bearer Token 访问本服务。明文 Token 只在生成时显示一次，之后无法找回。</p>
+                        <div class="settings-subsection-body">
+                            <div id="integrationTokenSummary" class="settings-summary-box"></div>
+                            <div id="integrationTokenReveal" class="hidden">
+                                <label class="field">
+                                    <span data-i18n="settings.integration.token_new">新 Token</span>
+                                    <input id="integrationTokenValueInput" class="form-input" type="text" readonly autocomplete="off">
+                                </label>
+                                <p class="muted" data-i18n="settings.integration.token_once_warning">此 Token 仅显示这一次，请立即复制并妥善保存。</p>
+                            </div>
+                            <p id="integrationTokenStatus" class="settings-inline-status" data-i18n="settings.integration.token_status_hint">生成 Token 后，外部工具才能访问本服务。</p>
+                            <div class="submit-row">
+                                <button id="revokeIntegrationTokenButton" class="btn btn-outline" type="button" data-i18n="settings.integration.revoke">吊销 Token</button>
+                                <button id="copyIntegrationTokenButton" class="btn btn-outline" type="button" data-i18n="settings.integration.copy_token">复制 Token</button>
+                                <button id="rotateIntegrationTokenButton" class="btn btn-primary" type="button" data-i18n="settings.integration.rotate">生成/轮换 Token</button>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="settings-subsection">
+                        <h3 data-i18n="settings.integration.wisp_title">Wisp 连接配置</h3>
+                        <p class="muted" data-i18n="settings.integration.wisp_desc">复制包含服务 URL 与 Token 的连接配置，粘贴到 Wisp 即可完成连接。</p>
+                        <div class="settings-subsection-body">
+                            <p id="integrationCopyConfigHint" class="muted" data-i18n="settings.integration.copy_config_hint">生成新 Token 后才能复制连接配置；已存在的 Token 无法再次查看明文。</p>
+                            <div class="submit-row">
+                                <button id="copyIntegrationConfigButton" class="btn btn-outline" type="button" data-i18n="settings.integration.copy_config">复制 Wisp 连接配置</button>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+            </details>
+
             <details class="manager-card settings-collapsible">
                 <summary class="settings-collapsible-toggle">
                     <h2 data-i18n="settings.ai.scene_title">场景绑定</h2>

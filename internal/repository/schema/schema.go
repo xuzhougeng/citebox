@@ -249,6 +249,7 @@ func (m *Manager) ensureSchemaColumns() error {
 		{tableName: "papers", name: "published_at", definition: "TEXT DEFAULT ''"},
 		{tableName: "papers", name: "extractor_job_id", definition: "TEXT DEFAULT ''"},
 		{tableName: "papers", name: "abstract_text", definition: "TEXT DEFAULT ''"},
+		{tableName: "papers", name: "pdf_page_texts", definition: "TEXT"},
 		{tableName: "papers", name: "notes_text", definition: "TEXT DEFAULT ''"},
 		{tableName: "papers", name: "pdf_sha256", definition: "TEXT DEFAULT ''"},
 		{tableName: "paper_figures", name: "source", definition: "TEXT DEFAULT 'auto'"},
@@ -274,6 +275,9 @@ func (m *Manager) ensureSchemaColumns() error {
 		return err
 	}
 	if err := m.ensureAIOrchestrationSchema(); err != nil {
+		return err
+	}
+	if err := m.ensureIntegrationSchema(); err != nil {
 		return err
 	}
 	if err := m.ensureConversationSurfaceColumns(); err != nil {
@@ -338,6 +342,27 @@ func (m *Manager) ensureAIOrchestrationSchema() error {
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_ai_generated_images_conv ON ai_generated_images(conversation_id, id)`,
 		`CREATE INDEX IF NOT EXISTS idx_ai_generated_images_turn ON ai_generated_images(turn_run_id)`,
+	}
+	for _, stmt := range stmts {
+		if _, err := m.db.Exec(stmt); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (m *Manager) ensureIntegrationSchema() error {
+	stmts := []string{
+		`CREATE TABLE IF NOT EXISTS integration_tokens (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			name TEXT NOT NULL DEFAULT '',
+			token_hash TEXT NOT NULL UNIQUE,
+			scopes TEXT NOT NULL DEFAULT '[]',
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			last_used_at DATETIME,
+			revoked_at DATETIME
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_integration_tokens_token_hash ON integration_tokens(token_hash)`,
 	}
 	for _, stmt := range stmts {
 		if _, err := m.db.Exec(stmt); err != nil {

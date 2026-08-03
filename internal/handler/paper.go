@@ -274,14 +274,20 @@ func (h *PaperHandler) UpdatePDFText(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		PDFText string `json:"pdf_text"`
+		PDFText      string   `json:"pdf_text"`
+		PDFPageTexts []string `json:"pdf_page_texts"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		sendError(w, apperr.New(apperr.CodeInvalidArgument, "请求体格式错误"))
 		return
 	}
 
-	paper, err := h.service.UpdatePaperPDFText(id, req.PDFText)
+	var paper *model.Paper
+	if req.PDFPageTexts != nil {
+		paper, err = h.service.UpdatePaperPDFTextWithPages(id, req.PDFText, req.PDFPageTexts)
+	} else {
+		paper, err = h.service.UpdatePaperPDFText(id, req.PDFText)
+	}
 	if err != nil {
 		sendError(w, err)
 		return
