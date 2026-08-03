@@ -268,6 +268,10 @@ const API = {
         });
     },
 
+    exportFigureTransferPackage(id) {
+        return requestBlob(`${API_BASE}/figures/${id}/transfer-package`);
+    },
+
     createFigurePalette(id, data) {
         return requestJSON(`${API_BASE}/figures/${id}/palette`, {
             method: 'POST',
