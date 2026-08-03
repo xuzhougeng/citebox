@@ -186,6 +186,9 @@ const FigureViewer = {
                 if (button.dataset.figureAction === 'download-image') {
                     await this.downloadCurrentImage();
                 }
+                if (button.dataset.figureAction === 'download-transfer-package') {
+                    await this.downloadTransferPackage();
+                }
                 if (button.dataset.figureAction === 'toggle-subfigure-crop') {
                     this.toggleSubfigureCropMode();
                 }
@@ -2198,6 +2201,24 @@ const FigureViewer = {
         }
     },
 
+    async downloadTransferPackage() {
+        const figureID = Number(this.currentFigure?.id || 0);
+        if (!figureID) {
+            Utils.showToast(t('shared.figure.transfer_package_failed', '迁移包下载失败'), 'error');
+            return;
+        }
+
+        try {
+            const result = await API.exportFigureTransferPackage(figureID);
+            const saved = await Utils.saveBlobDownload(result.blob, result.filename || `figure_${figureID}_transfer.zip`);
+            if (saved) {
+                Utils.showToast(t('shared.figure.transfer_package_saved', '迁移包已保存'));
+            }
+        } catch (error) {
+            Utils.showToast(error.message || t('shared.figure.transfer_package_failed', '迁移包下载失败'), 'error');
+        }
+    },
+
     async copyAIResult(kind, action = this.activeAIAction()) {
         const text = this.copyTextForAIResult(action, kind);
         if (!text) {
@@ -2662,6 +2683,7 @@ const FigureViewer = {
                             <button class="btn btn-primary" type="button" data-figure-action="open-paper">${t("shared.figure.view_source_paper", "查看来源文献")}</button>
                             <a class="btn btn-outline" href="${Utils.resourceViewerURL('image', figure.image_url)}">${t('shared.figure.open_original', '打开原图')}</a>
                             <button class="btn btn-outline" type="button" data-figure-action="download-image">${t('shared.figure.download_image', '下载图片')}</button>
+                            <button class="btn btn-outline" type="button" data-figure-action="download-transfer-package">${t('shared.figure.download_transfer_package', '下载迁移包')}</button>
                         </div>
 
                         <section class="figure-lightbox-ai">
