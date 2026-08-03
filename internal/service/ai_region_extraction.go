@@ -7,7 +7,9 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/xuzhougeng/citebox/internal/apperr"
@@ -44,6 +46,30 @@ Do not wrap JSON in markdown.`
 type aiFigureRegionCandidate struct {
 	BBox       []float64 `json:"bbox"`
 	Confidence float64   `json:"confidence"`
+}
+
+// UnmarshalJSON accepts the bbox key variants that vision models emit in
+// practice: the documented "bbox" plus Qwen-VL's native "bbox_2d".
+func (c *aiFigureRegionCandidate) UnmarshalJSON(data []byte) error {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	for _, key := range []string{"bbox", "bbox_2d"} {
+		value, ok := raw[key]
+		if !ok {
+			continue
+		}
+		var bbox []float64
+		if err := json.Unmarshal(value, &bbox); err == nil {
+			c.BBox = bbox
+			break
+		}
+	}
+	if value, ok := raw["confidence"]; ok {
+		_ = json.Unmarshal(value, &c.Confidence)
+	}
+	return nil
 }
 
 type aiFigureRegionPayload struct {
@@ -92,7 +118,7 @@ func (s *AIService) DetectFigureRegions(ctx context.Context, input model.AIFigur
 
 	runtimeSettings := *settings
 	applyAIModelConfig(&runtimeSettings, modelConfig)
-	runtimeSettings.MaxOutputTokens = minInt(maxInt(modelConfig.MaxOutputTokens, 512), 1200)
+	runtimeSettings.MaxOutputTokens = minInt(maxInt(modelConfig.MaxOutputTokens, 512), 4096)
 	runtimeSettings.Temperature = 0
 
 	rawText, err := s.callTextProvider(ctx, runtimeSettings, aiFigureRegionDetectionSystemPrompt, buildAIFigureRegionDetectionUserPrompt(input, paper), []aiImageInput{
@@ -107,7 +133,7 @@ func (s *AIService) DetectFigureRegions(ctx context.Context, input model.AIFigur
 
 	regions, err := parseAIFigureRegions(rawText)
 	if err != nil {
-		return nil, apperr.Wrap(apperr.CodeUnavailable, "解析模型返回的坐标失败", err)
+		return nil, apperr.Wrap(apperr.CodeUnavailable, "解析模型返回的坐标失败: "+err.Error(), err)
 	}
 
 	return &model.AIFigureRegionDetectResponse{
@@ -176,28 +202,20 @@ func parseAIFigureRegions(text string) ([]model.AIFigureRegion, error) {
 		return []model.AIFigureRegion{}, nil
 	}
 
-	var payload aiFigureRegionPayload
-	var parsed bool
-	for _, candidate := range []string{
-		trimmed,
-		trimCodeFence(trimmed),
-		trimJSONObject(trimmed),
-	} {
-		candidate = strings.TrimSpace(candidate)
-		if candidate == "" {
-			continue
-		}
-		if err := json.Unmarshal([]byte(candidate), &payload); err == nil {
-			parsed = true
-			break
-		}
-	}
+	candidates, parsed := decodeAIFigureRegionCandidates(trimmed)
 	if !parsed {
-		return nil, errors.New("模型没有返回有效 JSON")
+		// The model may have returned prose, a truncated payload (max tokens
+		// reached), or several JSON snippets; salvage any complete bbox entry.
+		candidates = salvageAIFigureRegionCandidates(trimmed)
+		if len(candidates) == 0 {
+			return nil, fmt.Errorf("模型没有返回有效 JSON（返回片段：%s）", aiFigureRegionRawPreview(trimmed, 120))
+		}
+	} else if len(candidates) == 0 {
+		candidates = salvageAIFigureRegionCandidates(trimmed)
 	}
 
-	regions := make([]model.AIFigureRegion, 0, len(payload.Figures))
-	for _, figure := range payload.Figures {
+	regions := make([]model.AIFigureRegion, 0, len(candidates))
+	for _, figure := range candidates {
 		region, ok := normalizeAIFigureRegion(figure)
 		if !ok {
 			continue
@@ -219,6 +237,65 @@ func parseAIFigureRegions(text string) ([]model.AIFigureRegion, error) {
 	})
 
 	return dedupeAIFigureRegions(regions), nil
+}
+
+// decodeAIFigureRegionCandidates extracts figure candidates from well-formed
+// model output, tolerating markdown fences, surrounding prose, and a bare
+// top-level array in addition to the documented {"figures": [...]} shape.
+func decodeAIFigureRegionCandidates(text string) ([]aiFigureRegionCandidate, bool) {
+	for _, candidate := range []string{
+		text,
+		trimCodeFence(text),
+		trimJSONObject(text),
+	} {
+		candidate = strings.TrimSpace(candidate)
+		if candidate == "" {
+			continue
+		}
+		var payload aiFigureRegionPayload
+		if err := json.Unmarshal([]byte(candidate), &payload); err == nil {
+			return payload.Figures, true
+		}
+		var list []aiFigureRegionCandidate
+		if err := json.Unmarshal([]byte(candidate), &list); err == nil {
+			return list, true
+		}
+	}
+	return nil, false
+}
+
+var aiFigureRegionBBoxPattern = regexp.MustCompile(`"(?:bbox|bbox_2d)"\s*:\s*\[\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*\]`)
+
+// salvageAIFigureRegionCandidates recovers complete bbox entries from output
+// that is not parseable as a whole, e.g. JSON truncated by the token limit.
+func salvageAIFigureRegionCandidates(text string) []aiFigureRegionCandidate {
+	matches := aiFigureRegionBBoxPattern.FindAllStringSubmatch(text, -1)
+	candidates := make([]aiFigureRegionCandidate, 0, len(matches))
+	for _, match := range matches {
+		bbox := make([]float64, 4)
+		valid := true
+		for i := 0; i < 4; i++ {
+			value, err := strconv.ParseFloat(match[i+1], 64)
+			if err != nil {
+				valid = false
+				break
+			}
+			bbox[i] = value
+		}
+		if valid {
+			candidates = append(candidates, aiFigureRegionCandidate{BBox: bbox})
+		}
+	}
+	return candidates
+}
+
+func aiFigureRegionRawPreview(text string, maxRunes int) string {
+	compact := strings.Join(strings.Fields(text), " ")
+	runes := []rune(compact)
+	if len(runes) > maxRunes {
+		return string(runes[:maxRunes]) + "…"
+	}
+	return compact
 }
 
 func normalizeAIFigureRegion(candidate aiFigureRegionCandidate) (model.AIFigureRegion, bool) {
