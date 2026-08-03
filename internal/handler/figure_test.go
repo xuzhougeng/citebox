@@ -82,7 +82,7 @@ func TestFigureHandlerExportTransferPackage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ValidateFigureTransferPackage() error = %v", err)
 	}
-	if manifest.Figure.ID != paper.Figures[0].ID || manifest.Source.ExtractionMethod != "manual" {
+	if manifest.Source.FigureID != paper.Figures[0].ID || manifest.Source.ExtractionMethod != "manual" {
 		t.Fatalf("manifest = %+v", manifest)
 	}
 }

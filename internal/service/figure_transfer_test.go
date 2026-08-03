@@ -35,33 +35,43 @@ func TestExportFigureTransferPackageMainFigure(t *testing.T) {
 	}
 
 	wantSourceID := "citebox:figure:" + strconv.FormatInt(paper.Figures[0].ID, 10)
-	if manifest.Schema.Name != FigureTransferSchemaName || manifest.Schema.Version != FigureTransferSchemaVersion {
-		t.Fatalf("schema = %+v", manifest.Schema)
+	if manifest.Schema != FigureTransferSchemaName || manifest.Version != FigureTransferSchemaVersion {
+		t.Fatalf("schema = %q version = %d", manifest.Schema, manifest.Version)
 	}
-	if manifest.Source.ID != wantSourceID || manifest.Source.System != "citebox" || manifest.Source.URL != "https://doi.org/10.1234/atlas.2024.7" {
+	if manifest.Producer.Name != "CiteBox" || manifest.Producer.Version == "" {
+		t.Fatalf("producer = %+v", manifest.Producer)
+	}
+	if _, err := time.Parse(time.RFC3339, manifest.ExportedAt); err != nil {
+		t.Fatalf("exportedAt = %q, parse error = %v", manifest.ExportedAt, err)
+	}
+	if manifest.Source.SourceID != wantSourceID || manifest.Source.FigureID != paper.Figures[0].ID || manifest.Source.ExtractionMethod != "auto" {
 		t.Fatalf("source = %+v", manifest.Source)
 	}
-	if manifest.Figure.ID != paper.Figures[0].ID || manifest.Figure.Kind != "figure" || manifest.Figure.ParentID != nil || manifest.Figure.ParentSourceID != nil {
-		t.Fatalf("figure identifiers = %+v", manifest.Figure)
+	if manifest.Figure.Kind != "figure" || manifest.Source.ParentFigureID != nil || len(manifest.Source.SubfigureLabels) != 0 {
+		t.Fatalf("figure identifiers = %+v, source = %+v", manifest.Figure, manifest.Source)
 	}
-	if manifest.Figure.Number != 2 || manifest.Figure.DisplayLabel != "Fig 2" || manifest.Figure.PageNumber != 7 || manifest.Figure.Caption != "Cell states" {
-		t.Fatalf("figure metadata = %+v", manifest.Figure)
+	if manifest.Figure.Number != 2 || manifest.Source.FigureLabel != "Fig 2" || manifest.Source.Page == nil || *manifest.Source.Page != 7 || manifest.Source.Caption != "Cell states" {
+		t.Fatalf("figure metadata = %+v, source = %+v", manifest.Figure, manifest.Source)
 	}
-	if manifest.Paper.ID != paper.ID || manifest.Paper.Title != "Transfer Atlas" || manifest.Paper.Authors != "Ada Lovelace, Alan Turing" || manifest.Paper.Journal != "Journal of Tests" {
-		t.Fatalf("paper metadata = %+v", manifest.Paper)
+	transferPaper := manifest.Source.Paper
+	if transferPaper.ID != paper.ID || transferPaper.Title != "Transfer Atlas" || strings.Join(transferPaper.Authors, "; ") != "Ada Lovelace; Alan Turing" {
+		t.Fatalf("paper metadata = %+v", transferPaper)
 	}
-	if manifest.Paper.Year == nil || *manifest.Paper.Year != 2024 || manifest.Paper.PublishedAt != "2024-06-03" || manifest.Paper.DOI != "10.1234/atlas.2024.7" {
-		t.Fatalf("paper publication metadata = %+v", manifest.Paper)
+	if transferPaper.Journal == nil || *transferPaper.Journal != "Journal of Tests" || transferPaper.Year == nil || *transferPaper.Year != 2024 || transferPaper.PublishedAt != "2024-06-03" {
+		t.Fatalf("paper publication metadata = %+v", transferPaper)
 	}
-	if manifest.Rights.License != "unknown" || manifest.Rights.Statement != "unknown" {
-		t.Fatalf("rights = %+v", manifest.Rights)
+	if transferPaper.DOI == nil || *transferPaper.DOI != "10.1234/atlas.2024.7" || transferPaper.URL == nil || *transferPaper.URL != "https://doi.org/10.1234/atlas.2024.7" {
+		t.Fatalf("paper identifiers = %+v", transferPaper)
 	}
-	if _, err := time.Parse(time.RFC3339, manifest.Export.ExportedAt); err != nil || manifest.Export.CiteBoxVersion == "" {
-		t.Fatalf("export metadata = %+v, parse error = %v", manifest.Export, err)
+	if manifest.Source.License.Scope != "unknown" || manifest.Source.License.Text != nil {
+		t.Fatalf("license = %+v", manifest.Source.License)
+	}
+	if manifest.Figure.File != "figure.png" || manifest.Figure.MediaType != "image/png" || manifest.Figure.Bytes != int64(len(imageData)) || len(manifest.Figure.SHA256) != 64 {
+		t.Fatalf("figure file metadata = %+v", manifest.Figure)
 	}
 
 	entries := readFigureTransferEntries(t, pkg.Data)
-	if len(entries) != 2 || !bytes.Equal(entries[manifest.Image.Filename], imageData) {
+	if len(entries) != 2 || !bytes.Equal(entries[manifest.Figure.File], imageData) {
 		t.Fatalf("package entries = %v", transferEntryNames(entries))
 	}
 	manifestJSON := string(entries[figureTransferManifestName])
@@ -107,18 +117,17 @@ func TestExportFigureTransferPackageSubfigurePreservesParentIdentity(t *testing.
 	if err != nil {
 		t.Fatalf("ValidateFigureTransferPackage() error = %v", err)
 	}
-	if manifest.Figure.Kind != "subfigure" || manifest.Figure.ParentID == nil || *manifest.Figure.ParentID != paper.Figures[0].ID {
-		t.Fatalf("subfigure identifiers = %+v", manifest.Figure)
+	if manifest.Figure.Kind != "subfigure" || manifest.Source.ParentFigureID == nil || *manifest.Source.ParentFigureID != paper.Figures[0].ID {
+		t.Fatalf("subfigure identifiers = %+v, source = %+v", manifest.Figure, manifest.Source)
 	}
-	wantParentSourceID := "citebox:figure:" + strconv.FormatInt(paper.Figures[0].ID, 10)
-	if manifest.Figure.ParentSourceID == nil || *manifest.Figure.ParentSourceID != wantParentSourceID || manifest.Figure.SubfigureLabel != "b" || manifest.Figure.DisplayLabel != "Fig 1b" {
-		t.Fatalf("subfigure relationship = %+v", manifest.Figure)
+	if len(manifest.Source.SubfigureLabels) != 1 || manifest.Source.SubfigureLabels[0] != "b" || manifest.Source.FigureLabel != "Fig 1b" {
+		t.Fatalf("subfigure relationship = %+v", manifest.Source)
 	}
-	if manifest.Image.Filename != "figure.png" || manifest.Image.MediaType != "image/png" {
-		t.Fatalf("image metadata = %+v", manifest.Image)
+	if manifest.Figure.File != "figure.png" || manifest.Figure.MediaType != "image/png" {
+		t.Fatalf("image metadata = %+v", manifest.Figure)
 	}
 
-	imageData := readFigureTransferEntries(t, pkg.Data)[manifest.Image.Filename]
+	imageData := readFigureTransferEntries(t, pkg.Data)[manifest.Figure.File]
 	image, err := png.Decode(bytes.NewReader(imageData))
 	if err != nil {
 		t.Fatalf("decode exported subfigure error = %v", err)
@@ -139,7 +148,7 @@ func TestValidateFigureTransferPackageRejectsChangedImage(t *testing.T) {
 		t.Fatalf("ExportFigureTransferPackage() error = %v", err)
 	}
 
-	corrupted := rewriteFigureTransferImage(t, pkg.Data, pkg.Manifest.Image.Filename)
+	corrupted := rewriteFigureTransferImage(t, pkg.Data, pkg.Manifest.Figure.File)
 	_, err = ValidateFigureTransferPackage(corrupted)
 	if !apperr.IsCode(err, apperr.CodeInvalidArgument) || !strings.Contains(apperr.Message(err), "sha256 mismatch") {
 		t.Fatalf("ValidateFigureTransferPackage() error = %v, want sha256 mismatch", err)
