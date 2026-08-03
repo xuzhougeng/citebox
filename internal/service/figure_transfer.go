@@ -20,73 +20,76 @@ import (
 )
 
 const (
-	FigureTransferSchemaName    = "citebox.figure-transfer-package"
-	FigureTransferSchemaVersion = "1.0"
+	FigureTransferSchemaName    = "figure-transfer-package.v1"
+	FigureTransferSchemaVersion = 1
 	figureTransferManifestName  = "manifest.json"
 	maxTransferManifestSize     = 1 << 20
-	maxTransferImageSize        = 512 << 20
+	maxTransferImageSize        = 20 << 20
+	maxTransferTitleRunes       = 2000
+	maxTransferAuthorRunes      = 300
+	maxTransferCaptionRunes     = 20000
 )
 
-type FigureTransferManifest struct {
-	Schema FigureTransferSchema `json:"schema"`
-	Source FigureTransferSource `json:"source"`
-	Figure FigureTransferFigure `json:"figure"`
-	Paper  FigureTransferPaper  `json:"paper"`
-	Image  FigureTransferImage  `json:"image"`
-	Rights FigureTransferRights `json:"rights"`
-	Export FigureTransferExport `json:"export"`
+// figureTransferMediaTypes maps the media types accepted by Figure Transfer
+// Package v1 consumers to the package-internal file extension they require.
+var figureTransferMediaTypes = map[string]string{
+	"image/png":       ".png",
+	"image/jpeg":      ".jpg",
+	"image/webp":      ".webp",
+	"image/svg+xml":   ".svg",
+	"application/pdf": ".pdf",
 }
 
-type FigureTransferSchema struct {
+type FigureTransferManifest struct {
+	Schema     string                 `json:"schema"`
+	Version    int                    `json:"version"`
+	Producer   FigureTransferProducer `json:"producer"`
+	ExportedAt string                 `json:"exportedAt"`
+	Source     FigureTransferSource   `json:"source"`
+	Figure     FigureTransferFigure   `json:"figure"`
+}
+
+type FigureTransferProducer struct {
 	Name    string `json:"name"`
 	Version string `json:"version"`
 }
 
 type FigureTransferSource struct {
-	System           string `json:"system"`
-	ID               string `json:"id"`
-	ExtractionMethod string `json:"extraction_method"`
-	URL              string `json:"url"`
-}
-
-type FigureTransferFigure struct {
-	ID             int64   `json:"id"`
-	ParentID       *int64  `json:"parent_id"`
-	ParentSourceID *string `json:"parent_source_id"`
-	Kind           string  `json:"kind"`
-	Number         int     `json:"number"`
-	DisplayLabel   string  `json:"display_label"`
-	SubfigureLabel string  `json:"subfigure_label"`
-	Caption        string  `json:"caption"`
-	PageNumber     int     `json:"page_number"`
+	SourceID         string                `json:"sourceId"`
+	FigureID         int64                 `json:"figureId"`
+	ParentFigureID   *int64                `json:"parentFigureId"`
+	FigureLabel      string                `json:"figureLabel"`
+	SubfigureLabels  []string              `json:"subfigureLabels"`
+	Caption          string                `json:"caption"`
+	Page             *int                  `json:"page"`
+	Paper            FigureTransferPaper   `json:"paper"`
+	License          FigureTransferLicense `json:"license"`
+	ExtractionMethod string                `json:"extractionMethod"`
 }
 
 type FigureTransferPaper struct {
-	ID          int64  `json:"id"`
-	Title       string `json:"title"`
-	Authors     string `json:"authors"`
-	Year        *int   `json:"year"`
-	PublishedAt string `json:"published_at"`
-	Journal     string `json:"journal"`
-	DOI         string `json:"doi"`
-	URL         string `json:"url"`
+	ID          int64    `json:"id"`
+	Title       string   `json:"title"`
+	Authors     []string `json:"authors"`
+	Year        *int     `json:"year"`
+	PublishedAt string   `json:"publishedAt,omitempty"`
+	Journal     *string  `json:"journal"`
+	DOI         *string  `json:"doi"`
+	URL         *string  `json:"url"`
 }
 
-type FigureTransferImage struct {
-	Filename  string `json:"filename"`
-	MediaType string `json:"media_type"`
-	ByteSize  int64  `json:"byte_size"`
+type FigureTransferLicense struct {
+	Scope string  `json:"scope"`
+	Text  *string `json:"text"`
+}
+
+type FigureTransferFigure struct {
+	File      string `json:"file"`
+	MediaType string `json:"mediaType"`
+	Bytes     int64  `json:"bytes"`
 	SHA256    string `json:"sha256"`
-}
-
-type FigureTransferRights struct {
-	License   string `json:"license"`
-	Statement string `json:"statement"`
-}
-
-type FigureTransferExport struct {
-	ExportedAt     string `json:"exported_at"`
-	CiteBoxVersion string `json:"citebox_version"`
+	Kind      string `json:"kind"`
+	Number    int    `json:"number"`
 }
 
 type FigureTransferPackage struct {
@@ -125,10 +128,15 @@ func (s *LibraryService) ExportFigureTransferPackage(id int64) (*FigureTransferP
 		return nil, apperr.New(apperr.CodeFailedPrecondition, "figure image is empty")
 	}
 
+	extension, ok := figureTransferMediaTypes[normalizeTransferMediaType(mediaType)]
+	if !ok {
+		return nil, apperr.New(apperr.CodeFailedPrecondition, fmt.Sprintf("figure media type %q is not supported by Figure Transfer Package v1", mediaType))
+	}
+
 	exportedAt := time.Now().UTC().Truncate(time.Second)
-	imageFilename := "figure" + figureTransferImageExtension(mediaType)
+	imageFilename := "figure" + extension
 	imageHash := sha256.Sum256(imageData)
-	manifest := newFigureTransferManifest(paper, figure, imageFilename, mediaType, int64(len(imageData)), hex.EncodeToString(imageHash[:]), exportedAt)
+	manifest := newFigureTransferManifest(paper, figure, imageFilename, normalizeTransferMediaType(mediaType), int64(len(imageData)), hex.EncodeToString(imageHash[:]), exportedAt)
 
 	data, err := writeFigureTransferPackage(manifest, imageData, exportedAt)
 	if err != nil {
@@ -154,60 +162,69 @@ func newFigureTransferManifest(
 	imageSHA256 string,
 	exportedAt time.Time,
 ) FigureTransferManifest {
-	sourceURL := figureTransferDOIURL(paper.DOI)
 	kind := "figure"
-	var parentSourceID *string
+	subfigureLabels := []string{}
 	if figure.ParentFigureID != nil {
 		kind = "subfigure"
-		value := figureTransferSourceID(*figure.ParentFigureID)
-		parentSourceID = &value
+		if label := strings.TrimSpace(figure.SubfigureLabel); label != "" {
+			subfigureLabels = append(subfigureLabels, label)
+		}
+	} else {
+		for _, candidate := range paper.Figures {
+			if candidate.ParentFigureID == nil || *candidate.ParentFigureID != figure.ID {
+				continue
+			}
+			if label := strings.TrimSpace(candidate.SubfigureLabel); label != "" {
+				subfigureLabels = append(subfigureLabels, label)
+			}
+		}
+	}
+
+	var page *int
+	if figure.PageNumber > 0 {
+		value := figure.PageNumber
+		page = &value
 	}
 
 	return FigureTransferManifest{
-		Schema: FigureTransferSchema{
-			Name:    FigureTransferSchemaName,
-			Version: FigureTransferSchemaVersion,
+		Schema:  FigureTransferSchemaName,
+		Version: FigureTransferSchemaVersion,
+		Producer: FigureTransferProducer{
+			Name:    "CiteBox",
+			Version: buildinfo.CurrentVersion(),
 		},
+		ExportedAt: exportedAt.Format(time.RFC3339),
 		Source: FigureTransferSource{
-			System:           "citebox",
-			ID:               figureTransferSourceID(figure.ID),
+			SourceID:        figureTransferSourceID(figure.ID),
+			FigureID:        figure.ID,
+			ParentFigureID:  figure.ParentFigureID,
+			FigureLabel:     formatFigureDisplayLabel(figure.FigureIndex, figure.SubfigureLabel),
+			SubfigureLabels: subfigureLabels,
+			Caption:         truncateTransferText(strings.TrimSpace(figure.Caption), maxTransferCaptionRunes),
+			Page:            page,
+			Paper: FigureTransferPaper{
+				ID:          paper.ID,
+				Title:       truncateTransferText(strings.TrimSpace(paper.Title), maxTransferTitleRunes),
+				Authors:     figureTransferAuthors(paper.AuthorsText),
+				Year:        figureTransferPublicationYear(paper.PublishedAt),
+				PublishedAt: strings.TrimSpace(paper.PublishedAt),
+				Journal:     optionalTransferString(paper.Journal),
+				DOI:         optionalTransferString(paper.DOI),
+				URL:         optionalTransferString(figureTransferDOIURL(paper.DOI)),
+			},
+			License: FigureTransferLicense{
+				Scope: "unknown",
+				Text:  nil,
+			},
 			ExtractionMethod: firstNonEmpty(figure.Source, "unknown"),
-			URL:              sourceURL,
 		},
 		Figure: FigureTransferFigure{
-			ID:             figure.ID,
-			ParentID:       figure.ParentFigureID,
-			ParentSourceID: parentSourceID,
-			Kind:           kind,
-			Number:         figure.FigureIndex,
-			DisplayLabel:   formatFigureDisplayLabel(figure.FigureIndex, figure.SubfigureLabel),
-			SubfigureLabel: strings.TrimSpace(figure.SubfigureLabel),
-			Caption:        strings.TrimSpace(figure.Caption),
-			PageNumber:     figure.PageNumber,
-		},
-		Paper: FigureTransferPaper{
-			ID:          paper.ID,
-			Title:       strings.TrimSpace(paper.Title),
-			Authors:     strings.TrimSpace(paper.AuthorsText),
-			Year:        figureTransferPublicationYear(paper.PublishedAt),
-			PublishedAt: strings.TrimSpace(paper.PublishedAt),
-			Journal:     strings.TrimSpace(paper.Journal),
-			DOI:         strings.TrimSpace(paper.DOI),
-			URL:         sourceURL,
-		},
-		Image: FigureTransferImage{
-			Filename:  imageFilename,
+			File:      imageFilename,
 			MediaType: mediaType,
-			ByteSize:  byteSize,
+			Bytes:     byteSize,
 			SHA256:    imageSHA256,
-		},
-		Rights: FigureTransferRights{
-			License:   "unknown",
-			Statement: "unknown",
-		},
-		Export: FigureTransferExport{
-			ExportedAt:     exportedAt.Format(time.RFC3339),
-			CiteBoxVersion: buildinfo.CurrentVersion(),
+			Kind:      kind,
+			Number:    figure.FigureIndex,
 		},
 	}
 }
@@ -224,7 +241,7 @@ func writeFigureTransferPackage(manifest FigureTransferManifest, imageData []byt
 	if err := writeFigureTransferEntry(writer, figureTransferManifestName, manifestData, modifiedAt); err != nil {
 		return nil, err
 	}
-	if err := writeFigureTransferEntry(writer, manifest.Image.Filename, imageData, modifiedAt); err != nil {
+	if err := writeFigureTransferEntry(writer, manifest.Figure.File, imageData, modifiedAt); err != nil {
 		return nil, err
 	}
 	if err := writer.Close(); err != nil {
@@ -290,19 +307,19 @@ func ValidateFigureTransferPackage(data []byte) (*FigureTransferManifest, error)
 		return nil, err
 	}
 
-	imageFile := entries[manifest.Image.Filename]
+	imageFile := entries[manifest.Figure.File]
 	if imageFile == nil {
-		return nil, invalidFigureTransferPackage("missing image %q", manifest.Image.Filename)
+		return nil, invalidFigureTransferPackage("missing image %q", manifest.Figure.File)
 	}
 	imageData, err := readFigureTransferEntry(imageFile, maxTransferImageSize)
 	if err != nil {
 		return nil, invalidFigureTransferPackage("read image: %v", err)
 	}
-	if int64(len(imageData)) != manifest.Image.ByteSize {
-		return nil, invalidFigureTransferPackage("image byte_size mismatch")
+	if int64(len(imageData)) != manifest.Figure.Bytes {
+		return nil, invalidFigureTransferPackage("image bytes mismatch")
 	}
 	imageHash := sha256.Sum256(imageData)
-	if hex.EncodeToString(imageHash[:]) != manifest.Image.SHA256 {
+	if hex.EncodeToString(imageHash[:]) != manifest.Figure.SHA256 {
 		return nil, invalidFigureTransferPackage("image sha256 mismatch")
 	}
 
@@ -310,13 +327,19 @@ func ValidateFigureTransferPackage(data []byte) (*FigureTransferManifest, error)
 }
 
 func validateFigureTransferManifest(manifest FigureTransferManifest) error {
-	if manifest.Schema.Name != FigureTransferSchemaName || manifest.Schema.Version != FigureTransferSchemaVersion {
-		return invalidFigureTransferPackage("unsupported schema %q version %q", manifest.Schema.Name, manifest.Schema.Version)
+	if manifest.Schema != FigureTransferSchemaName || manifest.Version != FigureTransferSchemaVersion {
+		return invalidFigureTransferPackage("unsupported schema %q version %d", manifest.Schema, manifest.Version)
 	}
-	if manifest.Source.System != "citebox" || manifest.Figure.ID <= 0 || manifest.Paper.ID <= 0 {
-		return invalidFigureTransferPackage("invalid source, figure, or paper identifier")
+	if strings.TrimSpace(manifest.Producer.Name) == "" || strings.TrimSpace(manifest.Producer.Version) == "" {
+		return invalidFigureTransferPackage("missing producer information")
 	}
-	if manifest.Source.ID != figureTransferSourceID(manifest.Figure.ID) {
+	if _, err := time.Parse(time.RFC3339, manifest.ExportedAt); err != nil {
+		return invalidFigureTransferPackage("invalid exportedAt")
+	}
+	if manifest.Source.FigureID <= 0 || manifest.Source.Paper.ID <= 0 {
+		return invalidFigureTransferPackage("invalid figure or paper identifier")
+	}
+	if manifest.Source.SourceID != figureTransferSourceID(manifest.Source.FigureID) {
 		return invalidFigureTransferPackage("source id does not match figure id")
 	}
 	if strings.TrimSpace(manifest.Source.ExtractionMethod) == "" {
@@ -325,44 +348,42 @@ func validateFigureTransferManifest(manifest FigureTransferManifest) error {
 
 	switch manifest.Figure.Kind {
 	case "figure":
-		if manifest.Figure.ParentID != nil || manifest.Figure.ParentSourceID != nil || manifest.Figure.SubfigureLabel != "" {
-			return invalidFigureTransferPackage("main figure contains subfigure identifiers")
+		if manifest.Source.ParentFigureID != nil {
+			return invalidFigureTransferPackage("main figure contains a parent identifier")
 		}
 	case "subfigure":
-		if manifest.Figure.ParentID == nil || *manifest.Figure.ParentID <= 0 || manifest.Figure.ParentSourceID == nil {
-			return invalidFigureTransferPackage("subfigure is missing parent identifiers")
+		if manifest.Source.ParentFigureID == nil || *manifest.Source.ParentFigureID <= 0 {
+			return invalidFigureTransferPackage("subfigure is missing a valid parent identifier")
 		}
-		if *manifest.Figure.ParentSourceID != figureTransferSourceID(*manifest.Figure.ParentID) {
-			return invalidFigureTransferPackage("parent source id does not match parent id")
-		}
-		if strings.TrimSpace(manifest.Figure.SubfigureLabel) == "" {
+		if len(manifest.Source.SubfigureLabels) == 0 {
 			return invalidFigureTransferPackage("subfigure is missing its label")
 		}
 	default:
 		return invalidFigureTransferPackage("invalid figure kind %q", manifest.Figure.Kind)
 	}
 
-	if !validFigureTransferImageName(manifest.Image.Filename) {
-		return invalidFigureTransferPackage("invalid image filename %q", manifest.Image.Filename)
+	if manifest.Source.Page != nil && *manifest.Source.Page <= 0 {
+		return invalidFigureTransferPackage("invalid page number")
 	}
-	if !strings.HasPrefix(strings.ToLower(strings.TrimSpace(manifest.Image.MediaType)), "image/") {
-		return invalidFigureTransferPackage("invalid image media_type %q", manifest.Image.MediaType)
+	if strings.TrimSpace(manifest.Source.License.Scope) == "" {
+		return invalidFigureTransferPackage("missing license scope")
 	}
-	if manifest.Image.ByteSize <= 0 {
-		return invalidFigureTransferPackage("invalid image byte_size")
+	if !validFigureTransferImageName(manifest.Figure.File) {
+		return invalidFigureTransferPackage("invalid image filename %q", manifest.Figure.File)
 	}
-	decodedHash, err := hex.DecodeString(manifest.Image.SHA256)
-	if err != nil || len(decodedHash) != sha256.Size || manifest.Image.SHA256 != strings.ToLower(manifest.Image.SHA256) {
+	extension, ok := figureTransferMediaTypes[strings.ToLower(strings.TrimSpace(manifest.Figure.MediaType))]
+	if !ok {
+		return invalidFigureTransferPackage("unsupported image media type %q", manifest.Figure.MediaType)
+	}
+	if path.Ext(manifest.Figure.File) != extension {
+		return invalidFigureTransferPackage("image filename does not match media type")
+	}
+	if manifest.Figure.Bytes <= 0 || manifest.Figure.Bytes > maxTransferImageSize {
+		return invalidFigureTransferPackage("invalid image bytes")
+	}
+	decodedHash, err := hex.DecodeString(manifest.Figure.SHA256)
+	if err != nil || len(decodedHash) != sha256.Size || manifest.Figure.SHA256 != strings.ToLower(manifest.Figure.SHA256) {
 		return invalidFigureTransferPackage("invalid image sha256")
-	}
-	if strings.TrimSpace(manifest.Rights.License) == "" || strings.TrimSpace(manifest.Rights.Statement) == "" {
-		return invalidFigureTransferPackage("missing rights information")
-	}
-	if _, err := time.Parse(time.RFC3339, manifest.Export.ExportedAt); err != nil {
-		return invalidFigureTransferPackage("invalid exported_at")
-	}
-	if strings.TrimSpace(manifest.Export.CiteBoxVersion) == "" {
-		return invalidFigureTransferPackage("missing CiteBox version")
 	}
 	return nil
 }
@@ -430,27 +451,34 @@ func figureTransferPublicationYear(publishedAt string) *int {
 	return &year
 }
 
-func figureTransferImageExtension(mediaType string) string {
-	switch strings.ToLower(strings.TrimSpace(strings.SplitN(mediaType, ";", 2)[0])) {
-	case "image/png":
-		return ".png"
-	case "image/jpeg":
-		return ".jpg"
-	case "image/gif":
-		return ".gif"
-	case "image/webp":
-		return ".webp"
-	case "image/tiff":
-		return ".tiff"
-	case "image/bmp":
-		return ".bmp"
-	case "image/svg+xml":
-		return ".svg"
-	case "image/avif":
-		return ".avif"
-	default:
-		return ".img"
+func figureTransferAuthors(authorsText string) []string {
+	authors := []string{}
+	for _, part := range strings.Split(authorsText, ",") {
+		if name := strings.TrimSpace(part); name != "" {
+			authors = append(authors, truncateTransferText(name, maxTransferAuthorRunes))
+		}
 	}
+	return authors
+}
+
+func optionalTransferString(value string) *string {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return nil
+	}
+	return &trimmed
+}
+
+func normalizeTransferMediaType(mediaType string) string {
+	return strings.ToLower(strings.TrimSpace(strings.SplitN(mediaType, ";", 2)[0]))
+}
+
+func truncateTransferText(value string, maxRunes int) string {
+	runes := []rune(value)
+	if len(runes) <= maxRunes {
+		return value
+	}
+	return string(runes[:maxRunes])
 }
 
 func invalidFigureTransferPackage(format string, args ...interface{}) error {

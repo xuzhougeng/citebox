@@ -609,72 +609,67 @@ citebox-figure-{id}-transfer-package.zip
 └── figure.<ext>
 ```
 
-当前 manifest schema 名为 `citebox.figure-transfer-package`，版本为 `1.0`。示例：
+当前 manifest 遵循 Figure Transfer Package v1：schema 为 `figure-transfer-package.v1`，version 为数值 `1`。示例：
 
 ```json
 {
-  "schema": {
-    "name": "citebox.figure-transfer-package",
-    "version": "1.0"
+  "schema": "figure-transfer-package.v1",
+  "version": 1,
+  "producer": {
+    "name": "CiteBox",
+    "version": "v0.31.0"
   },
+  "exportedAt": "2026-08-01T02:03:04Z",
   "source": {
-    "system": "citebox",
-    "id": "citebox:figure:42",
-    "extraction_method": "auto",
-    "url": "https://doi.org/10.1234/example"
+    "sourceId": "citebox:figure:42",
+    "figureId": 42,
+    "parentFigureId": null,
+    "figureLabel": "Fig 2",
+    "subfigureLabels": ["a", "b"],
+    "caption": "Figure caption",
+    "page": 7,
+    "paper": {
+      "id": 9,
+      "title": "Paper title",
+      "authors": ["Ada Lovelace", "Alan Turing"],
+      "year": 2024,
+      "publishedAt": "2024-06-03",
+      "journal": "Journal name",
+      "doi": "10.1234/example",
+      "url": "https://doi.org/10.1234/example"
+    },
+    "license": {
+      "scope": "unknown",
+      "text": null
+    },
+    "extractionMethod": "auto"
   },
   "figure": {
-    "id": 42,
-    "parent_id": null,
-    "parent_source_id": null,
+    "file": "figure.png",
+    "mediaType": "image/png",
+    "bytes": 12345,
+    "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
     "kind": "figure",
-    "number": 2,
-    "display_label": "Fig 2",
-    "subfigure_label": "",
-    "caption": "Figure caption",
-    "page_number": 7
-  },
-  "paper": {
-    "id": 9,
-    "title": "Paper title",
-    "authors": "Ada Lovelace, Alan Turing",
-    "year": 2024,
-    "published_at": "2024-06-03",
-    "journal": "Journal name",
-    "doi": "10.1234/example",
-    "url": "https://doi.org/10.1234/example"
-  },
-  "image": {
-    "filename": "figure.png",
-    "media_type": "image/png",
-    "byte_size": 12345,
-    "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-  },
-  "rights": {
-    "license": "unknown",
-    "statement": "unknown"
-  },
-  "export": {
-    "exported_at": "2026-08-01T02:03:04Z",
-    "citebox_version": "v0.31.0"
+    "number": 2
   }
 }
 ```
 
 字段与兼容规则：
 
-- `source.id` 是同一 CiteBox 文献库内稳定的 `citebox:figure:{id}` 标识；重复导出同一 Figure 时保持不变
-- `kind` 为 `figure` 或 `subfigure`；子图会同时保留自身 `id`、`subfigure_label`、`parent_id` 和 `parent_source_id`
-- `paper.authors` 保留 CiteBox 现有作者文本，不拆分可能含逗号的人名；无法从 `published_at` 读取年份时 `year` 为 `null`
-- DOI 存在且格式有效时，`source.url` 与 `paper.url` 使用 DOI 解析地址；否则显式为空字符串
-- CiteBox 当前没有论文级授权字段，因此 `rights.license` 与 `rights.statement` 显式为 `unknown`，不会推断授权状态
+- `source.sourceId` 是同一 CiteBox 文献库内稳定的 `citebox:figure:{id}` 标识；重复导出同一 Figure 时保持不变
+- `figure.kind` 为 `figure` 或 `subfigure`；子图会把 `source.parentFigureId` 设为父图 ID，并把自身标签放入 `source.subfigureLabels`；主图的 `subfigureLabels` 列出其已有子图标签
+- `paper.authors` 由 CiteBox 作者文本按逗号拆分；无法从 `publishedAt` 读取年份时 `year` 为 `null`；`journal`、`doi`、`url` 缺失时为 `null`
+- DOI 存在且格式有效时，`paper.url` 使用 DOI 解析地址；否则为 `null`
+- CiteBox 当前没有论文级授权字段，因此 `license.scope` 显式为 `unknown`、`license.text` 为 `null`，不会推断授权状态
+- `figure.mediaType` 仅支持 `image/png`、`image/jpeg`、`image/webp`、`image/svg+xml`、`application/pdf`，其他媒体类型的图片无法导出
 - 包内不包含原始文件名、机器绝对路径、数据库路径、本地 PDF 地址或 `/files/...` 私有位置
 
 校验规则：
 
 - ZIP 必须只包含 `manifest.json` 和 manifest 指定的 `figure.<ext>`，且不得包含目录、重复项或路径穿越项
-- manifest 必须严格匹配 schema `1.0`，主图与子图的父子字段必须自洽
-- 消费方必须同时核对 `image.byte_size` 和 `image.sha256`；不匹配时必须拒绝该包
+- manifest 必须严格匹配 `figure-transfer-package.v1`（version `1`），主图与子图的父子字段必须自洽
+- 消费方必须同时核对 `figure.bytes` 和 `figure.sha256`；不匹配时必须拒绝该包
 - CiteBox 在响应前会执行同样的结构、字节数和 SHA-256 校验；无法生成有效包时返回错误，不发送损坏附件
 
 #### `POST /api/figures/{id}/palette`
