@@ -227,5 +227,7 @@
     "ai.pdf_panel_figure_label": "第 {page} 页图 {index}",
     "ai.context_tray_page": "第 {page} 页",
     "ai.context_tray_remove_excerpt": "移除引用",
-    "ai.context_tray_remove_figure": "移除图片"
+    "ai.context_tray_remove_figure": "移除图片",
+    "ai.sidebar_collapse": "收起侧栏",
+    "ai.sidebar_expand": "展开侧栏"
 }

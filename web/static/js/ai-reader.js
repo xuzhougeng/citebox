@@ -48,9 +48,29 @@
             this._loadAllPapers();
 
             this._initModules();
+            this._initSidebarToggle();
             this._bindTitleRename();
             this._bindQuestionMirror();
             await this._dispatchEntry();
+        },
+
+        // Collapsible conversation sidebar: the toggle class lives on
+        // .ai-page-shell; state persists across visits.
+        _initSidebarToggle() {
+            const shell = document.querySelector('.ai-page-shell');
+            const collapseBtn = $('aiSidebarCollapse');
+            const expandBtn = $('aiSidebarExpand');
+            if (!shell || !collapseBtn || !expandBtn) return;
+            const KEY = 'citebox_ai_sidebar_collapsed';
+            const apply = (collapsed) => {
+                shell.classList.toggle('ai-sidebar-collapsed', collapsed);
+                try { localStorage.setItem(KEY, collapsed ? '1' : '0'); } catch (e) { /* ignore */ }
+            };
+            collapseBtn.addEventListener('click', () => apply(true));
+            expandBtn.addEventListener('click', () => apply(false));
+            let collapsed = false;
+            try { collapsed = localStorage.getItem(KEY) === '1'; } catch (e) { /* ignore */ }
+            if (collapsed) shell.classList.add('ai-sidebar-collapsed');
         },
 
         async _loadAllPapers() {

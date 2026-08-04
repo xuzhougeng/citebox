@@ -425,10 +425,10 @@
 /* Main pane head — title on left, action buttons on right */
 .ai-main-head {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: space-between;
-    gap: 1rem;
-    flex-wrap: nowrap;
+    gap: 0.6rem 1rem;
+    flex-wrap: wrap;
     padding: 1rem 1.75rem 0.85rem;
     border-bottom: 1px solid rgba(var(--ink-rgb), 0.08);
     background: rgba(var(--surface-rgb), 0.58);
@@ -438,6 +438,7 @@
     display: grid;
     gap: 0.45rem;
     min-width: 0;
+    flex: 1 1 14rem;
 }
 
 .ai-main-actions {
@@ -445,6 +446,7 @@
     align-items: center;
     gap: 0.5rem;
     flex: 0 0 auto;
+    margin-left: auto;
 }
 
 /* Inline-renameable conversation title */
@@ -464,7 +466,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    max-width: min(58vw, 48rem);
+    max-width: 100%;
     transition: background-color 0.15s ease, box-shadow 0.15s ease;
 }
 
@@ -1274,15 +1276,28 @@
     flex-direction: column;
 }
 
+/* Author display rules beat the UA [hidden] style — restore it explicitly. */
+.ai-pdf-panel-pdf[hidden],
+.ai-pdf-panel-figures[hidden],
+.ai-pdf-panel-empty[hidden],
+.ai-pdf-loading[hidden] {
+    display: none;
+}
+
 .ai-pdf-panel-pdf,
 .ai-pdf-panel-figures {
     flex: 1 1 auto;
     min-height: 0;
 }
 
-.ai-pdf-scroll {
+.ai-pdf-panel-pdf {
     position: relative;
-    height: 100%;
+}
+
+/* pdf.js requires an absolutely-positioned container. */
+.ai-pdf-scroll {
+    position: absolute;
+    inset: 0;
     min-height: 0;
     overflow: auto;
     padding: 1rem 0;
@@ -1320,6 +1335,8 @@
     color: rgba(var(--ink-rgb), 0.6);
     font-size: 0.9rem;
     text-align: center;
+    background: rgba(var(--ink-rgb), 0.07);
+    z-index: 2;
 }
 
 .ai-pdf-panel-empty {
@@ -1564,5 +1581,107 @@
 @media (max-width: 900px) {
     .ai-pdf-panel {
         width: min(94vw, 480px);
+    }
+}
+
+/* ------------------------------------------------------------------
+   Collapsible conversation sidebar
+   ------------------------------------------------------------------ */
+
+.ai-sidebar {
+    position: relative;
+}
+
+.ai-sidebar-head-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.ai-sidebar-head-row .btn-block {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.ai-sidebar-collapse {
+    flex: 0 0 auto;
+    width: 2rem;
+    height: 2rem;
+    padding: 0;
+    font-size: 0.9rem;
+    line-height: 1;
+    color: rgba(var(--ink-rgb), 0.55);
+    background: rgba(var(--surface-rgb), 0.85);
+    border: 1px solid rgba(var(--ink-rgb), 0.14);
+    border-radius: 50%;
+    cursor: pointer;
+}
+
+.ai-sidebar-collapse:hover {
+    color: var(--ink);
+    background: rgba(var(--ink-rgb), 0.08);
+}
+
+.ai-sidebar-expand {
+    display: none;
+    position: absolute;
+    left: 0.6rem;
+    top: 0.6rem;
+    z-index: 30;
+    width: 2rem;
+    height: 2rem;
+    padding: 0;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.95rem;
+    line-height: 1;
+    color: rgba(var(--ink-rgb), 0.7);
+    background: rgba(var(--surface-rgb), 0.95);
+    border: 1px solid rgba(var(--ink-rgb), 0.14);
+    border-radius: 50%;
+    box-shadow: 0 4px 14px rgba(var(--shadow-deep-rgb), 0.12);
+    cursor: pointer;
+}
+
+.ai-sidebar-expand:hover {
+    color: var(--accent-deep);
+    border-color: rgba(var(--accent-deep-rgb), 0.4);
+}
+
+.ai-page-shell.ai-sidebar-collapsed {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+.ai-page-shell.ai-sidebar-collapsed.ai-pdf-open {
+    grid-template-columns: minmax(0, 1fr) minmax(380px, 44%);
+}
+
+.ai-page-shell.ai-sidebar-collapsed .ai-sidebar {
+    display: none;
+}
+
+.ai-page-shell.ai-sidebar-collapsed .ai-sidebar-expand {
+    display: flex;
+}
+
+/* Reserve room for the round expand button so it never covers the title. */
+.ai-page-shell.ai-sidebar-collapsed .ai-main-head {
+    padding-left: 3.2rem;
+}
+
+@media (max-width: 1200px) {
+    /* Panel is an overlay drawer at this width — the collapsed shell stays
+       single-column instead of reserving a grid track. */
+    .ai-page-shell.ai-sidebar-collapsed.ai-pdf-open {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+@media (max-width: 900px) {
+    /* Sidebar is hidden outright on small screens; collapse controls are
+       desktop-only. */
+    .ai-sidebar-collapse,
+    .ai-sidebar-expand {
+        display: none !important;
     }
 }

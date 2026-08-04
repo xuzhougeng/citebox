@@ -227,5 +227,7 @@
     "ai.pdf_panel_figure_label": "Page {page} Fig. {index}",
     "ai.context_tray_page": "p. {page}",
     "ai.context_tray_remove_excerpt": "Remove excerpt",
-    "ai.context_tray_remove_figure": "Remove figure"
+    "ai.context_tray_remove_figure": "Remove figure",
+    "ai.sidebar_collapse": "Collapse sidebar",
+    "ai.sidebar_expand": "Expand sidebar"
 }
