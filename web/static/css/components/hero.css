@@ -1,21 +1,50 @@
 /* ===== Hero Section ===== */
 
 .hero {
+    position: relative;
     display: flex;
     justify-content: space-between;
     gap: 2rem;
     align-items: flex-end;
     margin-bottom: 1.5rem;
-    padding: 2rem;
+    padding: 2.2rem 2.4rem;
     border-radius: calc(var(--radius) + 6px);
     background:
         linear-gradient(135deg, rgba(var(--surface-rgb), 0.96), rgba(var(--bg-rgb), 0.84)),
         linear-gradient(180deg, rgba(var(--accent-rgb), 0.18), transparent);
     box-shadow: var(--shadow);
     border: 1px solid rgba(var(--ink-rgb), 0.08);
+    overflow: hidden;
+}
+
+.hero::before {
+    content: "";
+    position: absolute;
+    top: -7rem;
+    right: -5rem;
+    width: 22rem;
+    height: 22rem;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(var(--accent-rgb), 0.16), transparent 68%);
+    pointer-events: none;
+}
+
+.hero::after {
+    content: "";
+    position: absolute;
+    right: 3.5rem;
+    bottom: -6.5rem;
+    width: 15rem;
+    height: 15rem;
+    border-radius: 38%;
+    background: radial-gradient(circle at 35% 35%, rgba(var(--success-rgb), 0.14), transparent 70%);
+    transform: rotate(18deg);
+    pointer-events: none;
 }
 
 .hero > :first-child {
+    position: relative;
+    z-index: 1;
     flex: 1 1 auto;
     min-width: 0;
 }
@@ -73,13 +102,13 @@
 .hero h1 {
     margin: 0;
     font-family: var(--font-display);
-    font-size: clamp(2rem, 3vw, 3.4rem);
-    line-height: 1.05;
+    font-size: clamp(1.8rem, 2.6vw, 2.7rem);
+    line-height: 1.12;
 }
 
 .hero-text {
     max-width: 54rem;
-    margin: 1rem 0 0;
+    margin: 0.8rem 0 0;
     color: var(--muted);
     font-size: 1.02rem;
     line-height: 1.7;

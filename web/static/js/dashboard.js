@@ -96,32 +96,25 @@ const DashboardPage = {
         if (!this.summaryStrip) return;
 
         const stats = this.state.stats;
-        this.summaryStrip.innerHTML = `
-            <div class="stat-card">
-                <span>${t('index.stat_total_papers', '文献总数')}</span>
-                <strong>${stats.totalPapers}</strong>
+        const icons = DashboardPage.statIcons;
+        const cards = [
+            { label: t('index.stat_total_papers', '文献总数'), value: stats.totalPapers, tone: 'tone-accent', icon: icons.paper },
+            { label: t('index.stat_completed', '已完成'), value: stats.completedPapers, tone: 'tone-success', icon: icons.check },
+            { label: t('index.stat_processing', '处理中'), value: stats.processingPapers, tone: stats.processingPapers > 0 ? 'tone-info' : '', icon: icons.clock },
+            { label: t('index.stat_failed', '解析异常'), value: stats.failedPapers, tone: stats.failedPapers > 0 ? 'tone-error' : '', icon: icons.alert },
+            { label: t('index.stat_total_figures', '图片总数'), value: stats.totalFigures, tone: 'tone-accent', icon: icons.image },
+            { label: t('index.stat_noted_figures', '已写笔记图片'), value: stats.notedFigures, tone: 'tone-success', icon: icons.note }
+        ];
+
+        this.summaryStrip.innerHTML = cards.map((card) => `
+            <div class="stat-card with-icon ${card.tone}">
+                <span class="stat-card-icon" aria-hidden="true">${card.icon}</span>
+                <div class="stat-card-body">
+                    <span class="stat-card-label">${card.label}</span>
+                    <strong>${card.value}</strong>
+                </div>
             </div>
-            <div class="stat-card">
-                <span>${t('index.stat_completed', '已完成')}</span>
-                <strong>${stats.completedPapers}</strong>
-            </div>
-            <div class="stat-card">
-                <span>${t('index.stat_processing', '处理中')}</span>
-                <strong>${stats.processingPapers}</strong>
-            </div>
-            <div class="stat-card">
-                <span>${t('index.stat_failed', '解析异常')}</span>
-                <strong>${stats.failedPapers}</strong>
-            </div>
-            <div class="stat-card">
-                <span>${t('index.stat_total_figures', '图片总数')}</span>
-                <strong>${stats.totalFigures}</strong>
-            </div>
-            <div class="stat-card">
-                <span>${t('index.stat_noted_figures', '已写笔记图片')}</span>
-                <strong>${stats.notedFigures}</strong>
-            </div>
-        `;
+        `).join('');
     },
 
     renderRecentPapers() {
@@ -194,4 +187,13 @@ const DashboardPage = {
             Utils.showToast(error.message, 'error');
         }
     }
+};
+
+DashboardPage.statIcons = {
+    paper: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5"/><path d="M10 13h5M10 17h5"/></svg>',
+    check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M8.5 12.2l2.4 2.4 4.6-4.8"/></svg>',
+    clock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>',
+    alert: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4l9 16H3z"/><path d="M12 10v4.5"/><path d="M12 17.6v.1"/></svg>',
+    image: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5" width="16" height="14" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M5.5 17.5l4-4 3 3 3.5-3.5 2.5 2.5"/></svg>',
+    note: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 19l1-4L16.5 4.5a2.1 2.1 0 013 3L9 18z"/><path d="M14.5 6.5l3 3"/></svg>'
 };

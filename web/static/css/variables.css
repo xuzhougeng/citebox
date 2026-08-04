@@ -2,10 +2,10 @@
 
 :root {
     /* --- Named Semantic Tokens --- */
-    --bg: #efe6d7;
-    --bg-soft: #f7f2e8;
-    --panel: rgba(255, 251, 245, 0.88);
-    --panel-strong: #fffaf4;
+    --bg: #f2ebde;
+    --bg-soft: #f8f4ea;
+    --panel: rgba(255, 252, 247, 0.94);
+    --panel-strong: #fffdf9;
     --ink: #241b16;
     --muted: #6e5b4e;
     --line: rgba(36, 27, 22, 0.12);
@@ -15,7 +15,9 @@
     --info: #416788;
     --success: #4f6f52;
     --error: #9f3f34;
-    --shadow: 0 20px 60px rgba(78, 51, 33, 0.12);
+    --shadow:
+        0 1px 2px rgba(78, 51, 33, 0.05),
+        0 16px 44px -12px rgba(78, 51, 33, 0.16);
     --radius: 22px;
     --radius-sm: 16px;
 
@@ -29,15 +31,15 @@
     --success-rgb: 79, 111, 82;
     --shadow-rgb: 78, 51, 33;
     --shadow-deep-rgb: 20, 14, 11;
-    --bg-rgb: 239, 230, 215;
+    --bg-rgb: 242, 235, 222;
 
     /* --- Special Tokens --- */
     --on-accent: #fff8f2;
     --on-ink: #fff;
     --modal-bg: #fffaf4;
-    --body-bg-1: #f6efe5;
-    --body-bg-2: #efe6d7;
-    --body-bg-3: #eadfcf;
+    --body-bg-1: #f8f3e9;
+    --body-bg-2: #f2ebde;
+    --body-bg-3: #eae1d0;
     --highlight: rgba(255, 255, 255, 0.5);
     --code-bg: #2f261f;
     --code-text: #f8efe3;
@@ -55,7 +57,7 @@
 [data-theme="light"] {
     --bg: #f2f4f8;
     --bg-soft: #f8f9fc;
-    --panel: rgba(255, 255, 255, 0.88);
+    --panel: rgba(255, 255, 255, 0.94);
     --panel-strong: #ffffff;
     --ink: #1c2030;
     --muted: #5c6478;
@@ -66,7 +68,9 @@
     --info: #3868a8;
     --success: #2c7a44;
     --error: #c43830;
-    --shadow: 0 20px 60px rgba(28, 32, 48, 0.07);
+    --shadow:
+        0 1px 2px rgba(28, 32, 48, 0.04),
+        0 16px 44px -12px rgba(28, 32, 48, 0.1);
 
     --ink-rgb: 28, 32, 48;
     --surface-rgb: 255, 255, 255;
@@ -98,7 +102,7 @@
 [data-theme="dark"] {
     --bg: #181a1e;
     --bg-soft: #1e2228;
-    --panel: rgba(30, 34, 40, 0.88);
+    --panel: rgba(30, 34, 40, 0.92);
     --panel-strong: #242830;
     --ink: #dcd9d2;
     --muted: #8a8680;

@@ -1,11 +1,36 @@
 /* ===== Cards ===== */
 
 .shortcut-card {
+    position: relative;
     padding: 1.3rem;
     border-radius: var(--radius);
     background: rgba(var(--surface-rgb), 0.82);
     border: 1px solid rgba(var(--ink-rgb), 0.08);
     box-shadow: var(--shadow);
+    transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+a.shortcut-card:hover {
+    transform: translateY(-2px);
+    border-color: rgba(var(--accent-rgb), 0.28);
+    box-shadow: 0 14px 30px -12px rgba(var(--shadow-rgb), 0.3);
+}
+
+a.shortcut-card::after {
+    content: "→";
+    position: absolute;
+    top: 1.1rem;
+    right: 1.2rem;
+    color: var(--accent);
+    font-weight: 700;
+    opacity: 0;
+    transform: translateX(-4px);
+    transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+a.shortcut-card:hover::after {
+    opacity: 1;
+    transform: translateX(0);
 }
 
 .shortcut-card h2 {
@@ -76,6 +101,79 @@
     margin-top: 0.45rem;
     font-size: 1.8rem;
     font-family: var(--font-display);
+}
+
+/* ===== Stat Card with Icon (dashboard) ===== */
+
+.stat-card.with-icon {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.stat-card.with-icon:hover {
+    transform: translateY(-2px);
+    border-color: rgba(var(--ink-rgb), 0.14);
+    box-shadow: 0 10px 24px -12px rgba(var(--shadow-rgb), 0.28);
+}
+
+.stat-card .stat-card-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 2.6rem;
+    height: 2.6rem;
+    border-radius: 14px;
+    background: rgba(var(--ink-rgb), 0.06);
+    color: var(--muted);
+}
+
+.stat-card-icon svg {
+    width: 1.3rem;
+    height: 1.3rem;
+}
+
+.stat-card.tone-accent .stat-card-icon {
+    background: rgba(var(--accent-rgb), 0.13);
+    color: var(--accent-deep);
+}
+
+.stat-card.tone-success .stat-card-icon {
+    background: rgba(var(--success-rgb), 0.14);
+    color: var(--success);
+}
+
+.stat-card.tone-info .stat-card-icon {
+    background: rgba(var(--info-rgb), 0.13);
+    color: var(--info);
+}
+
+.stat-card.tone-error .stat-card-icon {
+    background: rgba(var(--error-rgb), 0.13);
+    color: var(--error);
+}
+
+.stat-card-body {
+    display: grid;
+    gap: 0.1rem;
+    min-width: 0;
+}
+
+.stat-card.with-icon .stat-card-label {
+    color: var(--muted);
+    font-size: 0.85rem;
+}
+
+.stat-card.with-icon strong {
+    margin-top: 0;
+    font-size: 1.7rem;
+    line-height: 1.15;
+}
+
+.stat-card.tone-error strong {
+    color: var(--error);
 }
 
 .workflow-card {
@@ -553,6 +651,13 @@
     border-radius: 22px;
     background: rgba(var(--surface-rgb), 0.82);
     border: 1px solid rgba(var(--ink-rgb), 0.08);
+    transition: border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+}
+
+.recent-paper-row:hover {
+    border-color: rgba(var(--accent-rgb), 0.24);
+    background: rgba(var(--surface-rgb), 0.94);
+    box-shadow: 0 12px 26px -14px rgba(var(--shadow-rgb), 0.3);
 }
 
 .recent-paper-main {

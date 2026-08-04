@@ -155,10 +155,15 @@
     transition: 0.2s ease;
 }
 
-.nav-links a.active,
 .nav-links a:hover {
     background: rgba(var(--ink-rgb), 0.08);
     color: var(--ink);
+}
+
+.nav-links a.active {
+    background: var(--accent-soft);
+    color: var(--accent-deep);
+    font-weight: 700;
 }
 
 .logo {
@@ -191,10 +196,15 @@
 }
 
 .nav-dropdown-toggle:hover,
-.nav-dropdown-toggle.active,
 .nav-dropdown.is-open .nav-dropdown-toggle {
     background: rgba(var(--ink-rgb), 0.08);
     color: var(--ink);
+}
+
+.nav-dropdown-toggle.active {
+    background: var(--accent-soft);
+    color: var(--accent-deep);
+    font-weight: 700;
 }
 
 .nav-dropdown-caret {
@@ -242,10 +252,15 @@
     transition: 0.15s ease;
 }
 
-.nav-dropdown-menu a.active,
 .nav-dropdown-menu a:hover {
     background: rgba(var(--ink-rgb), 0.08);
     color: var(--ink);
+}
+
+.nav-dropdown-menu a.active {
+    background: var(--accent-soft);
+    color: var(--accent-deep);
+    font-weight: 700;
 }
 
 /* ===== Mobile Nav Toggle ===== */
