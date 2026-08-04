@@ -112,7 +112,8 @@ func requestContextEmpty(ctx ai_assistant.RequestContext) bool {
 		ctx.PaperID == 0 &&
 		ctx.FigureID == 0 &&
 		len(ctx.PaperIDs) == 0 &&
-		len(ctx.FigureIDs) == 0
+		len(ctx.FigureIDs) == 0 &&
+		len(ctx.Excerpts) == 0
 }
 
 func toResultCards(rows []repository.AIResultCard) []ResultCard {

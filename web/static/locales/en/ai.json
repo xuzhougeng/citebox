@@ -207,5 +207,25 @@
     "ai.image_gen.status.prompt_label": "View prompt",
     "ai.image_gen.status.generating": "Generating image",
     "ai.image_gen.status.done": "Image generated",
-    "ai.image_gen.status.failed": "Image generation failed"
+    "ai.image_gen.status.failed": "Image generation failed",
+
+    "ai.pdf_panel_toggle": "Preview PDF",
+    "ai.pdf_panel_toggle_hint": "Preview the pinned paper's PDF; select text or check figures as context",
+    "ai.pdf_panel_no_pin_hint": "Pin a paper first",
+    "ai.pdf_panel_switch_paper": "Switch previewed paper",
+    "ai.pdf_panel_tab_pdf": "PDF",
+    "ai.pdf_panel_tab_figures": "Figures",
+    "ai.pdf_panel_close": "Close panel",
+    "ai.pdf_panel_empty": "Pin a paper to preview its PDF here, quote selected text, and check figures as question context.",
+    "ai.pdf_panel_loading": "Loading PDF…",
+    "ai.pdf_panel_no_pdf": "This paper has no previewable PDF.",
+    "ai.pdf_panel_load_error": "Failed to load the PDF.",
+    "ai.pdf_panel_quote_action": "Quote in question",
+    "ai.pdf_panel_excerpt_added": "Excerpt added",
+    "ai.pdf_panel_excerpt_full": "Excerpt limit reached",
+    "ai.pdf_panel_figures_empty": "No figures extracted for this paper yet.",
+    "ai.pdf_panel_figure_label": "Page {page} Fig. {index}",
+    "ai.context_tray_page": "p. {page}",
+    "ai.context_tray_remove_excerpt": "Remove excerpt",
+    "ai.context_tray_remove_figure": "Remove figure"
 }

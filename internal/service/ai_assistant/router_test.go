@@ -53,6 +53,15 @@ func TestRouteIntentDetectsFigureContext(t *testing.T) {
 	}
 }
 
+func TestRouteIntentAttachedFiguresRoutePaperRead(t *testing.T) {
+	// Attached figure images mean "ask about THESE images" — even when the
+	// question contains figure keywords, do not route to figure search.
+	got := RouteIntent(RouteInput{Content: "这两张图的区别", Context: RequestContext{FigureIDs: []int64{11, 12}}})
+	if got.Intent != IntentPaperRead {
+		t.Fatalf("intent = %q", got.Intent)
+	}
+}
+
 func TestRouteIntentDetectsPaperContext(t *testing.T) {
 	got := RouteIntent(RouteInput{Content: "解释一下", Context: RequestContext{PaperID: 1}})
 	if got.Intent != IntentPaperRead {
