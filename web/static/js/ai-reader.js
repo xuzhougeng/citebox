@@ -177,8 +177,22 @@
                 getPinned: () => (view._state && view._state.pinnedPapers) || [],
                 setPinnedCallback: (papers) => {
                     if (view._state) view._state.pinnedPapers = papers;
+                    if (window.AIReader.pdfPanel && typeof window.AIReader.pdfPanel.refreshPinned === 'function') {
+                        window.AIReader.pdfPanel.refreshPinned(papers);
+                    }
                 },
             });
+
+            // right-side PDF panel (preview + excerpts + figure checkboxes)
+            if (window.AIReader.pdfPanel && typeof window.AIReader.pdfPanel.init === 'function') {
+                window.AIReader.pdfPanel.init({
+                    shell: document.querySelector('.ai-page-shell'),
+                    panel: $('aiPdfPanel'),
+                    toggleBtn: $('aiPdfPanelToggle'),
+                    tray: $('aiContextTray'),
+                    pinChips: $('aiPinChips'),
+                });
+            }
 
             // mention palette
             if (mention && typeof mention.attach === 'function') {

@@ -32,6 +32,7 @@ type stubStreamCaller struct {
 	systemSeen   string
 	userSeen     string
 	settingsSeen model.AISettings
+	imagesSeen   []model.AIImageInput
 	staticReply  string
 }
 
@@ -41,6 +42,7 @@ func (s *stubStreamCaller) CallProviderStreamGeneric(ctx context.Context, settin
 	s.systemSeen = systemPrompt
 	s.userSeen = userPrompt
 	s.settingsSeen = settings
+	s.imagesSeen = images
 	if err := onDelta(s.staticReply); err != nil {
 		return "", "", err
 	}
@@ -1528,5 +1530,165 @@ func TestGetConversation_PinnedPapersIncludeFigures(t *testing.T) {
 	}
 	if pp.Figures[1].Caption != "Figure B caption" {
 		t.Errorf("unexpected second figure caption: %q", pp.Figures[1].Caption)
+	}
+}
+
+// --- User-attached context (PDF excerpts + checked figures) -----------------
+
+type stubFigureContextLoader struct {
+	calls     int32
+	idsSeen   []int64
+	images    []model.AIImageInput
+	summaries []string
+	err       error
+}
+
+func (s *stubFigureContextLoader) LoadFigureContext(_ context.Context, ids []int64) ([]model.AIImageInput, []string, error) {
+	atomic.AddInt32(&s.calls, 1)
+	s.idsSeen = append([]int64(nil), ids...)
+	return s.images, s.summaries, s.err
+}
+
+func TestSendMessageAttachesCheckedFiguresAsVisionInput(t *testing.T) {
+	svc, libRepo, caller := newServiceForTest(t)
+	loader := &stubFigureContextLoader{
+		images: []model.AIImageInput{
+			{MIMEType: "image/jpeg", Data: "aW1nMQ=="},
+			{MIMEType: "image/jpeg", Data: "aW1nMg=="},
+		},
+		summaries: []string{
+			"- figure_id=11；标签=第 3 页图 1；caption= volcano plot",
+			"- figure_id=12；标签=第 4 页图 2；caption= heatmap",
+		},
+	}
+	svc.WithFigureContextLoader(loader)
+
+	convID, _ := svc.CreateDraft()
+	_, err := svc.SendMessage(context.Background(), SendMessageInput{
+		ConversationID: convID,
+		Content:        "这两张图分别说明什么",
+		Context:        ai_assistant.RequestContext{FigureIDs: []int64{11, 12}},
+	}, func(string) error { return nil })
+	if err != nil {
+		t.Fatalf("SendMessage: %v", err)
+	}
+
+	if loader.calls != 1 || len(loader.idsSeen) != 2 || loader.idsSeen[0] != 11 || loader.idsSeen[1] != 12 {
+		t.Fatalf("loader call = %d ids=%v", loader.calls, loader.idsSeen)
+	}
+	if len(caller.imagesSeen) != 2 || caller.imagesSeen[0].Data != "aW1nMQ==" {
+		t.Fatalf("images seen = %+v", caller.imagesSeen)
+	}
+	if !strings.Contains(caller.userSeen, "本轮随附图片（共 2 张") || !strings.Contains(caller.userSeen, "figure_id=11") {
+		t.Fatalf("prompt missing figure block: %s", caller.userSeen)
+	}
+	if strings.Index(caller.userSeen, "本轮随附图片") > strings.Index(caller.userSeen, "用户问题：") {
+		t.Fatalf("figure block must precede the user question: %s", caller.userSeen)
+	}
+
+	msgs, _ := libRepo.AIConversation.ListMessages(convID, 0, 100)
+	if len(msgs) != 2 || msgs[1].IncludedFigures != 2 {
+		t.Fatalf("assistant IncludedFigures = %+v", msgs)
+	}
+}
+
+func TestSendMessageCheckedFiguresTextOnlyWhenModelLacksImages(t *testing.T) {
+	svc, _, caller := newServiceForTest(t)
+	unsupported := false
+	settings := model.DefaultAISettings()
+	settings.Models = []model.AIModelConfig{
+		{ID: "master", Name: "Master", Provider: model.AIProviderOpenAI, APIKey: "k", Model: "text-only", SupportsImages: &unsupported},
+	}
+	settings.SceneModels = model.AISceneModelSelection{AssistantMasterModelID: "master"}
+	svc.settings = &stubSettingsProvider{settings: settings}
+	loader := &stubFigureContextLoader{
+		images:    []model.AIImageInput{{MIMEType: "image/jpeg", Data: "aW1nMQ=="}},
+		summaries: []string{"- figure_id=11；标签=第 3 页图 1；caption= volcano plot"},
+	}
+	svc.WithFigureContextLoader(loader)
+
+	convID, _ := svc.CreateDraft()
+	_, err := svc.SendMessage(context.Background(), SendMessageInput{
+		ConversationID: convID,
+		Content:        "解读这张图",
+		Context:        ai_assistant.RequestContext{FigureIDs: []int64{11}},
+	}, func(string) error { return nil })
+	if err != nil {
+		t.Fatalf("SendMessage: %v", err)
+	}
+
+	if len(caller.imagesSeen) != 0 {
+		t.Fatalf("images should not reach a text-only model: %+v", caller.imagesSeen)
+	}
+	if !strings.Contains(caller.userSeen, "当前模型不支持图片输入") || !strings.Contains(caller.userSeen, "figure_id=11") {
+		t.Fatalf("prompt missing text-only fallback: %s", caller.userSeen)
+	}
+}
+
+func TestSendMessageFigureLoaderFailureDegradesGracefully(t *testing.T) {
+	svc, _, caller := newServiceForTest(t)
+	svc.WithFigureContextLoader(&stubFigureContextLoader{err: errors.New("disk gone")})
+
+	convID, _ := svc.CreateDraft()
+	_, err := svc.SendMessage(context.Background(), SendMessageInput{
+		ConversationID: convID,
+		Content:        "看图说话",
+		Context:        ai_assistant.RequestContext{FigureIDs: []int64{11}},
+	}, func(string) error { return nil })
+	if err != nil {
+		t.Fatalf("SendMessage should not fail on loader error: %v", err)
+	}
+	if len(caller.imagesSeen) != 0 || strings.Contains(caller.userSeen, "随附图片") {
+		t.Fatalf("loader failure must not inject anything: %+v / %s", caller.imagesSeen, caller.userSeen)
+	}
+}
+
+func TestSendMessageExcerptsInjectedBeforeQuestion(t *testing.T) {
+	svc, _, caller := newServiceForTest(t)
+
+	excerpts := []ai_assistant.ContextExcerpt{
+		{PaperID: 1, Page: 3, Text: "  糖酵解通路在缺氧条件下被显著激活  "},
+		{Text: "no-page excerpt"},
+		{Text: "   "}, // blank entries are skipped
+	}
+	for i := 0; i < maxExcerptsPerTurn; i++ {
+		excerpts = append(excerpts, ai_assistant.ContextExcerpt{Text: fmt.Sprintf("filler %d", i)})
+	}
+
+	convID, _ := svc.CreateDraft()
+	_, err := svc.SendMessage(context.Background(), SendMessageInput{
+		ConversationID: convID,
+		Content:        "结合引用回答",
+		Context:        ai_assistant.RequestContext{Excerpts: excerpts},
+	}, func(string) error { return nil })
+	if err != nil {
+		t.Fatalf("SendMessage: %v", err)
+	}
+
+	if !strings.Contains(caller.userSeen, "用户引用的原文片段") {
+		t.Fatalf("prompt missing excerpt block: %s", caller.userSeen)
+	}
+	if !strings.Contains(caller.userSeen, "[1] (第 3 页) \"糖酵解通路在缺氧条件下被显著激活\"") {
+		t.Fatalf("excerpt[1] formatting wrong: %s", caller.userSeen)
+	}
+	if !strings.Contains(caller.userSeen, "[2] \"no-page excerpt\"") {
+		t.Fatalf("excerpt[2] formatting wrong: %s", caller.userSeen)
+	}
+	// 2 real + 8 fillers = 10 candidates, but the cap allows only 8 lines.
+	if strings.Contains(caller.userSeen, "[9]") {
+		t.Fatalf("excerpt cap %d exceeded: %s", maxExcerptsPerTurn, caller.userSeen)
+	}
+	if strings.Index(caller.userSeen, "用户引用的原文片段") > strings.Index(caller.userSeen, "用户问题：") {
+		t.Fatalf("excerpt block must precede the user question: %s", caller.userSeen)
+	}
+}
+
+func TestRequestContextEmptyWithExcerpts(t *testing.T) {
+	if !requestContextEmpty(ai_assistant.RequestContext{}) {
+		t.Fatal("zero context should be empty")
+	}
+	ctx := ai_assistant.RequestContext{Excerpts: []ai_assistant.ContextExcerpt{{Text: "x"}}}
+	if requestContextEmpty(ctx) {
+		t.Fatal("context with only excerpts must not be empty")
 	}
 }

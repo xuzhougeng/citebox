@@ -38,6 +38,13 @@ type orchestrator interface {
 	Run(ctx context.Context, in ai_assistant.RunInput) (ai_assistant.RunOutput, error)
 }
 
+// FigureContextLoader resolves user-checked figure IDs into provider-ready
+// image inputs plus one text summary per figure. Implemented by
+// service.AIService; optional — nil means figure attachments are text-only.
+type FigureContextLoader interface {
+	LoadFigureContext(ctx context.Context, figureIDs []int64) ([]model.AIImageInput, []string, error)
+}
+
 // Service is the conversation lifecycle manager.
 type Service struct {
 	repo          *repository.AIConversationRepository
@@ -50,6 +57,7 @@ type Service struct {
 	summaryCaller NonStreamCaller
 	imageGen      ai_image_gen.Generator // optional; nil = image-gen disabled
 	imageStorage  ImageStorageCleaner    // optional; nil = no disk cleanup on delete
+	figureCtx     FigureContextLoader    // optional; nil = checked figures are text-only
 	logger        *slog.Logger
 }
 
@@ -79,6 +87,13 @@ func (s *Service) WithImageGen(g ai_image_gen.Generator) *Service {
 // conversation also removes its PNG files from disk. Chained.
 func (s *Service) WithImageStorage(c ImageStorageCleaner) *Service {
 	s.imageStorage = c
+	return s
+}
+
+// WithFigureContextLoader attaches an optional loader that turns user-checked
+// figure IDs into vision inputs for the master model. Chained.
+func (s *Service) WithFigureContextLoader(l FigureContextLoader) *Service {
+	s.figureCtx = l
 	return s
 }
 
@@ -330,10 +345,34 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput, onDelta 
 		conv.StrictEvidence = fresh.StrictEvidence
 	}
 
-	asm, err := s.assembleForTurn(conv, pinned, history, in.Content, masterSettings)
+	// User-attached context from the PDF panel: selected text excerpts and
+	// checked figure images. Excerpts ride as a prompt block; figures become
+	// vision inputs when the master model supports images, otherwise their
+	// captions/labels degrade to text.
+	attachmentBlock := buildExcerptBlock(in.Context.Excerpts)
+	var attachedImages []model.AIImageInput
+	if s.figureCtx != nil && len(in.Context.FigureIDs) > 0 &&
+		!strings.EqualFold(strings.TrimSpace(in.IntentHint), "image_generation") {
+		images, summaries, loadErr := s.figureCtx.LoadFigureContext(ctx, in.Context.FigureIDs)
+		switch {
+		case loadErr != nil:
+			s.logger.Warn("ai_conversation: figure context load failed", "error", loadErr)
+		case len(summaries) == 0:
+			// Nothing resolved — behave as if no figures were attached.
+		case assistantMasterSupportsImages(*settings) && len(images) > 0:
+			attachedImages = images
+			attachmentBlock += buildFigureContextBlock(summaries, true)
+		default:
+			attachmentBlock += buildFigureContextBlock(summaries, false)
+		}
+	}
+	includedFigures := len(attachedImages)
+
+	asm, err := s.assembleForTurn(conv, pinned, history, in.Content, attachmentBlock, masterSettings)
 	if err != nil {
 		return SendMessageResult{}, err
 	}
+	asm.images = attachedImages
 
 	var citations []Citation
 	var citationsJSON string
@@ -410,10 +449,11 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput, onDelta 
 				runOut.Process = ai_assistant.WithAnswerGenerationStage(runOut.Process, "stopped")
 			}
 			asstID, persistErr := s.repo.AddMessage(in.ConversationID, "assistant", rawText, repository.AIMessageMeta{
-				Provider:      string(masterSettings.Provider),
-				Model:         masterSettings.Model,
-				Mode:          "stopped",
-				CitationsJSON: citationsJSON,
+				Provider:        string(masterSettings.Provider),
+				Model:           masterSettings.Model,
+				Mode:            "stopped",
+				IncludedFigures: includedFigures,
+				CitationsJSON:   citationsJSON,
 			})
 			if persistErr != nil {
 				s.logger.Warn("ai_conversation: persist stopped message failed", "error", persistErr)
@@ -432,10 +472,11 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput, onDelta 
 					return SendMessageResult{}, deltaErr
 				}
 				asstID, persistErr := s.repo.AddMessage(in.ConversationID, "assistant", fallbackText, repository.AIMessageMeta{
-					Provider:      string(masterSettings.Provider),
-					Model:         masterSettings.Model,
-					Mode:          "tool_fallback",
-					CitationsJSON: citationsJSON,
+					Provider:        string(masterSettings.Provider),
+					Model:           masterSettings.Model,
+					Mode:            "tool_fallback",
+					IncludedFigures: includedFigures,
+					CitationsJSON:   citationsJSON,
 				})
 				if persistErr != nil {
 					return SendMessageResult{}, persistErr
@@ -460,10 +501,11 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput, onDelta 
 	}
 
 	asstID, err := s.repo.AddMessage(in.ConversationID, "assistant", rawText, repository.AIMessageMeta{
-		Provider:      string(masterSettings.Provider),
-		Model:         masterSettings.Model,
-		Mode:          mode,
-		CitationsJSON: citationsJSON,
+		Provider:        string(masterSettings.Provider),
+		Model:           masterSettings.Model,
+		Mode:            mode,
+		IncludedFigures: includedFigures,
+		CitationsJSON:   citationsJSON,
 	})
 	if err != nil {
 		return SendMessageResult{}, err
@@ -568,7 +610,7 @@ func (s *Service) SendForSurface(ctx context.Context, in SurfaceMessageInput,
 	if err != nil {
 		return SurfaceMessageResult{}, err
 	}
-	asm, err := s.assembleForTurn(conv, pinned, history, in.Text, masterSettings)
+	asm, err := s.assembleForTurn(conv, pinned, history, in.Text, "", masterSettings)
 	if err != nil {
 		return SurfaceMessageResult{}, err
 	}

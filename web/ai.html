@@ -6,7 +6,7 @@
     <title>AI 助手 - CiteBox</title>
     <link rel="icon" type="image/svg+xml" href="/static/img/citebox-icon.svg">
     <script>(function(){var d=document.documentElement;try{var t=localStorage.getItem("citebox_theme");if(t&&t!=="warm")d.setAttribute("data-theme",t);var l=localStorage.getItem("citebox_lang")||"zh-CN";d.lang=l;if(l!=="zh-CN")d.setAttribute("data-lang-loading","1");}catch(e){}})()</script>
-    <link rel="stylesheet" href="/static/css/style.css?v=ai-20260503-image-ui">
+    <link rel="stylesheet" href="/static/css/style.css?v=ai-20260804-pdf-panel">
 </head>
 <body>
     <nav class="navbar">
@@ -51,6 +51,7 @@
                     <div id="aiPinChips" class="ai-pin-chips"></div>
                 </div>
                 <div class="ai-main-actions">
+                    <button id="aiPdfPanelToggle" class="btn btn-outline btn-small" type="button" data-i18n="ai.pdf_panel_toggle">预览 PDF</button>
                     <button id="aiExportConversation" class="btn btn-outline btn-small" type="button" data-i18n="ai.btn_export_conversation">对话导出</button>
                     <button id="aiDeleteConversation" class="btn btn-outline btn-small" type="button" data-i18n="ai.btn_delete_conversation">删除</button>
                 </div>
@@ -75,6 +76,7 @@
                 </div>
                 <label class="field ai-question-field">
                     <span class="ai-question-label" data-i18n="ai.question_label">想让 AI 帮你什么？</span>
+                    <div id="aiContextTray" class="ai-context-tray" hidden></div>
                     <div class="ai-question-input-wrap">
                         <div id="aiQuestionMirror" class="ai-question-mirror" aria-hidden="true"></div>
                         <textarea id="aiQuestionInput" class="form-textarea ai-question-input" rows="2" data-i18n-placeholder="ai.question_placeholder" placeholder="输入 @ 切换文献或调用角色…" spellcheck="false"></textarea>
@@ -91,6 +93,8 @@
                 </div>
             </footer>
         </section>
+
+        <aside id="aiPdfPanel" hidden></aside>
     </main>
 
     <div id="paperModal" class="modal-shell hidden">
@@ -119,15 +123,16 @@
     <script src="/static/js/main.js"></script>
     <script src="/static/js/ai-mention-tags.js?v=20260503-ai-image-ui"></script>
     <script src="/static/js/ai-mention.js?v=20260501-p4"></script>
-    <script src="/static/js/ai-pin.js"></script>
+    <script src="/static/js/ai-pin.js?v=20260804-pdf-panel"></script>
     <script src="/static/js/ai-conversations.js?v=20260501-p3-conversations"></script>
     <script src="/static/js/ai-composer.js"></script>
     <script src="/static/js/ai-message-list.js"></script>
     <script src="/static/js/ai-process-strip.js?v=20260501-1"></script>
     <script src="/static/js/ai-result-cards.js?v=20260503-ai-image-ui"></script>
-    <script src="/static/js/ai-conversation-view.js?v=20260503-ai-image-ui"></script>
+    <script src="/static/js/ai-conversation-view.js?v=20260804-pdf-panel"></script>
     <script src="/static/js/ai-evidence.js"></script>
-    <script src="/static/js/ai-reader.js?v=20260503-ai-image-ui"></script>
+    <script src="/static/js/ai-pdf-panel.js?v=20260804-pdf-panel"></script>
+    <script src="/static/js/ai-reader.js?v=20260804-pdf-panel"></script>
     <script src="/static/js/translate.js"></script>
 </body>
 </html>

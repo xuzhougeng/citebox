@@ -168,6 +168,19 @@
                 body.context.figure_ids = figureIDs;
             }
 
+            // Merge PDF-panel context (checked figures + selected excerpts).
+            const panel = window.AIReader && window.AIReader.pdfPanel;
+            if (panel && typeof panel.hasContext === 'function' && panel.hasContext()) {
+                if (typeof window.AIReader.pdfPanelMergeContext === 'function') {
+                    window.AIReader.pdfPanelMergeContext(body, panel.getContextPayload());
+                }
+                // Snapshot for decorating the live user bubble; consumed in _sendBody.
+                this._state.pendingPanelSnapshot = typeof panel.describeContext === 'function'
+                    ? panel.describeContext() : null;
+            } else {
+                this._state.pendingPanelSnapshot = null;
+            }
+
             // Parse @ tool tags out of the content. The text is left intact in
             // body.content (so the model sees the user's literal input); the parsed
             // intent + sources ride alongside as routing hints.
@@ -209,6 +222,8 @@
             }
             // optimistic user bubble
             const userBubble = this._appendMessageBubble({ role: 'user', content: content });
+            this._decorateUserBubbleAttachments(userBubble, s.pendingPanelSnapshot);
+            s.pendingPanelSnapshot = null;
             const assistantBubble = this._appendMessageBubble({ role: 'assistant', content: '', streaming: true });
 
             const path = s.conversationId
@@ -365,6 +380,41 @@
             s.els.conversation.appendChild(div);
             s.els.conversation.scrollTop = s.els.conversation.scrollHeight;
             return div;
+        },
+
+        // Renders the PDF-panel attachments (checked figures + selected
+        // excerpts) onto the live user bubble for the current turn. The
+        // snapshot is turn-local; history reloads show plain text as before.
+        _decorateUserBubbleAttachments(bubble, snapshot) {
+            if (!bubble || !snapshot) return;
+            const figures = Array.isArray(snapshot.figures) ? snapshot.figures : [];
+            const excerpts = Array.isArray(snapshot.excerpts) ? snapshot.excerpts : [];
+            if (!figures.length && !excerpts.length) return;
+            const parts = this._ensureMessageParts(bubble);
+            const wrap = document.createElement('div');
+            wrap.className = 'ai-message-attachments';
+            let html = '';
+            figures.forEach((fig) => {
+                const label = (fig && fig.label) || ('figure-' + (fig && fig.id));
+                const url = (fig && fig.image_url) || '';
+                html += '<span class="ai-message-attachment ai-message-attachment-figure">'
+                    + (url ? '<img src="' + escapeHtml(url) + '" alt="">' : '')
+                    + '<span>' + escapeHtml(label) + '</span></span>';
+            });
+            excerpts.forEach((excerpt) => {
+                const text = String((excerpt && excerpt.text) || '');
+                if (!text) return;
+                const page = Number(excerpt && excerpt.page || 0);
+                const pageLabel = page > 0
+                    ? translate('ai.context_tray_page', '第 {page} 页').replace('{page}', page) + ' · '
+                    : '';
+                const short = text.length > 80 ? text.slice(0, 80) + '…' : text;
+                html += '<span class="ai-message-attachment ai-message-attachment-excerpt" title="'
+                    + escapeHtml(text) + '">' + escapeHtml(pageLabel) + '“' + escapeHtml(short) + '”</span>';
+            });
+            if (!html) return;
+            wrap.innerHTML = html;
+            parts.artifacts.appendChild(wrap);
         },
 
         _renderMessageContent(el, message) {
@@ -531,6 +581,10 @@
                     this._hydrateFinalCitations(assistantBubble, evt.assistant_message);
                     this._persistFinalMessages(evt);
                     this._decorateLastUserMessage();
+                    // Excerpt chips are one-shot — clear them once the turn lands.
+                    if (window.AIReader && window.AIReader.pdfPanel && typeof window.AIReader.pdfPanel.consumeExcerpts === 'function') {
+                        window.AIReader.pdfPanel.consumeExcerpts();
+                    }
                     document.dispatchEvent(new CustomEvent('ai-reader:conversation-changed'));
                 }
             } else if (evt.type === 'error') {

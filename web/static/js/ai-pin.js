@@ -54,6 +54,9 @@
             const addChip = draft ? '' :
                 `<span class="ai-pin-chip add" data-action="open-picker" role="button" tabindex="0">+ pin</span>`;
             s.container.innerHTML = chips + addChip;
+            // Notify subscribers (view state, PDF panel) on every render path —
+            // refresh / unpin / draft pick / conversation switch all funnel here.
+            s.setPinnedCallback(list);
         },
 
         async refresh() {

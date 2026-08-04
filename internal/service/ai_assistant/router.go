@@ -10,6 +10,11 @@ func RouteIntent(in RouteInput) RouteDecision {
 	if q == "" {
 		return RouteDecision{Intent: IntentChat, Confidence: "low", Reason: "empty content"}
 	}
+	// Figures explicitly attached as turn context mean "ask about THESE
+	// images", not a figure search — route to paper reading.
+	if len(in.Context.FigureIDs) > 0 {
+		return RouteDecision{Intent: IntentPaperRead, Confidence: "rule", Reason: "attached figure context"}
+	}
 	if containsAny(q, "图", "figure", "fig.", "fig ") {
 		return RouteDecision{Intent: IntentFigureLookup, Confidence: "rule", Reason: "figure terms"}
 	}

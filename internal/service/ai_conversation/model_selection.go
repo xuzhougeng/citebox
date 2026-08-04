@@ -58,3 +58,22 @@ func firstNonEmpty(values ...string) string {
 	}
 	return ""
 }
+
+// assistantMasterSupportsImages reports whether the resolved master model may
+// receive image inputs. A nil SupportsImages flag means "supported", matching
+// the semantics in internal/service/ai_service_settings.go. When the scene
+// selection matches no configured model the flag is unknown → treated as
+// supported, same as the read flow.
+func assistantMasterSupportsImages(settings model.AISettings) bool {
+	modelID := firstNonEmpty(
+		settings.SceneModels.AssistantMasterModelID,
+		settings.SceneModels.QAModelID,
+		settings.SceneModels.DefaultModelID,
+	)
+	for _, item := range settings.Models {
+		if item.ID == modelID {
+			return item.SupportsImages == nil || *item.SupportsImages
+		}
+	}
+	return true
+}

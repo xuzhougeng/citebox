@@ -207,5 +207,25 @@
     "ai.image_gen.status.prompt_label": "查看 prompt",
     "ai.image_gen.status.generating": "正在生成图片",
     "ai.image_gen.status.done": "已生成图片",
-    "ai.image_gen.status.failed": "图像生成失败"
+    "ai.image_gen.status.failed": "图像生成失败",
+
+    "ai.pdf_panel_toggle": "预览 PDF",
+    "ai.pdf_panel_toggle_hint": "预览 pin 文献的 PDF，划选引用、勾选图片作为上下文",
+    "ai.pdf_panel_no_pin_hint": "先 pin 一篇文献",
+    "ai.pdf_panel_switch_paper": "切换预览文献",
+    "ai.pdf_panel_tab_pdf": "PDF",
+    "ai.pdf_panel_tab_figures": "图片",
+    "ai.pdf_panel_close": "关闭面板",
+    "ai.pdf_panel_empty": "先 pin 一篇文献，即可在此预览 PDF、划选引用、勾选图片作为提问上下文。",
+    "ai.pdf_panel_loading": "正在加载 PDF…",
+    "ai.pdf_panel_no_pdf": "该文献没有可预览的 PDF。",
+    "ai.pdf_panel_load_error": "PDF 加载失败。",
+    "ai.pdf_panel_quote_action": "引用到提问",
+    "ai.pdf_panel_excerpt_added": "已加入引用",
+    "ai.pdf_panel_excerpt_full": "引用片段已达上限",
+    "ai.pdf_panel_figures_empty": "本篇文献还没有提取图片。",
+    "ai.pdf_panel_figure_label": "第 {page} 页图 {index}",
+    "ai.context_tray_page": "第 {page} 页",
+    "ai.context_tray_remove_excerpt": "移除引用",
+    "ai.context_tray_remove_figure": "移除图片"
 }

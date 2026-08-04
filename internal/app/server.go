@@ -427,7 +427,8 @@ func buildAIServices(
 	})
 	aiConvService := ai_conversation.New(repo.AIConversation, repo.Paper, aiSvc, aiSvc, aiExternalSvc, logger.With("component", "ai_conversation"), assistantOrchestrator).
 		WithImageGen(imageGenService).
-		WithImageStorage(imageStorage)
+		WithImageStorage(imageStorage).
+		WithFigureContextLoader(aiSvc)
 
 	return sharedAIServices{
 		research:     researchSvc,

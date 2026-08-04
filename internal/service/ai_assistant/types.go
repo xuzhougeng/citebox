@@ -12,12 +12,21 @@ const (
 	IntentChat           = "chat"
 )
 
+// ContextExcerpt is a verbatim text snippet the user selected in the PDF
+// preview panel and attached as turn context.
+type ContextExcerpt struct {
+	PaperID int64  `json:"paper_id,omitempty"`
+	Page    int    `json:"page,omitempty"`
+	Text    string `json:"text"`
+}
+
 type RequestContext struct {
-	Source    string  `json:"source,omitempty"`
-	PaperID   int64   `json:"paper_id,omitempty"`
-	PaperIDs  []int64 `json:"paper_ids,omitempty"`
-	FigureID  int64   `json:"figure_id,omitempty"`
-	FigureIDs []int64 `json:"figure_ids,omitempty"`
+	Source    string           `json:"source,omitempty"`
+	PaperID   int64            `json:"paper_id,omitempty"`
+	PaperIDs  []int64          `json:"paper_ids,omitempty"`
+	FigureID  int64            `json:"figure_id,omitempty"`
+	FigureIDs []int64          `json:"figure_ids,omitempty"`
+	Excerpts  []ContextExcerpt `json:"excerpts,omitempty"`
 }
 
 type RouteInput struct {
