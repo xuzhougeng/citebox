@@ -6,7 +6,7 @@
     <title>AI 助手 - CiteBox</title>
     <link rel="icon" type="image/svg+xml" href="/static/img/citebox-icon.svg">
     <script>(function(){var d=document.documentElement;try{var t=localStorage.getItem("citebox_theme");if(t&&t!=="warm")d.setAttribute("data-theme",t);var l=localStorage.getItem("citebox_lang")||"zh-CN";d.lang=l;if(l!=="zh-CN")d.setAttribute("data-lang-loading","1");}catch(e){}})()</script>
-    <link rel="stylesheet" href="/static/css/style.css?v=ai-20260804-pdf-panel">
+    <link rel="stylesheet" href="/static/css/style.css?v=ai-20260804c">
 </head>
 <body>
     <nav class="navbar">
@@ -34,7 +34,12 @@
     <main class="page-shell ai-page-shell">
         <aside id="aiSidebar" class="ai-sidebar">
             <div class="ai-sidebar-head">
-                <button id="aiNewConversation" class="btn btn-primary btn-block" type="button" data-i18n="ai.btn_new_conversation">＋ 新对话</button>
+                <div class="ai-sidebar-head-row">
+                    <button id="aiNewConversation" class="btn btn-primary btn-block" type="button" data-i18n="ai.btn_new_conversation">＋ 新对话</button>
+                    <button id="aiSidebarCollapse" class="ai-sidebar-collapse" type="button"
+                        aria-label="收起对话侧栏" data-i18n-aria-label="ai.sidebar_collapse"
+                        title="收起侧栏" data-i18n-title="ai.sidebar_collapse">«</button>
+                </div>
                 <input id="aiConversationSearch" class="form-input ai-sidebar-search" type="text" data-i18n-placeholder="ai.sidebar_search_placeholder" placeholder="搜索对话…">
             </div>
             <ul id="aiConversationList" class="ai-conversation-list" role="list"></ul>
@@ -43,6 +48,10 @@
             </div>
             <button id="aiMoreConversations" class="btn btn-outline ai-sidebar-more" type="button" data-i18n="ai.btn_more_conversations">更多对话</button>
         </aside>
+
+        <button id="aiSidebarExpand" class="ai-sidebar-expand" type="button"
+            aria-label="展开对话侧栏" data-i18n-aria-label="ai.sidebar_expand"
+            title="展开侧栏" data-i18n-title="ai.sidebar_expand">»</button>
 
         <section class="ai-main">
             <header class="ai-main-head">
@@ -123,16 +132,16 @@
     <script src="/static/js/main.js"></script>
     <script src="/static/js/ai-mention-tags.js?v=20260503-ai-image-ui"></script>
     <script src="/static/js/ai-mention.js?v=20260501-p4"></script>
-    <script src="/static/js/ai-pin.js?v=20260804-pdf-panel"></script>
+    <script src="/static/js/ai-pin.js?v=20260804c"></script>
     <script src="/static/js/ai-conversations.js?v=20260501-p3-conversations"></script>
     <script src="/static/js/ai-composer.js"></script>
     <script src="/static/js/ai-message-list.js"></script>
     <script src="/static/js/ai-process-strip.js?v=20260501-1"></script>
     <script src="/static/js/ai-result-cards.js?v=20260503-ai-image-ui"></script>
-    <script src="/static/js/ai-conversation-view.js?v=20260804-pdf-panel"></script>
+    <script src="/static/js/ai-conversation-view.js?v=20260804c"></script>
     <script src="/static/js/ai-evidence.js"></script>
-    <script src="/static/js/ai-pdf-panel.js?v=20260804-pdf-panel"></script>
-    <script src="/static/js/ai-reader.js?v=20260804-pdf-panel"></script>
+    <script src="/static/js/ai-pdf-panel.js?v=20260804c"></script>
+    <script src="/static/js/ai-reader.js?v=20260804c"></script>
     <script src="/static/js/translate.js"></script>
 </body>
 </html>

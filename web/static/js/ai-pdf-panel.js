@@ -42,6 +42,26 @@
             .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
 
+    // api.js / utils.js declare `const API` / `const Utils` at classic-script
+    // top level: reachable as bare globals but NOT as window properties.
+    // Resolve through both paths so the panel works regardless.
+    function apiClient() {
+        if (root && root.API) return root.API;
+        if (typeof API !== 'undefined') return API;
+        return null;
+    }
+
+    function utilsRef() {
+        if (root && root.Utils) return root.Utils;
+        if (typeof Utils !== 'undefined') return Utils;
+        return null;
+    }
+
+    function toast(message, kind) {
+        const u = utilsRef();
+        if (u && typeof u.showToast === 'function') u.showToast(message, kind);
+    }
+
     function truncateText(s, n) {
         const text = String(s || '');
         return text.length <= n ? text : text.slice(0, n) + '…';
@@ -394,10 +414,13 @@
             this._hideQuoteFab();
 
             let detail = null;
-            try {
-                detail = await root.API.getPaper(paperId);
-            } catch (e) {
-                console.error('[ai-pdf-panel] getPaper failed', e);
+            const api = apiClient();
+            if (api && typeof api.getPaper === 'function') {
+                try {
+                    detail = await api.getPaper(paperId);
+                } catch (e) {
+                    console.error('[ai-pdf-panel] getPaper failed', e);
+                }
             }
             if (s.currentPaperId !== paperId) return; // switched meanwhile
             s.paperDetail = detail;
@@ -654,9 +677,7 @@
                 return;
             }
             if (s.excerpts.length >= MAX_EXCERPTS) {
-                if (root.Utils && typeof root.Utils.showToast === 'function') {
-                    root.Utils.showToast(t('ai.pdf_panel_excerpt_full', '引用片段已达上限'), 'error');
-                }
+                toast(t('ai.pdf_panel_excerpt_full', '引用片段已达上限'), 'error');
             } else {
                 s.excerpts.push({
                     paper_id: s.currentPaperId,
@@ -664,9 +685,7 @@
                     text: text.slice(0, MAX_EXCERPT_CHARS),
                 });
                 this._renderTray();
-                if (root.Utils && typeof root.Utils.showToast === 'function') {
-                    root.Utils.showToast(t('ai.pdf_panel_excerpt_added', '已加入引用'), 'success');
-                }
+                toast(t('ai.pdf_panel_excerpt_added', '已加入引用'), 'success');
             }
             if (root.getSelection) {
                 const selection = root.getSelection();
