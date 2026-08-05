@@ -2572,7 +2572,7 @@ const FigureViewer = {
         this.currentFigure = this.figures?.[this.index];
         if (!this.currentFigure) {
             this.closeFigureInterpretationModal();
-            this.body.innerHTML = '<div class="empty-state"><h3>${t("shared.figure.no_figures_to_show", "没有可展示的图片")}</h3></div>';
+            this.body.innerHTML = `<div class="empty-state"><h3>${t("shared.figure.no_figures_to_show", "没有可展示的图片")}</h3></div>`;
             return;
         }
 
