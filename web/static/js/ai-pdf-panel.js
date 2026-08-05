@@ -30,6 +30,9 @@
     const MAX_EXCERPTS = 8;
     const MAX_EXCERPT_CHARS = 2000;
     const STORAGE_KEY = 'citebox_ai_pdf_panel';
+    const ZOOM_STEP = 1.2;
+    const ZOOM_MIN = 0.4;
+    const ZOOM_MAX = 4.0;
 
     function t(key, fallback) {
         if (root && typeof root.t === 'function') return root.t(key, fallback);
@@ -133,6 +136,7 @@
             excerpts: [],               // [{paper_id,page,text}]
             pdf: null,                  // pdf.js wiring state
             pdfLoadToken: 0,
+            zoomMode: 'fit',            // 'fit' (page-width) or 'custom'
             selectionTimer: 0,
             selectionText: '',
             selectionPage: 0,
@@ -199,6 +203,16 @@
                                 ${escapeHtml(t('ai.pdf_panel_loading', '正在加载 PDF…'))}
                             </div>
                         </div>
+                        <div class="ai-pdf-zoom-bar" data-role="zoom-bar">
+                            <button type="button" class="ai-pdf-zoom-btn" data-role="zoom-out"
+                                aria-label="${escapeHtml(t('ai.pdf_panel_zoom_out', '缩小'))}">−</button>
+                            <span class="ai-pdf-zoom-value" data-role="zoom-value">100%</span>
+                            <button type="button" class="ai-pdf-zoom-btn" data-role="zoom-in"
+                                aria-label="${escapeHtml(t('ai.pdf_panel_zoom_in', '放大'))}">+</button>
+                            <button type="button" class="ai-pdf-zoom-btn ai-pdf-zoom-fit" data-role="zoom-fit">
+                                ${escapeHtml(t('ai.pdf_panel_zoom_fit', '适应宽度'))}
+                            </button>
+                        </div>
                     </div>
                     <div class="ai-pdf-panel-figures" data-role="figures-section" hidden>
                         <div class="ai-pdf-figure-grid" data-role="figure-grid"></div>
@@ -238,6 +252,11 @@
             s.panel.querySelectorAll('[data-role="tab"]').forEach(function (btn) {
                 btn.addEventListener('click', function () { self._setTab(btn.dataset.tab); });
             });
+
+            // Zoom controls for the PDF preview.
+            s.panel.querySelector('[data-role="zoom-out"]').addEventListener('click', function () { self._zoomBy(1 / ZOOM_STEP); });
+            s.panel.querySelector('[data-role="zoom-in"]').addEventListener('click', function () { self._zoomBy(ZOOM_STEP); });
+            s.panel.querySelector('[data-role="zoom-fit"]').addEventListener('click', function () { self._zoomFit(); });
 
             // Figure grid: checkbox toggles selection; clicking the thumbnail previews.
             s.figureGrid.addEventListener('click', function (event) {
@@ -526,8 +545,13 @@
             eventBus.on('pagesinit', function () {
                 if (token !== s.pdfLoadToken) return;
                 pdf.pagesReady = true;
+                s.zoomMode = 'fit';
                 pdfViewer.currentScaleValue = 'page-width';
                 if (s.loadingEl) s.loadingEl.hidden = true;
+            });
+            eventBus.on('scalechanging', function (evt) {
+                if (token !== s.pdfLoadToken) return;
+                self._updateZoomLabel(evt && evt.scale);
             });
             eventBus.on('pagechanging', function () {
                 if (token !== s.pdfLoadToken) return;
@@ -586,7 +610,40 @@
             const pdf = s.pdf;
             if (!s.open || s.activeTab !== 'pdf') return;
             if (!pdf || !pdf.pdfViewer || !pdf.pagesReady) return;
+            // Keep a manually chosen zoom level across panel resizes.
+            if (s.zoomMode !== 'fit') return;
             pdf.pdfViewer.currentScaleValue = 'page-width';
+        },
+
+        // ---- zoom --------------------------------------------------------------
+
+        _zoomBy(factor) {
+            const s = this._state;
+            const pdf = s.pdf;
+            if (!pdf || !pdf.pdfViewer || !pdf.pagesReady) return;
+            const current = pdf.pdfViewer.currentScale || 1;
+            const next = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, current * factor));
+            if (Math.abs(next - current) < 0.001) return;
+            s.zoomMode = 'custom';
+            pdf.pdfViewer.currentScale = next;
+            this._updateZoomLabel(next);
+        },
+
+        _zoomFit() {
+            const s = this._state;
+            const pdf = s.pdf;
+            if (!pdf || !pdf.pdfViewer || !pdf.pagesReady) return;
+            s.zoomMode = 'fit';
+            pdf.pdfViewer.currentScaleValue = 'page-width';
+        },
+
+        _updateZoomLabel(scale) {
+            const s = this._state;
+            const el = s.panel && s.panel.querySelector('[data-role="zoom-value"]');
+            if (!el) return;
+            const value = Number(scale);
+            if (!Number.isFinite(value) || value <= 0) return;
+            el.textContent = Math.round(value * 100) + '%';
         },
 
         // ---- text selection → excerpts -----------------------------------------

@@ -1351,6 +1351,56 @@
     text-align: center;
 }
 
+/* zoom bar floats above the PDF scroll area */
+
+.ai-pdf-zoom-bar {
+    position: absolute;
+    left: 50%;
+    bottom: 0.9rem;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 0.2rem;
+    padding: 0.25rem 0.35rem;
+    background: rgba(var(--surface-rgb), 0.94);
+    border: 1px solid rgba(var(--ink-rgb), 0.14);
+    border-radius: 999px;
+    box-shadow: 0 6px 18px rgba(35, 26, 20, 0.16);
+    z-index: 3;
+}
+
+.ai-pdf-zoom-btn {
+    min-width: 1.8rem;
+    height: 1.8rem;
+    padding: 0 0.45rem;
+    font-size: 0.95rem;
+    line-height: 1;
+    color: rgba(var(--ink-rgb), 0.78);
+    background: transparent;
+    border: none;
+    border-radius: 999px;
+    cursor: pointer;
+}
+
+.ai-pdf-zoom-btn:hover {
+    color: var(--ink);
+    background: rgba(var(--ink-rgb), 0.08);
+}
+
+.ai-pdf-zoom-fit {
+    font-size: 0.78rem;
+    white-space: nowrap;
+}
+
+.ai-pdf-zoom-value {
+    min-width: 3rem;
+    font-size: 0.78rem;
+    color: rgba(var(--ink-rgb), 0.66);
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+    user-select: none;
+}
+
 /* figures tab */
 
 .ai-pdf-figure-grid {
