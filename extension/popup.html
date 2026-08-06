@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <style>
+        body {
+            font-family: system-ui, sans-serif;
+            font-size: 13px;
+            width: 320px;
+            margin: 0;
+            padding: 12px;
+            color: #222;
+        }
+        h1 {
+            font-size: 14px;
+            margin: 0 0 10px;
+        }
+        dl {
+            margin: 0 0 10px;
+        }
+        dt {
+            font-weight: 600;
+            color: #555;
+        }
+        dd {
+            margin: 2px 0 8px;
+            word-break: break-all;
+        }
+        button {
+            width: 100%;
+            padding: 6px 10px;
+            cursor: pointer;
+        }
+        button:disabled {
+            cursor: default;
+            opacity: 0.6;
+        }
+        #status {
+            margin: 10px 0 0;
+            min-height: 1em;
+        }
+        #status.ok {
+            color: #137333;
+        }
+        #status.warn {
+            color: #b06000;
+        }
+        #status.err {
+            color: #c5221f;
+        }
+        #open-link {
+            display: block;
+            margin-top: 8px;
+        }
+        [hidden] {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+    <h1 data-i18n="popupHeader"></h1>
+
+    <section id="view-config-missing" hidden>
+        <p data-i18n="notConfigured"></p>
+        <button id="btn-open-options" data-i18n="openOptions"></button>
+    </section>
+
+    <section id="view-unreadable" hidden>
+        <p data-i18n="cannotReadPage"></p>
+    </section>
+
+    <section id="view-main" hidden>
+        <dl>
+            <dt data-i18n="labelTitle"></dt>
+            <dd id="field-title"></dd>
+            <dt data-i18n="labelDoi"></dt>
+            <dd id="field-doi"></dd>
+        </dl>
+        <button id="btn-save" data-i18n="saveToCitebox"></button>
+        <p id="status"></p>
+        <a id="open-link" href="#" target="_blank" rel="noopener" data-i18n="openInCitebox" hidden></a>
+    </section>
+
+    <script src="popup.js"></script>
+</body>
+</html>

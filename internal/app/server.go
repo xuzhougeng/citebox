@@ -1294,7 +1294,7 @@ func buildHandlerWithAIServices(
 		{Path: "/api/auth/login", Prefix: false},
 		{Path: "/api/settings/mcp/oauth/callback", Prefix: false},
 		{Path: "/static/", Prefix: true},
-	}, cfg.DisableAuth)
+	}, cfg.DisableAuth, middleware.IntegrationBearerAuthenticator(integrationSvcs.tokens))
 
 	authenticated := authMiddleware(mux)
 	logged := middleware.RequestLogger(authenticated, logger.With("component", "http"))
@@ -1305,7 +1305,7 @@ func corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusOK)

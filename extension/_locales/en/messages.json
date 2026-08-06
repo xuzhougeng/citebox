@@ -1,0 +1,144 @@
+{
+    "extName": {
+        "message": "CiteBox Connector",
+        "description": "Extension name shown in the toolbar and extension list."
+    },
+    "extDescription": {
+        "message": "Save papers to your CiteBox library with one click, Zotero Connector style.",
+        "description": "Extension description shown in the extension list."
+    },
+    "popupHeader": {
+        "message": "CiteBox Connector",
+        "description": "Header of the browser action popup."
+    },
+    "notConfigured": {
+        "message": "Server URL or integration token is not configured yet.",
+        "description": "Shown in the popup when settings are missing."
+    },
+    "openOptions": {
+        "message": "Open settings",
+        "description": "Button that opens the options page."
+    },
+    "cannotReadPage": {
+        "message": "Cannot read this page. It may be a restricted page or not fully loaded.",
+        "description": "Shown when the content script cannot be reached on the current tab."
+    },
+    "labelTitle": {
+        "message": "Title",
+        "description": "Label for the detected paper title."
+    },
+    "labelDoi": {
+        "message": "DOI",
+        "description": "Label for the detected DOI."
+    },
+    "notDetected": {
+        "message": "Not detected",
+        "description": "Placeholder when title or DOI was not found on the page."
+    },
+    "saveToCitebox": {
+        "message": "Save to CiteBox",
+        "description": "Primary button in the popup that triggers the import."
+    },
+    "saving": {
+        "message": "Saving…",
+        "description": "In-progress label of the save button."
+    },
+    "imported": {
+        "message": "Saved to your CiteBox library.",
+        "description": "Shown when the server accepted the import (HTTP 202)."
+    },
+    "alreadyExists": {
+        "message": "This paper is already in your library.",
+        "description": "Shown when the server reports a duplicate (HTTP 409)."
+    },
+    "openInCitebox": {
+        "message": "Open in CiteBox",
+        "description": "Link to view the paper in the CiteBox web UI."
+    },
+    "checkToken": {
+        "message": "Unauthorized (HTTP 401). Please check your integration token in the settings.",
+        "description": "Shown when the server rejects the token."
+    },
+    "noPdfFound": {
+        "message": "No directly downloadable PDF found on this page.",
+        "description": "Error when neither a DOI import nor a PDF download is possible."
+    },
+    "networkError": {
+        "message": "Network error: $detail$",
+        "description": "Error when a fetch fails before receiving a response.",
+        "placeholders": {
+            "detail": {
+                "content": "$1"
+            }
+        }
+    },
+    "missingToken": {
+        "message": "Integration token is missing. Open the settings to configure it.",
+        "description": "Error when an import is attempted without a token."
+    },
+    "unknownError": {
+        "message": "Unknown error.",
+        "description": "Fallback error text when the server gave no message."
+    },
+    "optionsHeader": {
+        "message": "CiteBox Connector Settings",
+        "description": "Header of the options page."
+    },
+    "serverUrlLabel": {
+        "message": "Server URL",
+        "description": "Label for the server address input."
+    },
+    "serverUrlPlaceholder": {
+        "message": "http://localhost:8080",
+        "description": "Placeholder for the server address input."
+    },
+    "tokenLabel": {
+        "message": "Integration token",
+        "description": "Label for the token input."
+    },
+    "tokenPlaceholder": {
+        "message": "cbx_…",
+        "description": "Placeholder for the token input."
+    },
+    "saveButton": {
+        "message": "Save",
+        "description": "Button that saves the settings."
+    },
+    "saved": {
+        "message": "Settings saved.",
+        "description": "Confirmation after settings are saved."
+    },
+    "testConnection": {
+        "message": "Test connection",
+        "description": "Button that tests server reachability and token validity."
+    },
+    "testing": {
+        "message": "Testing…",
+        "description": "In-progress label of the test connection button."
+    },
+    "testSuccess": {
+        "message": "Connection successful. Server and token are working.",
+        "description": "Shown when the test request returns HTTP 200."
+    },
+    "testInvalidToken": {
+        "message": "The token is invalid (HTTP 401). Generate a new one in CiteBox settings.",
+        "description": "Shown when the test request returns HTTP 401."
+    },
+    "testUnreachable": {
+        "message": "Cannot reach the server. Check the URL and make sure CiteBox is running.",
+        "description": "Shown when the test request fails at the network level."
+    },
+    "testHttpError": {
+        "message": "Server responded with HTTP $status$.",
+        "description": "Shown when the test request returns an unexpected status code.",
+        "placeholders": {
+            "status": {
+                "content": "$1"
+            }
+        }
+    },
+    "fillRequired": {
+        "message": "Please fill in both the server URL and the integration token.",
+        "description": "Validation message when required fields are empty."
+    }
+}

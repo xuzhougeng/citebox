@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/xuzhougeng/citebox/internal/config"
+	"github.com/xuzhougeng/citebox/internal/integration"
 	"github.com/xuzhougeng/citebox/internal/repository"
 	"github.com/xuzhougeng/citebox/internal/service"
 )
@@ -25,7 +26,7 @@ func testPublicPaths() []PublicPath {
 
 func TestAuthMiddlewareRedirectsHTMLWithoutSession(t *testing.T) {
 	sessionManager := service.NewSessionManager(time.Hour)
-	protected := AuthMiddleware(sessionManager, nil, testPublicPaths(), false)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	protected := AuthMiddleware(sessionManager, nil, testPublicPaths(), false, nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
@@ -46,7 +47,7 @@ func TestAuthMiddlewareRedirectsHTMLWithoutSession(t *testing.T) {
 
 func TestAuthMiddlewareReturnsJSONWithoutSession(t *testing.T) {
 	sessionManager := service.NewSessionManager(time.Hour)
-	protected := AuthMiddleware(sessionManager, nil, testPublicPaths(), false)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	protected := AuthMiddleware(sessionManager, nil, testPublicPaths(), false, nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
@@ -72,7 +73,7 @@ func TestAuthMiddlewareAllowsValidSession(t *testing.T) {
 	}
 
 	var called bool
-	protected := AuthMiddleware(sessionManager, nil, testPublicPaths(), false)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	protected := AuthMiddleware(sessionManager, nil, testPublicPaths(), false, nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
 		w.WriteHeader(http.StatusNoContent)
 	}))
@@ -99,7 +100,7 @@ func TestAuthMiddlewareRedirectsAuthenticatedLoginPage(t *testing.T) {
 		t.Fatalf("Create() error = %v", err)
 	}
 
-	protected := AuthMiddleware(sessionManager, nil, testPublicPaths(), false)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	protected := AuthMiddleware(sessionManager, nil, testPublicPaths(), false, nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
@@ -121,7 +122,7 @@ func TestAuthMiddlewareRedirectsAuthenticatedLoginPage(t *testing.T) {
 func TestAuthMiddlewareBypassesProtectionWhenDisabled(t *testing.T) {
 	sessionManager := service.NewSessionManager(time.Hour)
 	var called bool
-	protected := AuthMiddleware(sessionManager, nil, testPublicPaths(), true)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	protected := AuthMiddleware(sessionManager, nil, testPublicPaths(), true, nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
 		w.WriteHeader(http.StatusNoContent)
 	}))
@@ -142,7 +143,7 @@ func TestAuthMiddlewareBypassesProtectionWhenDisabled(t *testing.T) {
 
 func TestAuthMiddlewareRedirectsLoginPageWhenDisabled(t *testing.T) {
 	sessionManager := service.NewSessionManager(time.Hour)
-	protected := AuthMiddleware(sessionManager, nil, testPublicPaths(), true)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	protected := AuthMiddleware(sessionManager, nil, testPublicPaths(), true, nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
@@ -169,7 +170,7 @@ func TestAuthMiddlewareRestoresSessionFromRememberCookie(t *testing.T) {
 	}
 
 	var called bool
-	protected := AuthMiddleware(sessionManager, libraryService, testPublicPaths(), false)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	protected := AuthMiddleware(sessionManager, libraryService, testPublicPaths(), false, nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
 		w.WriteHeader(http.StatusNoContent)
 	}))
@@ -211,7 +212,7 @@ func TestAuthMiddlewareRedirectsLoginPageWithRememberCookie(t *testing.T) {
 		t.Fatalf("IssueRememberLoginToken() error = %v", err)
 	}
 
-	protected := AuthMiddleware(sessionManager, libraryService, testPublicPaths(), false)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	protected := AuthMiddleware(sessionManager, libraryService, testPublicPaths(), false, nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
@@ -259,4 +260,91 @@ func newRememberLoginServiceForTest(t *testing.T) *service.LibraryService {
 	}
 
 	return libraryService
+}
+
+func newBearerTokenServiceForTest(t *testing.T) (*integration.TokenService, *repository.LibraryRepository) {
+	t.Helper()
+	repo, err := repository.NewLibraryRepository(filepath.Join(t.TempDir(), "library.db"))
+	if err != nil {
+		t.Fatalf("NewLibraryRepository() error = %v", err)
+	}
+	t.Cleanup(func() { _ = repo.Close() })
+	return integration.NewTokenService(repo.Integration), repo
+}
+
+func TestAuthMiddlewareAllowsBearerTokenWithWriteScope(t *testing.T) {
+	tokens, _ := newBearerTokenServiceForTest(t)
+	plaintext, _, err := tokens.Rotate()
+	if err != nil {
+		t.Fatalf("Rotate() error = %v", err)
+	}
+
+	sessionManager := service.NewSessionManager(time.Hour)
+	var called bool
+	protected := AuthMiddleware(sessionManager, nil, testPublicPaths(), false, IntegrationBearerAuthenticator(tokens))(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	req := httptest.NewRequest(http.MethodPost, "/api/papers/import-by-doi", nil)
+	req.Header.Set("Authorization", "Bearer "+plaintext)
+	w := httptest.NewRecorder()
+
+	protected.ServeHTTP(w, req)
+
+	resp := w.Result()
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusNoContent)
+	}
+	if !called {
+		t.Fatal("next handler was not called")
+	}
+}
+
+func TestAuthMiddlewareRejectsBearerTokenWithoutWriteScope(t *testing.T) {
+	tokens, repo := newBearerTokenServiceForTest(t)
+	plaintext, hash, err := integration.GenerateToken()
+	if err != nil {
+		t.Fatalf("GenerateToken() error = %v", err)
+	}
+	if _, err := repo.Integration.Create("default", hash, integration.ReadScopes()); err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+
+	sessionManager := service.NewSessionManager(time.Hour)
+	protected := AuthMiddleware(sessionManager, nil, testPublicPaths(), false, IntegrationBearerAuthenticator(tokens))(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	req := httptest.NewRequest(http.MethodPost, "/api/papers/import-by-doi", nil)
+	req.Header.Set("Authorization", "Bearer "+plaintext)
+	w := httptest.NewRecorder()
+
+	protected.ServeHTTP(w, req)
+
+	if resp := w.Result(); resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusUnauthorized)
+	}
+}
+
+func TestAuthMiddlewareRejectsInvalidBearerToken(t *testing.T) {
+	tokens, _ := newBearerTokenServiceForTest(t)
+	if _, _, err := tokens.Rotate(); err != nil {
+		t.Fatalf("Rotate() error = %v", err)
+	}
+
+	sessionManager := service.NewSessionManager(time.Hour)
+	protected := AuthMiddleware(sessionManager, nil, testPublicPaths(), false, IntegrationBearerAuthenticator(tokens))(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/papers", nil)
+	req.Header.Set("Authorization", "Bearer cbx_wrong-token-value")
+	w := httptest.NewRecorder()
+
+	protected.ServeHTTP(w, req)
+
+	if resp := w.Result(); resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusUnauthorized)
+	}
 }
