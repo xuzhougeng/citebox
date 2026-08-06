@@ -146,6 +146,7 @@ fi
 
 mkdir -p "${DMG_ROOT}"
 cp -R "${APP_DIR}" "${DMG_ROOT}/"
+cp -R extension "${DMG_ROOT}/"
 ln -s /Applications "${DMG_ROOT}/Applications"
 
 cat > "${DMG_ROOT}/README.txt" <<EOF
@@ -156,6 +157,11 @@ Quick start:
 1. Open the DMG.
 2. Drag CiteBox into Applications.
 3. Launch CiteBox from Applications.
+
+Browser extension:
+- The bundled extension/ folder contains the CiteBox Connector browser
+  extension. Load it via chrome://extensions (developer mode); see
+  extension/README.md for details.
 
 Default account: citebox / citebox123
 Desktop mode stores data in:

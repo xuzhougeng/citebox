@@ -77,6 +77,7 @@ Remove-Item Env:GOOS
 Remove-Item Env:CGO_ENABLED
 
 Copy-Item "web" -Destination $payloadDir -Recurse
+Copy-Item "extension" -Destination $payloadDir -Recurse
 Copy-Item "README.md" -Destination $payloadDir
 go run .\scripts\fetch_pdfjs.go (Join-Path $payloadDir "web\static\vendor\pdfjs")
 go run .\scripts\render_app_icon -ico $iconPath -size 256
@@ -88,6 +89,7 @@ CiteBox Desktop (Windows)
 Contents:
 - citebox-desktop.exe
 - web\
+- extension\  (browser extension: load via chrome://extensions, see extension\README.md)
 - README.txt
 
 Quick start:
@@ -173,6 +175,7 @@ Section "Uninstall"
   Delete "$INSTDIR\README.md"
   Delete "$INSTDIR\README.txt"
   RMDir /r "$INSTDIR\web"
+  RMDir /r "$INSTDIR\extension"
   RMDir /r "$INSTDIR"
 
   DeleteRegKey HKCU "Software\CiteBox"

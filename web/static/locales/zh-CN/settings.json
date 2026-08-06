@@ -534,6 +534,12 @@
     "settings.integration.copy_config_hint": "生成新 Token 后才能复制连接配置；已存在的 Token 无法再次查看明文。",
     "settings.integration.config_copied": "Wisp 连接配置已复制",
     "settings.integration.config_need_token": "请先生成新 Token，再复制连接配置。",
+    "settings.integration.extension_title": "浏览器扩展",
+    "settings.integration.extension_desc": "安装 CiteBox Connector 浏览器扩展后，在论文页面点击扩展图标即可一键入库。",
+    "settings.integration.extension_step1": "扩展已随软件附带，位于软件安装目录的 extension/ 文件夹。",
+    "settings.integration.extension_step2": "在 Chrome / Edge 中打开 chrome://extensions 并开启「开发者模式」。",
+    "settings.integration.extension_step3": "点击「加载已解压的扩展程序」，选择该 extension/ 文件夹。",
+    "settings.integration.extension_step4": "在扩展选项页填入本服务地址与上方生成的访问 Token，测试连接通过即可使用。",
 
     "settings.research.title": "文献搜索服务 API",
     "settings.research.desc": "配置 Semantic Scholar 与 PubMed / NCBI 的访问凭据。Semantic Scholar 用于 /research 文献搜索页；PubMed 用于 AI 助手外部搜索。",

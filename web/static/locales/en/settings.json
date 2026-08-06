@@ -534,6 +534,12 @@
     "settings.integration.copy_config_hint": "Generate a new token before copying the config; existing tokens cannot be revealed again.",
     "settings.integration.config_copied": "Wisp connection config copied",
     "settings.integration.config_need_token": "Generate a new token first, then copy the config.",
+    "settings.integration.extension_title": "Browser Extension",
+    "settings.integration.extension_desc": "Install the CiteBox Connector browser extension to save papers to your library with one click from any paper page.",
+    "settings.integration.extension_step1": "The extension ships with the app: find the extension/ folder in the CiteBox installation directory.",
+    "settings.integration.extension_step2": "Open chrome://extensions in Chrome / Edge and enable \"Developer mode\".",
+    "settings.integration.extension_step3": "Click \"Load unpacked\" and select that extension/ folder.",
+    "settings.integration.extension_step4": "Open the extension's options page, enter this server's URL and the access token generated above, then test the connection.",
 
     "settings.research.title": "Literature Search API",
     "settings.research.desc": "Configure Semantic Scholar and PubMed / NCBI credentials. Semantic Scholar powers the /research literature search page; PubMed powers AI assistant external search.",

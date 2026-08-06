@@ -55,6 +55,7 @@ GO_BUILD_CMD+=(
 CGO_ENABLED="${CGO_VALUE}" GOOS="${GOOS_VALUE}" GOARCH=amd64 "${GO_BUILD_CMD[@]}"
 
 cp -R web "${PACKAGE_DIR}/"
+cp -R extension "${PACKAGE_DIR}/"
 cp README.md "${PACKAGE_DIR}/"
 go run ./scripts/fetch_pdfjs.go "${PACKAGE_DIR}/web/static/vendor/pdfjs"
 
@@ -108,6 +109,7 @@ CiteBox ${PLATFORM} package
 Contents:
 - citebox
 - web/
+- extension/  (browser extension: load via chrome://extensions, see extension/README.md)
 - data/
 - start.sh
 - start-with-config.sh

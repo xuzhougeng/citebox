@@ -57,6 +57,7 @@ GO_BUILD_CMD+=(
 CGO_ENABLED=1 GOOS="${GOOS_VALUE}" "${GO_BUILD_CMD[@]}"
 
 cp -R web "${PACKAGE_DIR}/"
+cp -R extension "${PACKAGE_DIR}/"
 cp README.md "${PACKAGE_DIR}/"
 go run ./scripts/fetch_pdfjs.go "${PACKAGE_DIR}/web/static/vendor/pdfjs"
 
@@ -78,6 +79,7 @@ CiteBox Desktop (${DISPLAY_NAME})
 Contents:
 - citebox-desktop
 - web/
+- extension/  (browser extension: load via chrome://extensions, see extension/README.md)
 - start.sh
 
 Quick start:

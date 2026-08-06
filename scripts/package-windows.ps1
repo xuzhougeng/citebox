@@ -41,6 +41,7 @@ Remove-Item Env:GOARCH
 Remove-Item Env:CGO_ENABLED
 
 Copy-Item "web" -Destination $packageDir -Recurse
+Copy-Item "extension" -Destination $packageDir -Recurse
 Copy-Item "README.md" -Destination $packageDir
 go run .\scripts\fetch_pdfjs.go (Join-Path $packageDir "web\static\vendor\pdfjs")
 
@@ -88,6 +89,7 @@ CiteBox Windows package
 Contents:
 - citebox.exe
 - web\
+- extension\  (browser extension: load via chrome://extensions, see extension\README.md)
 - data\
 - start.bat
 - start-with-config.bat

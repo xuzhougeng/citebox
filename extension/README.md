@@ -11,9 +11,17 @@ Zotero Connector 式的一键入库插件：在论文页面（出版商站点、
 
 ## 安装方法
 
+扩展已随 CiteBox 发布包附带，无需单独下载：
+
+- **Windows / Linux 包**：扩展位于解压后目录的 `extension/` 文件夹
+- **macOS DMG**：扩展位于 DMG 根目录的 `extension/` 文件夹
+- **源码仓库**：扩展就在仓库根目录的 `extension/` 目录
+
+安装步骤：
+
 1. 打开 Chrome / Edge，访问 `chrome://extensions`
 2. 打开右上角「开发者模式」
-3. 点击「加载已解压的扩展程序」，选择本仓库的 `extension/` 目录
+3. 点击「加载已解压的扩展程序」，选择上述 `extension/` 目录
 
 ## 配置方法
 
