@@ -55,6 +55,8 @@ const SettingsPage = {
         this.aiModelNameInput = document.getElementById('aiModelNameInput');
         this.aiModelProviderInput = document.getElementById('aiModelProviderInput');
         this.aiModelIdentifierInput = document.getElementById('aiModelIdentifierInput');
+        this.codexModelOptions = document.getElementById('codexModelOptions');
+        this.codexModelCatalog = [];
         this.aiModelMaxTokensInput = document.getElementById('aiModelMaxTokensInput');
         this.aiModelBaseURLInput = document.getElementById('aiModelBaseURLInput');
         this.aiModelAPIKeyInput = document.getElementById('aiModelAPIKeyInput');
@@ -463,9 +465,17 @@ const SettingsPage = {
         this.deleteAIModelButton.addEventListener('click', async () => {
             await this.deleteCurrentAIModel();
         });
-        this.aiModelProviderInput.addEventListener('change', () => {
+        this.aiModelProviderInput.addEventListener('change', async () => {
             this.updateAIModelModalUI();
+            if (this.aiModelProviderInput.value === 'codex') {
+                await this.loadCodexRuntimeInfo();
+            }
             this.scheduleAIModelAutosave({ immediate: true });
+        });
+        this.aiModelIdentifierInput.addEventListener('change', () => {
+            if (this.aiModelProviderInput.value === 'codex') {
+                this.applyCodexModelCapabilities();
+            }
         });
         this.aiModelLegacyModeInput.addEventListener('change', () => {
             this.updateAIModelModalUI();
@@ -2549,7 +2559,8 @@ const SettingsPage = {
         const notes = {
             openai: t('settings.ai.provider_note_openai', 'OpenAI 默认使用 Responses API。勾选传统模式后会切到 Chat Completions；DeepSeek 等兼容网关可配合 thinking 和 reasoning_effort 使用。'),
             anthropic: t('settings.ai.provider_note_anthropic', 'Anthropic 使用原生 Messages API，请填写兼容的 Base URL 和模型名。'),
-            gemini: t('settings.ai.provider_note_gemini', 'Gemini 使用 generateContent 接口，API Key 会通过 query 参数发送。')
+            gemini: t('settings.ai.provider_note_gemini', 'Gemini 使用 generateContent 接口，API Key 会通过 query 参数发送。'),
+            codex: t('settings.ai.provider_note_codex', '仅桌面端可用。复用 Codex CLI 的 ChatGPT 登录和订阅额度，不读取或保存登录凭据，也不会自动回退到 API。')
         };
         return notes[provider] || '';
     },
@@ -2644,6 +2655,9 @@ const SettingsPage = {
         this.aiModelModal.classList.remove('hidden');
         document.body.classList.add('modal-open');
         this.isHydratingAIModelEditor = false;
+        if (model.provider === 'codex') {
+            this.loadCodexRuntimeInfo();
+        }
     },
 
     async closeAIModelModal() {
@@ -2660,16 +2674,109 @@ const SettingsPage = {
         const provider = this.aiModelProviderInput.value || 'openai';
         this.aiModelProviderNote.textContent = this.providerNoteText(provider);
         const legacyEnabled = provider === 'openai';
+        const codexEnabled = provider === 'codex';
         this.aiModelLegacyModeInput.disabled = !legacyEnabled;
         this.aiModelOmitTemperatureInput.disabled = !legacyEnabled;
         this.aiModelThinkingInput.disabled = !legacyEnabled;
-        this.aiModelReasoningEffortInput.disabled = !legacyEnabled;
+        this.aiModelReasoningEffortInput.disabled = !(legacyEnabled || codexEnabled);
+        this.aiModelSupportsImagesInput.disabled = false;
+        this.aiModelBaseURLInput.closest('label')?.classList.toggle('hidden', codexEnabled);
+        this.aiModelAPIKeyInput.closest('label')?.classList.toggle('hidden', codexEnabled);
+        this.aiModelMaxTokensInput.closest('label')?.classList.toggle('hidden', codexEnabled);
+        this.aiModelLegacyModeInput.closest('label')?.classList.toggle('hidden', codexEnabled);
+        this.aiModelOmitTemperatureInput.closest('label')?.classList.toggle('hidden', codexEnabled);
+        this.aiModelThinkingInput.closest('label')?.classList.toggle('hidden', codexEnabled);
         if (!legacyEnabled) {
             this.aiModelLegacyModeInput.checked = false;
-            this.aiModelOmitTemperatureInput.checked = false;
+            this.aiModelOmitTemperatureInput.checked = codexEnabled;
             this.aiModelThinkingInput.checked = false;
-            this.aiModelReasoningEffortInput.value = '';
+            if (!codexEnabled) this.aiModelReasoningEffortInput.value = '';
         }
+        if (codexEnabled) {
+            this.applyCodexModelCapabilities();
+        } else {
+            this.renderAIReasoningEffortOptions(
+                window.CiteBoxCodexModels?.reasoningEfforts || ['minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra'],
+                this.aiModelReasoningEffortInput.value
+            );
+        }
+    },
+
+    async loadCodexRuntimeInfo() {
+        if (this.aiModelProviderInput.value !== 'codex') return;
+        const requestID = (this.codexRuntimeRequestID || 0) + 1;
+        this.codexRuntimeRequestID = requestID;
+        const isCurrentRequest = () => this.aiModelProviderInput.value === 'codex' && this.codexRuntimeRequestID === requestID;
+        this.codexModelCatalog = [];
+        try {
+            const status = await API.getCodexStatus();
+            if (!isCurrentRequest()) return;
+            this.aiModelProviderNote.textContent = `${this.providerNoteText('codex')} ${status.message || ''}`.trim();
+            if (!status.authenticated) {
+                this.applyCodexModelCapabilities();
+                return;
+            }
+            const response = await API.getCodexModels();
+            if (!isCurrentRequest()) return;
+            const models = Array.isArray(response.models) ? response.models : [];
+            this.codexModelCatalog = models;
+            if (this.codexModelOptions) {
+                this.codexModelOptions.innerHTML = models.map((item) => `<option value="${Utils.escapeHTML(item.id || '')}">${Utils.escapeHTML(item.display_name || item.id || '')}</option>`).join('');
+            }
+            if (!this.aiModelIdentifierInput.value && models.length) {
+                const selected = models.find((item) => item.is_default) || models[0];
+                this.aiModelIdentifierInput.value = selected.id || '';
+                if (!this.aiModelNameInput.value) this.aiModelNameInput.value = selected.display_name || 'Codex Subscription';
+            }
+            this.applyCodexModelCapabilities();
+        } catch (error) {
+            if (!isCurrentRequest()) return;
+            this.applyCodexModelCapabilities();
+            this.aiModelProviderNote.textContent = `${this.providerNoteText('codex')} ${error.message}`.trim();
+        }
+    },
+
+    applyCodexModelCapabilities() {
+        if (this.aiModelProviderInput.value !== 'codex') return false;
+        const capabilities = window.CiteBoxCodexModels?.resolveCapabilities(
+            this.codexModelCatalog,
+            this.aiModelIdentifierInput.value
+        );
+        if (!capabilities) {
+            this.aiModelSupportsImagesInput.disabled = false;
+            this.renderAIReasoningEffortOptions(
+                window.CiteBoxCodexModels?.reasoningEfforts || ['minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra'],
+                this.aiModelReasoningEffortInput.value
+            );
+            return false;
+        }
+
+        this.aiModelSupportsImagesInput.checked = capabilities.supportsImages;
+        this.aiModelSupportsImagesInput.disabled = true;
+        const currentEffort = this.aiModelReasoningEffortInput.value;
+        const selectedEffort = capabilities.supportedReasoningEfforts.includes(currentEffort)
+            ? currentEffort
+            : capabilities.defaultReasoningEffort;
+        this.renderAIReasoningEffortOptions(capabilities.supportedReasoningEfforts, selectedEffort);
+        return true;
+    },
+
+    renderAIReasoningEffortOptions(efforts, selectedValue) {
+        if (!this.aiModelReasoningEffortInput) return;
+        const values = [...new Set((Array.isArray(efforts) ? efforts : []).filter(Boolean))];
+        this.aiModelReasoningEffortInput.innerHTML = '';
+
+        const emptyOption = document.createElement('option');
+        emptyOption.value = '';
+        emptyOption.textContent = t('settings.ai.reasoning_effort_none', '不发送');
+        this.aiModelReasoningEffortInput.appendChild(emptyOption);
+        values.forEach((value) => {
+            const option = document.createElement('option');
+            option.value = value;
+            option.textContent = value;
+            this.aiModelReasoningEffortInput.appendChild(option);
+        });
+        this.aiModelReasoningEffortInput.value = values.includes(selectedValue) ? selectedValue : '';
     },
 
     readAIModelFromModal() {
@@ -2688,7 +2795,13 @@ const SettingsPage = {
             reasoning_effort: this.aiModelReasoningEffortInput.value,
             check_status: this.aiModelCheckStatus.textContent.trim()
         };
-        if (model.provider !== 'openai') {
+        if (model.provider === 'codex') {
+            model.base_url = '';
+            model.api_key = '';
+            model.openai_legacy_mode = false;
+            model.omit_temperature = true;
+            model.thinking_enabled = false;
+        } else if (model.provider !== 'openai') {
             model.openai_legacy_mode = false;
             model.omit_temperature = false;
             model.thinking_enabled = false;

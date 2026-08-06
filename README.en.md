@@ -92,6 +92,7 @@ Most runtime settings can be managed from the in-app Settings page. If you want 
 | `PDF_EXTRACTOR_PROFILE` | automatic extraction | Extraction mode; switch between automatic extraction, built-in multimodal detection, or manual mode in Settings |
 | `PDF_EXTRACTOR_URL` | empty | External extraction service URL |
 | `PDF_EXTRACTOR_TOKEN` | empty | Bearer token for the external extraction service |
+| `CODEX_BIN` | auto-detected | Path to the Codex CLI executable when the desktop app cannot find it in common install locations |
 | `WEIXIN_BRIDGE_ENABLED` | `false` | Default WeChat IM bridge flag before settings are saved to the database |
 
 ### Extraction Profiles

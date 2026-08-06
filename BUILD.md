@@ -316,6 +316,7 @@ make build-linux
 | `STORAGE_DIR` | ./data/library | 文件存储目录 |
 | `DATABASE_PATH` | ./data/library.db | 数据库文件路径 |
 | `PDF_EXTRACTOR_URL` | - | PDF 解析服务 URL |
+| `CODEX_BIN` | 自动发现 | Codex CLI 可执行文件路径，供桌面端订阅 provider 使用 |
 | `MAX_UPLOAD_SIZE` | 262144000 | 最大上传大小 (字节) |
 
 ---

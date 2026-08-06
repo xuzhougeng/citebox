@@ -1,10 +1,13 @@
 package service
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 	"time"
 
+	"github.com/xuzhougeng/citebox/internal/apperr"
+	"github.com/xuzhougeng/citebox/internal/codexapp"
 	"github.com/xuzhougeng/citebox/internal/config"
 	"github.com/xuzhougeng/citebox/internal/model"
 	"github.com/xuzhougeng/citebox/internal/repository"
@@ -27,6 +30,36 @@ type AIService struct {
 	config     *config.Config
 	httpClient *http.Client
 	logger     *slog.Logger
+	codex      *codexapp.Client
+}
+
+func (s *AIService) SetCodexClient(client *codexapp.Client) {
+	s.codex = client
+}
+
+func (s *AIService) Close() error {
+	if s == nil || s.codex == nil {
+		return nil
+	}
+	return s.codex.Close()
+}
+
+func (s *AIService) CodexStatus(ctx context.Context) codexapp.Status {
+	if s == nil || s.codex == nil {
+		return codexapp.Status{Message: "Codex 订阅仅在 CiteBox 桌面端可用"}
+	}
+	return s.codex.Status(ctx)
+}
+
+func (s *AIService) CodexModels(ctx context.Context) ([]codexapp.Model, error) {
+	if s == nil || s.codex == nil {
+		return nil, apperr.New(apperr.CodeFailedPrecondition, "Codex 订阅仅在 CiteBox 桌面端可用")
+	}
+	models, err := s.codex.Models(ctx)
+	if err != nil {
+		return nil, mapCodexError(err)
+	}
+	return models, nil
 }
 
 type aiImageInput struct {

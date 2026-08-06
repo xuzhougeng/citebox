@@ -42,7 +42,11 @@ func (s *LibraryService) extractBuiltInLLMResult(ctx context.Context, paperID in
 	}
 	defer doc.Close()
 
-	aiSvc := NewAIService(s.repo, s.config, s.logger.With("component", "builtin_llm_extractor"))
+	aiSvc := s.aiService
+	if aiSvc == nil {
+		aiSvc = NewAIService(s.repo, s.config, s.logger.With("component", "builtin_llm_extractor"))
+		defer func() { _ = aiSvc.Close() }()
+	}
 	pageCount := doc.NumPage()
 	boxes := make([]map[string]interface{}, 0)
 	figures := make([]extractedFigure, 0)

@@ -92,6 +92,7 @@ make prepare-web-assets
 | `PDF_EXTRACTOR_PROFILE` | 自动提取 | 提取模式，可在设置页切换自动提取、内置多模态识别或手工模式 |
 | `PDF_EXTRACTOR_URL` | 空 | 外部提取服务地址 |
 | `PDF_EXTRACTOR_TOKEN` | 空 | 外部提取服务的 Bearer Token |
+| `CODEX_BIN` | 自动发现 | Codex CLI 可执行文件路径；桌面端无法从常见安装目录发现 Codex 时使用 |
 | `WEIXIN_BRIDGE_ENABLED` | `false` | 微信 IM 桥接默认开关，首次保存设置后以数据库配置为准 |
 
 ### 提取模式

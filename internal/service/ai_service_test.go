@@ -3,6 +3,7 @@ package service
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"image"
 	"image/color"
 	"image/png"
@@ -13,6 +14,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/xuzhougeng/citebox/internal/apperr"
+	"github.com/xuzhougeng/citebox/internal/codexapp"
 	"github.com/xuzhougeng/citebox/internal/model"
 )
 
@@ -162,6 +165,39 @@ func TestAIRolePromptsPersistence(t *testing.T) {
 	}
 	if len(reloaded) != 1 || reloaded[0].Prompt != "你是一名严格审稿人，优先检查证据链和结论边界。" {
 		t.Fatalf("GetRolePrompts() = %+v, want persisted role prompt list", reloaded)
+	}
+}
+
+func TestNormalizeCodexModelDoesNotRequireAPIKey(t *testing.T) {
+	normalized, err := normalizeAIModelConfig(model.AIModelConfig{
+		ID:              "codex-default",
+		Provider:        model.AIProviderCodex,
+		Model:           "codex-test",
+		BaseURL:         "https://api.openai.com",
+		APIKey:          "must-not-be-stored",
+		ReasoningEffort: "high",
+	}, model.DefaultAISettings().Models[0], 1)
+	if err != nil {
+		t.Fatalf("normalizeAIModelConfig() error = %v", err)
+	}
+	if normalized.APIKey != "" || normalized.BaseURL != "" {
+		t.Fatalf("Codex credentials = %q / %q, want empty", normalized.APIKey, normalized.BaseURL)
+	}
+	if normalized.Name != "Codex Subscription" || normalized.ReasoningEffort != "high" {
+		t.Fatalf("normalized Codex model = %+v", normalized)
+	}
+	if !aiModelIsConfigured(normalized) {
+		t.Fatal("aiModelIsConfigured(Codex) = false")
+	}
+}
+
+func TestMapCodexErrorExplainsMCPDiscoveryTimeout(t *testing.T) {
+	err := mapCodexError(fmt.Errorf("%w after 30s", codexapp.ErrMCPDiscoveryTimeout))
+	if !apperr.IsCode(err, apperr.CodeDeadlineExceeded) {
+		t.Fatalf("mapCodexError() code = %s", apperr.CodeOf(err))
+	}
+	if !strings.Contains(apperr.Message(err), "MCP 配置超时") {
+		t.Fatalf("mapCodexError() message = %q", apperr.Message(err))
 	}
 }
 

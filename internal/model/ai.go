@@ -6,6 +6,7 @@ const (
 	AIProviderOpenAI    AIProvider = "openai"
 	AIProviderAnthropic AIProvider = "anthropic"
 	AIProviderGemini    AIProvider = "gemini"
+	AIProviderCodex     AIProvider = "codex"
 )
 
 type AIAction string

@@ -38,8 +38,8 @@ func (s *AIService) Translate(ctx context.Context, input model.AITranslateReques
 	if err != nil {
 		return nil, err
 	}
-	if strings.TrimSpace(modelConfig.APIKey) == "" {
-		return nil, apperr.New(apperr.CodeFailedPrecondition, "请先在 AI 页面为翻译场景配置可用模型和 API Key")
+	if !aiModelIsConfigured(modelConfig) {
+		return nil, apperr.New(apperr.CodeFailedPrecondition, "请先在 AI 页面为翻译场景配置可用模型和凭据")
 	}
 
 	sourceLanguage, targetLanguage := resolveTranslationDirection(settings.Translation, text)
@@ -156,8 +156,8 @@ func (s *AIService) prepareRead(input model.AIReadRequest, structuredOutput bool
 	if requiresImageInput(action) && !aiModelSupportsImages(modelConfig) {
 		return nil, apperr.New(apperr.CodeFailedPrecondition, "当前场景选择的模型未启用图片输入，请在 AI 设置中更换支持图片的模型，或打开该模型的图片输入能力")
 	}
-	if strings.TrimSpace(modelConfig.APIKey) == "" {
-		return nil, apperr.New(apperr.CodeFailedPrecondition, "请先在 AI 页面为当前场景配置可用模型和 API Key")
+	if !aiModelIsConfigured(modelConfig) {
+		return nil, apperr.New(apperr.CodeFailedPrecondition, "请先在 AI 页面为当前场景配置可用模型和凭据")
 	}
 	question := strings.TrimSpace(input.Question)
 	if question == "" {

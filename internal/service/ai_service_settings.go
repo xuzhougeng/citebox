@@ -409,7 +409,10 @@ func normalizeAIModelConfig(input model.AIModelConfig, fallback model.AIModelCon
 	config.Name = strings.TrimSpace(config.Name)
 	config.ReasoningEffort = normalizeAIReasoningEffort(config.ReasoningEffort)
 
-	if config.BaseURL == "" {
+	if config.Provider == model.AIProviderCodex {
+		config.APIKey = ""
+		config.BaseURL = ""
+	} else if config.BaseURL == "" {
 		config.BaseURL = defaultAIBaseURL(config.Provider)
 	}
 	if config.Model == "" {
@@ -425,10 +428,16 @@ func normalizeAIModelConfig(input model.AIModelConfig, fallback model.AIModelCon
 		supportsImages := aiModelSupportsImages(fallback)
 		config.SupportsImages = &supportsImages
 	}
-	if config.Name == "" {
+	if config.Name == "" && config.Provider == model.AIProviderCodex {
+		config.Name = "Codex Subscription"
+	} else if config.Name == "" {
 		config.Name = fmt.Sprintf("%s / %s", strings.ToUpper(string(config.Provider)), config.Model)
 	}
-	if config.Provider != model.AIProviderOpenAI {
+	if config.Provider == model.AIProviderCodex {
+		config.OpenAILegacyMode = false
+		config.OmitTemperature = true
+		config.ThinkingEnabled = false
+	} else if config.Provider != model.AIProviderOpenAI {
 		config.OpenAILegacyMode = false
 		config.OmitTemperature = false
 		config.ThinkingEnabled = false
@@ -440,7 +449,7 @@ func normalizeAIModelConfig(input model.AIModelConfig, fallback model.AIModelCon
 
 func normalizeAIReasoningEffort(value string) string {
 	switch strings.ToLower(strings.TrimSpace(value)) {
-	case "minimal", "low", "medium", "high", "xhigh":
+	case "minimal", "low", "medium", "high", "xhigh", "max", "ultra":
 		return strings.ToLower(strings.TrimSpace(value))
 	default:
 		return ""
@@ -537,9 +546,16 @@ func aiModelSupportsImages(config model.AIModelConfig) bool {
 	return config.SupportsImages == nil || *config.SupportsImages
 }
 
+func aiModelIsConfigured(config model.AIModelConfig) bool {
+	if config.Provider == model.AIProviderCodex {
+		return true
+	}
+	return strings.TrimSpace(config.APIKey) != ""
+}
+
 func isSupportedAIProvider(provider model.AIProvider) bool {
 	switch provider {
-	case model.AIProviderOpenAI, model.AIProviderAnthropic, model.AIProviderGemini:
+	case model.AIProviderOpenAI, model.AIProviderAnthropic, model.AIProviderGemini, model.AIProviderCodex:
 		return true
 	default:
 		return false
@@ -548,6 +564,8 @@ func isSupportedAIProvider(provider model.AIProvider) bool {
 
 func defaultAIBaseURL(provider model.AIProvider) string {
 	switch provider {
+	case model.AIProviderCodex:
+		return ""
 	case model.AIProviderAnthropic:
 		return "https://api.anthropic.com"
 	case model.AIProviderGemini:
@@ -559,6 +577,8 @@ func defaultAIBaseURL(provider model.AIProvider) string {
 
 func defaultAIModel(provider model.AIProvider) string {
 	switch provider {
+	case model.AIProviderCodex:
+		return ""
 	case model.AIProviderAnthropic:
 		return "claude-3-7-sonnet-latest"
 	case model.AIProviderGemini:

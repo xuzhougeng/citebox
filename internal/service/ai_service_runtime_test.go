@@ -11,11 +11,13 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/xuzhougeng/citebox/internal/apperr"
+	"github.com/xuzhougeng/citebox/internal/codexapp"
 	"github.com/xuzhougeng/citebox/internal/model"
 	"github.com/xuzhougeng/citebox/internal/repository"
 )
@@ -46,6 +48,44 @@ func TestCheckModelCallsProviderSuccessfully(t *testing.T) {
 	}
 	if !result.Success || result.Model != "gpt-test" || result.Mode != "responses" {
 		t.Fatalf("CheckModel() = %+v, want success for responses mode", result)
+	}
+}
+
+func TestCheckModelUsesCodexStatusWithoutInference(t *testing.T) {
+	_, repo, cfg := newTestService(t)
+	aiSvc := NewAIService(repo, cfg, nil)
+
+	binary := filepath.Join(t.TempDir(), "codex")
+	script := `#!/bin/sh
+if [ "$1" = "--version" ]; then
+  echo "codex-cli 1.2.3"
+  exit 0
+fi
+if [ "$1" = "login" ] && [ "$2" = "status" ]; then
+  echo "Logged in using ChatGPT"
+  exit 0
+fi
+echo "unexpected Codex invocation: $*" >&2
+exit 9
+`
+	if err := os.WriteFile(binary, []byte(script), 0o700); err != nil {
+		t.Fatalf("write fake Codex: %v", err)
+	}
+	client := codexapp.New(codexapp.Config{Enabled: true, Binary: binary})
+	t.Cleanup(func() { _ = client.Close() })
+	aiSvc.SetCodexClient(client)
+
+	result, err := aiSvc.CheckModel(context.Background(), model.AIModelConfig{
+		ID:       "check-codex",
+		Name:     "Check Codex",
+		Provider: model.AIProviderCodex,
+		Model:    "codex-test",
+	})
+	if err != nil {
+		t.Fatalf("CheckModel() error = %v", err)
+	}
+	if !result.Success || result.Model != "codex-test" || result.Mode != "codex_quick_check" {
+		t.Fatalf("CheckModel() = %+v, want Codex quick-check success", result)
 	}
 }
 

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/xuzhougeng/citebox/internal/apperr"
+	"github.com/xuzhougeng/citebox/internal/codexapp"
 	"github.com/xuzhougeng/citebox/internal/config"
 	"github.com/xuzhougeng/citebox/internal/handler"
 	"github.com/xuzhougeng/citebox/internal/integration"
@@ -34,9 +35,10 @@ import (
 )
 
 type Options struct {
-	Config  *config.Config
-	Logger  *slog.Logger
-	WebRoot string
+	Config      *config.Config
+	Logger      *slog.Logger
+	WebRoot     string
+	DesktopMode bool
 }
 
 type Server struct {
@@ -50,6 +52,7 @@ type Server struct {
 	s2Client     *research.Client
 	pubmedClient *pubmed.Client
 	mcpServer    *mcpserver.Server
+	aiSvc        *service.AIService
 }
 
 func NewServer(opts Options) (*Server, error) {
@@ -84,17 +87,20 @@ func NewServer(opts Options) (*Server, error) {
 		return nil, err
 	}
 
+	aiSvc := service.NewAIService(repo, cfg, logger.With("component", "ai_service"))
+	aiSvc.SetCodexClient(codexapp.New(codexapp.Config{Enabled: opts.DesktopMode, Binary: cfg.CodexBin}))
+
 	librarySvc, err := service.NewLibraryService(
 		repo,
 		cfg,
 		service.WithLogger(logger.With("component", "library_service")),
+		service.WithAIService(aiSvc),
 	)
 	if err != nil {
+		_ = aiSvc.Close()
 		_ = repo.Close()
 		return nil, err
 	}
-
-	aiSvc := service.NewAIService(repo, cfg, logger.With("component", "ai_service"))
 
 	dbS2APIKey, _ := repo.GetAppSetting("s2_api_key")
 	s2APIKey := startupS2APIKey(cfg, dbS2APIKey)
@@ -105,6 +111,7 @@ func NewServer(opts Options) (*Server, error) {
 
 	pubmedSettings, err := librarySvc.GetAIExternalSearchSettings()
 	if err != nil {
+		_ = aiSvc.Close()
 		_ = repo.Close()
 		s2Client.Close()
 		return nil, fmt.Errorf("load AI external search settings: %w", err)
@@ -138,6 +145,7 @@ func NewServer(opts Options) (*Server, error) {
 		s2Client:     s2Client,
 		pubmedClient: pubmedClient,
 		mcpServer:    integrationSvcs.mcp,
+		aiSvc:        aiSvc,
 	}
 
 	logger.Info("resolved web root", "web_root", absoluteWebRoot)
@@ -150,6 +158,7 @@ func NewServer(opts Options) (*Server, error) {
 	surfaceStatePath := filepath.Join(cfg.StorageDir, "weixin-bridge", "weixin_surface_state.json")
 	surfaceState, err := agent_session.NewSurfaceStateStore(surfaceStatePath)
 	if err != nil {
+		_ = aiSvc.Close()
 		_ = repo.Close()
 		s2Client.Close()
 		pubmedClient.Close()
@@ -349,8 +358,12 @@ func (s *Server) Close() error {
 	if s.pubmedClient != nil {
 		s.pubmedClient.Close()
 	}
+	var aiErr error
+	if s.aiSvc != nil {
+		aiErr = s.aiSvc.Close()
+	}
 
-	return errors.Join(serverErr, repoErr)
+	return errors.Join(serverErr, repoErr, aiErr)
 }
 
 func (s *Server) logStartup(addr string) {
@@ -807,6 +820,22 @@ func buildHandlerWithAIServices(
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
+	})
+
+	mux.HandleFunc("/api/ai/codex/status", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		aiHandler.CodexStatus(w, r)
+	})
+
+	mux.HandleFunc("/api/ai/codex/models", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		aiHandler.CodexModels(w, r)
 	})
 
 	mux.HandleFunc("/api/ai/read", func(w http.ResponseWriter, r *http.Request) {
