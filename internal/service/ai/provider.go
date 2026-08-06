@@ -19,6 +19,8 @@ import (
 // ProviderMode 返回提供商的调用模式
 func ProviderMode(settings model.AISettings) string {
 	switch settings.Provider {
+	case model.AIProviderCodex:
+		return "codex_app_server"
 	case model.AIProviderOpenAI:
 		if settings.OpenAILegacyMode {
 			return "chat_completions"

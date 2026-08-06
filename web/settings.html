@@ -1038,11 +1038,13 @@ User Prompt:
                             <option value="openai">OpenAI</option>
                             <option value="anthropic">Anthropic</option>
                             <option value="gemini">Gemini</option>
+                            <option value="codex" data-i18n="settings.ai.provider_codex">Codex Subscription</option>
                         </select>
                     </label>
                     <label class="field">
                         <span data-i18n="settings.ai.model_id">模型名</span>
-                        <input id="aiModelIdentifierInput" class="form-input" type="text" data-i18n-placeholder="settings.ai.model_identifier_placeholder" placeholder="例如：gpt-4.1-mini">
+                        <input id="aiModelIdentifierInput" class="form-input" type="text" list="codexModelOptions" data-i18n-placeholder="settings.ai.model_identifier_placeholder" placeholder="例如：gpt-4.1-mini">
+                        <datalist id="codexModelOptions"></datalist>
                     </label>
                     <label class="field">
                         <span>Max Output Tokens</span>
@@ -1081,6 +1083,8 @@ User Prompt:
                             <option value="medium">medium</option>
                             <option value="high">high</option>
                             <option value="xhigh">xhigh</option>
+                            <option value="max">max</option>
+                            <option value="ultra">ultra</option>
                         </select>
                     </label>
                 </div>
@@ -1102,6 +1106,7 @@ User Prompt:
     <script src="/static/js/utils.js"></script>
     <script src="/static/js/api.js"></script>
     <script src="/static/js/settings-anchor.js"></script>
+    <script src="/static/js/codex-model-capabilities.js"></script>
     <script src="/static/js/settings.js"></script>
     <script src="/static/js/translate.js"></script>
     <script src="/static/js/main.js"></script>

@@ -65,9 +65,10 @@ func main() {
 	logger.Info("desktop web assets ready", "web_root", webRoot)
 
 	server, err := app.NewServer(app.Options{
-		Config:  cfg,
-		Logger:  logger,
-		WebRoot: webRoot,
+		Config:      cfg,
+		Logger:      logger,
+		WebRoot:     webRoot,
+		DesktopMode: true,
 	})
 	if err != nil {
 		logger.Error("failed to initialize desktop server", "error", err)

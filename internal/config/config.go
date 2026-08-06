@@ -32,6 +32,7 @@ type Config struct {
 	ExtractorTimeoutSeconds int
 	ExtractorPollInterval   int
 	WeixinBridgeEnabled     bool
+	CodexBin                string
 }
 
 func Load() *Config {
@@ -59,6 +60,7 @@ func Load() *Config {
 		ExtractorTimeoutSeconds: getEnvInt("PDF_EXTRACTOR_TIMEOUT_SECONDS", 300),
 		ExtractorPollInterval:   getEnvInt("PDF_EXTRACTOR_POLL_INTERVAL_SECONDS", 2),
 		WeixinBridgeEnabled:     getEnvBool("WEIXIN_BRIDGE_ENABLED", false),
+		CodexBin:                getEnv("CODEX_BIN", ""),
 	}
 }
 

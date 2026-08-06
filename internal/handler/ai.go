@@ -138,6 +138,19 @@ func (h *AIHandler) CheckModel(w http.ResponseWriter, r *http.Request) {
 	sendJSON(w, http.StatusOK, result)
 }
 
+func (h *AIHandler) CodexStatus(w http.ResponseWriter, r *http.Request) {
+	sendJSON(w, http.StatusOK, h.service.CodexStatus(r.Context()))
+}
+
+func (h *AIHandler) CodexModels(w http.ResponseWriter, r *http.Request) {
+	models, err := h.service.CodexModels(r.Context())
+	if err != nil {
+		sendError(w, err)
+		return
+	}
+	sendJSON(w, http.StatusOK, map[string]interface{}{"models": models})
+}
+
 func (h *AIHandler) Read(w http.ResponseWriter, r *http.Request) {
 	var req model.AIReadRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {

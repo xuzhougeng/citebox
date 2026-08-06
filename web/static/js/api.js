@@ -428,6 +428,14 @@ const API = {
         });
     },
 
+    getCodexStatus() {
+        return requestJSON(`${API_BASE}/ai/codex/status`);
+    },
+
+    getCodexModels() {
+        return requestJSON(`${API_BASE}/ai/codex/models`);
+    },
+
     readPaperWithAI(data) {
         return requestJSON(`${API_BASE}/ai/read`, {
             method: 'POST',

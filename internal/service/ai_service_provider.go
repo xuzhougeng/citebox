@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/xuzhougeng/citebox/internal/apperr"
+	"github.com/xuzhougeng/citebox/internal/codexapp"
 	"github.com/xuzhougeng/citebox/internal/model"
 )
 
@@ -21,8 +22,11 @@ func (s *AIService) CheckModel(ctx context.Context, input model.AIModelConfig) (
 	if err != nil {
 		return nil, err
 	}
-	if strings.TrimSpace(normalized.APIKey) == "" {
+	if normalized.Provider != model.AIProviderCodex && strings.TrimSpace(normalized.APIKey) == "" {
 		return nil, apperr.New(apperr.CodeFailedPrecondition, "请先填写 API Key 再检查模型")
+	}
+	if normalized.Provider == model.AIProviderCodex {
+		return s.checkCodexModel(ctx, normalized)
 	}
 
 	runtimeSettings := model.DefaultAISettings()
@@ -50,9 +54,42 @@ func (s *AIService) CheckModel(ctx context.Context, input model.AIModelConfig) (
 	}, nil
 }
 
+func (s *AIService) checkCodexModel(ctx context.Context, config model.AIModelConfig) (*model.AIModelCheckResponse, error) {
+	if s == nil || s.codex == nil {
+		return nil, apperr.New(apperr.CodeFailedPrecondition, "Codex 订阅仅在 CiteBox 桌面端可用")
+	}
+
+	modelID := strings.TrimSpace(config.Model)
+	if modelID == "" {
+		return nil, apperr.New(apperr.CodeFailedPrecondition, "请先选择 Codex 模型再检查")
+	}
+
+	status := s.codex.Status(ctx)
+	if !status.DesktopAvailable {
+		return nil, apperr.New(apperr.CodeFailedPrecondition, status.Message)
+	}
+	if !status.CLIAvailable {
+		return nil, apperr.New(apperr.CodeFailedPrecondition, status.Message)
+	}
+	if !status.Authenticated {
+		return nil, apperr.New(apperr.CodeUnauthenticated, status.Message)
+	}
+
+	return &model.AIModelCheckResponse{
+		Success:  true,
+		Provider: model.AIProviderCodex,
+		Model:    modelID,
+		Mode:     "codex_quick_check",
+		Message:  "Codex 快速检查通过",
+	}, nil
+}
+
 func (s *AIService) callProvider(ctx context.Context, prepared *aiReadPrepared) (string, string, error) {
 	mode := aiProviderMode(prepared.settings)
 	switch prepared.settings.Provider {
+	case model.AIProviderCodex:
+		text, err := s.callCodex(ctx, prepared.settings, prepared.systemPrompt, prepared.userPrompt, prepared.images, nil)
+		return text, mode, err
 	case model.AIProviderOpenAI:
 		if prepared.settings.OpenAILegacyMode {
 			text, err := s.callOpenAIChatCompletions(ctx, prepared.settings, prepared.systemPrompt, prepared.userPrompt, prepared.images)
@@ -73,6 +110,8 @@ func (s *AIService) callProvider(ctx context.Context, prepared *aiReadPrepared) 
 
 func (s *AIService) callProviderStream(ctx context.Context, prepared *aiReadPrepared, onDelta func(string) error) (string, error) {
 	switch prepared.settings.Provider {
+	case model.AIProviderCodex:
+		return s.callCodex(ctx, prepared.settings, prepared.systemPrompt, prepared.userPrompt, prepared.images, onDelta)
 	case model.AIProviderOpenAI:
 		if prepared.settings.OpenAILegacyMode {
 			return s.callOpenAIChatCompletionsStream(ctx, prepared.settings, prepared.systemPrompt, prepared.userPrompt, prepared.images, onDelta)
@@ -89,6 +128,8 @@ func (s *AIService) callProviderStream(ctx context.Context, prepared *aiReadPrep
 
 func aiProviderMode(settings model.AISettings) string {
 	switch settings.Provider {
+	case model.AIProviderCodex:
+		return "codex_app_server"
 	case model.AIProviderOpenAI:
 		if settings.OpenAILegacyMode {
 			return "chat_completions"
@@ -162,6 +203,8 @@ func openAIModelOmitsTemperature(modelName string) bool {
 
 func (s *AIService) callTextProvider(ctx context.Context, settings model.AISettings, systemPrompt, userPrompt string, images []aiImageInput) (string, error) {
 	switch settings.Provider {
+	case model.AIProviderCodex:
+		return s.callCodex(ctx, settings, systemPrompt, userPrompt, images, nil)
 	case model.AIProviderOpenAI:
 		if settings.OpenAILegacyMode {
 			return s.callOpenAIChatCompletions(ctx, settings, systemPrompt, userPrompt, images)
@@ -173,6 +216,54 @@ func (s *AIService) callTextProvider(ctx context.Context, settings model.AISetti
 		return s.callGeminiGenerateContent(ctx, settings, systemPrompt, userPrompt, images)
 	default:
 		return "", apperr.New(apperr.CodeInvalidArgument, "暂不支持该 AI 提供商")
+	}
+}
+
+func (s *AIService) callCodex(ctx context.Context, settings model.AISettings, systemPrompt, userPrompt string, images []aiImageInput, onDelta func(string) error) (string, error) {
+	if s == nil || s.codex == nil {
+		return "", apperr.New(apperr.CodeFailedPrecondition, "Codex 订阅仅在 CiteBox 桌面端可用")
+	}
+	inputs := make([]codexapp.Image, 0, len(images))
+	for _, image := range images {
+		inputs = append(inputs, codexapp.Image{MIMEType: image.MIMEType, Data: image.Data})
+	}
+	text, err := s.codex.Complete(ctx, codexapp.Request{
+		Model:           settings.Model,
+		ReasoningEffort: settings.ReasoningEffort,
+		SystemPrompt:    systemPrompt,
+		UserPrompt:      userPrompt,
+		Images:          inputs,
+	}, onDelta)
+	if err != nil {
+		return "", mapCodexError(err)
+	}
+	return text, nil
+}
+
+func mapCodexError(err error) error {
+	if err == nil {
+		return nil
+	}
+	if errors.Is(err, context.Canceled) {
+		return err
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return apperr.Wrap(apperr.CodeDeadlineExceeded, "Codex 请求超时", err)
+	}
+	if errors.Is(err, codexapp.ErrMCPDiscoveryTimeout) {
+		return apperr.Wrap(apperr.CodeDeadlineExceeded, "Codex CLI 检查本机 MCP 配置超时；请重试，若持续失败请在终端运行 codex mcp list --json 检查配置", err)
+	}
+	message := strings.TrimSpace(err.Error())
+	lower := strings.ToLower(message)
+	switch {
+	case strings.Contains(lower, "not logged"), strings.Contains(lower, "login"), strings.Contains(lower, "unauthorized"), strings.Contains(lower, "authentication"):
+		return apperr.Wrap(apperr.CodeUnauthenticated, "Codex 尚未通过 ChatGPT 登录；请在终端运行 codex login", err)
+	case strings.Contains(lower, "rate limit"), strings.Contains(lower, "usage limit"), strings.Contains(lower, "quota"), strings.Contains(lower, "credits"):
+		return apperr.Wrap(apperr.CodeResourceExhausted, "Codex 订阅额度或速率限制已达到上限；CiteBox 不会自动切换到 API", err)
+	case strings.Contains(lower, "only available in the desktop"), strings.Contains(lower, "executable not found"):
+		return apperr.Wrap(apperr.CodeFailedPrecondition, "Codex 订阅仅在已安装 Codex CLI 的 CiteBox 桌面端可用", err)
+	default:
+		return apperr.Wrap(apperr.CodeUnavailable, firstNonEmpty("Codex 调用失败", message), err)
 	}
 }
 

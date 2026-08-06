@@ -19,6 +19,7 @@ type LibraryService struct {
 	repo                *repository.LibraryRepository
 	repoMu              sync.RWMutex // protects repo during ImportDatabase
 	config              *config.Config
+	aiService           *AIService
 	httpClient          *http.Client
 	logger              *slog.Logger
 	startBackground     bool
@@ -207,6 +208,15 @@ func WithLogger(logger *slog.Logger) LibraryServiceOption {
 		if logger != nil {
 			service.logger = logger
 		}
+	}
+}
+
+// WithAIService reuses the application-scoped AI runtime for background
+// extraction jobs. This is required for desktop-only providers such as Codex,
+// whose client and process lifecycle are owned by the application server.
+func WithAIService(aiService *AIService) LibraryServiceOption {
+	return func(service *LibraryService) {
+		service.aiService = aiService
 	}
 }
 

@@ -797,7 +797,7 @@ func (s *LibraryService) builtInLLMCoordinateExtractionConfigured() (bool, error
 		return false, err
 	}
 
-	return strings.TrimSpace(modelConfig.APIKey) != "" && strings.TrimSpace(modelConfig.Model) != "", nil
+	return aiModelIsConfigured(modelConfig) && (modelConfig.Provider == model.AIProviderCodex || strings.TrimSpace(modelConfig.Model) != ""), nil
 }
 
 func usesBuiltInLLMCoordinateExtraction(settings model.ExtractorSettings) bool {

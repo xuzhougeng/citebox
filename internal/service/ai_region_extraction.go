@@ -103,8 +103,8 @@ func (s *AIService) DetectFigureRegions(ctx context.Context, input model.AIFigur
 	if err != nil {
 		return nil, err
 	}
-	if strings.TrimSpace(modelConfig.APIKey) == "" {
-		return nil, apperr.New(apperr.CodeFailedPrecondition, "请先在 AI 页面为图片场景配置可用模型和 API Key")
+	if !aiModelIsConfigured(modelConfig) {
+		return nil, apperr.New(apperr.CodeFailedPrecondition, "请先在 AI 页面为图片场景配置可用模型和凭据")
 	}
 
 	binary, mimeType, err := decodeAIRequestImage(input.ImageData)

@@ -46,8 +46,8 @@ func (s *AIService) RewriteTextForTTS(ctx context.Context, text string) (string,
 	if err != nil {
 		return "", err
 	}
-	if strings.TrimSpace(modelConfig.APIKey) == "" {
-		return "", apperr.New(apperr.CodeFailedPrecondition, "请先在 AI 页面为 TTS 优化场景配置可用模型和 API Key")
+	if !aiModelIsConfigured(modelConfig) {
+		return "", apperr.New(apperr.CodeFailedPrecondition, "请先在 AI 页面为 TTS 优化场景配置可用模型和凭据")
 	}
 
 	systemPrompt, userPrompt := buildAITTSPrompts(*settings, text)

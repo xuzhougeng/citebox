@@ -57,6 +57,16 @@ func newTestService(t *testing.T) (*LibraryService, *repository.LibraryRepositor
 	return svc, repo, cfg
 }
 
+func TestWithAIServiceReusesApplicationRuntime(t *testing.T) {
+	svc, repo, cfg := newTestService(t)
+	aiSvc := NewAIService(repo, cfg, nil)
+	WithAIService(aiSvc)(svc)
+
+	if svc.aiService != aiSvc {
+		t.Fatalf("LibraryService.aiService = %p, want %p", svc.aiService, aiSvc)
+	}
+}
+
 func waitForPaperPDFText(t *testing.T, svc *LibraryService, paperID int64) string {
 	t.Helper()
 

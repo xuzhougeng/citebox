@@ -107,3 +107,12 @@ func TestLoadReadsS2APIKey(t *testing.T) {
 		t.Fatalf("Load() S2APIKey = %q, want %q", cfg.S2APIKey, "test-key-abc")
 	}
 }
+
+func TestLoadReadsCodexBin(t *testing.T) {
+	t.Setenv("CODEX_BIN", "/opt/codex/bin/codex")
+
+	cfg := Load()
+	if cfg.CodexBin != "/opt/codex/bin/codex" {
+		t.Fatalf("Load() CodexBin = %q", cfg.CodexBin)
+	}
+}

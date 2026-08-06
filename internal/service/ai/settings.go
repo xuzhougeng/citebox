@@ -43,7 +43,7 @@ func DefaultModel(provider model.AIProvider) string {
 // IsSupportedProvider 检查提供商是否受支持
 func IsSupportedProvider(provider model.AIProvider) bool {
 	switch provider {
-	case model.AIProviderOpenAI, model.AIProviderAnthropic, model.AIProviderGemini:
+	case model.AIProviderOpenAI, model.AIProviderAnthropic, model.AIProviderGemini, model.AIProviderCodex:
 		return true
 	default:
 		return false
@@ -249,7 +249,10 @@ func normalizeModelConfig(input model.AIModelConfig, fallback model.AIModelConfi
 	config.Name = strings.TrimSpace(config.Name)
 	config.ReasoningEffort = normalizeReasoningEffort(config.ReasoningEffort)
 
-	if config.BaseURL == "" {
+	if config.Provider == model.AIProviderCodex {
+		config.APIKey = ""
+		config.BaseURL = ""
+	} else if config.BaseURL == "" {
 		config.BaseURL = DefaultBaseURL(config.Provider)
 	}
 	if config.Model == "" {
@@ -265,10 +268,16 @@ func normalizeModelConfig(input model.AIModelConfig, fallback model.AIModelConfi
 		supportsImages := modelSupportsImages(fallback)
 		config.SupportsImages = &supportsImages
 	}
-	if config.Name == "" {
+	if config.Name == "" && config.Provider == model.AIProviderCodex {
+		config.Name = "Codex Subscription"
+	} else if config.Name == "" {
 		config.Name = fmt.Sprintf("%s / %s", strings.ToUpper(string(config.Provider)), config.Model)
 	}
-	if config.Provider != model.AIProviderOpenAI {
+	if config.Provider == model.AIProviderCodex {
+		config.OpenAILegacyMode = false
+		config.OmitTemperature = true
+		config.ThinkingEnabled = false
+	} else if config.Provider != model.AIProviderOpenAI {
 		config.OpenAILegacyMode = false
 		config.OmitTemperature = false
 		config.ThinkingEnabled = false
@@ -280,7 +289,7 @@ func normalizeModelConfig(input model.AIModelConfig, fallback model.AIModelConfi
 
 func normalizeReasoningEffort(value string) string {
 	switch strings.ToLower(strings.TrimSpace(value)) {
-	case "minimal", "low", "medium", "high", "xhigh":
+	case "minimal", "low", "medium", "high", "xhigh", "max", "ultra":
 		return strings.ToLower(strings.TrimSpace(value))
 	default:
 		return ""

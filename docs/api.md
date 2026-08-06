@@ -898,6 +898,7 @@ citebox-figure-{id}-transfer-package.zip
 - `role_prompts` 是用户自定义的角色 Prompt 列表；每个角色包含：
   - `name`
   - `prompt`
+- `provider` 也支持 `codex`。该 provider 只在桌面运行时可用，通过本机 `codex app-server` 复用 Codex CLI 的 ChatGPT 登录；不会把订阅凭据保存到 CiteBox，也不会自动回退到 OpenAI API。若 CLI 当前使用 API key 登录，CiteBox 会拒绝调用，避免意外产生 API 账单。
 
 #### `PUT /api/ai/settings/models`
 
@@ -956,6 +957,8 @@ citebox-figure-{id}-transfer-package.zip
 说明：
 
 - `image_gen` 为可选字段；如果本次请求未传，后端会保留当前已保存的图像生成配置。
+- `provider=codex` 时 `api_key` 和 `base_url` 会被清空；`model` 使用 app-server 返回的模型 ID，`reasoning_effort` 和 `supports_images` 按该模型声明的能力设置。
+- `image_gen` 始终是独立的 Images API 配置，Codex 订阅 provider 不替代其 API key。
 - `image_gen.size` 目前支持：`1024x1024`、`1024x1536`、`1536x1024`。
 - `image_gen.quality` 目前支持：`low`、`medium`、`high`。
 
@@ -1197,8 +1200,33 @@ OpenAI 兼容模型配置说明：
 - `supports_images=false` 时，该模型不会接收 PDF 图片输入；`paper_qa` 会自动降级为文本问答，图片解读等必须视觉输入的场景会提示更换模型或打开该能力。
 - `omit_temperature=true` 会跳过 `temperature` 字段；`gpt-5*`、`o1*`、`o3*`、`o4*`、`o5*` 模型也会自动跳过，避免模型检查返回 `Unsupported parameter: 'temperature'`。
 - `thinking_enabled=true` 在 Chat Completions 请求体加入 `{"thinking":{"type":"enabled"}}`；在 Responses 模式下会启用 `reasoning` 对象，未设置 `reasoning_effort` 时默认使用 `medium`。
-- `reasoning_effort` 可填 `minimal`、`low`、`medium`、`high`、`xhigh`；Chat Completions 发送为 `reasoning_effort`，Responses 发送为 `reasoning.effort`。
+- `reasoning_effort` 可填 `minimal`、`low`、`medium`、`high`、`xhigh`、`max`、`ultra`；OpenAI 兼容接口是否接受具体值由上游模型决定，Codex 设置页按 app-server `model/list` 返回的能力使用。
 - DeepSeek 根地址 `https://api.deepseek.com` 在 Chat Completions 模式下会调用 `/chat/completions`；其他 OpenAI 兼容网关仍按 `/v1/chat/completions` 拼接。
+
+Codex 桌面模型可使用以下配置；不需要也不会保存 API key：
+
+```json
+{
+  "id": "codex-default",
+  "name": "Codex Subscription",
+  "provider": "codex",
+  "model": "<model/list 返回的模型 ID>",
+  "supports_images": true,
+  "reasoning_effort": "medium"
+}
+```
+
+当 `provider=codex` 时，模型检查使用快速检查：验证桌面运行环境、Codex CLI、ChatGPT 订阅登录和模型 ID 已选择，不启动 app-server、不创建推理线程，也不会消耗一次模型生成。模型目录仍由设置页通过 `GET /api/ai/codex/models` 单独加载；其他 provider 仍会发送最小生成请求来验证模型可用性。
+
+#### `GET /api/ai/codex/status`
+
+返回桌面运行时、Codex CLI 和 ChatGPT 登录状态，包括 `desktop_available`、`cli_available`、`authenticated`、`version`、`binary` 与可读 `message`。只有 CLI 明确报告通过 ChatGPT 登录时 `authenticated` 才为 `true`；接口不读取或返回 `auth.json` 内容。
+
+#### `GET /api/ai/codex/models`
+
+桌面端代理 app-server `model/list`，返回 `models` 数组。每项包含模型 ID、显示名称、默认/可用 reasoning effort、输入模态和是否默认模型；设置页会据此限制 reasoning effort，并自动同步图片输入能力。普通 server 运行时返回 `FAILED_PRECONDITION`。推理请求使用临时线程、只读且禁网的 sandbox，并禁用用户配置中的 MCP、apps、plugins、shell、浏览器和电脑控制能力。
+
+桌面端会依次从 `PATH`、`~/.local/bin`、`~/.npm-global/bin`、`~/.volta/bin` 以及 macOS 常见 Homebrew 目录查找 `codex`。仍无法发现时，可用 `CODEX_BIN` 指定可执行文件的绝对路径。
 
 #### `POST /api/ai/read`
 
