@@ -21,6 +21,8 @@ const (
 	ScopeNotesRead       = "notes:read"
 	ScopeAnnotationsRead = "annotations:read"
 	ScopeAssetsRead      = "assets:read"
+	// ScopeLibraryWrite 允许通过主 HTTP API 写入文库（如浏览器插件一键入库）
+	ScopeLibraryWrite = "library:write"
 )
 
 // TokenPrefix 是集成令牌明文的前缀，便于识别和泄露扫描
@@ -29,6 +31,11 @@ const TokenPrefix = "cbx_"
 // ReadScopes 返回集成令牌的全部只读权限范围
 func ReadScopes() []string {
 	return []string{ScopeLibraryRead, ScopeNotesRead, ScopeAnnotationsRead, ScopeAssetsRead}
+}
+
+// DefaultScopes 返回轮换生成的默认令牌权限范围：只读范围 + 文库写入
+func DefaultScopes() []string {
+	return append(ReadScopes(), ScopeLibraryWrite)
 }
 
 // HasScope 检查令牌是否拥有指定权限范围
@@ -102,7 +109,7 @@ func (s *TokenService) Rotate() (plaintext string, view *model.IntegrationToken,
 	if err := s.repo.RevokeAll(); err != nil {
 		return "", nil, err
 	}
-	if _, err := s.repo.Create("default", hash, ReadScopes()); err != nil {
+	if _, err := s.repo.Create("default", hash, DefaultScopes()); err != nil {
 		return "", nil, err
 	}
 	view, err = s.repo.GetActiveByHash(hash)

@@ -1,0 +1,144 @@
+{
+    "extName": {
+        "message": "CiteBox Connector",
+        "description": "扩展名称，显示在工具栏与扩展列表中。"
+    },
+    "extDescription": {
+        "message": "Zotero Connector 式的一键入库插件，将论文保存到你的 CiteBox 文库。",
+        "description": "扩展描述，显示在扩展列表中。"
+    },
+    "popupHeader": {
+        "message": "CiteBox Connector",
+        "description": "弹窗标题。"
+    },
+    "notConfigured": {
+        "message": "尚未配置服务器地址或集成令牌。",
+        "description": "弹窗中提示缺少配置。"
+    },
+    "openOptions": {
+        "message": "打开设置",
+        "description": "打开设置页的按钮。"
+    },
+    "cannotReadPage": {
+        "message": "无法读取此页面，可能是受限页面或页面尚未加载完成。",
+        "description": "当前标签页无法注入或联系 content script 时显示。"
+    },
+    "labelTitle": {
+        "message": "标题",
+        "description": "检测到的论文标题标签。"
+    },
+    "labelDoi": {
+        "message": "DOI",
+        "description": "检测到的 DOI 标签。"
+    },
+    "notDetected": {
+        "message": "未检测到",
+        "description": "页面上未找到标题或 DOI 时的占位文本。"
+    },
+    "saveToCitebox": {
+        "message": "保存到 CiteBox",
+        "description": "弹窗中的主按钮，触发入库。"
+    },
+    "saving": {
+        "message": "保存中…",
+        "description": "保存按钮的进行中文案。"
+    },
+    "imported": {
+        "message": "已保存到 CiteBox 文库。",
+        "description": "服务器接受入库（HTTP 202）时显示。"
+    },
+    "alreadyExists": {
+        "message": "库中已存在该文献。",
+        "description": "服务器报告重复（HTTP 409）时显示。"
+    },
+    "openInCitebox": {
+        "message": "在 CiteBox 中打开",
+        "description": "在 CiteBox Web 界面查看文献的链接。"
+    },
+    "checkToken": {
+        "message": "未认证（HTTP 401），请在设置中检查集成令牌。",
+        "description": "服务器拒绝令牌时显示。"
+    },
+    "noPdfFound": {
+        "message": "未找到可直接下载的 PDF。",
+        "description": "DOI 入库与 PDF 下载均不可行时的错误。"
+    },
+    "networkError": {
+        "message": "网络错误：$detail$",
+        "description": "请求在收到响应前失败时的错误。",
+        "placeholders": {
+            "detail": {
+                "content": "$1"
+            }
+        }
+    },
+    "missingToken": {
+        "message": "缺少集成令牌，请打开设置页进行配置。",
+        "description": "未配置令牌就尝试入库时的错误。"
+    },
+    "unknownError": {
+        "message": "未知错误。",
+        "description": "服务端未返回错误信息时的兜底文案。"
+    },
+    "optionsHeader": {
+        "message": "CiteBox Connector 设置",
+        "description": "设置页标题。"
+    },
+    "serverUrlLabel": {
+        "message": "服务器地址",
+        "description": "服务器地址输入框标签。"
+    },
+    "serverUrlPlaceholder": {
+        "message": "http://localhost:8080",
+        "description": "服务器地址输入框占位文本。"
+    },
+    "tokenLabel": {
+        "message": "集成令牌",
+        "description": "令牌输入框标签。"
+    },
+    "tokenPlaceholder": {
+        "message": "cbx_…",
+        "description": "令牌输入框占位文本。"
+    },
+    "saveButton": {
+        "message": "保存",
+        "description": "保存设置的按钮。"
+    },
+    "saved": {
+        "message": "设置已保存。",
+        "description": "设置保存成功后的确认信息。"
+    },
+    "testConnection": {
+        "message": "测试连接",
+        "description": "测试服务器连通性与令牌有效性的按钮。"
+    },
+    "testing": {
+        "message": "测试中…",
+        "description": "测试连接按钮的进行中文案。"
+    },
+    "testSuccess": {
+        "message": "连接成功，服务器与令牌均可用。",
+        "description": "测试请求返回 HTTP 200 时显示。"
+    },
+    "testInvalidToken": {
+        "message": "令牌无效（HTTP 401），请在 CiteBox 设置页重新生成。",
+        "description": "测试请求返回 HTTP 401 时显示。"
+    },
+    "testUnreachable": {
+        "message": "无法连接服务器，请检查地址并确认 CiteBox 正在运行。",
+        "description": "测试请求在网络层失败时显示。"
+    },
+    "testHttpError": {
+        "message": "服务器返回 HTTP $status$。",
+        "description": "测试请求返回其他状态码时显示。",
+        "placeholders": {
+            "status": {
+                "content": "$1"
+            }
+        }
+    },
+    "fillRequired": {
+        "message": "请填写服务器地址和集成令牌。",
+        "description": "必填字段为空时的校验提示。"
+    }
+}

@@ -11,7 +11,9 @@
 ## 总览
 
 - API 前缀：`/api`
-- 鉴权方式：同源 Cookie 会话
+- 鉴权方式：
+  - 同源 Cookie 会话（Web 前端默认）
+  - `Authorization: Bearer <集成令牌>`（面向浏览器插件等外部客户端；令牌在设置页轮换生成，需带 `library:write` 权限范围，默认令牌已包含）
 - 前端默认请求方式：
   - JSON 接口：`fetch(..., { credentials: 'same-origin' })`
   - 下载接口：`Blob` 或直接 `<a href=...>`

@@ -48,8 +48,11 @@ func TestTokenServiceAuthenticateRoundTrip(t *testing.T) {
 	if view == nil || view.Name != "default" {
 		t.Fatalf("Rotate() view = %+v, want name default", view)
 	}
-	if len(view.Scopes) != len(ReadScopes()) {
-		t.Fatalf("Rotate() scopes = %v, want %v", view.Scopes, ReadScopes())
+	if len(view.Scopes) != len(DefaultScopes()) {
+		t.Fatalf("Rotate() scopes = %v, want %v", view.Scopes, DefaultScopes())
+	}
+	if !HasScope(view, ScopeLibraryWrite) {
+		t.Fatalf("Rotate() scopes = %v, want containing %q", view.Scopes, ScopeLibraryWrite)
 	}
 
 	token, err := svc.Authenticate(plaintext)
@@ -130,13 +133,13 @@ func TestHasScope(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Rotate() error = %v", err)
 	}
-	for _, scope := range ReadScopes() {
+	for _, scope := range DefaultScopes() {
 		if !HasScope(view, scope) {
 			t.Fatalf("HasScope(%q) = false, want true", scope)
 		}
 	}
-	if HasScope(view, "library:write") {
-		t.Fatal("HasScope(library:write) = true, want false")
+	if HasScope(view, "bogus:scope") {
+		t.Fatal("HasScope(bogus:scope) = true, want false")
 	}
 	if HasScope(nil, ScopeLibraryRead) {
 		t.Fatal("HasScope(nil token) = true, want false")
