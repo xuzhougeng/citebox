@@ -464,11 +464,15 @@ const UploadPage = {
             return false;
         }
         const modelConfig = this.resolveFigureDetectionModel(aiSettings);
+        const provider = String(modelConfig?.provider || '').trim();
+        const usesCodexSubscription = provider === 'codex';
         return Boolean(
             modelConfig &&
-            String(modelConfig.api_key || '').trim() &&
-            String(modelConfig.model || '').trim() &&
-            String(modelConfig.provider || '').trim()
+            provider &&
+            (usesCodexSubscription || (
+                String(modelConfig.api_key || '').trim() &&
+                String(modelConfig.model || '').trim()
+            ))
         );
     },
 
