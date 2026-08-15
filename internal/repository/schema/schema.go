@@ -280,6 +280,9 @@ func (m *Manager) ensureSchemaColumns() error {
 	if err := m.ensureIntegrationSchema(); err != nil {
 		return err
 	}
+	if err := m.ensureZoteroSchema(); err != nil {
+		return err
+	}
 	if err := m.ensureConversationSurfaceColumns(); err != nil {
 		return err
 	}
@@ -363,6 +366,40 @@ func (m *Manager) ensureIntegrationSchema() error {
 			revoked_at DATETIME
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_integration_tokens_token_hash ON integration_tokens(token_hash)`,
+	}
+	for _, stmt := range stmts {
+		if _, err := m.db.Exec(stmt); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (m *Manager) ensureZoteroSchema() error {
+	stmts := []string{
+		`CREATE TABLE IF NOT EXISTS paper_external_ids (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			paper_id INTEGER NOT NULL REFERENCES papers(id) ON DELETE CASCADE,
+			source TEXT NOT NULL,
+			library_id TEXT NOT NULL DEFAULT '',
+			item_key TEXT NOT NULL,
+			collection_path TEXT NOT NULL DEFAULT '',
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(source, library_id, item_key)
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_paper_external_ids_paper_id ON paper_external_ids(paper_id)`,
+		`CREATE TABLE IF NOT EXISTS zotero_import_runs (
+			id TEXT PRIMARY KEY,
+			status TEXT NOT NULL DEFAULT 'queued',
+			include_children INTEGER NOT NULL DEFAULT 1,
+			collection_keys_json TEXT NOT NULL DEFAULT '[]',
+			summary_json TEXT NOT NULL DEFAULT '{}',
+			items_json TEXT NOT NULL DEFAULT '[]',
+			error_text TEXT NOT NULL DEFAULT '',
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)`,
 	}
 	for _, stmt := range stmts {
 		if _, err := m.db.Exec(stmt); err != nil {

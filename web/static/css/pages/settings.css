@@ -890,3 +890,45 @@ html[lang^="zh"] .prompt-template-details[open] summary::before {
         display: none;
     }
 }
+
+.zotero-collection-tree {
+    max-height: 280px;
+    overflow: auto;
+    border: 1px solid var(--border, #e5e2dc);
+    border-radius: 12px;
+    padding: 8px 0;
+    margin-bottom: 12px;
+}
+
+.zotero-collection-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    font-size: 14px;
+}
+
+.zotero-missing-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.zotero-missing-item {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 12px 0;
+    border-top: 1px solid var(--border, #eee);
+}
+
+.zotero-missing-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    align-items: stretch;
+}
+
+.zotero-missing-actions input[type="file"] {
+    display: none;
+}

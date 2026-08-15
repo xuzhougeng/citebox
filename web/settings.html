@@ -211,6 +211,57 @@
                 </div>
             </details>
 
+            <details id="settings-zotero" class="manager-card settings-collapsible">
+                <summary class="settings-collapsible-toggle">
+                    <h2 data-i18n="settings.zotero.title">Zotero</h2>
+                    <p data-i18n="settings.zotero.desc">连接本机 Zotero Local API，按 collection 把文献和 PDF 按 CiteBox 标准入库。</p>
+                </summary>
+                <div class="manager-form">
+                    <section class="settings-subsection">
+                        <h3 data-i18n="settings.zotero.connection_title">连接</h3>
+                        <p class="muted" data-i18n="settings.zotero.connection_desc">默认连接 http://127.0.0.1:23119/api。请先在 Zotero 设置 → 高级中启用 Local API，并保持 Zotero 运行。</p>
+                        <form id="zoteroSettingsForm" class="settings-subsection-body">
+                            <div class="form-grid">
+                                <label class="field field-span-2">
+                                    <span data-i18n="settings.zotero.base_url">Local API 地址</span>
+                                    <input id="zoteroBaseURLInput" class="form-input" type="text" spellcheck="false" data-i18n-placeholder="settings.zotero.base_url_placeholder" placeholder="http://127.0.0.1:23119/api">
+                                </label>
+                                <label class="field checkbox-field field-span-2">
+                                    <input id="zoteroIncludeChildrenInput" type="checkbox" checked>
+                                    <span data-i18n="settings.zotero.include_children">导入时包含子 collection</span>
+                                </label>
+                            </div>
+                            <div id="zoteroConnectionSummary" class="settings-summary-box"></div>
+                            <p id="zoteroConnectionStatus" class="settings-inline-status" data-i18n="settings.zotero.status_hint">保存地址后可测试连接。</p>
+                            <div class="submit-row">
+                                <button id="zoteroTestButton" class="btn btn-outline" type="button" data-i18n="settings.zotero.test">测试连接</button>
+                                <button class="btn btn-primary" type="submit" data-i18n="settings.zotero.save">保存</button>
+                            </div>
+                        </form>
+                    </section>
+
+                    <section class="settings-subsection">
+                        <h3 data-i18n="settings.zotero.import_title">选择 collection 并导入</h3>
+                        <p class="muted" data-i18n="settings.zotero.import_desc">有本地 PDF 的条目会按标准上传链路入库并提图；没有 PDF 的条目会留在下方待补列表。</p>
+                        <div class="settings-subsection-body">
+                            <div id="zoteroCollectionTree" class="zotero-collection-tree" role="group" aria-label="Zotero collections"></div>
+                            <p id="zoteroImportStatus" class="settings-inline-status" data-i18n="settings.zotero.import_hint">先测试连接，再选择 collection。</p>
+                            <div class="submit-row">
+                                <button id="zoteroLoadCollectionsButton" class="btn btn-outline" type="button" data-i18n="settings.zotero.load_collections">刷新 collections</button>
+                                <button id="zoteroPreviewButton" class="btn btn-outline" type="button" data-i18n="settings.zotero.preview">预览</button>
+                                <button id="zoteroImportButton" class="btn btn-primary" type="button" data-i18n="settings.zotero.start_import">开始导入</button>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="settings-subsection">
+                        <h3 data-i18n="settings.zotero.report_title">导入报告</h3>
+                        <div id="zoteroImportSummary" class="settings-summary-box"></div>
+                        <div id="zoteroMissingList" class="zotero-missing-list"></div>
+                    </section>
+                </div>
+            </details>
+
             <details id="settings-integration" class="manager-card settings-collapsible">
                 <summary class="settings-collapsible-toggle">
                     <h2 data-i18n="settings.integration.title">研究上下文集成</h2>
@@ -1121,6 +1172,7 @@ User Prompt:
     <script src="/static/js/settings-anchor.js"></script>
     <script src="/static/js/codex-model-capabilities.js"></script>
     <script src="/static/js/settings.js"></script>
+    <script src="/static/js/zotero-settings.js"></script>
     <script src="/static/js/translate.js"></script>
     <script src="/static/js/main.js"></script>
 </body>

@@ -20,6 +20,28 @@ func (s *LibraryService) CreateGroup(name, description string) (*model.Group, er
 	return s.repo.CreateGroup(name, description)
 }
 
+func (s *LibraryService) GetOrCreateGroupByName(name, description string) (*model.Group, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return nil, apperr.New(apperr.CodeInvalidArgument, "分组名称不能为空")
+	}
+	existing, err := s.repo.GetGroupByName(name)
+	if err != nil {
+		return nil, err
+	}
+	if existing != nil {
+		return existing, nil
+	}
+	group, err := s.CreateGroup(name, description)
+	if err == nil {
+		return group, nil
+	}
+	if !apperr.IsCode(err, apperr.CodeConflict) {
+		return nil, err
+	}
+	return s.repo.GetGroupByName(name)
+}
+
 func (s *LibraryService) UpdateGroup(id int64, name, description string) (*model.Group, error) {
 	name = strings.TrimSpace(name)
 	description = strings.TrimSpace(description)

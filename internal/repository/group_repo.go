@@ -2,6 +2,7 @@ package repository
 
 import (
 	"database/sql"
+	"strings"
 
 	"github.com/xuzhougeng/citebox/internal/apperr"
 	"github.com/xuzhougeng/citebox/internal/model"
@@ -68,6 +69,37 @@ func (r *GroupRepository) GetGroupByID(id int64) (*model.Group, error) {
 		WHERE g.id = ?
 		GROUP BY g.id
 	`, id).Scan(
+		&group.ID,
+		&group.Name,
+		&group.Description,
+		&group.CreatedAt,
+		&group.UpdatedAt,
+		&group.PaperCount,
+	); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, wrapDBError(err, "查询分组失败")
+	}
+	return &group, nil
+}
+
+// GetGroupByName 按名称查询分组（大小写不敏感）
+func (r *GroupRepository) GetGroupByName(name string) (*model.Group, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return nil, nil
+	}
+	var group model.Group
+	if err := r.db.QueryRow(`
+		SELECT
+			g.id, g.name, g.description, g.created_at, g.updated_at,
+			COUNT(p.id) AS paper_count
+		FROM groups g
+		LEFT JOIN papers p ON p.group_id = g.id
+		WHERE g.name = ?
+		GROUP BY g.id
+	`, name).Scan(
 		&group.ID,
 		&group.Name,
 		&group.Description,

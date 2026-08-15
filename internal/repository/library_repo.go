@@ -31,6 +31,8 @@ type LibraryRepository struct {
 	AIConversation   *AIConversationRepository
 	AIGeneratedImage *AIGeneratedImageRepository
 	Integration      *IntegrationTokenRepository
+	ExternalID       *ExternalIDRepository
+	ZoteroImport     *ZoteroImportRunRepository
 }
 
 // NewLibraryRepository 创建图书馆仓库
@@ -71,6 +73,8 @@ func NewLibraryRepository(dbPath string) (*LibraryRepository, error) {
 	aiConversationRepo := NewAIConversationRepository(db)
 	aiGeneratedImageRepo := NewAIGeneratedImageRepository(db)
 	integrationRepo := NewIntegrationTokenRepository(db)
+	externalIDRepo := NewExternalIDRepository(db)
+	zoteroImportRepo := NewZoteroImportRunRepository(db)
 
 	repo := &LibraryRepository{
 		db:               db,
@@ -85,6 +89,8 @@ func NewLibraryRepository(dbPath string) (*LibraryRepository, error) {
 		AIConversation:   aiConversationRepo,
 		AIGeneratedImage: aiGeneratedImageRepo,
 		Integration:      integrationRepo,
+		ExternalID:       externalIDRepo,
+		ZoteroImport:     zoteroImportRepo,
 	}
 
 	return repo, nil
@@ -293,6 +299,11 @@ func (r *LibraryRepository) DeletePalette(id int64) error {
 // ListGroups 查询分组列表（委托给 Group 仓库）
 func (r *LibraryRepository) ListGroups() ([]model.Group, error) {
 	return r.Group.ListGroups()
+}
+
+// GetGroupByName 按名称查询分组（委托给 Group 仓库）
+func (r *LibraryRepository) GetGroupByName(name string) (*model.Group, error) {
+	return r.Group.GetGroupByName(name)
 }
 
 // CreateGroup 创建分组（委托给 Group 仓库）

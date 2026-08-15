@@ -5,6 +5,7 @@
 
 
 - [ ] 增加Semantic Scholar 支持
+- [ ] Zotero 插件：在 Zotero 中把选中文献发送到同一个 `/api/integrations/zotero/ingest` 接口
 - [ ] 支持wolai的图片真实上传
 - [ ] 图片star功能, 单独一个收藏列表
 - [ ] 图片虚拟排版
@@ -29,6 +30,7 @@
 已完成
 
 - [x] 浏览器插件（Zotero Connector 式一键入库，见 `extension/`）
+- [x] CiteBox 官方 Zotero 连接器（Local API 按 collection 标准入库，见设置页）
 
 - [x] AI 对话内通过 @image-gen 生成 graphical abstract（vision → image API → 落盘 → 卡片）
 - [x] 写入笔记在图片解读过程中应该被禁用，因为输出时无法正常保存

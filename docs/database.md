@@ -5,7 +5,7 @@
 ## 概览
 
 - 数据库类型：SQLite
-- 主要业务表：`groups`、`papers`、`pdf_annotations`、`paper_figures`、`color_palettes`、`tags`
+- 主要业务表：`groups`、`papers`、`pdf_annotations`、`paper_figures`、`color_palettes`、`tags`、`paper_external_ids`、`zotero_import_runs`
 - 关系表：`paper_tags`、`figure_tags`
 - 配置表：`app_settings`
 - 全文检索：`papers_fts`、`figures_fts`（FTS5，`trigram` tokenizer）
@@ -19,7 +19,15 @@ erDiagram
     papers ||--o{ pdf_annotations : annotated_by
     papers ||--o{ color_palettes : has
     papers ||--o{ paper_tags : tagged_by
+    papers ||--o{ paper_external_ids : linked_from
     tags ||--o{ paper_tags : applied_to
+    paper_external_ids {
+        INTEGER id PK
+        INTEGER paper_id
+        TEXT source
+        TEXT library_id
+        TEXT item_key
+    }
     paper_figures ||--o{ figure_tags : tagged_by
     paper_figures ||--o| color_palettes : bound_palette
     tags ||--o{ figure_tags : applied_to
@@ -321,8 +329,38 @@ CREATE UNIQUE INDEX idx_tags_scope_name ON tags(scope, name);
 
 | 字段 | 用途 |
 | --- | --- |
-| `key` | 设置项名称，例如 `ai_settings`、`weixin_binding`、`weixin_bridge_settings`、`integration_settings`（内置 MCP 服务的开关与端口）、历史兼容键 `ai_prompt_presets`、提取器配置项 |
+| `key` | 设置项名称，例如 `ai_settings`、`weixin_binding`、`weixin_bridge_settings`、`integration_settings`（内置 MCP 服务的开关与端口）、`zotero_settings`、历史兼容键 `ai_prompt_presets`、提取器配置项 |
 | `value` | 对应设置的字符串或 JSON 内容 |
+| `created_at` | 创建时间 |
+| `updated_at` | 最近修改时间 |
+
+
+### `paper_external_ids`
+
+| 字段 | 用途 |
+| --- | --- |
+| `id` | 主键 |
+| `paper_id` | 关联的 CiteBox 文献 |
+| `source` | 外部来源，v1 为 `zotero` |
+| `library_id` | Zotero 文库前缀，例如 `users/0` |
+| `item_key` | Zotero item key |
+| `collection_path` | 最近一次导入使用的 collection 路径 |
+| `created_at` | 创建时间 |
+| `updated_at` | 最近修改时间 |
+
+`UNIQUE(source, library_id, item_key)`。删除文献时级联删除。
+
+### `zotero_import_runs`
+
+| 字段 | 用途 |
+| --- | --- |
+| `id` | 导入任务 ID |
+| `status` | `queued` / `running` / `completed` / `failed` |
+| `include_children` | 是否包含子 collection |
+| `collection_keys_json` | 选中的 collection key 列表 |
+| `summary_json` | 计数摘要 |
+| `items_json` | 逐条报告，供待补 PDF 和 DOI 补入使用 |
+| `error_text` | 任务级错误 |
 | `created_at` | 创建时间 |
 | `updated_at` | 最近修改时间 |
 
