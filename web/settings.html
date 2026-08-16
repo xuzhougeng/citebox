@@ -262,6 +262,33 @@
                 </div>
             </details>
 
+            <details id="settings-figure-library" class="manager-card settings-collapsible">
+                <summary class="settings-collapsible-toggle">
+                    <h2 data-i18n="settings.figure_library.title">Scientific Figure Library</h2>
+                    <p data-i18n="settings.figure_library.desc">把当前图的 Figure Transfer Package 写到本机接收目录，供 ScientificFigureLibrary 用 packagePath 导入为 draft。CiteBox 不会直接写入 SFL 图库，也不会自动 Published。</p>
+                </summary>
+                <div class="manager-form">
+                    <section class="settings-subsection">
+                        <h3 data-i18n="settings.figure_library.drop_title">接收目录</h3>
+                        <p class="muted" data-i18n="settings.figure_library.drop_desc">填写本机绝对路径，例如绘图仓库的 inbox/citebox。图库页的「发送到 Figure Library」会把 zip 写到这里。</p>
+                        <form id="figureLibrarySettingsForm" class="settings-subsection-body">
+                            <div class="form-grid">
+                                <label class="field field-span-2">
+                                    <span data-i18n="settings.figure_library.drop_dir">接收目录</span>
+                                    <input id="figureLibraryDropDirInput" class="form-input" type="text" spellcheck="false" data-i18n-placeholder="settings.figure_library.drop_dir_placeholder" placeholder="E:\\plot\\inbox\\citebox">
+                                </label>
+                            </div>
+                            <div id="figureLibrarySummary" class="settings-summary-box"></div>
+                            <p id="figureLibraryStatus" class="settings-inline-status" data-i18n="settings.figure_library.status_hint">保存目录后可检查是否可写。</p>
+                            <div class="submit-row">
+                                <button id="figureLibraryTestButton" class="btn btn-outline" type="button" data-i18n="settings.figure_library.test">检查目录</button>
+                                <button class="btn btn-primary" type="submit" data-i18n="settings.figure_library.save">保存</button>
+                            </div>
+                        </form>
+                    </section>
+                </div>
+            </details>
+
             <details id="settings-integration" class="manager-card settings-collapsible">
                 <summary class="settings-collapsible-toggle">
                     <h2 data-i18n="settings.integration.title">研究上下文集成</h2>
@@ -1173,6 +1200,7 @@ User Prompt:
     <script src="/static/js/codex-model-capabilities.js"></script>
     <script src="/static/js/settings.js"></script>
     <script src="/static/js/zotero-settings.js"></script>
+    <script src="/static/js/figure-library-settings.js"></script>
     <script src="/static/js/translate.js"></script>
     <script src="/static/js/main.js"></script>
 </body>

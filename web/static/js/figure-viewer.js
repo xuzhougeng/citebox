@@ -189,6 +189,9 @@ const FigureViewer = {
                 if (button.dataset.figureAction === 'download-transfer-package') {
                     await this.downloadTransferPackage();
                 }
+                if (button.dataset.figureAction === 'send-to-figure-library') {
+                    await this.sendToFigureLibrary();
+                }
                 if (button.dataset.figureAction === 'toggle-subfigure-crop') {
                     this.toggleSubfigureCropMode();
                 }
@@ -2201,6 +2204,27 @@ const FigureViewer = {
         }
     },
 
+    async sendToFigureLibrary() {
+        const figureID = Number(this.currentFigure?.id || 0);
+        if (!figureID) {
+            Utils.showToast(t('shared.figure.send_figure_library_failed', '发送到 Figure Library 失败'), 'error');
+            return;
+        }
+        try {
+            const result = await API.sendFigureToFigureLibrary(figureID);
+            const savedPath = result?.path || '';
+            Utils.showToast(savedPath
+                ? t('shared.figure.send_figure_library_saved', '已写入接收目录') + ': ' + savedPath
+                : t('shared.figure.send_figure_library_saved', '已写入接收目录'));
+        } catch (error) {
+            const message = error.message || t('shared.figure.send_figure_library_failed', '发送到 Figure Library 失败');
+            Utils.showToast(message, 'error');
+            if (/接收目录|Figure Library|drop folder/i.test(message)) {
+                window.location.href = '/settings.html#settings-figure-library';
+            }
+        }
+    },
+
     async downloadTransferPackage() {
         const figureID = Number(this.currentFigure?.id || 0);
         if (!figureID) {
@@ -2684,6 +2708,7 @@ const FigureViewer = {
                             <a class="btn btn-outline" href="${Utils.resourceViewerURL('image', figure.image_url)}">${t('shared.figure.open_original', '打开原图')}</a>
                             <button class="btn btn-outline" type="button" data-figure-action="download-image">${t('shared.figure.download_image', '下载图片')}</button>
                             <button class="btn btn-outline" type="button" data-figure-action="download-transfer-package">${t('shared.figure.download_transfer_package', '下载迁移包')}</button>
+                            <button class="btn btn-primary" type="button" data-figure-action="send-to-figure-library">${t('shared.figure.send_to_figure_library', '发送到 Figure Library')}</button>
                         </div>
 
                         <section class="figure-lightbox-ai">

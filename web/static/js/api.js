@@ -272,6 +272,26 @@ const API = {
         return requestBlob(`${API_BASE}/figures/${id}/transfer-package`);
     },
 
+    sendFigureToFigureLibrary(id) {
+        return requestJSON(`${API_BASE}/figures/${id}/send-to-figure-library`, { method: 'POST' });
+    },
+
+    getFigureLibrarySettings() {
+        return requestJSON(`${API_BASE}/settings/figure-library`);
+    },
+
+    updateFigureLibrarySettings(data) {
+        return requestJSON(`${API_BASE}/settings/figure-library`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+    },
+
+    getFigureLibraryStatus() {
+        return requestJSON(`${API_BASE}/integrations/figure-library/status`);
+    },
+
     createFigurePalette(id, data) {
         return requestJSON(`${API_BASE}/figures/${id}/palette`, {
             method: 'POST',

@@ -314,9 +314,30 @@ func multipartPDF(t *testing.T, name string, content []byte) (multipart.File, *m
 }
 
 func TestZoteroHasRunningBlocksSecondImport(t *testing.T) {
-	// sanity: invalid selection
-	svc, _, _ := newTestService(t)
+	svc, repo, _ := newTestService(t)
+	pdfPath := filepath.Join(t.TempDir(), "atlas.pdf")
+	if err := os.WriteFile(pdfPath, testPDFBytes(), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	server := newFakeZoteroServer(t, pdfPath)
+	if _, err := svc.UpdateZoteroSettings(model.ZoteroSettings{
+		BaseURL:         server.URL + "/api",
+		IncludeChildren: true,
+	}); err != nil {
+		t.Fatalf("UpdateZoteroSettings() error = %v", err)
+	}
+
 	if _, err := svc.PreviewZoteroImport(context.Background(), nil, true); err == nil || !apperr.IsCode(err, apperr.CodeInvalidArgument) {
 		t.Fatalf("empty preview error = %v", err)
+	}
+
+	if err := repo.ZoteroImport.Save(&model.ZoteroImportRun{
+		ID:     "run-already-running",
+		Status: zoteroRunRunning,
+	}); err != nil {
+		t.Fatalf("Save running import error = %v", err)
+	}
+	if _, err := svc.StartZoteroImport(context.Background(), []string{"C1"}, true); err == nil || !apperr.IsCode(err, apperr.CodeFailedPrecondition) {
+		t.Fatalf("second StartZoteroImport() error = %v", err)
 	}
 }

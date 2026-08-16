@@ -3,6 +3,7 @@ package zotero
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -32,5 +33,21 @@ func TestResolveLocalFilePathUsesExistingFile(t *testing.T) {
 func TestResolveLocalFilePathRejectsRemoteURL(t *testing.T) {
 	if _, err := ResolveLocalFilePath("https://example.com/paper.pdf"); err == nil {
 		t.Fatal("expected remote URL to be rejected")
+	}
+}
+
+func TestResolveLocalFilePathAcceptsTripleSlashWindowsURL(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "paper.pdf")
+	if err := os.WriteFile(path, []byte("%PDF-1.4"), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	slashPath := filepath.ToSlash(path)
+	got, err := ResolveLocalFilePath("file:///" + strings.TrimPrefix(slashPath, "/"))
+	if err != nil {
+		t.Fatalf("ResolveLocalFilePath() error = %v", err)
+	}
+	if got != path {
+		t.Fatalf("ResolveLocalFilePath() = %q, want %q", got, path)
 	}
 }

@@ -527,6 +527,7 @@ func buildHandlerWithAIServices(
 	mcpHandler := handler.NewMCPHandler(aiServices.remoteMCP)
 	integrationHandler := handler.NewIntegrationHandler(integrationSvcs.settings, integrationSvcs.tokens, integrationSvcs.mcp)
 	zoteroHandler := handler.NewZoteroHandler(librarySvc)
+	figureLibraryHandler := handler.NewFigureLibraryHandler(librarySvc)
 
 	researchAdapter := &research.RepoAdapter{Repo: repo.Research}
 	basket := research.NewBasket(researchAdapter, researchSvc, librarySvcImporterShim{librarySvc})
@@ -652,6 +653,10 @@ func buildHandlerWithAIServices(
 			default:
 				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			}
+			return
+		}
+		if strings.HasSuffix(r.URL.Path, "/send-to-figure-library") {
+			figureHandler.SendToFigureLibrary(w, r)
 			return
 		}
 		if strings.HasSuffix(r.URL.Path, "/image") {
@@ -971,6 +976,8 @@ func buildHandlerWithAIServices(
 	mux.HandleFunc("/api/settings/mcp/oauth/callback", mcpHandler.OAuthCallback)
 	mux.HandleFunc("/api/settings/integration", integrationHandler.Settings)
 	mux.HandleFunc("/api/settings/zotero", zoteroHandler.Settings)
+	mux.HandleFunc("/api/settings/figure-library", figureLibraryHandler.Settings)
+	mux.HandleFunc("/api/integrations/figure-library/status", figureLibraryHandler.Status)
 	mux.HandleFunc("/api/integrations/zotero/status", zoteroHandler.Status)
 	mux.HandleFunc("/api/integrations/zotero/collections", zoteroHandler.Collections)
 	mux.HandleFunc("/api/integrations/zotero/preview", zoteroHandler.Preview)

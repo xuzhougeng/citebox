@@ -4,7 +4,6 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 )
 
@@ -14,7 +13,10 @@ func ResolveLocalFilePath(raw string) (string, error) {
 		return "", os.ErrNotExist
 	}
 	if strings.Contains(value, "://") {
-		parsed, err := url.Parse(value)
+		if !hasFileScheme(value) {
+			return "", os.ErrInvalid
+		}
+		parsed, err := url.Parse(normalizeFileURL(value))
 		if err != nil {
 			return "", err
 		}
@@ -43,21 +45,36 @@ func ResolveLocalFilePath(raw string) (string, error) {
 	return value, os.ErrNotExist
 }
 
+func hasFileScheme(raw string) bool {
+	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(raw)), "file://")
+}
+
+func normalizeFileURL(raw string) string {
+	const prefix = "file://"
+	if len(raw) < len(prefix) {
+		return raw
+	}
+	return raw[:len(prefix)] + strings.ReplaceAll(raw[len(prefix):], `\`, "/")
+}
+
 func fileURLPath(parsed *url.URL) string {
 	if parsed == nil {
 		return ""
 	}
 	path := parsed.Path
-	if parsed.Host != "" && !strings.EqualFold(parsed.Host, "localhost") && parsed.Host != "127.0.0.1" {
-		// file://E:/foo or file://hostname/E:/foo
-		if len(parsed.Host) == 1 {
-			path = parsed.Host + ":" + path
-		} else {
-			path = "//" + parsed.Host + path
-		}
+	host := parsed.Host
+	switch {
+	case len(host) == 1:
+		// file://E/foo after odd parses
+		path = host + ":" + path
+	case len(host) == 2 && host[1] == ':':
+		// file://C:/foo -> host "C:"
+		path = host + path
+	case host != "" && !strings.EqualFold(host, "localhost") && host != "127.0.0.1":
+		path = "//" + host + path
 	}
-	if runtime.GOOS != "windows" && len(path) >= 3 && path[0] == '/' && path[2] == ':' {
-		// /E:/foo
+	// file:///C:/foo -> /C:/foo
+	if len(path) >= 3 && path[0] == '/' && path[2] == ':' {
 		path = path[1:]
 	}
 	if decoded, err := url.PathUnescape(path); err == nil {
@@ -67,7 +84,7 @@ func fileURLPath(parsed *url.URL) string {
 }
 
 func windowsPathToWSL(path string) string {
-	cleaned := strings.ReplaceAll(strings.TrimSpace(path), "/", "\\")
+	cleaned := strings.ReplaceAll(strings.TrimSpace(path), "/", `\`)
 	if len(cleaned) < 3 || cleaned[1] != ':' {
 		return ""
 	}
@@ -75,8 +92,8 @@ func windowsPathToWSL(path string) string {
 	if drive < "a" || drive > "z" {
 		return ""
 	}
-	rest := strings.TrimPrefix(cleaned[2:], "\\")
-	rest = strings.ReplaceAll(rest, "\\", "/")
+	rest := strings.TrimPrefix(cleaned[2:], `\`)
+	rest = strings.ReplaceAll(rest, `\`, "/")
 	return "/mnt/" + drive + "/" + rest
 }
 

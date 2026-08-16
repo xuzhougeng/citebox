@@ -599,6 +599,19 @@ AI 流式阅读通过：
 - 对主图直接返回原始图片文件
 - 对子图按父图坐标动态裁剪并返回预览图
 
+#### `POST /api/figures/{id}/send-to-figure-library`
+
+用途：
+
+- 把同一份 Figure Transfer Package 写到设置里的本机接收目录
+- 供 ScientificFigureLibrary `figure_library_import` 使用 `packagePath`
+- CiteBox 不调用 SFL MCP，也不写入 SFL 用户库 / Published
+
+设置：
+
+- `GET/PUT /api/settings/figure-library`，字段 `drop_dir`
+- `GET /api/integrations/figure-library/status`
+
 #### `GET /api/figures/{id}/transfer-package`
 
 用途：
