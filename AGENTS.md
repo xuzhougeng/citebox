@@ -9,7 +9,10 @@ CiteBox is a Go + SQLite application with a native HTML/CSS/JavaScript frontend.
 - `make run`: start the web server at `http://localhost:8080`.
 - `make run-desktop`: launch the desktop client with embedded local server.
 - `make build` / `make build-desktop`: compile server or desktop binaries into `bin/`.
-- `make test`: run the full Go test suite (`go test ./...`).
+- `make test`: run the Go test suite, skipping `cmd/desktop` (it needs GTK/WebKit headers; use `make build-desktop` to compile it).
+- `make test-js`: run frontend and script Node tests (`node --test`).
+- `make test-js-syntax`: syntax-check frontend, extension, and test JavaScript.
+- `make ci`: run the same checks as `.github/workflows/ci.yml` (Go tests, JS syntax, Node tests).
 - `make prepare-web-assets`: fetch `pdf.js` runtime assets required by some web flows.
 - `make package-desktop-linux|darwin|windows`: create desktop distribution archives in `dist/`.
 - `scripts/macos-desktop-ui-smoke.zsh smoke`: macOS-only desktop UI smoke test for close prompt, "minimize to tray", and Dock reopen flows. Start the desktop app first, and make sure Terminal/`osascript` already has Accessibility permission.
@@ -41,7 +44,7 @@ Use `gofmt` for all Go files; keep package names lowercase and exported identifi
 
 ## Testing Guidelines
 
-Go tests are colocated as `*_test.go` files, especially under `internal/repository` and `internal/service`. Name tests as `Test<Behavior>`. Add repository tests for schema changes, migrations, constraints, and search behavior. Use `go test ./...` before submitting; for UI-only changes, include at least a JS syntax check and a brief manual verification note.
+Go tests are colocated as `*_test.go` files, especially under `internal/repository` and `internal/service`. Name tests as `Test<Behavior>`. Add repository tests for schema changes, migrations, constraints, and search behavior. Use `make ci` before submitting so the same checks as GitHub Actions run locally. For UI-only changes, include at least `make test-js-syntax` / `make test-js` and a brief manual verification note. Pull requests and pushes to `main` run `.github/workflows/ci.yml`.
 
 When changing macOS desktop window-management flows, tray behavior, close-confirmation dialogs, or Dock reopen behavior, run `scripts/macos-desktop-ui-smoke.zsh smoke` as part of manual verification. If the full smoke command fails, use the script's helper subcommands to isolate whether the issue is process discovery, window selection, close prompt rendering, tray minimization, or Dock reopening.
 

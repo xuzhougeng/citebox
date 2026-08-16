@@ -1,6 +1,11 @@
 # CiteBox - Cross-Platform Build Makefile
 
-.PHONY: build run dev build-desktop run-desktop build-windows build-darwin build-linux package-windows package-darwin package-linux package-desktop-windows package-desktop-darwin package-desktop-linux prepare-web-assets clean test version help
+.PHONY: build run dev build-desktop run-desktop build-windows build-darwin build-linux package-windows package-darwin package-linux package-desktop-windows package-desktop-darwin package-desktop-linux prepare-web-assets clean test test-go test-js test-js-syntax ci version help
+
+# cmd/desktop needs GTK/WebKit headers. Compile it with `make build-desktop`.
+GO_TEST_PACKAGES=$(shell go list ./... | grep -v '/cmd/desktop$$')
+JS_CHECK_SOURCES=web/static/js/*.js extension/*.js web/static/js/__tests__/*.cjs scripts/tests/*.js
+JS_TEST_SOURCES=web/static/js/__tests__/*.test.cjs scripts/tests/*.test.js
 
 BINARY_NAME=citebox
 DESKTOP_BINARY_NAME=$(BINARY_NAME)-desktop
@@ -40,7 +45,18 @@ prepare-web-assets:
 	go run ./scripts/fetch_pdfjs.go web/static/vendor/pdfjs
 
 test:
-	go test ./...
+	go test -timeout 15m $(GO_TEST_PACKAGES)
+
+test-go: test
+
+test-js:
+	node --test $(JS_TEST_SOURCES)
+
+test-js-syntax:
+	node --check $(JS_CHECK_SOURCES)
+
+ci: test-js-syntax test-js
+	go test -count=1 -timeout 15m $(GO_TEST_PACKAGES)
 
 # =============================================================================
 # Windows Build & Package
@@ -349,7 +365,10 @@ help:
 	@echo "  make run            - Run development server"
 	@echo "  make dev            - Prepare PDF.js assets, then run development server"
 	@echo "  make prepare-web-assets - Download PDF.js runtime assets for source runs"
-	@echo "  make test           - Run tests"
+	@echo "  make test           - Run Go tests (skips cmd/desktop)"
+	@echo "  make test-js        - Run frontend and script Node tests"
+	@echo "  make test-js-syntax - Syntax-check JavaScript sources"
+	@echo "  make ci             - Run the same checks as GitHub Actions"
 	@echo ""
 	@echo "Windows:"
 	@echo "  make build-windows  - Build Windows executable (native Windows only)"

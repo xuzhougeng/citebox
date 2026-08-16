@@ -73,8 +73,12 @@ make run-desktop
 make build
 make build-desktop
 make test
+make test-js
+make ci
 make prepare-web-assets
 ```
+
+每个 Pull Request 以及推送到 `main` 的提交都会跑 GitHub Actions（`.github/workflows/ci.yml`）：Go 测试、前端 Node 测试和 JavaScript 语法检查。本地可用 `make ci` 复现同一套检查。
 
 ## 配置说明
 

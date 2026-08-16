@@ -73,8 +73,12 @@ Desktop mode starts an embedded local server on a random localhost port and open
 make build
 make build-desktop
 make test
+make test-js
+make ci
 make prepare-web-assets
 ```
+
+Every pull request and every push to `main` runs GitHub Actions (`.github/workflows/ci.yml`): Go tests, frontend Node tests, and JavaScript syntax checks. Run `make ci` locally to reproduce the same suite.
 
 ## Configuration
 
