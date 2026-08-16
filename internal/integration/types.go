@@ -51,6 +51,12 @@ const (
 	IncludeGroup       = "group"
 )
 
+// GetFigureHandoffParams 是图级研究交接参数。figure_id 与 source_id 至少提供一个。
+type GetFigureHandoffParams struct {
+	FigureID int64  `json:"figure_id"`
+	SourceID string `json:"source_id"`
+}
+
 // SearchPaperTextParams 是 PDF 全文检索参数
 type SearchPaperTextParams struct {
 	PaperIDs     []int64 `json:"paper_ids"`

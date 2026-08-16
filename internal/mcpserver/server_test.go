@@ -179,8 +179,8 @@ func TestMCPInitializeAndToolsList(t *testing.T) {
 	if !ok {
 		t.Fatalf("tools/list result = %v", resp)
 	}
-	if len(tools) != 7 {
-		t.Fatalf("tools count = %d, want 7", len(tools))
+	if len(tools) != 8 {
+		t.Fatalf("tools count = %d, want 8", len(tools))
 	}
 	names := map[string]bool{}
 	for _, tool := range tools {
@@ -315,6 +315,11 @@ func TestMCPUnknownMethodToolAndBadParams(t *testing.T) {
 	_, resp = rig.rpc(t, rig.token, `{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"citebox_get_paper_context","arguments":{}}}`)
 	if got := rpcErrorCode(t, resp); got != -32602 {
 		t.Fatalf("missing paper_id code = %v, want -32602", got)
+	}
+
+	_, resp = rig.rpc(t, rig.token, `{"jsonrpc":"2.0","id":13,"method":"tools/call","params":{"name":"citebox_get_figure_handoff","arguments":{}}}`)
+	if got := rpcErrorCode(t, resp); got != -32602 {
+		t.Fatalf("missing figure_id code = %v, want -32602", got)
 	}
 
 	// 参数类型错误 → -32602
