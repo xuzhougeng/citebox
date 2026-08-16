@@ -138,22 +138,6 @@ func (s *Server) executeTool(name string, arguments json.RawMessage) (any, *rpcE
 			AnnotationLimit: args.AnnotationLimit,
 		})
 		return toolDomainResult(result, err)
-	case integration.ToolGetFigureHandoff:
-		var args struct {
-			FigureID int64  `json:"figure_id"`
-			SourceID string `json:"source_id"`
-		}
-		if rpcErr := decodeArguments(arguments, &args); rpcErr != nil {
-			return nil, rpcErr
-		}
-		if args.FigureID <= 0 && strings.TrimSpace(args.SourceID) == "" {
-			return nil, invalidParams("figure_id or source_id is required")
-		}
-		result, err := s.facade.GetFigureHandoff(integration.GetFigureHandoffParams{
-			FigureID: args.FigureID,
-			SourceID: args.SourceID,
-		})
-		return toolDomainResult(result, err)
 	case integration.ToolSearchPaperText:
 		var args struct {
 			PaperIDs     []int64 `json:"paper_ids"`
@@ -300,17 +284,6 @@ func toolDefinitions() []map[string]any {
 					"annotation_limit": map[string]any{"type": "integer", "description": "Max annotations (default 50)"},
 				},
 				"required": []string{"paper_id"},
-			},
-		},
-		{
-			"name":        integration.ToolGetFigureHandoff,
-			"description": "Build a figure-centric research handoff envelope: selected figure or subfigure, paper metadata/abstract, this figure's note, limited figure-anchored excerpts, and asset pointers. Does not generate a biological question or plotting code.",
-			"inputSchema": map[string]any{
-				"type": "object",
-				"properties": map[string]any{
-					"figure_id": map[string]any{"type": "integer", "description": "Figure ID"},
-					"source_id": map[string]any{"type": "string", "description": "citebox:figure:{id}; may replace figure_id"},
-				},
 			},
 		},
 		{

@@ -113,8 +113,8 @@ func TestFacadeGetCapabilities(t *testing.T) {
 		t.Fatalf("transfer_package_schema = %v, want %q", caps["transfer_package_schema"], service.FigureTransferSchemaName)
 	}
 	tools, ok := caps["tools"].([]string)
-	if !ok || len(tools) != 8 {
-		t.Fatalf("tools = %v, want 8 tool names", caps["tools"])
+	if !ok || len(tools) != 7 {
+		t.Fatalf("tools = %v, want 7 tool names", caps["tools"])
 	}
 	scopes, ok := caps["scopes"].([]string)
 	if !ok || len(scopes) != 4 {

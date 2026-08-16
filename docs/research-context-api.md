@@ -170,7 +170,6 @@ HTTP 层错误：
 | `citebox_get_capabilities` | 任意有效令牌 | 返回集成能力描述 |
 | `citebox_search_library` | `library:read` | 跨实体检索文献/图片/笔记/标注 |
 | `citebox_get_paper_context` | `library:read` | 打包单篇文献的完整研究上下文 |
-| `citebox_get_figure_handoff` | `library:read` | 打包单张图的研究交接信封（出处 + 限额文献材料） |
 | `citebox_search_paper_text` | `library:read` | 在指定文献的 PDF 全文中检索子串 |
 | `citebox_get_entity` | 按实体类型决定 | 按 `source_id` 获取单个实体信封 |
 | `citebox_export_asset` | `assets:read` | 导出图片二进制，返回短时下载 URL |
@@ -197,7 +196,6 @@ HTTP 层错误：
     "citebox_get_capabilities",
     "citebox_search_library",
     "citebox_get_paper_context",
-    "citebox_get_figure_handoff",
     "citebox_search_paper_text",
     "citebox_get_entity",
     "citebox_export_asset",
@@ -350,33 +348,7 @@ HTTP 层错误：
 - `relations`：关联实体指针，figure/annotation 用 `source_id`，tag/group 用 `{type, id, name}`。
 - `assets`：资产描述符，**不直接含下载地址**；外部工具拿 `figure_id` 调 `citebox_export_asset` 按需换取。
 
-### `citebox_get_figure_handoff`
-
-打包**一张已选定的图或子图**的研究交接信封，供外部 Agent 继续起草生物学问题或写入 ScientificFigureLibrary Working。CiteBox 只提供来源事实，不生成生物学问题，也不生成或执行 R。
-
-输入（`figure_id` 与 `source_id` 至少提供一个；同时提供时必须指向同一张图）：
-
-```json
-{
-  "figure_id": 123,
-  "source_id": "citebox:figure:123"
-}
-```
-
-输出仍是 `citebox.research-context/v1` 信封，`entity_type` 为 `figure`。`data` 包含：
-
-- `figure`：id、label、caption、页码、主图/子图关系
-- `paper`：标题、DOI、作者、期刊、摘要
-- `notes`：仅这张图的 figure note；没有笔记时为 `null`
-- `excerpts`：用图号 / `Fig N` / `Figure N` / caption 短词在 PDF 中检索到的短摘录（默认最多 6 条，窗口约 400 rune）。`Fig 1` 不会命中 `Fig 10`
-- `completeness`：`abstract` / `page_texts` / `excerpts` / `notes` 是否齐全
-
-`assets` 给出当前图的 `figure_image` 与 `figure_transfer_package` 描述符，下载仍走 `citebox_export_asset`。不含整本 PDF。
-
-无逐页文本时 `completeness.page_texts` 为 false；若整篇 `pdf_text` 也没有可锚定命中，`excerpts` 可为空。
-
 ### `citebox_search_paper_text`
-
 
 在指定文献的 PDF 全文中做**大小写不敏感的子串检索**，返回 rune 安全的上下文窗口。
 

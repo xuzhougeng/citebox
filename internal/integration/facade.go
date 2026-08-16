@@ -18,29 +18,26 @@ import (
 
 // MCP 工具名
 const (
-	ToolGetCapabilities  = "citebox_get_capabilities"
-	ToolSearchLibrary    = "citebox_search_library"
-	ToolGetPaperContext  = "citebox_get_paper_context"
-	ToolGetFigureHandoff = "citebox_get_figure_handoff"
-	ToolSearchPaperText  = "citebox_search_paper_text"
-	ToolGetEntity        = "citebox_get_entity"
-	ToolExportAsset      = "citebox_export_asset"
-	ToolListChanges      = "citebox_list_changes"
+	ToolGetCapabilities = "citebox_get_capabilities"
+	ToolSearchLibrary   = "citebox_search_library"
+	ToolGetPaperContext = "citebox_get_paper_context"
+	ToolSearchPaperText = "citebox_search_paper_text"
+	ToolGetEntity       = "citebox_get_entity"
+	ToolExportAsset     = "citebox_export_asset"
+	ToolListChanges     = "citebox_list_changes"
 )
 
 const (
-	defaultSearchLimit         = 20
-	maxSearchLimit             = 100
-	searchBatchSize            = 50
-	defaultFigureLimit         = 20
-	defaultAnnotationLimit     = 50
-	defaultTextSearchLimit     = 12
-	defaultContextChars        = 1200
-	defaultHandoffExcerptLimit = 6
-	defaultHandoffContextChars = 400
-	defaultChangesLimit        = 100
-	maxChangesLimit            = 500
-	snippetRunes               = 200
+	defaultSearchLimit     = 20
+	maxSearchLimit         = 100
+	searchBatchSize        = 50
+	defaultFigureLimit     = 20
+	defaultAnnotationLimit = 50
+	defaultTextSearchLimit = 12
+	defaultContextChars    = 1200
+	defaultChangesLimit    = 100
+	maxChangesLimit        = 500
+	snippetRunes           = 200
 )
 
 // Facade 面向外部工具的只读研究上下文门面，组合图书馆服务、仓库、资产暂存区和集成设置
@@ -62,7 +59,6 @@ func ToolNames() []string {
 		ToolGetCapabilities,
 		ToolSearchLibrary,
 		ToolGetPaperContext,
-		ToolGetFigureHandoff,
 		ToolSearchPaperText,
 		ToolGetEntity,
 		ToolExportAsset,
