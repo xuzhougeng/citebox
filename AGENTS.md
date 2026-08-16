@@ -9,7 +9,7 @@ CiteBox is a Go + SQLite application with a native HTML/CSS/JavaScript frontend.
 - `make run`: start the web server at `http://localhost:8080`.
 - `make run-desktop`: launch the desktop client with embedded local server.
 - `make build` / `make build-desktop`: compile server or desktop binaries into `bin/`.
-- `make test`: run the Go test suite, skipping `cmd/desktop` (it needs GTK/WebKit headers; use `make build-desktop` to compile it).
+- `make test`: run the Go test suite, skipping `cmd/desktop` and `internal/desktopruntime` (they need GTK/WebKit headers; use `make build-desktop` to compile them).
 - `make test-js`: run frontend and script Node tests (`node --test`).
 - `make test-js-syntax`: syntax-check frontend, extension, and test JavaScript.
 - `make ci`: run the same checks as `.github/workflows/ci.yml` (Go tests, JS syntax, Node tests).
