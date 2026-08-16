@@ -35,6 +35,7 @@
   - 今日推荐测试发图：`/api/settings/weixin-bridge/daily-recommendation/test`
   - Wolai 设置：`/api/settings/wolai`
   - 外部集成（内置 MCP 服务）：`/api/settings/integration/...`
+  - Zotero 连接器：`/api/settings/zotero`、`/api/integrations/zotero/...`
   - Notion MCP 设置与 OAuth：`/api/settings/mcp/...`
   - Notion API 个人令牌设置：`/api/settings/notion-api/...`
   - Notion 图片笔记导出：`/api/notion/...`
@@ -597,6 +598,19 @@ AI 流式阅读通过：
 - 读取指定图片的展示图像
 - 对主图直接返回原始图片文件
 - 对子图按父图坐标动态裁剪并返回预览图
+
+#### `POST /api/figures/{id}/send-to-figure-library`
+
+用途：
+
+- 把同一份 Figure Transfer Package 写到设置里的本机接收目录
+- 供 ScientificFigureLibrary `figure_library_import` 使用 `packagePath`
+- CiteBox 不调用 SFL MCP，也不写入 SFL 用户库 / Published
+
+设置：
+
+- `GET/PUT /api/settings/figure-library`，字段 `drop_dir`
+- `GET /api/integrations/figure-library/status`
 
 #### `GET /api/figures/{id}/transfer-package`
 
@@ -1643,6 +1657,88 @@ Codex 桌面模型可使用以下配置；不需要也不会保存 API key：
   "target_block_url": "https://www.wolai.com/..."
 }
 ```
+
+
+### Zotero 连接器
+
+CiteBox 通过官方 Zotero Local API 读取本机 collection 和 PDF，再走现有 `UploadPaper` 标准入库。默认地址是 `http://127.0.0.1:23119/api`，只允许 `127.0.0.1` / `localhost`。不读取 `zotero.sqlite`，也不回写 Zotero。
+
+设置页接口走同源 Cookie 会话。`POST /api/integrations/zotero/ingest` 同时接受带 `library:write` 的集成令牌，供后续 Zotero 插件使用。
+
+#### `GET /api/settings/zotero`
+
+返回当前 Zotero 连接配置。
+
+```json
+{
+  "base_url": "http://127.0.0.1:23119/api",
+  "include_children": true,
+  "last_collection_keys": ["C1"],
+  "last_run_id": "ab12..."
+}
+```
+
+#### `PUT /api/settings/zotero`
+
+保存 Local API 地址和默认导入选项。非 loopback 地址会返回 `INVALID_ARGUMENT`。
+
+#### `GET /api/integrations/zotero/status`
+
+探测 Zotero Local API。Zotero 未运行时 `reachable` 为 `false`，不视为服务器错误。
+
+#### `GET /api/integrations/zotero/collections`
+
+返回 collection 树，节点含 `key`、`name`、`path`、`children`。
+
+#### `POST /api/integrations/zotero/preview`
+
+```json
+{
+  "collection_keys": ["C1"],
+  "include_children": true
+}
+```
+
+`include_children` 省略时默认为 `true`。响应是一次预览 run：统计将导入、将跳过和缺 PDF 的条目，不会写库。
+
+#### `POST /api/integrations/zotero/import`
+
+请求体与 preview 相同。返回 `202` 和一个后台 run。有本地 PDF 的条目走 `UploadPaper`；缺 PDF 的条目进入 `missing_pdf`，不创建空文献。
+
+#### `GET /api/integrations/zotero/runs/{id}`
+
+查询导入任务状态与逐条报告。`status` 为 `queued` / `running` / `completed` / `failed`。条目 `status` 为 `imported` / `skipped_existing` / `missing_pdf` / `error`。
+
+#### `POST /api/integrations/zotero/ingest`
+
+共享入库入口，后续 Zotero 插件也应调用此接口，不要直接打 `POST /api/papers`。
+
+请求类型：`multipart/form-data`
+
+| 字段 | 说明 |
+| --- | --- |
+| `pdf` | PDF 文件 |
+| `item_key` | Zotero item key |
+| `library_id` | 例如 `users/0` |
+| `title` | 标题 |
+| `doi` | DOI |
+| `authors_text` | 作者 |
+| `journal` | 期刊/来源 |
+| `published_at` | 发表时间 |
+| `abstract_text` | 摘要 |
+| `notes` | 笔记，写入 `paper_notes_text` |
+| `tags` | 逗号分隔标签 |
+| `collection_path` | 映射为 CiteBox 分组名 |
+
+成功后会绑定 `paper_external_ids`。若 DOI / PDF SHA256 / item key 已存在，返回已有文献并补上外部 ID。
+
+#### `POST /api/integrations/zotero/runs/{id}/items/{itemKey}/attach-pdf`
+
+为待补条目上传本地 PDF，走同一条标准入库链路。
+
+#### `POST /api/integrations/zotero/runs/{id}/items/{itemKey}/import-by-doi`
+
+对有 DOI 的待补条目手动调用现有 `import-by-doi`。不会自动抓取不明网站。
 
 ### 外部集成（内置 MCP 服务）
 

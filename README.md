@@ -15,11 +15,11 @@ CiteBox 是一个面向论文整理与图片阅读的本地优先工作台，基
 
 ## 当前能力
 
-- 文献导入：支持本地 PDF 上传，也支持基于 DOI 导入 Open Access PDF。
+- 文献导入：支持本地 PDF 上传、基于 DOI 导入 Open Access PDF，以及从本机 Zotero Local API 按 collection 导入。
 - 多种提取模式：支持外部自动提取、内置多模态坐标识别和纯手工标注三种流程。
 - 文献工作台：文献库、图片库、分组、标签、笔记、配色和手工补图页面均已内置。
 - AI 阅读：支持围绕正文和图片做问答、图片解读、Tag 建议、流式输出和导出。
-- 集成能力：支持 Notion MCP、Notion 原图笔记导出、Wolai 笔记写回、微信 IM 桥接、TTS 配置和版本检查。
+- 集成能力：支持 Zotero Local API 连接器、Notion MCP、Notion 原图笔记导出、Wolai 笔记写回、微信 IM 桥接、TTS 配置和版本检查。
 - 双端运行：既可作为本地 Web 服务运行，也可作为嵌入式桌面应用运行。
 
 ### 调研 / Research panel

@@ -272,6 +272,26 @@ const API = {
         return requestBlob(`${API_BASE}/figures/${id}/transfer-package`);
     },
 
+    sendFigureToFigureLibrary(id) {
+        return requestJSON(`${API_BASE}/figures/${id}/send-to-figure-library`, { method: 'POST' });
+    },
+
+    getFigureLibrarySettings() {
+        return requestJSON(`${API_BASE}/settings/figure-library`);
+    },
+
+    updateFigureLibrarySettings(data) {
+        return requestJSON(`${API_BASE}/settings/figure-library`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+    },
+
+    getFigureLibraryStatus() {
+        return requestJSON(`${API_BASE}/integrations/figure-library/status`);
+    },
+
     createFigurePalette(id, data) {
         return requestJSON(`${API_BASE}/figures/${id}/palette`, {
             method: 'POST',
@@ -595,6 +615,61 @@ const API = {
 
     deleteNotionAPIToken() {
         return requestJSON(`${API_BASE}/settings/notion-api`, { method: 'DELETE' });
+    },
+
+    getZoteroSettings() {
+        return requestJSON(`${API_BASE}/settings/zotero`);
+    },
+
+    updateZoteroSettings(data) {
+        return requestJSON(`${API_BASE}/settings/zotero`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+    },
+
+    getZoteroStatus() {
+        return requestJSON(`${API_BASE}/integrations/zotero/status`);
+    },
+
+    listZoteroCollections() {
+        return requestJSON(`${API_BASE}/integrations/zotero/collections`);
+    },
+
+    previewZoteroImport(data) {
+        return requestJSON(`${API_BASE}/integrations/zotero/preview`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+    },
+
+    startZoteroImport(data) {
+        return requestJSON(`${API_BASE}/integrations/zotero/import`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+    },
+
+    getZoteroImportRun(id) {
+        return requestJSON(`${API_BASE}/integrations/zotero/runs/${apiPathID(id)}`);
+    },
+
+    attachZoteroImportPDF(runId, itemKey, file) {
+        const form = new FormData();
+        form.append('pdf', file);
+        return requestJSON(`${API_BASE}/integrations/zotero/runs/${apiPathID(runId)}/items/${apiPathID(itemKey)}/attach-pdf`, {
+            method: 'POST',
+            body: form
+        });
+    },
+
+    importZoteroItemByDOI(runId, itemKey) {
+        return requestJSON(`${API_BASE}/integrations/zotero/runs/${apiPathID(runId)}/items/${apiPathID(itemKey)}/import-by-doi`, {
+            method: 'POST'
+        });
     },
 
     getIntegrationSettings() {

@@ -11,6 +11,7 @@
     "library.filter_title": "Filter Papers",
     "library.filter_desc": "Quickly locate papers by keyword, author, DOI, group, tag, and status.",
     "library.btn_upload": "Upload Paper",
+    "library.btn_zotero": "Import from Zotero",
     "library.filter_keyword": "Keyword",
     "library.filter_keyword_placeholder": "Title, abstract, full text, or DOI",
     "library.filter_keyword_placeholder_title": "Search title, abstract, or DOI",

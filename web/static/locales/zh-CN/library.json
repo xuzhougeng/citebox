@@ -11,6 +11,7 @@
     "library.filter_title": "筛选文献",
     "library.filter_desc": "按关键词、作者、DOI、分组、标签和状态快速定位目标文献。",
     "library.btn_upload": "上传新文献",
+    "library.btn_zotero": "从 Zotero 导入",
     "library.filter_keyword": "关键词",
     "library.filter_keyword_placeholder": "标题、摘要、正文或 DOI",
     "library.filter_keyword_placeholder_title": "标题、摘要或 DOI",

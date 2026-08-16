@@ -15,11 +15,11 @@ The project is intentionally optimized around a narrow workflow instead of tryin
 
 ## Current Capabilities
 
-- Paper import from local PDFs and DOI-based Open Access sources.
+- Paper import from local PDFs, DOI-based Open Access sources, and local Zotero collections via the official Zotero Local API.
 - Three extraction paths: external automatic extraction, built-in multimodal coordinate detection, or manual figure extraction.
 - Built-in workspaces for library, figures, groups, tags, notes, palettes, and manual backfill.
 - AI Reader with paper Q&A, figure interpretation, tag suggestions, streaming output, and export.
-- Integrations for Notion MCP, native Notion figure-note export, Wolai note export, WeChat IM bridge, TTS settings, and release checks.
+- Integrations for the Zotero Local API connector, Notion MCP, native Notion figure-note export, Wolai note export, WeChat IM bridge, TTS settings, and release checks.
 - Web and desktop runtime modes backed by the same SQLite and local-file data model.
 
 ### Research panel

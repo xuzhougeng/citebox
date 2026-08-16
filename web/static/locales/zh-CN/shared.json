@@ -357,5 +357,8 @@
     "shared.figure.subfigure_label": "子图",
 
     "shared.figure.click_to_remove": "再次点击取消",
-    "shared.figure.click_to_add": "点击添加"
+    "shared.figure.click_to_add": "点击添加",
+    "shared.figure.send_to_figure_library": "发送到 Figure Library",
+    "shared.figure.send_figure_library_saved": "已写入接收目录",
+    "shared.figure.send_figure_library_failed": "发送到 Figure Library 失败"
 }

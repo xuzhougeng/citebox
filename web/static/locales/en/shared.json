@@ -357,5 +357,8 @@
     "shared.figure.subfigure_label": "Subfigure",
 
     "shared.figure.click_to_remove": "Click to remove",
-    "shared.figure.click_to_add": "Click to add"
+    "shared.figure.click_to_add": "Click to add",
+    "shared.figure.send_to_figure_library": "Send to Figure Library",
+    "shared.figure.send_figure_library_saved": "Saved to drop folder",
+    "shared.figure.send_figure_library_failed": "Failed to send to Figure Library"
 }

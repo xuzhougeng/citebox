@@ -217,6 +217,7 @@ const SettingsPage = {
             'settings.wolai.title':                'integrations',
             'settings.mcp.title':                  'integrations',
             'settings.integration.title':          'integrations',
+            'settings.zotero.title':               'integrations',
             'settings.research.title':             'integrations',
             'settings.password.account_title':     'account',
             'settings.db.title':                   'system',
