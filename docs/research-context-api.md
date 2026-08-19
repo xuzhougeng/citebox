@@ -188,7 +188,7 @@ HTTP 层错误：
 {
   "citebox_version": "v0.16.0",
   "research_context_schema": "citebox.research-context/v1",
-  "transfer_package_schema": "figure-transfer-package.v1",
+  "transfer_package_schema": "figure-transfer-package.v2",
   "entity_types": ["paper", "figure", "note", "annotation"],
   "scopes": ["library:read", "notes:read", "annotations:read", "assets:read"],
   "max_page_size": 100,
@@ -471,7 +471,7 @@ HTTP 层错误：
 }
 ```
 
-- `figure_transfer_package` 的 `media_type` 固定为 `application/zip`，包结构 schema 为 `figure-transfer-package.v1`。
+- `figure_transfer_package` 的 `media_type` 固定为 `application/zip`，包结构 schema 为 `figure-transfer-package.v2`，内含原图、`manifest.json`、`research-context.json` 和 `handoff.md`。
 - `expires_at` 为 UTC RFC3339，固定为导出后 10 分钟。
 
 ### `citebox_list_changes`
@@ -581,3 +581,4 @@ sha256sum figure.png   # 与响应里的 sha256 对比
 - `citebox_get_paper_context` 的 `figure_limit` 只截断顶层图片；`figure_notes` 不受其限制。
 - 资产 URL 有效期 10 分钟且仍在内存中，服务重启后全部失效，需要重新导出。
 - 传输为单请求模式：无 batch、无 SSE；并发能力取决于客户端自行并行发起多个 HTTP 请求。
+

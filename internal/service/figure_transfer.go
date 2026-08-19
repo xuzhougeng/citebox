@@ -20,10 +20,12 @@ import (
 )
 
 const (
-	FigureTransferSchemaName    = "figure-transfer-package.v1"
-	FigureTransferSchemaVersion = 1
+	FigureTransferSchemaName    = "figure-transfer-package.v2"
+	FigureTransferSchemaVersion = 2
 	figureTransferManifestName  = "manifest.json"
 	maxTransferManifestSize     = 1 << 20
+	maxTransferContextSize      = 1 << 20
+	maxTransferHandoffSize      = 1 << 20
 	maxTransferImageSize        = 20 << 20
 	maxTransferTitleRunes       = 2000
 	maxTransferAuthorRunes      = 300
@@ -31,7 +33,7 @@ const (
 )
 
 // figureTransferMediaTypes maps the media types accepted by Figure Transfer
-// Package v1 consumers to the package-internal file extension they require.
+// Package consumers to the package-internal file extension they require.
 var figureTransferMediaTypes = map[string]string{
 	"image/png":       ".png",
 	"image/jpeg":      ".jpg",
@@ -45,8 +47,10 @@ type FigureTransferManifest struct {
 	Version    int                    `json:"version"`
 	Producer   FigureTransferProducer `json:"producer"`
 	ExportedAt string                 `json:"exportedAt"`
+	Entry      string                 `json:"entry"`
 	Source     FigureTransferSource   `json:"source"`
 	Figure     FigureTransferFigure   `json:"figure"`
+	Files      []FigureTransferFile   `json:"files"`
 }
 
 type FigureTransferProducer struct {
@@ -59,6 +63,7 @@ type FigureTransferSource struct {
 	FigureID         int64                 `json:"figureId"`
 	ParentFigureID   *int64                `json:"parentFigureId"`
 	FigureLabel      string                `json:"figureLabel"`
+	OfficialLabel    string                `json:"officialLabel"`
 	SubfigureLabels  []string              `json:"subfigureLabels"`
 	Caption          string                `json:"caption"`
 	Page             *int                  `json:"page"`
@@ -90,6 +95,14 @@ type FigureTransferFigure struct {
 	SHA256    string `json:"sha256"`
 	Kind      string `json:"kind"`
 	Number    int    `json:"number"`
+}
+
+type FigureTransferFile struct {
+	Name      string `json:"name"`
+	Role      string `json:"role"`
+	MediaType string `json:"mediaType"`
+	Bytes     int64  `json:"bytes"`
+	SHA256    string `json:"sha256"`
 }
 
 type FigureTransferPackage struct {
@@ -130,15 +143,35 @@ func (s *LibraryService) ExportFigureTransferPackage(id int64) (*FigureTransferP
 
 	extension, ok := figureTransferMediaTypes[normalizeTransferMediaType(mediaType)]
 	if !ok {
-		return nil, apperr.New(apperr.CodeFailedPrecondition, fmt.Sprintf("figure media type %q is not supported by Figure Transfer Package v1", mediaType))
+		return nil, apperr.New(apperr.CodeFailedPrecondition, fmt.Sprintf("figure media type %q is not supported by Figure Transfer Package v2", mediaType))
+	}
+
+	pageTexts, err := s.repo.GetPaperPDFPageTexts(paper.ID)
+	if err != nil {
+		return nil, err
 	}
 
 	exportedAt := time.Now().UTC().Truncate(time.Second)
 	imageFilename := "figure" + extension
-	imageHash := sha256.Sum256(imageData)
-	manifest := newFigureTransferManifest(paper, figure, imageFilename, normalizeTransferMediaType(mediaType), int64(len(imageData)), hex.EncodeToString(imageHash[:]), exportedAt)
+	contextDoc := buildFigureResearchContext(paper, figure, pageTexts)
+	contextData, err := marshalTransferJSON(contextDoc)
+	if err != nil {
+		return nil, apperr.Wrap(apperr.CodeInternal, "生成 research-context.json 失败", err)
+	}
+	handoffData := []byte(renderFigureHandoffMarkdown(contextDoc, imageFilename))
+	files := []FigureTransferFile{
+		newFigureTransferFile(imageFilename, "figure", normalizeTransferMediaType(mediaType), imageData),
+		newFigureTransferFile(figureTransferContextName, "research_context", "application/json", contextData),
+		newFigureTransferFile(figureTransferHandoffName, "handoff", "text/markdown", handoffData),
+	}
+	manifest := newFigureTransferManifest(paper, figure, contextDoc, imageFilename, normalizeTransferMediaType(mediaType), int64(len(imageData)), files[0].SHA256, exportedAt, files)
 
-	data, err := writeFigureTransferPackage(manifest, imageData, exportedAt)
+	payload := map[string][]byte{
+		imageFilename:             imageData,
+		figureTransferContextName: contextData,
+		figureTransferHandoffName: handoffData,
+	}
+	data, err := writeFigureTransferPackage(manifest, payload, exportedAt)
 	if err != nil {
 		return nil, apperr.Wrap(apperr.CodeInternal, "生成 Figure Transfer Package 失败", err)
 	}
@@ -156,16 +189,16 @@ func (s *LibraryService) ExportFigureTransferPackage(id int64) (*FigureTransferP
 func newFigureTransferManifest(
 	paper *model.Paper,
 	figure *model.Figure,
+	contextDoc FigureResearchContext,
 	imageFilename string,
 	mediaType string,
 	byteSize int64,
 	imageSHA256 string,
 	exportedAt time.Time,
+	files []FigureTransferFile,
 ) FigureTransferManifest {
-	kind := "figure"
 	subfigureLabels := []string{}
 	if figure.ParentFigureID != nil {
-		kind = "subfigure"
 		if label := strings.TrimSpace(figure.SubfigureLabel); label != "" {
 			subfigureLabels = append(subfigureLabels, label)
 		}
@@ -194,11 +227,13 @@ func newFigureTransferManifest(
 			Version: buildinfo.CurrentVersion(),
 		},
 		ExportedAt: exportedAt.Format(time.RFC3339),
+		Entry:      figureTransferHandoffName,
 		Source: FigureTransferSource{
 			SourceID:        figureTransferSourceID(figure.ID),
 			FigureID:        figure.ID,
 			ParentFigureID:  figure.ParentFigureID,
-			FigureLabel:     formatFigureDisplayLabel(figure.FigureIndex, figure.SubfigureLabel),
+			FigureLabel:     contextDoc.Figure.DisplayLabel,
+			OfficialLabel:   contextDoc.Figure.OfficialLabel,
 			SubfigureLabels: subfigureLabels,
 			Caption:         truncateTransferText(strings.TrimSpace(figure.Caption), maxTransferCaptionRunes),
 			Page:            page,
@@ -223,26 +258,32 @@ func newFigureTransferManifest(
 			MediaType: mediaType,
 			Bytes:     byteSize,
 			SHA256:    imageSHA256,
-			Kind:      kind,
+			Kind:      contextDoc.Figure.Kind,
 			Number:    figure.FigureIndex,
 		},
+		Files: files,
 	}
 }
 
-func writeFigureTransferPackage(manifest FigureTransferManifest, imageData []byte, modifiedAt time.Time) ([]byte, error) {
-	manifestData, err := json.MarshalIndent(manifest, "", "  ")
+func writeFigureTransferPackage(manifest FigureTransferManifest, payload map[string][]byte, modifiedAt time.Time) ([]byte, error) {
+	manifestData, err := marshalTransferJSON(manifest)
 	if err != nil {
 		return nil, err
 	}
-	manifestData = append(manifestData, '\n')
 
 	var buf bytes.Buffer
 	writer := zip.NewWriter(&buf)
 	if err := writeFigureTransferEntry(writer, figureTransferManifestName, manifestData, modifiedAt); err != nil {
 		return nil, err
 	}
-	if err := writeFigureTransferEntry(writer, manifest.Figure.File, imageData, modifiedAt); err != nil {
-		return nil, err
+	for _, name := range []string{figureTransferContextName, figureTransferHandoffName, manifest.Figure.File} {
+		data, ok := payload[name]
+		if !ok {
+			return nil, fmt.Errorf("missing package payload %q", name)
+		}
+		if err := writeFigureTransferEntry(writer, name, data, modifiedAt); err != nil {
+			return nil, err
+		}
 	}
 	if err := writer.Close(); err != nil {
 		return nil, err
@@ -270,13 +311,13 @@ func ValidateFigureTransferPackage(data []byte) (*FigureTransferManifest, error)
 	if err != nil {
 		return nil, invalidFigureTransferPackage("invalid ZIP: %v", err)
 	}
-	if len(reader.File) != 2 {
-		return nil, invalidFigureTransferPackage("expected exactly two files")
+	if len(reader.File) != 4 {
+		return nil, invalidFigureTransferPackage("expected exactly four files")
 	}
 
 	entries := make(map[string]*zip.File, len(reader.File))
 	for _, file := range reader.File {
-		if !validFigureTransferEntryName(file.Name) || file.FileInfo().IsDir() {
+		if !validFigureTransferPackageFileName(file.Name) || file.FileInfo().IsDir() {
 			return nil, invalidFigureTransferPackage("invalid ZIP entry %q", file.Name)
 		}
 		if _, exists := entries[file.Name]; exists {
@@ -307,6 +348,39 @@ func ValidateFigureTransferPackage(data []byte) (*FigureTransferManifest, error)
 		return nil, err
 	}
 
+	contextFile := entries[figureTransferContextName]
+	if contextFile == nil {
+		return nil, invalidFigureTransferPackage("missing %s", figureTransferContextName)
+	}
+	contextData, err := readFigureTransferEntry(contextFile, maxTransferContextSize)
+	if err != nil {
+		return nil, invalidFigureTransferPackage("read research context: %v", err)
+	}
+	var contextDoc FigureResearchContext
+	contextDecoder := json.NewDecoder(bytes.NewReader(contextData))
+	contextDecoder.DisallowUnknownFields()
+	if err := contextDecoder.Decode(&contextDoc); err != nil {
+		return nil, invalidFigureTransferPackage("invalid research context: %v", err)
+	}
+	if err := ensureJSONEOF(contextDecoder); err != nil {
+		return nil, invalidFigureTransferPackage("invalid research context: %v", err)
+	}
+	if contextDoc.Schema != FigureResearchContextSchemaName || contextDoc.Version != FigureResearchContextSchemaVersion {
+		return nil, invalidFigureTransferPackage("unsupported research context schema")
+	}
+
+	handoffFile := entries[figureTransferHandoffName]
+	if handoffFile == nil {
+		return nil, invalidFigureTransferPackage("missing %s", figureTransferHandoffName)
+	}
+	handoffData, err := readFigureTransferEntry(handoffFile, maxTransferHandoffSize)
+	if err != nil {
+		return nil, invalidFigureTransferPackage("read handoff: %v", err)
+	}
+	if !bytes.Contains(handoffData, []byte("### 原始图注")) {
+		return nil, invalidFigureTransferPackage("handoff is missing the original caption section")
+	}
+
 	imageFile := entries[manifest.Figure.File]
 	if imageFile == nil {
 		return nil, invalidFigureTransferPackage("missing image %q", manifest.Figure.File)
@@ -318,9 +392,17 @@ func ValidateFigureTransferPackage(data []byte) (*FigureTransferManifest, error)
 	if int64(len(imageData)) != manifest.Figure.Bytes {
 		return nil, invalidFigureTransferPackage("image bytes mismatch")
 	}
-	imageHash := sha256.Sum256(imageData)
-	if hex.EncodeToString(imageHash[:]) != manifest.Figure.SHA256 {
+	if sha256Hex(imageData) != manifest.Figure.SHA256 {
 		return nil, invalidFigureTransferPackage("image sha256 mismatch")
+	}
+
+	payload := map[string][]byte{
+		manifest.Figure.File:      imageData,
+		figureTransferContextName: contextData,
+		figureTransferHandoffName: handoffData,
+	}
+	if err := validateFigureTransferFiles(manifest, payload); err != nil {
+		return nil, err
 	}
 
 	return &manifest, nil
@@ -335,6 +417,9 @@ func validateFigureTransferManifest(manifest FigureTransferManifest) error {
 	}
 	if _, err := time.Parse(time.RFC3339, manifest.ExportedAt); err != nil {
 		return invalidFigureTransferPackage("invalid exportedAt")
+	}
+	if manifest.Entry != figureTransferHandoffName {
+		return invalidFigureTransferPackage("invalid entry file")
 	}
 	if manifest.Source.FigureID <= 0 || manifest.Source.Paper.ID <= 0 {
 		return invalidFigureTransferPackage("invalid figure or paper identifier")
@@ -388,6 +473,39 @@ func validateFigureTransferManifest(manifest FigureTransferManifest) error {
 	return nil
 }
 
+func validateFigureTransferFiles(manifest FigureTransferManifest, payload map[string][]byte) error {
+	if len(manifest.Files) != 3 {
+		return invalidFigureTransferPackage("manifest files must list figure, research context, and handoff")
+	}
+	seen := map[string]struct{}{}
+	for _, file := range manifest.Files {
+		if _, exists := seen[file.Name]; exists {
+			return invalidFigureTransferPackage("duplicate manifest file %q", file.Name)
+		}
+		seen[file.Name] = struct{}{}
+		data, ok := payload[file.Name]
+		if !ok {
+			return invalidFigureTransferPackage("missing listed file %q", file.Name)
+		}
+		if int64(len(data)) != file.Bytes {
+			return invalidFigureTransferPackage("file %q bytes mismatch", file.Name)
+		}
+		if sha256Hex(data) != file.SHA256 {
+			return invalidFigureTransferPackage("file %q sha256 mismatch", file.Name)
+		}
+	}
+	if _, ok := seen[manifest.Figure.File]; !ok {
+		return invalidFigureTransferPackage("files list is missing the figure")
+	}
+	if _, ok := seen[figureTransferContextName]; !ok {
+		return invalidFigureTransferPackage("files list is missing research-context.json")
+	}
+	if _, ok := seen[figureTransferHandoffName]; !ok {
+		return invalidFigureTransferPackage("files list is missing handoff.md")
+	}
+	return nil
+}
+
 func readFigureTransferEntry(file *zip.File, maxSize int64) ([]byte, error) {
 	if file.UncompressedSize64 > uint64(maxSize) {
 		return nil, fmt.Errorf("entry exceeds %d bytes", maxSize)
@@ -425,6 +543,10 @@ func validFigureTransferEntryName(name string) bool {
 
 func validFigureTransferImageName(name string) bool {
 	return validFigureTransferEntryName(name) && strings.HasPrefix(name, "figure.") && len(strings.TrimPrefix(name, "figure.")) > 0
+}
+
+func validFigureTransferPackageFileName(name string) bool {
+	return name == figureTransferManifestName || name == figureTransferContextName || name == figureTransferHandoffName || validFigureTransferImageName(name)
 }
 
 func figureTransferSourceID(figureID int64) string {
@@ -479,6 +601,29 @@ func truncateTransferText(value string, maxRunes int) string {
 		return value
 	}
 	return string(runes[:maxRunes])
+}
+
+func marshalTransferJSON(value interface{}) ([]byte, error) {
+	data, err := json.MarshalIndent(value, "", "  ")
+	if err != nil {
+		return nil, err
+	}
+	return append(data, '\n'), nil
+}
+
+func newFigureTransferFile(name, role, mediaType string, data []byte) FigureTransferFile {
+	return FigureTransferFile{
+		Name:      name,
+		Role:      role,
+		MediaType: mediaType,
+		Bytes:     int64(len(data)),
+		SHA256:    sha256Hex(data),
+	}
+}
+
+func sha256Hex(data []byte) string {
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:])
 }
 
 func invalidFigureTransferPackage(format string, args ...interface{}) error {

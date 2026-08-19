@@ -620,20 +620,22 @@ AI 流式阅读通过：
 - 返回 `application/zip` 附件，文件名为 `citebox-figure-{id}-transfer-package.zip`
 - 供 ScientificFigureLibrary、个人 Gallery 或其他策展工具消费；CiteBox 不在此接口生成 R 代码或写入外部图库
 
-ZIP 固定包含两个文件：
+ZIP 固定包含四个文件：
 
 ```text
 citebox-figure-{id}-transfer-package.zip
 ├── manifest.json
+├── research-context.json
+├── handoff.md
 └── figure.<ext>
 ```
 
-当前 manifest 遵循 Figure Transfer Package v1：schema 为 `figure-transfer-package.v1`，version 为数值 `1`。示例：
+当前 manifest 遵循 Figure Transfer Package v2：schema 为 `figure-transfer-package.v2`，version 为数值 `2`。`handoff.md` 是给人和其他 Agent 阅读的入口；`research-context.json` 是结构化事实源。导出由 CiteBox 原生后端确定性生成，不调用模型，也不把图注烧录进原图。示例：
 
 ```json
 {
-  "schema": "figure-transfer-package.v1",
-  "version": 1,
+  "schema": "figure-transfer-package.v2",
+  "version": 2,
   "producer": {
     "name": "CiteBox",
     "version": "v0.31.0"
@@ -682,13 +684,16 @@ citebox-figure-{id}-transfer-package.zip
 - DOI 存在且格式有效时，`paper.url` 使用 DOI 解析地址；否则为 `null`
 - CiteBox 当前没有论文级授权字段，因此 `license.scope` 显式为 `unknown`、`license.text` 为 `null`，不会推断授权状态
 - `figure.mediaType` 仅支持 `image/png`、`image/jpeg`、`image/webp`、`image/svg+xml`、`application/pdf`，其他媒体类型的图片无法导出
+- `source.officialLabel` 优先取 caption 开头的论文图号（如 Extended Data Fig. 3）；没有时可与 `figureLabel` 相同
+- `entry` 固定为 `handoff.md`
+- `research-context.json` 与 `handoff.md` 由库内事实确定性生成，不调用模型，不编造 DOI
 - 包内不包含原始文件名、机器绝对路径、数据库路径、本地 PDF 地址或 `/files/...` 私有位置
 
 校验规则：
 
-- ZIP 必须只包含 `manifest.json` 和 manifest 指定的 `figure.<ext>`，且不得包含目录、重复项或路径穿越项
-- manifest 必须严格匹配 `figure-transfer-package.v1`（version `1`），主图与子图的父子字段必须自洽
-- 消费方必须同时核对 `figure.bytes` 和 `figure.sha256`；不匹配时必须拒绝该包
+- ZIP 必须只包含 `manifest.json`、`research-context.json`、`handoff.md` 和 manifest 指定的 `figure.<ext>`，且不得包含目录、重复项或路径穿越项
+- manifest 必须严格匹配 `figure-transfer-package.v2`（version `2`），主图与子图的父子字段必须自洽
+- 消费方必须核对 `figure.bytes` / `figure.sha256`，以及 `files[]` 中 research-context 与 handoff 的字节数和 SHA-256；不匹配时必须拒绝该包
 - CiteBox 在响应前会执行同样的结构、字节数和 SHA-256 校验；无法生成有效包时返回错误，不发送损坏附件
 
 #### `POST /api/figures/{id}/palette`
@@ -2357,3 +2362,4 @@ Notion API 使用用户在 Notion Developer Portal 创建的个人访问令牌�
 2. 在对应 `handler` 中定义请求体和响应
 3. 在 `web/static/js/api.js` 增加前端封装
 4. 同步更新本文档
+
