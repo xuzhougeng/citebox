@@ -1,5 +1,7 @@
 const ResourceViewerPage = {
     init() {
+        this.embedded = window.self !== window.top && new URLSearchParams(window.location.search).get('embed') === '1';
+        document.body.classList.toggle('viewer-embedded', this.embedded);
         if (typeof t !== 'function') window.t = function(k, f) { return f || k; };
         this.stage = document.getElementById('viewerStage');
         this.closeButton = document.getElementById('viewerCloseButton');
@@ -1457,6 +1459,7 @@ const ResourceViewerPage = {
     },
 
     close(options = {}) {
+        if (this.embedded) return;
         if (this.closing) {
             return;
         }

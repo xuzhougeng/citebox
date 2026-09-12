@@ -104,6 +104,9 @@ function loadPaperViewerContext(api) {
         className: '',
         id: '',
         innerHTML: '',
+        get childNodes() { return [this]; },
+        replaceChildren(...nodes) { this.innerHTML = nodes.map(node => node.innerHTML).join(''); },
+        style: { setProperty() {} },
         classList: {
             add() {},
             contains() { return false; },
@@ -116,12 +119,14 @@ function loadPaperViewerContext(api) {
     const body = createTestElement();
     const context = {
         console,
+        URL,
         requestAnimationFrame(callback) {
             if (typeof callback === 'function') callback();
         },
         window: {
             location: {
                 href: 'http://localhost/library',
+                origin: 'http://localhost',
             },
             scrollX: 0,
             scrollY: 0,

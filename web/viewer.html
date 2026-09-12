@@ -488,6 +488,13 @@
                 height: calc(100vh - 10rem);
             }
         }
+        body.viewer-embedded .viewer-pdf-official { min-width: max-content; }
+        body.viewer-embedded .viewer-toolbar { grid-template-columns: 1fr; padding: 0.5rem; }
+        body.viewer-embedded #viewerCloseButton,
+        body.viewer-embedded .viewer-meta,
+        body.viewer-embedded #viewerPdfDetailLink { display: none !important; }
+        body.viewer-embedded .viewer-pdf-controls { justify-content: center; gap: 0.25rem; }
+        body.viewer-embedded .viewer-pdf-controls .btn { padding: 0.4rem 0.55rem; }
     </style>
 </head>
 <body class="viewer-page">

@@ -54,6 +54,11 @@ const PaperNoteViewer = {
             const button = event.target.closest('[data-paper-note-action]');
             if (!button) return;
 
+            if (button.dataset.paperNoteAction === 'toggle-pdf') {
+                this.showPDF = !this.showPDF;
+                this.render();
+                return;
+            }
             if (button.dataset.paperNoteAction === 'set-mode') {
                 this.noteMode = button.dataset.noteMode === 'preview' ? 'preview' : 'write';
                 this.render();
@@ -92,6 +97,9 @@ const PaperNoteViewer = {
         this.paper = PaperViewer.normalizePaperIdentity(options.paper, options.paper?.id) || null;
         this.onChanged = options.onChanged;
         this.onOpenPaper = options.onOpenPaper;
+        this.showPDF = Boolean(this.paper?.pdf_url);
+        this.pdfWidth = 50;
+        this.pdfPaperID = null;
         this.noteDraft = this.paper?.paper_notes_text || '';
         this.noteMode = this.noteDraft.trim() ? 'preview' : 'write';
         this.render();
@@ -102,6 +110,8 @@ const PaperNoteViewer = {
     close() {
         if (!this.modal) return;
         this.modal.classList.add('hidden');
+        this.body.querySelector('iframe[data-paper-note-pdf]')?.remove();
+        this.pdfPaperID = null;
         if (!document.querySelector('.modal-shell:not(.hidden)')) {
             document.body.classList.remove('modal-open');
         }
@@ -168,13 +178,19 @@ const PaperNoteViewer = {
             return;
         }
 
-        const noteText = this.currentNotesDraft();
+        const noteText = this.noteDraft ?? paper.paper_notes_text ?? '';
         const isPreviewMode = this.noteMode === 'preview';
         const tags = PaperViewer.renderTagChips(paper.tags || []);
         const managementNotePreview = String(paper.notes_text || '').trim();
 
-        this.body.innerHTML = `
-            <div class="note-lightbox">
+        const content = document.createElement('div');
+        const pdfURL = new URL(Utils.resourceViewerURL('pdf', paper.pdf_url, window.location.href, { paperId: paper.id }), window.location.origin);
+        pdfURL.searchParams.set('embed', '1');
+        const comparing = this.showPDF && Boolean(paper.pdf_url);
+        content.innerHTML = `
+            <div class="note-lightbox paper-note-layout ${comparing ? 'is-comparing' : ''}" style="--paper-pdf-width:${this.pdfWidth || 50}%">
+                ${comparing ? `<section class="paper-note-pdf-pane"><iframe data-paper-note-pdf title="${t('shared.paper.pdf_comparison', '原文对照')}" src="${Utils.escapeHTML(pdfURL.href)}"></iframe></section>
+                <div class="paper-note-divider" role="separator" tabindex="0" aria-orientation="vertical" aria-label="${t('shared.paper.resize_panes', '调整原文与笔记宽度')}" aria-valuemin="30" aria-valuemax="65" aria-valuenow="${this.pdfWidth || 50}"></div>` : ''}
                 <section class="note-lightbox-main">
                     <div class="note-lightbox-editor-card">
                         <div class="note-lightbox-head">
@@ -185,6 +201,7 @@ const PaperNoteViewer = {
                                     <p class="note-lightbox-subtitle">${Utils.escapeHTML(paper.original_filename || '')}</p>
                                 </div>
                                 <div class="note-lightbox-mode-switch">
+                                    ${paper.pdf_url ? `<button class="btn btn-outline" type="button" data-paper-note-action="toggle-pdf" aria-pressed="${comparing}">${comparing ? t('shared.paper.hide_pdf', '收起原文') : t('shared.paper.pdf_comparison', '原文对照')}</button>` : ''}
                                     <button class="btn ${isPreviewMode ? 'btn-outline' : 'btn-primary'}" type="button" data-paper-note-action="set-mode" data-note-mode="write">${t('shared.paper.write_mode', '编辑')}</button>
                                     <button class="btn ${isPreviewMode ? 'btn-primary' : 'btn-outline'}" type="button" data-paper-note-action="set-mode" data-note-mode="preview">${t('shared.paper.markdown_preview', 'Markdown 预览')}</button>
                                 </div>
@@ -250,6 +267,48 @@ const PaperNoteViewer = {
                 </aside>
             </div>
         `;
+        const existing = this.body.querySelector('.paper-note-layout.is-comparing');
+        if (existing && comparing && this.pdfPaperID === paper.id) {
+            // Keep the iframe connected: removing and reinserting it reloads its
+            // browsing context, losing the user's PDF page and zoom.
+            for (const selector of ['.note-lightbox-main', '.note-lightbox-side']) {
+                existing.querySelector(selector).replaceWith(content.querySelector(selector));
+            }
+        } else {
+            this.body.replaceChildren(...content.childNodes);
+            this.bindPDFDivider();
+        }
+        this.pdfPaperID = comparing ? paper.id : null;
+    },
+
+    bindPDFDivider() {
+        const divider = this.body.querySelector('.paper-note-divider');
+        if (!divider) return;
+        const layout = this.body.querySelector('.paper-note-layout');
+        const resize = value => {
+            this.pdfWidth = Math.max(30, Math.min(65, value));
+            layout.style.setProperty('--paper-pdf-width', `${this.pdfWidth}%`);
+            divider.setAttribute('aria-valuenow', Math.round(this.pdfWidth));
+        };
+        divider.addEventListener('pointerdown', event => {
+            if (event.button !== 0) return;
+            event.preventDefault();
+            divider.setPointerCapture(event.pointerId);
+            layout.classList.add('is-resizing');
+        });
+        divider.addEventListener('pointermove', event => {
+            if (!divider.hasPointerCapture(event.pointerId)) return;
+            const bounds = layout.getBoundingClientRect();
+            resize((event.clientX - bounds.left) / bounds.width * 100);
+        });
+        for (const name of ['pointerup', 'pointercancel', 'lostpointercapture']) {
+            divider.addEventListener(name, () => layout.classList.remove('is-resizing'));
+        }
+        divider.addEventListener('keydown', event => {
+            if (!['ArrowLeft', 'ArrowRight'].includes(event.key)) return;
+            event.preventDefault();
+            resize((this.pdfWidth || 50) + (event.key === 'ArrowLeft' ? -2 : 2));
+        });
     }
 };
 
