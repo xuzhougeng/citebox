@@ -2423,3 +2423,9 @@ Notion API 使用用户在 Notion Developer Portal 创建的个人访问令牌�
 3. 在 `web/static/js/api.js` 增加前端封装
 4. 同步更新本文档
 
+
+### AI 回答追加到文献笔记
+
+`POST /api/ai/conversations/{id}/append-note` 接收 `message_id`、`paper_id`、`language`（`zh-CN` 或 `en`）。目标必须是该会话已钉住的文献，来源必须是该会话中已保存且非空的 assistant 回答。服务端读取原始回答，不接受客户端提供的替代文本。
+
+返回 `{"saved":true,"paper_id":1}`；相同回答的来源链接仍在该文献笔记中时重复提交返回 `saved:false`。追加是原子操作，只修改 `paper_notes_text`，保留管理笔记、已有文献笔记和并行追加内容。保存块包含问题、AI 标识、记录时间、模型及返回原会话的来源链接。

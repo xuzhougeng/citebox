@@ -421,6 +421,10 @@
 
             if (Number.isFinite(convParam) && convParam > 0) {
                 await view.load(convParam);
+                const messageParam = Number(params.get('message'));
+                if (Number.isSafeInteger(messageParam) && messageParam > 0) {
+                    document.querySelector(`[data-message-id="${messageParam}"]`)?.scrollIntoView({ block: 'center' });
+                }
                 conversations.setActive(convParam);
                 return;
             }

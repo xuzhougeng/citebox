@@ -16,6 +16,7 @@ import (
 
 // AIConversationService is the surface AIConversationHandler depends on.
 type AIConversationService interface {
+	AppendAnswerToPaperNote(conversationID, messageID, paperID int64, language string) (bool, error)
 	ListConversations(q string, limit, offset int) ([]ai_conversation.Conversation, error)
 	GetConversation(id int64) (ai_conversation.Conversation, error)
 	ListMessages(id int64, afterID int64, limit int) ([]ai_conversation.Message, error)
@@ -298,3 +299,31 @@ func (h *AIConversationHandler) parseConversationID(path string) (int64, error) 
 
 // keep errors import alive for future use
 var _ = errors.Is
+
+// AppendNote saves a persisted assistant answer to an explicitly selected pinned paper.
+func (h *AIConversationHandler) AppendNote(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	id, err := h.parseConversationID(strings.TrimSuffix(r.URL.Path, "/append-note"))
+	if err != nil {
+		sendError(w, err)
+		return
+	}
+	var input struct {
+		MessageID int64  `json:"message_id"`
+		PaperID   int64  `json:"paper_id"`
+		Language  string `json:"language"`
+	}
+	if err = json.NewDecoder(r.Body).Decode(&input); err != nil {
+		sendError(w, apperr.New(apperr.CodeInvalidArgument, "invalid request"))
+		return
+	}
+	saved, err := h.svc.AppendAnswerToPaperNote(id, input.MessageID, input.PaperID, input.Language)
+	if err != nil {
+		sendError(w, err)
+		return
+	}
+	sendJSON(w, http.StatusOK, map[string]interface{}{"saved": saved, "paper_id": input.PaperID})
+}

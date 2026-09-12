@@ -61,7 +61,10 @@
                     const action = e.target.closest('[data-ai-message-action]');
                     if (!action) return;
                     const name = action.dataset.aiMessageAction;
-                    if (name === 'edit-resend') {
+                    if (name === 'append-note') {
+                        e.preventDefault();
+                        self._openAnswerNoteTarget(action.dataset.messageId);
+                    } else if (name === 'edit-resend') {
                         e.preventDefault();
                         self._beginEditLastUserMessage();
                     } else if (name === 'cancel-edit-resend') {
@@ -532,6 +535,7 @@
             const parts = this._ensureMessageParts(el);
             if (message && message.role === 'assistant' && !message.streaming) {
                 this._clearStreamingStatus(el);
+                this._decorateAnswerNoteAction(el, message);
                 parts.text.innerHTML = (typeof Utils !== 'undefined' && typeof Utils.renderMarkdown === 'function')
                     ? Utils.renderMarkdown(message.content || '', {})
                     : '<p class="markdown-paragraph">' + escapeHtml(message.content || '') + '</p>';
@@ -549,6 +553,73 @@
                 this._clearStreamingStatus(el);
                 parts.text.textContent = (message && message.content) || '';
             }
+        },
+
+        _decorateAnswerNoteAction(el, message) {
+            el.querySelector('[data-ai-message-action="append-note"]')?.remove();
+            if (!message.id || !String(message.content || '').trim()) return;
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'btn btn-outline btn-small';
+            button.dataset.aiMessageAction = 'append-note';
+            button.dataset.messageId = String(message.id);
+            button.textContent = translate('ai.btn_append_notes', '追加到文献笔记');
+            el.appendChild(button);
+        },
+
+        _openAnswerNoteTarget(messageID) {
+            const conversationID = this._state.conversationId;
+            const papers = this._state.pinnedPapers || [];
+            if (!papers.length) {
+                Utils.showToast(translate('ai.note_pin_first', '请先钉住要保存笔记的文献'), 'info');
+                return;
+            }
+            document.getElementById('aiAnswerNoteModal')?.remove();
+            const modal = document.createElement('div');
+            modal.id = 'aiAnswerNoteModal';
+            modal.className = 'modal-shell';
+            modal.innerHTML = `<div class="modal-dialog" style="max-width:560px;padding:1.5rem">
+                <h3>${translate('ai.btn_append_notes', '追加到文献笔记')}</h3>
+                <p>${translate('ai.note_target_hint', '选择目标文献。内容将追加到现有笔记，并保留 AI 来源。')}</p>
+                <label class="field"><span>${translate('ai.note_target', '目标文献')}</span>
+                <select class="form-input" data-note-target>
+                    <option value="">${translate('ai.note_choose_target', '请选择文献')}</option>
+                    ${papers.map(p => `<option value="${Number(p.paper_id || p.id)}">${escapeHtml(p.title || '')}</option>`).join('')}
+                </select></label>
+                <div style="display:flex;justify-content:flex-end;gap:0.6rem;margin-top:1rem">
+                    <button class="btn btn-outline" data-note-cancel>${translate('btn.cancel', '取消')}</button>
+                    <button class="btn btn-primary" data-note-save disabled>${translate('ai.btn_append_notes', '追加到文献笔记')}</button>
+                </div></div>`;
+            document.body.appendChild(modal);
+            const select = modal.querySelector('[data-note-target]');
+            const save = modal.querySelector('[data-note-save]');
+            let saving = false;
+            const close = () => { if (!saving) modal.remove(); };
+            modal.querySelector('[data-note-cancel]').addEventListener('click', close);
+            modal.addEventListener('click', event => { if (event.target === modal) close(); });
+            modal.addEventListener('keydown', event => { if (event.key === 'Escape') { event.stopPropagation(); close(); } });
+            select.addEventListener('change', () => { save.disabled = !select.value; });
+            select.focus();
+            save.addEventListener('click', async () => {
+                if (saving || !select.value) return;
+                saving = true;
+                save.disabled = true;
+                select.disabled = true;
+                try {
+                    const result = await requestJSON(`/api/ai/conversations/${conversationID}/append-note`, {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ message_id: Number(messageID), paper_id: Number(select.value), language: typeof CiteBoxI18n !== 'undefined' ? CiteBoxI18n.get() : 'zh-CN' })
+                    });
+                    Utils.showToast(translate(result.saved ? 'ai.msg_note_appended' : 'ai.msg_note_already_saved', result.saved ? 'AI 内容已追加到文献笔记' : '这轮 AI 内容已经写入文献笔记'));
+                    modal.remove();
+                } catch (error) {
+                    Utils.showToast(error.message, 'error');
+                } finally {
+                    saving = false;
+                    save.disabled = !select.value;
+                    select.disabled = false;
+                }
+            });
         },
 
         _ensureMessageParts(el) {

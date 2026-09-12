@@ -236,3 +236,7 @@ func TestAIConversationSendMessageStreams(t *testing.T) {
 		t.Fatalf("expected final event, got %s", rec.Body.String())
 	}
 }
+
+func (s *stubAIConversationService) AppendAnswerToPaperNote(c, m, p int64, lang string) (bool, error) {
+	return true, nil
+}

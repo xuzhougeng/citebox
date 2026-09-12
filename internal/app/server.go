@@ -909,6 +909,8 @@ func buildHandlerWithAIServices(
 			default:
 				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			}
+		case strings.HasSuffix(p, "/append-note"):
+			aiConversationHandler.AppendNote(w, r)
 		case strings.HasSuffix(p, "/export"):
 			if r.Method != http.MethodGet {
 				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
