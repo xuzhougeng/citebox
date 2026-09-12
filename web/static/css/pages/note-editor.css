@@ -159,15 +159,6 @@
     line-height: 1.7;
 }
 
-.paper-note-meta-panel {
-    grid-template-columns: 1fr;
-}
-
-.paper-note-meta-panel strong {
-    overflow-wrap: anywhere;
-    word-break: break-word;
-}
-
 .paper-note-layout.is-comparing {
     grid-template-columns: minmax(0, var(--paper-pdf-width, 50%)) 8px minmax(0, 1fr);
     gap: 0.5rem;
@@ -191,4 +182,13 @@
     .paper-note-layout.is-comparing > .note-lightbox-main { overflow: visible; }
     .paper-note-pdf-pane { height: 55vh; }
     .paper-note-divider { display: none; }
+}
+
+.paper-note-meta-panel {
+    grid-template-columns: 1fr;
+}
+
+.paper-note-meta-panel strong {
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
