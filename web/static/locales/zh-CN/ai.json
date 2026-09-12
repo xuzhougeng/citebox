@@ -236,5 +236,20 @@
     "ai.context_tray_remove_excerpt": "移除引用",
     "ai.context_tray_remove_figure": "移除图片",
     "ai.sidebar_collapse": "收起侧栏",
-    "ai.sidebar_expand": "展开侧栏"
+    "ai.sidebar_expand": "展开侧栏",
+    "ai.auto_attach_figures": "自动附带钉住文献图片（最多 4 张）",
+    "ai.context_images_history": "本轮发送图片输入 {count} 张",
+    "ai.context_body_usage": "{title}：正文 {included} / {total} 字符 · {count} 段",
+    "ai.context_evidence_usage": "本轮完整带入检索证据 {count} 段",
+    "ai.context_images_usage": "图片输入 {included} / {requested} 张",
+    "ai.context_image_auto_disabled": "未选择图片，自动附图未开启",
+    "ai.context_image_no_figures": "钉住文献没有已提取图片",
+    "ai.context_image_loader_unavailable": "图片加载器不可用",
+    "ai.context_image_load_failed": "图片加载失败",
+    "ai.context_image_capability_unknown": "图片能力未确认，请在模型设置中启用",
+    "ai.context_image_model_unsupported": "模型未启用图片输入，仅提供文字说明",
+    "ai.context_image_no_image_data": "图片文件不可用，仅提供可用文字说明",
+    "ai.context_image_partial": "部分图片未加载或达到附图限制",
+    "ai.context_image_attached": "已发送图片输入；不代表上游模型一定理解图片",
+    "ai.result_evidence_count": "查看检索证据（{count} 段）"
 }

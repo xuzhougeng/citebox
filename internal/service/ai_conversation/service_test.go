@@ -609,16 +609,16 @@ func TestSendMessageUsesOrchestratorEventsAndPersistsArtifacts(t *testing.T) {
 	if !strings.Contains(caller.userSeen, "ORCH_CONTEXT") {
 		t.Fatalf("provider prompt missing orchestrator context: %s", caller.userSeen)
 	}
-	if len(events) != 4 || events[0].Type != "process" || events[1].Type != "cards" || events[2].Type != "citations" || events[3].Type != "process" {
+	if len(events) != 5 || events[0].Type != "process" || events[1].Type != "cards" || events[2].Type != "citations" || events[3].Type != "context_usage" || events[4].Type != "process" {
 		t.Fatalf("events = %+v", events)
 	}
 	firstProcess, ok := events[0].Data.(ai_assistant.ProcessSummary)
 	if !ok || stageByLabel(firstProcess.Stages, "生成回答").Status != "running" {
 		t.Fatalf("first process event = %+v, want running answer generation stage", events[0].Data)
 	}
-	finalProcess, ok := events[3].Data.(ai_assistant.ProcessSummary)
+	finalProcess, ok := events[4].Data.(ai_assistant.ProcessSummary)
 	if !ok || stageByLabel(finalProcess.Stages, "生成回答").Status != "completed" {
-		t.Fatalf("final process event = %+v, want completed answer generation stage", events[3].Data)
+		t.Fatalf("final process event = %+v, want completed answer generation stage", events[4].Data)
 	}
 
 	msgs, err := libRepo.AIConversation.ListMessages(convID, 0, 10)

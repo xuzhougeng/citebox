@@ -33,7 +33,7 @@ func TestAssembleForTurnIncludesFullAbstractAndTruncationHint(t *testing.T) {
 	if !strings.Contains(asm.userPrompt, abstract) {
 		t.Fatalf("pinned block should include the full abstract")
 	}
-	if !strings.Contains(asm.userPrompt, "正文开头，全文更长") {
+	if !strings.Contains(asm.userPrompt, "非完整全文") {
 		t.Fatalf("pinned block should tell the model the body is truncated: %s", asm.userPrompt)
 	}
 	if !strings.Contains(asm.userPrompt, "文献检索工具") {
@@ -59,7 +59,7 @@ func TestAssembleForTurnKeepsBodyWholeUnderCap(t *testing.T) {
 		t.Fatalf("assembleForTurn: %v", err)
 	}
 
-	if strings.Contains(asm.userPrompt, "正文开头，全文更长") {
+	if strings.Contains(asm.userPrompt, "非完整全文") {
 		t.Fatalf("short body should not carry the truncation hint")
 	}
 	if !strings.Contains(asm.userPrompt, strings.TrimRight(pdfText, " ")) {
@@ -104,7 +104,7 @@ func TestAssembleForTurnFitsPinnedPapersWithinRemainingBudget(t *testing.T) {
 					t.Fatalf("missing pinned paper %q", pp.Title)
 				}
 			}
-			if !strings.Contains(asm.userPrompt, "文献检索工具") || !strings.Contains(asm.userPrompt, "已带入前") {
+			if !strings.Contains(asm.userPrompt, "文献检索工具") || !strings.Contains(asm.userPrompt, "已带入 ") {
 				t.Fatal("truncated text must disclose its extent and retrieval path")
 			}
 			if !strings.Contains(asm.userPrompt, conv.SummaryText) || !strings.Contains(asm.userPrompt, attachment) {

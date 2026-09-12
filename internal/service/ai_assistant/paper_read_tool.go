@@ -15,7 +15,11 @@ type PaperReadTool struct {
 	papers PaperGetter
 }
 
-const maxPaperReadPapers = 2
+const (
+	maxPaperReadPapers    = 2
+	maxPaperReadEvidence  = 8
+	paperReadExcerptRunes = 800
+)
 
 type PaperCompareCard struct {
 	Query  string             `json:"query"`
@@ -69,7 +73,10 @@ func (t *PaperReadTool) Run(ctx context.Context, in ToolInput) (ToolResult, erro
 			skipped++
 			continue
 		}
-		matches := FindLocalEvidenceMatches(*p, terms, 3)
+		// Keep targeted hits, but reserve coverage for sections whose vocabulary
+		// may not match a broad or cross-language question.
+		matches := FindLocalEvidenceMatches(*p, terms, maxPaperReadEvidence/2)
+		matches = append(matches, paperBodyEvidenceMatches(*p, maxPaperReadEvidence-len(matches))...)
 		if len(matches) == 0 {
 			matches = fallbackPaperEvidenceMatches(*p, 1)
 		}
@@ -193,10 +200,30 @@ func fallbackPaperEvidenceMatches(paper model.Paper, limit int) []LocalEvidenceM
 			Text:          text,
 			SnippetKind:   "body",
 			Section:       section,
-			SnippetOffset: research.SnippetOffset{Start: 0, End: len(text)},
+			SnippetOffset: research.SnippetOffset{Start: 0, End: len([]rune(text))},
 		},
 		Score: 1,
 	}}
+}
+
+func paperBodyEvidenceMatches(paper model.Paper, limit int) []LocalEvidenceMatch {
+	excerpts := samplePaperText(paper.PDFText, limit*paperReadExcerptRunes, limit)
+	matches := make([]LocalEvidenceMatch, 0, len(excerpts))
+	for _, excerpt := range excerpts {
+		location := "正文抽样（非完整全文）"
+		if excerpt.Heading != "" {
+			location += " / " + excerpt.Heading
+		}
+		matches = append(matches, LocalEvidenceMatch{
+			Location: location,
+			Snippet: research.Snippet{
+				Text: excerpt.Text, SnippetKind: "body", Section: location,
+				SnippetOffset: research.SnippetOffset{Start: excerpt.StartRune, End: excerpt.EndRune},
+			},
+			Score: 1,
+		})
+	}
+	return matches
 }
 
 // fallbackPaperEvidenceSection names the field the fallback drew from, so the

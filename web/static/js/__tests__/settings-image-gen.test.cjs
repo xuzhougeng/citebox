@@ -69,6 +69,16 @@ function makeSettingsSubject() {
     return subject;
 }
 
+test('saving unrelated model settings preserves unknown image capability', () => {
+    const subject = Object.create(loadSettingsPage());
+    const models = [{ id: 'custom', provider: 'openai', model: 'custom' },
+        { id: 'vision', provider: 'openai', model: 'vision', supports_images: true }];
+    const payload = JSON.parse(JSON.stringify(subject.getAIPayloadModels(models)));
+    assert.equal(payload[0].supports_images, undefined);
+    assert.equal(payload[1].supports_images, true);
+    assert.equal(subject.createAIModelDraft().supports_images, false);
+});
+
 test('settings page exposes image generation controls in HTML', () => {
     const html = fs.readFileSync(settingsHTMLPath, 'utf8');
 

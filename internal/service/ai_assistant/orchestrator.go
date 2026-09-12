@@ -97,7 +97,7 @@ func (o *Orchestrator) toolForIntent(intent string) Tool {
 
 func buildFinalAnswerContext(userText string, res ToolResult) string {
 	var b strings.Builder
-	b.WriteString("你正在基于工具检索结果回答。只使用下列证据和结果卡片支持结论；证据不足时明确说明。\n\n")
+	b.WriteString("你正在基于本轮提供的钉住文献、原文引用、图片输入及下列工具证据回答。只使用实际提供的内容支持结论；抽样片段不等于完整全文，图片文字说明不等于看到了图片，证据不足时明确说明。\n\n")
 	if res.AnswerContext != "" {
 		b.WriteString("工具结果：\n")
 		b.WriteString(res.AnswerContext)

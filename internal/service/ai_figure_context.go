@@ -70,7 +70,8 @@ func (s *AIService) LoadFigureContext(_ context.Context, figureIDs []int64) ([]m
 			continue
 		}
 
-		summaries = append(summaries, figureContextSummary(*figure))
+		summaryIndex := len(summaries)
+		summaries = append(summaries, "仅文字（图片未加载）："+figureContextSummary(*figure))
 		if budgetReached {
 			continue
 		}
@@ -97,6 +98,7 @@ func (s *AIService) LoadFigureContext(_ context.Context, figureIDs []int64) ([]m
 			MIMEType: compressedMIMEType,
 			Data:     base64.StdEncoding.EncodeToString(compressedData),
 		})
+		summaries[summaryIndex] = fmt.Sprintf("图片文件序号 %d：%s", len(images), figureContextSummary(*figure))
 		totalBytes += len(compressedData)
 	}
 

@@ -993,6 +993,7 @@ citebox-figure-{id}-transfer-package.zip
 
 - `image_gen` 为可选字段；如果本次请求未传，后端会保留当前已保存的图像生成配置。
 - `provider=codex` 时 `api_key` 和 `base_url` 会被清空；`model` 使用 app-server 返回的模型 ID，`reasoning_effort` 和 `supports_images` 按该模型声明的能力设置。
+- AI 助手会话只在所选主模型显式声明 `supports_images: true` 时附带图片。配置缺省或 `null` 保留为“能力未知”，不会从默认模型继承 `true`；设为 `false` 或未知时仅发送可用文字说明。新建自定义模型默认不勾选图片输入。历史上已保存的显式 `true` 会保留，请为纯文本模型取消勾选。
 - `image_gen` 始终是独立的 Images API 配置，Codex 订阅 provider 不替代其 API key。
 - `image_gen.size` 目前支持：`1024x1024`、`1024x1536`、`1536x1024`。
 - `image_gen.quality` 目前支持：`low`、`medium`、`high`。
@@ -1064,7 +1065,9 @@ citebox-figure-{id}-transfer-package.zip
 
 会话接口统一位于 `/api/ai/conversations`，用于 AI 页面侧边栏、已钉文献、内部搜索、外部搜索和流式对话。
 
-普通模式下，钉住文献的摘要和正文按 `context_budget_tokens` 的剩余预算分配；系统提示、问题、已有对话摘要和用户附件先计入预算，再在各篇文献间分配可用空间。单篇摘要最多 4000 字符、正文最多 24000 字符，实际可更少；截断时上下文会注明已带入的字符数及全文检索入口。历史消息继续使用剩余空间。用户问题或附件本身超出预算时，不会为了插入文献正文而截断这些显式输入。
+普通模式下，钉住文献的摘要和正文按 `context_budget_tokens` 的剩余预算分配；系统提示、问题、已有对话摘要和用户附件先计入预算，工具结果也在装配正文之前预留预算，再在各篇文献间分配可用空间。存在钉住文献时，工具结果最多使用剩余文本预算的一半，其余留给钉住正文和历史。单篇摘要最多 4000 字符、正文最多 24000 字符，实际可更少。短正文完整带入；长正文按常见中英文章节标题抽样，优先覆盖 Methods / STAR Methods、统计分析、数据与代码可用性等章节，并保留文末片段；无法识别标题时使用分布式窗口。抽样最多 8 段，标注字符位置、实际带入量和非完整全文边界。历史消息继续使用剩余空间。超长工具结果也会按预算抽样并披露；用户问题或附件本身超出预算时，不会截断这些显式输入。文本预算是启发式估算，不包含供应商的图片 token 计费。
+
+文献阅读工具仍最多处理 2 篇，但每篇最多返回 8 段证据：最多 4 段关键词命中，其余名额补充跨章节正文抽样（每篇抽样总长度最多为剩余名额 × 800 字符），因此综合性或跨语言问题即使关键词未命中也能取得尾部方法等内容。这些片段不代表完整阅读整篇论文，也不会取得未入库的补充材料。后续阅读轮次若未传 `context.paper_id(s)`，会回填会话已钉文献；显式指定的文献和未限定范围的库内/外部搜索不受影响。
 
 对话导出在应用内预览，支持返回、复制及通过桌面原生保存对话框下载 Markdown，页面不会导航到附件响应。
 
@@ -1110,8 +1113,9 @@ citebox-figure-{id}-transfer-package.zip
 - `intent_hint`：可选的一次性路由提示。支持 `library_search`（查全库）、`external_search`（查外部）、`paper_read`（读文献）、`figure_lookup`（看图/图文）、`remote_mcp`（调用已配置的 Notion MCP）。省略时由后端按内容和上下文自动判断。前端在用户输入 `@PubMed` / `@SemanticScholar` / `@Library` / `@Figure` / `@Notion` 等工具标签时会自动填充该字段。
 - `search_goal_hint`：可选字符串。支持 `discovery` 和 `evidence`；用于显式指定外部搜索目标，优先级高于 planner 推断出的 `search_goal`。`discovery` 适合找方向、找综述、扩展候选，`evidence` 适合核查具体断言、找直接出处。前端快捷入口通常会和 `intent_hint == "external_search"` 一起发送；后端也会把合法的 `search_goal_hint` 视为显式工具请求信号，用它优先走 orchestrator 而不是旧外部证据注入路径。非法值会被安全忽略，仍按 planner / 默认回退逻辑执行。
 - `sources`：可选字符串数组，仅在 `intent_hint == "external_search"` 时被读取。取值为外部源 ID 子集，例如 `["pubmed"]`、`["semantic_scholar"]` 或 `["pubmed","semantic_scholar"]`。当用户在输入框打了 `@PubMed`/`@SemanticScholar` 显式指定外部源时，前端会带上此字段；后端会与设置中"已启用源"取交集执行检索，被显式指定但未启用的源会以 `ErrSourceDisabled` 写入失败列表，并在 `Process.Note` 中提示"用户显式指定但未启用的源: …（请前往设置页启用）"。省略或为空数组时，等同当前默认行为（跑所有已启用源）。
-- `context`：可选上下文对象，支持 `source`、`paper_id`、`paper_ids`、`figure_id`、`figure_ids`、`excerpts`。用于指定当前文献、对比文献或图片上下文。当 `intent_hint == "library_search"` 且 `paper_ids` 非空时（典型场景：用户同时输入 `@Library @<paper>`），后端会把候选集裁剪到该 PaperIDs 集合内。
+- `context`：可选上下文对象，支持 `source`、`paper_id`、`paper_ids`、`figure_id`、`figure_ids`、`excerpts`、`auto_attach_figures`。用于指定当前文献、对比文献或图片上下文。当 `intent_hint == "library_search"` 且 `paper_ids` 非空时（典型场景：用户同时输入 `@Library @<paper>`），后端会把候选集裁剪到该 PaperIDs 集合内。
   - `context.figure_ids`：用户显式勾选的图片 ID 列表（AI 助手页右侧 PDF 面板的图片勾选，或 `@figure-<id>` 提及）。非空时后端会把这些图片作为视觉上下文随问题一并发给主模型（受该模型 `supports_images` 能力门控；不支持图片输入的模型会降级为 caption 文字描述），并把意图路由到 `paper_read`。
+  - `context.auto_attach_figures`：可选布尔值，默认 `false`。开启后，在没有显式 `figure_id` / `figure_ids` 的情况下，按已钉文献顺序选取最多 4 张顶层图片；不包含子图。显式选择优先且会去重，仍受现有最多 8 张及图片字节预算限制。仅使用库中已提取图片，不渲染整个 PDF。图像生成意图不使用此开关。AI 页提供本轮附图开关，刷新页面后恢复关闭。
   - `context.excerpts`：用户在 PDF 预览中划选引用的原文片段数组，每项为 `{"paper_id": 42, "page": 3, "text": "..."}`（`paper_id`、`page` 可省略）。后端以“用户引用的原文片段”块注入本轮 prompt（最多 8 条、每条截断约 2000 字符），按轮生效、不持久化。
 - `replace_last`：可选布尔值。为 `true` 时，服务端会先删除当前会话最后一轮用户消息及其后的回答、流程和结果卡片，再用本次 `content` 重新发送；仅适用于已有会话。
 - `strict_evidence`：兼容字段；历史上对应“内部搜索”开关。当前主 UI 使用 `intent_hint` 和 `context` 调度工具。没有显式 `intent_hint`/`context` 时，旧内部搜索语义仍保留。
@@ -1120,6 +1124,7 @@ citebox-figure-{id}-transfer-package.zip
 消息流返回 `application/x-ndjson`。除既有 `meta`、`delta`、`final`、`error` 外，AI 助手工具调度还可能返回：
 
 - `process`：紧凑流程摘要，用于展示扫描阶段、命中数和状态。
+- `context_usage`：在最终回答模型调用前发送，`data` 包含 `papers: [{paper_id, title, included_body_runes, total_body_runes, excerpt_count}]`、`evidence_snippets`（实际完整带入提示词的检索片段数）、`requested_images`、`attached_images`、`image_reason`、`estimated_text_tokens`。正文计数仅统计钉住正文块，不包括摘要、用户划选和工具结果；内部搜索模式下未注入钉住正文时计为 0。图片数量表示本轮 provider 调用的图片输入，不代表上游已接受或理解。`image_reason` 可为 `auto_disabled`、`no_figures`、`loader_unavailable`、`load_failed`、`capability_unknown`、`model_unsupported`、`no_image_data`、`partial`、`attached`。部分图片加载失败时，图注数量不会冒充实际附图数量，提示词按图片文件序号关联成功加载的图片。该事件是实时信息，不新增数据库字段；`included_figures` 继续随 assistant 消息保存，并在 final 响应返回，历史消息可显示已附图片数。
 - `cards`：结构化结果卡片，例如 `paper_hit`、`external_paper`、`paper_read`、`paper_compare`、`figure_result`。
   - `paper_hit.payload.highlight_terms`：本地全文扫描实际使用的检索词数组，前端用于在证据片段中高亮命中词；旧消息可能没有该字段。
   - `external_paper.payload`：外部出处检索卡片。常见字段包括 `matched_query`、`reason`、`search_goal`、`tier`、`year_label`、`article_role`、`matched_constraints`、`matched_preferences`、`evidence_annotations`。
@@ -1206,7 +1211,7 @@ citebox-figure-{id}-transfer-package.zip
 
 #### 发送消息请求体扩展
 
-`POST /api/ai-conversations/:id/messages` 现在支持 `context.figure_ids: [<int>]`，当消息文本中包含 `@figure-<id>` 提及、或用户在 AI 助手页右侧 PDF 面板勾选图片时由前端填充。勾选的图片会作为视觉上下文发给主模型（模型标记 `supports_images: false` 时降级为 caption 文字）。另支持 `context.excerpts: [{"paper_id", "page", "text"}]` 携带 PDF 划选引用片段。
+`POST /api/ai/conversations/{id}/messages` 支持 `context.figure_ids: [<int>]`，当消息文本中包含 `@figure-<id>` 提及、或用户在 AI 助手页右侧 PDF 面板勾选图片时由前端填充。只有主模型显式设置 `supports_images: true` 时才附带图片，否则降级为 caption 文字并披露原因。也可通过 `context.auto_attach_figures: true` 自动附带最多 4 张已钉文献顶层图片，显式选择优先。另支持 `context.excerpts: [{"paper_id", "page", "text"}]` 携带 PDF 划选引用片段。
 
 #### `POST /api/ai/settings/check-model`
 

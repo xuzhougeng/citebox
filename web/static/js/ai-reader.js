@@ -173,6 +173,7 @@
                 pinChips: $('aiPinChips'),
                 strictEvidence: $('aiStrictEvidenceToggle'),
                 externalEvidence: $('aiExternalEvidenceToggle'),
+                autoAttachFigures: $('aiAutoAttachFigures'),
                 runBtn: $('runAIReaderButton'),
                 stopBtn: $('stopAIReaderButton'),
                 exportBtn: $('aiExportConversation'),

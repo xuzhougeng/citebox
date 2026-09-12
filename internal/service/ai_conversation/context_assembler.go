@@ -14,19 +14,35 @@ type assembledContext struct {
 	systemPrompt string
 	userPrompt   string
 	images       []model.AIImageInput
+	papers       []PinnedPaperContextUsage
+	evidenceText string
+}
+
+// PinnedPaperContextUsage describes the exact body spans added to this turn.
+type PinnedPaperContextUsage struct {
+	PaperID           int64  `json:"paper_id"`
+	Title             string `json:"title"`
+	IncludedBodyRunes int    `json:"included_body_runes"`
+	TotalBodyRunes    int    `json:"total_body_runes"`
+	ExcerptCount      int    `json:"excerpt_count"`
 }
 
 // assembleForTurn returns prompts ready for the LLM call. Pinned papers'
-// abstract + first maxPinnedBodyRunes of pdf_text are included as context.
+// abstract + bounded samples across pdf_text are included as context.
 // Recent messages are concatenated; oldest are dropped if estimated tokens >
 // budget. attachmentBlock carries user-attached context (PDF excerpts, checked
 // figure summaries) and is inserted right before the final user question.
 //
-// Sliding-window only — summarization & evidence injection happen in sibling
-// files later (Tasks 3.2 / 3.4).
+// History uses a sliding window; summary generation remains in the service.
 func (s *Service) assembleForTurn(conv repository.AIConversation,
 	pinned []repository.AIPinnedPaper, history []repository.AIMessage,
 	userText string, attachmentBlock string, settings model.AISettings) (assembledContext, error) {
+	return s.assembleWithEvidence(conv, pinned, history, userText, attachmentBlock, "", settings)
+}
+
+func (s *Service) assembleWithEvidence(conv repository.AIConversation,
+	pinned []repository.AIPinnedPaper, history []repository.AIMessage,
+	userText, attachmentBlock, evidenceBlock string, settings model.AISettings) (assembledContext, error) {
 
 	budget := settings.ContextBudgetTokens
 	if budget <= 0 {
@@ -40,29 +56,39 @@ func (s *Service) assembleForTurn(conv repository.AIConversation,
 	// Reserve mandatory input and framing before adding optional paper text.
 	// The same estimate is used below to allocate the remaining history window.
 	fixedTokens := estimateTokens(systemPrompt) + estimateTokens(summaryBlock) + estimateTokens(attachmentBlock) + estimateTokens(userText) + 200
+	evidenceBudget := max(0, budget-fixedTokens)
+	if !conv.StrictEvidence && len(pinned) > 0 {
+		evidenceBudget /= 2
+	}
+	evidenceBlock = budgetedEvidenceBlock(evidenceBlock, evidenceBudget)
+	fixedTokens += estimateTokens(evidenceBlock)
 	pinnedBudget := budget - fixedTokens
 	pinnedBlock := ""
-	if !conv.StrictEvidence && pinnedBudget > 0 {
-		var paperBlocks []string
-		remaining := pinnedBudget - estimateTokens("已钉文献：\n\n")
-		for i, pp := range pinned {
-			paper, err := s.papers.GetPaperDetail(pp.PaperID)
-			if err != nil {
-				s.logger.Warn("ai_conversation: pinned paper missing", "paper_id", pp.PaperID, "error", err)
-				continue
-			}
-			// Share the budget across papers so the first long PDF cannot crowd
-			// out every other pinned source. Unused shares remain available.
-			block := budgetedPinnedPaperBlock(*paper, remaining/(len(pinned)-i)-10)
-			if block == "" {
-				continue
-			}
-			paperBlocks = append(paperBlocks, block)
-			remaining -= estimateTokens(block) + 10
+	var paperUsage []PinnedPaperContextUsage
+	var paperBlocks []string
+	remaining := pinnedBudget - estimateTokens("已钉文献：\n\n")
+	for i, pp := range pinned {
+		paper, err := s.papers.GetPaperDetail(pp.PaperID)
+		if err != nil {
+			s.logger.Warn("ai_conversation: pinned paper missing", "paper_id", pp.PaperID, "error", err)
+			continue
 		}
-		if len(paperBlocks) > 0 {
-			pinnedBlock = "已钉文献：\n\n" + strings.Join(paperBlocks, "\n\n---\n\n") + "\n\n"
+		// Share the budget across papers so the first long PDF cannot crowd
+		// out every other pinned source. Unused shares remain available.
+		share := remaining/(len(pinned)-i) - 10
+		if conv.StrictEvidence {
+			share = 0
 		}
+		block, usage := budgetedPinnedPaperBlock(*paper, share)
+		paperUsage = append(paperUsage, usage)
+		if block == "" {
+			continue
+		}
+		paperBlocks = append(paperBlocks, block)
+		remaining -= estimateTokens(block) + 10
+	}
+	if len(paperBlocks) > 0 {
+		pinnedBlock = "已钉文献：\n\n" + strings.Join(paperBlocks, "\n\n---\n\n") + "\n\n"
 	}
 
 	var historyLines []string
@@ -90,12 +116,41 @@ func (s *Service) assembleForTurn(conv repository.AIConversation,
 	if attachmentBlock != "" {
 		userPrompt += attachmentBlock
 	}
+	userPrompt += evidenceBlock
 	userPrompt += "用户问题：\n" + userText
 
 	return assembledContext{
 		systemPrompt: systemPrompt,
 		userPrompt:   userPrompt,
+		papers:       paperUsage,
+		evidenceText: evidenceBlock,
 	}, nil
+}
+
+// Reserve tool evidence before optional pinned text and history. Exceptionally
+// large tool output is disclosed as sampled rather than silently overrunning
+// the text budget or losing all late evidence to a prefix cut.
+func budgetedEvidenceBlock(text string, budget int) string {
+	if strings.TrimSpace(text) == "" {
+		return ""
+	}
+	if estimateTokens(text) <= budget {
+		return text
+	}
+	render := func(n int) string {
+		var b strings.Builder
+		b.WriteString("工具结果受本轮预算限制，以下仅为抽样片段；未展示部分不能作为已读证据：\n")
+		for _, excerpt := range ai_assistant.SamplePaperText(text, n) {
+			b.WriteString(excerpt.Text)
+			b.WriteString("\n…\n")
+		}
+		return b.String()
+	}
+	n := fitPinnedLength(len([]rune(text)), budget, render)
+	if n < 0 {
+		return ""
+	}
+	return render(n)
 }
 
 // Per-paper ceilings; the available turn budget can reduce either limit.
@@ -106,29 +161,48 @@ const (
 
 // budgetedPinnedPaperBlock retains the abstract first, then includes as much
 // body text as the paper's share permits. Truncation disclosure is budgeted too.
-func budgetedPinnedPaperBlock(paper model.Paper, budget int) string {
+func budgetedPinnedPaperBlock(paper model.Paper, budget int) (string, PinnedPaperContextUsage) {
 	abstract := []rune(strings.TrimSpace(paper.AbstractText))
-	body := []rune(strings.TrimSpace(paper.PDFText))
+	body := strings.TrimSpace(paper.PDFText)
+	totalBody := len([]rune(body))
+	usage := PinnedPaperContextUsage{PaperID: paper.ID, Title: paper.Title, TotalBodyRunes: totalBody}
 	abstractLimit := min(len(abstract), maxPinnedAbstractRunes)
-	bodyLimit := min(len(body), maxPinnedBodyRunes)
+	bodyLimit := min(totalBody, maxPinnedBodyRunes)
 	render := func(abstractLength, bodyLength int) string {
 		abstractText := string(abstract[:abstractLength])
 		if abstractLength < len(abstract) {
 			abstractText += "…"
 		}
+		excerpts := ai_assistant.SamplePaperText(body, bodyLength)
+		var text strings.Builder
+		included := 0
+		for _, excerpt := range excerpts {
+			if bodyLength < totalBody {
+				fmt.Fprintf(&text, "[正文字符 %d–%d / %d；%s]\n", excerpt.StartRune+1, excerpt.EndRune, totalBody, excerpt.Heading)
+			}
+			text.WriteString(excerpt.Text)
+			text.WriteString("\n")
+			included += excerpt.EndRune - excerpt.StartRune
+		}
 		block := fmt.Sprintf("### %s\nDOI: %s\n摘要: %s\n正文片段:\n%s",
-			paper.Title, paper.DOI, abstractText, string(body[:bodyLength]))
-		if bodyLength < len(body) {
-			block += fmt.Sprintf("\n（注意：以上仅为正文开头，全文更长；已带入前 %d / %d 字符。如需其他段落，请调用文献检索工具查询，不要据此判断用户未提供全文。）", bodyLength, len(body))
+			paper.Title, paper.DOI, abstractText, text.String())
+		if included < totalBody {
+			block += fmt.Sprintf("\n（注意：以上为跨章节或分布式抽样，非完整全文；已带入 %d / %d 字符，共 %d 段。未展示的部分仍可能存在于库中，可通过文献检索工具查询；不要据此判断用户未提供全文。）", included, totalBody, len(excerpts))
+		} else if totalBody == 0 {
+			block += "\n（当前没有可用的已提取正文；摘要和笔记不能代替全文。）"
 		}
 		return block
 	}
 	abstractLength := fitPinnedLength(abstractLimit, budget, func(n int) string { return render(n, 0) })
 	if abstractLength < 0 {
-		return ""
+		return "", usage
 	}
 	bodyLength := fitPinnedLength(bodyLimit, budget, func(n int) string { return render(abstractLength, n) })
-	return render(abstractLength, bodyLength)
+	for _, excerpt := range ai_assistant.SamplePaperText(body, bodyLength) {
+		usage.IncludedBodyRunes += excerpt.EndRune - excerpt.StartRune
+		usage.ExcerptCount++
+	}
+	return render(abstractLength, bodyLength), usage
 }
 
 // Return -1 when even the metadata and disclosure cannot fit.
@@ -186,27 +260,6 @@ func buildExcerptBlock(excerpts []ai_assistant.ContextExcerpt) string {
 	}
 	if count == 0 {
 		return ""
-	}
-	b.WriteString("\n")
-	return b.String()
-}
-
-// buildFigureContextBlock renders checked-figure summaries. When
-// imagesIncluded is false the master model cannot see images, so the block
-// explains the text-only degradation.
-func buildFigureContextBlock(summaries []string, imagesIncluded bool) string {
-	if len(summaries) == 0 {
-		return ""
-	}
-	var b strings.Builder
-	if imagesIncluded {
-		fmt.Fprintf(&b, "本轮随附图片（共 %d 张，已作为图片输入提供，与用户问题相关）：\n", len(summaries))
-	} else {
-		fmt.Fprintf(&b, "本轮用户勾选了 %d 张图片；当前模型不支持图片输入，仅以文字信息代替：\n", len(summaries))
-	}
-	for _, summary := range summaries {
-		b.WriteString(summary)
-		b.WriteString("\n")
 	}
 	b.WriteString("\n")
 	return b.String()

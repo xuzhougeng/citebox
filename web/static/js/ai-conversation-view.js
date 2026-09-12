@@ -275,6 +275,10 @@
 
             const body = { content: content, context: this._currentContext() };
 
+            if (this._state.els?.autoAttachFigures?.checked) {
+                body.context.auto_attach_figures = true;
+            }
+
             // Extract @figure-<id> mentions and pass as context.figure_ids.
             const figureIDs = extractFigureMentions(content);
             if (figureIDs.length > 0) {
@@ -539,6 +543,10 @@
                 parts.text.innerHTML = (typeof Utils !== 'undefined' && typeof Utils.renderMarkdown === 'function')
                     ? Utils.renderMarkdown(message.content || '', {})
                     : '<p class="markdown-paragraph">' + escapeHtml(message.content || '') + '</p>';
+                if (Number.isInteger(message.included_figures) && message.included_figures > 0 &&
+                    !parts.artifacts.querySelector('.ai-context-usage')) {
+                    this._renderContextUsage(el, { attached_images: message.included_figures, historical: true });
+                }
             } else if (message && message.role === 'user') {
                 this._clearStreamingStatus(el);
                 const renderMentions = window.AIReader && window.AIReader.toolTags && window.AIReader.toolTags.renderMentionHTML;
@@ -721,6 +729,8 @@
                 const summary = evt.process || evt.data;
                 if (s.streaming) s.streaming.process = summary;
                 this._appendProcess(summary);
+            } else if (evt.type === 'context_usage') {
+                this._renderContextUsage(assistantBubble, evt.data || {});
             } else if (evt.type === 'cards') {
                 const cards = evt.cards || evt.data || [];
                 if (s.streaming) s.streaming.cards = cards;
@@ -931,6 +941,49 @@
             }
             slot.innerHTML = html || '';
             this._scrollConversationToBottom();
+        },
+
+        _contextUsageLines(usage) {
+            const count = (value) => Math.max(0, Math.floor(Number(value) || 0));
+            const format = (key, fallback, values) => translate(key, fallback)
+                .replace(/\{(\w+)\}/g, (_, key) => String(values[key] ?? ''));
+            if (usage.historical) {
+                return [format('ai.context_images_history', '本轮发送图片输入 {count} 张', { count: count(usage.attached_images) })];
+            }
+            const lines = (Array.isArray(usage.papers) ? usage.papers : []).map((paper) =>
+                format('ai.context_body_usage', '{title}：正文 {included} / {total} 字符 · {count} 段', {
+                    title: paper.title || `#${paper.paper_id}`,
+                    included: count(paper.included_body_runes), total: count(paper.total_body_runes), count: count(paper.excerpt_count),
+                }));
+            lines.push(format('ai.context_evidence_usage', '本轮完整带入检索证据 {count} 段', { count: count(usage.evidence_snippets) }));
+            lines.push(format('ai.context_images_usage', '图片输入 {included} / {requested} 张', {
+                included: count(usage.attached_images), requested: count(usage.requested_images),
+            }));
+            const reasons = {
+                auto_disabled: ['ai.context_image_auto_disabled', '未选择图片，自动附图未开启'],
+                no_figures: ['ai.context_image_no_figures', '钉住文献没有已提取图片'],
+                loader_unavailable: ['ai.context_image_loader_unavailable', '图片加载器不可用'],
+                load_failed: ['ai.context_image_load_failed', '图片加载失败'],
+                capability_unknown: ['ai.context_image_capability_unknown', '图片能力未确认，请在模型设置中启用'],
+                model_unsupported: ['ai.context_image_model_unsupported', '模型未启用图片输入，仅提供文字说明'],
+                no_image_data: ['ai.context_image_no_image_data', '图片文件不可用，仅提供可用文字说明'],
+                partial: ['ai.context_image_partial', '部分图片未加载或达到附图限制'],
+                attached: ['ai.context_image_attached', '已发送图片输入；不代表上游模型一定理解图片'],
+            };
+            if (reasons[usage.image_reason]) lines.push(translate(...reasons[usage.image_reason]));
+            return lines;
+        },
+
+        _renderContextUsage(bubble, usage) {
+            if (!bubble) return;
+            const artifacts = this._ensureMessageParts(bubble).artifacts;
+            let slot = artifacts.querySelector('.ai-context-usage');
+            if (!slot) {
+                slot = document.createElement('p');
+                slot.className = 'ai-context-usage ai-status-line';
+                artifacts.appendChild(slot);
+            }
+            slot.textContent = this._contextUsageLines(usage).join(' · ');
         },
 
         _setImageGenStatus(status, data) {

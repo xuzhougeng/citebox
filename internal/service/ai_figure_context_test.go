@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/base64"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -65,5 +66,38 @@ func TestLoadFigureContextEmptyInput(t *testing.T) {
 	images, summaries, err := aiSvc.LoadFigureContext(context.Background(), nil)
 	if err != nil || images != nil || summaries != nil {
 		t.Fatalf("empty input = %v, %v, %v", images, summaries, err)
+	}
+}
+
+func TestLoadFigureContextMissingFirstImageKeepsInputOrder(t *testing.T) {
+	_, repo, cfg := newTestService(t)
+	svc := NewAIService(repo, cfg, nil)
+	res, err := repo.DB().Exec(`INSERT INTO papers (title, original_filename, stored_pdf_name) VALUES ('Partial figures', 'partial.pdf', 'partial.pdf')`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	paperID, _ := res.LastInsertId()
+	if err := os.MkdirAll(cfg.FiguresDir(), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeFigureFixture(t, filepath.Join(cfg.FiguresDir(), "available.png"), 32, 32)
+	var ids []int64
+	for i, name := range []string{"missing.png", "available.png"} {
+		res, err := repo.DB().Exec(`INSERT INTO paper_figures (paper_id, filename, content_type, page_number, figure_index) VALUES (?, ?, 'image/png', ?, ?)`, paperID, name, i+1, i+1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		id, _ := res.LastInsertId()
+		ids = append(ids, id)
+	}
+	images, summaries, err := svc.LoadFigureContext(context.Background(), ids)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(images) != 1 || len(summaries) != 2 {
+		t.Fatalf("images=%d summaries=%v", len(images), summaries)
+	}
+	if !strings.HasPrefix(summaries[0], "仅文字") || !strings.HasPrefix(summaries[1], "图片文件序号 1") || !strings.Contains(summaries[1], fmt.Sprintf("figure_id=%d", ids[1])) {
+		t.Fatalf("incorrect image-summary association: %v", summaries)
 	}
 }

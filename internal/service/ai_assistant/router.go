@@ -35,7 +35,7 @@ func RouteIntent(in RouteInput) RouteDecision {
 	if hasLibraryTerms {
 		return RouteDecision{Intent: IntentLibrarySearch, Confidence: "rule", Reason: "library search terms"}
 	}
-	if in.Context.PaperID > 0 {
+	if in.Context.PaperID > 0 || len(in.Context.PaperIDs) > 0 {
 		return RouteDecision{Intent: IntentPaperRead, Confidence: "rule", Reason: "paper context"}
 	}
 	return RouteDecision{Intent: IntentChat, Confidence: "low", Reason: "default chat"}

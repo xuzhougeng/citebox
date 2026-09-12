@@ -100,6 +100,42 @@ test('sendPayload does not invent search_goal_hint for ordinary payloads', async
     assert.ok(!Object.prototype.hasOwnProperty.call(sentBody, 'search_goal_hint'));
 });
 
+test('automatic pinned figures are opt-in and preserve manual figure selections', async () => {
+    const subject = createSubject();
+    let sent;
+    subject._sendBody = async (body) => { sent = body; };
+    subject._state.els = { autoAttachFigures: { checked: false } };
+    await subject.sendPayload({ content: 'explain design' });
+    assert.equal(sent.context.auto_attach_figures, undefined);
+    subject._state.els.autoAttachFigures.checked = true;
+    await subject.sendPayload({ content: 'explain @figure-12' });
+    assert.equal(sent.context.auto_attach_figures, true);
+    assert.deepEqual(Array.from(sent.context.figure_ids), [12]);
+});
+
+test('context disclosure uses actual image counts and explains unknown capability', () => {
+    const subject = createSubject();
+    const lines = subject._contextUsageLines({
+        papers: [{ paper_id: 1, title: 'Study', included_body_runes: 24000, total_body_runes: 80000, excerpt_count: 8 }],
+        evidence_snippets: 6, requested_images: 4, attached_images: 0, image_reason: 'capability_unknown',
+    });
+    assert.match(lines.join(' '), /24000 \/ 80000/);
+    assert.match(lines.join(' '), /图片输入 0 \/ 4/);
+    assert.match(lines.join(' '), /图片能力未确认/);
+    assert.match(subject._contextUsageLines({ requested_images: 4, attached_images: 2, image_reason: 'partial' }).join(' '), /图片输入 2 \/ 4/);
+});
+
+test('context_usage events render on the current assistant bubble', () => {
+    const subject = createSubject();
+    const bubble = {};
+    const usage = { attached_images: 0, image_reason: 'auto_disabled' };
+    let rendered;
+    subject._renderContextUsage = (el, value) => { rendered = { el, value }; };
+    subject._handleEvent({ type: 'context_usage', data: usage }, bubble);
+    assert.equal(rendered.el, bubble);
+    assert.equal(rendered.value, usage);
+});
+
 test('loadDraft pins the deep-linked paper when paper metadata is available', () => {
     const view = loadView();
     const subject = Object.create(view);

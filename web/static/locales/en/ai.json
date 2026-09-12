@@ -236,5 +236,20 @@
     "ai.context_tray_remove_excerpt": "Remove excerpt",
     "ai.context_tray_remove_figure": "Remove figure",
     "ai.sidebar_collapse": "Collapse sidebar",
-    "ai.sidebar_expand": "Expand sidebar"
+    "ai.sidebar_expand": "Expand sidebar",
+    "ai.auto_attach_figures": "Auto-attach pinned paper figures (up to 4)",
+    "ai.context_images_history": "Sent {count} image inputs this turn",
+    "ai.context_body_usage": "{title}: body {included} / {total} characters · {count} excerpts",
+    "ai.context_evidence_usage": "{count} complete retrieved evidence excerpts included",
+    "ai.context_images_usage": "Image inputs: {included} / {requested}",
+    "ai.context_image_auto_disabled": "No figures selected; automatic attachment is off",
+    "ai.context_image_no_figures": "No extracted figures in pinned papers",
+    "ai.context_image_loader_unavailable": "Figure loader unavailable",
+    "ai.context_image_load_failed": "Figure loading failed",
+    "ai.context_image_capability_unknown": "Image capability unknown; enable it in model settings",
+    "ai.context_image_model_unsupported": "Image input disabled for this model; text descriptions only",
+    "ai.context_image_no_image_data": "Image files unavailable; available text descriptions only",
+    "ai.context_image_partial": "Some images could not load or exceeded attachment limits",
+    "ai.context_image_attached": "Image inputs sent; provider comprehension is not guaranteed",
+    "ai.result_evidence_count": "View retrieved evidence ({count} excerpts)"
 }

@@ -99,9 +99,9 @@
         return html;
     }
 
-    function renderSnippets(snippets, terms) {
+    function renderSnippets(snippets, terms, limit = 3) {
         if (!Array.isArray(snippets) || snippets.length === 0) return '';
-        return '<div class="ai-result-snippets">' + snippets.slice(0, 3).map((snippet) => {
+        return '<div class="ai-result-snippets">' + snippets.slice(0, limit).map((snippet) => {
             const location = snippet.location ? '<span>' + escapeHtml(snippet.location) + '</span>' : '';
             return '<blockquote>' +
                 '<p>' + renderHighlightedText(snippet.text || '', terms) + citation(snippet.citation_index) + '</p>' +
@@ -273,7 +273,10 @@
             papers.map((paper) => (
                 '<section class="ai-result-paper-section">' +
                     '<strong>' + escapeHtml(paper.title || translate('ai.result_paper_fallback', '文献')) + '</strong>' +
-                    renderSnippets(paper.evidence) +
+                    (Array.isArray(paper.evidence) && paper.evidence.length ?
+                        '<details><summary>' + escapeHtml(translate('ai.result_evidence_count', '查看检索证据（{count} 段）')
+                            .replace('{count}', Math.min(paper.evidence.length, 8))) + '</summary>' +
+                            renderSnippets(paper.evidence, undefined, 8) + '</details>' : '') +
                 '</section>'
             )).join('') +
         '</article>';

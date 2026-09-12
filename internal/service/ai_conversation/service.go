@@ -345,34 +345,26 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput, onDelta 
 		conv.StrictEvidence = fresh.StrictEvidence
 	}
 
-	// User-attached context from the PDF panel: selected text excerpts and
-	// checked figure images. Excerpts ride as a prompt block; figures become
-	// vision inputs when the master model supports images, otherwise their
-	// captions/labels degrade to text.
 	attachmentBlock := buildExcerptBlock(in.Context.Excerpts)
-	var attachedImages []model.AIImageInput
-	if s.figureCtx != nil && len(in.Context.FigureIDs) > 0 &&
-		!strings.EqualFold(strings.TrimSpace(in.IntentHint), "image_generation") {
-		images, summaries, loadErr := s.figureCtx.LoadFigureContext(ctx, in.Context.FigureIDs)
-		switch {
-		case loadErr != nil:
-			s.logger.Warn("ai_conversation: figure context load failed", "error", loadErr)
-		case len(summaries) == 0:
-			// Nothing resolved — behave as if no figures were attached.
-		case assistantMasterSupportsImages(*settings) && len(images) > 0:
-			attachedImages = images
-			attachmentBlock += buildFigureContextBlock(summaries, true)
-		default:
-			attachmentBlock += buildFigureContextBlock(summaries, false)
+	figureInput := in.Context
+	if strings.EqualFold(strings.TrimSpace(in.IntentHint), "image_generation") {
+		figureInput = ai_assistant.RequestContext{}
+	}
+	attachedImages, figureBlock, usage := s.loadTurnFigures(ctx, figureInput, pinned, *settings)
+	attachmentBlock += figureBlock
+	includedFigures := len(attachedImages)
+	var evidenceBlock string
+	toolContext := in.Context
+	if toolContext.PaperID <= 0 && len(toolContext.PaperIDs) == 0 {
+		// Restore persistent pins for reading turns without narrowing an
+		// otherwise unscoped library/external search to those papers.
+		route := ai_assistant.RouteIntent(ai_assistant.RouteInput{Content: in.Content, IntentHint: in.IntentHint, Context: toolContext})
+		if route.Intent == ai_assistant.IntentChat || route.Intent == ai_assistant.IntentPaperRead || route.Intent == ai_assistant.IntentFigureLookup {
+			for _, pp := range pinned {
+				toolContext.PaperIDs = append(toolContext.PaperIDs, pp.PaperID)
+			}
 		}
 	}
-	includedFigures := len(attachedImages)
-
-	asm, err := s.assembleForTurn(conv, pinned, history, in.Content, attachmentBlock, masterSettings)
-	if err != nil {
-		return SendMessageResult{}, err
-	}
-	asm.images = attachedImages
 
 	var citations []Citation
 	var citationsJSON string
@@ -389,21 +381,15 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput, onDelta 
 			IntentHint:     in.IntentHint,
 			SearchGoalHint: in.SearchGoalHint,
 			Sources:        in.Sources,
-			Context:        in.Context,
+			Context:        toolContext,
 		})
 		if orchErr != nil {
 			s.logger.Warn("ai_conversation: orchestrator failed", "error", orchErr)
 		} else {
 			runOut = out
 			runUsed = true
-			if strings.TrimSpace(out.AnswerContext) != "" {
-				suffix := "用户问题：\n" + in.Content
-				if strings.HasSuffix(asm.userPrompt, suffix) {
-					asm.userPrompt = strings.TrimSuffix(asm.userPrompt, suffix) + out.AnswerContext
-				} else {
-					asm.userPrompt += "\n\n" + out.AnswerContext
-				}
-			}
+			evidenceBlock = strings.TrimSuffix(out.AnswerContext, "用户问题：\n"+strings.TrimSpace(in.Content))
+
 			citationsJSON = marshalAssistantCitations(out.Citations)
 			streamProcess := ai_assistant.WithAnswerGenerationStage(out.Process, "running")
 			if err := s.emitStreamEvent(in, StreamEvent{Type: "process", Data: streamProcess}); err != nil {
@@ -427,18 +413,34 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput, onDelta 
 			// Surface a single warning line through the stream so the UI can toast.
 			_ = onDelta("\n\n_(证据检索失败，本次按普通模式作答)_\n\n")
 		} else {
-			// Replace the trailing "用户问题：\n<userText>" portion of asm.userPrompt
-			// with the enriched evidence block (which already ends with the same).
-			suffix := "用户问题：\n" + in.Content
-			if strings.HasSuffix(asm.userPrompt, suffix) {
-				asm.userPrompt = strings.TrimSuffix(asm.userPrompt, suffix) + enrichedUser
-			} else {
-				// Defensive: if the suffix shape changed, just append the evidence.
-				asm.userPrompt = asm.userPrompt + "\n\n" + enrichedUser
-			}
+			evidenceBlock = strings.TrimSuffix(enrichedUser, "用户问题：\n"+in.Content)
+
 			citations = cites
 			citationsJSON = MarshalCitations(citations)
 		}
+	}
+
+	asm, err := s.assembleWithEvidence(conv, pinned, history, in.Content, attachmentBlock, evidenceBlock, masterSettings)
+	if err != nil {
+		return SendMessageResult{}, err
+	}
+	asm.images = attachedImages
+	usage.Papers = asm.papers
+	usage.EstimatedTextTokens = estimateTokens(asm.systemPrompt) + estimateTokens(asm.userPrompt)
+	for _, citation := range runOut.Citations {
+		if citation.Snippet.Text != "" && strings.Contains(asm.evidenceText, citation.Snippet.Text) {
+			usage.EvidenceSnippets++
+		}
+	}
+	if !runUsed {
+		for _, citation := range citations {
+			if citation.Snippet.Text != "" && strings.Contains(asm.evidenceText, citation.Snippet.Text) {
+				usage.EvidenceSnippets++
+			}
+		}
+	}
+	if err := s.emitStreamEvent(in, StreamEvent{Type: "context_usage", Data: usage}); err != nil {
+		return SendMessageResult{}, err
 	}
 
 	rawText, mode, err := s.caller.CallProviderStreamGeneric(ctx, masterSettings, asm.systemPrompt, asm.userPrompt, asm.images, onDelta)
@@ -486,7 +488,7 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput, onDelta 
 				return SendMessageResult{
 					ConversationID:   in.ConversationID,
 					UserMessage:      Message{ID: userMsgID, Role: "user", Content: in.Content},
-					AssistantMessage: Message{ID: asstID, Role: "assistant", Content: fallbackText, Provider: string(masterSettings.Provider), Model: masterSettings.Model, Mode: "tool_fallback"},
+					AssistantMessage: Message{ID: asstID, Role: "assistant", Content: fallbackText, Provider: string(masterSettings.Provider), Model: masterSettings.Model, Mode: "tool_fallback", IncludedFigures: includedFigures},
 				}, nil
 			}
 		}
@@ -532,7 +534,7 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput, onDelta 
 	res := SendMessageResult{
 		ConversationID:   in.ConversationID,
 		UserMessage:      Message{ID: userMsgID, Role: "user", Content: in.Content},
-		AssistantMessage: Message{ID: asstID, Role: "assistant", Content: rawText, Provider: string(masterSettings.Provider), Model: masterSettings.Model, Mode: mode},
+		AssistantMessage: Message{ID: asstID, Role: "assistant", Content: rawText, Provider: string(masterSettings.Provider), Model: masterSettings.Model, Mode: mode, IncludedFigures: includedFigures},
 	}
 	return res, nil
 }

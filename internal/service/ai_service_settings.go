@@ -27,6 +27,9 @@ func (s *AIService) GetSettings() (*model.AISettings, error) {
 
 	settings := model.DefaultAISettings()
 	if strings.TrimSpace(raw) != "" {
+		// Decode configured models into fresh elements so omitted capability
+		// fields cannot inherit the built-in model's explicit true value.
+		settings.Models = nil
 		if err := json.Unmarshal([]byte(raw), &settings); err != nil {
 			return nil, apperr.Wrap(apperr.CodeInternal, "解析 AI 设置失败", err)
 		}
@@ -424,10 +427,8 @@ func normalizeAIModelConfig(input model.AIModelConfig, fallback model.AIModelCon
 	if config.MaxOutputTokens > 16384 {
 		return model.AIModelConfig{}, apperr.New(apperr.CodeInvalidArgument, "max_output_tokens 过大")
 	}
-	if config.SupportsImages == nil {
-		supportsImages := aiModelSupportsImages(fallback)
-		config.SupportsImages = &supportsImages
-	}
+	// Preserve unknown image capability. A provider/model name or an unrelated
+	// default model is not evidence that this configured endpoint accepts images.
 	if config.Name == "" && config.Provider == model.AIProviderCodex {
 		config.Name = "Codex Subscription"
 	} else if config.Name == "" {

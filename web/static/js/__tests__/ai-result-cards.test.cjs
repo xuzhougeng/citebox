@@ -31,6 +31,14 @@ function loadCards() {
 
 const render = loadCards();
 
+test('paper reading cards expose all eight retrieved excerpts in expandable details', () => {
+    const evidence = Array.from({ length: 8 }, (_, i) => ({ text: 'evidence-' + (i + 1), citation_index: i + 1, location: i === 7 ? 'STAR Methods' : 'Results' }));
+    const html = render([{ card_type: 'paper_read', payload: { papers: [{ title: 'Study', evidence }] } }]);
+    assert.match(html, /<details><summary>查看检索证据（8 段）/);
+    assert.match(html, /evidence-8/);
+    assert.match(html, /STAR Methods/);
+});
+
 test('renderCard - generated_image: renders thumbnail trigger, prompt, download and copy buttons', () => {
     const html = render([{
         card_type: 'generated_image',

@@ -69,6 +69,13 @@ func TestRouteIntentDetectsPaperContext(t *testing.T) {
 	}
 }
 
+func TestRouteIntentDetectsSinglePaperInList(t *testing.T) {
+	got := RouteIntent(RouteInput{Content: "解释研究设计", Context: RequestContext{PaperIDs: []int64{1}}})
+	if got.Intent != IntentPaperRead {
+		t.Fatalf("intent = %q", got.Intent)
+	}
+}
+
 func TestRouteIntentEmptyContentRoutesChat(t *testing.T) {
 	got := RouteIntent(RouteInput{})
 	if got.Intent != IntentChat || got.Confidence != "low" {
