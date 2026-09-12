@@ -62,3 +62,16 @@ test('resolveSettingsNavigation keeps category links working', () => {
         sectionId: '',
     });
 });
+
+test('settings navigation keeps legacy system links and moved section links working', () => {
+    const options = {
+        defaultCategoryId: 'general', categoryIds: ['general', 'ai', 'papers', 'integrations', 'data', 'account', 'about'],
+        categoryAliases: { system: 'general' },
+        sectionCategoryById: { 'settings-section-1': 'about', 'settings-section-19': 'data', 'settings-external-sources': 'papers', 'settings-figure-library': 'integrations' },
+        legacySectionAliasByHash: { research: 'settings-external-sources' }
+    };
+    assert.deepEqual(resolveSettingsNavigation('#category-system', options), { categoryId: 'general', sectionId: '' });
+    assert.deepEqual(resolveSettingsNavigation('#research', options), { categoryId: 'papers', sectionId: 'settings-external-sources' });
+    assert.deepEqual(resolveSettingsNavigation('#settings-section-19', options), { categoryId: 'data', sectionId: 'settings-section-19' });
+    assert.deepEqual(resolveSettingsNavigation('#settings-figure-library', options), { categoryId: 'integrations', sectionId: 'settings-figure-library' });
+});

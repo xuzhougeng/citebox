@@ -12,7 +12,10 @@
     }
 
     function resolveSettingsNavigation(hash, options) {
-        const raw = normalizeHash(hash);
+        let raw = normalizeHash(hash);
+        const aliases = options?.categoryAliases || {};
+        const category = raw.replace(/^category-/, '');
+        if (aliases[category]) raw = `category-${aliases[category]}`;
         const defaultCategoryId = String(options?.defaultCategoryId || '');
         const categoryIds = Array.isArray(options?.categoryIds) ? options.categoryIds : [];
         const sectionCategoryById = options?.sectionCategoryById || {};

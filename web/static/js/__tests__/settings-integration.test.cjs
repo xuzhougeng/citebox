@@ -61,7 +61,7 @@ function makeIntegrationSubject() {
 test('settings page exposes the research-context integration section and controls', () => {
     const html = fs.readFileSync(settingsHTMLPath, 'utf8');
 
-    assert.match(html, /<details id="settings-integration"/);
+    assert.match(html, /<section id="settings-integration"/);
     assert.match(html, /data-i18n="settings\.integration\.title"/);
     for (const id of [
         'integrationSettingsForm',
@@ -86,8 +86,8 @@ test('settings page exposes the research-context integration section and control
 });
 
 test('settings sidebar maps the integration section to the integrations category', () => {
-    const source = fs.readFileSync(settingsModulePath, 'utf8');
-    assert.match(source, /'settings\.integration\.title':\s*'integrations'/);
+    const html = fs.readFileSync(settingsHTMLPath, 'utf8');
+    assert.match(html, /<section id="settings-integration"[^>]*data-settings-category="integrations"/);
 });
 
 test('api client wires the integration settings endpoints', () => {

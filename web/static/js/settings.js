@@ -1,7 +1,8 @@
 const SettingsPage = {
-    init() {
+    async init() {
         if (this.initialized) return;
         this.initialized = true;
+        if (typeof CiteBoxI18n !== 'undefined') await CiteBoxI18n.whenReady();
         if (typeof t !== 'function') { window.t = function(k, f) { return f || k; }; }
 
         this.aiSettingsForm = document.getElementById('aiSettingsForm');
@@ -39,6 +40,7 @@ const SettingsPage = {
         this.translatePromptInput = document.getElementById('aiTranslatePromptInput');
         this.ttsPromptInput = document.getElementById('aiTTSPromptInput');
         this.aiModelAutosaveStatus = document.getElementById('aiModelAutosaveStatus');
+        this.aiAutosaveStatuses = Array.from(document.querySelectorAll('[data-ai-autosave-status]'));
         this.aiPromptSaveStatus = document.getElementById('aiPromptSaveStatus');
         this.translatePromptSaveStatus = document.getElementById('translatePromptSaveStatus');
         this.saveTranslatePromptButton = document.getElementById('saveTranslatePromptButton');
@@ -191,233 +193,208 @@ const SettingsPage = {
         const sidebar = document.getElementById('settingsAnchorSidebar');
         const stack = document.querySelector('.settings-content');
         if (!sidebar || !stack) return;
-
-        const CATEGORIES = [
-            { id: 'system',       i18n: 'settings.category.system',       label: '系统',    icon: '⚙' },
-            { id: 'ai',           i18n: 'settings.category.ai',           label: 'AI',     icon: '✨' },
-            { id: 'integrations', i18n: 'settings.category.integrations', label: '集成',    icon: '🔌' },
-            { id: 'account',      i18n: 'settings.category.account',      label: '账号',    icon: '👤' },
+        this.settingsCategories = [
+            { id: 'general', label: '通用', description: '调整界面与桌面使用习惯。', direct: true },
+            { id: 'ai', label: 'AI 与阅读', description: '连接模型，调整阅读功能和提示词。' },
+            { id: 'papers', label: '文献与解析', description: '配置文献搜索、导入和 PDF 提取。' },
+            { id: 'integrations', label: '连接与扩展', description: '收藏文献，连接笔记应用与外部工具。' },
+            { id: 'data', label: '数据管理', description: '备份、恢复与维护文献库。', direct: true },
+            { id: 'account', label: '账号', description: '管理登录与访问安全。', direct: true },
+            { id: 'about', label: '关于 CiteBox', description: '版本与更新。', direct: true }
         ];
-        // Categories that should auto-expand all their <details> on entry —
-        // these have few cards and the user wants them visible right away.
-        const AUTO_EXPAND_CATEGORIES = new Set(['system', 'account']);
-        this._settingsAutoExpandCategories = AUTO_EXPAND_CATEGORIES;
-        const SECTION_TO_CATEGORY = {
-            'settings.version.title':              'system',
-            'settings.desktop_close.title':        'system',
-            'settings.ai.model_title':             'ai',
-            'settings.ai.scene_title':             'ai',
-            'settings.ai.global_prompt_title':     'ai',
-            'settings.ai.figure_group_prompt_title': 'ai',
-            'settings.ai.translate_title':         'ai',
-            'settings.extractor.title':            'integrations',
-            'settings.weixin.title':               'integrations',
-            'settings.weixin.daily_title':         'integrations',
-            'settings.tts.title':                  'integrations',
-            'settings.wolai.title':                'integrations',
-            'settings.mcp.title':                  'integrations',
-            'settings.integration.title':          'integrations',
-            'settings.zotero.title':               'integrations',
-            'settings.research.title':             'integrations',
-            'settings.password.account_title':     'account',
-            'settings.db.title':                   'system',
-        };
-
-        const sections = Array.from(stack.querySelectorAll(':scope > details.settings-collapsible'));
-        this.settingsCategoryIDs = CATEGORIES.map((cat) => cat.id);
-        this.settingsSectionCategoryById = {};
-        this.settingsLegacySectionAliasByHash = {
-            research: 'settings-external-sources',
-        };
-        sections.forEach((section, index) => {
-            if (!section.id) section.id = `settings-section-${index + 1}`;
-            const titleEl = section.querySelector('summary h2[data-i18n]');
-            const key = titleEl?.dataset.i18n;
-            section.dataset.settingsCategory = SECTION_TO_CATEGORY[key] || 'system';
-            this.settingsSectionCategoryById[section.id] = section.dataset.settingsCategory;
+        this.settingsSections = Array.from(stack.querySelectorAll(':scope > .settings-section'));
+        this.settingsCategoryIDs = this.settingsCategories.map(category => category.id);
+        this.settingsSectionCategoryById = Object.fromEntries(this.settingsSections.map(section => [section.id, section.dataset.settingsCategory]));
+        this.settingsLegacySectionAliasByHash = { research: 'settings-external-sources' };
+        const list = document.createElement('ul');
+        list.className = 'settings-category-list';
+        this.settingsCategories.forEach(category => {
+            const item = document.createElement('li');
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'settings-category-item';
+            button.dataset.category = category.id;
+            button.dataset.i18n = `settings.category.${category.id}`;
+            button.textContent = t(button.dataset.i18n, category.label);
+            button.addEventListener('click', () => this.setActiveSettingsCategory(category.id, true));
+            item.appendChild(button);
+            list.appendChild(item);
         });
-
-        const tt = (typeof window !== 'undefined' && typeof window.t === 'function') ? window.t : (k, fb) => (fb || k);
-
-        const catList = document.createElement('ul');
-        catList.className = 'settings-category-list';
-        catList.setAttribute('role', 'list');
-        CATEGORIES.forEach((cat) => {
-            const li = document.createElement('li');
-            const btn = document.createElement('button');
-            btn.type = 'button';
-            btn.className = 'settings-category-item';
-            btn.dataset.category = cat.id;
-            btn.innerHTML =
-                `<span class="settings-category-icon" aria-hidden="true">${cat.icon}</span>` +
-                `<span class="settings-category-label" data-i18n="${cat.i18n}">${tt(cat.i18n, cat.label)}</span>`;
-            btn.addEventListener('click', () => this.setActiveSettingsCategory(cat.id, true));
-            li.appendChild(btn);
-            catList.appendChild(li);
+        sidebar.appendChild(list);
+        this.settingsCategoryList = list;
+        document.getElementById('settingsOverview')?.addEventListener('click', event => {
+            const link = event.target.closest('[data-settings-open]');
+            if (!link) return;
+            event.preventDefault();
+            this.scrollToSection(link.dataset.settingsOpen);
         });
-
-        const subEyebrow = document.createElement('p');
-        subEyebrow.className = 'eyebrow settings-sub-eyebrow';
-        subEyebrow.textContent = 'On this page';
-
-        const subList = document.createElement('ul');
-        subList.className = 'settings-anchor-list';
-        subList.setAttribute('role', 'list');
-
-        sidebar.innerHTML = '';
-        sidebar.appendChild(catList);
-        sidebar.appendChild(subEyebrow);
-        sidebar.appendChild(subList);
-
-        this.settingsCategoryList = catList;
-        this.settingsAnchorList = subList;
-
+        document.getElementById('settingsPageHeader')?.addEventListener('click', event => {
+            if (event.target.closest('[data-settings-back]')) this.setActiveSettingsCategory(this.activeSettingsCategory, true);
+        });
+        const quick = document.getElementById('settingsQuickPreferences');
+        const defaultField = this.defaultModelSelect?.closest('label');
+        if (quick && defaultField) {
+            defaultField.className = 'settings-preference-row';
+            quick.insertBefore(defaultField, quick.firstChild);
+        }
         this.applySettingsHash(window.location.hash, { scroll: false });
         if (!this._settingsHashChangeBound) {
             this._settingsHashChangeBound = true;
-            window.addEventListener('hashchange', () => {
-                this.applySettingsHash(window.location.hash, { scroll: true });
-            });
+            window.addEventListener('hashchange', () => this.applySettingsHash(window.location.hash, { scroll: true }));
         }
-
-        // i18n bundles load async; re-translate the dynamically inserted labels
-        // once they're available.
-        const refreshI18n = () => {
-            if (typeof CiteBoxI18n !== 'undefined' && typeof CiteBoxI18n.applyDOM === 'function') {
-                CiteBoxI18n.applyDOM();
-            }
-        };
-        window.setTimeout(refreshI18n, 100);
-        window.setTimeout(refreshI18n, 600);
     },
 
-    setActiveSettingsCategory(catId, updateHash) {
+    setActiveSettingsCategory(categoryID, updateHash = false) {
+        const category = this.settingsCategories?.find(item => item.id === categoryID) || this.settingsCategories?.[0];
+        if (!category) return;
+        this.activeSettingsCategory = category.id;
+        this.settingsCategoryList.querySelectorAll('[data-category]').forEach(button => {
+            const selected = button.dataset.category === category.id;
+            button.classList.toggle('active', selected);
+            if (selected) button.setAttribute('aria-current', 'page');
+            else button.removeAttribute('aria-current');
+        });
         const stack = document.querySelector('.settings-content');
-        if (!stack || !this.settingsCategoryList || !this.settingsAnchorList) return;
-
-        stack.dataset.settingsCategoryActive = catId;
-        this.settingsCategoryList.querySelectorAll('.settings-category-item').forEach((btn) => {
-            btn.classList.toggle('active', btn.dataset.category === catId);
+        stack.dataset.settingsCategoryActive = category.id;
+        delete stack.dataset.settingsDetail;
+        this.settingsSections.forEach(section => {
+            section.hidden = !(category.direct && section.dataset.settingsCategory === category.id);
         });
-
-        const sections = Array.from(stack.querySelectorAll(`:scope > details.settings-collapsible[data-settings-category="${catId}"]`))
-            .filter((section) => !section.classList.contains('hidden'));
-
-        // Auto-expand all cards for categories that are short and benefit from
-        // immediate visibility (e.g. 系统/账号 only have 1–2 cards each).
-        if (this._settingsAutoExpandCategories?.has(catId)) {
-            sections.forEach((section) => { section.open = true; });
+        const title = t(`settings.category.${category.id}`, category.label);
+        document.getElementById('settingsPageHeader').innerHTML = `
+            <h2 tabindex="-1">${Utils.escapeHTML(title)}</h2>
+            <p>${Utils.escapeHTML(t(`settings.category.${category.id}_desc`, category.description))}</p>`;
+        const overview = document.getElementById('settingsOverview');
+        overview.hidden = !!category.direct;
+        const quick = document.getElementById('settingsQuickPreferences');
+        if (quick) quick.hidden = category.id !== 'ai';
+        if (!category.direct) {
+            const groups = {
+                ai: [
+                    ['models', ['settings-ai', 'settings-section-8']],
+                    ['reading', ['settings-section-11', 'settings-section-15', 'settings-image-gen']],
+                    ['advanced', ['settings-section-9', 'settings-section-10']]
+                ],
+                papers: [['papers', ['settings-section-12', 'settings-external-sources', 'settings-zotero']]],
+                integrations: [
+                    ['capture', ['settings-browser-extension']],
+                    ['export', ['settings-mcp', 'settings-section-16', 'settings-figure-library']],
+                    ['external', ['settings-integration', 'settings-section-13']]
+                ]
+            };
+            const labels = { models: '模型', reading: '阅读功能', advanced: '高级', papers: '文献服务', capture: '收藏文献', export: '发送笔记与图片', external: '外部访问' };
+            overview.innerHTML = (groups[category.id] || []).map(([group, ids]) => {
+                const sections = ids.map(id => this.settingsSections.find(section => section.id === id)).filter(Boolean);
+                return `<h3 class="settings-overview-group">${t(`settings.navigation.group_${group}`, labels[group])}</h3>` + sections.map(section => {
+                    const heading = section.querySelector('.settings-section-heading h2');
+                    const description = t(`settings.navigation.desc_${section.id}`, '');
+                    return `<a class="settings-overview-row" href="#${section.id}" data-settings-open="${section.id}">
+                        <span><strong>${Utils.escapeHTML(heading?.textContent || '')}</strong>${description ? `<span class="settings-overview-description">${Utils.escapeHTML(description)}</span>` : ''}</span>
+                        <span class="settings-overview-open">${t('settings.navigation.configure', '设置')} <span aria-hidden="true">›</span></span>
+                    </a>`;
+                }).join('');
+            }).join('');
         }
-
-        const items = sections.map((section) => {
-            const titleEl = section.querySelector('summary h2');
-            return titleEl ? { id: section.id, titleEl, section } : null;
-        }).filter(Boolean);
-
-        this.settingsAnchorList.innerHTML = '';
-        items.forEach((item) => {
-            const li = document.createElement('li');
-            const a = document.createElement('a');
-            a.href = `#${item.id}`;
-            a.textContent = item.titleEl.textContent.trim();
-            a.dataset.targetId = item.id;
-            a.addEventListener('click', (event) => {
-                event.preventDefault();
-                this.scrollToSection(item.id);
-            });
-            li.appendChild(a);
-            this.settingsAnchorList.appendChild(li);
-        });
-
-        this.anchorItems = items;
-        this.anchorLinks = Array.from(this.settingsAnchorList.querySelectorAll('a'));
-
-        // Re-sync labels after i18n loads (titles use data-i18n).
-        const refreshLabels = () => {
-            this.anchorLinks.forEach((link) => {
-                const item = items.find((it) => it.id === link.dataset.targetId);
-                if (item && item.titleEl) link.textContent = item.titleEl.textContent.trim();
-            });
-        };
-        window.setTimeout(refreshLabels, 50);
-        window.setTimeout(refreshLabels, 400);
-
         if (updateHash) {
-            history.replaceState(null, '', `#category-${catId}`);
-            window.scrollTo({ top: 0, behavior: 'smooth' });
+            history.pushState(null, '', `#category-${category.id}`);
+            this.focusSettingsHeading();
         }
-
-        this.bindAnchorScrollSpy();
     },
 
     resolveSettingsHashTarget(hash) {
-        const resolver = window.CiteBoxSettingsAnchor && window.CiteBoxSettingsAnchor.resolveSettingsNavigation;
+        const resolver = window.CiteBoxSettingsAnchor?.resolveSettingsNavigation;
         if (typeof resolver === 'function') {
             return resolver(hash, {
-                defaultCategoryId: 'system',
+                defaultCategoryId: 'general',
                 categoryIds: this.settingsCategoryIDs || [],
+                categoryAliases: { system: 'general' },
                 sectionCategoryById: this.settingsSectionCategoryById || {},
-                legacySectionAliasByHash: this.settingsLegacySectionAliasByHash || {},
+                legacySectionAliasByHash: this.settingsLegacySectionAliasByHash || {}
             });
         }
-        return { categoryId: 'system', sectionId: '' };
+        return { categoryId: 'general', sectionId: '' };
     },
 
     applySettingsHash(hash, options = {}) {
         const target = this.resolveSettingsHashTarget(hash);
-        this.setActiveSettingsCategory(target.categoryId || 'system', false);
-        if (!target.sectionId) {
-            return;
-        }
-        const section = document.getElementById(target.sectionId);
-        if (section?.tagName === 'DETAILS' && !section.open) {
-            section.open = true;
-        }
-        if (options.scroll === false) {
-            return;
-        }
-        window.requestAnimationFrame(() => this.scrollToSection(target.sectionId, false));
+        this.setActiveSettingsCategory(target.categoryId, false);
+        if (target.sectionId) this.showSettingsSection(target.sectionId);
+        if (options.scroll !== false) this.focusSettingsHeading();
+    },
+
+    showSettingsSection(id) {
+        const section = this.settingsSections?.find(item => item.id === id);
+        if (!section || section.classList.contains('hidden')) return;
+        const category = this.settingsCategories.find(item => item.id === section.dataset.settingsCategory);
+        if (!category || category.direct) return;
+        const parentID = section.dataset.settingsParent || id;
+        this.settingsSections.forEach(item => { item.hidden = item.id !== parentID && item.dataset.settingsParent !== parentID; });
+        const quick = document.getElementById('settingsQuickPreferences');
+        if (quick) quick.hidden = true;
+        document.getElementById('settingsOverview').hidden = true;
+        document.querySelector('.settings-content').dataset.settingsDetail = id;
+        document.getElementById('settingsPageHeader').innerHTML = `<button type="button" class="settings-back-button" data-settings-back>‹ ${t('settings.navigation.back', '返回')} ${Utils.escapeHTML(t(`settings.category.${category.id}`, category.label))}</button>`;
+        section.querySelector('.settings-section-heading h2')?.setAttribute('tabindex', '-1');
     },
 
     scrollToSection(id, updateHash = true) {
-        const section = document.getElementById(id);
-        if (!section) return;
-        if (section.tagName === 'DETAILS' && !section.open) section.open = true;
-        if (updateHash) {
-            history.replaceState(null, '', `#${id}`);
-        }
-        const top = section.getBoundingClientRect().top + window.scrollY - 80;
-        window.scrollTo({ top, behavior: 'smooth' });
+        const categoryID = this.settingsSectionCategoryById?.[id];
+        if (!categoryID) return;
+        this.setActiveSettingsCategory(categoryID, false);
+        this.showSettingsSection(id);
+        if (updateHash) history.pushState(null, '', `#${id}`);
+        this.focusSettingsHeading();
     },
 
-    bindAnchorScrollSpy() {
-        if (!this.anchorItems || !this.anchorLinks) return;
-        if (this._anchorObserver) this._anchorObserver.disconnect();
+    focusSettingsHeading() {
+        const inDetail = document.querySelector('.settings-content')?.dataset.settingsDetail;
+        const heading = inDetail ? document.querySelector('.settings-section:not([hidden]):not(.hidden) .settings-section-heading h2') : document.querySelector('#settingsPageHeader h2');
+        heading?.focus({ preventScroll: true });
+        window.scrollTo({ top: 0, behavior: 'auto' });
+    },
 
-        const linkById = new Map();
-        this.anchorLinks.forEach((link) => linkById.set(link.dataset.targetId, link));
+    async loadAppearancePreferences() {
+        const language = document.getElementById('settingsLanguageSelect');
+        const theme = document.getElementById('settingsThemeSelect');
+        if (!language || !theme) return;
+        language.disabled = theme.disabled = true;
+        try {
+            const settings = await API.getAppearanceSettings();
+            language.value = settings.language || CiteBoxI18n.get();
+            theme.value = settings.theme || CiteBoxTheme.get();
+        } finally {
+            language.disabled = theme.disabled = false;
+        }
+    },
 
-        const setActive = (id) => {
-            this.anchorLinks.forEach((link) => link.classList.remove('active'));
-            const link = linkById.get(id);
-            if (link) link.classList.add('active');
-        };
-
-        const observer = new IntersectionObserver((entries) => {
-            const visible = entries
-                .filter((e) => e.isIntersecting)
-                .sort((a, b) => a.target.getBoundingClientRect().top - b.target.getBoundingClientRect().top);
-            if (visible.length > 0) setActive(visible[0].target.id);
-        }, {
-            rootMargin: '-100px 0px -60% 0px',
-            threshold: 0,
-        });
-
-        this.anchorItems.forEach((item) => observer.observe(item.section));
-        this._anchorObserver = observer;
+    async saveAppearancePreference(kind, select) {
+        const previous = kind === 'language' ? CiteBoxI18n.get() : CiteBoxTheme.get();
+        const status = document.getElementById('settingsAppearanceStatus');
+        select.disabled = true;
+        this.setInlineStatus(status, t('settings.preferences.saving', '正在保存…'), 'saving');
+        try {
+            if (kind === 'language') {
+                await CiteBoxI18n.set(select.value);
+                window.location.reload();
+            } else {
+                await API.updateAppearanceSettings({ theme: select.value });
+                CiteBoxTheme.apply(select.value, { persist: false });
+            }
+            this.setInlineStatus(status, t('settings.preferences.saved', '已保存'), 'success');
+        } catch (error) {
+            select.value = previous;
+            this.setInlineStatus(status, t('settings.preferences.failed', '保存失败，请重试。'), 'error');
+        } finally {
+            select.disabled = false;
+        }
     },
 
     bindEvents() {
+        const extensionURL = document.getElementById('extensionWebURL');
+        if (extensionURL) extensionURL.textContent = window.location.origin;
+        document.getElementById('extensionTokenSettingsButton')?.addEventListener('click', () => this.scrollToSection('settings-integration'));
+        document.getElementById('settingsLanguageSelect')?.addEventListener('change', event => this.saveAppearancePreference('language', event.target));
+        document.getElementById('settingsThemeSelect')?.addEventListener('change', event => this.saveAppearancePreference('theme', event.target));
         this.aiSettingsForm.addEventListener('submit', (event) => {
             event.preventDefault();
         });
@@ -741,6 +718,7 @@ const SettingsPage = {
 
         try {
             await Promise.all([
+                this.loadAppearancePreferences(),
                 this.loadAISettings(),
                 this.loadExtractorSettings(),
                 this.loadWolaiSettings(),
@@ -915,6 +893,7 @@ const SettingsPage = {
 
     setAIModelAutosaveStatus(message, tone = '') {
         this.setInlineStatus(this.aiModelAutosaveStatus, message, tone);
+        (this.aiAutosaveStatuses || []).forEach(status => this.setInlineStatus(status, message, tone));
     },
 
     setAIPromptSaveStatus(message, tone = '') {
@@ -2304,23 +2283,7 @@ const SettingsPage = {
     renderDesktopCloseSummary(action) {
         if (!this.desktopCloseSummary) return;
 
-        const normalized = this.normalizeDesktopCloseAction(action);
-        this.desktopCloseSummary.innerHTML = `
-            <div>
-                <span>${t('settings.desktop_close.current_label', '当前模式')}</span>
-                <strong>${Utils.escapeHTML(this.desktopCloseActionLabel(normalized))}</strong>
-            </div>
-            <div>
-                <span>${t('settings.desktop_close.effect_label', '实际行为')}</span>
-                <strong>${Utils.escapeHTML(this.desktopCloseActionLabel(normalized))}</strong>
-                <p>${Utils.escapeHTML(this.desktopCloseActionEffect(normalized))}</p>
-            </div>
-            <div>
-                <span>${t('settings.desktop_close.scope_label', '作用范围')}</span>
-                <strong>${t('settings.desktop_close.scope_value', '桌面端关闭弹窗')}</strong>
-                <p>${t('settings.desktop_close.status_hint', '修改后立即生效，也会同步影响关闭弹窗里的“记住这次选择”。')}</p>
-            </div>
-        `;
+        this.desktopCloseSummary.textContent = this.desktopCloseActionEffect(this.normalizeDesktopCloseAction(action));
     },
 
     renderWolaiResultLink(url) {
@@ -2514,27 +2477,15 @@ const SettingsPage = {
             : t('settings.version.not_checked', '尚未完成检查');
 
         this.versionSummary.innerHTML = `
-            <div>
-                <span>${t('settings.version.current', '当前版本')}</span>
-                <strong>${Utils.escapeHTML(currentVersion)}</strong>
+            <div class="settings-version-line"><strong>CiteBox ${Utils.escapeHTML(currentVersion)}</strong>${badge}</div>
+            <p>${Utils.escapeHTML(status.message || t('settings.version.no_check_message', '尚未检查最新版本'))}</p>
+            <details class="settings-version-details">
+                <summary>${t('settings.version.details', '构建与检查详情')}</summary>
                 <p>${currentDetail}</p>
-            </div>
-            <div>
-                <span>${t('settings.version.check_result', '检查结果')}</span>
-                <strong>${badge}</strong>
-                <p>${Utils.escapeHTML(status.message || t('settings.version.no_check_message', '尚未检查最新版本'))}</p>
-            </div>
-            <div>
-                <span>${t('settings.version.latest', '最新正式版本')}</span>
-                <strong>${Utils.escapeHTML(latestVersion)}</strong>
+                <p>${t('settings.version.latest', '最新正式版本')}：${Utils.escapeHTML(latestVersion)}</p>
                 <p>${latestDetail}</p>
-            </div>
-            <div>
-                <span>${t('settings.version.last_check', '最近检查')}</span>
-                <strong>${Utils.escapeHTML(checkedAt)}</strong>
-                <p>${status.latest_release_url ? `${t('settings.version.download_page', '下载页面：')}<a href="${Utils.escapeHTML(status.latest_release_url)}" target="_blank" rel="noreferrer">${Utils.escapeHTML(status.latest_release_url)}</a>` : t('settings.version.no_release_link', '暂无可用的 Release 链接')}</p>
-            </div>
-        `;
+                <p>${t('settings.version.last_check', '最近检查')}：${Utils.escapeHTML(checkedAt)}</p>
+            </details>`;
 
         if (status.latest_release_url) {
             this.versionReleaseLink.href = status.latest_release_url;

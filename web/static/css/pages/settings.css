@@ -714,181 +714,100 @@ html[lang^="zh"] .prompt-template-details[open] summary::before {
     width: 100%;
 }
 
-/* ===== Anchor sidebar layout ===== */
+/* Settings use a single category list and persistent, independently shown forms. */
+.settings-page { background: var(--bg-soft); }
+.settings-page .navbar { background: var(--panel-strong); box-shadow: none; }
+.settings-page .nav-actions .theme-switcher,
+.settings-page .nav-actions .lang-switcher { display: none; }
+.settings-page > .page-shell { padding-top: 1.5rem; }
 .settings-layout {
     display: grid;
-    grid-template-columns: 220px minmax(0, 1fr);
-    gap: 1.5rem;
+    grid-template-columns: 190px minmax(0, 1fr);
     align-items: start;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--panel-strong);
     min-width: 0;
 }
-
-.settings-anchor-sidebar {
-    position: sticky;
-    top: calc(72px + 1rem);
-    align-self: start;
-    max-height: calc(100vh - 96px);
-    overflow-y: auto;
-    overflow-x: hidden;
-    overscroll-behavior: contain;
-    scrollbar-gutter: stable;
-    padding: 0.75rem;
-    border-radius: calc(var(--radius) - 4px);
-    background: rgba(var(--surface-rgb), 0.7);
-    border: 1px solid rgba(var(--ink-rgb), 0.08);
-    box-shadow: var(--shadow);
+.settings-anchor-sidebar { position: sticky; top: 90px; padding: 1.5rem 0.75rem; min-width: 0; }
+.settings-anchor-sidebar h1 { font-family: var(--font-body); font-size: 1.15rem; margin: 0 0.7rem 1.2rem; }
+.settings-category-list { list-style: none; display: grid; gap: 0.25rem; margin: 0; padding: 0; }
+.settings-category-item { width: 100%; border: 0; border-radius: 5px; padding: 0.7rem; text-align: left; background: transparent; color: var(--muted); font: inherit; cursor: pointer; }
+.settings-category-item:hover { background: var(--bg-soft); }
+.settings-category-item.active { color: var(--accent-deep); background: var(--accent-soft); font-weight: 600; }
+.settings-content { min-width: 0; min-height: 540px; padding: 1.8rem 2rem 2.5rem; border-left: 1px solid var(--line); }
+.settings-page-header { margin-bottom: 1.5rem; }
+.settings-page-header h2,
+.settings-section-heading h2 { margin: 0 0 0.4rem; font-family: var(--font-body); font-size: 1.45rem; }
+.settings-page-header p,
+.settings-section-heading p { margin: 0.25rem 0 0; color: var(--muted); font-size: 0.9rem; line-height: 1.6; }
+.settings-section-heading { margin-bottom: 1.3rem; }
+.settings-content [hidden],
+.settings-content:not([data-settings-category-active]) > .settings-section { display: none !important; }
+.settings-content > .settings-section { border: 0; border-radius: 0; background: transparent; box-shadow: none; padding: 0; min-width: 0; }
+.settings-content > .settings-section + .settings-section { margin-top: 0; }
+.settings-content[data-settings-category-active="general"] > .settings-section > .settings-section-heading,
+.settings-content[data-settings-category-active="about"] > .settings-section > .settings-section-heading,
+.settings-content[data-settings-category-active="data"] > .settings-section > .settings-section-heading,
+.settings-content[data-settings-category-active="account"] > .settings-section > .settings-section-heading { display: none; }
+.settings-overview-row { display: flex; align-items: center; justify-content: space-between; gap: 1.5rem; padding: 1.05rem 0; border-bottom: 1px solid var(--line); }
+.settings-overview-row:hover strong { color: var(--accent-deep); }
+.settings-overview-row strong { font-weight: 600; }
+.settings-overview-description { display: block; color: var(--muted); font-size: 0.85rem; line-height: 1.55; margin-top: 0.25rem; }
+.settings-overview-open { flex-shrink: 0; color: var(--accent-deep); font-size: 0.85rem; }
+.settings-back-button { border: 0; padding: 0.25rem 0; background: transparent; color: var(--accent-deep); font: inherit; cursor: pointer; }
+.settings-preference-row { display: flex; align-items: center; justify-content: space-between; gap: 1.5rem; padding: 1.05rem 0; border-bottom: 1px solid var(--line); }
+.settings-preference-row .form-input { max-width: 220px; width: 45%; }
+.settings-page .settings-inline-status { font-size: 0.85rem; margin-top: 0.6rem; }
+.settings-page .settings-inline-status:empty { display: none; }
+.settings-page .manager-form { gap: 1.1rem; }
+.settings-page .btn,
+.settings-page .form-input,
+.settings-page .form-textarea { border-radius: 6px; box-shadow: none; }
+.settings-page .settings-subsection,
+.settings-page .prompt-field,
+.settings-page .prompt-preset-panel,
+.settings-page .weixin-summary-hero,
+.settings-page .weixin-summary-card { border: 0; border-radius: 0; background: transparent; box-shadow: none; padding: 1rem 0; }
+.settings-page .settings-subsection + .settings-subsection { border-top: 1px solid var(--line); }
+.settings-page .settings-subsection h3,
+.settings-page .db-action-item h3 { font-family: var(--font-body); font-size: 1rem; }
+.settings-page .prompt-field .field-label-text { padding-left: 0; }
+.settings-page .prompt-field .field-label-text::before { display: none; }
+.settings-page .settings-summary-box { display: block; background: transparent; border: 0; padding: 0; }
+.settings-page .settings-summary-box > div { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.3rem 1rem; padding: 0.65rem 0; background: transparent; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; box-shadow: none; }
+.settings-page .settings-summary-box > div > span { font-size: 0.85rem; min-width: 110px; }
+.settings-page .settings-summary-box > div > strong { font-size: 0.95rem; font-weight: 500; }
+.settings-page .settings-summary-box p { flex-basis: 100%; margin: 0; font-size: 0.85rem; }
+.settings-page .settings-summary-box a { overflow-wrap: anywhere; }
+.settings-version-line { display: flex; align-items: center; flex-wrap: wrap; gap: 1rem; margin-top: 1.5rem; }
+.settings-version-line > strong { font-family: var(--font-display); font-size: 1.5rem; }
+.settings-version-details { margin-top: 1.5rem; border-top: 1px solid var(--line); padding-top: 1rem; }
+.settings-version-details summary { cursor: pointer; color: var(--muted); }
+.settings-version-details p { font-size: 0.85rem; color: var(--muted); }
+.settings-page .db-actions-grid { display: block; }
+.settings-page .db-action-item { padding: 1.1rem 0; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: transparent; }
+.settings-page .db-action-item.danger { margin-top: 1.5rem; border-bottom: 0; }
+.settings-page .db-action-item.danger h3 { color: var(--error); }
+.settings-page .settings-action-form { max-width: 620px; }
+.settings-content, .settings-section, .settings-subsection-body, .manager-form, .prompt-field, .prompt-preset-panel { min-width: 0; }
+@media (max-width: 800px) {
+    .settings-layout { grid-template-columns: 155px minmax(0, 1fr); }
+    .settings-content { padding: 1.3rem; }
+    .settings-overview-row { gap: 0.75rem; }
+    .settings-page .form-grid { grid-template-columns: 1fr; }
+    .settings-page .form-grid > * { grid-column: auto; }
 }
-
-.settings-anchor-sidebar > p.eyebrow {
-    margin: 0.2rem 0 0.55rem;
-    padding: 0 0.5rem;
-}
-
-.settings-sub-eyebrow {
-    margin: 1rem 0 0.4rem !important;
-    padding: 0 0.6rem;
-    font-size: 0.7rem;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: var(--muted);
-}
-
-/* Category list (top of sidebar) — macOS Settings-style rows. */
-.settings-category-list {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 0.2rem;
-}
-
-.settings-category-item {
-    width: 100%;
-    background: transparent;
-    border: 0;
-    cursor: pointer;
-    padding: 0.4rem 0.5rem;
-    border-radius: 8px;
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
-    font-size: 0.92rem;
-    color: var(--ink);
-    text-align: left;
-    transition: background 0.14s ease, color 0.14s ease;
-}
-
-.settings-category-item:hover {
-    background: rgba(var(--ink-rgb), 0.05);
-}
-
-.settings-category-item.active {
-    background: rgba(var(--accent-rgb), 0.14);
-    color: var(--accent-deep);
-    font-weight: 600;
-}
-
-.settings-category-icon {
-    width: 1.7rem;
-    height: 1.7rem;
-    border-radius: 7px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    background: rgba(var(--accent-rgb), 0.12);
-    font-size: 0.95rem;
-    flex-shrink: 0;
-}
-
-.settings-category-item.active .settings-category-icon {
-    background: rgba(var(--accent-rgb), 0.28);
-}
-
-/* Anchor list (within active category) */
-.settings-anchor-list {
-    display: flex;
-    flex-direction: column;
-    gap: 0.15rem;
-    margin: 0;
-    padding: 0;
-    list-style: none;
-}
-
-.settings-anchor-list a {
-    display: block;
-    padding: 0.4rem 0.6rem 0.4rem 1.2rem;
-    border-radius: 8px;
-    color: var(--muted);
-    font-size: 0.85rem;
-    line-height: 1.4;
-    border-left: 2px solid transparent;
-    transition: 0.15s ease;
-    overflow-wrap: anywhere;
-}
-
-.settings-anchor-list a:hover {
-    color: var(--ink);
-    background: rgba(var(--ink-rgb), 0.05);
-}
-
-.settings-anchor-list a.active {
-    color: var(--accent-deep);
-    background: rgba(var(--accent-rgb), 0.1);
-    border-left-color: var(--accent-deep);
-    font-weight: 600;
-}
-
-/* Hide collapsibles outside the active category. .hidden uses !important so
-   sections that are inherently hidden (e.g. desktop-only) stay hidden. */
-.settings-content[data-settings-category-active] > details.settings-collapsible[data-settings-category] {
-    display: none;
-}
-.settings-content[data-settings-category-active="ai"] > details.settings-collapsible[data-settings-category="ai"],
-.settings-content[data-settings-category-active="integrations"] > details.settings-collapsible[data-settings-category="integrations"],
-.settings-content[data-settings-category-active="system"] > details.settings-collapsible[data-settings-category="system"],
-.settings-content[data-settings-category-active="account"] > details.settings-collapsible[data-settings-category="account"] {
-    display: block;
-}
-
-.settings-content {
-    min-width: 0;
-}
-
-.settings-content,
-.settings-collapsible,
-.settings-subsection-body,
-.manager-form,
-.prompt-field,
-.prompt-preset-panel {
-    min-width: 0;
-}
-
-@media (max-width: 960px) {
-    .settings-layout {
-        grid-template-columns: 1fr;
-    }
-
-    .settings-anchor-sidebar {
-        position: static;
-        max-height: none;
-    }
-
-    /* On mobile: categories become a horizontal pill bar, sub-list hidden. */
-    .settings-category-list {
-        flex-direction: row;
-        flex-wrap: wrap;
-        gap: 0.3rem;
-    }
-
-    .settings-category-item {
-        padding: 0.35rem 0.7rem;
-    }
-
-    .settings-sub-eyebrow,
-    .settings-anchor-list {
-        display: none;
-    }
+@media (max-width: 560px) {
+    .settings-layout { grid-template-columns: 1fr; }
+    .settings-anchor-sidebar { position: static; padding: 0.8rem; }
+    .settings-anchor-sidebar h1 { margin: 0.3rem 0.6rem 0.6rem; }
+    .settings-category-list { display: flex; flex-wrap: wrap; gap: 0.1rem; }
+    .settings-category-item { width: auto; font-size: 0.85rem; padding: 0.6rem; }
+    .settings-content { border-left: 0; border-top: 1px solid var(--line); min-height: 0; }
+    .settings-overview-row { align-items: start; }
+    .settings-preference-row { flex-wrap: wrap; gap: 0.6rem; }
+    .settings-preference-row .form-input { max-width: none; width: 100%; }
 }
 
 .zotero-collection-tree {
@@ -932,3 +851,11 @@ html[lang^="zh"] .prompt-template-details[open] summary::before {
 .zotero-missing-actions input[type="file"] {
     display: none;
 }
+
+.settings-page .settings-overview-group { margin: 1.4rem 0 0; color: var(--muted); font: 600 0.85rem var(--font-body); }
+.settings-page #settingsOverview > .settings-overview-group:first-child { margin-top: 0.5rem; }
+.settings-page #settingsQuickPreferences { margin-bottom: 1.3rem; }
+.settings-page [data-settings-detail] > [data-settings-parent]:not([hidden]) { margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid var(--line); }
+.settings-page #extensionWebURL { overflow-wrap: anywhere; }
+.settings-page-header h2:focus,
+.settings-section-heading h2:focus { outline: none; }

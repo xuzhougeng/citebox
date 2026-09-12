@@ -8,7 +8,7 @@
     <script>(function(){var d=document.documentElement;try{var t=localStorage.getItem("citebox_theme");if(t&&t!=="warm")d.setAttribute("data-theme",t);var l=localStorage.getItem("citebox_lang")||"zh-CN";d.lang=l;if(l!=="zh-CN")d.setAttribute("data-lang-loading","1");}catch(e){}})()</script>
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
-<body>
+<body class="settings-page">
     <nav class="navbar">
         <div class="navbar-content">
             <a href="/" class="logo">CiteBox</a>
@@ -32,128 +32,69 @@
     </nav>
 
     <main class="page-shell">
-        <section class="hero compact">
-            <div>
-                <p class="eyebrow" data-i18n="settings.eyebrow">Settings</p>
-                <h1 data-i18n="settings.hero_title">设置</h1>
-                <p class="hero-text" data-i18n="settings.hero_text">
-                    管理 AI 模型、提示词、服务集成与账号。模型配置自动保存，提示词需手动保存。
-                </p>
-            </div>
-        </section>
-
         <div class="settings-layout">
-            <aside id="settingsAnchorSidebar" class="settings-anchor-sidebar" data-i18n-aria-label="settings.anchor_sidebar_aria" aria-label="设置导航"></aside>
-            <section class="section-stack settings-content">
-            <details class="manager-card settings-collapsible" open>
-                <summary class="settings-collapsible-toggle">
+            <aside id="settingsAnchorSidebar" class="settings-anchor-sidebar" data-i18n-aria-label="settings.anchor_sidebar_aria" aria-label="设置导航"><h1 data-i18n="settings.hero_title">设置</h1></aside>
+            <section class="settings-content">
+                <header id="settingsPageHeader" class="settings-page-header"></header>
+                <div id="settingsQuickPreferences" hidden><p class="settings-inline-status" data-ai-autosave-status role="status"></p></div>
+                <div id="settingsOverview"></div>
+
+            <section id="settings-general" class="manager-card settings-section" data-settings-category="general">
+                <header class="settings-section-heading"><h2 data-i18n="settings.preferences.title">界面</h2></header>
+                <label class="settings-preference-row"><span data-i18n="settings.preferences.language">界面语言</span><select id="settingsLanguageSelect" class="form-input"><option value="zh-CN">中文</option><option value="en">English</option></select></label>
+                <label class="settings-preference-row"><span data-i18n="settings.preferences.theme">外观</span><select id="settingsThemeSelect" class="form-input"><option value="warm" data-i18n="shared.theme.warm">暖色</option><option value="light" data-i18n="shared.theme.light">明亮</option><option value="dark" data-i18n="shared.theme.dark">暗黑</option></select></label>
+                <p id="settingsAppearanceStatus" class="settings-inline-status" role="status" data-i18n="settings.preferences.autosave">更改后自动保存。</p>
+            </section>
+            <section id="settings-section-1" class="manager-card settings-section" data-settings-category="about">
+                <header class="settings-section-heading">
                     <h2 data-i18n="settings.version.title">版本信息</h2>
                     <p data-i18n="settings.version.desc">检查是否有新版本可用。</p>
-                </summary>
+                </header>
                 <div class="submit-row">
                     <a id="versionReleaseLink" class="btn btn-outline hidden" href="#" target="_blank" rel="noreferrer" data-i18n="settings.version.view_release">查看 Release</a>
                     <button id="checkVersionButton" class="btn btn-primary" type="button" data-i18n="settings.version.check_update">检查更新</button>
                 </div>
-                <div id="versionSummary" class="settings-summary-box">
-                    <div>
-                        <span data-i18n="settings.version.current">当前版本</span>
-                        <strong data-i18n="msg.loading">载入中...</strong>
-                    </div>
-                    <div>
-                        <span data-i18n="settings.version.check_result">检查结果</span>
-                        <strong data-i18n="settings.version.checking">正在查询最新版本</strong>
-                    </div>
-                    <div>
-                        <span data-i18n="settings.version.latest">最新正式版本</span>
-                        <strong data-i18n="msg.loading">载入中...</strong>
-                    </div>
-                    <div>
-                        <span data-i18n="settings.version.last_check">最近检查</span>
-                        <strong data-i18n="msg.loading">载入中...</strong>
-                    </div>
-                </div>
-            </details>
+                <div id="versionSummary"><p data-i18n="msg.loading">载入中...</p></div>
+            </section>
 
-            <details id="desktopCloseSettingsSection" class="manager-card settings-collapsible hidden">
-                <summary class="settings-collapsible-toggle">
+            <section id="desktopCloseSettingsSection" class="manager-card settings-section hidden" data-settings-category="general">
+                <header class="settings-section-heading">
                     <h2 data-i18n="settings.desktop_close.title">关闭窗口行为</h2>
                     <p data-i18n="settings.desktop_close.desc">仅影响桌面端：选择每次询问、直接最小化到托盘或直接退出。</p>
-                </summary>
+                </header>
                 <div class="manager-form">
-                    <div class="form-grid">
-                        <label class="field">
-                            <span data-i18n="settings.desktop_close.mode_label">关闭窗口时</span>
-                            <select id="desktopCloseActionSelect" class="form-input">
-                                <option value="ask" data-i18n="settings.desktop_close.option_ask">每次询问</option>
-                                <option value="minimize" data-i18n="settings.desktop_close.option_minimize">最小化到托盘</option>
-                                <option value="exit" data-i18n="settings.desktop_close.option_exit">直接退出</option>
-                            </select>
-                        </label>
-                    </div>
-                    <div id="desktopCloseSummary" class="settings-summary-box"></div>
-                    <p id="desktopCloseStatus" class="settings-inline-status" data-i18n="settings.desktop_close.status_hint">修改后立即生效，也会同步影响关闭弹窗里的“记住这次选择”。</p>
+                    <label class="settings-preference-row"><span data-i18n="settings.desktop_close.mode_label">关闭窗口时</span>
+                        <select id="desktopCloseActionSelect" class="form-input">
+                            <option value="ask" data-i18n="settings.desktop_close.option_ask">每次询问</option>
+                            <option value="minimize" data-i18n="settings.desktop_close.option_minimize">最小化到托盘</option>
+                            <option value="exit" data-i18n="settings.desktop_close.option_exit">直接退出</option>
+                        </select>
+                    </label>
+                    <p id="desktopCloseSummary" class="settings-inline-status"></p>
+                    <p id="desktopCloseStatus" class="settings-inline-status" role="status"></p>
                 </div>
-            </details>
+            </section>
 
-            <details id="settings-ai" class="manager-card settings-collapsible">
-                <summary class="settings-collapsible-toggle">
+            <section id="settings-ai" class="manager-card settings-section" data-settings-category="ai">
+                <header class="settings-section-heading">
                     <h2 data-i18n="settings.ai.model_title">模型配置</h2>
                     <p data-i18n="settings.ai.model_desc">添加或编辑 AI 模型。修改会自动保存。</p>
-                </summary>
+                </header>
                 <div class="manager-form">
                     <div id="aiModelList" class="manager-list"></div>
-                    <section class="settings-subsection">
-                        <h3 data-i18n="settings.ai.image_gen_title">图像生成</h3>
-                        <p data-i18n="settings.ai.image_gen_desc">控制 @image-gen 的启用状态，以及生成 graphical abstract 时使用的 API 配置。</p>
-                        <div class="settings-subsection-body">
-                            <div class="form-grid">
-                                <label class="field checkbox-field field-span-2">
-                                    <input id="aiImageGenEnabledInput" type="checkbox">
-                                    <span data-i18n="settings.ai.image_gen_enabled">启用 @image-gen 图像生成</span>
-                                </label>
-                                <label class="field field-span-2">
-                                    <span data-i18n="settings.ai.image_gen_api_key">图像生成 API Key</span>
-                                    <input id="aiImageGenAPIKeyInput" class="form-input" type="password" autocomplete="off" placeholder="sk-...">
-                                </label>
-                                <label class="field field-span-2">
-                                    <span data-i18n="settings.ai.image_gen_base_url">图像生成 Base URL</span>
-                                    <input id="aiImageGenBaseURLInput" class="form-input" type="text" data-i18n-placeholder="settings.ai.image_gen_base_url_placeholder" placeholder="默认使用官方地址；兼容网关时填自定义地址">
-                                </label>
-                                <label class="field">
-                                    <span data-i18n="settings.ai.image_gen_model">图像生成模型</span>
-                                    <input id="aiImageGenModelInput" class="form-input" type="text" placeholder="gpt-image-2">
-                                </label>
-                                <label class="field">
-                                    <span data-i18n="settings.ai.image_gen_size">图片尺寸</span>
-                                    <select id="aiImageGenSizeSelect" class="form-input">
-                                        <option value="1024x1024">1024 × 1024</option>
-                                        <option value="1024x1536">1024 × 1536</option>
-                                        <option value="1536x1024">1536 × 1024</option>
-                                    </select>
-                                </label>
-                                <label class="field">
-                                    <span data-i18n="settings.ai.image_gen_quality">生成质量</span>
-                                    <select id="aiImageGenQualitySelect" class="form-input">
-                                        <option value="low" data-i18n="settings.ai.image_gen_quality_low">低</option>
-                                        <option value="medium" data-i18n="settings.ai.image_gen_quality_medium">中</option>
-                                        <option value="high" data-i18n="settings.ai.image_gen_quality_high">高</option>
-                                    </select>
-                                </label>
-                            </div>
-                        </div>
-                    </section>
+
                     <div class="submit-row">
                         <button id="addAIModelButton" class="btn btn-outline" type="button" data-i18n="settings.ai.add_model">添加模型</button>
                     </div>
                     <p id="aiModelAutosaveStatus" class="settings-inline-status" data-i18n="settings.ai.autosave_hint">模型配置修改后会自动保存。</p>
                 </div>
-            </details>
+            </section>
 
-            <details id="settings-mcp" class="manager-card settings-collapsible">
-                <summary class="settings-collapsible-toggle">
+            <section id="settings-mcp" class="manager-card settings-section" data-settings-category="integrations">
+                <header class="settings-section-heading">
                     <h2 data-i18n="settings.mcp.title">Notion</h2>
                     <p data-i18n="settings.mcp.desc">配置 AI 助手使用的 Notion MCP，以及原图笔记导出使用的 Notion API。</p>
-                </summary>
+                </header>
                 <div class="manager-form">
                     <section class="settings-subsection">
                         <h3 data-i18n="settings.mcp.mcp_title">Notion MCP</h3>
@@ -209,13 +150,13 @@
                         </form>
                     </section>
                 </div>
-            </details>
+            </section>
 
-            <details id="settings-zotero" class="manager-card settings-collapsible">
-                <summary class="settings-collapsible-toggle">
+            <section id="settings-zotero" class="manager-card settings-section" data-settings-category="papers">
+                <header class="settings-section-heading">
                     <h2 data-i18n="settings.zotero.title">Zotero</h2>
                     <p data-i18n="settings.zotero.desc">连接本机 Zotero Local API，按 collection 把文献和 PDF 按 CiteBox 标准入库。</p>
-                </summary>
+                </header>
                 <div class="manager-form">
                     <section class="settings-subsection">
                         <h3 data-i18n="settings.zotero.connection_title">连接</h3>
@@ -260,13 +201,13 @@
                         <div id="zoteroMissingList" class="zotero-missing-list"></div>
                     </section>
                 </div>
-            </details>
+            </section>
 
-            <details id="settings-figure-library" class="manager-card settings-collapsible">
-                <summary class="settings-collapsible-toggle">
+            <section id="settings-figure-library" class="manager-card settings-section" data-settings-category="integrations">
+                <header class="settings-section-heading">
                     <h2 data-i18n="settings.figure_library.title">Scientific Figure Library</h2>
                     <p data-i18n="settings.figure_library.desc">把当前图的 Figure Transfer Package 写到本机接收目录，供 ScientificFigureLibrary 用 packagePath 导入为 draft。CiteBox 不会直接写入 SFL 图库，也不会自动 Published。</p>
-                </summary>
+                </header>
                 <div class="manager-form">
                     <section class="settings-subsection">
                         <h3 data-i18n="settings.figure_library.drop_title">接收目录</h3>
@@ -287,13 +228,13 @@
                         </form>
                     </section>
                 </div>
-            </details>
+            </section>
 
-            <details id="settings-integration" class="manager-card settings-collapsible">
-                <summary class="settings-collapsible-toggle">
+            <section id="settings-integration" class="manager-card settings-section" data-settings-category="integrations">
+                <header class="settings-section-heading">
                     <h2 data-i18n="settings.integration.title">研究上下文集成</h2>
                     <p data-i18n="settings.integration.desc">在本机嵌入 MCP 服务，供 Wisp 等外部工具读取文献库上下文。</p>
-                </summary>
+                </header>
                 <div class="manager-form">
                     <section class="settings-subsection">
                         <h3 data-i18n="settings.integration.service_title">本地 MCP 服务</h3>
@@ -349,26 +290,15 @@
                         </div>
                     </section>
 
-                    <section class="settings-subsection">
-                        <h3 data-i18n="settings.integration.extension_title">浏览器扩展</h3>
-                        <p class="muted" data-i18n="settings.integration.extension_desc">安装 CiteBox Connector 浏览器扩展后，在论文页面点击扩展图标即可一键入库。</p>
-                        <div class="settings-subsection-body">
-                            <ol class="muted">
-                                <li data-i18n="settings.integration.extension_step1">扩展已随软件附带，位于软件安装目录的 extension/ 文件夹。</li>
-                                <li data-i18n="settings.integration.extension_step2">在 Chrome / Edge 中打开 chrome://extensions 并开启「开发者模式」。</li>
-                                <li data-i18n="settings.integration.extension_step3">点击「加载已解压的扩展程序」，选择该 extension/ 文件夹。</li>
-                                <li data-i18n="settings.integration.extension_step4">在扩展选项页填入本服务地址与上方生成的访问 Token，测试连接通过即可使用。</li>
-                            </ol>
-                        </div>
-                    </section>
-                </div>
-            </details>
 
-            <details class="manager-card settings-collapsible">
-                <summary class="settings-collapsible-toggle">
+                </div>
+            </section>
+
+            <section id="settings-section-8" class="manager-card settings-section" data-settings-category="ai">
+                <header class="settings-section-heading">
                     <h2 data-i18n="settings.ai.scene_title">场景绑定</h2>
                     <p data-i18n="settings.ai.scene_desc">为 AI 助手 Master/Sub-Agent、阅读和整理场景指定默认模型，并调整通用设置。修改会自动保存。</p>
-                </summary>
+                </header>
                 <div class="manager-form">
                     <div id="aiAssistantBindingSummary" class="settings-summary-box ai-assistant-binding-summary" aria-live="polite"></div>
                     <div class="submit-row">
@@ -417,13 +347,14 @@
                         </label>
                     </div>
                 </div>
-            </details>
+            <p class="settings-inline-status" data-ai-autosave-status role="status"></p>
+            </section>
 
-            <details class="manager-card settings-collapsible">
-                <summary class="settings-collapsible-toggle">
+            <section id="settings-section-9" class="manager-card settings-section" data-settings-category="ai">
+                <header class="settings-section-heading">
                     <h2 data-i18n="settings.ai.global_prompt_title">全局 Prompt 设置</h2>
                     <p data-i18n="settings.ai.global_prompt_desc">通用角色设定、问答指令与可复用角色 Prompt。修改后需点击保存。</p>
-                </summary>
+                </header>
                 <form id="aiSettingsForm" class="manager-form">
                     <div class="settings-subsection-body">
 
@@ -518,13 +449,13 @@ User Prompt:
                     </div>
                     <p id="aiPromptSaveStatus" class="settings-inline-status" data-i18n="settings.ai.prompt_save_hint">提示词修改后需点击保存。</p>
                 </form>
-            </details>
+            </section>
 
-            <details class="manager-card settings-collapsible">
-                <summary class="settings-collapsible-toggle">
+            <section id="settings-section-10" class="manager-card settings-section" data-settings-category="ai">
+                <header class="settings-section-heading">
                     <h2 data-i18n="settings.ai.figure_group_prompt_title">图片与分组 Prompt</h2>
                     <p data-i18n="settings.ai.figure_group_prompt_desc">图片解读、标签建议和分组建议的场景提示词。修改后需点击保存。</p>
-                </summary>
+                </header>
                 <form id="figureGroupPromptForm" class="manager-form">
                     <div class="settings-subsection-body">
 
@@ -697,13 +628,13 @@ User Prompt:
                     </div>
                     <p id="figureGroupPromptSaveStatus" class="settings-inline-status" data-i18n="settings.ai.figure_group_prompt_save_hint">图片与分组 Prompt 修改后需点击保存。</p>
                 </form>
-            </details>
+            </section>
 
-            <details class="manager-card settings-collapsible">
-                <summary class="settings-collapsible-toggle">
+            <section id="settings-section-11" class="manager-card settings-section" data-settings-category="ai">
+                <header class="settings-section-heading">
                     <h2 data-i18n="settings.ai.translate_title">翻译设置</h2>
                     <p data-i18n="settings.ai.translate_desc">设置划词翻译的语言、模型和提示词。模型和语言自动保存，提示词需手动保存。</p>
-                </summary>
+                </header>
                 <div class="manager-form">
                     <div class="form-grid">
                         <label class="field">
@@ -754,13 +685,13 @@ User Prompt:
                     </div>
                     <p id="translatePromptSaveStatus" class="settings-inline-status" data-i18n="settings.ai.translate_prompt_save_hint">翻译 Prompt 修改后需点击保存。</p>
                 </div>
-            </details>
+            </section>
 
-            <details class="manager-card settings-collapsible">
-                <summary class="settings-collapsible-toggle">
+            <section id="settings-section-12" class="manager-card settings-section" data-settings-category="papers">
+                <header class="settings-section-heading">
                     <h2 data-i18n="settings.extractor.title">PDF 提取配置</h2>
                     <p data-i18n="settings.extractor.desc">选择当前 PDF 提取方案。可切换为手工、内置 LLM 坐标提取，或标准 pdffigx。</p>
-                </summary>
+                </header>
                 <form id="extractorSettingsForm" class="manager-form">
                     <div class="form-grid">
                         <label class="field">
@@ -807,13 +738,13 @@ User Prompt:
                         <button class="btn btn-primary" type="submit" data-i18n="settings.extractor.save_btn">保存提取服务配置</button>
                     </div>
                 </form>
-            </details>
+            </section>
 
-            <details class="manager-card settings-collapsible">
-                <summary class="settings-collapsible-toggle">
+            <section id="settings-section-13" class="manager-card settings-section" data-settings-category="integrations">
+                <header class="settings-section-heading">
                     <h2 data-i18n="settings.weixin.title">微信配置</h2>
                     <p data-i18n="settings.weixin.desc">设置微信消息桥接、绑定状态，以及消息意图识别所使用的模型。</p>
-                </summary>
+                </header>
                 <div class="manager-form weixin-settings-layout">
                     <div class="weixin-overview-panel">
                         <div class="weixin-overview-copy">
@@ -874,13 +805,13 @@ User Prompt:
                         </section>
                     </div>
                 </div>
-            </details>
+            </section>
 
-            <details class="manager-card settings-collapsible">
-                <summary class="settings-collapsible-toggle">
+            <section id="settings-section-14" class="manager-card settings-section" data-settings-category="integrations" data-settings-parent="settings-section-13">
+                <header class="settings-section-heading">
                     <h2 data-i18n="settings.weixin.daily_title">今日推荐</h2>
                     <p data-i18n="settings.weixin.daily_desc">开启后会在每天设定时间随机发送一张已保存图片到绑定微信，也支持立即测试发图。</p>
-                </summary>
+                </header>
                 <div class="manager-form weixin-daily-settings-layout">
                     <div class="form-grid">
                         <label class="field checkbox-field weixin-bridge-toggle field-span-2">
@@ -903,13 +834,13 @@ User Prompt:
                         <button id="saveWeixinDailyRecommendationButton" class="btn btn-primary" type="button" data-i18n="settings.weixin.daily_save_btn">保存今日推荐配置</button>
                     </div>
                 </div>
-            </details>
+            </section>
 
-            <details class="manager-card settings-collapsible">
-                <summary class="settings-collapsible-toggle">
+            <section id="settings-section-15" class="manager-card settings-section" data-settings-category="ai">
+                <header class="settings-section-heading">
                     <h2 data-i18n="settings.tts.title">TTS 配置</h2>
                     <p data-i18n="settings.tts.desc">独立维护豆包 TTS 配置；设置页可直接测试，当前实际用于微信 `/ask`、`/qa` 与 `/testvoice`。</p>
-                </summary>
+                </header>
                 <form id="ttsSettingsForm" class="manager-form">
                     <div class="form-grid">
                         <label class="field">
@@ -972,13 +903,13 @@ User Prompt:
                         <button id="saveTTSButton" class="btn btn-primary" type="submit" data-i18n="settings.tts.save_btn">保存 TTS 配置</button>
                     </div>
                 </form>
-            </details>
+            </section>
 
-            <details class="manager-card settings-collapsible">
-                <summary class="settings-collapsible-toggle">
+            <section id="settings-section-16" class="manager-card settings-section" data-settings-category="integrations">
+                <header class="settings-section-heading">
                     <h2 data-i18n="settings.wolai.title">Wolai 配置</h2>
                     <p data-i18n="settings.wolai.desc">配置 Wolai 授权信息和目标页面，将笔记同步到 Wolai。</p>
-                </summary>
+                </header>
                 <form id="wolaiSettingsForm" class="manager-form">
                     <div class="form-grid">
                         <label class="field field-span-2">
@@ -1007,13 +938,13 @@ User Prompt:
                         <button class="btn btn-primary" type="submit" data-i18n="settings.wolai.save_btn">保存 Wolai 配置</button>
                     </div>
                 </form>
-            </details>
+            </section>
 
-            <details id="settings-external-sources" class="manager-card settings-collapsible">
-                <summary class="settings-collapsible-toggle">
+            <section id="settings-external-sources" class="manager-card settings-section" data-settings-category="papers">
+                <header class="settings-section-heading">
                     <h2 data-i18n="settings.research.title">文献搜索服务 API</h2>
                     <p data-i18n="settings.research.desc">配置 Semantic Scholar 与 PubMed / NCBI 凭据，以及 AI 助手外部检索使用的来源。Semantic Scholar 在 API key 非空时自动启用。</p>
-                </summary>
+                </header>
                 <form id="researchSettingsForm" class="manager-form">
                     <div class="form-grid">
                         <label class="field field-span-2">
@@ -1039,13 +970,13 @@ User Prompt:
                         <button class="btn btn-primary" type="submit" data-i18n="settings.research.save_btn">保存文献搜索配置</button>
                     </div>
                 </form>
-            </details>
+            </section>
 
-            <details class="manager-card settings-collapsible">
-                <summary class="settings-collapsible-toggle">
+            <section id="settings-section-18" class="manager-card settings-section" data-settings-category="account">
+                <header class="settings-section-heading">
                     <h2 data-i18n="settings.password.account_title">账号管理</h2>
                     <p data-i18n="settings.password.account_desc">修改密码、管理记住登录状态，或退出登录。</p>
-                </summary>
+                </header>
                 <div class="db-actions-grid">
                     <div class="db-action-item">
                         <h3 data-i18n="settings.password.change_title">修改密码</h3>
@@ -1075,13 +1006,13 @@ User Prompt:
                         <button id="logoutButton" class="btn btn-outline" type="button" data-i18n="settings.password.logout_btn">安全登出</button>
                     </div>
                 </div>
-            </details>
+            </section>
 
-            <details class="manager-card danger-zone-card settings-collapsible">
-                <summary class="settings-collapsible-toggle">
+            <section id="settings-section-19" class="manager-card settings-section" data-settings-category="data">
+                <header class="settings-section-heading">
                     <h2 data-i18n="settings.db.title">数据库管理</h2>
                     <p data-i18n="settings.db.desc">导出、导入或清空数据库。导入会覆盖现有数据，请谨慎操作。</p>
-                </summary>
+                </header>
                 <div class="db-actions-grid">
                     <div class="db-action-item">
                         <h3 data-i18n="settings.db.export_title">导出数据库</h3>
@@ -1102,7 +1033,63 @@ User Prompt:
                         <button id="purgeDbButton" class="btn btn-outline danger" type="button" data-i18n="settings.db.purge_btn">清空数据库</button>
                     </div>
                 </div>
-            </details>
+            </section>
+            <section id="settings-image-gen" class="manager-card settings-section" data-settings-category="ai">
+                <header class="settings-section-heading"><h2 data-i18n="settings.ai.image_gen_title">图像生成</h2></header>
+                <p data-i18n="settings.ai.image_gen_desc">控制 @image-gen 的启用状态，以及生成 graphical abstract 时使用的 API 配置。</p>
+                <div class="settings-subsection-body">
+                    <div class="form-grid">
+                        <label class="field checkbox-field field-span-2">
+                            <input id="aiImageGenEnabledInput" type="checkbox">
+                            <span data-i18n="settings.ai.image_gen_enabled">启用 @image-gen 图像生成</span>
+                        </label>
+                        <label class="field field-span-2">
+                            <span data-i18n="settings.ai.image_gen_api_key">图像生成 API Key</span>
+                            <input id="aiImageGenAPIKeyInput" class="form-input" type="password" autocomplete="off" placeholder="sk-...">
+                        </label>
+                        <label class="field field-span-2">
+                            <span data-i18n="settings.ai.image_gen_base_url">图像生成 Base URL</span>
+                            <input id="aiImageGenBaseURLInput" class="form-input" type="text" data-i18n-placeholder="settings.ai.image_gen_base_url_placeholder" placeholder="默认使用官方地址；兼容网关时填自定义地址">
+                        </label>
+                        <label class="field">
+                            <span data-i18n="settings.ai.image_gen_model">图像生成模型</span>
+                            <input id="aiImageGenModelInput" class="form-input" type="text" placeholder="gpt-image-2">
+                        </label>
+                        <label class="field">
+                            <span data-i18n="settings.ai.image_gen_size">图片尺寸</span>
+                            <select id="aiImageGenSizeSelect" class="form-input">
+                                <option value="1024x1024">1024 × 1024</option>
+                                <option value="1024x1536">1024 × 1536</option>
+                                <option value="1536x1024">1536 × 1024</option>
+                            </select>
+                        </label>
+                        <label class="field">
+                            <span data-i18n="settings.ai.image_gen_quality">生成质量</span>
+                            <select id="aiImageGenQualitySelect" class="form-input">
+                                <option value="low" data-i18n="settings.ai.image_gen_quality_low">低</option>
+                                <option value="medium" data-i18n="settings.ai.image_gen_quality_medium">中</option>
+                                <option value="high" data-i18n="settings.ai.image_gen_quality_high">高</option>
+                            </select>
+                        </label>
+                    </div>
+                </div>
+            <p class="settings-inline-status" data-ai-autosave-status role="status"></p>
+            </section>
+            <section id="settings-browser-extension" class="manager-card settings-section" data-settings-category="integrations">
+                <header class="settings-section-heading"><h2 data-i18n="settings.integration.extension_title">浏览器扩展</h2></header>
+                <p class="muted" data-i18n="settings.integration.extension_desc">安装 CiteBox Connector 浏览器扩展后，在论文页面点击扩展图标即可一键入库。</p>
+                <div class="settings-subsection-body">
+                    <ol class="muted">
+                        <li data-i18n="settings.integration.extension_step1">找到安装包中的 extension/ 文件夹，先复制到电脑上的固定位置。</li>
+                        <li data-i18n="settings.integration.extension_step2">Chrome 打开 chrome://extensions，Edge 打开 edge://extensions，开启「开发者模式」。</li>
+                        <li data-i18n="settings.integration.extension_step3">点击「加载已解压的扩展程序」，选择复制后的 extension/ 文件夹。</li>
+                        <li data-i18n="settings.integration.extension_step4">在扩展选项页填写 CiteBox 网页服务地址和访问 Token，再测试连接。</li>
+                    </ol>
+                    <p class="muted" data-i18n="settings.integration.extension_desktop_note">桌面版网页地址会随启动变化；扩展暂需更新地址，不能使用 MCP 服务地址代替。</p>
+                    <div class="settings-preference-row"><span data-i18n="settings.integration.extension_web_url">当前网页服务地址</span><code id="extensionWebURL"></code></div>
+                    <button id="extensionTokenSettingsButton" class="btn btn-outline" type="button" data-i18n="settings.integration.extension_token_settings">管理访问 Token</button>
+                </div>
+            </section>
             </section>
         </div>
     </main>

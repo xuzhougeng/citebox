@@ -73,6 +73,7 @@ function loadSettingsPage(contextOverrides = {}) {
 
     const context = {
         console,
+        t: (key, fallback) => fallback || key,
         module: { exports: {} },
         exports: {},
         document,
@@ -124,6 +125,7 @@ function createSubject(SettingsPage) {
     subject.applySettingsHash = function (hash, options) {
         this.applyCalls.push({ hash, options: { ...options } });
     };
+    subject.loadAppearancePreferences = async () => {};
     subject.loadAISettings = async () => {};
     subject.loadExtractorSettings = async () => {};
     subject.loadWolaiSettings = async () => {};
