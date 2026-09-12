@@ -208,6 +208,9 @@ const FigureViewer = {
                 if (button.dataset.figureAction === 'download-image') {
                     await this.downloadCurrentImage();
                 }
+                if (button.dataset.figureAction === 'export-paper-notes') {
+                    this.openNotesExport({ paper_id: this.currentFigure.paper_id }, this.currentFigure.paper_title);
+                }
                 if (button.dataset.figureAction === 'download-transfer-package') {
                     await this.downloadTransferPackage();
                 }
@@ -2448,6 +2451,81 @@ const FigureViewer = {
         }
     },
 
+    openNotesExport(params = {}, paperTitle = '') {
+        if (document.getElementById('figureNotesExportModal')) return;
+        // Capture the scope when opened; later filter changes cannot redirect it.
+        const scope = { ...params };
+        delete scope.page;
+        delete scope.page_size;
+        const previousFocus = document.activeElement;
+        const modal = document.createElement('div');
+        modal.id = 'figureNotesExportModal';
+        modal.className = 'modal-shell';
+        modal.innerHTML = `
+            <form class="modal-dialog figure-notes-export-dialog" role="dialog" aria-modal="true" aria-labelledby="figureNotesExportTitle">
+                <h2 id="figureNotesExportTitle">${t('shared.figure.export_notes', '导出图片笔记')}</h2>
+                <p>${Utils.escapeHTML(paperTitle || t('shared.figure.export_filter_scope', '当前筛选条件下的全部图片（包括其他分页）'))}</p>
+                <p class="muted">${t('shared.figure.export_notes_hint', 'ZIP 包含 Markdown 笔记、原图片、图注和文献来源。导出已保存的内容。')}</p>
+                <label><input type="checkbox" name="onlyNotes" ${scope.has_notes ? 'checked' : ''}> ${t('shared.figure.export_only_notes', '仅导出有笔记的图片')}</label>
+                <p data-export-error role="alert"></p>
+                <div class="figure-notes-export-actions">
+                    <button class="btn btn-outline" type="button" data-export-close>${t('shared.utils.cancel', '取消')}</button>
+                    <button class="btn btn-primary" type="submit">${t('shared.figure.export_notes_download', '下载 ZIP')}</button>
+                </div>
+            </form>`;
+        let busy = false;
+        const close = () => {
+            if (busy) return;
+            document.removeEventListener('keydown', keydown, true);
+            modal.remove();
+            previousFocus?.focus();
+        };
+        const keydown = event => {
+            if (event.key === 'Escape') { event.preventDefault(); event.stopImmediatePropagation(); close(); }
+            if (event.key === 'Tab') {
+                const controls = [...modal.querySelectorAll('button, input')].filter(el => !el.disabled);
+                const first = controls[0], last = controls.at(-1);
+                if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+                if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+            }
+        };
+        modal.querySelector('[data-export-close]').addEventListener('click', close);
+        modal.addEventListener('click', event => { if (event.target === modal) close(); });
+        modal.querySelector('form').addEventListener('submit', async event => {
+            event.preventDefault();
+            if (busy) return;
+            busy = true;
+            const button = modal.querySelector('[type="submit"]');
+            const controls = [...modal.querySelectorAll('button, input')];
+            const hasNotes = modal.querySelector('[name="onlyNotes"]').checked;
+            controls.forEach(el => { el.disabled = true; });
+            button.textContent = t('shared.figure.export_notes_working', '正在打包…');
+            const errorBox = modal.querySelector('[data-export-error]');
+            errorBox.textContent = '';
+            try {
+                const result = await API.exportFigureNotes({ ...scope, has_notes: hasNotes ? '1' : '', language: document.documentElement.lang || 'zh-CN' });
+                const saved = await Utils.saveBlobDownload(result.blob, result.filename || 'citebox-figure-notes.zip');
+                busy = false;
+                if (saved) close();
+            } catch (error) {
+                const messages = {
+                    NOT_FOUND: ['shared.figure.export_notes_empty', '没有符合条件的图片，或来源已变更。请调整筛选后重试。'],
+                    INVALID_ARGUMENT: ['shared.figure.export_notes_limit', '请缩小导出范围：最多 1000 张图片，图片和笔记合计不超过 500 MiB。'],
+                    FAILED_PRECONDITION: ['shared.figure.export_notes_unavailable', '部分图片无法读取或已变更，请检查原图后重试。']
+                };
+                const message = messages[error.code] || ['shared.figure.export_notes_failed', '导出失败，请重试。'];
+                errorBox.textContent = t(...message);
+            } finally {
+                busy = false;
+                controls.forEach(el => { el.disabled = false; });
+                button.textContent = t('shared.figure.export_notes_download', '下载 ZIP');
+            }
+        });
+        document.body.appendChild(modal);
+        document.addEventListener('keydown', keydown, true);
+        modal.querySelector('[name="onlyNotes"]').focus();
+    },
+
     async downloadTransferPackage() {
         const figureID = Number(this.currentFigure?.id || 0);
         if (!figureID) {
@@ -2932,6 +3010,7 @@ const FigureViewer = {
                             <button class="btn btn-primary" type="button" data-figure-action="open-paper">${t("shared.figure.view_source_paper", "查看来源文献")}</button>
                             <a class="btn btn-outline" href="${Utils.resourceViewerURL('image', figure.image_url)}">${t('shared.figure.open_original', '打开原图')}</a>
                             <button class="btn btn-outline" type="button" data-figure-action="download-image">${t('shared.figure.download_image', '下载图片')}</button>
+                            <button class="btn btn-outline" type="button" data-figure-action="export-paper-notes">${t('shared.figure.export_paper_notes', '导出本文图片笔记')}</button>
                             <button class="btn btn-outline" type="button" data-figure-action="download-transfer-package">${t('shared.figure.download_transfer_package', '下载迁移包')}</button>
                             <button class="btn btn-primary" type="button" data-figure-action="send-to-figure-library">${t('shared.figure.send_to_figure_library', '发送到 Figure Library')}</button>
                         </div>

@@ -645,6 +645,14 @@ func buildHandlerWithAIServices(
 		}
 	})
 
+	mux.HandleFunc("/api/figures/export-notes", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		figureHandler.ExportNotes(w, r)
+	})
+
 	mux.HandleFunc("/api/figures/", func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, "/transfer-package") {
 			switch r.Method {

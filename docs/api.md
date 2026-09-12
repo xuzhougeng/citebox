@@ -2423,3 +2423,11 @@ Notion API 使用用户在 Notion Developer Portal 创建的个人访问令牌�
 3. 在 `web/static/js/api.js` 增加前端封装
 4. 同步更新本文档
 
+
+### GET /api/figures/export-notes
+
+导出图片笔记 ZIP。支持 `paper_id`（单篇文献）、`keyword`、`group_id`、`tag_id`、`figure_type`、`sort_by`，筛选语义与图片库一致；导出覆盖所有分页，忽略 `page` / `page_size`。默认包含无笔记图片，`has_notes=1` 或 `true` 可仅保留有笔记图片。`language=en` 输出英文标题，默认中文。
+
+响应为 `application/zip`，附件名 `citebox-figure-notes.zip`。包内包含 `README.md` 目录、`figures/figure-{id}.md` 和 `images/figure-{id}.{ext}`。Markdown 使用相对图片路径，包含图注、已保存的图片笔记、文献标题、DOI、作者、期刊、发表日期、分组、图片标签、页码和 CiteBox ID；笔记原始 Markdown 保留。范围与图片库一样仅含主图，不额外展开子图。图片和图注保留原文献来源。
+
+最多 1000 张图片、图片和笔记合计 500 MiB。无匹配图片返回 404；超限或无效 ID 返回 400；图片缺失、空文件或指向图库外部的路径导致整次导出失败。服务器先在临时文件中生成完整 ZIP，成功后下载，失败或请求结束后清理临时文件。导出期间请避免同时修改筛选范围内的图片。

@@ -248,6 +248,12 @@ const FiguresPage = {
     },
 
     bind() {
+        document.getElementById('exportFigureNotesButton')?.addEventListener('click', () => {
+            FigureViewer.openNotesExport({
+                ...this.state.filters,
+                keyword: this.keywordInput.value.trim()
+            });
+        });
         this.figureActions = createFigureCollectionActions({
             getFigures: () => this.figures || [],
             getPage: () => this.state.page,

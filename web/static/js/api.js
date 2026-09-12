@@ -268,6 +268,14 @@ const API = {
         });
     },
 
+    exportFigureNotes(params = {}) {
+        const query = new URLSearchParams();
+        for (const [key, value] of Object.entries(params)) {
+            if (value !== '' && value != null) query.set(key, String(value));
+        }
+        return requestBlob(`${API_BASE}/figures/export-notes?${query}`);
+    },
+
     exportFigureTransferPackage(id) {
         return requestBlob(`${API_BASE}/figures/${id}/transfer-package`);
     },

@@ -167,3 +167,8 @@
     overflow-wrap: anywhere;
     word-break: break-word;
 }
+
+.figure-notes-export-dialog { max-width: 560px; }
+.figure-notes-export-dialog p { margin: 1rem 0; overflow-wrap: anywhere; }
+.figure-notes-export-actions { display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1.5rem; }
+.figure-notes-export-dialog [data-export-error] { color: var(--danger, #a33225); }
