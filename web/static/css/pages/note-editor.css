@@ -167,3 +167,32 @@
     overflow-wrap: anywhere;
     word-break: break-word;
 }
+
+.note-image-controls {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+.note-image-controls output { min-width: 3.5rem; text-align: center; }
+.note-image-viewport {
+    position: relative;
+    overflow: hidden;
+    height: clamp(280px, 48vh, 540px);
+    min-height: 0;
+    touch-action: none;
+    cursor: grab;
+}
+.note-image-viewport:active { cursor: grabbing; }
+.note-image-viewport img {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    max-width: none;
+    max-height: none;
+    border-radius: 0;
+    transform-origin: center;
+    user-select: none;
+    pointer-events: none;
+}

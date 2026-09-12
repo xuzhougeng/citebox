@@ -30,6 +30,12 @@ const NoteViewer = {
             }
             const target = event.target;
             const isEditableTarget = target instanceof HTMLElement && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName));
+            if (event.key === 'Escape' && !isEditableTarget && this.imageViewport && !this.imageViewport.state.fit) {
+                event.preventDefault();
+                event.stopPropagation();
+                this.imageViewport.reset();
+                return;
+            }
             if (event.key === 'Escape') {
                 event.preventDefault();
                 event.stopPropagation();
@@ -69,6 +75,14 @@ const NoteViewer = {
             const button = event.target.closest('[data-note-action]');
             if (!button) return;
 
+            if (button.dataset.noteAction === 'zoom-in' || button.dataset.noteAction === 'zoom-out') {
+                this.imageViewport?.zoom(button.dataset.noteAction === 'zoom-in' ? 1.2 : 1 / 1.2);
+                return;
+            }
+            if (button.dataset.noteAction === 'fit-image') {
+                this.imageViewport?.reset();
+                return;
+            }
             if (button.dataset.noteAction === 'prev') {
                 await this.previous();
                 return;
@@ -153,6 +167,8 @@ const NoteViewer = {
 
         const restoreFigure = Boolean(options.restoreFigure ?? this.returnToFigureViewer);
         this.closing = true;
+        this.imageViewport?.destroy();
+        this.imageViewport = null;
         this.modal.classList.add('hidden');
 
         if (!document.querySelector('.modal-shell:not(.hidden)')) {
@@ -339,6 +355,9 @@ const NoteViewer = {
     },
 
     render() {
+        const previousImageState = this.imageViewport && this.viewportFigureID === this.currentFigure?.id ? { ...this.imageViewport.state } : null;
+        this.imageViewport?.destroy();
+        this.imageViewport = null;
         this.currentFigure = this.figures?.[this.index];
         if (!this.currentFigure) {
             this.body.innerHTML = `<div class="empty-state"><h3>${t('shared.note.no_notes_to_show', '没有可展示的笔记')}</h3></div>`;
@@ -349,7 +368,7 @@ const NoteViewer = {
         const total = this.figures.length;
         const canPrev = this.canMovePrevious();
         const canNext = this.canMoveNext();
-        const noteText = this.currentFigureNotesDraft();
+        const noteText = this.noteDraft ?? figure.notes_text ?? '';
         const isPreviewMode = this.noteMode === 'preview';
 
         this.body.innerHTML = `
@@ -415,8 +434,14 @@ const NoteViewer = {
 
                 <aside class="note-lightbox-side">
                     <div class="note-lightbox-preview-card">
-                        <div class="note-lightbox-preview-media">
-                            <img src="${figure.image_url}" alt="${Utils.escapeHTML(figure.caption || figure.paper_title)}">
+                        <div class="note-image-controls">
+                            <button class="btn btn-outline btn-small" type="button" data-note-action="zoom-out" aria-label="${t('shared.note.zoom_out', '缩小')}">−</button>
+                            <output data-note-image-scale aria-live="polite"></output>
+                            <button class="btn btn-outline btn-small" type="button" data-note-action="zoom-in" aria-label="${t('shared.note.zoom_in', '放大')}">+</button>
+                            <button class="btn btn-outline btn-small" type="button" data-note-action="fit-image">${t('shared.note.fit_image', '适应窗口')}</button>
+                        </div>
+                        <div class="note-lightbox-preview-media note-image-viewport" data-note-image-viewport title="${t('shared.note.zoom_hint', '滚轮缩放，拖动平移，双击或 Esc 复位')}">
+                            <img src="${figure.image_url}" alt="${Utils.escapeHTML(figure.caption || figure.paper_title)}" draggable="false">
                         </div>
                         ${figure.caption ? `
                             <div class="figure-lightbox-caption">
@@ -438,5 +463,7 @@ const NoteViewer = {
                 </aside>
             </div>
         `;
+        this.viewportFigureID = figure.id;
+        this.imageViewport = new ImageViewport(this.body.querySelector('[data-note-image-viewport]'), this.body.querySelector('[data-note-image-scale]'), previousImageState);
     }
 };

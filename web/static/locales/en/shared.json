@@ -175,6 +175,10 @@
     "shared.paper.bottom_right_coords": "Bottom-right coordinates",
     "shared.paper.management_notes_label": "Management Notes",
 
+    "shared.note.zoom_out": "Zoom out",
+    "shared.note.zoom_in": "Zoom in",
+    "shared.note.fit_image": "Fit image",
+    "shared.note.zoom_hint": "Scroll to zoom, drag to pan; double-click or Esc to reset",
     "shared.note.no_notes_to_show": "No notes to display",
     "shared.note.prev": "Previous",
     "shared.note.next": "Next",

@@ -175,6 +175,10 @@
     "shared.paper.bottom_right_coords": "右下角坐标",
     "shared.paper.management_notes_label": "管理笔记",
 
+    "shared.note.zoom_out": "缩小",
+    "shared.note.zoom_in": "放大",
+    "shared.note.fit_image": "适应窗口",
+    "shared.note.zoom_hint": "滚轮缩放，拖动平移，双击或 Esc 复位",
     "shared.note.no_notes_to_show": "没有可展示的笔记",
     "shared.note.prev": "上一条",
     "shared.note.next": "下一条",
