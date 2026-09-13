@@ -105,9 +105,18 @@
             const location = snippet.location ? '<span>' + escapeHtml(snippet.location) + '</span>' : '';
             return '<blockquote>' +
                 '<p>' + renderHighlightedText(snippet.text || '', terms) + citation(snippet.citation_index) + '</p>' +
-                location +
+                location + renderEvidenceIdentity(snippet) +
             '</blockquote>';
         }).join('') + '</div>';
+    }
+
+    function renderEvidenceIdentity(snippet) {
+        const origins = ['original', 'user_note', 'ai_note', 'mixed_note'];
+        const verdicts = ['supports', 'partially_supports', 'contradicts', 'related_only', 'insufficient', 'unassessed', 'note_only'];
+        const labels = [];
+        if (origins.includes(snippet.origin)) labels.push(translate('ai.evidence_origin_' + snippet.origin));
+        if (verdicts.includes(snippet.verdict)) labels.push(translate('ai.evidence_verdict_' + snippet.verdict));
+        return labels.length ? '<div class="ai-result-note" data-evidence-origin="' + escapeHtml(snippet.origin || '') + '">' + escapeHtml(labels.join(' · ')) + '</div>' : '';
     }
 
     function renderCard(card) {

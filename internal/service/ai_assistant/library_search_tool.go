@@ -281,6 +281,7 @@ type LocalEvidenceMatch struct {
 }
 
 type assistantLocalCandidate struct {
+	origin  string
 	paperID int64
 	title   string
 	field   string
@@ -417,6 +418,9 @@ func FindLocalEvidenceMatches(paper model.Paper, terms []string, limit int) []Lo
 	}
 	candidates := findAssistantLocalCandidates(paper, terms)
 	sort.SliceStable(candidates, func(i, j int) bool {
+		if (candidates[i].origin == "original") != (candidates[j].origin == "original") {
+			return candidates[i].origin == "original"
+		}
 		if candidates[i].score != candidates[j].score {
 			return candidates[i].score > candidates[j].score
 		}
@@ -442,6 +446,7 @@ func FindLocalEvidenceMatches(paper model.Paper, terms []string, limit int) []Lo
 			Location: section,
 			Snippet: research.Snippet{
 				Text:          cand.text,
+				Origin:        cand.origin,
 				SnippetKind:   cand.field,
 				Section:       section,
 				SnippetOffset: research.SnippetOffset{Start: cand.start, End: cand.end},
@@ -527,7 +532,7 @@ func findAssistantLocalCandidates(paper model.Paper, terms []string) []assistant
 	}{
 		{name: "title", text: paper.Title, boost: 1.4},
 		{name: "abstract", text: paper.AbstractText, boost: 1.25},
-		{name: "notes", text: paper.NotesText + "\n" + paper.PaperNotesText, boost: 1.15},
+		{name: "notes", text: paper.NotesText + "\n" + paper.PaperNotesText, boost: 0.6},
 		{name: "body", text: paper.PDFText, boost: 1.0},
 	}
 
@@ -553,7 +558,12 @@ func findAssistantLocalCandidates(paper model.Paper, terms []string) []assistant
 				start := pos + idx
 				end := start + len(lowerTerm)
 				snippet, runeStart, runeEnd := snippetAroundEvidence(text, start, end, 420)
+				origin := "original"
+				if field.name == "notes" {
+					origin = NoteEvidenceOrigin(paper.NotesText, paper.PaperNotesText)
+				}
 				candidates = append(candidates, assistantLocalCandidate{
+					origin:  origin,
 					paperID: paper.ID,
 					title:   paper.Title,
 					field:   field.name,

@@ -79,6 +79,7 @@ type SnippetOffset struct {
 
 // Snippet is one matching text excerpt.
 type Snippet struct {
+	Origin        string        `json:"origin,omitempty"`
 	Text          string        `json:"text"`
 	SnippetKind   string        `json:"snippetKind,omitempty"` // title | abstract | body
 	Section       string        `json:"section,omitempty"`
