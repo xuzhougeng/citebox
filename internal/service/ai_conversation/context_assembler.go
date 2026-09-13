@@ -153,11 +153,8 @@ func budgetedEvidenceBlock(text string, budget int) string {
 	return render(n)
 }
 
-// Per-paper ceilings; the available turn budget can reduce either limit.
-const (
-	maxPinnedAbstractRunes = 4000
-	maxPinnedBodyRunes     = 24000
-)
+// Abstracts retain a ceiling; body coverage is limited only by the turn budget.
+const maxPinnedAbstractRunes = 4000
 
 // budgetedPinnedPaperBlock retains the abstract first, then includes as much
 // body text as the paper's share permits. Truncation disclosure is budgeted too.
@@ -167,7 +164,7 @@ func budgetedPinnedPaperBlock(paper model.Paper, budget int) (string, PinnedPape
 	totalBody := len([]rune(body))
 	usage := PinnedPaperContextUsage{PaperID: paper.ID, Title: paper.Title, TotalBodyRunes: totalBody}
 	abstractLimit := min(len(abstract), maxPinnedAbstractRunes)
-	bodyLimit := min(totalBody, maxPinnedBodyRunes)
+	bodyLimit := totalBody
 	render := func(abstractLength, bodyLength int) string {
 		abstractText := string(abstract[:abstractLength])
 		if abstractLength < len(abstract) {

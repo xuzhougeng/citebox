@@ -12,8 +12,8 @@ import (
 
 const maxAutoAttachedFigures = 4
 
-// ContextUsage is a live-turn disclosure, emitted immediately before the
-// provider call. Image counts describe inputs sent, not provider comprehension.
+// ContextUsage is emitted immediately before the provider call and saved
+// with the assistant message through its turn run. Image counts describe inputs sent, not provider comprehension.
 type ContextUsage struct {
 	Papers              []PinnedPaperContextUsage `json:"papers"`
 	RequestedImages     int                       `json:"requested_images"`
@@ -32,19 +32,40 @@ func (s *Service) turnFigureIDs(input ai_assistant.RequestContext, pinned []repo
 	if len(ids) > 0 || !input.AutoAttachFigures || s.papers == nil {
 		return ids
 	}
+	var papers [][]int64
+	seen := make(map[int64]bool)
 	for _, pp := range pinned {
 		paper, err := s.papers.GetPaperDetail(pp.PaperID)
 		if err != nil || paper == nil {
 			continue
 		}
+		var figures []int64
 		for _, figure := range paper.Figures {
-			if figure.ParentFigureID != nil || figure.ID <= 0 {
+			if figure.ParentFigureID != nil || figure.ID <= 0 || seen[figure.ID] {
 				continue
 			}
-			ids = dedupeInt64(append(ids, figure.ID))
+			seen[figure.ID] = true
+			figures = append(figures, figure.ID)
+		}
+		if len(figures) > 0 {
+			papers = append(papers, figures)
+		}
+	}
+	// Give each pinned paper a turn before taking another figure from any paper.
+	for round := 0; ; round++ {
+		added := false
+		for _, figures := range papers {
+			if round >= len(figures) {
+				continue
+			}
+			ids = append(ids, figures[round])
+			added = true
 			if len(ids) == maxAutoAttachedFigures {
 				return ids
 			}
+		}
+		if !added {
+			break
 		}
 	}
 	return ids

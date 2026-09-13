@@ -930,8 +930,17 @@
         },
 
         _renderCardsInto(bubble, cards) {
-            if (!bubble || !window.AIReader || !window.AIReader.resultCards) return;
-            const html = window.AIReader.resultCards.render(cards);
+            if (!bubble) return;
+            const resultCards = (Array.isArray(cards) ? cards : []).filter((card) => {
+                if (!card || (card.type || card.card_type) !== 'context_usage') return true;
+                const usage = card.payload || this._parseJSON(card.payload_json);
+                if (usage && typeof usage === 'object' && !Array.isArray(usage)) {
+                    this._renderContextUsage(bubble, usage);
+                }
+                return false;
+            });
+            if (!window.AIReader || !window.AIReader.resultCards) return;
+            const html = window.AIReader.resultCards.render(resultCards);
             const artifacts = this._ensureMessageParts(bubble).artifacts;
             let slot = artifacts.querySelector(':scope > .ai-message-cards-slot');
             if (!slot) {

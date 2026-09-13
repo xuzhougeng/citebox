@@ -21,6 +21,18 @@ func (s *Service) emitStreamEvent(in SendMessageInput, event StreamEvent) error 
 	return nil
 }
 
+// Keep disclosure separate from orchestration decisions: a context card alone
+// must not enable tool fallback or synthesize tool execution stages.
+func (s *Service) persistContextRunArtifacts(conversationID, userMsgID, assistantMsgID int64, mode string, out ai_assistant.RunOutput, usage ContextUsage) {
+	if out.Intent == "" {
+		out.Intent = ai_assistant.IntentChat
+	}
+	out.Cards = append(append([]ai_assistant.ResultCard(nil), out.Cards...), ai_assistant.ResultCard{
+		Type: "context_usage", Payload: usage,
+	})
+	s.persistRunArtifacts(conversationID, userMsgID, assistantMsgID, mode, out)
+}
+
 func (s *Service) persistRunArtifacts(conversationID, userMsgID, assistantMsgID int64, mode string, out ai_assistant.RunOutput) {
 	runID, err := s.repo.CreateTurnRun(repository.AITurnRun{
 		ConversationID:     conversationID,

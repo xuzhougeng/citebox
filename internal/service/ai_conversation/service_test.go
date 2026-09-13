@@ -649,14 +649,14 @@ func TestSendMessageUsesOrchestratorEventsAndPersistsArtifacts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListResultCards: %v", err)
 	}
-	if len(cards) != 1 || cards[0].CardType != "figure_result" || !strings.Contains(cards[0].PayloadJSON, "Figure 1") {
+	if len(cards) != 2 || cards[1].CardType != "context_usage" || cards[0].CardType != "figure_result" || !strings.Contains(cards[0].PayloadJSON, "Figure 1") {
 		t.Fatalf("cards = %+v", cards)
 	}
 	conv, err := svc.GetConversation(convID)
 	if err != nil {
 		t.Fatalf("GetConversation: %v", err)
 	}
-	if len(conv.TurnRuns) != 1 || len(conv.TurnRuns[0].Cards) != 1 {
+	if len(conv.TurnRuns) != 1 || len(conv.TurnRuns[0].Cards) != 2 {
 		t.Fatalf("conversation turn runs = %+v", conv.TurnRuns)
 	}
 }
@@ -850,7 +850,7 @@ func TestSendMessagePersistsOrchestratorArtifactsForStoppedStream(t *testing.T) 
 	if err != nil {
 		t.Fatalf("ListResultCards: %v", err)
 	}
-	if len(cards) != 1 || cards[0].CardType != "figure_result" {
+	if len(cards) != 2 || cards[1].CardType != "context_usage" || cards[0].CardType != "figure_result" {
 		t.Fatalf("cards = %+v", cards)
 	}
 }

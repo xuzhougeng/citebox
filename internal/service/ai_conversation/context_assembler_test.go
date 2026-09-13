@@ -14,7 +14,7 @@ func TestAssembleForTurnIncludesFullAbstractAndTruncationHint(t *testing.T) {
 
 	paperID := mustInsertPaperForTest(t, libRepo, "Spatial Omni Paper", "10.1/spatial")
 	abstract := strings.Repeat("摘要句子。", 400) // 2000 runes, well above the old 800 cap
-	longTail := strings.Repeat("RESULTS AND METHODS tail ", 1500)
+	longTail := strings.Repeat("RESULTS AND METHODS tail ", 7000)
 	pdfText := "INTRODUCTION head " + longTail
 	if _, err := libRepo.DB().Exec(
 		`UPDATE papers SET abstract_text = ?, pdf_text = ? WHERE id = ?`,
@@ -41,11 +41,11 @@ func TestAssembleForTurnIncludesFullAbstractAndTruncationHint(t *testing.T) {
 	}
 }
 
-func TestAssembleForTurnKeepsBodyWholeUnderCap(t *testing.T) {
+func TestAssembleForTurnKeepsBodyWholeWithinBudget(t *testing.T) {
 	svc, libRepo, _ := newServiceForTest(t)
 
 	paperID := mustInsertPaperForTest(t, libRepo, "Short Body Paper", "10.1/short")
-	pdfText := strings.Repeat("short body ", 200) // 2400 runes, under the cap
+	pdfText := strings.Repeat("short body ", 200) // Short body fits comfortably within the turn budget
 	if _, err := libRepo.DB().Exec(
 		`UPDATE papers SET pdf_text = ? WHERE id = ?`, pdfText, paperID); err != nil {
 		t.Fatalf("update paper text: %v", err)
@@ -63,7 +63,7 @@ func TestAssembleForTurnKeepsBodyWholeUnderCap(t *testing.T) {
 		t.Fatalf("short body should not carry the truncation hint")
 	}
 	if !strings.Contains(asm.userPrompt, strings.TrimRight(pdfText, " ")) {
-		t.Fatalf("pinned block should include the whole body under the cap")
+		t.Fatalf("pinned block should include the whole body within the budget")
 	}
 }
 

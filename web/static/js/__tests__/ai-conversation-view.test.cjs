@@ -8,7 +8,7 @@ const vm = require('node:vm');
 
 const modulePath = path.resolve(__dirname, '..', 'ai-conversation-view.js');
 
-function loadView(parseToolTags, utils, renderMentionHTML) {
+function loadView(parseToolTags, utils, renderMentionHTML, resultCards) {
     const code = fs.readFileSync(modulePath, 'utf8');
     const context = {
         console: console,
@@ -17,6 +17,7 @@ function loadView(parseToolTags, utils, renderMentionHTML) {
         },
         window: {
             AIReader: {
+                resultCards,
                 toolTags: {
                     parseToolTags: parseToolTags || (() => ({ intentHint: '', sources: [], conflict: null })),
                     renderMentionHTML: renderMentionHTML || ((value) => value),
@@ -232,4 +233,59 @@ test('_renderMessageContent uses shared mention renderer for user messages', () 
 
     assert.equal(mentionCall, '@image-gen hi');
     assert.equal(parts.text.innerHTML, '<span class="ai-token-mention ai-token-tool">@image-gen</span> hi');
+});
+
+
+test('saved context usage restores zero-image coverage alongside other run artifacts', () => {
+    const subject = createSubject();
+    const bubble = {};
+    const usage = {
+        papers: [{ paper_id: 1, title: 'Saved study', included_body_runes: 45000, total_body_runes: 45000, excerpt_count: 1 }],
+        attached_images: 0, requested_images: 4, image_reason: 'capability_unknown', evidence_snippets: 2,
+    };
+    subject._state.turnRuns = [{
+        assistant_message_id: 42,
+        cards: [
+            { card_type: 'paper_result', payload_json: '{"paper_id":1}' },
+            { card_type: 'context_usage', payload_json: JSON.stringify(usage) },
+        ],
+    }];
+    let restored;
+    subject._renderContextUsage = (el, value) => { restored = { el, value }; };
+    subject._attachTurnRunArtifacts({ 42: bubble });
+    assert.equal(restored.el, bubble);
+    assert.deepEqual(JSON.parse(JSON.stringify(restored.value)), usage);
+    const text = subject._contextUsageLines(restored.value).join(' ');
+    assert.match(text, /45000 \/ 45000/);
+    assert.match(text, /图片输入 0 \/ 4/);
+    assert.match(text, /图片能力未确认/);
+});
+
+test('invalid saved coverage does not overwrite historical image fallback', () => {
+    const subject = createSubject();
+    let calls = 0;
+    subject._renderContextUsage = () => { calls++; };
+    for (const payload_json of ['{broken', 'null', '[]', '"invalid"']) {
+        subject._renderCardsInto({}, [{ card_type: 'context_usage', payload_json }]);
+    }
+    assert.equal(calls, 0);
+});
+
+
+test('coverage restores without becoming a generic result card or hiding tool cards', () => {
+    let renderedCards;
+    const subject = Object.create(loadView(null, null, null, {
+        render(cards) { renderedCards = cards; return 'tool cards'; },
+    }));
+    const slot = {};
+    subject._ensureMessageParts = () => ({ artifacts: { querySelector: () => slot } });
+    subject._scrollConversationToBottom = () => {};
+    let usage;
+    subject._renderContextUsage = (_, value) => { usage = value; };
+    const toolCard = { card_type: 'paper_read', payload: { paper_id: 1 } };
+    subject._renderCardsInto({}, [toolCard, { card_type: 'context_usage', payload_json: '{"attached_images":0}' }]);
+    assert.equal(renderedCards.length, 1);
+    assert.equal(renderedCards[0], toolCard);
+    assert.equal(usage.attached_images, 0);
+    assert.equal(slot.innerHTML, 'tool cards');
 });

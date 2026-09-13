@@ -459,8 +459,8 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput, onDelta 
 			})
 			if persistErr != nil {
 				s.logger.Warn("ai_conversation: persist stopped message failed", "error", persistErr)
-			} else if runUsed {
-				s.persistRunArtifacts(in.ConversationID, userMsgID, asstID, "stopped", runOut)
+			} else {
+				s.persistContextRunArtifacts(in.ConversationID, userMsgID, asstID, "stopped", runOut, usage)
 			}
 			_ = s.repo.TouchConversation(in.ConversationID)
 		}
@@ -484,7 +484,7 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput, onDelta 
 					return SendMessageResult{}, persistErr
 				}
 				_ = s.repo.TouchConversation(in.ConversationID)
-				s.persistRunArtifacts(in.ConversationID, userMsgID, asstID, "completed", runOut)
+				s.persistContextRunArtifacts(in.ConversationID, userMsgID, asstID, "completed", runOut, usage)
 				return SendMessageResult{
 					ConversationID:   in.ConversationID,
 					UserMessage:      Message{ID: userMsgID, Role: "user", Content: in.Content},
@@ -513,9 +513,7 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput, onDelta 
 		return SendMessageResult{}, err
 	}
 	_ = s.repo.TouchConversation(in.ConversationID)
-	if runUsed {
-		s.persistRunArtifacts(in.ConversationID, userMsgID, asstID, mode, runOut)
-	}
+	s.persistContextRunArtifacts(in.ConversationID, userMsgID, asstID, mode, runOut, usage)
 
 	if conv.Title == "" && !conv.TitleLocked && s.titleCaller != nil {
 		go func(convID int64, settings model.AISettings, userText, asstText string) {
