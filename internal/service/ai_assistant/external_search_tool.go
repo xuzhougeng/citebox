@@ -317,6 +317,7 @@ func (t *ExternalSearchTool) Run(ctx context.Context, in ToolInput) (ToolResult,
 				I:          len(citations) + 1,
 				S2PaperID:  externalSemanticScholarID(p),
 				ExternalID: externalID(p),
+				SourceURL:  p.URL,
 				Title:      p.Title,
 				Source:     "external:" + strings.Join(labels, "+"),
 				Snippet: research.Snippet{

@@ -6,10 +6,10 @@ func (r *AIConversationRepository) GetNoteSource(conversationID, messageID int64
 	var m AIMessage
 	var question string
 	err := r.db.QueryRow(`SELECT m.id, m.conversation_id, m.role, m.content,
-        COALESCE(m.provider,''), COALESCE(m.model,''), m.created_at,
+        COALESCE(m.provider,''), COALESCE(m.model,''), COALESCE(m.mode,''), COALESCE(m.citations_json,''), m.created_at,
         COALESCE((SELECT content FROM ai_messages WHERE conversation_id=m.conversation_id AND role='user' AND id<m.id ORDER BY id DESC LIMIT 1),'')
         FROM ai_messages m WHERE m.conversation_id=? AND m.id=?`, conversationID, messageID).
-		Scan(&m.ID, &m.ConversationID, &m.Role, &m.Content, &m.Provider, &m.Model, &m.CreatedAt, &question)
+		Scan(&m.ID, &m.ConversationID, &m.Role, &m.Content, &m.Provider, &m.Model, &m.Mode, &m.CitationsJSON, &m.CreatedAt, &question)
 	return m, question, err
 }
 

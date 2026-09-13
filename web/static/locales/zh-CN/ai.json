@@ -262,5 +262,7 @@
     "ai.evidence_verdict_related_only": "仅相关",
     "ai.evidence_verdict_insufficient": "证据不足",
     "ai.evidence_verdict_unassessed": "尚未判定",
-    "ai.evidence_verdict_note_only": "仅作笔记参考"
+    "ai.evidence_verdict_note_only": "仅作笔记参考",
+    "ai.citation_open_source": "查看原文",
+    "ai.citation_page": "第 {page} 页"
 }

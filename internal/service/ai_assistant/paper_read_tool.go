@@ -116,6 +116,8 @@ func (t *PaperReadTool) Run(ctx context.Context, in ToolInput) (ToolResult, erro
 		note = fmt.Sprintf("已读取 %d 篇，跳过 %d 篇。", len(items), skipped)
 	}
 
+	EnrichCitationSources(t.papers, citations)
+
 	return ToolResult{
 		Process: ProcessSummary{
 			Intent: IntentPaperRead,

@@ -695,3 +695,7 @@ AI 回答采用原子条件更新追加到 `papers.paper_notes_text`，不新增
 ### Evidence provenance in AI artifacts
 
 The existing citation JSON and result-card payloads retain evidence origin and provisional support/contradiction judgments. Paper notes remain text fields. Notes containing prior AI-answer source links are treated as derived AI/mixed content during retrieval; unmarked historical notes are user-note context. Strict evidence mode uses original paper fields only. This change adds no tables or migrations and does not rewrite existing notes.
+
+### Saved AI citation snapshots
+
+AI message citation JSON optionally stores source URL, page and a SHA-256 revision of the original retrieved field. The note-source repository query loads this JSON and message completion mode. Appending an answer to `paper_notes_text` adds referenced excerpts as Markdown snapshot text using those historical values, not current paper metadata. Existing atomic append and source-link deduplication remain in effect. No schema migration or separate receipt table is added; deleting a conversation does not remove saved note snapshots.
