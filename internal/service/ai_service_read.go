@@ -7,6 +7,7 @@ import (
 
 	"github.com/xuzhougeng/citebox/internal/apperr"
 	"github.com/xuzhougeng/citebox/internal/model"
+	"github.com/xuzhougeng/citebox/internal/service/ai_context"
 )
 
 func (s *AIService) ReadPaper(ctx context.Context, input model.AIReadRequest) (*model.AIReadResponse, error) {
@@ -213,6 +214,13 @@ func (s *AIService) prepareRead(input model.AIReadRequest, structuredOutput bool
 
 	systemPrompt, userPrompt := buildAIPrompts(*settings, paper, groups, tags, action, question, promptQuestion, history, figureSummaries, len(images), activeRolePrompts, structuredOutput)
 
+	budget := settings.ContextBudgetTokens
+	if budget <= 0 {
+		budget = 32000
+	}
+	if ai_context.EstimateTokens(systemPrompt)+ai_context.EstimateTokens(userPrompt) > budget {
+		return nil, apperr.New(apperr.CodeInvalidArgument, "问题或场景指令超过上下文预算，请缩短输入或增加预算")
+	}
 	runtimeSettings := *settings
 	applyAIModelConfig(&runtimeSettings, modelConfig)
 

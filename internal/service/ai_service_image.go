@@ -30,7 +30,8 @@ func (s *AIService) loadFigureInputsWithOptions(paper *model.Paper, figures []mo
 	budgetReached := false
 	for _, figure := range figures {
 		summary := buildAIFigureSummary(figure, action)
-		summaries = append(summaries, summary)
+		summaryIndex := len(summaries)
+		summaries = append(summaries, "仅文字（图片未加载）："+summary)
 
 		if !includeImagePayloads {
 			continue
@@ -77,6 +78,7 @@ func (s *AIService) loadFigureInputsWithOptions(paper *model.Paper, figures []mo
 			MIMEType: compressedMIMEType,
 			Data:     base64.StdEncoding.EncodeToString(compressedData),
 		})
+		summaries[summaryIndex] = fmt.Sprintf("图片文件序号 %d：%s", len(images), summary)
 		totalBytes += len(compressedData)
 	}
 

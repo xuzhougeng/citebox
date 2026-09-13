@@ -360,7 +360,7 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput, onDelta 
 	if strings.EqualFold(strings.TrimSpace(in.IntentHint), "image_generation") {
 		figureInput = ai_assistant.RequestContext{}
 	}
-	attachedImages, figureBlock, usage := s.loadTurnFigures(ctx, figureInput, pinned, *settings)
+	attachedImages, figureBlock, usage := s.loadTurnFiguresForQuestion(ctx, figureInput, pinned, *settings, in.Content)
 	attachmentBlock += figureBlock
 	includedFigures := len(attachedImages)
 	var evidenceBlock string
