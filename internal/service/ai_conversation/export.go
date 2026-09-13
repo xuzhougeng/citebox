@@ -44,7 +44,15 @@ func (s *Service) ExportMarkdown(id int64) (string, string, error) {
 		if m.Role == "assistant" {
 			who = fmt.Sprintf("AI (%s/%s)", m.Provider, m.Model)
 		}
-		fmt.Fprintf(&b, "## %s\n\n%s\n\n", who, m.Content)
+		content := m.Content
+		if m.Role == "assistant" {
+			var citeErr error
+			content, citeErr = answerWithCitationSnapshots(content, m.CitationsJSON, "zh-CN")
+			if citeErr != nil {
+				return "", "", citeErr
+			}
+		}
+		fmt.Fprintf(&b, "## %s\n\n%s\n\n", who, content)
 	}
 	filename := safeFilename(title) + ".md"
 	return b.String(), filename, nil

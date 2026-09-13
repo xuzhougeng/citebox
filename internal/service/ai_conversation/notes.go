@@ -20,7 +20,7 @@ func (s *Service) AppendAnswerToPaperNote(conversationID, messageID, paperID int
 	if err != nil {
 		return false, err
 	}
-	if message.Role != "assistant" || strings.TrimSpace(message.Content) == "" {
+	if message.Role != "assistant" || strings.TrimSpace(message.Content) == "" || message.Mode == "stopped" || message.Mode == "failed" {
 		return false, apperr.New(apperr.CodeInvalidArgument, "only completed answers can be saved")
 	}
 	pinned, err := s.repo.ListPinnedPapers(conversationID)
@@ -42,8 +42,12 @@ func (s *Service) AppendAnswerToPaperNote(conversationID, messageID, paperID int
 	if language == "en" {
 		heading, questionLabel, sourceLabel, notice = "AI Assistant", "Question", "Source", "AI-generated notes; verify against the original paper."
 	}
+	answer, err := answerWithCitationSnapshots(message.Content, message.CitationsJSON, language)
+	if err != nil {
+		return false, err
+	}
 	block := fmt.Sprintf("## %s · #%d\n\n> %s\n\n%s: %s\n\n%s: [#%d](/ai?conversation=%d&message=%d) · %s · %s / %s\n\n%s",
-		heading, messageID, notice, questionLabel, question, sourceLabel, conversationID, conversationID, messageID, message.CreatedAt.UTC().Format("2006-01-02 15:04 UTC"), message.Provider, message.Model, message.Content)
+		heading, messageID, notice, questionLabel, question, sourceLabel, conversationID, conversationID, messageID, message.CreatedAt.UTC().Format("2006-01-02 15:04 UTC"), message.Provider, message.Model, answer)
 	saved, err := s.papers.AppendAINote(paperID, marker, block)
 	if errors.Is(err, sql.ErrNoRows) {
 		return false, apperr.New(apperr.CodeNotFound, "paper not found")

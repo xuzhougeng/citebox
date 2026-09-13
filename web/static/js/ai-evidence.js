@@ -16,35 +16,59 @@
     }
 
     let tooltipEl = null;
+    let hideTimer = null;
+
+    function t(key, fallback) {
+        return window.CiteBoxI18n ? window.CiteBoxI18n.t(key, fallback) : fallback;
+    }
+
+    function citationURL(citation) {
+        const raw = citation.source_url || (citation.s2_paper_id ? 'https://www.semanticscholar.org/paper/' + encodeURIComponent(citation.s2_paper_id) : '');
+        if (!raw) return '';
+        try {
+            const url = new URL(raw, window.location.origin);
+            if (!['https:', 'http:'].includes(url.protocol)) return '';
+            return url.href;
+        } catch (_) { return ''; }
+    }
+
 
     function ensureTooltip() {
         if (tooltipEl) return tooltipEl;
         tooltipEl = document.createElement('div');
         tooltipEl.className = 'ai-citation-tooltip';
         tooltipEl.hidden = true;
+        tooltipEl.addEventListener('mouseenter', () => clearTimeout(hideTimer));
+        tooltipEl.addEventListener('mouseleave', hideTooltip);
+        tooltipEl.addEventListener('focusin', () => clearTimeout(hideTimer));
+        tooltipEl.addEventListener('focusout', scheduleHideTooltip);
         document.body.appendChild(tooltipEl);
         return tooltipEl;
     }
 
     function showTooltip(anchor, citation) {
-        const t = ensureTooltip();
-        const paperTitle = citation._title || '';
+        clearTimeout(hideTimer);
+        const tooltip = ensureTooltip();
+        const paperTitle = citation.title || citation._title || '';
         const section = citation.snippet && (citation.snippet.section || citation.snippet.snippetKind) || '';
         const text = citation.snippet && citation.snippet.text || '';
         const truncated = text.length > 400 ? text.slice(0, 400) + '…' : text;
-        let srcLink = '';
-        if (citation.s2_paper_id) {
-            srcLink = `<a class="src" href="https://www.semanticscholar.org/paper/${escapeHtml(citation.s2_paper_id)}" target="_blank" rel="noopener">在 Semantic Scholar 中查看 →</a>`;
-        }
-        t.innerHTML = '' +
+        const href = citationURL(citation);
+        const srcLink = href ? `<a class="src" href="${escapeHtml(href)}">${escapeHtml(t('ai.citation_open_source', 'Open source'))}</a>` : '';
+        const page = citation.page ? t('ai.citation_page', 'Page {page}').replace('{page}', citation.page) : '';
+        tooltip.innerHTML = '' +
             (paperTitle ? `<h4>${escapeHtml(paperTitle)}</h4>` : '') +
-            (section ? `<div class="meta">${escapeHtml(section)}</div>` : '') +
-            `<div class="snippet">${escapeHtml(truncated)}</div>` +
-            srcLink;
+            ([section, page].filter(Boolean).length ? `<div class="meta">${escapeHtml([section, page].filter(Boolean).join(' · '))}</div>` : '') +
+            `<div class="snippet">${escapeHtml(truncated)}</div>` + srcLink;
         const r = anchor.getBoundingClientRect();
-        t.style.left = (window.scrollX + r.left) + 'px';
-        t.style.top = (window.scrollY + r.bottom + 4) + 'px';
-        t.hidden = false;
+        tooltip.style.left = (window.scrollX + r.left) + 'px';
+        tooltip.style.top = (window.scrollY + r.bottom + 4) + 'px';
+        tooltip.hidden = false;
+    }
+
+    function scheduleHideTooltip() {
+        clearTimeout(hideTimer);
+        hideTimer = setTimeout(hideTooltip, 150);
     }
 
     function hideTooltip() {
@@ -87,7 +111,7 @@
                 const text = node.nodeValue;
                 if (!/\[\d+\]/.test(text)) continue;
                 const parent = textNodeParentElement(node);
-                if (parent && parent.closest('.ai-citation')) continue;
+                if (parent && parent.closest('.ai-citation, a, code, pre')) continue;
                 replacements.push(node);
             }
             replacements.forEach((textNode) => {
@@ -103,15 +127,17 @@
                     const idx = parseInt(m[1], 10);
                     const c = byIndex[idx];
                     if (c) {
-                        const sup = document.createElement('sup');
+                        const href = citationURL(c);
+                        const sup = document.createElement(href ? 'a' : 'sup');
+                        if (href) sup.href = href;
                         sup.className = 'ai-citation';
                         sup.dataset.cite = String(idx);
                         sup.textContent = '[' + idx + ']';
                         sup.tabIndex = 0;
                         sup.addEventListener('mouseenter', () => showTooltip(sup, c));
                         sup.addEventListener('focus', () => showTooltip(sup, c));
-                        sup.addEventListener('mouseleave', hideTooltip);
-                        sup.addEventListener('blur', hideTooltip);
+                        sup.addEventListener('mouseleave', scheduleHideTooltip);
+                        sup.addEventListener('blur', scheduleHideTooltip);
                         frag.appendChild(sup);
                     } else {
                         frag.appendChild(document.createTextNode(m[0]));

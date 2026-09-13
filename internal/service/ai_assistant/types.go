@@ -100,16 +100,19 @@ type ToolCallSummary struct {
 }
 
 type Citation struct {
-	Verdict    string           `json:"verdict,omitempty"`
-	Assessment string           `json:"assessment,omitempty"`
-	I          int              `json:"i"`
-	PaperID    int64            `json:"paper_id,omitempty"`
-	ExternalID string           `json:"external_id,omitempty"`
-	S2PaperID  string           `json:"s2_paper_id,omitempty"`
-	Title      string           `json:"title,omitempty"`
-	Source     string           `json:"source,omitempty"`
-	Snippet    research.Snippet `json:"snippet"`
-	Score      float64          `json:"score,omitempty"`
+	Page           *int             `json:"page,omitempty"`
+	SourceURL      string           `json:"source_url,omitempty"`
+	SourceRevision string           `json:"source_revision,omitempty"`
+	Verdict        string           `json:"verdict,omitempty"`
+	Assessment     string           `json:"assessment,omitempty"`
+	I              int              `json:"i"`
+	PaperID        int64            `json:"paper_id,omitempty"`
+	ExternalID     string           `json:"external_id,omitempty"`
+	S2PaperID      string           `json:"s2_paper_id,omitempty"`
+	Title          string           `json:"title,omitempty"`
+	Source         string           `json:"source,omitempty"`
+	Snippet        research.Snippet `json:"snippet"`
+	Score          float64          `json:"score,omitempty"`
 }
 
 type ToolResult struct {

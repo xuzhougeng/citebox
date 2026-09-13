@@ -262,5 +262,7 @@
     "ai.evidence_verdict_related_only": "Related only",
     "ai.evidence_verdict_insufficient": "Insufficient evidence",
     "ai.evidence_verdict_unassessed": "Not assessed",
-    "ai.evidence_verdict_note_only": "Note context only"
+    "ai.evidence_verdict_note_only": "Note context only",
+    "ai.citation_open_source": "Open source",
+    "ai.citation_page": "Page {page}"
 }

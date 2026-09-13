@@ -232,6 +232,8 @@ func (t *LibrarySearchTool) Run(ctx context.Context, in ToolInput) (ToolResult, 
 		answerContext = fmt.Sprintf("没有命中：内部全文搜索扫描了 %d 篇候选文献，没有找到符合用户问题的证据。", len(ids))
 	}
 
+	EnrichCitationSources(t.papers, citations)
+
 	return ToolResult{
 		Process: ProcessSummary{
 			Intent: IntentLibrarySearch,

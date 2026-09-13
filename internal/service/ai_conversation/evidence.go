@@ -11,6 +11,7 @@ import (
 
 	"github.com/xuzhougeng/citebox/internal/model"
 	"github.com/xuzhougeng/citebox/internal/repository"
+	"github.com/xuzhougeng/citebox/internal/service/ai_assistant"
 	"github.com/xuzhougeng/citebox/internal/service/ai_external"
 	"github.com/xuzhougeng/citebox/internal/service/research"
 )
@@ -44,16 +45,7 @@ type EvidenceOptions struct {
 }
 
 // Citation is one entry in the persisted citations_json array.
-type Citation struct {
-	I          int              `json:"i"`
-	PaperID    int64            `json:"paper_id"`
-	ExternalID string           `json:"external_id"`
-	S2PaperID  string           `json:"s2_paper_id,omitempty"`
-	Title      string           `json:"title,omitempty"`
-	Source     string           `json:"source,omitempty"`
-	Snippet    research.Snippet `json:"snippet"`
-	Score      float64          `json:"score"`
-}
+type Citation = ai_assistant.Citation
 
 // injectEvidence builds an evidence prompt fragment from local library text
 // first (with pinned papers prioritized), and optionally augments it with
@@ -79,6 +71,7 @@ func injectEvidence(ctx context.Context, papers PaperDetailGetter, searcher Exte
 		citations = append(citations, external...)
 	}
 
+	ai_assistant.EnrichCitationSources(papers, citations)
 	for i := range citations {
 		citations[i].I = i + 1
 	}
@@ -431,7 +424,7 @@ func citationsFromExternalPapers(papers []ai_external.Paper, idMap map[string]re
 			score -= float64(i) * 0.03
 		}
 		citations = append(citations, Citation{
-			PaperID: paperID, ExternalID: ext, S2PaperID: externalSemanticScholarID(p), Title: title,
+			PaperID: paperID, SourceURL: p.URL, ExternalID: ext, S2PaperID: externalSemanticScholarID(p), Title: title,
 			Source: externalCitationSource(p),
 			Snippet: research.Snippet{
 				Text:        snippet,
