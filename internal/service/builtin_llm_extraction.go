@@ -86,7 +86,7 @@ func (s *LibraryService) extractBuiltInLLMResult(ctx context.Context, paperID in
 			ImageData:  pageDataURL,
 		})
 		if err != nil {
-			return nil, err
+			return nil, apperr.Wrap(apperr.CodeOf(err), fmt.Sprintf("内置 AI 解析第 %d / %d 页失败: %s", pageNumber, pageCount, err.Error()), err)
 		}
 
 		for regionIndex, region := range detected.Regions {

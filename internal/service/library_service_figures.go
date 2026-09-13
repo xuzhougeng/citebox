@@ -491,11 +491,10 @@ func (s *LibraryService) ManualExtractFigures(id int64, params ManualExtractPara
 	}
 	removeFiles(replacedPaths)
 
-	if paper.ExtractionStatus == "failed" || paper.ExtractionStatus == "cancelled" || paper.ExtractionStatus == manualPendingStatus || (paper.ExtractionStatus == "completed" && strings.TrimSpace(paper.PDFText) == "") {
+	// Manual images do not resolve an automatic extraction failure. Preserve its
+	// diagnostic message so saving a region cannot erase the original cause.
+	if paper.ExtractionStatus == manualPendingStatus || (paper.ExtractionStatus == "completed" && strings.TrimSpace(paper.PDFText) == "") {
 		message := fmt.Sprintf("已人工录入 %d 张图片，可继续补充或替换其他图片", len(items))
-		if paper.ExtractionStatus == "failed" || paper.ExtractionStatus == "cancelled" {
-			message = fmt.Sprintf("自动解析未完成，已人工录入 %d 张图片", len(items))
-		}
 		if err := s.repo.UpdatePaperExtractionState(id, paper.ExtractionStatus, message, paper.ExtractorJobID); err != nil && !apperr.IsCode(err, apperr.CodeNotFound) {
 			s.logger.Warn("update paper message after manual extraction failed",
 				"paper_id", id,

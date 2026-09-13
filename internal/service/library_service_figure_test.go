@@ -573,3 +573,25 @@ func containsString(values []string, target string) bool {
 	}
 	return false
 }
+
+func TestManualExtractionPreservesFailureDiagnostics(t *testing.T) {
+	for _, status := range []string{"failed", "cancelled"} {
+		t.Run(status, func(t *testing.T) {
+			svc, repo, _ := newTestService(t)
+			paper := createTestPaper(t, repo)
+			message := "内置 AI 解析第 7 / 56 页失败: OpenAI Chat Completions 未返回文本内容"
+			if err := repo.UpdatePaperExtractionState(paper.ID, status, message, "job-1"); err != nil {
+				t.Fatal(err)
+			}
+			for i := 0; i < 2; i++ {
+				updated, _, err := svc.ManualExtractFigures(paper.ID, ManualExtractParams{Regions: []model.ManualExtractionRegion{{PageNumber: 1, X: 0.1, Y: 0.1, Width: 0.3, Height: 0.3, ImageData: testPNGDataURL(t, 24, 18)}}})
+				if err != nil {
+					t.Fatal(err)
+				}
+				if updated.ExtractionStatus != status || updated.ExtractorMessage != message || updated.ExtractorJobID != "job-1" {
+					t.Fatalf("diagnostic changed: %+v", updated)
+				}
+			}
+		})
+	}
+}
