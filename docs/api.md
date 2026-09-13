@@ -480,6 +480,7 @@ AI 流式阅读通过：
 用途：
 
 - 提交人工选框生成图片
+- 文献原状态为 `failed` / `cancelled` 时，保存图片保留原有 `extraction_status`、`extractor_message` 和任务 ID，避免覆盖自动解析失败原因；手工图片保存成功不代表自动解析完成。
 - 人工流程中的全文提取不依赖此接口，前端会通过单独的 `POST /api/papers/{id}/pdf-text` 保存全文
 
 请求体：

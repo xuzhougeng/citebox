@@ -358,20 +358,7 @@ func (s *AIService) callOpenAIChatCompletions(ctx context.Context, settings mode
 		return "", err
 	}
 
-	var response struct {
-		Choices []struct {
-			Message struct {
-				Content string `json:"content"`
-			} `json:"message"`
-		} `json:"choices"`
-	}
-	if err := json.Unmarshal(body, &response); err != nil {
-		return "", apperr.Wrap(apperr.CodeUnavailable, "解析 OpenAI Chat Completions 响应失败", err)
-	}
-	if len(response.Choices) == 0 || strings.TrimSpace(response.Choices[0].Message.Content) == "" {
-		return "", apperr.New(apperr.CodeUnavailable, "OpenAI Chat Completions 未返回文本内容")
-	}
-	return response.Choices[0].Message.Content, nil
+	return parseOpenAIChatCompletionText(body)
 }
 
 func (s *AIService) callAnthropicMessages(ctx context.Context, settings model.AISettings, systemPrompt, userPrompt string, images []aiImageInput) (string, error) {
@@ -1152,4 +1139,41 @@ func addQuery(rawURL, key, value string) (string, error) {
 	query.Set(key, value)
 	parsed.RawQuery = query.Encode()
 	return parsed.String(), nil
+}
+
+// parseOpenAIChatCompletionText keeps provider diagnostics without exposing raw
+// response content (which can include private prompts or reasoning).
+func parseOpenAIChatCompletionText(body []byte) (string, error) {
+	var response struct {
+		Choices []struct {
+			FinishReason string `json:"finish_reason"`
+			Message      struct {
+				Content          string `json:"content"`
+				Refusal          string `json:"refusal"`
+				ReasoningContent string `json:"reasoning_content"`
+			} `json:"message"`
+		} `json:"choices"`
+	}
+	if err := json.Unmarshal(body, &response); err != nil {
+		return "", apperr.Wrap(apperr.CodeUnavailable, "解析 OpenAI Chat Completions 响应失败", err)
+	}
+	if len(response.Choices) == 0 {
+		return "", apperr.New(apperr.CodeUnavailable, "OpenAI Chat Completions 未返回候选结果（choices 为空），请检查模型及接口兼容性")
+	}
+	choice := response.Choices[0]
+	if strings.TrimSpace(choice.Message.Content) != "" {
+		return choice.Message.Content, nil
+	}
+	message := "OpenAI Chat Completions 未返回文本内容"
+	switch {
+	case choice.FinishReason == "length":
+		message += "：输出达到 token 上限（finish_reason=length），请增加模型输出上限或降低推理强度"
+	case choice.FinishReason == "content_filter" || strings.TrimSpace(choice.Message.Refusal) != "":
+		message += "：提供商过滤或拒绝了请求"
+	case strings.TrimSpace(choice.Message.ReasoningContent) != "":
+		message += "：仅返回推理内容，没有最终答案，请检查推理设置及接口兼容性"
+	default:
+		message += "：请检查模型能力及接口兼容性"
+	}
+	return "", apperr.New(apperr.CodeUnavailable, message)
 }
