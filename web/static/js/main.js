@@ -12,6 +12,7 @@ const AppNav = {
         this.reorderPrimary(navLinks);
         this.buildDropdown(navLinks);
         this.buildMobileToggle(navLinks);
+        this.initOverflow(navLinks);
         this.bindGlobalDismiss();
     },
 
@@ -97,6 +98,73 @@ const AppNav = {
         });
 
         this._dropdown = dropdown;
+    },
+
+    initOverflow(navLinks) {
+        const navbar = navLinks.closest('.navbar-content');
+        if (!navbar || !this._dropdown || typeof ResizeObserver === 'undefined') return;
+
+        this._primaryItems = Array.from(navLinks.children).filter((item) => item !== this._dropdown);
+        const schedule = () => {
+            if (this._overflowFrame) cancelAnimationFrame(this._overflowFrame);
+            this._overflowFrame = requestAnimationFrame(() => {
+                this._overflowFrame = null;
+                this.fitPrimaryLinks(navbar, navLinks);
+            });
+        };
+        this._overflowObserver = new ResizeObserver(schedule);
+        this._overflowObserver.observe(navbar);
+        const actions = navbar.querySelector('.nav-actions');
+        if (actions) this._overflowObserver.observe(actions);
+        this._overflowObserver.observe(navLinks);
+        if (document.fonts?.ready) document.fonts.ready.then(schedule);
+        schedule();
+    },
+
+    fitPrimaryLinks(navbar, navLinks) {
+        const menu = this._dropdown.querySelector('.nav-dropdown-menu');
+        const focused = document.activeElement;
+        this._primaryItems.forEach((item) => {
+            if (item.parentElement !== navLinks) navLinks.insertBefore(item, this._dropdown);
+            item.removeAttribute('role');
+            item.querySelector('a')?.removeAttribute('role');
+        });
+        // Restoring items in their original order also handles a wider window.
+        this._primaryItems.forEach((item) => navLinks.insertBefore(item, this._dropdown));
+
+        if (window.matchMedia('(min-width: 721px)').matches) {
+            const styles = getComputedStyle(navbar);
+            const available = navbar.clientWidth - parseFloat(styles.paddingLeft) - parseFloat(styles.paddingRight);
+            const gap = parseFloat(styles.columnGap) || 0;
+            const fits = () => {
+                const children = Array.from(navbar.children).filter((item) => getComputedStyle(item).display !== 'none');
+                const used = children.reduce((sum, item) => sum + item.getBoundingClientRect().width, 0);
+                return used + gap * Math.max(0, children.length - 1) <= available + 1;
+            };
+            const priority = ['/', '/research', '/figures', '/notes', '/ai', '/library'];
+            const candidates = [...this._primaryItems].sort((a, b) => {
+                const rank = (item) => priority.indexOf(item.querySelector('a')?.getAttribute('href'));
+                return rank(a) - rank(b);
+            });
+            for (const item of candidates) {
+                if (fits()) break;
+                item.setAttribute('role', 'none');
+                item.querySelector('a')?.setAttribute('role', 'menuitem');
+                menu.appendChild(item);
+            }
+        }
+
+        const active = Boolean(menu.querySelector('a.active'));
+        this._dropdown.classList.toggle('is-active', active);
+        this._dropdown.querySelector('.nav-dropdown-toggle').classList.toggle('active', active);
+        // Moving a link can clear focus in WebKit. Keep its new location reachable.
+        if (focused && this._primaryItems.some((item) => item.contains(focused))) {
+            if (menu.contains(focused) && !this._dropdown.classList.contains('is-open')) {
+                this._dropdown.querySelector('.nav-dropdown-toggle').focus();
+            } else {
+                focused.focus({ preventScroll: true });
+            }
+        }
     },
 
     buildMobileToggle(navLinks) {
@@ -408,9 +476,12 @@ function restorePendingModalState() {
     }, 0);
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     const path = window.location.pathname;
     AppNav.init();
+    if (window.CiteBoxI18n && typeof window.CiteBoxI18n.init === 'function') {
+        await window.CiteBoxI18n.init();
+    }
     AppNavigationHotkeys.init();
     if (typeof Utils !== 'undefined' && typeof Utils.bindResourceViewerLinks === 'function') {
         Utils.bindResourceViewerLinks();

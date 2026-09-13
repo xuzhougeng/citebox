@@ -31,34 +31,21 @@
         </div>
     </nav>
 
-    <main class="page-shell">
-        <section class="hero compact">
-            <div>
-                <p class="eyebrow" data-i18n="library.hero_eyebrow">Library</p>
-                <h1 data-i18n="library.hero_title">浏览和管理你的文献</h1>
-                <p class="hero-text" data-i18n="library.hero_text">
+    <main class="page-shell collection-page library-page">
+        <header class="collection-header">
+            <h1 data-i18n="nav.library">文献库</h1>
+            <a class="btn btn-outline btn-small" href="/settings#settings-zotero" data-i18n="library.btn_zotero">从 Zotero 导入</a>
+            <details class="collection-help">
+                <summary data-i18n="shared.collection.help">使用说明</summary>
+                <p class="collection-help-text" data-i18n="library.hero_text">
                     筛选和浏览已入库的文献，点击查看详情、编辑标签或管理图片。
                 </p>
-                <p class="hero-inline-links">
-                    <span data-i18n="library.hero_aux_links">辅助入口：</span>
-                    <a href="/guide" data-i18n="library.hero_link_guide">查看功能说明</a>
-                    <span aria-hidden="true">/</span>
-                    <a href="/" data-i18n="library.hero_link_overview">返回总览</a>
-                </p>
-            </div>
-        </section>
+                <p data-i18n="library.filter_desc">按关键词、DOI、分组、标签和状态快速定位目标文献。</p>
+                <a href="/guide" data-i18n="library.hero_link_guide">查看功能说明</a>
+            </details>
+        </header>
 
-        <section class="filters-card">
-            <div class="filters-card-head">
-                <div>
-                    <h2 data-i18n="library.filter_title">筛选文献</h2>
-                    <p data-i18n="library.filter_desc">按关键词、DOI、分组、标签和状态快速定位目标文献。</p>
-                </div>
-                <div class="submit-row">
-                    <a class="btn btn-outline" href="/settings#settings-zotero" data-i18n="library.btn_zotero">从 Zotero 导入</a>
-                    <a class="btn btn-primary" href="/upload" data-i18n="library.btn_upload">上传新文献</a>
-                </div>
-            </div>
+        <section class="filters-card collection-filters" aria-label="筛选条件" data-i18n-aria-label="shared.collection.filters">
             <div class="filters-grid">
                 <label class="field">
                     <span data-i18n="library.filter_keyword">关键词</span>

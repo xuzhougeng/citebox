@@ -1804,7 +1804,7 @@ const NotesPage = {
                     <div class="note-row-foot">
                         <div class="note-row-tags">${tags}</div>
                         <div class="note-row-actions">
-                            <button class="btn btn-small btn-primary" type="button" data-action="note">${Utils.escapeHTML(t('notes.btn_edit_note', '编辑笔记'))}</button>
+                            <button class="btn btn-small btn-outline" type="button" data-action="note">${Utils.escapeHTML(t('notes.btn_edit_note', '编辑笔记'))}</button>
                             <button class="btn btn-small btn-outline" type="button" data-action="paper">${Utils.escapeHTML(t('notes.btn_paper_detail', '文献详情'))}</button>
                             <button class="btn btn-small btn-outline" type="button" data-action="ai">${Utils.escapeHTML(t('notes.btn_ai_reader', 'AI 助手'))}</button>
                         </div>
@@ -1857,7 +1857,7 @@ const NotesPage = {
                     <div class="note-row-foot">
                         <div class="note-row-tags">${tags}</div>
                         <div class="note-row-actions">
-                            <button class="btn btn-small btn-primary" type="button" data-action="note">${Utils.escapeHTML(t('notes.btn_edit_note', '编辑笔记'))}</button>
+                            <button class="btn btn-small btn-outline" type="button" data-action="note">${Utils.escapeHTML(t('notes.btn_edit_note', '编辑笔记'))}</button>
                             <button class="btn btn-small btn-outline" type="button" data-action="preview">${Utils.escapeHTML(t('notes.btn_view_large', '大图'))}</button>
                             <button class="btn btn-small btn-outline" type="button" data-action="paper">${Utils.escapeHTML(t('notes.btn_paper', '文献'))}</button>
                         </div>

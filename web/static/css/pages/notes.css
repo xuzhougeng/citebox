@@ -3,9 +3,9 @@
 .notes-results-shell {
     margin-top: 1.8rem;
     padding: 1.45rem;
-    border-radius: calc(var(--radius) + 6px);
-    background: linear-gradient(180deg, rgba(var(--surface-rgb), 0.86), rgba(var(--bg-rgb), 0.94));
-    border: 1px solid rgba(var(--ink-rgb), 0.08);
+    border-radius: var(--radius-panel);
+    background: var(--panel-strong);
+    border: 1px solid var(--line);
     box-shadow: var(--shadow);
 }
 
@@ -23,26 +23,19 @@
     gap: 0.75rem;
 }
 
-.notes-type-switch {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.55rem;
-    flex-wrap: wrap;
-}
-
 .note-row {
     display: flex;
     gap: 1rem;
     padding: 1rem;
-    border-radius: 16px;
+    border-radius: var(--radius-card);
     background: rgba(var(--surface-rgb), 0.92);
-    border: 1px solid rgba(var(--ink-rgb), 0.06);
+    border: 1px solid var(--line);
     transition: box-shadow 0.15s, border-color 0.15s;
 }
 
 .note-row:hover {
     border-color: rgba(var(--accent-rgb), 0.18);
-    box-shadow: 0 4px 16px rgba(var(--ink-rgb), 0.06);
+    box-shadow: var(--shadow);
 }
 
 .note-row-paper {
@@ -57,7 +50,7 @@
     left: 0;
     width: 4px;
     border-radius: 0 999px 999px 0;
-    background: linear-gradient(180deg, rgba(var(--accent-rgb), 0.92), rgba(var(--info-rgb), 0.82));
+    background: var(--accent);
 }
 
 .note-row-thumb {
@@ -69,8 +62,8 @@
     width: 80px;
     height: 80px;
     padding: 0;
-    border: 1px solid rgba(var(--ink-rgb), 0.08);
-    border-radius: 10px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-control);
     overflow: hidden;
     cursor: pointer;
     background: var(--bg);

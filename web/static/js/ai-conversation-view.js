@@ -456,7 +456,7 @@
             const s = this._state;
             if (!s.els) return;
             const meta = s.meta || {};
-            if (s.els.title) s.els.title.textContent = meta.title || '新对话';
+            if (s.els.title) s.els.title.textContent = meta.title || translate('ai.active_title_default', 'New Conversation');
             if (s.els.strictEvidence) s.els.strictEvidence.checked = !!meta.strict_evidence;
             this._syncEvidenceControls();
             if (window.AIReader && window.AIReader.pin && typeof window.AIReader.pin.setPinned === 'function') {

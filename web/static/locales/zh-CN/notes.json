@@ -62,5 +62,6 @@
     "figures.label_source_paper": "来源文献",
     "figures.label_original": "原图",
     "figures.label_figure_note": "图片笔记",
-    "figures.note_empty_text": "还没有笔记，可把 AI 解读或人工观察先记在这里。"
+    "figures.note_empty_text": "还没有笔记，可把 AI 解读或人工观察先记在这里。",
+    "notes.type_switch_aria": "笔记类型"
 }

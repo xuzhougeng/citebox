@@ -13,7 +13,7 @@
     display: grid;
     grid-template-rows: auto 1fr;
     border: 1px solid rgba(var(--ink-rgb), 0.08);
-    border-radius: 24px;
+    border-radius: var(--radius-panel);
     overflow: hidden;
     background: rgba(var(--surface-rgb), 0.94);
     box-shadow: 0 18px 34px rgba(var(--ink-rgb), 0.08);
@@ -109,7 +109,7 @@
     display: grid;
     gap: 0.6rem;
     padding: 0.85rem 0.95rem 0.95rem;
-    border-radius: 18px;
+    border-radius: var(--radius-card);
     border: 1px solid rgba(var(--ink-rgb), 0.08);
     background: rgba(var(--bg-rgb), 0.52);
 }

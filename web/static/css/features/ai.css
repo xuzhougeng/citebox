@@ -39,9 +39,9 @@
     right: 0;
     width: min(320px, calc(100vw - 2rem));
     padding: 1rem 1.05rem;
-    border-radius: 20px;
+    border-radius: var(--radius-card);
     background: rgba(var(--surface-rgb), 0.98);
-    border: 1px solid rgba(var(--ink-rgb), 0.08);
+    border: 1px solid var(--line);
     box-shadow: var(--shadow);
 }
 
@@ -120,7 +120,7 @@ html[lang^="zh"] .ai-config-details[open] .ai-collapsible-toggle::before {
 .ai-provider-note {
     margin: 0 0 1rem;
     padding: 0.9rem 1rem;
-    border-radius: 18px;
+    border-radius: var(--radius-card);
     background: rgba(var(--info-rgb), 0.08);
     color: var(--info);
     border: 1px solid rgba(var(--info-rgb), 0.12);
@@ -138,8 +138,8 @@ html[lang^="zh"] .ai-config-details[open] .ai-collapsible-toggle::before {
     align-items: start;
     justify-items: start;
     padding: 0.95rem 1rem;
-    border-radius: 16px;
-    border: 1px solid rgba(var(--ink-rgb), 0.08);
+    border-radius: var(--radius-card);
+    border: 1px solid var(--line);
     background: rgba(var(--surface-rgb), 0.86);
     text-align: left;
     transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease;
@@ -186,9 +186,9 @@ html[lang^="zh"] .ai-config-details[open] .ai-collapsible-toggle::before {
 .settings-summary-box div {
     min-width: 0;
     padding: 1rem;
-    border-radius: 18px;
+    border-radius: var(--radius-card);
     background: rgba(var(--surface-rgb), 0.82);
-    border: 1px solid rgba(var(--ink-rgb), 0.08);
+    border: 1px solid var(--line);
 }
 
 .settings-summary-card span,
@@ -347,7 +347,7 @@ html[lang^="zh"] .ai-config-details[open] .ai-collapsible-toggle::before {
     min-height: 1.55rem;
     padding: 0.16rem 0.48rem;
     border-radius: 999px;
-    border: 1px solid rgba(var(--ink-rgb), 0.08);
+    border: 1px solid var(--line);
     background: rgba(var(--surface-rgb), 0.62);
 }
 
@@ -373,7 +373,7 @@ html[lang^="zh"] .ai-config-details[open] .ai-collapsible-toggle::before {
     gap: 0.55rem;
     padding: 0.78rem;
     border-radius: 8px;
-    border: 1px solid rgba(var(--ink-rgb), 0.1);
+    border: 1px solid var(--line);
     background: rgba(var(--surface-rgb), 0.72);
 }
 
@@ -608,7 +608,7 @@ html[lang^="zh"] .ai-config-details[open] .ai-collapsible-toggle::before {
     max-height: 18rem;
     object-fit: contain;
     border-radius: 6px;
-    border: 1px solid rgba(var(--ink-rgb), 0.1);
+    border: 1px solid var(--line);
     background: rgba(var(--ink-rgb), 0.04);
 }
 
@@ -617,8 +617,8 @@ html[lang^="zh"] .ai-config-details[open] .ai-collapsible-toggle::before {
     width: min(100%, 17rem);
     aspect-ratio: 1 / 1;
     padding: 0;
-    border: 1px solid rgba(var(--ink-rgb), 0.1);
-    border-radius: 14px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-card);
     overflow: hidden;
     background: linear-gradient(180deg, rgba(var(--surface-rgb), 0.94), rgba(var(--bg-rgb), 0.92));
     box-shadow: 0 14px 30px rgba(var(--shadow-rgb), 0.08);
@@ -659,7 +659,7 @@ html[lang^="zh"] .ai-config-details[open] .ai-collapsible-toggle::before {
     display: block;
     max-width: 100%;
     max-height: min(72vh, 46rem);
-    border-radius: 18px;
+    border-radius: var(--radius-card);
     box-shadow: 0 24px 60px rgba(var(--shadow-rgb), 0.16);
     background: rgba(var(--surface-rgb), 0.96);
 }
@@ -698,8 +698,8 @@ html[lang^="zh"] .ai-config-details[open] .ai-collapsible-toggle::before {
     position: relative;
     width: 100%;
     padding: 1rem 1.05rem;
-    border-radius: 18px;
-    border: 1px solid rgba(var(--ink-rgb), 0.1);
+    border-radius: var(--radius-card);
+    border: 1px solid var(--line);
     background: rgba(var(--surface-rgb), 0.88);
     text-align: left;
     overflow: hidden;
@@ -787,9 +787,9 @@ html[lang^="zh"] .ai-config-details[open] .ai-collapsible-toggle::before {
 
 .ai-paper-summary-card {
     padding: 1.2rem;
-    border-radius: 20px;
+    border-radius: var(--radius-card);
     background: rgba(var(--surface-rgb), 0.82);
-    border: 1px solid rgba(var(--ink-rgb), 0.08);
+    border: 1px solid var(--line);
 }
 
 .ai-paper-summary-actions {
@@ -857,8 +857,8 @@ html[lang^="zh"] .ai-config-details[open] .ai-collapsible-toggle::before {
 
 .ai-turn {
     padding: 1rem 1.05rem;
-    border-radius: 20px;
-    border: 1px solid rgba(var(--ink-rgb), 0.08);
+    border-radius: var(--radius-card);
+    border: 1px solid var(--line);
 }
 
 .ai-turn-user {
@@ -923,9 +923,9 @@ html[lang^="zh"] .ai-config-details[open] .ai-collapsible-toggle::before {
 .ai-question-field {
     margin-top: 1rem;
     padding: 1rem;
-    border-radius: 20px;
+    border-radius: var(--radius-card);
     background: rgba(var(--surface-rgb), 0.78);
-    border: 1px solid rgba(var(--ink-rgb), 0.08);
+    border: 1px solid var(--line);
 }
 
 .ai-question-label {
@@ -983,8 +983,8 @@ html[lang^="zh"] .ai-config-details[open] .ai-collapsible-toggle::before {
     gap: 0.85rem;
     padding: 0.7rem 0.95rem;
     margin-bottom: 0.9rem;
-    border-radius: 14px;
-    border: 1px solid rgba(var(--ink-rgb), 0.08);
+    border-radius: var(--radius-card);
+    border: 1px solid var(--line);
     background: rgba(var(--surface-rgb), 0.7);
     min-height: 2.85rem;
 }
@@ -1058,7 +1058,7 @@ html[lang^="zh"] .ai-config-details[open] .ai-collapsible-toggle::before {
     width: 100%;
     margin: 0;
     padding: 0.85rem 1rem;
-    border-radius: 14px;
+    border-radius: var(--radius-card);
     border: 1px solid rgba(var(--ink-rgb), 0.16);
     font-family: inherit;
     font-size: 0.96rem;
@@ -1174,7 +1174,7 @@ html[lang^="zh"] .ai-config-details[open] .ai-collapsible-toggle::before {
     max-height: 22rem;
     overflow-y: auto;
     padding: 0.4rem;
-    border-radius: 14px;
+    border-radius: var(--radius-card);
     background: var(--bg, #fff);
     border: 1px solid rgba(var(--ink-rgb), 0.12);
     box-shadow: 0 18px 40px -18px rgba(0, 0, 0, 0.32),
@@ -1188,7 +1188,7 @@ html[lang^="zh"] .ai-config-details[open] .ai-collapsible-toggle::before {
 .ai-mention-section + .ai-mention-section {
     margin-top: 0.35rem;
     padding-top: 0.35rem;
-    border-top: 1px solid rgba(var(--ink-rgb), 0.06);
+    border-top: 1px solid var(--line);
 }
 
 .ai-mention-section-title {
@@ -1213,7 +1213,7 @@ html[lang^="zh"] .ai-config-details[open] .ai-collapsible-toggle::before {
     align-items: center;
     gap: 0.65rem;
     padding: 0.5rem 0.6rem;
-    border-radius: 10px;
+    border-radius: var(--radius-control);
     cursor: pointer;
     transition: background 0.15s ease;
 }
@@ -1324,7 +1324,7 @@ html[lang^="zh"] .ai-config-details[open] .ai-collapsible-toggle::before {
     max-height: calc(100vh - 13rem);
     overflow: auto;
     padding: 1rem 1.2rem;
-    border-radius: 14px;
+    border-radius: var(--radius-card);
     background: rgba(var(--ink-rgb), 0.045);
     white-space: pre-wrap;
     word-break: break-word;

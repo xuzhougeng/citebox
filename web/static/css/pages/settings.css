@@ -3,13 +3,14 @@
 .manager-head h2,
 .detail-section h3 {
     margin: 0;
-    font-family: var(--font-display);
+    font-family: var(--font-body);
+    font-size: var(--text-section);
 }
 
 .manager-head h3 {
     margin: 0;
     color: var(--ink);
-    font-family: var(--font-display);
+    font-family: var(--font-body);
 }
 
 .manager-head p,
@@ -94,7 +95,7 @@ details[open] > .settings-subsection-toggle::after {
 
 .settings-subsection {
     padding: 0.9rem 1.05rem;
-    border-radius: 18px;
+    border-radius: var(--radius-card);
     border: 1px solid rgba(var(--ink-rgb), 0.06);
     background: rgba(var(--surface-rgb), 0.64);
 }
@@ -116,7 +117,7 @@ details[open] > .settings-subsection-toggle::after {
     gap: 0.8rem;
     align-items: flex-start;
     padding: 0.95rem;
-    border-radius: 16px;
+    border-radius: var(--radius-card);
     background: rgba(var(--surface-rgb), 0.86);
     border: 1px solid rgba(var(--ink-rgb), 0.08);
 }
@@ -133,7 +134,7 @@ details[open] > .settings-subsection-toggle::after {
 .prompt-field {
     gap: 0.9rem;
     padding: 1rem 1.05rem 1.05rem;
-    border-radius: 22px;
+    border-radius: var(--radius-card);
     border: 1px solid rgba(var(--ink-rgb), 0.08);
     background:
         radial-gradient(circle at top right, rgba(var(--info-rgb), 0.06), transparent 12rem),
@@ -176,7 +177,7 @@ details[open] > .settings-subsection-toggle::after {
     display: grid;
     gap: 0.9rem;
     padding: 1rem 1.05rem 1.05rem;
-    border-radius: 22px;
+    border-radius: var(--radius-card);
     border: 1px solid rgba(var(--ink-rgb), 0.08);
     background:
         radial-gradient(circle at top left, rgba(var(--accent-rgb), 0.08), transparent 12rem),
@@ -216,7 +217,7 @@ details[open] > .settings-subsection-toggle::after {
 
 .prompt-preset-empty {
     padding: 1rem 1.05rem;
-    border-radius: 16px;
+    border-radius: var(--radius-card);
     border: 1px dashed rgba(var(--ink-rgb), 0.14);
     color: var(--muted);
     background: rgba(var(--surface-rgb), 0.72);
@@ -226,7 +227,7 @@ details[open] > .settings-subsection-toggle::after {
     display: grid;
     gap: 0.85rem;
     padding: 0.95rem 1rem;
-    border-radius: 18px;
+    border-radius: var(--radius-card);
     border: 1px solid rgba(var(--ink-rgb), 0.08);
     background: rgba(var(--surface-rgb), 0.84);
 }
@@ -258,7 +259,7 @@ details[open] > .settings-subsection-toggle::after {
 
 .prompt-preset-preview-item {
     padding: 0.75rem 0.8rem;
-    border-radius: 14px;
+    border-radius: var(--radius-card);
     background: rgba(var(--surface-rgb), 0.9);
     border: 1px solid rgba(var(--ink-rgb), 0.06);
 }
@@ -333,7 +334,7 @@ html[lang^="zh"] .prompt-template-details[open] summary::before {
 .prompt-template-pre {
     margin: 0.8rem 0 0;
     padding: 1rem 1.05rem;
-    border-radius: 18px;
+    border-radius: var(--radius-card);
     border: 1px solid rgba(var(--ink-rgb), 0.08);
     background: rgba(var(--surface-rgb), 0.92);
     color: var(--ink);
@@ -381,7 +382,7 @@ html[lang^="zh"] .prompt-template-details[open] summary::before {
     display: grid;
     gap: 0.85rem;
     padding: 0.95rem;
-    border-radius: 18px;
+    border-radius: var(--radius-card);
     background: rgba(var(--surface-rgb), 0.78);
     border: 1px solid rgba(var(--ink-rgb), 0.08);
 }
@@ -395,7 +396,7 @@ html[lang^="zh"] .prompt-template-details[open] summary::before {
     padding: 0.8rem;
     background: linear-gradient(180deg, rgba(var(--surface-rgb), 0.96), rgba(var(--surface-rgb), 0.92));
     border: 1px dashed rgba(var(--accent-rgb), 0.28);
-    border-radius: 14px;
+    border-radius: var(--radius-card);
     font-size: 0.9rem;
     color: var(--muted);
     cursor: pointer;
@@ -428,7 +429,7 @@ html[lang^="zh"] .prompt-template-details[open] summary::before {
     grid-template-columns: minmax(0, 1.15fr) minmax(280px, 0.92fr);
     gap: 1rem;
     padding: 1.2rem;
-    border-radius: 24px;
+    border-radius: var(--radius-panel);
     border: 1px solid rgba(var(--ink-rgb), 0.08);
     background:
         radial-gradient(circle at top right, rgba(var(--accent-rgb), 0.09), transparent 11rem),
@@ -468,7 +469,7 @@ html[lang^="zh"] .prompt-template-details[open] summary::before {
     margin: 0;
     align-self: start;
     padding: 1rem;
-    border-radius: 20px;
+    border-radius: var(--radius-card);
     border: 1px solid rgba(var(--ink-rgb), 0.08);
     background: rgba(var(--surface-rgb), 0.8);
 }
@@ -485,7 +486,7 @@ html[lang^="zh"] .prompt-template-details[open] summary::before {
 .weixin-summary-meta {
     min-width: 0;
     padding: 1rem 1.05rem;
-    border-radius: 20px;
+    border-radius: var(--radius-card);
     background: rgba(var(--surface-rgb), 0.84);
     border: 1px solid rgba(var(--ink-rgb), 0.08);
 }
@@ -547,7 +548,7 @@ html[lang^="zh"] .prompt-template-details[open] summary::before {
 .weixin-summary-item {
     min-width: 0;
     padding: 0.85rem 0.9rem;
-    border-radius: 16px;
+    border-radius: var(--radius-card);
     background: rgba(var(--surface-rgb), 0.9);
     border: 1px solid rgba(var(--ink-rgb), 0.06);
 }
@@ -577,7 +578,7 @@ html[lang^="zh"] .prompt-template-details[open] summary::before {
     display: grid;
     gap: 0.95rem;
     padding: 1.15rem;
-    border-radius: 22px;
+    border-radius: var(--radius-card);
     background:
         linear-gradient(180deg, rgba(var(--surface-rgb), 0.96), rgba(var(--surface-rgb), 0.9));
     border: 1px solid rgba(var(--ink-rgb), 0.08);
@@ -626,7 +627,7 @@ html[lang^="zh"] .prompt-template-details[open] summary::before {
 .weixin-bridge-toggle {
     margin: 0;
     padding: 0.95rem 1rem;
-    border-radius: 18px;
+    border-radius: var(--radius-card);
     border: 1px solid rgba(var(--ink-rgb), 0.08);
     background: rgba(var(--surface-rgb), 0.78);
 }
@@ -647,7 +648,7 @@ html[lang^="zh"] .prompt-template-details[open] summary::before {
     gap: 0.45rem;
     justify-items: center;
     padding: 1.2rem 1rem;
-    border-radius: 18px;
+    border-radius: var(--radius-card);
     border: 1px dashed rgba(var(--accent-rgb), 0.24);
     background:
         radial-gradient(circle at top, rgba(var(--accent-rgb), 0.08), transparent 10rem),
@@ -671,7 +672,7 @@ html[lang^="zh"] .prompt-template-details[open] summary::before {
     gap: 0.7rem;
     justify-items: center;
     padding: 1rem;
-    border-radius: 18px;
+    border-radius: var(--radius-card);
     border: 1px dashed rgba(var(--accent-rgb), 0.24);
     background: linear-gradient(180deg, rgba(var(--surface-rgb), 0.94), rgba(var(--surface-rgb), 0.9));
 }
@@ -679,7 +680,7 @@ html[lang^="zh"] .prompt-template-details[open] summary::before {
 .weixin-qr-image {
     width: min(240px, 100%);
     aspect-ratio: 1 / 1;
-    border-radius: 18px;
+    border-radius: var(--radius-card);
     background: #fff;
     border: 1px solid rgba(var(--ink-rgb), 0.08);
     box-shadow: 0 18px 36px rgba(var(--shadow-rgb), 0.08);
@@ -700,7 +701,7 @@ html[lang^="zh"] .prompt-template-details[open] summary::before {
     display: grid;
     gap: 0.75rem;
     padding: 1rem;
-    border-radius: 18px;
+    border-radius: var(--radius-card);
     border: 1px solid rgba(var(--ink-rgb), 0.08);
     background: rgba(var(--surface-rgb), 0.84);
 }
@@ -725,14 +726,14 @@ html[lang^="zh"] .prompt-template-details[open] summary::before {
     grid-template-columns: 190px minmax(0, 1fr);
     align-items: start;
     border: 1px solid var(--line);
-    border-radius: 10px;
+    border-radius: var(--radius-panel);
     background: var(--panel-strong);
     min-width: 0;
 }
 .settings-anchor-sidebar { position: sticky; top: 90px; padding: 1.5rem 0.75rem; min-width: 0; }
 .settings-anchor-sidebar h1 { font-family: var(--font-body); font-size: 1.15rem; margin: 0 0.7rem 1.2rem; }
 .settings-category-list { list-style: none; display: grid; gap: 0.25rem; margin: 0; padding: 0; }
-.settings-category-item { width: 100%; border: 0; border-radius: 5px; padding: 0.7rem; text-align: left; background: transparent; color: var(--muted); font: inherit; cursor: pointer; }
+.settings-category-item { width: 100%; border: 0; border-radius: var(--radius-control); padding: 0.7rem; text-align: left; background: transparent; color: var(--muted); font: inherit; cursor: pointer; }
 .settings-category-item:hover { background: var(--bg-soft); }
 .settings-category-item.active { color: var(--accent-deep); background: var(--accent-soft); font-weight: 600; }
 .settings-content { min-width: 0; min-height: 540px; padding: 1.8rem 2rem 2.5rem; border-left: 1px solid var(--line); }
@@ -763,7 +764,7 @@ html[lang^="zh"] .prompt-template-details[open] summary::before {
 .settings-page .manager-form { gap: 1.1rem; }
 .settings-page .btn,
 .settings-page .form-input,
-.settings-page .form-textarea { border-radius: 6px; box-shadow: none; }
+.settings-page .form-textarea { border-radius: var(--radius-control); box-shadow: none; }
 .settings-page .settings-subsection,
 .settings-page .prompt-field,
 .settings-page .prompt-preset-panel,
@@ -814,7 +815,7 @@ html[lang^="zh"] .prompt-template-details[open] summary::before {
     max-height: 280px;
     overflow: auto;
     border: 1px solid var(--border, #e5e2dc);
-    border-radius: 12px;
+    border-radius: var(--radius-card);
     padding: 8px 0;
     margin-bottom: 12px;
 }

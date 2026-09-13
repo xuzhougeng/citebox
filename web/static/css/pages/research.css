@@ -467,7 +467,7 @@
     align-items: center;
     gap: 0.5rem;
     padding: 0.55rem 0.8rem;
-    border-radius: 10px;
+    border-radius: var(--radius-control);
     background: rgba(var(--surface-rgb), 0.92);
     border: 1px solid rgba(var(--ink-rgb), 0.06);
     font-size: 0.88rem;

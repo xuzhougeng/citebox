@@ -397,5 +397,7 @@
     "shared.figure.click_to_add": "Click to add",
     "shared.figure.send_to_figure_library": "Send to Figure Library",
     "shared.figure.send_figure_library_saved": "Saved to drop folder",
-    "shared.figure.send_figure_library_failed": "Failed to send to Figure Library"
+    "shared.figure.send_figure_library_failed": "Failed to send to Figure Library",
+    "shared.collection.help": "Page help",
+    "shared.collection.filters": "Filters"
 }

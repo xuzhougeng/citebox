@@ -30,11 +30,46 @@
 .form-textarea,
 .color-input {
     width: 100%;
-    border: 1px solid rgba(var(--ink-rgb), 0.1);
-    border-radius: 16px;
-    background: rgba(var(--surface-rgb), 0.92);
-    padding: 0.9rem 1rem;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-control);
+    background: var(--panel-strong);
+    padding: 0.65rem 1rem;
     color: var(--ink);
+    line-height: 1.5;
+}
+
+input.form-input,
+select.form-input:not([multiple]):not([size]) {
+    height: var(--control-height);
+}
+
+select.form-input:not([multiple]):not([size]) {
+    -webkit-appearance: none;
+    appearance: none;
+    padding-right: 2.5rem;
+    background-image:
+        linear-gradient(45deg, transparent 50%, var(--muted) 50%),
+        linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+    background-position: calc(100% - 1rem - 5px) center, calc(100% - 1rem) center;
+    background-size: 5px 5px;
+    background-repeat: no-repeat;
+    cursor: pointer;
+}
+
+.form-input:disabled,
+.form-textarea:disabled,
+.color-input:disabled {
+    background-color: var(--bg-soft);
+    color: var(--muted);
+    cursor: not-allowed;
+}
+
+@media (forced-colors: active) {
+    select.form-input:not([multiple]):not([size]) {
+        -webkit-appearance: menulist;
+        appearance: auto;
+        background-image: none;
+    }
 }
 
 .form-input:focus,
@@ -45,14 +80,21 @@
     box-shadow: 0 0 0 4px rgba(var(--accent-rgb), 0.12);
 }
 
+.form-input:focus-visible,
+.form-textarea:focus-visible,
+.color-input:focus-visible {
+    outline: 2px solid var(--accent-deep);
+    outline-offset: 2px;
+}
+
 .checkbox-field {
     display: flex;
     align-items: flex-start;
     gap: 0.75rem;
     padding: 1rem;
-    border-radius: 18px;
+    border-radius: var(--radius-card);
     background: rgba(var(--surface-rgb), 0.72);
-    border: 1px solid rgba(var(--ink-rgb), 0.08);
+    border: 1px solid var(--line);
 }
 
 .checkbox-field input {
@@ -86,8 +128,8 @@
     gap: 0.75rem;
     min-width: 0;
     padding: 0.95rem 1rem;
-    border-radius: 18px;
-    border: 1px solid rgba(var(--ink-rgb), 0.08);
+    border-radius: var(--radius-card);
+    border: 1px solid var(--line);
     background: rgba(var(--surface-rgb), 0.76);
     margin: 0;
 }
@@ -163,8 +205,8 @@
     max-height: 13rem;
     overflow: auto;
     padding: 0.45rem;
-    border: 1px solid rgba(var(--ink-rgb), 0.1);
-    border-radius: 16px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-card);
     background: rgba(var(--surface-rgb), 0.98);
     box-shadow: 0 16px 32px rgba(var(--shadow-rgb), 0.14);
 }
@@ -180,8 +222,8 @@
     gap: 0.8rem;
     width: 100%;
     padding: 0.58rem 0.72rem;
-    border: 1px solid rgba(var(--ink-rgb), 0.08);
-    border-radius: 12px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-card);
     background: rgba(var(--surface-rgb), 0.94);
     color: var(--ink);
     text-align: left;
@@ -252,7 +294,7 @@
     transform: translateX(-50%);
     width: min(28rem, calc(100vw - 3rem));
     padding: 0.85rem 1rem;
-    border-radius: 16px;
+    border-radius: var(--radius-card);
     background: var(--tooltip-bg);
     color: var(--tooltip-text);
     font-size: 0.9rem;
@@ -328,8 +370,8 @@
 .tag-color-field {
     min-width: 0;
     padding: 0.95rem 1rem;
-    border-radius: 18px;
-    border: 1px solid rgba(var(--ink-rgb), 0.08);
+    border-radius: var(--radius-card);
+    border: 1px solid var(--line);
     background: rgba(var(--surface-rgb), 0.76);
     margin: 0;
 }

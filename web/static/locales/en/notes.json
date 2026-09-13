@@ -62,5 +62,6 @@
     "figures.label_source_paper": "Source Paper",
     "figures.label_original": "Original",
     "figures.label_figure_note": "Figure Note",
-    "figures.note_empty_text": "No notes yet. Jot down AI insights or personal observations here."
+    "figures.note_empty_text": "No notes yet. Jot down AI insights or personal observations here.",
+    "notes.type_switch_aria": "Note type"
 }

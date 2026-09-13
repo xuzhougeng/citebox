@@ -5,10 +5,8 @@
     grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.85fr);
     gap: 1rem;
     padding: 1.1rem;
-    border-radius: 28px;
-    background:
-        radial-gradient(circle at top right, rgba(var(--info-rgb), 0.08), transparent 18rem),
-        linear-gradient(180deg, rgba(var(--surface-rgb), 0.98), rgba(var(--bg-rgb), 0.96));
+    border-radius: var(--radius-panel);
+    background: var(--panel-strong);
 }
 
 .note-lightbox-main,
@@ -22,9 +20,9 @@
     display: grid;
     gap: 1rem;
     padding: 1.15rem;
-    border-radius: 24px;
+    border-radius: var(--radius-panel);
     background: rgba(var(--surface-rgb), 0.92);
-    border: 1px solid rgba(var(--ink-rgb), 0.08);
+    border: 1px solid var(--line);
 }
 
 .note-lightbox-head h2 {
@@ -62,7 +60,7 @@
     display: grid;
     gap: 0.35rem;
     padding: 0.95rem 1rem;
-    border-radius: 18px;
+    border-radius: var(--radius-card);
     background: rgba(var(--bg-rgb), 0.48);
 }
 
@@ -106,9 +104,9 @@
     display: grid;
     gap: 0.85rem;
     padding: 1rem;
-    border-radius: 24px;
+    border-radius: var(--radius-panel);
     background: rgba(var(--surface-rgb), 0.9);
-    border: 1px solid rgba(var(--ink-rgb), 0.08);
+    border: 1px solid var(--line);
 }
 
 .note-lightbox-preview-media {
@@ -116,10 +114,8 @@
     align-items: center;
     justify-content: center;
     min-height: 320px;
-    border-radius: 20px;
-    background:
-        radial-gradient(circle at top left, rgba(var(--accent-rgb), 0.12), transparent 16rem),
-        linear-gradient(180deg, rgba(var(--bg-rgb), 0.72), rgba(var(--surface-rgb), 0.9));
+    border-radius: var(--radius-card);
+    background: var(--bg-soft);
 }
 
 .note-lightbox-preview-media img {
@@ -127,8 +123,8 @@
     max-width: 100%;
     max-height: 28rem;
     object-fit: contain;
-    border-radius: 18px;
-    box-shadow: 0 22px 44px rgba(var(--ink-rgb), 0.12);
+    border-radius: 0;
+    box-shadow: none;
 }
 
 .figure-notes-export-dialog { max-width: 560px; }
@@ -144,7 +140,7 @@
 
 .note-lightbox-tip {
     padding: 1rem 1.05rem;
-    border-radius: 18px;
+    border-radius: var(--radius-card);
     background: rgba(var(--success-rgb), 0.08);
     border: 1px solid rgba(var(--success-rgb), 0.14);
 }
@@ -176,7 +172,7 @@
     overscroll-behavior: contain;
 }
 .paper-note-layout.is-comparing > .note-lightbox-side { display: none; }
-.paper-note-pdf-pane { min-height: 0; min-width: 0; overflow: hidden; border-radius: 16px; }
+.paper-note-pdf-pane { min-height: 0; min-width: 0; overflow: hidden; border-radius: var(--radius-card); }
 .paper-note-pdf-pane iframe { width: 100%; height: 100%; border: 0; display: block; }
 .paper-note-divider { cursor: col-resize; border-radius: 5px; background: rgba(var(--ink-rgb), 0.1); touch-action: none; }
 .paper-note-divider:focus-visible { outline: 2px solid var(--accent); }

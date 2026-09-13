@@ -15,11 +15,25 @@
     --info: #416788;
     --success: #4f6f52;
     --error: #9f3f34;
-    --shadow:
-        0 1px 2px rgba(78, 51, 33, 0.05),
-        0 16px 44px -12px rgba(78, 51, 33, 0.16);
-    --radius: 22px;
-    --radius-sm: 16px;
+    --shadow: 0 1px 3px rgba(var(--shadow-rgb), 0.05);
+    --shadow-floating: 0 16px 44px -12px rgba(var(--shadow-deep-rgb), 0.24);
+    --radius-panel: 20px;
+    --radius-card: 12px;
+    --radius-control: 10px;
+    --radius: var(--radius-panel);
+    --radius-sm: var(--radius-card);
+    --space-1: 0.25rem;
+    --space-2: 0.5rem;
+    --space-3: 0.75rem;
+    --space-4: 1rem;
+    --space-6: 1.5rem;
+    --space-8: 2rem;
+    --control-height: 3rem;
+    --control-height-sm: 2.25rem;
+    --text-sm: 0.875rem;
+    --text-body: 1rem;
+    --text-section: 1.125rem;
+    --text-title: clamp(1.5rem, 2vw, 1.875rem);
 
     /* --- RGB Component Tokens (for rgba usage across components) --- */
     --ink-rgb: 36, 27, 22;
@@ -68,9 +82,6 @@
     --info: #3868a8;
     --success: #2c7a44;
     --error: #c43830;
-    --shadow:
-        0 1px 2px rgba(28, 32, 48, 0.04),
-        0 16px 44px -12px rgba(28, 32, 48, 0.1);
 
     --ink-rgb: 28, 32, 48;
     --surface-rgb: 255, 255, 255;
@@ -105,15 +116,14 @@
     --panel: rgba(30, 34, 40, 0.92);
     --panel-strong: #242830;
     --ink: #dcd9d2;
-    --muted: #8a8680;
-    --line: rgba(220, 217, 210, 0.1);
+    --muted: #aaa69f;
+    --line: rgba(220, 217, 210, 0.16);
     --accent: #d4a060;
     --accent-deep: #e8b878;
     --accent-soft: rgba(212, 160, 96, 0.12);
     --info: #68a4d8;
     --success: #68ac6c;
     --error: #d86860;
-    --shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
 
     --ink-rgb: 220, 217, 210;
     --surface-rgb: 30, 34, 40;
@@ -149,11 +159,13 @@
 
 /* ===== Theme Transition ===== */
 
-html.theme-transition,
-html.theme-transition *,
-html.theme-transition *::before,
-html.theme-transition *::after {
-    transition: background-color 0.35s ease, color 0.35s ease, border-color 0.35s ease, box-shadow 0.35s ease, background 0.35s ease !important;
+@media (prefers-reduced-motion: no-preference) {
+    html.theme-transition,
+    html.theme-transition *,
+    html.theme-transition *::before,
+    html.theme-transition *::after {
+        transition: background-color 0.35s ease, color 0.35s ease, border-color 0.35s ease, box-shadow 0.35s ease, background 0.35s ease !important;
+    }
 }
 
 /* ===== Theme Switcher ===== */

@@ -21,7 +21,7 @@
 
 .detail-meta-panel {
     padding: 1rem;
-    border-radius: 18px;
+    border-radius: var(--radius-card);
     background: rgba(var(--bg-rgb), 0.46);
     flex-wrap: wrap;
     display: flex;
@@ -43,8 +43,8 @@
 
 .detail-section {
     padding: 1rem;
-    border-radius: 20px;
-    border: 1px solid rgba(var(--ink-rgb), 0.08);
+    border-radius: var(--radius-card);
+    border: 1px solid var(--line);
     background: rgba(var(--surface-rgb), 0.8);
 }
 

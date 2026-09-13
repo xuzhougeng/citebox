@@ -87,6 +87,8 @@ const CiteBoxTheme = {
             dot.dataset.theme = theme;
             dot.title = t('shared.theme.' + theme, self.LABELS[theme]);
             dot.setAttribute('aria-label', t('shared.theme.' + theme, self.LABELS[theme]));
+            dot.setAttribute('data-i18n-title', 'shared.theme.' + theme);
+            dot.setAttribute('data-i18n-aria-label', 'shared.theme.' + theme);
             dot.style.setProperty('--dot-bg', self.DOTS[theme].bg);
             dot.style.setProperty('--dot-accent', self.DOTS[theme].accent);
             dot.addEventListener('click', function() { self.apply(theme); });

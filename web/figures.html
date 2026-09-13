@@ -31,24 +31,19 @@
         </div>
     </nav>
 
-    <main class="page-shell">
-        <section class="hero compact">
-            <div>
-                <p class="eyebrow">Image Library</p>
-                <h1 data-i18n="figures.hero_title">跨文献浏览所有提取图片</h1>
-                <p class="hero-text" data-i18n="figures.hero_text">浏览所有文献中提取的图片，按标签整理，随时回到来源文献。</p>
-            </div>
-        </section>
+    <main class="page-shell collection-page figures-page">
+        <header class="collection-header">
+            <h1 data-i18n="nav.figures">图片库</h1>
 
-        <section class="filters-card figure-filters-card">
-            <div class="filters-card-head">
-                <div>
-                    <p class="eyebrow">Filter Dock</p>
-                    <h2 data-i18n="figures.filter_title">按条件筛选图片</h2>
-                    <p data-i18n="figures.filter_desc">支持按来源分组和图片标签筛选，快速找到目标图片。</p>
-                </div>
-            </div>
-            <div class="filters-grid">
+            <details class="collection-help">
+                <summary data-i18n="shared.collection.help">使用说明</summary>
+                <p class="collection-help-text" data-i18n="figures.hero_text">浏览所有文献中提取的图片，按标签整理，随时回到来源文献。</p>
+                <p data-i18n="figures.filter_desc">支持按来源分组和图片标签筛选，快速找到目标图片。</p>
+            </details>
+        </header>
+
+        <section class="filters-card collection-filters" aria-label="筛选条件" data-i18n-aria-label="shared.collection.filters">
+            <div class="filters-grid filters-grid-five">
                 <label class="field">
                     <span data-i18n="label.keyword">关键词</span>
                     <input id="figureKeywordInput" class="form-input" type="text" placeholder="文献标题、图片说明、标签、笔记" data-i18n-placeholder="figures.filter_keyword_placeholder">
@@ -84,13 +79,12 @@
         </section>
 
         <section class="figure-results-shell">
-            <section id="figureSummaryStrip" class="summary-strip"></section>
+            <section id="figureSummaryStrip" class="summary-strip collection-summary"></section>
             <div class="figure-results-head">
                 <div>
-                    <p class="eyebrow">Library Shelf</p>
                     <h2 data-i18n="figures.shelf_title">图片库</h2>
                 </div>
-                <button id="exportFigureNotesButton" class="btn btn-outline" type="button" data-i18n="shared.figure.export_notes">导出图片笔记</button>
+                <button id="exportFigureNotesButton" class="btn btn-outline btn-small" type="button" data-i18n="shared.figure.export_notes">导出图片笔记</button>
                 <div id="figurePageControls" class="figure-page-controls"></div>
             </div>
             <section id="figureGrid" class="figure-preview-grid"></section>

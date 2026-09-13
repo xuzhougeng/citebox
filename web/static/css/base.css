@@ -39,11 +39,9 @@ body {
     margin: 0;
     min-height: 100vh;
     font-family: var(--font-body);
+    font-size: var(--text-body);
     color: var(--ink);
-    background:
-        radial-gradient(circle at top left, rgba(var(--accent-rgb), 0.18), transparent 22rem),
-        radial-gradient(circle at top right, rgba(var(--success-rgb), 0.14), transparent 24rem),
-        linear-gradient(180deg, var(--body-bg-1) 0%, var(--body-bg-2) 45%, var(--body-bg-3) 100%);
+    background: linear-gradient(180deg, var(--bg-soft), var(--bg) 32rem);
     overflow-x: clip;
 }
 
@@ -61,6 +59,22 @@ textarea {
 
 button {
     cursor: pointer;
+}
+
+:where(a, button, input, select, textarea, summary, [tabindex], [role="button"]):focus-visible {
+    outline: 2px solid var(--accent-deep);
+    outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
 }
 
 body.modal-open {

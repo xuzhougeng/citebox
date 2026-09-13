@@ -31,27 +31,21 @@
         </div>
     </nav>
 
-    <main class="page-shell">
-        <section class="hero compact">
-            <div>
-                <p class="eyebrow">Notes Desk</p>
-                <h1 data-i18n="notes.hero_title">查看和编辑笔记</h1>
-                <p class="hero-text" data-i18n="notes.hero_text">集中查看文献笔记和图片笔记。文献的基本信息请在详情页中编辑。</p>
+    <main class="page-shell collection-page notes-page">
+        <header class="collection-header">
+            <h1 data-i18n="nav.notes">笔记</h1>
+            <div id="notesTypeSwitch" class="segmented-control" role="group" aria-label="笔记类型" data-i18n-aria-label="notes.type_switch_aria">
+                <button class="btn btn-primary" type="button" data-notes-mode="paper" aria-pressed="true" data-i18n="notes.type_paper">文献笔记</button>
+                <button class="btn btn-outline" type="button" data-notes-mode="figure" aria-pressed="false" data-i18n="notes.type_figure">图片笔记</button>
             </div>
-        </section>
+            <details class="collection-help">
+                <summary data-i18n="shared.collection.help">使用说明</summary>
+                <p class="collection-help-text" data-i18n="notes.hero_text">集中查看文献笔记和图片笔记。文献的基本信息请在详情页中编辑。</p>
+                <p id="notesFilterDescription" data-i18n="notes.filter_desc_paper">这里只显示已经写过文献笔记的条目，你可以继续编辑、回看内容或跳转到来源文献。</p>
+            </details>
+        </header>
 
-        <section class="filters-card figure-filters-card">
-            <div class="filters-card-head">
-                <div>
-                    <p class="eyebrow">Notes Filter</p>
-                    <h2 data-i18n="notes.filter_title">筛选笔记</h2>
-                    <p id="notesFilterDescription" data-i18n="notes.filter_desc_paper">这里只显示已经写过文献笔记的条目，你可以继续编辑、回看内容或跳转到来源文献。</p>
-                </div>
-                <div id="notesTypeSwitch" class="notes-type-switch" role="tablist" aria-label="笔记类型切换">
-                    <button class="btn btn-primary" type="button" data-notes-mode="paper" aria-pressed="true" data-i18n="notes.type_paper">文献笔记</button>
-                    <button class="btn btn-outline" type="button" data-notes-mode="figure" aria-pressed="false" data-i18n="notes.type_figure">图片笔记</button>
-                </div>
-            </div>
+        <section class="filters-card collection-filters" aria-label="筛选条件" data-i18n-aria-label="shared.collection.filters">
             <div class="filters-grid">
                 <label class="field">
                     <span data-i18n="label.keyword">关键词</span>
@@ -77,10 +71,9 @@
         </section>
 
         <section class="notes-results-shell">
-            <section id="notesSummaryStrip" class="summary-strip"></section>
+            <section id="notesSummaryStrip" class="summary-strip collection-summary"></section>
             <div class="notes-results-head">
                 <div>
-                    <p class="eyebrow">Notes Shelf</p>
                     <h2 data-i18n="notes.shelf_title">笔记列表</h2>
                 </div>
                 <div id="notesPageControls" class="figure-page-controls"></div>

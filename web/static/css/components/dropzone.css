@@ -2,7 +2,7 @@
 
 .drop-zone {
     padding: 3.25rem 1.25rem;
-    border-radius: 24px;
+    border-radius: var(--radius-panel);
     border: 1.5px dashed rgba(var(--accent-rgb), 0.35);
     background:
         linear-gradient(135deg, rgba(var(--accent-rgb), 0.08), rgba(var(--surface-rgb), 0.7)),
@@ -32,7 +32,7 @@
     justify-content: space-between;
     gap: 1rem;
     padding: 1rem 1.1rem;
-    border-radius: 18px;
+    border-radius: var(--radius-card);
     background: rgba(var(--surface-rgb), 0.8);
     border: 1px solid rgba(var(--ink-rgb), 0.08);
 }

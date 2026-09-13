@@ -6,12 +6,10 @@
     justify-content: space-between;
     gap: 1rem;
     padding: 1.2rem 1.3rem;
-    border-radius: 22px;
-    background:
-        radial-gradient(circle at top right, rgba(var(--info-rgb), 0.08), transparent 14rem),
-        linear-gradient(180deg, rgba(var(--surface-rgb), 0.96), rgba(var(--surface-rgb), 0.92));
+    border-radius: var(--radius-card);
+    background: var(--panel-strong);
     border: 1px solid rgba(var(--ink-rgb), 0.08);
-    box-shadow: 0 14px 28px rgba(var(--shadow-rgb), 0.08);
+    box-shadow: none;
 }
 
 .library-result-meta h2 {

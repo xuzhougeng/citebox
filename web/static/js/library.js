@@ -305,21 +305,20 @@ const LibraryPage = {
         const vm = this.state.viewMode;
         this.resultMeta.innerHTML = `
             <div>
-                <p class="eyebrow">Result Set</p>
                 <h2>${t('library.result_found', '找到')} ${this.state.total || 0} ${t('library.result_papers', '篇文献')}</h2>
-                <p>${t('library.result_focus', '当前聚焦')}：${Utils.escapeHTML(statusLabel)}。${t('library.result_scope', '关键词检索范围')}：${Utils.escapeHTML(scopeLabel)}。${t('library.result_sort', '排序')}：${Utils.escapeHTML(sortLabel)}。</p>
             </div>
             <div class="library-result-meta-tags">
                 <span class="tag-pill neutral">${t('library.result_current_page', '当前页')} ${this.state.papers.length} ${t('library.result_papers_unit', '篇')}</span>
                 ${this.state.filters.keyword ? `<span class="tag-pill neutral">${t('library.result_keyword', '关键词')}：${Utils.escapeHTML(this.state.filters.keyword)}</span>` : ''}
                 ${this.state.filters.author ? `<span class="tag-pill neutral">${t('library.result_author', '作者')}：${Utils.escapeHTML(this.state.filters.author)}</span>` : ''}
+                <span class="tag-pill neutral">${Utils.escapeHTML(statusLabel)}</span>
                 <span class="tag-pill neutral">${t('library.result_scope_label', '范围')}：${Utils.escapeHTML(scopeLabel)}</span>
                 <span class="tag-pill neutral">${t('library.result_sort', '排序')}：${Utils.escapeHTML(sortLabel)}</span>
                 ${this.state.filters.group_id ? `<span class="tag-pill neutral">${t('library.result_group_limited', '已限定分组')}</span>` : ''}
                 ${this.state.filters.tag_id ? `<span class="tag-pill neutral">${t('library.result_tag_limited', '已限定标签')}</span>` : ''}
                 <span class="library-view-toggle" role="group" aria-label="${t('library.view_mode_aria', '视图模式')}">
-                    <button type="button" class="view-toggle-btn ${vm === 'detailed' ? 'active' : ''}" data-view-mode="detailed">${t('library.view_detailed', '详细')}</button>
-                    <button type="button" class="view-toggle-btn ${vm === 'compact' ? 'active' : ''}" data-view-mode="compact">${t('library.view_compact', '紧凑')}</button>
+                    <button type="button" class="view-toggle-btn ${vm === 'detailed' ? 'active' : ''}" data-view-mode="detailed" aria-pressed="${vm === 'detailed'}">${t('library.view_detailed', '详细')}</button>
+                    <button type="button" class="view-toggle-btn ${vm === 'compact' ? 'active' : ''}" data-view-mode="compact" aria-pressed="${vm === 'compact'}">${t('library.view_compact', '紧凑')}</button>
                 </span>
             </div>
         `;

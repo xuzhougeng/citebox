@@ -3,7 +3,7 @@
 .page-shell {
     max-width: 1280px;
     margin: 0 auto;
-    padding: 2rem 1.5rem 4rem;
+    padding: var(--space-6) var(--space-6) 4rem;
 }
 
 .page-shell.narrow {
@@ -122,7 +122,7 @@
 .navbar-content {
     max-width: 1280px;
     margin: 0 auto;
-    padding: 1rem 1.5rem;
+    padding: var(--space-3) var(--space-6);
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -135,6 +135,7 @@
     margin: 0;
     padding: 0;
     list-style: none;
+    flex-shrink: 0;
 }
 
 .nav-actions {
@@ -167,6 +168,7 @@
 }
 
 .logo {
+    flex-shrink: 0;
     font-family: var(--font-display);
     font-size: 1.35rem;
     font-weight: 700;
@@ -220,16 +222,15 @@
 .nav-dropdown-menu {
     position: absolute;
     top: calc(100% + 0.4rem);
-    left: 0;
+    right: 0;
     min-width: 160px;
     margin: 0;
     padding: 0.4rem;
     list-style: none;
     background: var(--bg, #fff);
     border: 1px solid rgba(var(--ink-rgb), 0.1);
-    border-radius: 14px;
-    box-shadow: 0 14px 36px -18px rgba(0, 0, 0, 0.32),
-                0 4px 10px -6px rgba(0, 0, 0, 0.12);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-floating);
     display: none;
     z-index: 30;
 }
