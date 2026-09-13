@@ -11,11 +11,13 @@ import (
 
 // assembleContext is the prompt-ready output of one turn's prompt build.
 type assembledContext struct {
-	systemPrompt string
-	userPrompt   string
-	images       []model.AIImageInput
-	papers       []PinnedPaperContextUsage
-	evidenceText string
+	systemPrompt           string
+	userPrompt             string
+	images                 []model.AIImageInput
+	papers                 []PinnedPaperContextUsage
+	evidenceText           string
+	historyMessages        int
+	omittedHistoryMessages int
 }
 
 // PinnedPaperContextUsage describes the exact body spans added to this turn.
@@ -56,13 +58,14 @@ func (s *Service) assembleWithEvidence(conv repository.AIConversation,
 	// Reserve mandatory input and framing before adding optional paper text.
 	// The same estimate is used below to allocate the remaining history window.
 	fixedTokens := estimateTokens(systemPrompt) + estimateTokens(summaryBlock) + estimateTokens(attachmentBlock) + estimateTokens(userText) + 200
-	evidenceBudget := max(0, budget-fixedTokens)
+	reservedHistory := min(historyTokenCost(history), max(0, budget-fixedTokens)/2)
+	evidenceBudget := max(0, budget-fixedTokens-reservedHistory)
 	if !conv.StrictEvidence && len(pinned) > 0 {
 		evidenceBudget /= 2
 	}
 	evidenceBlock = budgetedEvidenceBlock(evidenceBlock, evidenceBudget)
 	fixedTokens += estimateTokens(evidenceBlock)
-	pinnedBudget := budget - fixedTokens
+	pinnedBudget := budget - fixedTokens - reservedHistory
 	pinnedBlock := ""
 	var paperUsage []PinnedPaperContextUsage
 	var paperBlocks []string
@@ -91,28 +94,10 @@ func (s *Service) assembleWithEvidence(conv repository.AIConversation,
 		pinnedBlock = "已钉文献：\n\n" + strings.Join(paperBlocks, "\n\n---\n\n") + "\n\n"
 	}
 
-	var historyLines []string
-	staticBudget := fixedTokens + estimateTokens(pinnedBlock)
-	available := budget - staticBudget
-	if available < 0 {
-		available = 0
-	}
-	cumulative := 0
-	for i := len(history) - 1; i >= 0; i-- {
-		m := history[i]
-		line := fmt.Sprintf("%s: %s", m.Role, m.Content)
-		cost := estimateTokens(line)
-		if cumulative+cost > available {
-			break
-		}
-		historyLines = append([]string{line}, historyLines...)
-		cumulative += cost
-	}
+	historyBlock, keptMessages := budgetedHistoryBlock(history, max(0, budget-fixedTokens-estimateTokens(pinnedBlock)))
 
 	userPrompt := pinnedBlock + summaryBlock
-	if len(historyLines) > 0 {
-		userPrompt += "近期对话：\n" + strings.Join(historyLines, "\n") + "\n\n"
-	}
+	userPrompt += historyBlock
 	if attachmentBlock != "" {
 		userPrompt += attachmentBlock
 	}
@@ -120,10 +105,11 @@ func (s *Service) assembleWithEvidence(conv repository.AIConversation,
 	userPrompt += "用户问题：\n" + userText
 
 	return assembledContext{
-		systemPrompt: systemPrompt,
-		userPrompt:   userPrompt,
-		papers:       paperUsage,
-		evidenceText: evidenceBlock,
+		systemPrompt:    systemPrompt,
+		userPrompt:      userPrompt,
+		papers:          paperUsage,
+		evidenceText:    evidenceBlock,
+		historyMessages: keptMessages, omittedHistoryMessages: len(history) - keptMessages,
 	}, nil
 }
 

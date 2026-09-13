@@ -336,7 +336,17 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput, onDelta 
 		history = history[:len(history)-1]
 	}
 
-	s.maybeSummarize(ctx, &conv, &history, subagentSettings)
+	summarySettings := subagentSettings
+	// Reserve the same half-window for history that assembly protects when
+	// pinned papers compete for the context budget. Include framing and input.
+	if len(pinned) > 0 {
+		budget := masterSettings.ContextBudgetTokens
+		if budget <= 0 {
+			budget = 32000
+		}
+		summarySettings.ContextBudgetTokens = max(256, (budget-estimateTokens(masterSettings.SystemPrompt)-estimateTokens(in.Content)-estimateTokens(buildExcerptBlock(in.Context.Excerpts))-200)/2)
+	}
+	s.maybeSummarize(ctx, &conv, &history, summarySettings)
 
 	// Re-read StrictEvidence from DB so a PATCH between turns is honoured
 	// immediately. We only refresh that flag to avoid clobbering the summary
@@ -436,6 +446,8 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput, onDelta 
 	}
 	asm.images = attachedImages
 	usage.Papers = asm.papers
+	usage.HistoryMessages = asm.historyMessages
+	usage.OmittedHistoryMessages = asm.omittedHistoryMessages
 	usage.EstimatedTextTokens = estimateTokens(asm.systemPrompt) + estimateTokens(asm.userPrompt)
 	for _, citation := range runOut.Citations {
 		if citation.Snippet.Text != "" && strings.Contains(asm.evidenceText, citation.Snippet.Text) {

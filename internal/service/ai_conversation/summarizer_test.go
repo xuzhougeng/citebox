@@ -27,8 +27,8 @@ func TestSummarizerCompressOldHalf(t *testing.T) {
 	if !strings.Contains(summary, "压缩摘要内容") {
 		t.Fatalf("summary = %q", summary)
 	}
-	// Compresses oldest half (id 1..3 → 3 messages of 6).
-	if throughID != 3 {
-		t.Fatalf("throughID = %d, want 3", throughID)
+	// Preserve complete turns: include the answer to the second question.
+	if throughID != 4 {
+		t.Fatalf("throughID = %d, want 4", throughID)
 	}
 }

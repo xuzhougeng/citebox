@@ -15,12 +15,14 @@ const maxAutoAttachedFigures = 4
 // ContextUsage is emitted immediately before the provider call and saved
 // with the assistant message through its turn run. Image counts describe inputs sent, not provider comprehension.
 type ContextUsage struct {
-	Papers              []PinnedPaperContextUsage `json:"papers"`
-	RequestedImages     int                       `json:"requested_images"`
-	AttachedImages      int                       `json:"attached_images"`
-	ImageReason         string                    `json:"image_reason"`
-	EvidenceSnippets    int                       `json:"evidence_snippets"`
-	EstimatedTextTokens int                       `json:"estimated_text_tokens"`
+	HistoryMessages        int                       `json:"history_messages"`
+	OmittedHistoryMessages int                       `json:"omitted_history_messages"`
+	Papers                 []PinnedPaperContextUsage `json:"papers"`
+	RequestedImages        int                       `json:"requested_images"`
+	AttachedImages         int                       `json:"attached_images"`
+	ImageReason            string                    `json:"image_reason"`
+	EvidenceSnippets       int                       `json:"evidence_snippets"`
+	EstimatedTextTokens    int                       `json:"estimated_text_tokens"`
 }
 
 func (s *Service) turnFigureIDs(input ai_assistant.RequestContext, pinned []repository.AIPinnedPaper) []int64 {
