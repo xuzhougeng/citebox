@@ -37,6 +37,7 @@ type RouteInput struct {
 }
 
 type ToolInput struct {
+	SearchTerms    []string           `json:"search_terms,omitempty"`
 	Query          string             `json:"query"`
 	Context        RequestContext     `json:"context,omitempty"`
 	Limit          int                `json:"limit,omitempty"`

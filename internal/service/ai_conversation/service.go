@@ -376,12 +376,22 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput, onDelta 
 		!requestContextEmpty(in.Context) ||
 		len(in.Sources) > 0
 	if s.orchestrator != nil && (!legacyEvidenceRequested || explicitAssistantRequest) {
+		var planningHistory []ai_assistant.PlanningMessage
+		for _, m := range history {
+			planningHistory = append(planningHistory, ai_assistant.PlanningMessage{Role: m.Role, Content: m.Content})
+		}
+		var planningPapers []ai_assistant.PlanningPaper
+		for _, pp := range pinned {
+			planningPapers = append(planningPapers, ai_assistant.PlanningPaper{ID: pp.PaperID, Title: pp.Title})
+		}
 		out, orchErr := s.orchestrator.Run(ctx, ai_assistant.RunInput{
-			Content:        in.Content,
-			IntentHint:     in.IntentHint,
-			SearchGoalHint: in.SearchGoalHint,
-			Sources:        in.Sources,
-			Context:        toolContext,
+			History: planningHistory, Summary: conv.SummaryText, PinnedPapers: planningPapers,
+			ExplicitPaperScope: in.Context.PaperID > 0 || len(in.Context.PaperIDs) > 0,
+			Content:            in.Content,
+			IntentHint:         in.IntentHint,
+			SearchGoalHint:     in.SearchGoalHint,
+			Sources:            in.Sources,
+			Context:            toolContext,
 		})
 		if orchErr != nil {
 			s.logger.Warn("ai_conversation: orchestrator failed", "error", orchErr)
