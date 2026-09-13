@@ -8,6 +8,7 @@ import (
 
 	"github.com/xuzhougeng/citebox/internal/apperr"
 	"github.com/xuzhougeng/citebox/internal/model"
+	"github.com/xuzhougeng/citebox/internal/service/ai_context"
 )
 
 func buildAIPrompts(
@@ -34,9 +35,9 @@ func buildAIPrompts(
 		tagNames = append(tagNames, tag.Name)
 	}
 
-	fullText := strings.TrimSpace(paper.PDFText)
-	if fullText == "" {
-		fullText = "未提取到正文内容。"
+	budget := settings.ContextBudgetTokens
+	if budget <= 0 {
+		budget = 32000
 	}
 
 	abstractText := strings.TrimSpace(paper.AbstractText)
@@ -84,7 +85,14 @@ func buildAIPrompts(
 		displayQuestion = promptQuestion
 	}
 
-	userPrompt := fmt.Sprintf(`任务类型: %s
+	abstractText = ai_context.BoundText(abstractText, max(64, budget/12))
+	notesText = ai_context.BoundText(notesText, max(64, budget/12))
+	existingTagNames = ai_context.BoundText(existingTagNames, max(32, budget/24))
+	existingGroupNames = ai_context.BoundText(existingGroupNames, max(32, budget/24))
+	figureSection = ai_context.BoundText(figureSection, max(64, budget/12))
+	conversationSection = ai_context.BoundText(conversationSection, max(64, budget/4))
+	renderPrompt := func(fullText string) string {
+		return fmt.Sprintf(`任务类型: %s
 
 场景范围:
 %s
@@ -122,31 +130,34 @@ func buildAIPrompts(
 场景指令:
 %s
 
-全文:
+正文上下文:
 %s
 
 输出要求:
 %s`,
-		action,
-		scopeDescription,
-		paper.Title,
-		paper.OriginalFilename,
-		groupName,
-		joinOrFallback(tagNames, "无"),
-		abstractText,
-		notesText,
-		includedFigures,
-		figureSection,
-		existingTagNames,
-		existingGroupNames,
-		promptQuestion,
-		displayQuestion,
-		rolePromptNames,
-		conversationSection,
-		actionPromptFor(settings, action),
-		fullText,
-		outputRequirements,
-	)
+			action,
+			scopeDescription,
+			paper.Title,
+			paper.OriginalFilename,
+			groupName,
+			joinOrFallback(tagNames, "无"),
+			abstractText,
+			notesText,
+			includedFigures,
+			figureSection,
+			existingTagNames,
+			existingGroupNames,
+			promptQuestion,
+			displayQuestion,
+			rolePromptNames,
+			conversationSection,
+			actionPromptFor(settings, action),
+			fullText,
+			outputRequirements,
+		)
+
+	}
+	userPrompt := renderPrompt("")
 
 	systemPrompt := settings.SystemPrompt
 	roleSystemPrompt := buildAIRolePromptSystemSection(activeRolePrompts)
@@ -154,6 +165,15 @@ func buildAIPrompts(
 		systemPrompt = strings.TrimSpace(systemPrompt + "\n\n" + roleSystemPrompt)
 	}
 
+	remaining := max(0, budget-ai_context.EstimateTokens(systemPrompt)-ai_context.EstimateTokens(userPrompt)-100)
+	var body string
+	if action == model.AIActionFigureInterpretation {
+		remaining = min(remaining, budget/2, 6000)
+		body = ai_context.FigureBody(*paper, promptQuestion+" "+figureSection, remaining)
+	} else {
+		body, _ = ai_context.PaperBlock(*paper, remaining)
+	}
+	userPrompt = renderPrompt(body)
 	return systemPrompt, userPrompt
 }
 

@@ -26,6 +26,10 @@ type ContextUsage struct {
 }
 
 func (s *Service) turnFigureIDs(input ai_assistant.RequestContext, pinned []repository.AIPinnedPaper) []int64 {
+	return s.turnFigureIDsForQuestion(input, pinned, "")
+}
+
+func (s *Service) turnFigureIDsForQuestion(input ai_assistant.RequestContext, pinned []repository.AIPinnedPaper, question string) []int64 {
 	ids := append([]int64(nil), input.FigureIDs...)
 	if input.FigureID > 0 {
 		ids = append(ids, input.FigureID)
@@ -42,8 +46,8 @@ func (s *Service) turnFigureIDs(input ai_assistant.RequestContext, pinned []repo
 			continue
 		}
 		var figures []int64
-		for _, figure := range paper.Figures {
-			if figure.ParentFigureID != nil || figure.ID <= 0 || seen[figure.ID] {
+		for _, figure := range ai_assistant.RelevantFigures(paper.Figures, question) {
+			if figure.ID <= 0 || seen[figure.ID] {
 				continue
 			}
 			seen[figure.ID] = true
@@ -75,7 +79,11 @@ func (s *Service) turnFigureIDs(input ai_assistant.RequestContext, pinned []repo
 
 func (s *Service) loadTurnFigures(ctx context.Context, input ai_assistant.RequestContext,
 	pinned []repository.AIPinnedPaper, settings model.AISettings) ([]model.AIImageInput, string, ContextUsage) {
-	ids := s.turnFigureIDs(input, pinned)
+	return s.loadTurnFiguresForQuestion(ctx, input, pinned, settings, "")
+}
+
+func (s *Service) loadTurnFiguresForQuestion(ctx context.Context, input ai_assistant.RequestContext, pinned []repository.AIPinnedPaper, settings model.AISettings, question string) ([]model.AIImageInput, string, ContextUsage) {
+	ids := s.turnFigureIDsForQuestion(input, pinned, question)
 	usage := ContextUsage{RequestedImages: len(ids), ImageReason: "auto_disabled"}
 	var images []model.AIImageInput
 	var summaries []string
