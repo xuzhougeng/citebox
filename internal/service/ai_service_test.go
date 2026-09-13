@@ -126,8 +126,8 @@ func TestAISettingsDefaultsAndPersistence(t *testing.T) {
 	if reloaded.Models[0].MaxOutputTokens != 900 {
 		t.Fatalf("GetSettings() reload model max_output_tokens = %d, want 900", reloaded.Models[0].MaxOutputTokens)
 	}
-	if !aiModelSupportsImages(reloaded.Models[0]) {
-		t.Fatalf("GetSettings() reload legacy model supports_images = false, want true default")
+	if aiModelSupportsImages(reloaded.Models[0]) {
+		t.Fatalf("legacy model without explicit capability must not default to image support")
 	}
 	if reloaded.TranslatePrompt != "custom translate" || reloaded.Translation.PrimaryLanguage != "中文" || reloaded.Translation.TargetLanguage != "英文" {
 		t.Fatalf("GetSettings() reload translate settings = %+v, want persisted translate config", reloaded)

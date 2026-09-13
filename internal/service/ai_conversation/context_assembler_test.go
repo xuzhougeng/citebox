@@ -14,7 +14,7 @@ func TestAssembleForTurnIncludesFullAbstractAndTruncationHint(t *testing.T) {
 
 	paperID := mustInsertPaperForTest(t, libRepo, "Spatial Omni Paper", "10.1/spatial")
 	abstract := strings.Repeat("摘要句子。", 400) // 2000 runes, well above the old 800 cap
-	longTail := strings.Repeat("RESULTS AND METHODS tail ", 1500)
+	longTail := strings.Repeat("RESULTS AND METHODS tail ", 15000)
 	pdfText := "INTRODUCTION head " + longTail
 	if _, err := libRepo.DB().Exec(
 		`UPDATE papers SET abstract_text = ?, pdf_text = ? WHERE id = ?`,
@@ -33,10 +33,10 @@ func TestAssembleForTurnIncludesFullAbstractAndTruncationHint(t *testing.T) {
 	if !strings.Contains(asm.userPrompt, abstract) {
 		t.Fatalf("pinned block should include the full abstract")
 	}
-	if !strings.Contains(asm.userPrompt, "正文开头，全文更长") {
+	if !strings.Contains(asm.userPrompt, "不是完整全文") {
 		t.Fatalf("pinned block should tell the model the body is truncated: %s", asm.userPrompt)
 	}
-	if !strings.Contains(asm.userPrompt, "文献检索工具") {
+	if !strings.Contains(asm.userPrompt, "未选中的内容仍可能在库内") {
 		t.Fatalf("pinned block should point the model at retrieval tools")
 	}
 }
@@ -59,7 +59,7 @@ func TestAssembleForTurnKeepsBodyWholeUnderCap(t *testing.T) {
 		t.Fatalf("assembleForTurn: %v", err)
 	}
 
-	if strings.Contains(asm.userPrompt, "正文开头，全文更长") {
+	if strings.Contains(asm.userPrompt, "不是完整全文") {
 		t.Fatalf("short body should not carry the truncation hint")
 	}
 	if !strings.Contains(asm.userPrompt, strings.TrimRight(pdfText, " ")) {
@@ -104,7 +104,7 @@ func TestAssembleForTurnFitsPinnedPapersWithinRemainingBudget(t *testing.T) {
 					t.Fatalf("missing pinned paper %q", pp.Title)
 				}
 			}
-			if !strings.Contains(asm.userPrompt, "文献检索工具") || !strings.Contains(asm.userPrompt, "已带入前") {
+			if !strings.Contains(asm.userPrompt, "未选中的内容仍可能在库内") || !strings.Contains(asm.userPrompt, "正文字符") {
 				t.Fatal("truncated text must disclose its extent and retrieval path")
 			}
 			if !strings.Contains(asm.userPrompt, conv.SummaryText) || !strings.Contains(asm.userPrompt, attachment) {

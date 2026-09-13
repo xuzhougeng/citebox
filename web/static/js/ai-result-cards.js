@@ -99,9 +99,9 @@
         return html;
     }
 
-    function renderSnippets(snippets, terms) {
+    function renderSnippets(snippets, terms, all = false) {
         if (!Array.isArray(snippets) || snippets.length === 0) return '';
-        return '<div class="ai-result-snippets">' + snippets.slice(0, 3).map((snippet) => {
+        return '<div class="ai-result-snippets">' + (all ? snippets : snippets.slice(0, 3)).map((snippet) => {
             const location = snippet.location ? '<span>' + escapeHtml(snippet.location) + '</span>' : '';
             return '<blockquote>' +
                 '<p>' + renderHighlightedText(snippet.text || '', terms) + citation(snippet.citation_index) + '</p>' +
@@ -113,6 +113,8 @@
     function renderCard(card) {
         const p = payload(card);
         switch (cardType(card)) {
+        case 'context_summary':
+            return renderContextSummary(p);
         case 'paper_hit':
             return renderPaperHit(p);
         case 'external_paper':
@@ -129,6 +131,37 @@
                 escapeHtml(JSON.stringify(p, null, 2)) +
             '</pre></article>';
         }
+    }
+
+    function renderContextSummary(p) {
+        const number = value => Math.max(0, Number(value) || 0);
+        const format = (key, fallback, values) => {
+            let text = translate(key, fallback);
+            Object.keys(values).forEach(key => { text = text.replace('{' + key + '}', values[key]); });
+            return escapeHtml(text);
+        };
+        const reasons = {
+            none: ['ai.context_images_none', '未选择图片；可勾选主图自动附带或手动选图。'],
+            text_only: ['ai.context_images_text_only', '模型未确认支持图片输入，仅提供文字图注。'],
+            unavailable: ['ai.context_images_unavailable', '图片未能加载，请检查图片文件。'],
+            partial: ['ai.context_images_partial', '部分图片缺失或超过数量、大小限制。'],
+            attached: ['ai.context_images_attached', '图片已随请求提交；不代表模型一定使用了图片内容。']
+        };
+        const reason = reasons[p.figure_status] || reasons.none;
+        const papers = (Array.isArray(p.papers) ? p.papers : []).map(paper => {
+            const included = number(paper.included_characters), total = number(paper.total_characters);
+            return '<li><strong>' + escapeHtml(paper.title || '') + '</strong> — ' +
+                format('ai.context_body_extent', '正文 {included} / {total} 字符', {included, total}) +
+                ' · ' + escapeHtml(total === 0 ? translate('ai.context_no_body', '库内无正文') :
+                    included === total ? translate('ai.context_full_body', '完整带入') : translate('ai.context_sampled_body', '跨章节取段，非完整全文')) + '</li>';
+        }).join('');
+        return '<details class="ai-context-report"><summary>' +
+            escapeHtml(translate('ai.context_report', '本轮读取范围')) + ' · ' +
+            format('ai.context_images_count', '图片输入 {included} / {requested} 张', {included:number(p.included_figures), requested:number(p.requested_figures)}) +
+            '</summary>' + (papers ? '<ul>' + papers + '</ul>' : '') +
+            '<p>' + escapeHtml(translate(reason[0], reason[1])) + '</p>' +
+            (p.tool_context_truncated ? '<p>' + escapeHtml(translate('ai.context_tool_truncated', '检索结果也因本轮预算缩减，结果卡片可能包含未送入模型的片段。')) + '</p>' : '') +
+            '</details>';
     }
 
     function renderPaperHit(p) {
@@ -273,7 +306,9 @@
             papers.map((paper) => (
                 '<section class="ai-result-paper-section">' +
                     '<strong>' + escapeHtml(paper.title || translate('ai.result_paper_fallback', '文献')) + '</strong>' +
-                    renderSnippets(paper.evidence) +
+                    '<details><summary>' + escapeHtml(translate('ai.context_read_passages', '本次检索与取样片段')) +
+                    ' (' + (Array.isArray(paper.evidence) ? paper.evidence.length : 0) + ')</summary>' +
+                    renderSnippets(paper.evidence, [], true) + '</details>' +
                 '</section>'
             )).join('') +
         '</article>';

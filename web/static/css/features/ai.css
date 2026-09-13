@@ -1333,3 +1333,10 @@ html[lang^="zh"] .ai-config-details[open] .ai-collapsible-toggle::before {
     user-select: text;
     cursor: text;
 }
+
+/* Context provenance stays secondary to the answer. */
+.ai-context-report { padding: 10px 0; font-size: .85rem; color: var(--text-secondary); }
+.ai-context-report summary { cursor: pointer; }
+.ai-context-report ul { padding-left: 20px; }
+.ai-context-report p { margin: 8px 0; }
+.ai-auto-figures-option { display: flex; align-items: center; gap: 8px; padding: 10px 12px; font-size: .8rem; border-bottom: 1px solid var(--border-color); }

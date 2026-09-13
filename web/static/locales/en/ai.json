@@ -1,10 +1,8 @@
 {
     "_title": "AI Assistant - CiteBox",
-
     "ai.hero_eyebrow": "AI Assistant",
     "ai.hero_title": "AI helps you search papers, read papers, and organize evidence",
     "ai.hero_text": "Ask AI to use your local library, full text, figures, and evidence modes for retrieval, explanation, and synthesis.",
-
     "ai.help_label": "Hotkey help",
     "ai.help_heading": "Hotkeys",
     "ai.help_turns_key": "5 Turns Max",
@@ -13,13 +11,11 @@
     "ai.help_send_desc": "Send the current question directly.",
     "ai.help_role_key": "@",
     "ai.help_role_desc": "Type <code>@</code> in the prompt box to open the picker — switch papers or insert a role prompt with arrow keys + Enter.",
-
     "ai.config_heading": "Configuration Summary",
     "ai.config_desc": "Current AI and extraction service settings. Go to Settings if not configured.",
     "ai.select_paper_heading": "Select Paper",
     "ai.search_label": "Search papers",
     "ai.search_placeholder": "Filter by title, filename, abstract, notes, or tags",
-
     "ai.btn_new_conversation": "+ New Conversation",
     "ai.sidebar_search_placeholder": "Search conversations…",
     "ai.sidebar_empty": "No conversations yet. Click + New Conversation to start.",
@@ -83,7 +79,6 @@
     "ai.btn_delete_conversation": "Delete",
     "ai.confirm_delete_conversation_title": "Delete Conversation",
     "ai.confirm_delete_conversation": "This will remove the conversation and its message history.",
-
     "ai.free_ask": "Free Ask",
     "ai.round_badge": "${current} / 5 turns",
     "ai.session_hint_empty": "No conversation yet. Select a paper to start asking.",
@@ -116,7 +111,6 @@
     "ai.btn_edit_resend": "Edit & Resend",
     "ai.btn_cancel_resend": "Cancel",
     "ai.edit_resend_active": "Editing last question",
-
     "ai.config_qa_model": "QA Model",
     "ai.config_ai_status": "AI Status",
     "ai.config_configured": "Configured",
@@ -128,7 +122,6 @@
     "ai.config_entry": "Settings",
     "ai.config_go_settings": "Go to Settings",
     "ai.config_entry_desc": "Configure AI models and PDF extraction service in Settings.",
-
     "ai.empty_no_papers": "No papers available for AI Assistant.",
     "ai.empty_select_paper": "Please select a paper.",
     "ai.no_summary": "This paper has no abstract or notes yet.",
@@ -138,7 +131,6 @@
     "ai.paper_active_badge": "Current",
     "ai.btn_paper_detail": "Paper Details",
     "ai.btn_open_pdf": "Open PDF",
-
     "ai.session_hint_no_paper": "Select a paper for AI Assistant before starting a conversation.",
     "ai.empty_no_conversation": "No paper selected yet.",
     "ai.session_hint_generating": "Generating turn ${round} response. Output streams in real time.",
@@ -147,7 +139,6 @@
     "ai.session_hint_ongoing": "This paper has ${count} turns so far. The next question will include prior context.",
     "ai.session_hint_ready": "No conversation yet. Context will be preserved after the first question.",
     "ai.empty_no_questions": "No questions yet. Try asking about conclusions, methods, limitations, or specific passages.",
-
     "ai.turn_label": "Turn ${n}",
     "ai.turn_user": "You",
     "ai.turn_sending": "Sending",
@@ -171,7 +162,6 @@
     "ai.btn_exporting_md": "Exporting...",
     "ai.btn_exporting_conversation": "Exporting...",
     "ai.btn_sending": "Sending...",
-
     "ai.msg_select_paper": "Please select a paper first",
     "ai.msg_configure_model": "Please configure the QA model in Settings first",
     "ai.msg_limit_reached": "This paper has reached the 5-turn limit. Clear the conversation first.",
@@ -184,7 +174,6 @@
     "ai.msg_note_already_saved": "This turn has already been saved to paper notes",
     "ai.msg_note_overwritten": "AI content overwrote paper notes",
     "ai.msg_note_appended": "AI content appended to paper notes",
-
     "ai.export_title": "AI Assistant Conversation Export",
     "ai.export_paper": "Paper: ${title}",
     "ai.export_file": "Original file: ${filename}",
@@ -193,26 +182,21 @@
     "ai.export_round_heading": "Turn ${n}",
     "ai.export_user_question": "User Question",
     "ai.export_ai_answer": "AI Answer",
-
     "ai.note_heading": "AI Assistant - Turn ${n}",
     "ai.note_question": "Question: ${text}",
     "ai.note_time": "Recorded: ${time}",
     "ai.note_model": "Model: ${meta}",
-
     "ai.tts.read_aloud": "Read aloud",
     "ai.tts.read_failed": "Read aloud failed",
-
     "ai.doi.importing": "Importing paper by DOI: ",
     "ai.doi.imported": "Imported: ",
     "ai.doi.failed": "DOI import failed: ",
-
     "ai.image_gen.status.drafting_prompt": "Analyzing paper and figures...",
     "ai.image_gen.status.prompt_drafted": "Image prompt drafted",
     "ai.image_gen.status.prompt_label": "View prompt",
     "ai.image_gen.status.generating": "Generating image",
     "ai.image_gen.status.done": "Image generated",
     "ai.image_gen.status.failed": "Image generation failed",
-
     "ai.pdf_panel_toggle": "Preview PDF",
     "ai.pdf_panel_toggle_hint": "Preview the pinned paper's PDF; select text or check figures as context",
     "ai.pdf_panel_no_pin_hint": "Pin a paper first",
@@ -236,5 +220,19 @@
     "ai.context_tray_remove_excerpt": "Remove excerpt",
     "ai.context_tray_remove_figure": "Remove figure",
     "ai.sidebar_collapse": "Collapse sidebar",
-    "ai.sidebar_expand": "Expand sidebar"
+    "ai.sidebar_expand": "Expand sidebar",
+    "ai.auto_figures": "Include main figures from pinned papers (up to 8)",
+    "ai.context_report": "Context used this turn",
+    "ai.context_body_extent": "Body: {included} / {total} characters",
+    "ai.context_full_body": "Full stored text included",
+    "ai.context_sampled_body": "Passages across sections, not full text",
+    "ai.context_no_body": "No stored body text",
+    "ai.context_images_count": "Image inputs: {included} / {requested}",
+    "ai.context_images_none": "No images selected. Enable automatic figures or select images manually.",
+    "ai.context_images_text_only": "Image support is unconfirmed for this model; only captions were included.",
+    "ai.context_images_unavailable": "Images could not be loaded. Check the image files.",
+    "ai.context_images_partial": "Some images are missing or exceed count or size limits.",
+    "ai.context_images_attached": "Images were submitted with the request; this does not guarantee the model used their content.",
+    "ai.context_tool_truncated": "Retrieved results were also reduced to fit this turn. Result cards may contain passages not sent to the model.",
+    "ai.context_read_passages": "Retrieved and sampled passages"
 }

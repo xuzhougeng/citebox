@@ -77,3 +77,14 @@ test('renderCard - generated_image: handles null cost_estimate_usd', () => {
     assert.ok(html.includes('gpt-image-2 · 1024x1024'), 'should include model and size');
     assert.ok(!html.includes('$'), 'should not include cost when null');
 });
+
+test('context report distinguishes supplied text and partial images and escapes titles', () => {
+    const html = render([{type:'context_summary',payload:{papers:[{title:'<script>unsafe</script>',included_characters:1200,total_characters:80000}],requested_figures:3,included_figures:1,figure_status:'partial',tool_context_truncated:true}}]);
+    assert.ok(html.includes('1200 / 80000'));
+    assert.ok(html.includes('1 / 3'));
+    assert.ok(html.includes('非完整全文'));
+    assert.ok(html.includes('部分图片缺失'));
+    assert.ok(html.includes('未送入模型'));
+    assert.ok(!html.includes('<script>'));
+    assert.ok(html.includes('<details'));
+});

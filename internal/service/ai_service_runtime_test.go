@@ -710,6 +710,7 @@ func TestPrepareReadFigureInterpretationUsesRequestedFigureOnly(t *testing.T) {
 		Models: []model.AIModelConfig{
 			{
 				ID:              "figure",
+				SupportsImages:  func() *bool { v := true; return &v }(),
 				Name:            "Figure",
 				Provider:        model.AIProviderOpenAI,
 				APIKey:          "test-key",

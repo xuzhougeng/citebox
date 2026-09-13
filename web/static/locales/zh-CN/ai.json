@@ -1,10 +1,8 @@
 {
     "_title": "AI 助手 - CiteBox",
-
     "ai.hero_eyebrow": "AI Assistant",
     "ai.hero_title": "AI 帮你查文献、读文献和整理证据",
     "ai.hero_text": "向 AI 提问，调用本地文献库、全文、图片和证据模式来完成检索、解释与归纳。",
-
     "ai.help_label": "快捷键帮助",
     "ai.help_heading": "快捷键",
     "ai.help_turns_key": "5 Turns Max",
@@ -13,13 +11,11 @@
     "ai.help_send_desc": "直接发送当前问题。",
     "ai.help_role_key": "@",
     "ai.help_role_desc": "在提问框输入 <code>@</code> 唤起选择面板：上下键浏览，回车切换文献或插入角色 Prompt。",
-
     "ai.config_heading": "当前配置摘要",
     "ai.config_desc": "当前生效的 AI 和解析服务设置。未配置时请先前往配置页完成设置。",
     "ai.select_paper_heading": "选择文献",
     "ai.search_label": "检索文献",
     "ai.search_placeholder": "按标题、文件名、摘要、备注或标签过滤",
-
     "ai.btn_new_conversation": "＋ 新对话",
     "ai.sidebar_search_placeholder": "搜索对话…",
     "ai.sidebar_empty": "还没有对话。点 ＋ 新对话开始。",
@@ -83,7 +79,6 @@
     "ai.btn_delete_conversation": "删除",
     "ai.confirm_delete_conversation_title": "删除对话",
     "ai.confirm_delete_conversation": "删除后会移除当前会话及其消息记录。",
-
     "ai.free_ask": "自由提问",
     "ai.round_badge": "${current} / 5 轮",
     "ai.session_hint_empty": "当前还没有对话记录，选中文献后就可以开始提问。",
@@ -116,7 +111,6 @@
     "ai.btn_edit_resend": "编辑重发",
     "ai.btn_cancel_resend": "取消",
     "ai.edit_resend_active": "正在编辑最后一问",
-
     "ai.config_qa_model": "问答模型",
     "ai.config_ai_status": "AI 状态",
     "ai.config_configured": "已配置",
@@ -128,7 +122,6 @@
     "ai.config_entry": "配置入口",
     "ai.config_go_settings": "前往配置页",
     "ai.config_entry_desc": "在配置页统一设置 AI 模型和 PDF 解析服务。",
-
     "ai.empty_no_papers": "没有找到可用于 AI 助手的文献。",
     "ai.empty_select_paper": "请选择一篇文献。",
     "ai.no_summary": "当前文献还没有摘要或笔记。",
@@ -138,7 +131,6 @@
     "ai.paper_active_badge": "当前文献",
     "ai.btn_paper_detail": "文献详情",
     "ai.btn_open_pdf": "打开 PDF",
-
     "ai.session_hint_no_paper": "先选择一篇可用于 AI 助手的文献，再开始连续提问。",
     "ai.empty_no_conversation": "当前还没有选中文献。",
     "ai.session_hint_generating": "正在生成第 ${round} 轮回答，输出会实时显示。",
@@ -147,7 +139,6 @@
     "ai.session_hint_ongoing": "当前文献已累计 ${count} 轮对话，下一次提问会自动带上前文上下文。",
     "ai.session_hint_ready": "当前还没有对话记录，发送第一个问题后会自动保留上下文。",
     "ai.empty_no_questions": "还没有提问记录。你可以先问结论、方法、局限，或者直接追问某段原文。",
-
     "ai.turn_label": "第 ${n} 轮",
     "ai.turn_user": "你",
     "ai.turn_sending": "发送中",
@@ -171,7 +162,6 @@
     "ai.btn_exporting_md": "导出中...",
     "ai.btn_exporting_conversation": "导出中...",
     "ai.btn_sending": "发送中...",
-
     "ai.msg_select_paper": "请先选择一篇文献",
     "ai.msg_configure_model": "请先到配置页设置问答模型",
     "ai.msg_limit_reached": "当前文献已达到 5 轮对话上限，请先清空对话",
@@ -184,7 +174,6 @@
     "ai.msg_note_already_saved": "这轮 AI 内容已经写入文献笔记",
     "ai.msg_note_overwritten": "AI 内容已覆盖文献笔记",
     "ai.msg_note_appended": "AI 内容已追加到文献笔记",
-
     "ai.export_title": "AI 助手对话导出",
     "ai.export_paper": "文献：${title}",
     "ai.export_file": "原始文件：${filename}",
@@ -193,26 +182,21 @@
     "ai.export_round_heading": "第 ${n} 轮",
     "ai.export_user_question": "用户提问",
     "ai.export_ai_answer": "AI 回答",
-
     "ai.note_heading": "AI 助手 · 第 ${n} 轮",
     "ai.note_question": "问题：${text}",
     "ai.note_time": "记录时间：${time}",
     "ai.note_model": "模型：${meta}",
-
     "ai.tts.read_aloud": "朗读",
     "ai.tts.read_failed": "朗读失败",
-
     "ai.doi.importing": "正在通过 DOI 导入文献：",
     "ai.doi.imported": "已导入：",
     "ai.doi.failed": "DOI 导入失败：",
-
     "ai.image_gen.status.drafting_prompt": "正在分析文献和图片...",
     "ai.image_gen.status.prompt_drafted": "已生成图像 prompt",
     "ai.image_gen.status.prompt_label": "查看 prompt",
     "ai.image_gen.status.generating": "正在生成图片",
     "ai.image_gen.status.done": "已生成图片",
     "ai.image_gen.status.failed": "图像生成失败",
-
     "ai.pdf_panel_toggle": "预览 PDF",
     "ai.pdf_panel_toggle_hint": "预览 pin 文献的 PDF，划选引用、勾选图片作为上下文",
     "ai.pdf_panel_no_pin_hint": "先 pin 一篇文献",
@@ -236,5 +220,19 @@
     "ai.context_tray_remove_excerpt": "移除引用",
     "ai.context_tray_remove_figure": "移除图片",
     "ai.sidebar_collapse": "收起侧栏",
-    "ai.sidebar_expand": "展开侧栏"
+    "ai.sidebar_expand": "展开侧栏",
+    "ai.auto_figures": "自动附带已钉文献主图（最多 8 张）",
+    "ai.context_report": "本轮读取范围",
+    "ai.context_body_extent": "正文 {included} / {total} 字符",
+    "ai.context_full_body": "完整带入",
+    "ai.context_sampled_body": "跨章节取段，非完整全文",
+    "ai.context_no_body": "库内无正文",
+    "ai.context_images_count": "图片输入 {included} / {requested} 张",
+    "ai.context_images_none": "未选择图片；可勾选主图自动附带或手动选图。",
+    "ai.context_images_text_only": "模型未确认支持图片输入，仅提供文字图注。",
+    "ai.context_images_unavailable": "图片未能加载，请检查图片文件。",
+    "ai.context_images_partial": "部分图片缺失或超过数量、大小限制。",
+    "ai.context_images_attached": "图片已随请求提交；不代表模型一定使用了图片内容。",
+    "ai.context_tool_truncated": "检索结果也因本轮预算缩减，结果卡片可能包含未送入模型的片段。",
+    "ai.context_read_passages": "本次检索与取样片段"
 }

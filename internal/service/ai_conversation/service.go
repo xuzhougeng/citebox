@@ -350,29 +350,23 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput, onDelta 
 	// vision inputs when the master model supports images, otherwise their
 	// captions/labels degrade to text.
 	attachmentBlock := buildExcerptBlock(in.Context.Excerpts)
-	var attachedImages []model.AIImageInput
-	if s.figureCtx != nil && len(in.Context.FigureIDs) > 0 &&
-		!strings.EqualFold(strings.TrimSpace(in.IntentHint), "image_generation") {
-		images, summaries, loadErr := s.figureCtx.LoadFigureContext(ctx, in.Context.FigureIDs)
-		switch {
-		case loadErr != nil:
-			s.logger.Warn("ai_conversation: figure context load failed", "error", loadErr)
-		case len(summaries) == 0:
-			// Nothing resolved — behave as if no figures were attached.
-		case assistantMasterSupportsImages(*settings) && len(images) > 0:
-			attachedImages = images
-			attachmentBlock += buildFigureContextBlock(summaries, true)
-		default:
-			attachmentBlock += buildFigureContextBlock(summaries, false)
+	figureIDs := s.turnFigureIDs(in.Context, pinned)
+	attachedImages, figureBlock, contextReport := s.loadTurnFigures(ctx, figureIDs, *settings)
+	attachmentBlock += figureBlock
+	includedFigures := len(attachedImages)
+	var toolContext string
+	// Existing conversation pins must reach the reading tool on later turns too.
+	toolRequestContext := in.Context
+	route := ai_assistant.RouteIntent(ai_assistant.RouteInput{Content: in.Content, IntentHint: in.IntentHint, Context: in.Context})
+	usesPinnedContext := route.Intent == ai_assistant.IntentChat || route.Intent == ai_assistant.IntentPaperRead || route.Intent == ai_assistant.IntentFigureLookup
+	if usesPinnedContext && toolRequestContext.PaperID == 0 && len(toolRequestContext.PaperIDs) == 0 && !hasExplicitSearchGoalHint(in.SearchGoalHint) {
+		for _, pp := range pinned {
+			toolRequestContext.PaperIDs = append(toolRequestContext.PaperIDs, pp.PaperID)
+		}
+		if len(pinned) > 0 {
+			toolRequestContext.PaperID = pinned[0].PaperID
 		}
 	}
-	includedFigures := len(attachedImages)
-
-	asm, err := s.assembleForTurn(conv, pinned, history, in.Content, attachmentBlock, masterSettings)
-	if err != nil {
-		return SendMessageResult{}, err
-	}
-	asm.images = attachedImages
 
 	var citations []Citation
 	var citationsJSON string
@@ -389,21 +383,15 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput, onDelta 
 			IntentHint:     in.IntentHint,
 			SearchGoalHint: in.SearchGoalHint,
 			Sources:        in.Sources,
-			Context:        in.Context,
+			Context:        toolRequestContext,
 		})
 		if orchErr != nil {
 			s.logger.Warn("ai_conversation: orchestrator failed", "error", orchErr)
 		} else {
 			runOut = out
 			runUsed = true
-			if strings.TrimSpace(out.AnswerContext) != "" {
-				suffix := "用户问题：\n" + in.Content
-				if strings.HasSuffix(asm.userPrompt, suffix) {
-					asm.userPrompt = strings.TrimSuffix(asm.userPrompt, suffix) + out.AnswerContext
-				} else {
-					asm.userPrompt += "\n\n" + out.AnswerContext
-				}
-			}
+			toolContext = strings.TrimSuffix(out.AnswerContext, "用户问题：\n"+in.Content)
+
 			citationsJSON = marshalAssistantCitations(out.Citations)
 			streamProcess := ai_assistant.WithAnswerGenerationStage(out.Process, "running")
 			if err := s.emitStreamEvent(in, StreamEvent{Type: "process", Data: streamProcess}); err != nil {
@@ -427,17 +415,43 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput, onDelta 
 			// Surface a single warning line through the stream so the UI can toast.
 			_ = onDelta("\n\n_(证据检索失败，本次按普通模式作答)_\n\n")
 		} else {
-			// Replace the trailing "用户问题：\n<userText>" portion of asm.userPrompt
-			// with the enriched evidence block (which already ends with the same).
-			suffix := "用户问题：\n" + in.Content
-			if strings.HasSuffix(asm.userPrompt, suffix) {
-				asm.userPrompt = strings.TrimSuffix(asm.userPrompt, suffix) + enrichedUser
-			} else {
-				// Defensive: if the suffix shape changed, just append the evidence.
-				asm.userPrompt = asm.userPrompt + "\n\n" + enrichedUser
-			}
+			toolContext = strings.TrimSuffix(enrichedUser, "用户问题：\n"+in.Content)
+
 			citations = cites
 			citationsJSON = MarshalCitations(citations)
+		}
+	}
+
+	budget := masterSettings.ContextBudgetTokens
+	if budget <= 0 {
+		budget = 32000
+	}
+	toolRunes := []rune(toolContext)
+	toolBudget := min(budget/3, max(0, budget-estimateTokens(masterSettings.SystemPrompt+conv.SummaryText+attachmentBlock+in.Content)-300))
+	toolLength := fitPinnedLength(len(toolRunes), toolBudget, func(n int) string { return string(toolRunes[:n]) })
+	if toolLength < 0 {
+		toolLength = 0
+	}
+	contextReport.ToolContextTruncated = toolLength < len(toolRunes)
+	toolContext = string(toolRunes[:toolLength])
+	if contextReport.ToolContextTruncated {
+		toolContext += "\n（工具结果因本轮预算截断，未带入的结果不作为已读证据。）\n"
+	}
+	asm, err := s.assembleForTurn(conv, pinned, history, in.Content, attachmentBlock+toolContext, masterSettings)
+	if err != nil {
+		return SendMessageResult{}, err
+	}
+	asm.images = attachedImages
+	contextReport.Papers = asm.papers
+	if len(pinned) > 0 || len(figureIDs) > 0 {
+		runOut.Cards = append(runOut.Cards, ai_assistant.ResultCard{Type: "context_summary", Payload: contextReport})
+		if !runUsed {
+			runOut.Intent = ai_assistant.IntentChat
+			runOut.Process.Intent = ai_assistant.IntentChat
+		}
+		runUsed = true
+		if err := s.emitStreamEvent(in, StreamEvent{Type: "cards", Data: runOut.Cards}); err != nil {
+			return SendMessageResult{}, err
 		}
 	}
 

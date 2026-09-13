@@ -609,14 +609,14 @@ func TestSendMessageUsesOrchestratorEventsAndPersistsArtifacts(t *testing.T) {
 	if !strings.Contains(caller.userSeen, "ORCH_CONTEXT") {
 		t.Fatalf("provider prompt missing orchestrator context: %s", caller.userSeen)
 	}
-	if len(events) != 4 || events[0].Type != "process" || events[1].Type != "cards" || events[2].Type != "citations" || events[3].Type != "process" {
+	if len(events) != 5 || events[0].Type != "process" || events[1].Type != "cards" || events[2].Type != "citations" || events[3].Type != "cards" || events[4].Type != "process" {
 		t.Fatalf("events = %+v", events)
 	}
 	firstProcess, ok := events[0].Data.(ai_assistant.ProcessSummary)
 	if !ok || stageByLabel(firstProcess.Stages, "生成回答").Status != "running" {
 		t.Fatalf("first process event = %+v, want running answer generation stage", events[0].Data)
 	}
-	finalProcess, ok := events[3].Data.(ai_assistant.ProcessSummary)
+	finalProcess, ok := events[4].Data.(ai_assistant.ProcessSummary)
 	if !ok || stageByLabel(finalProcess.Stages, "生成回答").Status != "completed" {
 		t.Fatalf("final process event = %+v, want completed answer generation stage", events[3].Data)
 	}
@@ -649,14 +649,14 @@ func TestSendMessageUsesOrchestratorEventsAndPersistsArtifacts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListResultCards: %v", err)
 	}
-	if len(cards) != 1 || cards[0].CardType != "figure_result" || !strings.Contains(cards[0].PayloadJSON, "Figure 1") {
+	if len(cards) != 2 || cards[1].CardType != "context_summary" || cards[0].CardType != "figure_result" || !strings.Contains(cards[0].PayloadJSON, "Figure 1") {
 		t.Fatalf("cards = %+v", cards)
 	}
 	conv, err := svc.GetConversation(convID)
 	if err != nil {
 		t.Fatalf("GetConversation: %v", err)
 	}
-	if len(conv.TurnRuns) != 1 || len(conv.TurnRuns[0].Cards) != 1 {
+	if len(conv.TurnRuns) != 1 || len(conv.TurnRuns[0].Cards) != 2 {
 		t.Fatalf("conversation turn runs = %+v", conv.TurnRuns)
 	}
 }
@@ -1579,10 +1579,10 @@ func TestSendMessageAttachesCheckedFiguresAsVisionInput(t *testing.T) {
 	if len(caller.imagesSeen) != 2 || caller.imagesSeen[0].Data != "aW1nMQ==" {
 		t.Fatalf("images seen = %+v", caller.imagesSeen)
 	}
-	if !strings.Contains(caller.userSeen, "本轮随附图片（共 2 张") || !strings.Contains(caller.userSeen, "figure_id=11") {
+	if !strings.Contains(caller.userSeen, "实际向模型提交 2 张图片输入") || !strings.Contains(caller.userSeen, "figure_id=11") {
 		t.Fatalf("prompt missing figure block: %s", caller.userSeen)
 	}
-	if strings.Index(caller.userSeen, "本轮随附图片") > strings.Index(caller.userSeen, "用户问题：") {
+	if strings.Index(caller.userSeen, "本轮请求") > strings.Index(caller.userSeen, "用户问题：") {
 		t.Fatalf("figure block must precede the user question: %s", caller.userSeen)
 	}
 
@@ -1620,7 +1620,7 @@ func TestSendMessageCheckedFiguresTextOnlyWhenModelLacksImages(t *testing.T) {
 	if len(caller.imagesSeen) != 0 {
 		t.Fatalf("images should not reach a text-only model: %+v", caller.imagesSeen)
 	}
-	if !strings.Contains(caller.userSeen, "当前模型不支持图片输入") || !strings.Contains(caller.userSeen, "figure_id=11") {
+	if !strings.Contains(caller.userSeen, "当前模型未确认支持图片输入") || !strings.Contains(caller.userSeen, "figure_id=11") {
 		t.Fatalf("prompt missing text-only fallback: %s", caller.userSeen)
 	}
 }

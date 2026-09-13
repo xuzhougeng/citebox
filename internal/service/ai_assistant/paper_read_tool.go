@@ -69,9 +69,30 @@ func (t *PaperReadTool) Run(ctx context.Context, in ToolInput) (ToolResult, erro
 			skipped++
 			continue
 		}
-		matches := FindLocalEvidenceMatches(*p, terms, 3)
+		matches := FindLocalEvidenceMatches(*p, terms, 8)
 		if len(matches) == 0 {
 			matches = fallbackPaperEvidenceMatches(*p, 1)
+		}
+		// Add distributed body passages even when a broad question has no lexical hits.
+		sampled := SelectPaperText(p.PDFText, in.Query, 4800)
+		body := []rune(p.PDFText)
+		for _, span := range sampled.Ranges {
+			text := string(body[span.Start:span.End])
+			duplicate := false
+			for _, match := range matches {
+				if strings.Contains(match.Snippet.Text, text) {
+					duplicate = true
+					break
+				}
+			}
+			if duplicate {
+				continue
+			}
+			location := fmt.Sprintf("正文字符 %d–%d / %d（全文取段）", span.Start+1, span.End, len(body))
+			matches = append(matches, LocalEvidenceMatch{Location: location, Snippet: research.Snippet{
+				Text: text, SnippetKind: "body", Section: location,
+				SnippetOffset: research.SnippetOffset{Start: len(string(body[:span.Start])), End: len(string(body[:span.End]))},
+			}})
 		}
 		item := PaperCompareItem{PaperID: p.ID, Title: p.Title}
 		for _, m := range matches {
@@ -112,7 +133,7 @@ func (t *PaperReadTool) Run(ctx context.Context, in ToolInput) (ToolResult, erro
 			Note:   note,
 			Stages: []ProcessStage{
 				{Label: "全文扫描", Count: len(items), Unit: "篇", Status: "completed"},
-				{Label: "命中", Count: len(citations), Unit: "段", Status: "completed", Detail: "文献阅读证据片段"},
+				{Label: "命中", Count: len(citations), Unit: "段", Status: "completed", Detail: "关键词命中与全文分段取样，非完整全文"},
 			},
 		},
 		Cards: []ResultCard{{Type: cardType, Payload: PaperCompareCard{

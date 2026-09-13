@@ -14,10 +14,11 @@ type assembledContext struct {
 	systemPrompt string
 	userPrompt   string
 	images       []model.AIImageInput
+	papers       []PaperContextCoverage
 }
 
 // assembleForTurn returns prompts ready for the LLM call. Pinned papers'
-// abstract + first maxPinnedBodyRunes of pdf_text are included as context.
+// full text or question-aware passages across the document are included.
 // Recent messages are concatenated; oldest are dropped if estimated tokens >
 // budget. attachmentBlock carries user-attached context (PDF excerpts, checked
 // figure summaries) and is inserted right before the final user question.
@@ -42,7 +43,8 @@ func (s *Service) assembleForTurn(conv repository.AIConversation,
 	fixedTokens := estimateTokens(systemPrompt) + estimateTokens(summaryBlock) + estimateTokens(attachmentBlock) + estimateTokens(userText) + 200
 	pinnedBudget := budget - fixedTokens
 	pinnedBlock := ""
-	if !conv.StrictEvidence && pinnedBudget > 0 {
+	var coverage []PaperContextCoverage
+	if !conv.StrictEvidence {
 		var paperBlocks []string
 		remaining := pinnedBudget - estimateTokens("已钉文献：\n\n")
 		for i, pp := range pinned {
@@ -53,7 +55,8 @@ func (s *Service) assembleForTurn(conv repository.AIConversation,
 			}
 			// Share the budget across papers so the first long PDF cannot crowd
 			// out every other pinned source. Unused shares remain available.
-			block := budgetedPinnedPaperBlock(*paper, remaining/(len(pinned)-i)-10)
+			block, selected := selectPinnedPaperBlock(*paper, userText, remaining/(len(pinned)-i)-10)
+			coverage = append(coverage, selected)
 			if block == "" {
 				continue
 			}
@@ -95,40 +98,58 @@ func (s *Service) assembleForTurn(conv repository.AIConversation,
 	return assembledContext{
 		systemPrompt: systemPrompt,
 		userPrompt:   userPrompt,
+		papers:       coverage,
 	}, nil
 }
 
-// Per-paper ceilings; the available turn budget can reduce either limit.
-const (
-	maxPinnedAbstractRunes = 4000
-	maxPinnedBodyRunes     = 24000
-)
+// PaperContextCoverage describes only text actually included in the provider prompt.
+type PaperContextCoverage struct {
+	PaperID int64  `json:"paper_id"`
+	Title   string `json:"title"`
+	ai_assistant.PaperTextSelection
+}
 
-// budgetedPinnedPaperBlock retains the abstract first, then includes as much
-// body text as the paper's share permits. Truncation disclosure is budgeted too.
 func budgetedPinnedPaperBlock(paper model.Paper, budget int) string {
+	block, _ := selectPinnedPaperBlock(paper, "", budget)
+	return block
+}
+
+func selectPinnedPaperBlock(paper model.Paper, query string, budget int) (string, PaperContextCoverage) {
 	abstract := []rune(strings.TrimSpace(paper.AbstractText))
-	body := []rune(strings.TrimSpace(paper.PDFText))
-	abstractLimit := min(len(abstract), maxPinnedAbstractRunes)
-	bodyLimit := min(len(body), maxPinnedBodyRunes)
-	render := func(abstractLength, bodyLength int) string {
+	total := len([]rune(paper.PDFText))
+	coverage := PaperContextCoverage{PaperID: paper.ID, Title: paper.Title,
+		PaperTextSelection: ai_assistant.PaperTextSelection{Total: total}}
+	render := func(abstractLength, bodyLength int) (string, ai_assistant.PaperTextSelection) {
+		selected := ai_assistant.SelectPaperText(paper.PDFText, query, bodyLength)
 		abstractText := string(abstract[:abstractLength])
 		if abstractLength < len(abstract) {
 			abstractText += "…"
 		}
-		block := fmt.Sprintf("### %s\nDOI: %s\n摘要: %s\n正文片段:\n%s",
-			paper.Title, paper.DOI, abstractText, string(body[:bodyLength]))
-		if bodyLength < len(body) {
-			block += fmt.Sprintf("\n（注意：以上仅为正文开头，全文更长；已带入前 %d / %d 字符。如需其他段落，请调用文献检索工具查询，不要据此判断用户未提供全文。）", bodyLength, len(body))
+		block := fmt.Sprintf("### %s\nDOI: %s\n摘要: %s\n正文（本轮 %d / 库内 %d 字符）:\n%s",
+			paper.Title, paper.DOI, abstractText, selected.Included, total, selected.Text)
+		if selected.Included < total {
+			block += "\n正文为结合问题与全文位置选取的片段，不是完整全文。未选中的内容仍可能在库内；不能把本轮未见等同于原文不存在。"
+		} else if total == 0 {
+			block += "\n库内尚无提取正文；摘要不能替代全文。"
 		}
-		return block
+		return block, selected
 	}
-	abstractLength := fitPinnedLength(abstractLimit, budget, func(n int) string { return render(n, 0) })
+	abstractLength := fitPinnedLength(min(len(abstract), 4000), budget, func(n int) string { block, _ := render(n, 0); return block })
 	if abstractLength < 0 {
-		return ""
+		return "", coverage
 	}
-	bodyLength := fitPinnedLength(bodyLimit, budget, func(n int) string { return render(abstractLength, n) })
-	return render(abstractLength, bodyLength)
+	bodyLength := fitPinnedLength(total, budget, func(n int) string { block, _ := render(abstractLength, n); return block })
+	if bodyLength < 0 {
+		return "", coverage
+	}
+	block, selected := render(abstractLength, bodyLength)
+	// Sampling locations can change at width thresholds. Verify the final rendered budget.
+	for estimateTokens(block) > budget && bodyLength > 0 {
+		bodyLength = bodyLength * 9 / 10
+		block, selected = render(abstractLength, bodyLength)
+	}
+	coverage.PaperTextSelection = selected
+	return block, coverage
 }
 
 // Return -1 when even the metadata and disclosure cannot fit.
@@ -202,7 +223,7 @@ func buildFigureContextBlock(summaries []string, imagesIncluded bool) string {
 	if imagesIncluded {
 		fmt.Fprintf(&b, "本轮随附图片（共 %d 张，已作为图片输入提供，与用户问题相关）：\n", len(summaries))
 	} else {
-		fmt.Fprintf(&b, "本轮用户勾选了 %d 张图片；当前模型不支持图片输入，仅以文字信息代替：\n", len(summaries))
+		fmt.Fprintf(&b, "本轮用户勾选了 %d 张图片；当前模型未确认支持图片输入，仅以文字信息代替：\n", len(summaries))
 	}
 	for _, summary := range summaries {
 		b.WriteString(summary)

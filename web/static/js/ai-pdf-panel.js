@@ -76,6 +76,10 @@
     // excerpts are capped defensively to mirror the backend limits.
     function mergePanelContext(body, panelCtx) {
         if (!body || !panelCtx) return body;
+        if (panelCtx.auto_figures === true) {
+            body.context = body.context || {};
+            body.context.auto_figures = true;
+        }
         const existing = Array.isArray(body.context && body.context.figure_ids)
             ? body.context.figure_ids : [];
         const extra = Array.isArray(panelCtx.figure_ids) ? panelCtx.figure_ids : [];
@@ -132,6 +136,7 @@
             pinned: [],
             currentPaperId: 0,
             paperDetail: null,
+            autoFigures: false,
             selectedFigures: new Map(), // figure_id -> {id,label,image_url,caption}
             excerpts: [],               // [{paper_id,page,text}]
             pdf: null,                  // pdf.js wiring state
@@ -195,6 +200,10 @@
                     <button type="button" class="ai-pdf-panel-close" data-role="close"
                         aria-label="${escapeHtml(t('ai.pdf_panel_close', '关闭面板'))}">×</button>
                 </header>
+                <label class="ai-auto-figures-option">
+                    <input type="checkbox" data-role="auto-figures">
+                    <span>${escapeHtml(t('ai.auto_figures', '自动附带已钉文献主图（最多 8 张）'))}</span>
+                </label>
                 <div class="ai-pdf-panel-body">
                     <div class="ai-pdf-panel-pdf" data-role="pdf-section">
                         <div class="ai-pdf-scroll" data-role="pdf-scroll" tabindex="0">
@@ -221,6 +230,9 @@
                         <p>${escapeHtml(t('ai.pdf_panel_empty', '先 pin 一篇文献，即可在此预览 PDF、划选引用、勾选图片作为提问上下文。'))}</p>
                     </div>
                 </div>`;
+            s.panel.querySelector('[data-role="auto-figures"]').addEventListener('change', (event) => {
+                s.autoFigures = event.target.checked;
+            });
             s.paperSelect = s.panel.querySelector('[data-role="paper-select"]');
             s.figCountEl = s.panel.querySelector('[data-role="figcount"]');
             s.pdfSection = s.panel.querySelector('[data-role="pdf-section"]');
@@ -902,12 +914,13 @@
 
         hasContext() {
             const s = this._state;
-            return s.excerpts.length > 0 || s.selectedFigures.size > 0;
+            return s.autoFigures || s.excerpts.length > 0 || s.selectedFigures.size > 0;
         },
 
         getContextPayload() {
             const s = this._state;
             return {
+                auto_figures: s.autoFigures,
                 figure_ids: Array.from(s.selectedFigures.keys()),
                 excerpts: s.excerpts.map(function (excerpt) {
                     return { paper_id: excerpt.paper_id, page: excerpt.page, text: excerpt.text };

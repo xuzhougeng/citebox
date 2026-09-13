@@ -77,3 +77,14 @@ test('mergePanelContext keeps existing excerpts-free context fields', () => {
     assert.deepEqual(body.context.figure_ids, [9]);
     assert.deepEqual(body.context.excerpts, [{ paper_id: 5, page: 1, text: 'quote' }]);
 });
+
+test('mergePanelContext carries explicit automatic-figure opt-in without replacing manual selections', () => {
+    const { mergePanelContext } = loadModule();
+    const body = {context:{figure_ids:[3]}};
+    mergePanelContext(body,{auto_figures:true,figure_ids:[4]});
+    assert.equal(body.context.auto_figures,true);
+    assert.deepEqual(Array.from(body.context.figure_ids),[3,4]);
+    const empty = {};
+    mergePanelContext(empty,{auto_figures:false});
+    assert.equal(empty.context && empty.context.auto_figures,undefined);
+});

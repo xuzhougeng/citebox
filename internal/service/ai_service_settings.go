@@ -425,7 +425,7 @@ func normalizeAIModelConfig(input model.AIModelConfig, fallback model.AIModelCon
 		return model.AIModelConfig{}, apperr.New(apperr.CodeInvalidArgument, "max_output_tokens 过大")
 	}
 	if config.SupportsImages == nil {
-		supportsImages := aiModelSupportsImages(fallback)
+		supportsImages := false
 		config.SupportsImages = &supportsImages
 	}
 	if config.Name == "" && config.Provider == model.AIProviderCodex {
@@ -543,7 +543,7 @@ func applyAIModelConfig(settings *model.AISettings, config model.AIModelConfig) 
 }
 
 func aiModelSupportsImages(config model.AIModelConfig) bool {
-	return config.SupportsImages == nil || *config.SupportsImages
+	return config.SupportsImages != nil && *config.SupportsImages
 }
 
 func aiModelIsConfigured(config model.AIModelConfig) bool {

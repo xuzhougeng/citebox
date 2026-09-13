@@ -1064,7 +1064,9 @@ citebox-figure-{id}-transfer-package.zip
 
 会话接口统一位于 `/api/ai/conversations`，用于 AI 页面侧边栏、已钉文献、内部搜索、外部搜索和流式对话。
 
-普通模式下，钉住文献的摘要和正文按 `context_budget_tokens` 的剩余预算分配；系统提示、问题、已有对话摘要和用户附件先计入预算，再在各篇文献间分配可用空间。单篇摘要最多 4000 字符、正文最多 24000 字符，实际可更少；截断时上下文会注明已带入的字符数及全文检索入口。历史消息继续使用剩余空间。用户问题或附件本身超出预算时，不会为了插入文献正文而截断这些显式输入。
+普通模式下，钉住文献的摘要和正文按 `context_budget_tokens` 的剩余预算分配；系统提示、问题、已有对话摘要、用户附件和工具结果先计入预算，再在各篇文献间分配可用空间。单篇摘要最多 4000 字符；正文取消固定 24000 字符上限，预算足够时带入全部库内正文，否则结合问题命中、主要章节与全文分布取段，覆盖文末，并披露实际字符范围。历史消息继续使用剩余空间。工具结果最多占本轮文本预算的三分之一，必要时再缩减；状态卡会注明缩减。用户问题或附件本身超出预算时，不会为了插入文献正文而截断这些显式输入。此处是文本 token 估算，不代表供应商实际计费 token，也不保证无限长度论文可完整放入单轮。
+
+`paper_read` 会检索最多 8 个词面命中，并补充覆盖全文位置的正文片段（正文取样最多 4800 字符）；关键词未命中时仍能到达文末。既有会话的已钉文献也会传入阅读工具。当前执行方式为单次工具调度，没有提供让回答模型自行循环翻读全文的工具接口。
 
 对话导出在应用内预览，支持返回、复制及通过桌面原生保存对话框下载 Markdown，页面不会导航到附件响应。
 
@@ -1110,8 +1112,9 @@ citebox-figure-{id}-transfer-package.zip
 - `intent_hint`：可选的一次性路由提示。支持 `library_search`（查全库）、`external_search`（查外部）、`paper_read`（读文献）、`figure_lookup`（看图/图文）、`remote_mcp`（调用已配置的 Notion MCP）。省略时由后端按内容和上下文自动判断。前端在用户输入 `@PubMed` / `@SemanticScholar` / `@Library` / `@Figure` / `@Notion` 等工具标签时会自动填充该字段。
 - `search_goal_hint`：可选字符串。支持 `discovery` 和 `evidence`；用于显式指定外部搜索目标，优先级高于 planner 推断出的 `search_goal`。`discovery` 适合找方向、找综述、扩展候选，`evidence` 适合核查具体断言、找直接出处。前端快捷入口通常会和 `intent_hint == "external_search"` 一起发送；后端也会把合法的 `search_goal_hint` 视为显式工具请求信号，用它优先走 orchestrator 而不是旧外部证据注入路径。非法值会被安全忽略，仍按 planner / 默认回退逻辑执行。
 - `sources`：可选字符串数组，仅在 `intent_hint == "external_search"` 时被读取。取值为外部源 ID 子集，例如 `["pubmed"]`、`["semantic_scholar"]` 或 `["pubmed","semantic_scholar"]`。当用户在输入框打了 `@PubMed`/`@SemanticScholar` 显式指定外部源时，前端会带上此字段；后端会与设置中"已启用源"取交集执行检索，被显式指定但未启用的源会以 `ErrSourceDisabled` 写入失败列表，并在 `Process.Note` 中提示"用户显式指定但未启用的源: …（请前往设置页启用）"。省略或为空数组时，等同当前默认行为（跑所有已启用源）。
-- `context`：可选上下文对象，支持 `source`、`paper_id`、`paper_ids`、`figure_id`、`figure_ids`、`excerpts`。用于指定当前文献、对比文献或图片上下文。当 `intent_hint == "library_search"` 且 `paper_ids` 非空时（典型场景：用户同时输入 `@Library @<paper>`），后端会把候选集裁剪到该 PaperIDs 集合内。
+- `context`：可选上下文对象，支持 `source`、`paper_id`、`paper_ids`、`figure_id`、`figure_ids`、`auto_figures`、`excerpts`。用于指定当前文献、对比文献或图片上下文。当 `intent_hint == "library_search"` 且 `paper_ids` 非空时（典型场景：用户同时输入 `@Library @<paper>`），后端会把候选集裁剪到该 PaperIDs 集合内。
   - `context.figure_ids`：用户显式勾选的图片 ID 列表（AI 助手页右侧 PDF 面板的图片勾选，或 `@figure-<id>` 提及）。非空时后端会把这些图片作为视觉上下文随问题一并发给主模型（受该模型 `supports_images` 能力门控；不支持图片输入的模型会降级为 caption 文字描述），并把意图路由到 `paper_read`。
+  - `context.auto_figures`：可选布尔值，默认 `false`。为 `true` 时，在显式选图之后，按已钉文献轮流补充主图，总计最多 8 张；子图不自动加入，手动选图优先。仅钉住而未开启此选项不会自动传图。
   - `context.excerpts`：用户在 PDF 预览中划选引用的原文片段数组，每项为 `{"paper_id": 42, "page": 3, "text": "..."}`（`paper_id`、`page` 可省略）。后端以“用户引用的原文片段”块注入本轮 prompt（最多 8 条、每条截断约 2000 字符），按轮生效、不持久化。
 - `replace_last`：可选布尔值。为 `true` 时，服务端会先删除当前会话最后一轮用户消息及其后的回答、流程和结果卡片，再用本次 `content` 重新发送；仅适用于已有会话。
 - `strict_evidence`：兼容字段；历史上对应“内部搜索”开关。当前主 UI 使用 `intent_hint` 和 `context` 调度工具。没有显式 `intent_hint`/`context` 时，旧内部搜索语义仍保留。
@@ -1206,7 +1209,7 @@ citebox-figure-{id}-transfer-package.zip
 
 #### 发送消息请求体扩展
 
-`POST /api/ai-conversations/:id/messages` 现在支持 `context.figure_ids: [<int>]`，当消息文本中包含 `@figure-<id>` 提及、或用户在 AI 助手页右侧 PDF 面板勾选图片时由前端填充。勾选的图片会作为视觉上下文发给主模型（模型标记 `supports_images: false` 时降级为 caption 文字）。另支持 `context.excerpts: [{"paper_id", "page", "text"}]` 携带 PDF 划选引用片段。
+`POST /api/ai-conversations/:id/messages` 现在支持 `context.figure_ids: [<int>]`，当消息文本中包含 `@figure-<id>` 提及、或用户在 AI 助手页右侧 PDF 面板勾选图片时由前端填充。勾选的图片会作为视觉上下文发给主模型（模型未显式标记 `supports_images: true` 时降级为 caption 文字）。另支持 `context.excerpts: [{"paper_id", "page", "text"}]` 携带 PDF 划选引用片段。
 
 #### `POST /api/ai/settings/check-model`
 
@@ -1236,7 +1239,7 @@ citebox-figure-{id}-transfer-package.zip
 OpenAI 兼容模型配置说明：
 
 - `openai_legacy_mode=true` 时使用 Chat Completions，适合 DeepSeek 等兼容网关。
-- `supports_images=false` 时，该模型不会接收 PDF 图片输入；`paper_qa` 会自动降级为文本问答，图片解读等必须视觉输入的场景会提示更换模型或打开该能力。
+- `supports_images` 必须显式为 `true` 才允许图片输入。自定义或旧配置缺失该字段时按 `false` 处理，需在模型设置中确认能力；已有显式设置保持不变。`supports_images=false` 时，该模型不会接收 PDF 图片输入；`paper_qa` 会自动降级为文本问答，图片解读等必须视觉输入的场景会提示更换模型或打开该能力。
 - `omit_temperature=true` 会跳过 `temperature` 字段；`gpt-5*`、`o1*`、`o3*`、`o4*`、`o5*` 模型也会自动跳过，避免模型检查返回 `Unsupported parameter: 'temperature'`。
 - `thinking_enabled=true` 在 Chat Completions 请求体加入 `{"thinking":{"type":"enabled"}}`；在 Responses 模式下会启用 `reasoning` 对象，未设置 `reasoning_effort` 时默认使用 `medium`。
 - `reasoning_effort` 可填 `minimal`、`low`、`medium`、`high`、`xhigh`、`max`、`ultra`；OpenAI 兼容接口是否接受具体值由上游模型决定，Codex 设置页按 app-server `model/list` 返回的能力使用。
@@ -2437,3 +2440,21 @@ Notion API 使用用户在 Notion Developer Portal 创建的个人访问令牌�
 `POST /api/ai/conversations/{id}/append-note` 接收 `message_id`、`paper_id`、`language`（`zh-CN` 或 `en`）。目标必须是该会话已钉住的文献，来源必须是该会话中已保存且非空的 assistant 回答。服务端读取原始回答，不接受客户端提供的替代文本。
 
 返回 `{"saved":true,"paper_id":1}`；相同回答的来源链接仍在该文献笔记中时重复提交返回 `saved:false`。追加是原子操作，只修改 `paper_notes_text`，保留管理笔记、已有文献笔记和并行追加内容。保存块包含问题、AI 标识、记录时间、模型及返回原会话的来源链接。
+
+### 本轮上下文状态卡
+
+带有已钉文献或请求图片的回答，会通过已有 `cards` 流事件提供 `context_summary` 卡，并保存在该轮结果卡中，重开会话可查看。流中后续 `cards` 事件是整组卡片的更新。示例 payload：
+
+```json
+{
+  "papers": [{"paper_id":42,"title":"Example paper","total_characters":80000,"included_characters":6000,"ranges":[{"start":0,"end":3000},{"start":77000,"end":80000}]}],
+  "requested_figures":3,
+  "included_figures":1,
+  "figure_status":"partial",
+  "tool_context_truncated":false
+}
+```
+
+- 正文字符范围使用 Unicode 字符计数、从零起始、左闭右开，对应库内 `pdf_text`；数量只统计固定注入的正文，不包含摘要和工具检索片段。严格证据模式不走固定正文注入，`papers` 可为空。
+- `figure_status` 为 `none`（未选择）、`text_only`（能力未确认，仅文字）、`unavailable`（未能加载）、`partial`（部分图片输入可用）或 `attached`（选图全部成为图片输入）。计数表示向供应商请求提供的图片输入，不保证模型实际关注或正确理解图像。
+- `tool_context_truncated=true` 表示部分工具结果未带入模型，结果卡和引用列表可能比模型实际收到的片段更多。
