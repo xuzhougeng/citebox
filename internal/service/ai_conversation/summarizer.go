@@ -2,6 +2,7 @@ package ai_conversation
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -22,6 +23,14 @@ func summarize(ctx context.Context, caller NonStreamCaller, settings model.AISet
 	if half == 0 {
 		half = 1
 	}
+	// End at a turn boundary; never summarize the user question while leaving
+	// its answer detached in the recent window. Keep the newest turn intact.
+	for half < len(msgs) && msgs[half].Role != "user" {
+		half++
+	}
+	if half >= len(msgs) {
+		return existing, 0, nil
+	}
 	chunk := msgs[:half]
 	through := chunk[len(chunk)-1].ID
 
@@ -36,5 +45,9 @@ func summarize(ctx context.Context, caller NonStreamCaller, settings model.AISet
 	if err != nil {
 		return "", 0, err
 	}
-	return strings.TrimSpace(out), through, nil
+	out = strings.TrimSpace(out)
+	if out == "" {
+		return "", 0, errors.New("empty conversation summary")
+	}
+	return out, through, nil
 }

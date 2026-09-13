@@ -2451,3 +2451,9 @@ Conversation turns now plan retrieval using the current question, up to six rece
 A `retrieval_plan` tool-call artifact records the public structured plan (`intent`, `scope`, `resolved_query`, `search_terms`, `subquestions`, `target_sections`, `need_figures`, `rationale`). This is an execution plan, not model reasoning. Planning input and output are bounded; each planning call has a 20-second timeout. Pinned reading may inspect retrieved evidence and perform at most one supplementary lookup with a 25-second total follow-up deadline. Citations and result cards keep aligned indices across both lookups. The planner does not attach images; the existing explicit image preferences still apply.
 
 Local candidate retrieval interleaves independently ranked term results before applying the overall candidate limit, so later precise terms are represented. No request fields or database migrations are required.
+
+### Recent history context budget
+
+`context_usage` now also includes `history_messages` and `omitted_history_messages`, counting messages represented in the recent-history block (possibly as disclosed excerpts) and messages omitted from that block. Summarized messages are represented separately by the conversation summary. These values are persisted with the turn.
+
+Before allocating pinned body and evidence, the assembler reserves up to half of the remaining text window for recent history. It selects complete recent turns; an oversized newest turn uses explicitly labeled excerpts. Pinned conversations trigger summarization against the reserved history window rather than the entire model window. Summaries end at turn boundaries, retain the newest turn, and never advance the cursor after an empty result. No schema migration is required.
