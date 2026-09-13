@@ -60,7 +60,10 @@ func (t *PaperReadTool) Run(ctx context.Context, in ToolInput) (ToolResult, erro
 	if len(readIDs) > readLimit {
 		readIDs = readIDs[:readLimit]
 	}
-	terms := EvidenceSearchTerms(in.Query)
+	terms := sanitizeEvidenceTerms(in.SearchTerms)
+	if len(terms) == 0 {
+		terms = EvidenceSearchTerms(in.Query)
+	}
 	items := make([]PaperCompareItem, 0, len(readIDs))
 	citations := make([]Citation, 0, len(readIDs)*3)
 	skipped := requested - len(readIDs)

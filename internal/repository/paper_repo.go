@@ -589,12 +589,8 @@ func (r *PaperRepository) ListEvidenceCandidatePaperIDs(terms []string, limit in
 		return []int64{}, nil
 	}
 
-	ids := make([]int64, 0, limit)
-	seenIDs := map[int64]bool{}
+	lists := make([][]int64, 0, len(normalizedTerms))
 	for _, term := range normalizedTerms {
-		if len(ids) >= limit {
-			break
-		}
 		rows, err := r.db.Query(`
 			SELECT p.id
 			FROM papers p
@@ -618,27 +614,42 @@ func (r *PaperRepository) ListEvidenceCandidatePaperIDs(terms []string, limit in
 		if err != nil {
 			return nil, wrapDBError(err, "查询证据候选文献失败")
 		}
+		var matches []int64
 		for rows.Next() {
 			var id int64
 			if err := rows.Scan(&id); err != nil {
 				_ = rows.Close()
 				return nil, wrapDBError(err, "查询证据候选文献失败")
 			}
-			if seenIDs[id] {
-				continue
-			}
-			seenIDs[id] = true
-			ids = append(ids, id)
-			if len(ids) >= limit {
-				break
-			}
+			matches = append(matches, id)
 		}
 		if err := rows.Err(); err != nil {
 			_ = rows.Close()
 			return nil, wrapDBError(err, "查询证据候选文献失败")
 		}
 		_ = rows.Close()
+		lists = append(lists, matches)
 	}
+	// Interleave independently ranked queries so a broad first term cannot
+	// consume the candidate budget before precise alternatives are considered.
+	ids := make([]int64, 0, limit)
+	seenIDs := map[int64]bool{}
+	for rank := 0; rank < limit && len(ids) < limit; rank++ {
+		for _, matches := range lists {
+			if rank >= len(matches) {
+				continue
+			}
+			id := matches[rank]
+			if !seenIDs[id] {
+				seenIDs[id] = true
+				ids = append(ids, id)
+			}
+			if len(ids) == limit {
+				break
+			}
+		}
+	}
+
 	return ids, nil
 }
 

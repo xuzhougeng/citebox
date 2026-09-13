@@ -56,3 +56,9 @@ User question / claim
 - Add a cheap-model evidence judge after local recall to classify snippets as `supports`, `partially_supports`, `related_only`, `contradicts`, or `irrelevant`.
 - Cache evidence judgments by paper ID, normalized claim, snippet offset, and prompt version.
 - Add a dedicated "查文献 / 言之有理" entry point that uses the same local-first evidence pipeline.
+
+## Conversation retrieval planning
+
+The conversation orchestrator now shares a model-based intent and keyword planner across library search and pinned reading. It receives recent conversation context and pinned titles, preserves explicit user scope, and falls back to rule-based routing on planner failure. Pinned reading can make one bounded evidence-guided supplementary lookup. Library candidate lists interleave terms to avoid starving later queries. Existing source-specific external planning remains available.
+
+Follow-up work is split into separate changes: protect recent history budgets; distinguish original evidence from notes; preserve citation snapshots in saved notes; share context selection across reading surfaces; and resume long extraction/interpretation jobs.

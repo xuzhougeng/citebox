@@ -78,11 +78,14 @@ func (t *LibrarySearchTool) Run(ctx context.Context, in ToolInput) (ToolResult, 
 	if limit > maxLibrarySearchLimit {
 		limit = maxLibrarySearchLimit
 	}
-	terms := EvidenceSearchTerms(in.Query)
+	terms := sanitizeEvidenceTerms(in.SearchTerms)
+	if len(terms) == 0 {
+		terms = EvidenceSearchTerms(in.Query)
+	}
 	plan := LibrarySearchPlan{}
 	processStages := make([]ProcessStage, 0, 4)
 	notes := make([]string, 0, 2)
-	if t.planner != nil {
+	if t.planner != nil && len(in.SearchTerms) == 0 {
 		planned, planErr := t.planner.PlanLibrarySearch(ctx, in.Query)
 		if planErr == nil {
 			plan = planned
