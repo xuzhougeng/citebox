@@ -135,7 +135,7 @@ const FigureViewer = {
         this.interpretationCloseButton?.addEventListener('click', () => this.closeFigureInterpretationModal());
         document.getElementById('closeFigureBatchInterpretationModal')?.addEventListener('click', () => this.closeBatchInterpretationModal());
         this.batchModal?.addEventListener('click', (event) => {
-            if (event.target === this.batchModal && !this.batchState?.running) this.closeBatchInterpretationModal();
+            if (event.target === this.batchModal) this.closeBatchInterpretationModal();
         });
         this.interpretationModal?.addEventListener('click', (event) => {
             if (event.target === this.interpretationModal) {
@@ -2200,7 +2200,11 @@ const FigureViewer = {
             if (button.dataset.batchInterpretationAction === 'start') {
                 await this.startBatchInterpretation();
             } else if (button.dataset.batchInterpretationAction === 'stop') {
-                this.stopBatchInterpretation();
+                await this.stopBatchInterpretation();
+            } else if (button.dataset.batchInterpretationAction === 'resume') {
+                await this.resumeBatchInterpretation();
+            } else if (button.dataset.batchInterpretationAction === 'new') {
+                await this.openBatchInterpretationModal(true);
             }
         });
         this.batchBody?.addEventListener('change', (event) => {
@@ -2211,10 +2215,13 @@ const FigureViewer = {
         });
     },
 
-    stopBatchInterpretation() {
-        if (!this.batchState?.running) return;
-        this.batchState.abort = true;
-        this.batchState.controller?.abort();
+    async stopBatchInterpretation() {
+        const state = this.batchState;
+        if (!state?.jobId || !state.running) return;
+        try {
+            const payload = await API.controlFigureAIJob(state.jobId, 'stop');
+            if (this.batchState === state) this.applyBatchJob(payload.job);
+        } catch (error) { Utils.showToast(error.message, 'error'); }
     },
 
     batchInterpretationTargets() {
@@ -2223,8 +2230,9 @@ const FigureViewer = {
         return all;
     },
 
-    openBatchInterpretationModal() {
-        if (!this.batchModal || this.batchState?.running) return;
+    async openBatchInterpretationModal(newTask = false) {
+        if (!this.batchModal) return;
+        clearTimeout(this.batchPollTimer);
         const all = this.batchInterpretationTargets();
         if (!all.length) {
             Utils.showToast(t('shared.figure.batch_no_targets', '当前文献没有可解读的图片'), 'info');
@@ -2235,6 +2243,7 @@ const FigureViewer = {
             abort: false,
             done: false,
             options: { scope: 'missing', mode: 'append' },
+            loading: !newTask,
             total: all.length,
             index: 0,
             succeeded: 0,
@@ -2244,10 +2253,22 @@ const FigureViewer = {
         };
         this.batchModal.classList.remove('hidden');
         this.renderBatchInterpretationModal();
+        if (!newTask) {
+            const state = this.batchState;
+            try {
+                const payload = await API.latestFigureAIJob(Number(this.currentFigure?.paper_id || 0));
+                if (this.batchState !== state) return;
+                if (payload.job && payload.job.status !== 'completed') {
+                    this.applyBatchJob(payload.job);
+                    if (state.running) await this.pollBatchInterpretation(state);
+                }
+            } catch (error) { Utils.showToast(error.message, 'error'); }
+            finally { if (this.batchState === state) { state.loading = false; this.renderBatchInterpretationModal(); } }
+        }
     },
 
     closeBatchInterpretationModal() {
-        if (this.batchState?.running) return;
+        clearTimeout(this.batchPollTimer);
         this.batchState = null;
         this.batchModal?.classList.add('hidden');
     },
@@ -2286,7 +2307,7 @@ const FigureViewer = {
                 </div>
                 <div class="figure-batch-actions">
                     <button class="btn btn-outline" type="button" data-figure-ai-action-close>${t('btn.close', '关闭')}</button>
-                    <button class="btn btn-primary" type="button" data-batch-interpretation-action="start" ${selectedCount ? '' : 'disabled'}>${t('shared.figure.batch_start', '开始解读')}</button>
+                    <button class="btn btn-primary" type="button" data-batch-interpretation-action="start" ${selectedCount && !state.loading ? '' : 'disabled'}>${t('shared.figure.batch_start', '开始解读')}</button>
                 </div>
             `;
         } else {
@@ -2302,14 +2323,15 @@ const FigureViewer = {
                         ? t('shared.figure.batch_done', '解读结束：成功 {ok} 张').replace('{ok}', state.succeeded)
                         : t('shared.figure.batch_progress', '正在解读 {current} / {total} · {label}').replace('{current}', Math.min(state.index + 1, state.total)).replace('{total}', state.total).replace('{label}', Utils.escapeHTML(state.currentLabel))}
                 </p>
+                ${state.pollError ? `<p class="figure-ai-modal-hint">${t('shared.figure.batch_connection_lost', '连接中断，正在重新读取任务进度。')}</p>` : ''}
                 ${state.abort ? `<p class="figure-ai-modal-hint">${t('shared.figure.batch_interrupted', '已中断，尚有 {count} 张未处理').replace('{count}', state.total - state.index)}</p>` : ''}
                 <div class="figure-batch-progress"><div class="figure-batch-progress-bar" style="width: ${percent}%"></div></div>
                 ${state.skipped ? `<p class="figure-ai-modal-hint">${t('shared.figure.batch_skipped', '跳过 {count} 张（已有笔记）').replace('{count}', state.skipped)}</p>` : ''}
                 ${state.failures.length ? `<div class="figure-batch-failures"><strong>${t('shared.figure.batch_failed_summary', '失败 {count} 张').replace('{count}', state.failures.length)}</strong><ul>${failures}</ul></div>` : ''}
                 <div class="figure-batch-actions">
                     ${finished
-                        ? `<button class="btn btn-primary" type="button" id="closeFigureBatchDone">${t('btn.close', '关闭')}</button>`
-                        : `<button class="btn btn-outline" type="button" data-batch-interpretation-action="stop">${t('shared.figure.batch_interrupt', '中断')}</button>`}
+                        ? `${state.jobId && state.resumable ? `<button class="btn btn-primary" type="button" data-batch-interpretation-action="resume">${t('shared.figure.batch_resume', '继续未完成项')}</button><button class="btn btn-outline" type="button" data-batch-interpretation-action="new">${t('shared.figure.batch_new', '新建任务')}</button>` : ''}<button class="btn btn-outline" type="button" id="closeFigureBatchDone">${t('btn.close', '关闭')}</button>`
+                        : `<button class="btn btn-outline" type="button" data-batch-interpretation-action="stop" ${state.jobId ? '' : 'disabled'}>${t('shared.figure.batch_interrupt', '中断')}</button><button class="btn btn-outline" type="button" data-figure-ai-action-close>${t('shared.figure.batch_background', '后台继续')}</button>`}
                 </div>
             `;
         }
@@ -2320,74 +2342,82 @@ const FigureViewer = {
 
     async startBatchInterpretation() {
         const state = this.batchState;
-        if (!state || state.running || state.done) return;
-        const all = this.batchInterpretationTargets();
-        const targets = state.options.scope === 'all'
-            ? all
-            : all.filter((figure) => !String(figure.notes_text || '').trim());
-        if (!targets.length) {
-            Utils.showToast(t('shared.figure.batch_no_targets', '当前文献没有可解读的图片'), 'info');
-            return;
-        }
-
+        if (!state || state.loading || state.running || state.done) return;
         state.running = true;
-        state.abort = false;
-        state.done = false;
-        state.total = targets.length;
-        state.index = 0;
-        state.succeeded = 0;
-        state.skipped = all.length - targets.length;
-        state.failures = [];
-        state.controller = new AbortController();
         this.renderBatchInterpretationModal();
-
-        const paperID = Number(this.currentFigure?.paper_id || 0);
-        let latestPaper = null;
-
-        for (const figure of targets) {
-            if (state.abort) break;
-            state.currentLabel = this.batchFigureLabel(figure);
+        try {
+            const payload = await API.startFigureAIJob({
+                paper_id: Number(this.currentFigure?.paper_id || 0),
+                scope: state.options.scope, mode: state.options.mode,
+                language: document.documentElement?.lang === 'en' ? 'en' : 'zh-CN'
+            });
+            if (this.batchState !== state) return;
+            this.applyBatchJob(payload.job);
+            await this.pollBatchInterpretation(state);
+        } catch (error) {
+            if (this.batchState !== state) return;
+            state.running = false;
             this.renderBatchInterpretationModal();
-            try {
-                const result = await API.readPaperWithAI({
-                    paper_id: paperID,
-                    figure_id: figure.id,
-                    action: 'figure_interpretation',
-                    question: this.buildAIQuestion('figure_interpretation', figure)
-                }, { signal: state.controller.signal });
-                if (state.abort) break;
-                const answer = String(result?.answer || '').trim();
-                if (!answer) {
-                    throw new Error(t('shared.figure.no_content_to_write', '当前没有可写入笔记的内容'));
-                }
-                const currentNotes = String(figure.notes_text || '').trim();
-                const nextNotes = state.options.mode === 'overwrite'
-                    ? answer
-                    : (currentNotes ? `${currentNotes}\n\n${answer}` : answer);
-                const payload = await API.updateFigure(figure.id, { notes_text: nextNotes });
-                if (payload?.paper) latestPaper = payload.paper;
-                figure.notes_text = nextNotes;
-                state.succeeded += 1;
-            } catch (error) {
-                if (state.abort && error.name === 'AbortError') break;
-                state.failures.push({ label: this.batchFigureLabel(figure), error: error.message || String(error) });
+            Utils.showToast(error.message, 'error');
+        }
+    },
+
+    applyBatchJob(job) {
+        const state = this.batchState;
+        if (!state || !job) return;
+        state.jobId = job.id;
+        state.paperId = job.paper_id;
+        state.options = { scope: job.scope, mode: job.mode };
+        state.running = ['queued', 'running'].includes(job.status);
+        state.done = !state.running;
+        state.abort = job.status === 'stopped';
+        state.resumable = ['stopped', 'failed'].includes(job.status);
+        const items = job.items || [];
+        const label = item => this.batchFigureLabel(this.findFigureInCurrentPaper(item.figure_id) || { id: item.figure_id, figure_index: item.figure_id });
+        state.total = items.length;
+        state.succeeded = items.filter(item => item.status === 'completed').length;
+        state.failures = items.filter(item => item.status === 'failed').map(item => ({ label: label(item), error: item.error || '' }));
+        state.index = state.succeeded + state.failures.length;
+        state.skipped = Math.max(0, this.batchInterpretationTargets().length - items.length);
+        const current = items.find(item => item.status === 'running') || items.find(item => item.status === 'pending');
+        state.currentLabel = current ? label(current) : '';
+        state.pollError = false;
+        this.renderBatchInterpretationModal();
+    },
+
+    async pollBatchInterpretation(state) {
+        clearTimeout(this.batchPollTimer);
+        if (this.batchState !== state || !state.jobId) return;
+        try {
+            const payload = await API.getFigureAIJob(state.jobId);
+            if (this.batchState !== state) return;
+            this.applyBatchJob(payload.job);
+            if (!state.running) {
+                const paperPayload = await API.getPaper(state.paperId);
+                if (this.batchState !== state) return;
+                const paper = paperPayload.paper || paperPayload;
+                this.syncPaperMetadata(paper);
+                if (typeof this.onMetaChanged === 'function') await this.onMetaChanged(paper);
+                this.render();
+                return;
             }
-            state.index += 1;
+        } catch (error) {
+            if (this.batchState !== state) return;
+            state.pollError = true;
             this.renderBatchInterpretationModal();
         }
+        if (this.batchState === state) this.batchPollTimer = setTimeout(() => this.pollBatchInterpretation(state), state.pollError ? 3000 : 1000);
+    },
 
-        state.running = false;
-        state.controller = null;
-        state.done = true;
-        this.renderBatchInterpretationModal();
-
-        if (latestPaper) {
-            this.syncPaperMetadata(latestPaper);
-            if (typeof this.onMetaChanged === 'function') {
-                try { await this.onMetaChanged(latestPaper); } catch (error) { /* keep summary visible */ }
-            }
-        }
-        this.render();
+    async resumeBatchInterpretation() {
+        const state = this.batchState;
+        if (!state?.jobId || state.running) return;
+        try {
+            const payload = await API.controlFigureAIJob(state.jobId, 'resume');
+            if (this.batchState !== state) return;
+            this.applyBatchJob(payload.job);
+            await this.pollBatchInterpretation(state);
+        } catch (error) { Utils.showToast(error.message, 'error'); }
     },
 
     async openNotes() {

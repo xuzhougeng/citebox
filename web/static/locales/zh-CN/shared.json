@@ -399,5 +399,9 @@
     "shared.figure.send_figure_library_saved": "已写入接收目录",
     "shared.figure.send_figure_library_failed": "发送到 Figure Library 失败",
     "shared.collection.help": "使用说明",
-    "shared.collection.filters": "筛选条件"
+    "shared.collection.filters": "筛选条件",
+    "shared.figure.batch_connection_lost": "连接中断，正在重新读取任务进度。",
+    "shared.figure.batch_resume": "继续未完成项",
+    "shared.figure.batch_new": "新建任务",
+    "shared.figure.batch_background": "后台继续"
 }

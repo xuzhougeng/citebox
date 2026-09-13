@@ -399,5 +399,9 @@
     "shared.figure.send_figure_library_saved": "Saved to drop folder",
     "shared.figure.send_figure_library_failed": "Failed to send to Figure Library",
     "shared.collection.help": "Page help",
-    "shared.collection.filters": "Filters"
+    "shared.collection.filters": "Filters",
+    "shared.figure.batch_connection_lost": "Connection interrupted; reconnecting to task progress.",
+    "shared.figure.batch_resume": "Resume unfinished items",
+    "shared.figure.batch_new": "New task",
+    "shared.figure.batch_background": "Continue in background"
 }

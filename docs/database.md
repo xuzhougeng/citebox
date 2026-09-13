@@ -699,3 +699,15 @@ The existing citation JSON and result-card payloads retain evidence origin and p
 ### Saved AI citation snapshots
 
 AI message citation JSON optionally stores source URL, page and a SHA-256 revision of the original retrieved field. The note-source repository query loads this JSON and message completion mode. Appending an answer to `paper_notes_text` adds referenced excerpts as Markdown snapshot text using those historical values, not current paper metadata. Existing atomic append and source-link deduplication remain in effect. No schema migration or separate receipt table is added; deleting a conversation does not remove saved note snapshots.
+
+### Resumable AI tasks
+
+Schema initialization adds three tables without rewriting existing papers or notes:
+
+| Table | Purpose and constraints |
+| --- | --- |
+| `ai_figure_jobs` | Integer ID, paper FK (cascade delete), scope, note mode, language, status and timestamps. CHECK constraints restrict options/status. A partial unique index permits at most one queued/running job per paper. |
+| `ai_figure_job_items` | Composite `(job_id, figure_id)` key, cascade FKs, order, status, original-note snapshot, attempt count and error. Completed items are retained on resume. |
+| `extraction_page_checkpoints` | Composite `(paper_id, page_number)` key, positive page constraint, input fingerprint and JSON containing completed page boxes/images. Paper deletion cascades; a mismatched fingerprint cannot be reused. |
+
+A transaction writes each generated figure note, updates its paper timestamp and marks the task item completed together. Append uses the current note; overwrite compares it with the original-note snapshot and preserves intervening edits. On application startup queued/running jobs become stopped and running items become pending; completed items remain completed. Explicit resume resets unfinished items only. Extraction checkpoint image payloads are temporary database data and are deleted after successful final extraction; failed jobs keep completed pages for retry.

@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/xuzhougeng/citebox/internal/apperr"
@@ -26,6 +27,13 @@ const (
 )
 
 type AIService struct {
+	jobSlots   chan struct{}
+	jobsMu     sync.Mutex
+	jobsWG     sync.WaitGroup
+	jobsClosed bool
+	jobCancels map[int64]context.CancelFunc
+	jobReader  func(context.Context, model.AIReadRequest) (*model.AIReadResponse, error)
+
 	repo       *repository.LibraryRepository
 	config     *config.Config
 	httpClient *http.Client
@@ -38,7 +46,11 @@ func (s *AIService) SetCodexClient(client *codexapp.Client) {
 }
 
 func (s *AIService) Close() error {
-	if s == nil || s.codex == nil {
+	if s == nil {
+		return nil
+	}
+	s.StopFigureAIJobs()
+	if s.codex == nil {
 		return nil
 	}
 	return s.codex.Close()

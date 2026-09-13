@@ -37,11 +37,12 @@ function setup(api = {}) {
         nodes[close] = new Element(nodes[`${prefix}Modal`]);
     }
     const context = {
-        window: {}, document: { getElementById: id => nodes[id], body: root, addEventListener() {} },
+        window: {}, setTimeout: () => 1, clearTimeout() {}, document: { documentElement: { lang: 'en' }, getElementById: id => nodes[id], body: root, addEventListener() {} },
         AbortController, HTMLElement: Element, console,
         t: (key, fallback) => fallback || key,
-        Utils: { showToast() {}, escapeHTML: value => String(value) }, API: api
+        Utils: { showToast() {}, escapeHTML: value => String(value) }, API: { async latestFigureAIJob() { return { job: null }; }, async getPaper() { return { paper: { id: 11, figures: [] } }; }, ...api }
     };
+    vm.runInNewContext(fs.readFileSync(path.join(__dirname, '..', 'browser-pages.js'), 'utf8'), context);
     vm.runInNewContext(fs.readFileSync(path.join(__dirname, '..', 'figure-viewer.js'), 'utf8') + '\nglobalThis.viewer = FigureViewer;', context);
     const viewer = context.viewer;
     viewer.init();
@@ -52,79 +53,102 @@ function setup(api = {}) {
         { id: 3, figure_index: 3, notes_text: '' },
         { id: 4, figure_index: 3, parent_figure_id: 3, notes_text: '' }
     ];
+    viewer.figures = figures;
+    viewer.index = 0;
     viewer.paperDetails.set(11, { id: 11, figures });
     viewer.render = () => {};
-    viewer.openBatchInterpretationModal();
+    const ready = viewer.openBatchInterpretationModal();
     const action = name => new Element(viewer.batchBody, { batchInterpretationAction: name });
     const option = (name, value) => Object.assign(new Element(viewer.batchBody, { batchInterpretationOption: name }), { value });
-    return { viewer, figures, action, option };
+    return { viewer, figures, action, option, ready };
 }
 
-test('batch sibling dialog starts serially, skips existing notes and continues after failure', async () => {
+
+function job(status, items = [{ figure_id: 1, status: 'completed' }, { figure_id: 3, status: 'failed', error: 'Provider failed' }]) {
+    return { id: 9, paper_id: 11, scope: 'missing', mode: 'append', language: 'en', status, items };
+}
+
+test('batch sibling dialog starts a durable task and renders server progress', async () => {
     const calls = [];
-    const saves = [];
-    const { viewer, action } = setup({
-        async readPaperWithAI(request) {
-            calls.push(request.figure_id);
-            if (request.figure_id === 1) throw new Error('Model unavailable');
-            return { answer: 'Interpretation' };
-        },
-        async updateFigure(id, data) { saves.push({ id, ...data }); return {}; }
+    const { viewer, action, ready } = setup({
+        async startFigureAIJob(request) { calls.push(request); return { job: job('running') }; },
+        async getFigureAIJob() { return { job: job('failed') }; },
+        async readPaperWithAI() { assert.fail('Inference must run on the server'); },
+        async updateFigure() { assert.fail('The server atomically writes notes'); }
     });
+    await ready;
     await action('start').dispatch('click');
-    assert.deepEqual(calls, [1, 3]);
-    assert.deepEqual(saves, [{ id: 3, notes_text: 'Interpretation' }]);
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].paper_id, 11);
+    assert.equal(calls[0].scope, 'missing');
     assert.equal(viewer.batchState.succeeded, 1);
     assert.equal(viewer.batchState.skipped, 1);
     assert.equal(viewer.batchState.failures.length, 1);
     assert.equal(viewer.batchState.done, true);
+    assert.equal(viewer.batchState.pollError, false);
+    assert.match(viewer.batchBody.innerHTML, /继续未完成项/);
 });
 
-test('batch scope and note mode respond to change events', async () => {
-    const saves = [];
-    const { viewer, action, option } = setup({
-        async readPaperWithAI() { return { answer: 'New answer' }; },
-        async updateFigure(id, data) { saves.push({ id, ...data }); return {}; }
+test('batch scope and note mode are sent to the durable task', async () => {
+    let request;
+    const { action, option, ready } = setup({
+        async startFigureAIJob(value) { request = value; return { job: job('completed') }; },
+        async getFigureAIJob() { return { job: job('completed') }; }
     });
+    await ready;
     await option('scope', 'all').dispatch('change');
     await option('mode', 'overwrite').dispatch('change');
-    assert.equal(viewer.batchState.options.scope, 'all');
     await action('start').dispatch('click');
-    assert.equal(saves.length, 3);
-    assert.equal(saves.find(save => save.id === 2).notes_text, 'New answer');
+    assert.equal(request.scope, 'all');
+    assert.equal(request.mode, 'overwrite');
 });
 
-test('append keeps existing notes when all figures are selected', async () => {
-    const saves = [];
-    const { action, option } = setup({
-        async readPaperWithAI() { return { answer: 'New answer' }; },
-        async updateFigure(id, data) { saves.push({ id, ...data }); return {}; }
+test('reopening restores an interrupted task and resumes the same job', async () => {
+    const controls = [];
+    const { viewer, action, ready } = setup({
+        async latestFigureAIJob() { return { job: job('stopped') }; },
+        async controlFigureAIJob(id, action) { controls.push([id, action]); return { job: job('running') }; },
+        async getFigureAIJob() { return { job: job('completed') }; },
+        async startFigureAIJob() { assert.fail('Resume must not create a replacement job'); }
     });
-    await option('scope', 'all').dispatch('change');
-    await action('start').dispatch('click');
-    assert.equal(saves.find(save => save.id === 2).notes_text, 'Human note\n\nNew answer');
-});
-
-test('interrupt cancels pending inference, prevents duplicate starts and does not save its answer', async () => {
-    let started;
-    const waiting = new Promise(resolve => { started = resolve; });
-    let calls = 0;
-    const { viewer, action } = setup({
-        readPaperWithAI(request, { signal }) {
-            calls++;
-            started();
-            return new Promise((resolve, reject) => signal.addEventListener('abort', () => reject(Object.assign(new Error('Aborted'), { name: 'AbortError' }))));
-        },
-        async updateFigure() { assert.fail('Cancelled inference must not save'); }
-    });
-    const run = action('start').dispatch('click');
-    await waiting;
-    await action('start').dispatch('click');
-    await action('stop').dispatch('click');
-    await run;
-    assert.equal(calls, 1);
+    await ready;
+    assert.equal(viewer.batchState.jobId, 9);
     assert.equal(viewer.batchState.abort, true);
+    await action('resume').dispatch('click');
+    assert.deepEqual(controls, [[9, 'resume']]);
+    assert.equal(viewer.batchState.done, true);
+    assert.equal(viewer.batchState.pollError, false);
+});
+
+test('interrupt stops the server task while closing only detaches progress', async () => {
+    const controls = [];
+    const { viewer, action, ready } = setup({
+        async latestFigureAIJob() { return { job: job('running', [{ figure_id: 1, status: 'running' }, { figure_id: 3, status: 'pending' }]) }; },
+        async getFigureAIJob() { return { job: job('running', [{ figure_id: 1, status: 'running' }, { figure_id: 3, status: 'pending' }]) }; },
+        async controlFigureAIJob(id, action) { controls.push([id, action]); return { job: job('stopped', [{ figure_id: 1, status: 'pending' }, { figure_id: 3, status: 'pending' }]) }; }
+    });
+    await ready;
+    await action('stop').dispatch('click');
+    assert.deepEqual(controls, [[9, 'stop']]);
     assert.equal(viewer.batchState.running, false);
-    assert.equal(viewer.batchState.failures.length, 0);
     assert.match(viewer.batchBody.innerHTML, /尚有 2 张未处理/);
+    await viewer.openBatchInterpretationModal();
+    viewer.closeBatchInterpretationModal();
+    assert.equal(viewer.batchState, null);
+    assert.equal(controls.length, 1);
+});
+
+test('polling failure retains task identity and does not restart inference', async () => {
+    let starts = 0;
+    const { viewer, action, ready } = setup({
+        async startFigureAIJob() { starts++; return { job: job('running') }; },
+        async getFigureAIJob() { throw new Error('Disconnected'); }
+    });
+    await ready;
+    await action('start').dispatch('click');
+    assert.equal(starts, 1);
+    assert.equal(viewer.batchState.jobId, 9);
+    assert.equal(viewer.batchState.pollError, true);
+    await action('start').dispatch('click');
+    assert.equal(starts, 1);
 });

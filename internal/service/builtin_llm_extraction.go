@@ -32,7 +32,13 @@ func (s *LibraryService) processBuiltInLLMExtraction(settings model.ExtractorSet
 		return err
 	}
 
-	return s.persistExtractionResult(paperID, "", settings, result)
+	if err := s.persistExtractionResult(paperID, "", settings, result); err != nil {
+		return err
+	}
+	if err := s.repo.ClearExtractionPageCheckpoints(paperID); err != nil {
+		s.logger.Warn("clear extraction checkpoints", "paper_id", paperID, "error", err)
+	}
+	return nil
 }
 
 func (s *LibraryService) extractBuiltInLLMResult(ctx context.Context, paperID int64, pdfPath, originalFilename string) (*extractionResult, error) {
@@ -47,6 +53,10 @@ func (s *LibraryService) extractBuiltInLLMResult(ctx context.Context, paperID in
 		aiSvc = NewAIService(s.repo, s.config, s.logger.With("component", "builtin_llm_extractor"))
 		defer func() { _ = aiSvc.Close() }()
 	}
+	checkpointHash, err := s.extractionCheckpointHash(aiSvc, paperID, pdfPath, originalFilename)
+	if err != nil {
+		return nil, err
+	}
 	pageCount := doc.NumPage()
 	boxes := make([]map[string]interface{}, 0)
 	figures := make([]extractedFigure, 0)
@@ -58,6 +68,26 @@ func (s *LibraryService) extractBuiltInLLMResult(ctx context.Context, paperID in
 
 	for pageIndex := 0; pageIndex < pageCount; pageIndex++ {
 		pageNumber := pageIndex + 1
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		cached, cacheErr := s.repo.GetExtractionPageCheckpoint(paperID, pageNumber, checkpointHash)
+		if cacheErr != nil {
+			return nil, cacheErr
+		}
+		if cached != "" {
+			var checkpoint extractionPageCheckpoint
+			if json.Unmarshal([]byte(cached), &checkpoint) == nil && checkpoint.Version == 1 {
+				boxes = append(boxes, checkpoint.Boxes...)
+				for _, figure := range checkpoint.Figures {
+					nextFigureIndex++
+					figure.FigureIndex = nextFigureIndex
+					figures = append(figures, figure)
+				}
+				continue
+			}
+		}
+		pageBoxStart, pageFigureStart := len(boxes), len(figures)
 		if err := s.repo.UpdatePaperExtractionState(paperID, "running", fmt.Sprintf("内置 AI 正在解析第 %d / %d 页", pageNumber, pageCount), ""); err != nil && !apperr.IsCode(err, apperr.CodeNotFound) {
 			s.logger.Warn("update built-in extraction progress failed",
 				"paper_id", paperID,
@@ -126,6 +156,14 @@ func (s *LibraryService) extractBuiltInLLMResult(ctx context.Context, paperID in
 				Source:      manualFigureSourceLLM,
 			})
 		}
+		checkpoint, err := json.Marshal(extractionPageCheckpoint{Version: 1, Boxes: boxes[pageBoxStart:], Figures: figures[pageFigureStart:]})
+		if err != nil {
+			return nil, err
+		}
+		if err := s.repo.SaveExtractionPageCheckpoint(paperID, pageNumber, checkpointHash, string(checkpoint)); err != nil {
+			return nil, err
+		}
+
 	}
 
 	boxesJSON, err := json.Marshal(boxes)
