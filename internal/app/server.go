@@ -89,6 +89,11 @@ func NewServer(opts Options) (*Server, error) {
 
 	aiSvc := service.NewAIService(repo, cfg, logger.With("component", "ai_service"))
 	aiSvc.SetCodexClient(codexapp.New(codexapp.Config{Enabled: opts.DesktopMode, Binary: cfg.CodexBin}))
+	if err := aiSvc.RecoverFigureAIJobs(); err != nil {
+		_ = aiSvc.Close()
+		_ = repo.Close()
+		return nil, err
+	}
 
 	librarySvc, err := service.NewLibraryService(
 		repo,
@@ -347,6 +352,9 @@ func (s *Server) Close() error {
 		}
 	}
 
+	if s.aiSvc != nil {
+		s.aiSvc.StopFigureAIJobs()
+	}
 	var repoErr error
 	if s.repo != nil {
 		repoErr = s.repo.Close()
@@ -852,6 +860,8 @@ func buildHandlerWithAIServices(
 		aiHandler.CodexModels(w, r)
 	})
 
+	mux.HandleFunc("/api/ai/figure-jobs", aiHandler.FigureJobs)
+	mux.HandleFunc("/api/ai/figure-jobs/", aiHandler.FigureJobs)
 	mux.HandleFunc("/api/ai/read", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodPost:

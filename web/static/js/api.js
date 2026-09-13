@@ -464,6 +464,23 @@ const API = {
         return requestJSON(`${API_BASE}/ai/codex/models`);
     },
 
+    startFigureAIJob(data) {
+        return requestJSON(`${API_BASE}/ai/figure-jobs`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+    },
+
+    latestFigureAIJob(paperId) {
+        return requestJSON(`${API_BASE}/ai/figure-jobs?paper_id=${apiPathID(paperId)}`);
+    },
+
+    getFigureAIJob(id) {
+        return requestJSON(`${API_BASE}/ai/figure-jobs/${apiPathID(id)}`);
+    },
+
+    controlFigureAIJob(id, action) {
+        if (!['stop', 'resume'].includes(action)) return Promise.reject(new Error('Invalid task action'));
+        return requestJSON(`${API_BASE}/ai/figure-jobs/${apiPathID(id)}/${action}`, { method: 'POST' });
+    },
+
     readPaperWithAI(data, options = {}) {
         return requestJSON(`${API_BASE}/ai/read`, {
             signal: options.signal,

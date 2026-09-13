@@ -2475,3 +2475,19 @@ Appending an AI answer to paper notes now includes a readable snapshot appendix 
 Conversation paper context and `/api/ai/read` (including batch figure interpretation) now use the same bounded paper sampler and text-token estimator. Legacy reading clips optional metadata with disclosure before allocating body text. Figure interpretation prioritizes original-body matches near question/caption terms and uses at most half of the configured text window, capped at 6,000 estimated tokens, for body context. Long papers retain distributed/late-section coverage; short bodies may be included whole. Requests whose mandatory question/instructions still exceed the text budget fail before provider dispatch. Token estimates remain heuristic and do not include provider-specific image token charges.
 
 Opt-in automatic images are ranked within each pinned paper using explicit figure references and caption matches before cross-paper round-robin selection. The total automatic limit remains four, manual selection still wins, and unconfirmed image capability still prevents image payloads. Legacy figure inputs now label actual image-file sequence numbers separately from unloaded text-only summaries. Response shapes remain compatible.
+
+### Durable batch figure interpretation
+
+- `POST /api/ai/figure-jobs`: `{paper_id, scope: "missing"|"all", mode: "append"|"overwrite", language: "zh-CN"|"en"}`. Returns HTTP 202 with `{job}`. Targets are top-level figures selected from current server-side paper data. At most one queued/running job exists per paper; duplicate starts return that active job.
+- `GET /api/ai/figure-jobs?paper_id=ID`: returns `{job}` for the latest job, or `{job:null}`.
+- `GET /api/ai/figure-jobs/{id}`: returns `{job}` with `id`, `paper_id`, `scope`, `mode`, `language`, `status`, and ordered `items`. Items contain `figure_id`, `status`, `attempts`, and optional `error`; model answers are saved to figure notes, not repeated in progress responses.
+- `POST /api/ai/figure-jobs/{id}/stop`: cancels the active provider request and marks the job stopped.
+- `POST /api/ai/figure-jobs/{id}/resume`: resumes stopped/failed jobs, retaining completed items and retrying only unfinished items. A task still shutting down returns a conflict until its worker exits.
+
+Job states are queued/running/stopped/completed/failed; item states are pending/running/completed/failed. Up to two batch jobs run concurrently, with sequential figure calls within each job and a three-minute deadline per figure. Each retry uses the current configured figure model, allowing users to fix provider settings before resuming. Successful note writes and item completion commit in one transaction. Append preserves concurrent edits; overwrite refuses to replace notes changed since task creation.
+
+Closing the dialog or refreshing the browser leaves the server task running. Reopening restores progress from the server. Application restart marks interrupted tasks stopped; explicit resume continues them. Normal server shutdown cancels workers before closing SQLite. Polling failures retain the job identity and reconnect without creating a new inference job. Existing authentication applies to these endpoints.
+
+### Built-in extraction checkpoints
+
+Built-in AI extraction commits completed page artifacts as checkpoints. Retrying through the existing paper extraction endpoint reuses pages only when the PDF checksum, filename/title, model endpoint/configuration and detector prompt fingerprint match. A failed/empty model response is never saved as a completed no-figure page. Checkpoints retain extracted artifacts, not credentials or reasoning; final figure persistence still uses the standard extraction pipeline. Checkpoints are deleted after successful final persistence and cascade away when the paper is deleted.

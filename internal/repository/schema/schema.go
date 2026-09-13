@@ -118,6 +118,35 @@ func (m *Manager) initSchema() error {
 		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
 
+ CREATE TABLE IF NOT EXISTS ai_figure_jobs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  paper_id INTEGER NOT NULL REFERENCES papers(id) ON DELETE CASCADE,
+  scope TEXT NOT NULL CHECK(scope IN ('missing','all')),
+  note_mode TEXT NOT NULL CHECK(note_mode IN ('append','overwrite')),
+  language TEXT NOT NULL DEFAULT 'zh-CN' CHECK(language IN ('zh-CN','en')),
+  status TEXT NOT NULL CHECK(status IN ('queued','running','stopped','completed','failed')),
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+ );
+ CREATE UNIQUE INDEX IF NOT EXISTS idx_ai_figure_jobs_active ON ai_figure_jobs(paper_id) WHERE status IN ('queued','running');
+ CREATE TABLE IF NOT EXISTS ai_figure_job_items (
+  job_id INTEGER NOT NULL REFERENCES ai_figure_jobs(id) ON DELETE CASCADE,
+  figure_id INTEGER NOT NULL REFERENCES paper_figures(id) ON DELETE CASCADE,
+  sort_order INTEGER NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','running','completed','failed')),
+  original_notes TEXT NOT NULL DEFAULT '',
+  attempts INTEGER NOT NULL DEFAULT 0,
+  error TEXT NOT NULL DEFAULT '',
+  PRIMARY KEY(job_id,figure_id)
+ );
+ CREATE TABLE IF NOT EXISTS extraction_page_checkpoints (
+  paper_id INTEGER NOT NULL REFERENCES papers(id) ON DELETE CASCADE,
+  page_number INTEGER NOT NULL CHECK(page_number>0),
+  input_hash TEXT NOT NULL,
+  result_json TEXT NOT NULL,
+  PRIMARY KEY(paper_id,page_number)
+ );
+
 	CREATE TABLE IF NOT EXISTS figure_tags (
 		figure_id INTEGER NOT NULL REFERENCES paper_figures(id) ON DELETE CASCADE,
 		tag_id INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
