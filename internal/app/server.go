@@ -422,7 +422,7 @@ func buildAIServices(
 		PaperRead:      ai_assistant.NewPaperReadTool(repo.Paper),
 		FigureLookup:   ai_assistant.NewFigureLookupToolWithPapers(ai_assistant.NewRepositoryFigureSearcher(repo.Figure), repo.Paper),
 		RemoteMCP:      ai_assistant.NewMCPTool(remoteMCP, aiSvc, aiSvc),
-	}).WithPlanner(ai_assistant.NewLLMRetrievalPlanner(aiSvc, aiSvc))
+	}).WithPlanner(ai_assistant.NewLLMRetrievalPlanner(aiSvc, aiSvc)).WithEvidenceJudge(ai_assistant.NewLLMEvidenceJudge(aiSvc, aiSvc))
 	imageStorage := ai_image_gen.NewStorage(cfg.AIGeneratedDir())
 	imageGenService := ai_image_gen.NewService(ai_image_gen.ServiceDeps{
 		Repo:       aiGeneratedImageRepoAdapter{libRepo: repo},

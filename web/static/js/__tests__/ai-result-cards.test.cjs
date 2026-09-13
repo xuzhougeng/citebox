@@ -85,3 +85,15 @@ test('renderCard - generated_image: handles null cost_estimate_usd', () => {
     assert.ok(html.includes('gpt-image-2 · 1024x1024'), 'should include model and size');
     assert.ok(!html.includes('$'), 'should not include cost when null');
 });
+
+test('local evidence displays provenance and verdict without trusting unknown values', () => {
+    const html = render([{ type: 'paper_read', payload: { papers: [{ title: 'Study', evidence: [
+        { text: 'Negative result', origin: 'original', verdict: 'contradicts' },
+        { text: 'AI interpretation', origin: 'ai_note', verdict: 'note_only' },
+        { text: 'Unknown', origin: '<script>bad</script>', verdict: 'invented' }
+    ] }] } }]);
+    assert.match(html, /data-evidence-origin="original"/);
+    assert.match(html, /ai.evidence_verdict_contradicts/);
+    assert.match(html, /ai.evidence_origin_ai_note/);
+    assert.doesNotMatch(html, /<script>/);
+});

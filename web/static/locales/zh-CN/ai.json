@@ -251,5 +251,16 @@
     "ai.context_image_no_image_data": "图片文件不可用，仅提供可用文字说明",
     "ai.context_image_partial": "部分图片未加载或达到附图限制",
     "ai.context_image_attached": "已发送图片输入；不代表上游模型一定理解图片",
-    "ai.result_evidence_count": "查看检索证据（{count} 段）"
+    "ai.result_evidence_count": "查看检索证据（{count} 段）",
+    "ai.evidence_origin_original": "论文原文",
+    "ai.evidence_origin_user_note": "用户笔记",
+    "ai.evidence_origin_ai_note": "AI 整理笔记",
+    "ai.evidence_origin_mixed_note": "混合来源笔记",
+    "ai.evidence_verdict_supports": "支持",
+    "ai.evidence_verdict_partially_supports": "部分支持",
+    "ai.evidence_verdict_contradicts": "反驳",
+    "ai.evidence_verdict_related_only": "仅相关",
+    "ai.evidence_verdict_insufficient": "证据不足",
+    "ai.evidence_verdict_unassessed": "尚未判定",
+    "ai.evidence_verdict_note_only": "仅作笔记参考"
 }

@@ -83,6 +83,8 @@ type PaperHitCard struct {
 }
 
 type PaperHitSnippet struct {
+	Origin        string `json:"origin,omitempty"`
+	Verdict       string `json:"verdict,omitempty"`
 	CitationIndex int    `json:"citation_index"`
 	Location      string `json:"location"`
 	Text          string `json:"text"`
@@ -98,6 +100,8 @@ type ToolCallSummary struct {
 }
 
 type Citation struct {
+	Verdict    string           `json:"verdict,omitempty"`
+	Assessment string           `json:"assessment,omitempty"`
 	I          int              `json:"i"`
 	PaperID    int64            `json:"paper_id,omitempty"`
 	ExternalID string           `json:"external_id,omitempty"`

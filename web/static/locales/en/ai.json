@@ -251,5 +251,16 @@
     "ai.context_image_no_image_data": "Image files unavailable; available text descriptions only",
     "ai.context_image_partial": "Some images could not load or exceeded attachment limits",
     "ai.context_image_attached": "Image inputs sent; provider comprehension is not guaranteed",
-    "ai.result_evidence_count": "View retrieved evidence ({count} excerpts)"
+    "ai.result_evidence_count": "View retrieved evidence ({count} excerpts)",
+    "ai.evidence_origin_original": "Original paper",
+    "ai.evidence_origin_user_note": "User note",
+    "ai.evidence_origin_ai_note": "AI-generated note",
+    "ai.evidence_origin_mixed_note": "Mixed-source note",
+    "ai.evidence_verdict_supports": "Supports",
+    "ai.evidence_verdict_partially_supports": "Partially supports",
+    "ai.evidence_verdict_contradicts": "Contradicts",
+    "ai.evidence_verdict_related_only": "Related only",
+    "ai.evidence_verdict_insufficient": "Insufficient evidence",
+    "ai.evidence_verdict_unassessed": "Not assessed",
+    "ai.evidence_verdict_note_only": "Note context only"
 }

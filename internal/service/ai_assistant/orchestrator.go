@@ -24,6 +24,7 @@ type ToolSet struct {
 type Orchestrator struct {
 	tools   ToolSet
 	planner RetrievalPlanner
+	judge   EvidenceJudge
 }
 
 func NewOrchestrator(tools ToolSet) *Orchestrator {
@@ -31,6 +32,8 @@ func NewOrchestrator(tools ToolSet) *Orchestrator {
 }
 
 func (o *Orchestrator) WithPlanner(p RetrievalPlanner) *Orchestrator { o.planner = p; return o }
+
+func (o *Orchestrator) WithEvidenceJudge(j EvidenceJudge) *Orchestrator { o.judge = j; return o }
 
 type RunInput struct {
 	History            []PlanningMessage
@@ -150,6 +153,7 @@ func (o *Orchestrator) Run(ctx context.Context, in RunInput) (RunOutput, error) 
 		}
 		cancel()
 	}
+	res = o.groundEvidence(ctx, query, res)
 	res.ToolCalls = append(planningCalls, res.ToolCalls...)
 	if ctx.Err() != nil {
 		return RunOutput{}, ctx.Err()

@@ -691,3 +691,7 @@ CREATE TABLE entity_events (
 ### AI 回答保存到文献笔记
 
 AI 回答采用原子条件更新追加到 `papers.paper_notes_text`，不新增表或列，不修改管理笔记 `notes_text`。保存块中的 `/ai?conversation=<id>&message=<id>` 来源链接用于同一目标文献内的持久去重。保留来源链接时重复保存不会新增内容；用户手动删除包含来源链接的保存块后，可以重新追加该回答。
+
+### Evidence provenance in AI artifacts
+
+The existing citation JSON and result-card payloads retain evidence origin and provisional support/contradiction judgments. Paper notes remain text fields. Notes containing prior AI-answer source links are treated as derived AI/mixed content during retrieval; unmarked historical notes are user-note context. Strict evidence mode uses original paper fields only. This change adds no tables or migrations and does not rewrite existing notes.

@@ -96,7 +96,7 @@ func buildEvidencePrompt(userText string, citations []Citation, pinnedCount int,
 	b.WriteString("如果证据不足以回答或支持用户说法，请明确说明\"证据不足\"，不要凭常识补全。\n\n")
 	sources := make([]string, 0, 2)
 	if includeLocal {
-		sources = append(sources, "本地文献库（已钉文献优先，包含本地已钉文献全文、标题、摘要、笔记和 PDF 全文）")
+		sources = append(sources, "本地文献库（已钉文献优先，包含本地已钉文献全文、标题、摘要和 PDF 正文；笔记不作为论文原始证据）")
 	}
 	if includeExternal {
 		sources = append(sources, "外部学术搜索")
@@ -218,6 +218,7 @@ func localEvidence(papers PaperDetailGetter, userText string, pinned []repositor
 			Source:  evidenceSourceLocal,
 			Snippet: research.Snippet{
 				Text:          cand.text,
+				Origin:        "original",
 				SnippetKind:   cand.field,
 				Section:       localSectionLabel(cand.field),
 				SnippetOffset: research.SnippetOffset{Start: cand.start, End: cand.end},
@@ -264,7 +265,7 @@ func findLocalCandidates(paper model.Paper, terms []string) []localCandidate {
 	}{
 		{name: "title", text: paper.Title, boost: 1.4},
 		{name: "abstract", text: paper.AbstractText, boost: 1.25},
-		{name: "notes", text: paper.NotesText + "\n" + paper.PaperNotesText, boost: 1.15},
+		// Strict evidence only uses original paper fields; notes are derived context.
 		{name: "body", text: paper.PDFText, boost: 1.0},
 	}
 

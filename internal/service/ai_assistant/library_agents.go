@@ -197,7 +197,8 @@ JSON 格式：
 判断规则：
 - 只有候选文献确实使用、包含、分析或明确比较了用户要求的数据/方法，才 relevant=true。
 - 只是泛泛提到背景词、引用无关术语、或者只出现“数据/文章”等泛词，必须 relevant=false。
-- reason 必须引用候选片段中的具体证据词。`
+- reason 必须引用候选片段中的具体证据词。
+- 笔记是用户或 AI 的整理，不能仅凭笔记判定论文确实做过某项实验或证明了某个结论。`
 
 const externalClassifierSystemPrompt = `你是 CiteBox 的 Sub-Agent，负责判断外部检索候选是否能作为用户原句或问题的出处。
 只输出 JSON，不要输出 Markdown。
