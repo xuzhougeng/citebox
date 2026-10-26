@@ -52,6 +52,70 @@ function Hide-SecretValues {
     return $Text
 }
 
+function ConvertFrom-Base32 {
+    param([Parameter(Mandatory = $true)][string]$Text)
+    $alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
+    $bytes = New-Object System.Collections.Generic.List[byte]
+    $buffer = 0
+    $bits = 0
+    foreach ($ch in $Text.ToUpperInvariant().TrimEnd("=").ToCharArray()) {
+        $index = $alphabet.IndexOf($ch)
+        if ($index -lt 0) {
+            throw "Base32 text contains an invalid character."
+        }
+        $buffer = (($buffer -shl 5) -bor $index) -band 0xFFFF
+        $bits += 5
+        if ($bits -ge 8) {
+            $bits -= 8
+            $bytes.Add([byte](($buffer -shr $bits) -band 0xFF))
+        }
+    }
+    return ,$bytes.ToArray()
+}
+
+# CodeSignTool Base64-decodes -totp_secret. The eSigner page shows that Base64
+# "secret code", but the QR code (otpauth://...secret=...) and authenticator
+# apps carry the same seed as Base32. Base32 text also decodes as Base64, to
+# the wrong bytes, so every OTP is rejected. Normalize to Base64 here.
+function ConvertTo-CodeSignTotpSecret {
+    param([Parameter(Mandatory = $true)][string]$Secret)
+    $value = $Secret.Trim()
+    $source = "Base64"
+    if ($value -match '^(?i)otpauth://') {
+        $match = [regex]::Match($value, '(?i)[?&]secret=([^&#]+)')
+        if (-not $match.Success) {
+            throw "ESIGNER_TOTP_SECRET is an otpauth:// URI without a secret parameter."
+        }
+        $value = [Uri]::UnescapeDataString($match.Groups[1].Value)
+        $source = "otpauth URI (Base32)"
+    }
+    $compact = $value -replace '\s', ''
+    $isBase32 = $compact -cmatch '^[A-Z2-7]+=*$' -or $compact -cmatch '^[a-z2-7]+=*$'
+    if ($source -ne "Base64" -or $isBase32) {
+        if (-not $isBase32) {
+            throw "ESIGNER_TOTP_SECRET from the otpauth URI is not Base32."
+        }
+        if ($source -eq "Base64") {
+            $source = "Base32"
+        }
+        $seed = ConvertFrom-Base32 $compact
+    } else {
+        try {
+            $seed = [Convert]::FromBase64String($compact)
+        } catch {
+            throw "ESIGNER_TOTP_SECRET is neither Base64 nor Base32."
+        }
+    }
+    if ($seed.Length -lt 10) {
+        throw "ESIGNER_TOTP_SECRET decodes to $($seed.Length) bytes; expected the eSigner TOTP seed."
+    }
+    return @{
+        Value = [Convert]::ToBase64String($seed)
+        Source = $source
+        SeedBytes = $seed.Length
+    }
+}
+
 function Get-OtpSlot {
     $token = $env:CITEBOX_SIGN_SLOT
     if ([string]::IsNullOrWhiteSpace($token)) {
@@ -465,6 +529,10 @@ function Start-CiteboxWindowsAuthenticodeSign {
         Write-Warning "eSigner secrets are not configured. Skipping Authenticode signing."
         return
     }
+
+    $totp = ConvertTo-CodeSignTotpSecret $secrets.ESIGNER_TOTP_SECRET
+    $secrets.ESIGNER_TOTP_SECRET = $totp.Value
+    Write-Host "ESIGNER_TOTP_SECRET format: $($totp.Source), $($totp.SeedBytes)-byte seed (passed to CodeSignTool as Base64)."
 
     if ($env:OS -ne "Windows_NT") {
         throw "Authenticode signing must run on Windows."

@@ -58,6 +58,24 @@ Assert-True ((-not $redacted.Contains($long)) -and (-not $redacted.Contains($sho
 
 Assert-Equal (Get-OtpRetryDelaySeconds -BaseSeconds 35 -Slot 0) 35 "server slot waits one TOTP window"
 Assert-Equal (Get-OtpRetryDelaySeconds -BaseSeconds 35 -Slot 1) 65 "desktop slot waits an extra window"
+
+# RFC 6238 seed "12345678901234567890" as Base64 and Base32.
+$seedBase64 = "MTIzNDU2Nzg5MDEyMzQ1Njc4OTA="
+$seedBase32 = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"
+$totpBase64 = ConvertTo-CodeSignTotpSecret " $seedBase64 "
+Assert-Equal $totpBase64.Value $seedBase64 "Base64 TOTP secret passes through"
+Assert-Equal $totpBase64.Source "Base64" "Base64 TOTP secret is reported as Base64"
+$totpBase32 = ConvertTo-CodeSignTotpSecret $seedBase32
+Assert-Equal $totpBase32.Value $seedBase64 "Base32 TOTP secret is converted to Base64"
+Assert-Equal $totpBase32.Source "Base32" "Base32 TOTP secret is reported as Base32"
+Assert-Equal $totpBase32.SeedBytes 20 "Base32 TOTP seed length is reported"
+Assert-Equal (ConvertTo-CodeSignTotpSecret "gezd gnbv gy3t qojq gezd gnbv gy3t qojq").Value $seedBase64 "grouped lowercase Base32 is converted"
+$totpUri = ConvertTo-CodeSignTotpSecret "otpauth://totp/SSL.com:user?secret=$seedBase32&issuer=SSL.com"
+Assert-Equal $totpUri.Value $seedBase64 "otpauth URI secret is converted"
+Assert-Equal $totpUri.Source "otpauth URI (Base32)" "otpauth URI is reported"
+$badTotp = ""
+try { ConvertTo-CodeSignTotpSecret "not a secret!" | Out-Null } catch { $badTotp = $_.Exception.Message }
+Assert-True ($badTotp.Contains("neither Base64 nor Base32") -and -not $badTotp.Contains("not a secret!")) "invalid TOTP secret fails without echoing it"
 Assert-Equal (Get-OtpRetryDelaySeconds -BaseSeconds 0 -Slot 1) 0 "tests can disable the OTP wait"
 $previousSlot = $env:CITEBOX_SIGN_SLOT
 $env:CITEBOX_SIGN_SLOT = "desktop"

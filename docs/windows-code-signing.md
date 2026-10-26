@@ -18,8 +18,10 @@ zip 不会被签名。安装包是用户直接运行的 `.exe`，所以在 NSIS 
 | `ESIGNER_USERNAME` | SSL.com 账号用户名 |
 | `ESIGNER_PASSWORD` | SSL.com 账号密码，传给 CodeSignTool 的 `-password` |
 | `ESIGNER_CREDENTIAL_ID` | eSigner 代码签名证书的 Credential ID |
-| `ESIGNER_TOTP_SECRET` | eSigner 自动化签名用的 TOTP 密钥，不是一次性验证码 |
+| `ESIGNER_TOTP_SECRET` | eSigner 自动化签名用的 TOTP 密钥（eSigner 页面上的 Base64 “secret code”，或二维码里的 Base32 种子），不是一次性验证码 |
 | `ESIGNER_PIN` | 证书登记 eSigner 时设置的 4 位 PIN |
+
+CodeSignTool `v1.3.2` 会先把 `-totp_secret` 当 Base64 解码，再计算 OTP。二维码 `otpauth://...secret=...` 和身份验证器 App 里的同一个种子是 Base32 写法，Base32 文本也能被当成 Base64 解码，只是得到的字节不对，于是每次都报 `The OTP is invalid`。签名脚本会识别 Base32（全大写或全小写的 `A-Z2-7`，允许空格分组）和 `otpauth://` URI，转成 Base64 再传给 CodeSignTool，并在日志里打印密钥格式和种子字节数，不打印密钥本身。如果日志显示格式是 Base64 但仍然报 OTP 无效，说明密钥已经过期：重新登记过 eSigner 二维码后，旧密钥会失效，需要在 SSL.com 上取最新的 secret code 更新 `ESIGNER_TOTP_SECRET`。
 
 当前固定使用的 CodeSignTool `v1.3.2` 的 `sign` 命令没有 `-pin` 参数。tag 发布仍然要求 `ESIGNER_PIN` 已设置，这样 CiteBox 和其他仓库使用同一组 eSigner 密钥。如果以后换上的 CodeSignTool 在 `sign --help` 里提供 `-pin`，签名脚本会把 PIN 传进去。
 
