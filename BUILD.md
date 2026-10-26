@@ -41,6 +41,8 @@ git push origin v0.1.0
 - Linux Desktop: `citebox-desktop-linux-{version}.tar.gz`
 - Windows Desktop: `citebox-desktop-windows-{version}.exe`
 
+Windows 的 `.exe` 在打进 zip 或 NSIS 安装包之前，用 SSL.com eSigner 做 Authenticode 签名。zip 本身不签名。tag 发布缺少签名密钥或签名失败时，发布会失败。密钥名称、时间戳和校验方法见 [Windows Authenticode 签名](docs/windows-code-signing.md)。
+
 说明：
 
 - `pdf.js` 运行时资源不会提交到仓库。
@@ -148,6 +150,7 @@ Windows 桌面安装包当前按“原生 runner + MinGW cgo toolchain + NSIS �
 - 通过 `choco install nsis` 提供安装器打包能力
 - 打包时会以 GUI 子系统构建桌面版，因此双击启动默认不弹出终端窗口
 - 安装器默认按用户安装到 `%LocalAppData%\Programs\CiteBox\`
+- tag 发布会先签 `citebox-desktop.exe`，再打 NSIS 安装包，然后签安装包本身。服务端包则先签 `citebox.exe` 再压缩。详见 [Windows Authenticode 签名](docs/windows-code-signing.md)
 
 ### macOS 说明
 
@@ -435,6 +438,7 @@ upx --best citebox
 - [ ] 版本号正确 (`make version`)
 - [ ] 所有平台构建成功 (`make package-all`)
 - [ ] Windows 包能正常启动
+- [ ] Windows 发布包里的 exe 已通过 eSigner Authenticode 校验，zip 本身未签名
 - [ ] macOS 包能正常启动
 - [ ] Linux 包能正常启动
 - [ ] 默认账号能登录

@@ -61,6 +61,31 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Require eSigner secrets on tag releases
+        if: matrix.platform == 'windows' && github.event_name == 'push'
+        shell: pwsh
+        env:
+          ESIGNER_CREDENTIAL_ID: ${{ secrets.ESIGNER_CREDENTIAL_ID }}
+          ESIGNER_USERNAME: ${{ secrets.ESIGNER_USERNAME }}
+          ESIGNER_PASSWORD: ${{ secrets.ESIGNER_PASSWORD }}
+          ESIGNER_TOTP_SECRET: ${{ secrets.ESIGNER_TOTP_SECRET }}
+          ESIGNER_PIN: ${{ secrets.ESIGNER_PIN }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $required = @(
+            "ESIGNER_CREDENTIAL_ID",
+            "ESIGNER_USERNAME",
+            "ESIGNER_PASSWORD",
+            "ESIGNER_TOTP_SECRET",
+            "ESIGNER_PIN"
+          )
+          $missing = @($required | Where-Object {
+            [string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($_))
+          })
+          if ($missing.Count -gt 0) {
+            throw "Tag releases require GitHub Actions secrets: $($missing -join ', '). Refusing to publish unsigned Windows artifacts."
+          }
+
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
@@ -256,14 +281,35 @@ jobs:
           xcrun stapler staple "${dmg_path}"
           xcrun stapler validate "${dmg_path}"
 
+      - name: Set up Java for eSigner CodeSignTool
+        if: matrix.platform == 'windows'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
       - name: Package Windows server release
         if: matrix.package_kind == 'server' && matrix.platform == 'windows'
         shell: pwsh
+        env:
+          CITEBOX_REQUIRE_WINDOWS_SIGNING: ${{ github.event_name == 'push' && '1' || '0' }}
+          ESIGNER_CREDENTIAL_ID: ${{ secrets.ESIGNER_CREDENTIAL_ID }}
+          ESIGNER_USERNAME: ${{ secrets.ESIGNER_USERNAME }}
+          ESIGNER_PASSWORD: ${{ secrets.ESIGNER_PASSWORD }}
+          ESIGNER_TOTP_SECRET: ${{ secrets.ESIGNER_TOTP_SECRET }}
+          ESIGNER_PIN: ${{ secrets.ESIGNER_PIN }}
         run: ./scripts/package-windows.ps1 -Version "${env:VERSION}"
 
       - name: Package Windows desktop release
         if: matrix.package_kind == 'desktop' && matrix.platform == 'windows'
         shell: pwsh
+        env:
+          CITEBOX_REQUIRE_WINDOWS_SIGNING: ${{ github.event_name == 'push' && '1' || '0' }}
+          ESIGNER_CREDENTIAL_ID: ${{ secrets.ESIGNER_CREDENTIAL_ID }}
+          ESIGNER_USERNAME: ${{ secrets.ESIGNER_USERNAME }}
+          ESIGNER_PASSWORD: ${{ secrets.ESIGNER_PASSWORD }}
+          ESIGNER_TOTP_SECRET: ${{ secrets.ESIGNER_TOTP_SECRET }}
+          ESIGNER_PIN: ${{ secrets.ESIGNER_PIN }}
         run: ./scripts/package-desktop-windows.ps1 -Version "${env:VERSION}"
 
       - name: Upload packaged artifact

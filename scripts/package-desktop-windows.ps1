@@ -33,6 +33,21 @@ function Resolve-Makensis {
     throw "makensis not found. Searched PATH, Program Files, and Chocolatey install directories."
 }
 
+function Get-CiteboxPackageBinaries {
+    param([Parameter(Mandatory = $true)][string]$Root)
+    @(Get-ChildItem -LiteralPath $Root -File | Where-Object {
+        @(".exe", ".dll", ".msi", ".sys") -contains $_.Extension
+    } | Select-Object -ExpandProperty FullName)
+}
+
+function Invoke-CiteboxWindowsSign {
+    param([Parameter(Mandatory = $true)][string[]]$Files)
+    & (Join-Path $PSScriptRoot "sign-windows-authenticode.ps1") -Path $Files
+    if (-not $? -or $LASTEXITCODE -ne 0) {
+        throw "Windows Authenticode signing failed."
+    }
+}
+
 $ErrorActionPreference = "Stop"
 
 if ($env:OS -ne "Windows_NT") {
@@ -203,6 +218,19 @@ $nsisScript = $nsisScript.Replace("__VERSION__", $Version)
 
 Set-Content -Path $nsisScriptPath -Value $nsisScript -Encoding ascii
 
-& $makensis $nsisScriptPath | Write-Host
+$payloadBinaries = @(Get-CiteboxPackageBinaries $payloadDir)
+if ($payloadBinaries.Count -eq 0) {
+    throw "No Windows binaries found to package in $payloadDir"
+}
+Invoke-CiteboxWindowsSign -Files $payloadBinaries
+
+& $makensis $nsisScriptPath
+if ($LASTEXITCODE -ne 0) {
+    throw "makensis failed with exit code $LASTEXITCODE"
+}
+if (-not (Test-Path -LiteralPath $installerPath)) {
+    throw "NSIS did not create $installerPath"
+}
+Invoke-CiteboxWindowsSign -Files @((Resolve-Path -LiteralPath $installerPath).Path)
 
 Write-Host "Created $installerPath"
