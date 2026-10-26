@@ -73,6 +73,19 @@ function ConvertFrom-Base32 {
     return ,$bytes.ToArray()
 }
 
+# Describes a secret by length and character classes, never its value.
+function Get-SecretShape {
+    param([string]$Text)
+    $classes = @()
+    if ($Text -cmatch '[A-Z]') { $classes += "upper" }
+    if ($Text -cmatch '[a-z]') { $classes += "lower" }
+    if ($Text -match '[0-9]') { $classes += "digits" }
+    if ($Text -match '[+/]') { $classes += "+/" }
+    if ($Text -match '=') { $classes += "=" }
+    if ($Text -match '[^A-Za-z0-9+/=]') { $classes += "other" }
+    return "length $($Text.Length), characters: $($classes -join ' ')"
+}
+
 # CodeSignTool Base64-decodes -totp_secret. The eSigner page shows that Base64
 # "secret code", but the QR code (otpauth://...secret=...) and authenticator
 # apps carry the same seed as Base32. Base32 text also decodes as Base64, to
@@ -100,14 +113,19 @@ function ConvertTo-CodeSignTotpSecret {
         }
         $seed = ConvertFrom-Base32 $compact
     } else {
+        # Java's Base64 decoder does not require padding; .NET does.
+        $padded = $compact
+        if ($padded.Length % 4 -ne 0) {
+            $padded += "=" * (4 - ($padded.Length % 4))
+        }
         try {
-            $seed = [Convert]::FromBase64String($compact)
+            $seed = [Convert]::FromBase64String($padded)
         } catch {
-            throw "ESIGNER_TOTP_SECRET is neither Base64 nor Base32."
+            throw "ESIGNER_TOTP_SECRET is neither Base64 nor Base32 ($(Get-SecretShape $compact))."
         }
     }
     if ($seed.Length -lt 10) {
-        throw "ESIGNER_TOTP_SECRET decodes to $($seed.Length) bytes; expected the eSigner TOTP seed."
+        throw "ESIGNER_TOTP_SECRET decodes to $($seed.Length) bytes ($(Get-SecretShape $compact)); expected the eSigner TOTP seed, not a one-time code."
     }
     return @{
         Value = [Convert]::ToBase64String($seed)

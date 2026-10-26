@@ -73,6 +73,10 @@ Assert-Equal (ConvertTo-CodeSignTotpSecret "gezd gnbv gy3t qojq gezd gnbv gy3t q
 $totpUri = ConvertTo-CodeSignTotpSecret "otpauth://totp/SSL.com:user?secret=$seedBase32&issuer=SSL.com"
 Assert-Equal $totpUri.Value $seedBase64 "otpauth URI secret is converted"
 Assert-Equal $totpUri.Source "otpauth URI (Base32)" "otpauth URI is reported"
+Assert-Equal (ConvertTo-CodeSignTotpSecret $seedBase64.TrimEnd("=")).Value $seedBase64 "unpadded Base64 is accepted like Java's decoder"
+$shortTotp = ""
+try { ConvertTo-CodeSignTotpSecret "123456" | Out-Null } catch { $shortTotp = $_.Exception.Message }
+Assert-True ($shortTotp.Contains("not a one-time code") -and $shortTotp.Contains("length 6") -and -not $shortTotp.Contains("123456")) "one-time code is rejected without echoing it"
 $badTotp = ""
 try { ConvertTo-CodeSignTotpSecret "not a secret!" | Out-Null } catch { $badTotp = $_.Exception.Message }
 Assert-True ($badTotp.Contains("neither Base64 nor Base32") -and -not $badTotp.Contains("not a secret!")) "invalid TOTP secret fails without echoing it"
