@@ -5,6 +5,21 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+function Get-CiteboxPackageBinaries {
+    param([Parameter(Mandatory = $true)][string]$Root)
+    @(Get-ChildItem -LiteralPath $Root -File | Where-Object {
+        @(".exe", ".dll", ".msi", ".sys") -contains $_.Extension
+    } | Select-Object -ExpandProperty FullName)
+}
+
+function Invoke-CiteboxWindowsSign {
+    param([Parameter(Mandatory = $true)][string[]]$Files)
+    & (Join-Path $PSScriptRoot "sign-windows-authenticode.ps1") -Path $Files
+    if (-not $? -or $LASTEXITCODE -ne 0) {
+        throw "Windows Authenticode signing failed."
+    }
+}
+
 if ($env:OS -ne "Windows_NT") {
     throw "Windows server packaging must run on native Windows so CGO and MuPDF stay enabled."
 }
@@ -110,6 +125,12 @@ Set-Content -Path (Join-Path $packageDir "README.txt") -Value $readmeTxt -Encodi
 if (Test-Path $archivePath) {
     Remove-Item $archivePath -Force
 }
+
+$binaries = @(Get-CiteboxPackageBinaries $packageDir)
+if ($binaries.Count -eq 0) {
+    throw "No Windows binaries found to package in $packageDir"
+}
+Invoke-CiteboxWindowsSign -Files $binaries
 
 Compress-Archive -Path $packageDir -DestinationPath $archivePath -CompressionLevel Optimal
 
