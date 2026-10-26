@@ -1,6 +1,6 @@
 # CiteBox - Cross-Platform Build Makefile
 
-.PHONY: build run dev build-desktop run-desktop build-windows build-darwin build-linux package-windows package-darwin package-linux package-desktop-windows package-desktop-darwin package-desktop-linux prepare-web-assets clean test test-go test-js test-js-syntax ci version help
+.PHONY: build run dev build-desktop run-desktop build-windows build-darwin build-linux package-windows package-darwin package-linux package-desktop-windows package-desktop-darwin package-desktop-linux prepare-web-assets clean test test-go test-js test-js-syntax test-ps ci version help
 
 # cmd/desktop and internal/desktopruntime need GTK/WebKit headers.
 # Compile them with `make build-desktop`.
@@ -56,7 +56,10 @@ test-js:
 test-js-syntax:
 	node --check $(JS_CHECK_SOURCES)
 
-ci: test-js-syntax test-js
+test-ps:
+	pwsh -NoProfile -File scripts/tests/sign-windows-authenticode.test.ps1
+
+ci: test-js-syntax test-js test-ps
 	go test -count=1 -timeout 15m $(GO_TEST_PACKAGES)
 
 # =============================================================================
@@ -369,6 +372,7 @@ help:
 	@echo "  make test           - Run Go tests (skips cmd/desktop and internal/desktopruntime)"
 	@echo "  make test-js        - Run frontend and script Node tests"
 	@echo "  make test-js-syntax - Syntax-check JavaScript sources"
+	@echo "  make test-ps        - Run Windows Authenticode signer tests"
 	@echo "  make ci             - Run the same checks as GitHub Actions"
 	@echo ""
 	@echo "Windows:"

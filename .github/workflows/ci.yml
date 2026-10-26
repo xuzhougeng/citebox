@@ -49,6 +49,19 @@ jobs:
       - name: Prepare go-fitz libs
         run: ./scripts/prepare-go-fitz-libs.sh --goos linux --goarch amd64
 
+      - name: Install PowerShell
+        run: |
+          if command -v pwsh >/dev/null 2>&1; then
+            pwsh -NoProfile -Command '$PSVersionTable.PSVersion.ToString()'
+            exit 0
+          fi
+          curl -fsSL -o /tmp/powershell.tar.gz -L https://github.com/PowerShell/PowerShell/releases/download/v7.5.4/powershell-7.5.4-linux-x64.tar.gz
+          sudo mkdir -p /opt/microsoft/powershell/7
+          sudo tar -xzf /tmp/powershell.tar.gz -C /opt/microsoft/powershell/7
+          sudo chmod +x /opt/microsoft/powershell/7/pwsh
+          sudo ln -sfn /opt/microsoft/powershell/7/pwsh /usr/local/bin/pwsh
+          pwsh -NoProfile -Command '$PSVersionTable.PSVersion.ToString()'
+
       - name: Run CI checks
         env:
           CGO_ENABLED: "1"

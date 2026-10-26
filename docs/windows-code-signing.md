@@ -23,6 +23,15 @@ zip 不会被签名。安装包是用户直接运行的 `.exe`，所以在 NSIS 
 
 当前固定使用的 CodeSignTool `v1.3.2` 的 `sign` 命令没有 `-pin` 参数。tag 发布仍然要求 `ESIGNER_PIN` 已设置，这样 CiteBox 和其他仓库使用同一组 eSigner 密钥。如果以后换上的 CodeSignTool 在 `sign --help` 里提供 `-pin`，签名脚本会把 PIN 传进去。
 
+`v1.3.2` 的 `main` 会丢掉 picocli 的退出码。认证失败、`invalid otp`、参数错误时进程退出码仍是 0，原因写在标准输出的 `Error: ...`、标准错误的异常栈，或 `logs/code_signing_tool.log`。签名脚本用 .NET `Process` 直接启动 `java`，把用户名、密码、Credential ID、TOTP 和可选的 PIN 作为单独参数传入。它把下面任一情况当成签名失败，并把脱敏后的工具输出打到日志：
+
+- 进程退出码不是 0，或调用超时
+- 标准输出或标准错误里出现 `Error:` 或异常栈
+- 没有 `Code signed successfully:`
+- 输出目录里没有签好的文件
+
+`invalid otp` 或 `OTP is invalid` 会等到下一个 TOTP 窗口再试，最多 4 次。Windows 桌面 job 比服务端 job 多等一个窗口，避免两个并行 job 用同一组验证码重试。日志和失败信息里的密钥值会替换成 `***`。
+
 tag 发布（`github.event_name == push`）会在构建前检查这五个密钥。缺任何一个，Windows job 失败，Release 不会挂上未签名的 Windows 产物。签名或 Authenticode 校验失败同样会使 job 失败，工作流没有 `continue-on-error`。
 
 `workflow_dispatch` 不会创建 GitHub Release。五个密钥都没配置时跳过签名；只配置了其中一部分，或密钥齐全但签名失败时，job 失败。本地 `make package-windows` 和 `make package-desktop-windows` 使用同一规则：五个变量都未设置时跳过签名，变量不全或签名失败时停止打包。

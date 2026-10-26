@@ -293,6 +293,7 @@ jobs:
         shell: pwsh
         env:
           CITEBOX_REQUIRE_WINDOWS_SIGNING: ${{ github.event_name == 'push' && '1' || '0' }}
+          CITEBOX_SIGN_SLOT: ${{ matrix.package_kind }}
           ESIGNER_CREDENTIAL_ID: ${{ secrets.ESIGNER_CREDENTIAL_ID }}
           ESIGNER_USERNAME: ${{ secrets.ESIGNER_USERNAME }}
           ESIGNER_PASSWORD: ${{ secrets.ESIGNER_PASSWORD }}
@@ -305,6 +306,7 @@ jobs:
         shell: pwsh
         env:
           CITEBOX_REQUIRE_WINDOWS_SIGNING: ${{ github.event_name == 'push' && '1' || '0' }}
+          CITEBOX_SIGN_SLOT: ${{ matrix.package_kind }}
           ESIGNER_CREDENTIAL_ID: ${{ secrets.ESIGNER_CREDENTIAL_ID }}
           ESIGNER_USERNAME: ${{ secrets.ESIGNER_USERNAME }}
           ESIGNER_PASSWORD: ${{ secrets.ESIGNER_PASSWORD }}
