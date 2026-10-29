@@ -314,6 +314,11 @@ func (s *Server) ListenAndServe() error {
 	return err
 }
 
+// Handler returns the HTTP handler so a desktop shell can serve it in-process.
+func (s *Server) Handler() http.Handler {
+	return s.httpServer.Handler
+}
+
 func (s *Server) Serve(listener net.Listener) error {
 	s.logStartup(listener.Addr().String())
 
