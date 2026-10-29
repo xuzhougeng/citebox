@@ -3,6 +3,7 @@ package service
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"image"
 	"image/color"
@@ -188,6 +189,18 @@ func TestNormalizeCodexModelDoesNotRequireAPIKey(t *testing.T) {
 	}
 	if !aiModelIsConfigured(normalized) {
 		t.Fatal("aiModelIsConfigured(Codex) = false")
+	}
+}
+
+func TestMapCodexErrorLoginFailureIsNotSessionError(t *testing.T) {
+	for _, message := range []string{"not logged in", "401 Unauthorized", "authentication required"} {
+		err := mapCodexError(errors.New(message))
+		if !apperr.IsCode(err, apperr.CodeFailedPrecondition) {
+			t.Fatalf("mapCodexError(%q) code = %s, want %s", message, apperr.CodeOf(err), apperr.CodeFailedPrecondition)
+		}
+		if apperr.HTTPStatus(err) == http.StatusUnauthorized {
+			t.Fatalf("mapCodexError(%q) maps to 401, which logs the user out of CiteBox", message)
+		}
 	}
 }
 

@@ -72,7 +72,7 @@ func (s *AIService) checkCodexModel(ctx context.Context, config model.AIModelCon
 		return nil, apperr.New(apperr.CodeFailedPrecondition, status.Message)
 	}
 	if !status.Authenticated {
-		return nil, apperr.New(apperr.CodeUnauthenticated, status.Message)
+		return nil, apperr.New(apperr.CodeFailedPrecondition, status.Message)
 	}
 
 	return &model.AIModelCheckResponse{
@@ -257,7 +257,7 @@ func mapCodexError(err error) error {
 	lower := strings.ToLower(message)
 	switch {
 	case strings.Contains(lower, "not logged"), strings.Contains(lower, "login"), strings.Contains(lower, "unauthorized"), strings.Contains(lower, "authentication"):
-		return apperr.Wrap(apperr.CodeUnauthenticated, "Codex 尚未通过 ChatGPT 登录；请在终端运行 codex login", err)
+		return apperr.Wrap(apperr.CodeFailedPrecondition, "Codex 尚未通过 ChatGPT 登录；请在终端运行 codex login", err)
 	case strings.Contains(lower, "rate limit"), strings.Contains(lower, "usage limit"), strings.Contains(lower, "quota"), strings.Contains(lower, "credits"):
 		return apperr.Wrap(apperr.CodeResourceExhausted, "Codex 订阅额度或速率限制已达到上限；CiteBox 不会自动切换到 API", err)
 	case strings.Contains(lower, "only available in the desktop"), strings.Contains(lower, "executable not found"):

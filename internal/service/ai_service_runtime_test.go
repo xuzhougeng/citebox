@@ -89,6 +89,45 @@ exit 9
 	}
 }
 
+// A Codex login problem must not surface as HTTP 401: the web UI treats 401
+// as an expired CiteBox session and sends the user back to /login (#68).
+func TestCheckModelCodexNotLoggedInIsNotSessionError(t *testing.T) {
+	_, repo, cfg := newTestService(t)
+	aiSvc := NewAIService(repo, cfg, nil)
+
+	binary := filepath.Join(t.TempDir(), "codex")
+	script := `#!/bin/sh
+if [ "$1" = "--version" ]; then
+  echo "codex-cli 1.2.3"
+  exit 0
+fi
+if [ "$1" = "login" ] && [ "$2" = "status" ]; then
+  echo "Not logged in"
+  exit 1
+fi
+exit 9
+`
+	if err := os.WriteFile(binary, []byte(script), 0o700); err != nil {
+		t.Fatalf("write fake Codex: %v", err)
+	}
+	client := codexapp.New(codexapp.Config{Enabled: true, Binary: binary})
+	t.Cleanup(func() { _ = client.Close() })
+	aiSvc.SetCodexClient(client)
+
+	_, err := aiSvc.CheckModel(context.Background(), model.AIModelConfig{
+		ID:       "check-codex",
+		Name:     "Check Codex",
+		Provider: model.AIProviderCodex,
+		Model:    "codex-test",
+	})
+	if !apperr.IsCode(err, apperr.CodeFailedPrecondition) {
+		t.Fatalf("CheckModel() code = %q, want %q (err = %v)", apperr.CodeOf(err), apperr.CodeFailedPrecondition, err)
+	}
+	if status := apperr.HTTPStatus(err); status == http.StatusUnauthorized {
+		t.Fatalf("CheckModel() HTTP status = %d, must not be 401", status)
+	}
+}
+
 func TestCheckModelOmitsTemperatureForGPT5Family(t *testing.T) {
 	_, repo, cfg := newTestService(t)
 	aiSvc := NewAIService(repo, cfg, nil)

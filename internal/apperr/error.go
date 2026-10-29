@@ -17,8 +17,13 @@ const (
 	CodeUnsupportedMedia   Code = "UNSUPPORTED_MEDIA_TYPE"
 	CodeUnavailable        Code = "UNAVAILABLE"
 	CodeDeadlineExceeded   Code = "DEADLINE_EXCEEDED"
-	CodeUnauthenticated    Code = "UNAUTHENTICATED"
-	CodeInternal           Code = "INTERNAL"
+	// CodeUnauthenticated maps to HTTP 401, which the web UI treats as an
+	// expired CiteBox session and answers by redirecting to /login. Use it
+	// only for CiteBox's own login and integration tokens; a rejected
+	// third-party credential (Codex, Notion, ...) is FailedPrecondition or
+	// InvalidArgument instead.
+	CodeUnauthenticated Code = "UNAUTHENTICATED"
+	CodeInternal        Code = "INTERNAL"
 )
 
 type Error struct {

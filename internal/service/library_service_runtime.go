@@ -39,7 +39,7 @@ func (s *LibraryService) ChangePassword(currentPassword, newPassword string) err
 
 	runtimePassword := s.GetRuntimePassword()
 	if currentPassword != runtimePassword {
-		return apperr.New(apperr.CodeUnauthenticated, "当前密码错误")
+		return apperr.New(apperr.CodeInvalidArgument, "当前密码错误")
 	}
 
 	if err := s.repo.UpsertAppSetting(runtimePasswordKey, newPassword); err != nil {

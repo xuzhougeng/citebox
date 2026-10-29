@@ -215,6 +215,28 @@ func TestChangePasswordInvalidatesAllSessions(t *testing.T) {
 	}
 }
 
+func TestChangePasswordWrongCurrentPasswordKeepsSession(t *testing.T) {
+	handler, _, sessionManager := newAuthHandlerForTest(t)
+	session, err := sessionManager.Create("citebox")
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/change-password", bytes.NewBufferString(`{"current_password":"wrong-password","new_password":"new-secret"}`))
+	req.AddCookie(&http.Cookie{Name: service.SessionCookieName, Value: session.ID})
+	w := httptest.NewRecorder()
+
+	handler.ChangePassword(w, req)
+
+	// 401 would make the web UI treat this as an expired session and log out.
+	if resp := w.Result(); resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("ChangePassword() status = %d, want %d", resp.StatusCode, http.StatusBadRequest)
+	}
+	if _, ok := sessionManager.Validate(session.ID); !ok {
+		t.Fatal("ChangePassword() with a wrong current password ended the session")
+	}
+}
+
 func TestChangePasswordRevokesRememberLoginTokens(t *testing.T) {
 	handler, libraryService, sessionManager := newAuthHandlerForTest(t)
 	currentSession, err := sessionManager.Create("citebox")

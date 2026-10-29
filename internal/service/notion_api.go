@@ -169,10 +169,10 @@ type notionAPIUser struct {
 func (s *NotionAPIService) retrieveCurrentUser(ctx context.Context, token string) (notionAPIUser, error) {
 	var user notionAPIUser
 	if err := s.doJSON(ctx, http.MethodGet, "/v1/users/me", token, nil, &user); err != nil {
-		return notionAPIUser{}, apperr.Wrap(apperr.CodeUnauthenticated, "Notion API 个人访问令牌验证失败", err)
+		return notionAPIUser{}, apperr.Wrap(apperr.CodeInvalidArgument, "Notion API 个人访问令牌验证失败", err)
 	}
 	if strings.TrimSpace(user.ID) == "" {
-		return notionAPIUser{}, apperr.New(apperr.CodeUnauthenticated, "Notion API 用户响应缺少用户 ID")
+		return notionAPIUser{}, apperr.New(apperr.CodeUnavailable, "Notion API 用户响应缺少用户 ID")
 	}
 	return user, nil
 }
