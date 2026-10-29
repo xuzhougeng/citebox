@@ -89,7 +89,7 @@
     "settings.desktop_close.option_ask": "每次询问",
     "settings.desktop_close.option_minimize": "最小化到托盘",
     "settings.desktop_close.option_exit": "直接退出",
-    "settings.desktop_close.status_hint": "修改后立即生效，也会同步影响关闭弹窗里的“记住这次选择”。",
+    "settings.desktop_close.status_hint": "修改后立即生效，也会同步影响关闭弹窗里的“不再询问”。",
     "settings.desktop_close.saving": "正在保存关闭窗口行为...",
     "settings.desktop_close.saved": "关闭窗口行为已更新。",
     "settings.desktop_close.saved_toast": "关闭窗口行为已更新",
