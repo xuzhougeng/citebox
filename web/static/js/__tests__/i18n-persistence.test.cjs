@@ -17,7 +17,7 @@ function setup(fetch, pathname = '/ai') {
         Utils: { showToast: message => errors.push(message) },
         document: {
             addEventListener() {},
-            querySelector: selector => selector === '.nav-actions' ? target : null,
+            querySelector: selector => selector === '.login-footer' ? target : null,
             createElement() {
                 return { children: [], listeners: {}, setAttribute() {},
                     appendChild(node) { this.children.push(node); },

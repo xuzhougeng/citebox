@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"runtime"
 
 	"github.com/xuzhougeng/citebox/internal/model"
 )
@@ -13,8 +14,18 @@ import (
 // shimScript maps the window.citeboxDesktop* functions the bridge script
 // expects onto DesktopService methods, so the shared bridge and the pages
 // stay unchanged. Wails's runtime.js is an ES module, so it is loaded with a
-// dynamic import from this classic script.
-const shimScript = `(function() {
+// dynamic import from this classic script. On macOS it also tells the bridge
+// that the window has a hidden-inset title bar, so the page header has to
+// make room for the traffic lights and act as the drag area.
+func shimScript() string {
+	flags := ""
+	if runtime.GOOS == "darwin" {
+		flags = "window.__CITEBOX_DESKTOP_INSET_TITLEBAR__ = true;\n"
+	}
+	return flags + shimScriptBody
+}
+
+const shimScriptBody = `(function() {
     const runtime = import('/wails/runtime.js');
     const call = (method) => (...args) => runtime.then((wails) => wails.Call.ByName('main.DesktopService.' + method, ...args));
     window.citeboxDesktopOpenExternal = call('OpenExternal');
@@ -25,6 +36,7 @@ const shimScript = `(function() {
     window.citeboxDesktopReadClipboardText = call('ReadClipboardText');
     window.citeboxDesktopWriteClipboardText = call('WriteClipboardText');
     window.citeboxDesktopSaveFile = call('SaveFile');
+    window.citeboxDesktopSyncAppearance = call('SyncAppearance');
 
     // Page errors are invisible without a web inspector, so send them to the
     // desktop log.
@@ -71,6 +83,12 @@ func (d *DesktopService) SetClosePreference(action string) (string, error) {
 		return model.DesktopCloseActionAsk, err
 	}
 	return settings.Action, nil
+}
+
+// SyncAppearance receives the page's theme and UI language whenever they
+// change, so the native window and menus can follow them.
+func (d *DesktopService) SyncAppearance(theme string, lang string) {
+	d.shell.syncAppearance(theme, lang)
 }
 
 func (d *DesktopService) LogFrontendError(page string, message string) {

@@ -1,6 +1,18 @@
 if (typeof window.t !== 'function') window.t = function(k,f){return f||k};
 const LibraryPage = {
     VIEW_MODE_KEY: 'citebox.libraryViewMode',
+    DEFAULT_FILTERS: {
+        keyword: '',
+        author: '',
+        keyword_scope: 'full_text',
+        group_id: '',
+        tag_id: '',
+        status: '',
+        sort_by: 'created_at'
+    },
+    // Filters that live inside the collapsible "more filters" panel.
+    SECONDARY_FILTERS: ['author', 'keyword_scope', 'status', 'sort_by'],
+    MAX_LISTED_AUTHORS: 3,
     state: {
         currentPage: 1,
         pageSize: 12,
@@ -13,7 +25,7 @@ const LibraryPage = {
             keyword_scope: 'full_text',
             group_id: '',
             tag_id: '',
-            status: 'completed',
+            status: '',
             sort_by: 'created_at'
         }
     },
@@ -41,7 +53,9 @@ const LibraryPage = {
         this.readLaunchState();
         this.cacheElements();
         this.applyViewMode();
+        this.syncFilterMore();
         this.bindEvents();
+        this.loadExtractionHint();
         await Promise.all([
             this.loadGroups(),
             this.loadTags()
@@ -87,8 +101,11 @@ const LibraryPage = {
         this.tagFilter = document.getElementById('tagFilter');
         this.statusFilter = document.getElementById('statusFilter');
         this.sortFilter = document.getElementById('sortFilter');
+        this.filterMore = document.getElementById('libraryFilterMore');
+        this.filterMoreCount = document.getElementById('libraryFilterMoreCount');
         this.paperList = document.getElementById('paperList');
         this.resultMeta = document.getElementById('libraryResultMeta');
+        this.extractionHint = document.getElementById('libraryExtractionHint');
         this.pagination = document.getElementById('pagination');
         this.groupForm = document.getElementById('groupForm');
         this.groupNameInput = document.getElementById('groupNameInput');
@@ -112,60 +129,54 @@ const LibraryPage = {
 
     bindEvents() {
         const debouncedSearch = Utils.debounce(async () => {
-            this.state.filters.keyword = this.keywordInput.value.trim();
-            this.state.currentPage = 1;
-            await this.loadPapers();
+            await this.applyFilterChange('keyword', this.keywordInput.value.trim());
         }, 300);
 
         this.keywordInput.addEventListener('input', debouncedSearch);
 
         const debouncedAuthorFilter = Utils.debounce(async () => {
-            this.state.filters.author = this.authorInput.value.trim();
-            this.state.currentPage = 1;
-            await this.loadPapers();
+            await this.applyFilterChange('author', this.authorInput.value.trim());
         }, 300);
 
         this.authorInput.addEventListener('input', debouncedAuthorFilter);
 
         this.keywordScopeFilter.addEventListener('change', async () => {
             this.state.filters.keyword_scope = this.keywordScopeFilter.value || 'full_text';
-            this.state.currentPage = 1;
             this.updateKeywordPlaceholder();
-            await this.loadPapers();
+            await this.applyFilterChange('keyword_scope', this.state.filters.keyword_scope);
         });
 
         this.groupFilter.addEventListener('change', async () => {
-            this.state.filters.group_id = this.groupFilter.value;
-            this.state.currentPage = 1;
-            await this.loadPapers();
+            await this.applyFilterChange('group_id', this.groupFilter.value);
         });
 
         this.tagFilter.addEventListener('change', async () => {
-            this.state.filters.tag_id = this.tagFilter.value;
-            this.state.currentPage = 1;
-            await this.loadPapers();
+            await this.applyFilterChange('tag_id', this.tagFilter.value);
         });
 
         this.statusFilter.addEventListener('change', async () => {
-            this.state.filters.status = this.statusFilter.value;
-            this.state.currentPage = 1;
-            await this.loadPapers();
+            await this.applyFilterChange('status', this.statusFilter.value);
         });
 
         this.sortFilter.addEventListener('change', async () => {
-            this.state.filters.sort_by = this.sortFilter.value || 'created_at';
-            this.state.currentPage = 1;
-            await this.loadPapers();
+            await this.applyFilterChange('sort_by', this.sortFilter.value || 'created_at');
         });
 
         this.paperList.addEventListener('click', async (event) => {
-            const action = event.target.closest('[data-action]');
-            if (!action) return;
-
             const card = event.target.closest('[data-paper-id]');
             if (!card) return;
-
             const paperId = String(card.dataset.paperId ?? '').trim();
+
+            const action = event.target.closest('[data-action]');
+            if (!action) {
+                // Compact rows open the detail view when clicked anywhere that is
+                // not another control (links, menus, buttons keep their own behavior).
+                if (card.hasAttribute('data-row-open') && !event.target.closest('a, button, summary, details, input, select, textarea')) {
+                    await this.openPaperModal(paperId);
+                }
+                return;
+            }
+
             if (action.dataset.action === 'open-pdf') {
                 this.openPaperPDF(paperId);
             }
@@ -181,7 +192,12 @@ const LibraryPage = {
         });
 
         if (this.resultMeta) {
-            this.resultMeta.addEventListener('click', (event) => {
+            this.resultMeta.addEventListener('click', async (event) => {
+                const clear = event.target.closest('[data-clear-filter]');
+                if (clear) {
+                    await this.clearFilter(clear.dataset.clearFilter);
+                    return;
+                }
                 const btn = event.target.closest('[data-view-mode]');
                 if (!btn) return;
                 this.setViewMode(btn.dataset.viewMode);
@@ -293,34 +309,108 @@ const LibraryPage = {
         }
     },
 
+    async applyFilterChange(key, value) {
+        this.state.filters[key] = value;
+        this.state.currentPage = 1;
+        this.syncFilterMore();
+        await this.loadPapers();
+    },
+
+    isFilterActive(key) {
+        return String(this.state.filters[key] ?? '') !== String(this.DEFAULT_FILTERS[key] ?? '');
+    },
+
+    // Keeps the "more filters" panel open while any of its fields differs from
+    // the default, and shows how many of them are set when it is collapsed.
+    syncFilterMore() {
+        const activeCount = this.SECONDARY_FILTERS.filter((key) => this.isFilterActive(key)).length;
+        if (this.filterMore && activeCount > 0) {
+            this.filterMore.open = true;
+        }
+        if (this.filterMoreCount) {
+            this.filterMoreCount.hidden = activeCount === 0;
+            this.filterMoreCount.textContent = activeCount > 0 ? String(activeCount) : '';
+        }
+    },
+
+    async clearFilter(key) {
+        const keys = key === 'all'
+            ? Object.keys(this.DEFAULT_FILTERS)
+            : (Object.prototype.hasOwnProperty.call(this.DEFAULT_FILTERS, key) ? [key] : []);
+        if (!keys.length) return;
+
+        keys.forEach((name) => {
+            this.state.filters[name] = this.DEFAULT_FILTERS[name];
+        });
+        const controls = {
+            keyword: this.keywordInput,
+            author: this.authorInput,
+            keyword_scope: this.keywordScopeFilter,
+            group_id: this.groupFilter,
+            tag_id: this.tagFilter,
+            status: this.statusFilter,
+            sort_by: this.sortFilter
+        };
+        keys.forEach((name) => {
+            if (controls[name]) controls[name].value = this.state.filters[name];
+        });
+        this.updateKeywordPlaceholder();
+        this.state.currentPage = 1;
+        this.syncFilterMore();
+        await this.loadPapers();
+    },
+
+    activeFilterChips() {
+        const filters = this.state.filters;
+        const chips = [];
+        if (filters.keyword) {
+            chips.push({ key: 'keyword', label: `${t('library.result_keyword', '关键词')}：${filters.keyword}` });
+        }
+        if (filters.keyword && this.isFilterActive('keyword_scope')) {
+            chips.push({ key: 'keyword_scope', label: `${t('library.result_scope_label', '范围')}：${this.keywordScopeLabel()}` });
+        }
+        if (filters.author) {
+            chips.push({ key: 'author', label: `${t('library.result_author', '作者')}：${filters.author}` });
+        }
+        if (filters.group_id) {
+            const group = (this.state.groups || []).find((item) => String(item.id) === String(filters.group_id));
+            chips.push({ key: 'group_id', label: `${t('library.filter_group', '分组')}：${group ? group.name : filters.group_id}` });
+        }
+        if (filters.tag_id) {
+            const tag = (this.state.tags || []).find((item) => String(item.id) === String(filters.tag_id));
+            chips.push({ key: 'tag_id', label: `${t('library.result_tag', '标签')}：${tag ? tag.name : filters.tag_id}` });
+        }
+        if (filters.status) {
+            chips.push({ key: 'status', label: `${t('library.result_status', '状态')}：${Utils.statusLabel(filters.status)}` });
+        }
+        return chips;
+    },
+
     renderResultMeta() {
         if (!this.resultMeta) return;
 
-        const statusLabel = this.state.filters.status
-            ? Utils.statusLabel(this.state.filters.status)
-            : t('library.filter_all_status', '全部状态');
-        const scopeLabel = this.keywordScopeLabel();
-        const sortLabel = this.sortLabel();
+        const chips = this.activeFilterChips();
+        const removeLabel = t('library.filter_remove', '移除筛选');
+        const chipsHTML = chips.length ? `
+            <div class="active-filter-chips">
+                ${chips.map((chip) => `
+                    <button type="button" class="active-filter-chip" data-clear-filter="${chip.key}" aria-label="${Utils.escapeHTML(`${removeLabel}：${chip.label}`)}">
+                        <span>${Utils.escapeHTML(chip.label)}</span>
+                        <span class="active-filter-chip-x" aria-hidden="true">×</span>
+                    </button>
+                `).join('')}
+                ${chips.length > 1 ? `<button type="button" class="active-filter-clear" data-clear-filter="all">${t('library.filter_clear_all', '清除全部')}</button>` : ''}
+            </div>
+        ` : '';
 
         const vm = this.state.viewMode;
         this.resultMeta.innerHTML = `
-            <div>
-                <h2>${t('library.result_found', '找到')} ${this.state.total || 0} ${t('library.result_papers', '篇文献')}</h2>
-            </div>
-            <div class="library-result-meta-tags">
-                <span class="tag-pill neutral">${t('library.result_current_page', '当前页')} ${this.state.papers.length} ${t('library.result_papers_unit', '篇')}</span>
-                ${this.state.filters.keyword ? `<span class="tag-pill neutral">${t('library.result_keyword', '关键词')}：${Utils.escapeHTML(this.state.filters.keyword)}</span>` : ''}
-                ${this.state.filters.author ? `<span class="tag-pill neutral">${t('library.result_author', '作者')}：${Utils.escapeHTML(this.state.filters.author)}</span>` : ''}
-                <span class="tag-pill neutral">${Utils.escapeHTML(statusLabel)}</span>
-                <span class="tag-pill neutral">${t('library.result_scope_label', '范围')}：${Utils.escapeHTML(scopeLabel)}</span>
-                <span class="tag-pill neutral">${t('library.result_sort', '排序')}：${Utils.escapeHTML(sortLabel)}</span>
-                ${this.state.filters.group_id ? `<span class="tag-pill neutral">${t('library.result_group_limited', '已限定分组')}</span>` : ''}
-                ${this.state.filters.tag_id ? `<span class="tag-pill neutral">${t('library.result_tag_limited', '已限定标签')}</span>` : ''}
-                <span class="library-view-toggle" role="group" aria-label="${t('library.view_mode_aria', '视图模式')}">
-                    <button type="button" class="view-toggle-btn ${vm === 'detailed' ? 'active' : ''}" data-view-mode="detailed" aria-pressed="${vm === 'detailed'}">${t('library.view_detailed', '详细')}</button>
-                    <button type="button" class="view-toggle-btn ${vm === 'compact' ? 'active' : ''}" data-view-mode="compact" aria-pressed="${vm === 'compact'}">${t('library.view_compact', '紧凑')}</button>
-                </span>
-            </div>
+            <h2>${t('library.result_found', '找到')} ${this.state.total || 0} ${t('library.result_papers', '篇文献')}</h2>
+            ${chipsHTML}
+            <span class="library-view-toggle" role="group" aria-label="${t('library.view_mode_aria', '视图模式')}">
+                <button type="button" class="view-toggle-btn ${vm === 'detailed' ? 'active' : ''}" data-view-mode="detailed" aria-pressed="${vm === 'detailed'}">${t('library.view_detailed', '详细')}</button>
+                <button type="button" class="view-toggle-btn ${vm === 'compact' ? 'active' : ''}" data-view-mode="compact" aria-pressed="${vm === 'compact'}">${t('library.view_compact', '紧凑')}</button>
+            </span>
         `;
     },
 
@@ -331,6 +421,7 @@ const LibraryPage = {
         this.saveViewMode(mode);
         this.applyViewMode();
         this.renderResultMeta();
+        this.renderPaperList();
     },
 
     keywordScopeLabel() {
@@ -348,15 +439,112 @@ const LibraryPage = {
             : t('library.filter_keyword_placeholder', '标题、摘要、正文或 DOI');
     },
 
+    async loadExtractionHint() {
+        if (!this.extractionHint || typeof API === 'undefined' || typeof API.getExtractorSettings !== 'function') return;
+        try {
+            const settings = await API.getExtractorSettings();
+            const profile = String(settings?.extractor_profile || '').trim();
+            // The manual profile is a deliberate choice; the built-in AI profile
+            // is configured on the AI page. Only hint when a service URL is missing.
+            const missing = profile !== 'manual' && profile !== 'open_source_vision' && !settings?.effective_extractor_url;
+            this.extractionHint.hidden = !missing;
+            this.extractionHint.innerHTML = missing ? `
+                <span>${t('library.extraction_hint', '未配置自动解析服务：新文献会直接入库，图片可通过手动标注补录。')}</span>
+                <a href="/settings#settings-section-12">${t('library.extraction_hint_link', '前往配置')}</a>
+            ` : '';
+        } catch (error) {
+            this.extractionHint.hidden = true;
+        }
+    },
+
+    // "A, B, C" for short lists, "A, B, C et al." beyond MAX_LISTED_AUTHORS.
+    formatAuthors(value) {
+        const raw = String(value || '').trim();
+        if (!raw) return '';
+        // "Last, First; Last, First" lists keep their semicolons.
+        const semicolons = /[;；]/.test(raw);
+        const separator = semicolons ? '; ' : ', ';
+        const names = (semicolons ? raw.split(/[;；]/) : raw.split(/[,，]/))
+            .map((name) => name.trim())
+            .filter(Boolean);
+        if (names.length <= this.MAX_LISTED_AUTHORS) return names.join(separator);
+        return t('library.authors_et_al', '{names} 等').replace('{names}', names.slice(0, this.MAX_LISTED_AUTHORS).join(separator));
+    },
+
+    publishedYear(value) {
+        const raw = String(value || '').trim();
+        const match = raw.match(/\b(\d{4})\b/);
+        return match ? match[1] : raw;
+    },
+
+    formatShortDate(value) {
+        if (!value) return '';
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) return '';
+        const locale = typeof document !== 'undefined' && document.documentElement?.lang ? document.documentElement.lang : 'zh-CN';
+        return date.toLocaleDateString(locale, { year: 'numeric', month: '2-digit', day: '2-digit' });
+    },
+
+    paperMetaLine(paper) {
+        return [this.formatAuthors(paper.authors_text), String(paper.journal || '').trim(), this.publishedYear(paper.published_at)]
+            .filter(Boolean)
+            .map((part) => Utils.escapeHTML(part))
+            .join('<span class="paper-meta-sep" aria-hidden="true"> · </span>');
+    },
+
+    // Status is shown only when it carries information (anything but completed).
+    renderStatusPill(paper) {
+        if (!paper.extraction_status || paper.extraction_status === 'completed') return '';
+        return `<span class="status-pill ${Utils.statusTone(paper.extraction_status)}">${Utils.escapeHTML(Utils.statusLabel(paper.extraction_status))}</span>`;
+    },
+
+    shouldShowExtractorMessage(paper) {
+        return Boolean(paper.extractor_message) && ['failed', 'cancelled', 'queued', 'running'].includes(paper.extraction_status);
+    },
+
+    canReextract(paper) {
+        return paper.extraction_status === 'failed' || paper.extraction_status === 'cancelled';
+    },
+
+    renderTitleButton(paper) {
+        return `<button type="button" class="paper-title-link" data-action="open" title="${t('library.meta_click_detail', '点击查看详情')}">${Utils.escapeHTML(paper.title)}</button>`;
+    },
+
+    renderRowMenu(paper, options = {}) {
+        const moreLabel = t('library.btn_more_actions', '更多操作');
+        return `
+            <details class="action-menu no-caret">
+                <summary class="btn btn-outline btn-small action-menu-trigger" aria-label="${moreLabel}" title="${moreLabel}">⋯</summary>
+                <div class="action-menu-list">
+                    ${options.includeReadPDF ? `<button type="button" class="action-menu-item" data-action="open-pdf">${t('library.btn_read_pdf', '阅读 PDF')}</button>` : ''}
+                    <button type="button" class="action-menu-item" data-action="open">${t('library.btn_view_detail', '查看详情')}</button>
+                    <a class="action-menu-item" href="/manual?paper_id=${paper.id}">${t('library.btn_manual', '手动标注')}</a>
+                    ${this.canReextract(paper) ? `<button type="button" class="action-menu-item" data-action="reextract">${t('library.btn_reextract', '重新解析')}</button>` : ''}
+                    <div class="action-menu-separator"></div>
+                    <button type="button" class="action-menu-item danger" data-action="delete">${t('btn.delete', '删除')}</button>
+                </div>
+            </details>
+        `;
+    },
+
     renderPaperList() {
         if (!this.state.papers.length) {
+            const filtered = Object.keys(this.DEFAULT_FILTERS).some((key) => key !== 'sort_by' && this.isFilterActive(key));
             this.paperList.innerHTML = `
                 <div class="empty-state">
-                    <h3>${t('library.empty_title', '还没有符合条件的文献')}</h3>
-                    <p>${this.state.filters.status === 'completed' ? t('library.empty_completed', '当前还没有完成解析的文献，先上传 PDF 或把状态切回全部。') : t('library.empty_default', '先上传 PDF，或者调整当前的筛选条件。')}</p>
-                    <a class="btn btn-primary" href="/upload">${t('library.btn_upload', '上传文献')}</a>
+                    <h3>${filtered ? t('library.empty_title', '还没有符合条件的文献') : t('library.empty_library_title', '文献库还是空的')}</h3>
+                    <p>${filtered ? t('library.empty_filtered', '调整或清除当前的筛选条件后再试。') : t('library.empty_library_desc', '上传 PDF 后，文献会出现在这里。')}</p>
+                    ${filtered
+                        ? `<button class="btn btn-outline" type="button" data-empty-clear-filters>${t('library.filter_clear_all', '清除全部')}</button>`
+                        : `<a class="btn btn-primary" href="/upload">${t('library.btn_upload', '上传文献')}</a>`}
                 </div>
             `;
+            this.paperList.querySelector?.('[data-empty-clear-filters]')?.addEventListener('click', () => this.clearFilter('all'));
+            return;
+        }
+
+        if (this.state.viewMode === 'compact') {
+            this.paperList.innerHTML = this.renderCompactTable();
             return;
         }
 
@@ -364,55 +552,74 @@ const LibraryPage = {
             const tags = (paper.tags || []).map((tag) => `<span class="chip" style="--chip-color:${tag.color}">${Utils.escapeHTML(tag.name)}</span>`).join('');
             const statusClass = Utils.statusTone(paper.extraction_status);
             const summary = paper.abstract_text || paper.paper_notes_text || paper.notes_text;
+            const metaLine = this.paperMetaLine(paper);
+            const quiet = [
+                paper.group_name ? Utils.escapeHTML(paper.group_name) : '',
+                t('library.meta_figure_count', '{count} 张图片').replace('{count}', paper.figure_count || 0)
+            ].filter(Boolean).join('<span class="paper-meta-sep" aria-hidden="true"> · </span>');
 
             return `
-                <article class="paper-list-row" data-paper-id="${paper.id}">
-                    <div class="paper-list-main">
-                        <div class="paper-list-head">
-                            <span class="status-pill ${statusClass}">${Utils.escapeHTML(Utils.statusLabel(paper.extraction_status))}</span>
-                            <h3>${Utils.escapeHTML(paper.title)}</h3>
-                            <div class="paper-list-head-actions">
-                                <button class="btn btn-outline danger" type="button" data-action="delete">${t('btn.delete', '删除')}</button>
-                            </div>
+                <article class="paper-row" data-paper-id="${paper.id}">
+                    <div class="paper-row-main">
+                        <h3 class="paper-row-title">${this.renderStatusPill(paper)}${this.renderTitleButton(paper)}</h3>
+                        ${metaLine ? `<p class="paper-row-meta">${metaLine}</p>` : ''}
+                        ${summary ? `<p class="paper-row-summary">${Utils.escapeHTML(summary)}</p>` : ''}
+                        ${this.shouldShowExtractorMessage(paper) ? `<p class="notice ${statusClass} paper-row-notice">${Utils.escapeHTML(paper.extractor_message)}</p>` : ''}
+                        <div class="paper-row-foot">
+                            <span class="paper-row-quiet">${quiet}</span>
+                            ${tags ? `<span class="paper-row-tags">${tags}</span>` : ''}
                         </div>
-                        <div class="paper-list-meta">
-                            <span class="paper-list-meta-item paper-list-meta-file" data-action="open" role="button" title="${t('library.meta_click_detail', '点击查看详情')}">
-                                <span class="paper-list-meta-label">${t('library.meta_file', '文件')}</span>
-                                <span class="paper-list-meta-value">${Utils.escapeHTML(paper.original_filename)}</span>
-                            </span>
-                            <span class="paper-list-meta-item">
-                                <span class="paper-list-meta-label">${t('library.meta_group', '分组')}</span>
-                                <span class="paper-list-meta-value">${Utils.escapeHTML(paper.group_name || t('library.meta_no_group', '未分组'))}</span>
-                            </span>
-                            ${paper.doi ? `
-                                <span class="paper-list-meta-item">
-                                    <span class="paper-list-meta-label">${t('library.meta_doi', 'DOI')}</span>
-                                    <span class="paper-list-meta-value">${Utils.escapeHTML(paper.doi)}</span>
-                                </span>
-                            ` : ''}
-                            <span class="paper-list-meta-item">
-                                <span class="paper-list-meta-label">${t('library.meta_figures', '图片')}</span>
-                                <span class="paper-list-meta-value">${paper.figure_count || 0}</span>
-                            </span>
-                            <span class="paper-list-meta-item">
-                                <span class="paper-list-meta-label">${t('library.meta_updated', '更新')}</span>
-                                <span class="paper-list-meta-value">${Utils.formatDate(paper.updated_at || paper.created_at)}</span>
-                            </span>
-                        </div>
-                        ${summary ? `<p class="paper-list-summary">${Utils.escapeHTML(summary)}</p>` : ''}
-                        ${paper.extractor_message ? `<p class="notice ${statusClass} paper-list-notice">${Utils.escapeHTML(paper.extractor_message)}</p>` : ''}
                     </div>
-                    <div class="paper-list-footer">
-                        <div class="paper-list-tags">${tags || `<span class="muted">${t('library.meta_no_tags', '无标签')}</span>`}</div>
-                        <div class="paper-list-footer-actions">
-                            <button class="btn btn-outline" type="button" data-action="open-pdf">${t('library.btn_read_pdf', '阅读 PDF')}</button>
-                            <a class="btn btn-outline" href="/manual?paper_id=${paper.id}">${t('library.btn_manual', '手动标注')}</a>
-                            ${(paper.extraction_status === 'failed' || paper.extraction_status === 'cancelled') ? `<button class="btn btn-outline" type="button" data-action="reextract">${t('library.btn_reextract', '重新解析')}</button>` : ''}
-                        </div>
+                    <div class="paper-row-actions">
+                        <button class="btn btn-outline btn-small" type="button" data-action="open-pdf">${t('library.btn_read_pdf', '阅读 PDF')}</button>
+                        ${this.renderRowMenu(paper)}
                     </div>
                 </article>
             `;
         }).join('');
+    },
+
+    renderCompactTable() {
+        const sortedByUpdate = this.state.filters.sort_by === 'updated_at';
+        const dateLabel = sortedByUpdate ? t('library.col_updated', '更新时间') : t('library.col_added', '添加时间');
+        const rows = this.state.papers.map((paper) => {
+            const authors = this.formatAuthors(paper.authors_text);
+            const year = this.publishedYear(paper.published_at);
+            const journal = String(paper.journal || '').trim();
+            const date = this.formatShortDate(sortedByUpdate ? (paper.updated_at || paper.created_at) : paper.created_at);
+            return `
+                <tr class="paper-table-row" data-paper-id="${paper.id}" data-row-open>
+                    <td class="paper-table-title">${this.renderTitleButton(paper)}${this.renderStatusPill(paper)}</td>
+                    <td class="paper-table-authors" title="${Utils.escapeHTML(paper.authors_text || '')}">${Utils.escapeHTML(authors) || '<span class="muted">—</span>'}</td>
+                    <td class="paper-table-year">${Utils.escapeHTML(year) || '<span class="muted">—</span>'}</td>
+                    <td class="paper-table-journal" title="${Utils.escapeHTML(journal)}">${Utils.escapeHTML(journal) || '<span class="muted">—</span>'}</td>
+                    <td class="paper-table-group">${paper.group_name ? Utils.escapeHTML(paper.group_name) : '<span class="muted">—</span>'}</td>
+                    <td class="paper-table-figures">${paper.figure_count || 0}</td>
+                    <td class="paper-table-date">${Utils.escapeHTML(date)}</td>
+                    <td class="paper-table-actions">${this.renderRowMenu(paper, { includeReadPDF: true })}</td>
+                </tr>
+            `;
+        }).join('');
+
+        return `
+            <div class="paper-table-wrap">
+                <table class="paper-table">
+                    <thead>
+                        <tr>
+                            <th scope="col" class="paper-table-title">${t('library.col_title', '标题')}</th>
+                            <th scope="col" class="paper-table-authors">${t('library.col_authors', '作者')}</th>
+                            <th scope="col" class="paper-table-year">${t('library.col_year', '年份')}</th>
+                            <th scope="col" class="paper-table-journal">${t('library.col_journal', '期刊')}</th>
+                            <th scope="col" class="paper-table-group">${t('library.col_group', '分组')}</th>
+                            <th scope="col" class="paper-table-figures">${t('library.col_figures', '图片')}</th>
+                            <th scope="col" class="paper-table-date" aria-sort="descending">${dateLabel}<span class="paper-table-sort" aria-hidden="true">↓</span></th>
+                            <th scope="col" class="paper-table-actions"><span class="paper-table-hidden-label">${t('library.col_actions', '操作')}</span></th>
+                        </tr>
+                    </thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            </div>
+        `;
     },
 
     renderPagination() {

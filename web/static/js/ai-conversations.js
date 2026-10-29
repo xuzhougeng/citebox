@@ -41,6 +41,7 @@
     const Conversations = {
         _state: {
             items: [],
+            hasMore: false,
             activeID: null,
             query: '',
             searchTimer: null,
@@ -112,7 +113,11 @@
         // -----------------------------------------------------------------------
         async refresh() {
             const s = this._state;
-            s.items = await this._fetchConversations(s.query, s.sidebarLimit);
+            // Ask for one extra row so "More conversations" only shows when
+            // the sidebar is actually truncated.
+            const items = await this._fetchConversations(s.query, s.sidebarLimit + 1);
+            s.hasMore = items.length > s.sidebarLimit;
+            s.items = items.slice(0, s.sidebarLimit);
             this._render();
         },
 
@@ -274,6 +279,7 @@
             if (!container) return;
 
             const items = s.items || [];
+            if (s.moreBtn) s.moreBtn.hidden = !s.hasMore;
 
             if (items.length === 0) {
                 container.innerHTML = '';

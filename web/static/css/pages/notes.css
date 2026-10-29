@@ -33,9 +33,12 @@
     transition: box-shadow 0.15s, border-color 0.15s;
 }
 
+.note-row {
+    cursor: pointer;
+}
+
 .note-row:hover {
-    border-color: rgba(var(--accent-rgb), 0.18);
-    box-shadow: var(--shadow);
+    border-color: rgba(var(--accent-rgb), 0.28);
 }
 
 .note-row-paper {
@@ -91,37 +94,44 @@
 }
 
 .note-row-source {
+    padding: 0;
+    border: none;
+    background: none;
+    font: inherit;
     font-weight: 700;
-    font-size: 0.95rem;
+    font-size: var(--text-ui);
+    text-align: left;
     color: var(--accent-deep);
     cursor: pointer;
     border-radius: 4px;
-    transition: background 0.15s;
 }
 
 .note-row-source:hover {
-    background: rgba(var(--accent-rgb), 0.08);
+    text-decoration: underline;
+    text-underline-offset: 0.18rem;
+}
+
+.note-row-source:focus-visible {
+    outline: 2px solid var(--accent-deep);
+    outline-offset: 2px;
 }
 
 .note-row-page {
     color: var(--muted);
-    font-size: 0.82rem;
+    font-size: var(--text-sm);
     white-space: nowrap;
 }
 
 .note-row-text {
-    font-size: 0.95rem;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    overflow: hidden;
+    font-size: var(--text-ui);
     line-height: 1.7;
-    color: var(--ink);
+    color: var(--muted);
     white-space: normal;
     word-break: break-word;
-    cursor: pointer;
-    border-radius: 8px;
-    transition: background 0.15s;
-}
-
-.note-row-text:hover {
-    background: rgba(var(--accent-rgb), 0.06);
 }
 
 .note-row-foot {
@@ -141,7 +151,8 @@
 
 .note-row-actions {
     display: flex;
-    gap: 0.4rem;
+    align-items: center;
+    gap: var(--space-2);
     flex-shrink: 0;
 }
 
@@ -149,7 +160,7 @@
     margin-top: 1.45rem;
 }
 
-@media (max-width: 640px) {
+@media (max-width: 720px) {
     .note-row {
         flex-direction: column;
     }

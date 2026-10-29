@@ -31,31 +31,14 @@
         </div>
     </nav>
 
-    <main class="page-shell">
-        <section class="hero compact">
-            <div>
-                <p class="eyebrow" data-i18n="research.hero_eyebrow">Literature Search</p>
-                <h1 data-i18n="research.hero_title">基于 Semantic Scholar 的文献搜索</h1>
-                <p class="hero-text" data-i18n="research.hero_text">
-                    搜索关键词，点开结果查看引用、被引用与相似文献，把感兴趣的论文先放入候选列表，再统一导入文献库。
-                </p>
-                <p class="hero-inline-links">
-                    <span data-i18n="research.hero_aux_links">辅助入口：</span>
-                    <a href="/settings#settings-external-sources" data-i18n="research.hero_link_settings">设置 API key</a>
-                    <span aria-hidden="true">/</span>
-                    <a href="/library" data-i18n="research.hero_link_library">回到文献库</a>
-                </p>
-            </div>
-        </section>
+    <main class="page-shell research-page">
+        <header class="collection-header research-page-header">
+            <h1 data-i18n="research.page_title">文献搜索</h1>
+            <a class="btn btn-outline btn-small" href="/settings#settings-external-sources" data-i18n="research.link_settings">设置 API Key</a>
+            <p class="research-page-subtitle" data-i18n="research.page_subtitle">用 Semantic Scholar 搜索论文，沿引用关系发现相关文献，先加入候选再统一导入文献库。</p>
+        </header>
 
-        <section class="filters-card">
-            <div class="filters-card-head">
-                <div>
-                    <h2 data-i18n="research.toolbar_title">检索 / 设置种子</h2>
-                    <p data-i18n="research.toolbar_desc">输入关键词、DOI、arXiv ID 或 Semantic Scholar paperId 开始搜索。</p>
-                </div>
-                <span id="research-rate-warning" class="research-rate-warning hidden" data-i18n="research.error.rateLimited">Semantic Scholar 限流，请稍后重试。</span>
-            </div>
+        <section class="filters-card collection-filters research-search-card">
             <div class="research-toolbar">
                 <label class="field research-search-field">
                     <span data-i18n="research.search_label">搜索</span>
@@ -66,9 +49,10 @@
                 </label>
                 <div class="research-toolbar-actions">
                     <button id="research-search-btn" class="btn btn-primary" type="button" data-i18n="research.action.search">搜索</button>
-                    <button id="research-pick-from-library" class="btn btn-secondary" type="button" data-i18n="research.action.pickFromLibrary">从文献库选种子</button>
+                    <button id="research-pick-from-library" class="btn btn-outline" type="button" data-i18n="research.action.pickFromLibrary">从文献库选起点</button>
                 </div>
             </div>
+            <p id="research-rate-warning" class="research-rate-warning hidden" role="status" data-i18n="research.error.rateLimited">Semantic Scholar 限流，请稍后重试。</p>
             <div id="research-search-history" class="research-history-row" hidden>
             </div>
         </section>
@@ -76,7 +60,7 @@
         <section class="research-layout">
             <article class="research-seed-pane manager-card" id="research-seed-pane">
                 <div id="research-empty-state" class="research-empty">
-                    <p data-i18n="research.empty.hint">在上方搜索框输入关键词或粘贴 DOI / arXiv ID 开始搜索。</p>
+                    <p data-i18n="research.empty.hint">搜索结果和文献的引用关系会显示在这里。</p>
                 </div>
             </article>
             <aside class="research-basket-pane manager-card" id="research-basket-pane">
@@ -85,9 +69,9 @@
                 </header>
                 <ul id="research-basket-list" class="research-basket-list"></ul>
                 <div class="research-basket-actions">
-                    <button id="research-basket-import-all" class="btn btn-primary btn-small" type="button" data-i18n="research.basket.importAll">全部加入文献库</button>
-                    <button id="research-basket-export" class="btn btn-secondary btn-small" type="button" data-i18n="research.basket.exportMarkdown">导出 Markdown 清单</button>
-                    <button id="research-basket-recommend" class="btn btn-outline btn-small" type="button" data-i18n="research.basket.recommendMore">基于候选推荐</button>
+                    <button id="research-basket-import-all" class="btn btn-primary btn-small" type="button" disabled data-i18n="research.basket.importAll">全部加入文献库</button>
+                    <button id="research-basket-export" class="btn btn-outline btn-small" type="button" disabled data-i18n="research.basket.exportMarkdown">导出 Markdown 清单</button>
+                    <button id="research-basket-recommend" class="btn btn-outline btn-small" type="button" disabled data-i18n="research.basket.recommendMore">基于候选推荐</button>
                 </div>
             </aside>
         </section>
@@ -99,6 +83,6 @@
     <script src="/static/js/api.js"></script>
     <script src="/static/js/main.js"></script>
     <script src="/static/js/research-errors.js"></script>
-    <script src="/static/js/research.js"></script>
+    <script src="/static/js/research.js?v=20261028"></script>
 </body>
 </html>

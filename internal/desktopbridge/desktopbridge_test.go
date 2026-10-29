@@ -165,3 +165,20 @@ func sortedStrings(values []string) []string {
 	sort.Strings(values)
 	return values
 }
+
+func TestScriptAddsTitleBarDragAndAppearanceSync(t *testing.T) {
+	script, err := Script()
+	if err != nil {
+		t.Fatalf("Script() error = %v", err)
+	}
+	for _, want := range []string{
+		"__CITEBOX_DESKTOP_INSET_TITLEBAR__",
+		"--wails-draggable: drag;",
+		"--wails-draggable: no-drag;",
+		"citeboxDesktopSyncAppearance",
+	} {
+		if !strings.Contains(script, want) {
+			t.Fatalf("Script() is missing %q", want)
+		}
+	}
+}

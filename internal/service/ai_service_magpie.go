@@ -14,6 +14,16 @@ func (r RuntimeAISettings) GetSettings() (*model.AISettings, error) {
 	return r.service.GetRuntimeSettings()
 }
 
+// RuntimeManaged reports whether a valid Magpie connection currently supplies
+// the text models, so the UI can skip "no API key" warnings for personal settings.
+func (s *AIService) RuntimeManaged() bool {
+	if s.config == nil {
+		return false
+	}
+	_, ok := magpie.Load(s.config.MagpieConfigPath)
+	return ok
+}
+
 // GetRuntimeSettings is read for each new operation. In-flight requests keep
 // their existing snapshot; a change or disconnect affects the next operation.
 func (s *AIService) GetRuntimeSettings() (*model.AISettings, error) {

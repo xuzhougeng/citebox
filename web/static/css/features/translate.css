@@ -73,7 +73,7 @@
     background: rgba(var(--surface-rgb), 0.98);
     color: var(--ink);
     font-family: inherit;
-    font-size: 0.98rem;
+    font-size: var(--text-ui);
     font-weight: 600;
     letter-spacing: 0;
     cursor: text;

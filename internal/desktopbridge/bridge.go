@@ -39,6 +39,86 @@ var internalRoutes = []string{
 const scriptTemplate = `(function() {
     window.__CITEBOX_DESKTOP__ = true;
 
+    // This script runs at the start of <head>, before the page's own scripts
+    // and styles, so the shell styles below apply from the first paint.
+    const rootElement = document.documentElement;
+    rootElement.classList.add('citebox-desktop');
+    const shellStyleRules = [
+        // The desktop webview is always signed in (the shell's in-process
+        // handler is trusted), so sign-in controls have nothing to do.
+        '.citebox-desktop .db-action-item:has(#logoutButton),',
+        '.citebox-desktop .db-action-item:has(#rememberLoginEnabledInput) {',
+        '    display: none !important;',
+        '}'
+    ];
+    if (window.__CITEBOX_DESKTOP_INSET_TITLEBAR__) {
+        // macOS hidden-inset title bar: the page header sits under the traffic
+        // lights, so it needs room on the left and becomes the drag area. The
+        // Wails runtime reads --wails-draggable from the clicked element.
+        rootElement.classList.add('desktop-mac');
+        const headers = ['.navbar', '.viewer-toolbar', '.overview-topbar'];
+        const inHeaders = (selector) => headers.map((header) => 'html.desktop-mac ' + header + ' ' + selector).join(',\n');
+        shellStyleRules.push(
+            headers.map((header) => 'html.desktop-mac ' + header).join(',\n') + ' {',
+            '    --wails-draggable: drag;',
+            '    -webkit-user-select: none;',
+            '    user-select: none;',
+            '}',
+            'html.desktop-mac .navbar {',
+            '    padding-left: 80px;',
+            '}',
+            'html.desktop-mac .viewer-toolbar,',
+            'html.desktop-mac .overview-topbar {',
+            '    padding-left: 88px;',
+            '}',
+            inHeaders(':is(a, button, input, select, textarea, label, summary, [role="button"], [role="menu"], [role="menuitem"], [tabindex], [contenteditable=""], [contenteditable="true"], .nav-dropdown-menu)') + ' {',
+            '    --wails-draggable: no-drag;',
+            '}',
+            inHeaders(':is(input, textarea, [contenteditable=""], [contenteditable="true"])') + ' {',
+            '    -webkit-user-select: text;',
+            '    user-select: text;',
+            '}'
+        );
+    }
+    const shellStyle = document.createElement('style');
+    shellStyle.id = 'citeboxDesktopShellStyle';
+    shellStyle.textContent = shellStyleRules.join('\n');
+    (document.head || rootElement).appendChild(shellStyle);
+
+    // Report theme and UI language changes so the shell can match the native
+    // window appearance and menu language. theme.js sets data-theme and
+    // i18n.js sets lang on <html> (on every page load, after the locale is
+    // resolved), so watching those attributes is enough.
+    // The static lang attribute in the HTML is only a placeholder, so the
+    // language is reported once i18n.js has set it on this page.
+    let reportedAppearance = '';
+    let appearanceTimer = 0;
+    let langResolved = false;
+    const reportAppearance = () => {
+        appearanceTimer = 0;
+        if (typeof window.citeboxDesktopSyncAppearance !== 'function') {
+            return;
+        }
+        const theme = rootElement.getAttribute('data-theme') || 'warm';
+        const lang = langResolved ? String(rootElement.lang || '') : '';
+        const key = theme + '|' + lang;
+        if (key === reportedAppearance) {
+            return;
+        }
+        reportedAppearance = key;
+        void Promise.resolve(window.citeboxDesktopSyncAppearance(theme, lang)).catch(() => {});
+    };
+    if (typeof MutationObserver === 'function') {
+        new MutationObserver((records) => {
+            if (records.some((record) => record.attributeName === 'lang')) {
+                langResolved = true;
+            }
+            if (!appearanceTimer) {
+                appearanceTimer = window.setTimeout(reportAppearance, 50);
+            }
+        }).observe(rootElement, { attributes: true, attributeFilter: ['data-theme', 'lang'] });
+    }
+
     const normalizePath = (path = '') => {
         const normalized = String(path || '').trim();
         if (!normalized || normalized === '/index.html') {

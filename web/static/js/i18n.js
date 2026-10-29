@@ -139,8 +139,9 @@ var CiteBoxI18n = {
     },
 
     injectSwitcher: function() {
-        var target = document.querySelector('.nav-actions');
-        if (!target) target = document.querySelector('.login-footer');
+        // In the app shell, language lives in Settings > General; only the
+        // login page offers a quick switch.
+        var target = document.querySelector('.login-footer');
         if (!target || document.querySelector('.lang-switcher')) return;
 
         this._injectStyles();

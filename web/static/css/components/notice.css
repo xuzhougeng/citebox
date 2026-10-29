@@ -3,7 +3,7 @@
 .notice {
     padding: 0.8rem 0.95rem;
     border-radius: 14px;
-    font-size: 0.92rem;
+    font-size: var(--text-ui);
 }
 
 .notice.error {
@@ -27,18 +27,18 @@
     bottom: 1.2rem;
     z-index: 80;
     padding: 0.9rem 1rem;
-    border-radius: 14px;
-    color: #fff;
+    border-radius: var(--radius-card);
+    color: var(--on-ink);
     box-shadow: var(--shadow);
 }
 
 .toast-success,
 .toast-info {
-    background: rgba(54, 82, 58, 0.92);
+    background: rgba(var(--success-rgb), 0.92);
 }
 
 .toast-error {
-    background: rgba(144, 47, 42, 0.94);
+    background: rgba(var(--error-rgb), 0.94);
 }
 
 .empty-state {

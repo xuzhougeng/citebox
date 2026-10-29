@@ -64,13 +64,37 @@
 .figure-page-controls {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
+    gap: var(--space-2);
     flex-wrap: wrap;
+}
+
+.figures-page .figure-results-head {
+    padding-bottom: var(--space-3);
+    border-bottom: 1px solid var(--line);
+}
+
+.figure-results-summary {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: var(--space-1) var(--space-4);
+    min-width: 0;
+    font-size: var(--text-sm);
+}
+
+.figure-results-count {
+    color: var(--ink);
+    font-weight: 600;
+}
+
+.figure-results-filter {
+    color: var(--muted);
+    overflow-wrap: anywhere;
 }
 
 .figure-page-indicator {
     color: var(--muted);
-    font-size: 0.95rem;
+    font-size: var(--text-sm);
     white-space: nowrap;
 }
 
@@ -146,34 +170,60 @@
     flex-direction: column;
 }
 
+/* Single-line strip with a fixed height so images in one grid row share a top edge. */
 .figure-preview-badges {
+    --figure-badge-height: 1.5rem;
     order: -1;
-    padding: var(--space-3) var(--space-3) 0;
+    box-sizing: content-box;
+    height: var(--figure-badge-height);
+    padding: var(--space-3) var(--space-3) var(--space-2);
     display: flex;
-    flex-wrap: wrap;
-    gap: 0.45rem;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: var(--space-1);
+    overflow: hidden;
     pointer-events: none;
 }
 
 .figure-badge {
     display: inline-flex;
+    flex: 0 0 auto;
     align-items: center;
+    height: var(--figure-badge-height, 1.5rem);
     max-width: 100%;
-    padding: 0.38rem 0.7rem;
+    padding: 0 0.55rem;
     border-radius: 999px;
-    background: rgba(var(--surface-rgb), 0.82);
+    background: var(--bg-soft);
     border: 1px solid var(--line);
     color: var(--ink);
-    font-size: 0.8rem;
+    font-size: var(--text-xs);
     font-weight: 600;
-    backdrop-filter: blur(10px);
-    box-shadow: 0 8px 22px rgba(var(--ink-rgb), 0.08);
+    line-height: 1;
+    white-space: nowrap;
+}
+
+.figure-badge-indicator {
+    background: transparent;
+    border-color: transparent;
+    color: var(--muted);
+    font-weight: 500;
+    padding: 0 0.25rem;
+}
+
+.figure-badge-indicator::before {
+    content: "";
+    width: 0.4rem;
+    height: 0.4rem;
+    margin-right: 0.3rem;
+    border-radius: 50%;
+    background: var(--success);
 }
 
 .figure-badge-strong {
-    background: rgba(var(--ink-rgb), 0.72);
-    border-color: rgba(var(--surface-rgb), 0.16);
-    color: var(--on-accent);
+    background: var(--panel-strong);
+    border-color: var(--line);
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
 }
 
 .figure-badge-accent {
@@ -202,7 +252,7 @@
 
 .figure-preview-label {
     color: var(--muted);
-    font-size: 0.78rem;
+    font-size: var(--text-xs);
     letter-spacing: 0.08em;
     text-transform: uppercase;
 }
@@ -211,7 +261,7 @@
     display: -webkit-box;
     overflow: hidden;
     margin: 0;
-    font-size: 1rem;
+    font-size: var(--text-body);
     line-height: 1.45;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
@@ -229,7 +279,7 @@
 .figure-preview-origin-link {
     flex: 0 0 auto;
     color: var(--muted);
-    font-size: 0.82rem;
+    font-size: var(--text-sm);
     line-height: 1.5;
     white-space: nowrap;
 }
@@ -238,22 +288,21 @@
     display: flex;
     flex-wrap: wrap;
     gap: 0.45rem;
-    min-height: 1.8rem;
 }
 
 .figure-preview-tags .chip {
     padding: 0.3rem 0.62rem;
-    font-size: 0.78rem;
+    font-size: var(--text-xs);
     opacity: 0.92;
 }
 
 .figure-preview-note {
     display: grid;
     gap: 0.35rem;
-    padding: 0.9rem 0.95rem;
-    border-radius: var(--radius-card);
-    background: rgba(var(--bg-rgb), 0.76);
-    border: 1px solid var(--line);
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--radius-control);
+    background: var(--bg-soft);
+    border: 1px solid transparent;
 }
 
 .figure-preview-note-action {
@@ -273,7 +322,7 @@
 
 .figure-preview-note-label {
     color: var(--muted);
-    font-size: 0.74rem;
+    font-size: var(--text-2xs);
     font-weight: 700;
     letter-spacing: 0.08em;
     text-transform: uppercase;
@@ -284,9 +333,10 @@
     overflow: hidden;
     margin: 0;
     color: var(--ink);
+    font-size: var(--text-sm);
     line-height: 1.6;
     -webkit-box-orient: vertical;
-    -webkit-line-clamp: 4;
+    -webkit-line-clamp: 3;
 }
 
 .figure-preview-note.is-empty .figure-preview-note-text {
@@ -297,7 +347,7 @@
     display: inline-flex;
     align-items: center;
     color: var(--muted);
-    font-size: 0.88rem;
+    font-size: var(--text-sm);
 }
 
 @media (max-width: 720px) {

@@ -2,6 +2,7 @@ package handler
 
 import (
 	"bytes"
+	"encoding/json"
 	"io"
 	"log/slog"
 	"net/http"
@@ -289,5 +290,35 @@ func TestUpdateRememberLoginSetsCookie(t *testing.T) {
 	}
 	if !libraryService.HasRememberLoginToken(rememberCookie.Value) {
 		t.Fatal("UpdateRememberLogin() remember login token not persisted")
+	}
+}
+
+func TestLoginReportsBuiltinDefaultPassword(t *testing.T) {
+	handler, libraryService, _ := newAuthHandlerForTest(t)
+
+	login := func(password string) map[string]interface{} {
+		t.Helper()
+		body := `{"username":"citebox","password":"` + password + `"}`
+		w := httptest.NewRecorder()
+		handler.Login(w, httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewBufferString(body)))
+		if w.Code != http.StatusOK {
+			t.Fatalf("Login(%q) status = %d, body = %s", password, w.Code, w.Body.String())
+		}
+		var payload map[string]interface{}
+		if err := json.Unmarshal(w.Body.Bytes(), &payload); err != nil {
+			t.Fatalf("decode login response: %v", err)
+		}
+		return payload
+	}
+
+	if got := login("citebox123")["default_password"]; got != true {
+		t.Fatalf("default_password = %v, want true", got)
+	}
+
+	if err := libraryService.ChangePassword("citebox123", "changed-secret"); err != nil {
+		t.Fatalf("ChangePassword() error = %v", err)
+	}
+	if got := login("changed-secret")["default_password"]; got != false {
+		t.Fatalf("default_password after change = %v, want false", got)
 	}
 }

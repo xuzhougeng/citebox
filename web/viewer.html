@@ -63,6 +63,7 @@
 
         .viewer-toolbar-actions[hidden],
         .viewer-pdf-controls[hidden],
+        .viewer-ask-ai-btn[hidden],
         .viewer-pdf-loading[hidden],
         .viewer-selection-menu[hidden] {
             display: none !important;
@@ -75,6 +76,20 @@
             font-size: 0.9rem;
             line-height: 1;
             white-space: nowrap;
+        }
+
+        .viewer-toolbar .btn.viewer-icon-btn,
+        .viewer-pdf-controls .btn.viewer-icon-btn {
+            width: var(--control-height-sm);
+            min-height: var(--control-height-sm);
+            height: var(--control-height-sm);
+            padding: 0;
+            flex: 0 0 auto;
+        }
+
+        .viewer-icon-btn svg {
+            display: block;
+            flex: 0 0 auto;
         }
 
         .viewer-pdf-controls {
@@ -403,6 +418,27 @@
             line-height: 1.7;
         }
 
+        .viewer-empty-actions {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: var(--space-2);
+            margin-top: var(--space-4);
+        }
+
+        .viewer-empty-detail {
+            margin-top: var(--space-3);
+            font-size: var(--text-sm);
+            opacity: 0.75;
+            text-align: left;
+        }
+
+        .viewer-empty-detail code {
+            display: block;
+            margin-top: var(--space-1);
+            overflow-wrap: anywhere;
+        }
+
         @media (max-width: 720px) {
             .viewer-toolbar {
                 grid-template-columns: auto minmax(0, 1fr);
@@ -511,23 +547,31 @@
             </div>
             <div id="viewerPdfControls" class="viewer-pdf-controls" hidden>
                 <div class="viewer-pdf-control-group">
-                    <button id="viewerPdfPrevButton" class="btn btn-outline" type="button" data-i18n="viewer.pdf_prev">上一页</button>
+                    <button id="viewerPdfPrevButton" class="btn btn-outline viewer-icon-btn" type="button" data-i18n-title="viewer.pdf_prev_title" data-i18n-aria-label="viewer.pdf_prev" title="上一页（← / PageUp）" aria-label="上一页">
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M15 18l-6-6 6-6"/></svg>
+                    </button>
                     <label class="viewer-pdf-page-control">
                         <span data-i18n="viewer.pdf_page_label">页码</span>
                         <input id="viewerPdfPageInput" class="viewer-pdf-page-input" type="number" min="1" value="1">
                         <span id="viewerPdfPageTotal">/ 1</span>
                     </label>
-                    <button id="viewerPdfNextButton" class="btn btn-outline" type="button" data-i18n="viewer.pdf_next">下一页</button>
+                    <button id="viewerPdfNextButton" class="btn btn-outline viewer-icon-btn" type="button" data-i18n-title="viewer.pdf_next_title" data-i18n-aria-label="viewer.pdf_next" title="下一页（→ / PageDown）" aria-label="下一页">
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9 18l6-6-6-6"/></svg>
+                    </button>
                 </div>
                 <div class="viewer-pdf-control-group">
-                    <button id="viewerPdfZoomOutButton" class="btn btn-outline" type="button" data-i18n="viewer.pdf_zoom_out">缩小</button>
+                    <button id="viewerPdfZoomOutButton" class="btn btn-outline viewer-icon-btn" type="button" data-i18n-title="viewer.pdf_zoom_out_title" data-i18n-aria-label="viewer.pdf_zoom_out" title="缩小（Ctrl/⌘ -）" aria-label="缩小">
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M5 12h14"/></svg>
+                    </button>
                     <span id="viewerPdfZoomLabel" class="viewer-pdf-zoom-label">100%</span>
-                    <button id="viewerPdfZoomInButton" class="btn btn-outline" type="button" data-i18n="viewer.pdf_zoom_in">放大</button>
-                    <button id="viewerPdfFitButton" class="btn btn-outline" type="button" data-i18n="viewer.pdf_fit_width">适合宽度</button>
+                    <button id="viewerPdfZoomInButton" class="btn btn-outline viewer-icon-btn" type="button" data-i18n-title="viewer.pdf_zoom_in_title" data-i18n-aria-label="viewer.pdf_zoom_in" title="放大（Ctrl/⌘ +）" aria-label="放大">
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 5v14M5 12h14"/></svg>
+                    </button>
+                    <button id="viewerPdfFitButton" class="btn btn-outline viewer-icon-btn" type="button" aria-pressed="false" data-i18n-title="viewer.pdf_fit_width_title" data-i18n-aria-label="viewer.pdf_fit_width" title="适合宽度（再次点击恢复阅读宽度，Ctrl/⌘ 0 复原）" aria-label="适合宽度">
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 4v16M21 4v16M7 12h10M10 9l-3 3 3 3M14 9l3 3-3 3"/></svg>
+                    </button>
                 </div>
-                <div class="viewer-pdf-control-group">
-                    <a id="viewerPdfDetailLink" class="btn btn-outline" href="/ai" data-i18n="viewer.pdf_ask_ai" hidden>在 AI 中追问</a>
-                </div>
+                <a id="viewerPdfDetailLink" class="btn btn-primary viewer-ask-ai-btn" href="/ai" data-i18n="viewer.pdf_ask_ai" hidden>在 AI 中追问</a>
             </div>
         </header>
         <main id="viewerStage" class="viewer-stage" aria-live="polite"></main>

@@ -11,6 +11,7 @@
         basket: [],
         history: [],
         searchHistory: [],
+        libraryQuery: '',
     };
 
     const STORAGE_KEY = 'citebox_research_state';
@@ -381,6 +382,7 @@
             seed: state.seed,
             activeTab: state.activeTab,
             list: Array.isArray(state.list) ? state.list.slice() : [],
+            libraryQuery: state.libraryQuery,
         };
     }
 
@@ -397,6 +399,8 @@
 
         if (state.activeTab === 'search') {
             renderSearchResults(snapshot.list || []);
+        } else if (state.activeTab === 'library') {
+            renderLibraryPicker(snapshot.list || [], snapshot.libraryQuery || '');
         } else if (state.activeTab === 'basketRec') {
             renderSeedPane(`<h4>${escapeHtml(t('research.tab.basketRec', '候选推荐'))}</h4>`, snapshot.list || []);
         } else if (state.seed) {
@@ -443,6 +447,75 @@
                 ${linksHtml}
             </div>
         `;
+    }
+
+    // Library papers as starting points: a paper with a DOI opens directly in
+    // Semantic Scholar; one without falls back to a title search.
+    async function openLibraryPicker() {
+        hideAutocomplete();
+        const query = ($('research-search-input')?.value || '').trim();
+        const params = new URLSearchParams({ page_size: '20', sort_by: 'updated_at' });
+        if (query) params.set('keyword', query);
+        const res = await fetch(`/api/papers?${params.toString()}`);
+        if (!res.ok) throw new Error(t('research.library.loadFailed', '文献库加载失败'));
+        const body = await res.json();
+        const papers = Array.isArray(body && body.papers) ? body.papers : [];
+        state.history = [];
+        state.seed = null;
+        renderLibraryPicker(papers, query);
+        savePersistedState();
+    }
+
+    function renderLibraryPicker(papers, query) {
+        state.activeTab = 'library';
+        state.list = papers;
+        state.libraryQuery = query || '';
+        const heading = query
+            ? formatI18n('research.library.matching', '文献库中匹配「{query}」的文献', { query })
+            : t('research.library.recent', '文献库中最近更新的文献');
+        const emptyText = query
+            ? t('research.library.noMatches', '文献库中没有匹配的文献')
+            : t('research.library.empty', '文献库还是空的');
+        const listHTML = papers.map(renderLibraryItem).join('');
+        $('research-seed-pane').innerHTML = `
+            ${renderBackBar()}
+            <h4>${escapeHtml(heading)}</h4>
+            <div class="research-list">${listHTML || `<div class="research-empty">${escapeHtml(emptyText)}</div>`}</div>
+        `;
+    }
+
+    function renderLibraryItem(p) {
+        const title = (p.title || '').trim() || paperTitle({});
+        const year = String(p.published_at || '').slice(0, 4);
+        const metaParts = [p.authors_text, p.journal, /^\d{4}$/.test(year) ? year : ''].filter(Boolean);
+        const metaHtml = metaParts.length
+            ? `<div class="research-meta">${metaParts.map(escapeHtml).join(' · ')}</div>`
+            : '';
+        const label = t('research.library.startHere', '以此为起点');
+        return `
+            <div class="research-list-item">
+                <div class="research-item-head">
+                    <b class="research-item-title">${escapeHtml(title)}</b>
+                    <button class="btn btn-outline btn-small research-library-start" type="button" data-action="library-seed" data-doi="${escapeHtml((p.doi || '').trim())}" data-title="${escapeHtml(title)}">${escapeHtml(label)}</button>
+                </div>
+                ${metaHtml}
+            </div>
+        `;
+    }
+
+    async function startFromLibraryPaper(doi, title) {
+        if (doi) {
+            try {
+                await setSeed(`DOI:${doi}`);
+                return;
+            } catch (e) {
+                // Not indexed by Semantic Scholar under this DOI — try the title.
+            }
+        }
+        const q = title || doi;
+        if (!q) return;
+        $('research-search-input').value = q;
+        await searchSeed(q);
     }
 
     function paperTitle(p) {
@@ -508,7 +581,16 @@
         renderBasket();
     }
 
+    function syncBasketActions() {
+        const empty = !state.basket.length;
+        ['research-basket-import-all', 'research-basket-export', 'research-basket-recommend'].forEach((id) => {
+            const btn = $(id);
+            if (btn) btn.disabled = empty;
+        });
+    }
+
     function renderBasket() {
+        syncBasketActions();
         if (!state.basket.length) {
             $('research-basket-list').innerHTML = `<li class="research-basket-empty">${escapeHtml(t('research.basket.empty', '暂无候选文献'))}</li>`;
             return;
@@ -546,6 +628,7 @@
     }
 
     async function exportBasket() {
+        if (!state.basket.length) return;
         const res = await fetch('/api/research/basket/export');
         const blob = await res.blob();
         const url = URL.createObjectURL(blob);
@@ -620,6 +703,9 @@
             const i = parseInt(li.dataset.i, 10);
             if (Number.isFinite(i)) selectAutocomplete(i);
         });
+        $('research-pick-from-library').addEventListener('click', () => {
+            openLibraryPicker().catch((e) => showRateWarning(e && e.message));
+        });
         $('research-basket-import-all').addEventListener('click', importBasketToLibrary);
         $('research-basket-export').addEventListener('click', exportBasket);
         $('research-basket-recommend').addEventListener('click', recommendFromBasket);
@@ -639,6 +725,10 @@
             const id = actionEl && actionEl.dataset.id;
             if (action === 'go-back') {
                 restorePreviousView();
+                return;
+            }
+            if (action === 'library-seed') {
+                await startFromLibraryPaper(actionEl.dataset.doi || '', actionEl.dataset.title || '');
                 return;
             }
             if (action === 'set-as-seed' && id) await setSeed(id);
@@ -669,6 +759,10 @@
 
     async function init() {
         bindEvents();
+        // Dynamic labels (basket, history, empty states) need the locale.
+        if (typeof CiteBoxI18n !== 'undefined' && typeof CiteBoxI18n.whenReady === 'function') {
+            try { await CiteBoxI18n.whenReady(); } catch (e) { /* fall back to built-in copy */ }
+        }
 
         const persisted = loadPersistedState();
         if (persisted) {

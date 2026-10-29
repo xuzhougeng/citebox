@@ -348,3 +348,33 @@ func TestAuthMiddlewareRejectsInvalidBearerToken(t *testing.T) {
 		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusUnauthorized)
 	}
 }
+
+func TestAuthMiddlewareTrustsOnlyWrappedDesktopRequests(t *testing.T) {
+	sessionManager := service.NewSessionManager(time.Hour)
+	protected := AuthMiddleware(sessionManager, nil, testPublicPaths(), false, nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	desktop := TrustDesktopRequests(protected)
+
+	for _, path := range []string{"/api/papers", "/library"} {
+		w := httptest.NewRecorder()
+		desktop.ServeHTTP(w, httptest.NewRequest(http.MethodGet, path, nil))
+		if w.Code != http.StatusNoContent {
+			t.Fatalf("desktop %s status = %d, want %d", path, w.Code, http.StatusNoContent)
+		}
+
+		// The same request through the plain handler (the loopback listener)
+		// must still need a session.
+		w = httptest.NewRecorder()
+		protected.ServeHTTP(w, httptest.NewRequest(http.MethodGet, path, nil))
+		if w.Code == http.StatusNoContent {
+			t.Fatalf("plain %s was served without a session", path)
+		}
+	}
+
+	w := httptest.NewRecorder()
+	desktop.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/login", nil))
+	if w.Code != http.StatusFound || w.Header().Get("Location") != "/" {
+		t.Fatalf("desktop /login = %d %q, want redirect to /", w.Code, w.Header().Get("Location"))
+	}
+}

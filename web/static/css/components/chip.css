@@ -7,7 +7,7 @@
     border-radius: 999px;
     background: color-mix(in srgb, var(--chip-color, var(--accent)) 15%, white);
     border: 1px solid color-mix(in srgb, var(--chip-color, var(--accent)) 35%, white);
-    font-size: 0.85rem;
+    font-size: var(--text-sm);
 }
 
 .chip-row {
@@ -20,7 +20,7 @@
     align-items: center;
     padding: 0.38rem 0.75rem;
     border-radius: 999px;
-    font-size: 0.8rem;
+    font-size: var(--text-xs);
     font-weight: 700;
 }
 
@@ -44,7 +44,7 @@
     display: inline-flex;
     align-items: center;
     border-radius: 999px;
-    font-size: 0.8rem;
+    font-size: var(--text-xs);
     font-weight: 700;
 }
 

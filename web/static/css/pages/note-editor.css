@@ -30,6 +30,14 @@
     font-family: var(--font-display);
 }
 
+.note-lightbox-title {
+    min-width: 0;
+}
+
+.note-lightbox-title h2 {
+    margin-top: 0;
+}
+
 .note-lightbox-head-row {
     display: flex;
     align-items: flex-start;
@@ -43,11 +51,36 @@
     line-height: 1.65;
 }
 
+.note-lightbox-byline {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+    overflow-wrap: anywhere;
+    font-size: var(--text-sm);
+}
+
 .note-lightbox-mode-switch {
     display: flex;
     flex-wrap: wrap;
+    align-items: center;
     justify-content: flex-end;
-    gap: 0.6rem;
+    gap: var(--space-2);
+}
+
+.note-lightbox-pdf-toggle {
+    background: transparent;
+    color: var(--muted);
+}
+
+.note-lightbox-pdf-toggle:hover:not(:disabled) {
+    color: var(--ink);
+}
+
+.note-lightbox-save-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
 }
 
 .note-lightbox-meta-grid {
@@ -66,7 +99,7 @@
 
 .note-lightbox-meta-item > span {
     color: var(--muted);
-    font-size: 0.82rem;
+    font-size: var(--text-sm);
 }
 
 .note-lightbox-meta-item strong {
@@ -90,7 +123,7 @@
 
 .note-lightbox-panel-label {
     color: var(--muted);
-    font-size: 0.8rem;
+    font-size: var(--text-xs);
     font-weight: 700;
     letter-spacing: 0.06em;
     text-transform: uppercase;
@@ -130,7 +163,7 @@
 .figure-notes-export-dialog { max-width: 560px; }
 .figure-notes-export-dialog p { margin: 1rem 0; overflow-wrap: anywhere; }
 .figure-notes-export-actions { display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1.5rem; }
-.figure-notes-export-dialog [data-export-error] { color: var(--danger, #a33225); }
+.figure-notes-export-dialog [data-export-error] { color: var(--error); }
 
 .note-lightbox-actions {
     display: flex;
@@ -148,7 +181,7 @@
 .note-lightbox-tip span {
     display: block;
     color: var(--success);
-    font-size: 0.76rem;
+    font-size: var(--text-xs);
     font-weight: 700;
     letter-spacing: 0.12em;
     text-transform: uppercase;
@@ -178,7 +211,7 @@
 .paper-note-divider:focus-visible { outline: 2px solid var(--accent); }
 .paper-note-layout.is-resizing iframe { pointer-events: none; }
 .paper-note-layout.is-comparing .note-lightbox-head-row { flex-wrap: wrap; }
-@media (max-width: 900px) {
+@media (max-width: 960px) {
     .paper-note-layout.is-comparing { grid-template-columns: minmax(0, 1fr); height: auto; }
     .paper-note-layout.is-comparing > .note-lightbox-main { overflow: visible; }
     .paper-note-pdf-pane { height: 55vh; }

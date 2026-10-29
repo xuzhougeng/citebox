@@ -152,7 +152,7 @@ details[open] > .settings-subsection-toggle::after {
     border: 0;
     box-shadow: none;
     border-radius: 0;
-    font-size: 1rem;
+    font-size: var(--text-body);
     font-weight: 700;
     letter-spacing: 0.01em;
 }
@@ -194,7 +194,7 @@ details[open] > .settings-subsection-toggle::after {
 
 .prompt-preset-head h4 {
     margin: 0;
-    font-size: 1rem;
+    font-size: var(--text-body);
     font-family: var(--font-display);
 }
 
@@ -248,7 +248,7 @@ details[open] > .settings-subsection-toggle::after {
     display: block;
     margin-top: 0.2rem;
     color: var(--muted);
-    font-size: 0.9rem;
+    font-size: var(--text-sm);
 }
 
 .prompt-preset-preview {
@@ -268,7 +268,7 @@ details[open] > .settings-subsection-toggle::after {
     display: inline-flex;
     margin-bottom: 0.35rem;
     color: var(--muted);
-    font-size: 0.82rem;
+    font-size: var(--text-sm);
     font-weight: 700;
     letter-spacing: 0.02em;
 }
@@ -276,7 +276,7 @@ details[open] > .settings-subsection-toggle::after {
 .prompt-preset-preview-item p {
     margin: 0;
     color: var(--ink);
-    font-size: 0.9rem;
+    font-size: var(--text-sm);
     line-height: 1.55;
 }
 
@@ -305,7 +305,7 @@ details[open] > .settings-subsection-toggle::after {
 
 .prompt-template-details summary::before {
     content: "Expand template";
-    font-size: 0.92rem;
+    font-size: var(--text-ui);
 }
 
 .prompt-template-details[open] summary::before {
@@ -339,7 +339,7 @@ html[lang^="zh"] .prompt-template-details[open] summary::before {
     background: rgba(var(--surface-rgb), 0.92);
     color: var(--ink);
     font-family: "SFMono-Regular", "Menlo", "Monaco", "Cascadia Mono", "Segoe UI Mono", monospace;
-    font-size: 0.84rem;
+    font-size: var(--text-sm);
     line-height: 1.62;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
@@ -368,14 +368,14 @@ html[lang^="zh"] .prompt-template-details[open] summary::before {
 
 .db-action-item h3 {
     margin: 0 0 0.5rem 0;
-    font-size: 1.1rem;
+    font-size: var(--text-section);
     font-family: var(--font-display);
 }
 
 .db-action-item p {
     margin: 0 0 1rem 0;
     color: var(--muted);
-    font-size: 0.95rem;
+    font-size: var(--text-ui);
 }
 
 .settings-action-form {
@@ -397,7 +397,7 @@ html[lang^="zh"] .prompt-template-details[open] summary::before {
     background: linear-gradient(180deg, rgba(var(--surface-rgb), 0.96), rgba(var(--surface-rgb), 0.92));
     border: 1px dashed rgba(var(--accent-rgb), 0.28);
     border-radius: var(--radius-card);
-    font-size: 0.9rem;
+    font-size: var(--text-sm);
     color: var(--muted);
     cursor: pointer;
 }
@@ -445,7 +445,7 @@ html[lang^="zh"] .prompt-template-details[open] summary::before {
 
 .weixin-overview-eyebrow {
     color: var(--accent-deep);
-    font-size: 0.76rem;
+    font-size: var(--text-xs);
     font-weight: 700;
     letter-spacing: 0.08em;
     text-transform: uppercase;
@@ -454,7 +454,7 @@ html[lang^="zh"] .prompt-template-details[open] summary::before {
 .weixin-overview-copy h3 {
     margin: 0;
     font-family: var(--font-display);
-    font-size: 1.4rem;
+    font-size: var(--text-xl);
     line-height: 1.25;
 }
 
@@ -509,7 +509,7 @@ html[lang^="zh"] .prompt-template-details[open] summary::before {
     min-height: 2rem;
     padding: 0.18rem 0.72rem;
     border-radius: 999px;
-    font-size: 0.84rem;
+    font-size: var(--text-sm);
     font-weight: 700;
     border: 1px solid rgba(var(--ink-rgb), 0.08);
     background: rgba(var(--surface-rgb), 0.9);
@@ -528,7 +528,7 @@ html[lang^="zh"] .prompt-template-details[open] summary::before {
 .weixin-summary-title {
     display: block;
     color: var(--ink);
-    font-size: 1.18rem;
+    font-size: var(--text-section);
     line-height: 1.4;
     font-family: var(--font-display);
 }
@@ -556,13 +556,13 @@ html[lang^="zh"] .prompt-template-details[open] summary::before {
 .weixin-summary-item span {
     display: block;
     color: var(--muted);
-    font-size: 0.83rem;
+    font-size: var(--text-sm);
 }
 
 .weixin-summary-item strong {
     display: block;
     margin-top: 0.35rem;
-    font-size: 0.96rem;
+    font-size: var(--text-ui);
     line-height: 1.55;
     overflow-wrap: anywhere;
 }
@@ -614,7 +614,7 @@ html[lang^="zh"] .prompt-template-details[open] summary::before {
 
 .weixin-card-head h3 {
     margin: 0;
-    font-size: 1.02rem;
+    font-size: var(--text-body);
     font-family: var(--font-display);
 }
 
@@ -657,7 +657,7 @@ html[lang^="zh"] .prompt-template-details[open] summary::before {
 }
 
 .weixin-qr-placeholder strong {
-    font-size: 1rem;
+    font-size: var(--text-body);
     font-family: var(--font-display);
 }
 
@@ -681,7 +681,7 @@ html[lang^="zh"] .prompt-template-details[open] summary::before {
     width: min(240px, 100%);
     aspect-ratio: 1 / 1;
     border-radius: var(--radius-card);
-    background: #fff;
+    background: rgb(255, 255, 255); /* QR codes need a white quiet zone in every theme */
     border: 1px solid rgba(var(--ink-rgb), 0.08);
     box-shadow: 0 18px 36px rgba(var(--shadow-rgb), 0.08);
 }
@@ -689,7 +689,7 @@ html[lang^="zh"] .prompt-template-details[open] summary::before {
 .weixin-qr-fallback {
     margin: 0;
     color: var(--muted);
-    font-size: 0.88rem;
+    font-size: var(--text-sm);
     word-break: break-all;
 }
 
@@ -707,7 +707,7 @@ html[lang^="zh"] .prompt-template-details[open] summary::before {
 }
 
 .settings-audio-preview strong {
-    font-size: 0.96rem;
+    font-size: var(--text-ui);
     font-family: var(--font-display);
 }
 
@@ -731,7 +731,7 @@ html[lang^="zh"] .prompt-template-details[open] summary::before {
     min-width: 0;
 }
 .settings-anchor-sidebar { position: sticky; top: 90px; padding: 1.5rem 0.75rem; min-width: 0; }
-.settings-anchor-sidebar h1 { font-family: var(--font-body); font-size: 1.15rem; margin: 0 0.7rem 1.2rem; }
+.settings-anchor-sidebar h1 { font-family: var(--font-body); font-size: var(--text-section); margin: 0 0.7rem 1.2rem; }
 .settings-category-list { list-style: none; display: grid; gap: 0.25rem; margin: 0; padding: 0; }
 .settings-category-item { width: 100%; border: 0; border-radius: var(--radius-control); padding: 0.7rem; text-align: left; background: transparent; color: var(--muted); font: inherit; cursor: pointer; }
 .settings-category-item:hover { background: var(--bg-soft); }
@@ -739,9 +739,9 @@ html[lang^="zh"] .prompt-template-details[open] summary::before {
 .settings-content { min-width: 0; min-height: 540px; padding: 1.8rem 2rem 2.5rem; border-left: 1px solid var(--line); }
 .settings-page-header { margin-bottom: 1.5rem; }
 .settings-page-header h2,
-.settings-section-heading h2 { margin: 0 0 0.4rem; font-family: var(--font-body); font-size: 1.45rem; }
+.settings-section-heading h2 { margin: 0 0 0.4rem; font-family: var(--font-body); font-size: var(--text-xl); }
 .settings-page-header p,
-.settings-section-heading p { margin: 0.25rem 0 0; color: var(--muted); font-size: 0.9rem; line-height: 1.6; }
+.settings-section-heading p { margin: 0.25rem 0 0; color: var(--muted); font-size: var(--text-sm); line-height: 1.6; }
 .settings-section-heading { margin-bottom: 1.3rem; }
 .settings-content [hidden],
 .settings-content:not([data-settings-category-active]) > .settings-section { display: none !important; }
@@ -754,12 +754,12 @@ html[lang^="zh"] .prompt-template-details[open] summary::before {
 .settings-overview-row { display: flex; align-items: center; justify-content: space-between; gap: 1.5rem; padding: 1.05rem 0; border-bottom: 1px solid var(--line); }
 .settings-overview-row:hover strong { color: var(--accent-deep); }
 .settings-overview-row strong { font-weight: 600; }
-.settings-overview-description { display: block; color: var(--muted); font-size: 0.85rem; line-height: 1.55; margin-top: 0.25rem; }
-.settings-overview-open { flex-shrink: 0; color: var(--accent-deep); font-size: 0.85rem; }
+.settings-overview-description { display: block; color: var(--muted); font-size: var(--text-sm); line-height: 1.55; margin-top: 0.25rem; }
+.settings-overview-open { flex-shrink: 0; color: var(--accent-deep); font-size: var(--text-sm); }
 .settings-back-button { border: 0; padding: 0.25rem 0; background: transparent; color: var(--accent-deep); font: inherit; cursor: pointer; }
 .settings-preference-row { display: flex; align-items: center; justify-content: space-between; gap: 1.5rem; padding: 1.05rem 0; border-bottom: 1px solid var(--line); }
 .settings-preference-row .form-input { max-width: 220px; width: 45%; }
-.settings-page .settings-inline-status { font-size: 0.85rem; margin-top: 0.6rem; }
+.settings-page .settings-inline-status { font-size: var(--text-sm); margin-top: 0.6rem; }
 .settings-page .settings-inline-status:empty { display: none; }
 .settings-page .manager-form { gap: 1.1rem; }
 .settings-page .btn,
@@ -772,27 +772,27 @@ html[lang^="zh"] .prompt-template-details[open] summary::before {
 .settings-page .weixin-summary-card { border: 0; border-radius: 0; background: transparent; box-shadow: none; padding: 1rem 0; }
 .settings-page .settings-subsection + .settings-subsection { border-top: 1px solid var(--line); }
 .settings-page .settings-subsection h3,
-.settings-page .db-action-item h3 { font-family: var(--font-body); font-size: 1rem; }
+.settings-page .db-action-item h3 { font-family: var(--font-body); font-size: var(--text-body); }
 .settings-page .prompt-field .field-label-text { padding-left: 0; }
 .settings-page .prompt-field .field-label-text::before { display: none; }
 .settings-page .settings-summary-box { display: block; background: transparent; border: 0; padding: 0; }
 .settings-page .settings-summary-box > div { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.3rem 1rem; padding: 0.65rem 0; background: transparent; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; box-shadow: none; }
-.settings-page .settings-summary-box > div > span { font-size: 0.85rem; min-width: 110px; }
-.settings-page .settings-summary-box > div > strong { font-size: 0.95rem; font-weight: 500; }
-.settings-page .settings-summary-box p { flex-basis: 100%; margin: 0; font-size: 0.85rem; }
+.settings-page .settings-summary-box > div > span { font-size: var(--text-sm); min-width: 110px; }
+.settings-page .settings-summary-box > div > strong { font-size: var(--text-ui); font-weight: 500; }
+.settings-page .settings-summary-box p { flex-basis: 100%; margin: 0; font-size: var(--text-sm); }
 .settings-page .settings-summary-box a { overflow-wrap: anywhere; }
 .settings-version-line { display: flex; align-items: center; flex-wrap: wrap; gap: 1rem; margin-top: 1.5rem; }
-.settings-version-line > strong { font-family: var(--font-display); font-size: 1.5rem; }
+.settings-version-line > strong { font-family: var(--font-display); font-size: var(--text-xl); }
 .settings-version-details { margin-top: 1.5rem; border-top: 1px solid var(--line); padding-top: 1rem; }
 .settings-version-details summary { cursor: pointer; color: var(--muted); }
-.settings-version-details p { font-size: 0.85rem; color: var(--muted); }
+.settings-version-details p { font-size: var(--text-sm); color: var(--muted); }
 .settings-page .db-actions-grid { display: block; }
 .settings-page .db-action-item { padding: 1.1rem 0; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: transparent; }
 .settings-page .db-action-item.danger { margin-top: 1.5rem; border-bottom: 0; }
 .settings-page .db-action-item.danger h3 { color: var(--error); }
 .settings-page .settings-action-form { max-width: 620px; }
 .settings-content, .settings-section, .settings-subsection-body, .manager-form, .prompt-field, .prompt-preset-panel { min-width: 0; }
-@media (max-width: 800px) {
+@media (max-width: 720px) {
     .settings-layout { grid-template-columns: 155px minmax(0, 1fr); }
     .settings-content { padding: 1.3rem; }
     .settings-overview-row { gap: 0.75rem; }
@@ -804,7 +804,7 @@ html[lang^="zh"] .prompt-template-details[open] summary::before {
     .settings-anchor-sidebar { position: static; padding: 0.8rem; }
     .settings-anchor-sidebar h1 { margin: 0.3rem 0.6rem 0.6rem; }
     .settings-category-list { display: flex; flex-wrap: wrap; gap: 0.1rem; }
-    .settings-category-item { width: auto; font-size: 0.85rem; padding: 0.6rem; }
+    .settings-category-item { width: auto; font-size: var(--text-sm); padding: 0.6rem; }
     .settings-content { border-left: 0; border-top: 1px solid var(--line); min-height: 0; }
     .settings-overview-row { align-items: start; }
     .settings-preference-row { flex-wrap: wrap; gap: 0.6rem; }
@@ -814,7 +814,7 @@ html[lang^="zh"] .prompt-template-details[open] summary::before {
 .zotero-collection-tree {
     max-height: 280px;
     overflow: auto;
-    border: 1px solid var(--border, #e5e2dc);
+    border: 1px solid var(--line);
     border-radius: var(--radius-card);
     padding: 8px 0;
     margin-bottom: 12px;
@@ -825,7 +825,7 @@ html[lang^="zh"] .prompt-template-details[open] summary::before {
     align-items: center;
     gap: 8px;
     padding: 6px 12px;
-    font-size: 14px;
+    font-size: var(--text-sm);
 }
 
 .zotero-missing-list {
@@ -839,7 +839,7 @@ html[lang^="zh"] .prompt-template-details[open] summary::before {
     justify-content: space-between;
     gap: 16px;
     padding: 12px 0;
-    border-top: 1px solid var(--border, #eee);
+    border-top: 1px solid var(--line);
 }
 
 .zotero-missing-actions {
@@ -860,3 +860,7 @@ html[lang^="zh"] .prompt-template-details[open] summary::before {
 .settings-page #extensionWebURL { overflow-wrap: anywhere; }
 .settings-page-header h2:focus,
 .settings-section-heading h2:focus { outline: none; }
+
+/* Consecutive helper paragraphs read as one block instead of separate grid rows. */
+.settings-hint-stack { display: grid; gap: var(--space-1); }
+.settings-hint-stack p { margin: 0; line-height: 1.6; }

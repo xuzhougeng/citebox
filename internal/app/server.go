@@ -319,6 +319,23 @@ func (s *Server) Handler() http.Handler {
 	return s.httpServer.Handler
 }
 
+// DesktopHandler returns the handler for the desktop shell's own webview.
+// Its requests count as signed in (see middleware.TrustDesktopRequests), so
+// it must only be served in-process, never on a listener; Serve keeps
+// requiring a session or an integration token.
+func (s *Server) DesktopHandler() http.Handler {
+	return middleware.TrustDesktopRequests(s.httpServer.Handler)
+}
+
+// GetAppearanceSettings returns the stored theme and UI language, which the
+// desktop shell uses for the window appearance and native menu labels.
+func (s *Server) GetAppearanceSettings() (*model.AppearanceSettings, error) {
+	if s == nil || s.librarySvc == nil {
+		return &model.AppearanceSettings{}, nil
+	}
+	return s.librarySvc.GetAppearanceSettings()
+}
+
 func (s *Server) Serve(listener net.Listener) error {
 	s.logStartup(listener.Addr().String())
 

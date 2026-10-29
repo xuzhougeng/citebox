@@ -30,9 +30,15 @@
     --space-8: 2rem;
     --control-height: 3rem;
     --control-height-sm: 2.25rem;
+    --text-2xs: 0.72rem;
+    --text-xs: 0.78rem;
     --text-sm: 0.875rem;
+    --text-ui: 0.95rem;
     --text-body: 1rem;
     --text-section: 1.125rem;
+    --text-lg: 1.25rem;
+    --text-xl: 1.5rem;
+    --text-2xl: 1.75rem;
     --text-title: clamp(1.5rem, 2vw, 1.875rem);
 
     /* --- RGB Component Tokens (for rgba usage across components) --- */
@@ -159,13 +165,14 @@
 
 /* ===== Theme Transition ===== */
 
-@media (prefers-reduced-motion: no-preference) {
-    html.theme-transition,
-    html.theme-transition *,
-    html.theme-transition *::before,
-    html.theme-transition *::after {
-        transition: background-color 0.35s ease, color 0.35s ease, border-color 0.35s ease, box-shadow 0.35s ease, background 0.35s ease !important;
-    }
+/* Swap themes in a single frame. Cross-fading colors let text change before
+   gradient backgrounds (which cannot interpolate), producing unreadable
+   intermediate frames, so transitions are suspended during the swap. */
+html.theme-transition,
+html.theme-transition *,
+html.theme-transition *::before,
+html.theme-transition *::after {
+    transition: none !important;
 }
 
 /* ===== Theme Switcher ===== */

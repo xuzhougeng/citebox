@@ -589,7 +589,7 @@
     "settings.integration.extension_step4": "Enter the CiteBox web server URL and access token in the extension options, then test the connection.",
 
     "settings.research.title": "Literature Search API",
-    "settings.research.desc": "Configure Semantic Scholar and PubMed / NCBI credentials. Semantic Scholar powers the /research literature search page; PubMed powers AI assistant external search.",
+    "settings.research.desc": "Configure Semantic Scholar and PubMed / NCBI credentials. Semantic Scholar powers the Literature Search page; PubMed powers external search in the AI assistant.",
     "settings.research.s2.label": "Semantic Scholar API key",
     "settings.research.s2.hint": "Leave blank to use anonymous rate (~1 req/s). Changes take effect immediately on save.",
     "settings.research.pubmed.api_key": "PubMed / NCBI API key",

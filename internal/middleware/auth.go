@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -40,10 +41,34 @@ func IntegrationBearerAuthenticator(tokens *integration.TokenService) BearerAuth
 	}
 }
 
+type trustedDesktopRequestKey struct{}
+
+// TrustDesktopRequests marks every request it serves as coming from the
+// desktop shell's own webview, which AuthMiddleware then treats as signed in.
+//
+// The mark is a request context value, so it cannot be set by a client: only
+// code that calls this handler directly gets it. The desktop shell wraps the
+// handler it serves in-process to the webview (a custom URL scheme, not a
+// socket). Never serve the returned handler on a network listener; the
+// loopback listener for external tools keeps using the plain handler, which
+// still requires a session cookie or a Bearer integration token.
+func TrustDesktopRequests(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := context.WithValue(r.Context(), trustedDesktopRequestKey{}, true)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+func isTrustedDesktopRequest(r *http.Request) bool {
+	trusted, _ := r.Context().Value(trustedDesktopRequestKey{}).(bool)
+	return trusted
+}
+
 // AuthMiddleware protects routes with a session cookie and redirects
 // unauthenticated HTML requests to the login page.
-// Requests carrying a valid Bearer integration token (see bearerAuth) are
-// treated as authenticated without a session cookie.
+// Requests carrying a valid Bearer integration token (see bearerAuth), and
+// requests from the desktop webview (see TrustDesktopRequests), are treated
+// as authenticated without a session cookie.
 // When disableAuth is true, all requests pass through and the login page
 // is redirected back to the app root.
 func AuthMiddleware(sessionManager *service.SessionManager, libraryService *service.LibraryService, publicPaths []PublicPath, disableAuth bool, bearerAuth BearerAuthenticator) func(http.Handler) http.Handler {
@@ -64,7 +89,10 @@ func AuthMiddleware(sessionManager *service.SessionManager, libraryService *serv
 			}
 
 			isPublic := matchesPublicPath(r.URL.Path, publicPaths)
-			_, authenticated := sessionFromRequest(r, sessionManager)
+			authenticated := isTrustedDesktopRequest(r)
+			if !authenticated {
+				_, authenticated = sessionFromRequest(r, sessionManager)
+			}
 			if !authenticated {
 				authenticated = authenticateRememberedSession(w, r, sessionManager, libraryService)
 			}

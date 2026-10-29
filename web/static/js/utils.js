@@ -861,12 +861,7 @@ const Utils = {
                 : '';
             const codeClass = normalizedLanguage ? ` class="language-${Utils.escapeHTML(normalizedLanguage)}"` : '';
             const normalizedCode = String(code || '').replace(/^\n+|\n+$/g, '');
-            return stash(`
-                <div class="markdown-code-shell">
-                    ${languageBadge}
-                    <pre class="markdown-code-block"><code${codeClass}>${normalizedCode}</code></pre>
-                </div>
-            `, 'MDBLOCKTOKEN');
+            return stash(`<div class="markdown-code-shell">${languageBadge}<pre class="markdown-code-block"><code${codeClass}>${normalizedCode}</code></pre></div>`, 'MDBLOCKTOKEN');
         });
         text = text.replace(/`([^`\n]+)`/g, (_, code) => stash(`<code class="markdown-inline-code">${code}</code>`, 'MDINLINEROOTTOKEN'));
 
@@ -876,6 +871,60 @@ const Utils = {
             html = html.replaceAll(token, fragment);
         });
         return html;
+    },
+
+    // markdownToPlainText turns a Markdown note into a single-line plain-text
+    // excerpt for lists and cards: block syntax (headings, quotes, list markers,
+    // rules, table pipes, code fences) and inline syntax (emphasis, links,
+    // images, inline code) are removed while the readable text is kept.
+    markdownToPlainText(value = '', options = {}) {
+        const source = String(value || '').replace(/\r\n?/g, '\n');
+        if (!source.trim()) return '';
+
+        const stripInline = (text) => String(text || '')
+            .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
+            .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+            .replace(/`([^`]+)`/g, '$1')
+            .replace(/(\*\*|__)(?=\S)([\s\S]*?\S)\1/g, '$2')
+            .replace(/(^|[^*\w])\*(?=\S)([^*]*?\S)\*(?!\*)/g, '$1$2')
+            .replace(/(^|[^_\w])_(?=\S)([^_]*?\S)_(?![_\w])/g, '$1$2')
+            .replace(/~~(?=\S)([^~]*?\S)~~/g, '$1')
+            .replace(/<\/?[a-zA-Z][^>]*>/g, '');
+
+        const parts = [];
+        let inFence = false;
+        source.split('\n').forEach((rawLine) => {
+            let line = rawLine.trim();
+            if (/^(```|~~~)/.test(line)) {
+                inFence = !inFence;
+                return;
+            }
+            if (inFence) {
+                if (line) parts.push(line);
+                return;
+            }
+            if (!line || Utils.isMarkdownHorizontalRuleLine(line) || Utils.isMarkdownTableSeparatorLine(line)) {
+                return;
+            }
+            line = line
+                .replace(/^(>\s?)+/, '')
+                .replace(/^#{1,6}\s+/, '')
+                .replace(/\s+#+\s*$/, '')
+                .replace(/^([-*+]|\d+[.)])\s+/, '')
+                .replace(/^\[[ xX]\]\s+/, '');
+            if (Utils.isMarkdownTableCandidateLine(line)) {
+                line = Utils.splitMarkdownTableRow(line).join(' ');
+            }
+            line = stripInline(line).trim();
+            if (line) parts.push(line);
+        });
+
+        const text = parts.join(' ').replace(/\s+/g, ' ').trim();
+        const maxLength = Number(options.maxLength) || 0;
+        if (maxLength > 0 && text.length > maxLength) {
+            return text.slice(0, maxLength).trimEnd() + '…';
+        }
+        return text;
     },
 
     renderMarkdownBlocks(lines = [], options = {}) {
@@ -1009,11 +1058,7 @@ const Utils = {
         const startAttr = marker.type === 'ordered' && marker.start > 1 ? ` start="${marker.start}"` : '';
 
         return {
-            html: `
-                <${tagName} class="markdown-list${orderedClass}"${startAttr}>
-                    ${items.join('')}
-                </${tagName}>
-            `,
+            html: `<${tagName} class="markdown-list${orderedClass}"${startAttr}>${items.join('')}</${tagName}>`,
             nextIndex: index
         };
     },
@@ -1216,14 +1261,7 @@ const Utils = {
         const bodyRows = rows.map((cells) => `<tr>${renderCells(cells, 'td')}</tr>`).join('');
 
         return {
-            html: `
-                <div class="markdown-table-wrap">
-                    <table class="markdown-table">
-                        <thead><tr>${renderCells(headers, 'th')}</tr></thead>
-                        ${bodyRows ? `<tbody>${bodyRows}</tbody>` : ''}
-                    </table>
-                </div>
-            `,
+            html: `<div class="markdown-table-wrap"><table class="markdown-table"><thead><tr>${renderCells(headers, 'th')}</tr></thead>${bodyRows ? `<tbody>${bodyRows}</tbody>` : ''}</table></div>`,
             nextIndex: index
         };
     },
@@ -1302,12 +1340,7 @@ const Utils = {
         if (!imageHTML) return '';
 
         const caption = String(altText || '').trim();
-        return `
-            <figure class="markdown-figure">
-                ${imageHTML}
-                ${caption ? `<figcaption class="markdown-figcaption">${caption}</figcaption>` : ''}
-            </figure>
-        `;
+        return `<figure class="markdown-figure">${imageHTML}${caption ? `<figcaption class="markdown-figcaption">${caption}</figcaption>` : ''}</figure>`;
     },
 
     renderMarkdownFlowBlock(lines = [], options = {}, wrapperTag = 'p') {

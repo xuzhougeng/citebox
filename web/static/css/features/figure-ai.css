@@ -84,7 +84,7 @@
 
 .figure-ai-status {
     color: var(--muted);
-    font-size: 0.84rem;
+    font-size: var(--text-sm);
     font-weight: 700;
 }
 
@@ -121,7 +121,7 @@
 
 .figure-ai-supplement span {
     color: var(--muted);
-    font-size: 0.82rem;
+    font-size: var(--text-sm);
     font-weight: 700;
 }
 
@@ -239,7 +239,7 @@
     margin-top: 0;
 }
 
-@media (max-width: 1080px) {
+@media (max-width: 1200px) {
     .figure-ai-modal-dialog {
         overflow: auto;
     }
@@ -270,13 +270,13 @@
 
 .figure-ai-modal-title {
     margin: 0 2.4rem 0.4rem 0;
-    font-size: 1.05rem;
+    font-size: var(--text-body);
 }
 
 .figure-ai-modal-hint {
     margin: 0 0 0.8rem;
-    color: var(--muted, #8b7e75);
-    font-size: 0.86rem;
+    color: var(--muted);
+    font-size: var(--text-sm);
 }
 
 .figure-batch-options {
@@ -303,7 +303,7 @@
 .figure-batch-progress-bar {
     height: 100%;
     border-radius: 999px;
-    background: var(--accent, #c17f59);
+    background: var(--accent);
     transition: width 0.3s ease;
 }
 
@@ -313,7 +313,7 @@
     padding: 0.7rem 1rem;
     border-radius: 10px;
     background: rgba(var(--ink-rgb, 0, 0, 0), 0.045);
-    font-size: 0.84rem;
+    font-size: var(--text-sm);
 }
 
 .figure-batch-failures ul {

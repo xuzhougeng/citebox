@@ -27,7 +27,12 @@ func (h *AIHandler) GetSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sendJSON(w, http.StatusOK, settings)
+	// runtime_managed tells the UI that Magpie supplies the text models even
+	// when the personal settings returned here have no API key.
+	sendJSON(w, http.StatusOK, struct {
+		*model.AISettings
+		RuntimeManaged bool `json:"runtime_managed,omitempty"`
+	}{settings, h.service.RuntimeManaged()})
 }
 
 func (h *AIHandler) GetDefaultSettings(w http.ResponseWriter, r *http.Request) {

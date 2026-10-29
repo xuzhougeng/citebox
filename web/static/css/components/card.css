@@ -50,7 +50,7 @@ a.shortcut-card:hover::after {
 }
 
 .shortcut-card.compact h2 {
-    font-size: 1.15rem;
+    font-size: var(--text-section);
 }
 
 .filters-card,
@@ -93,13 +93,13 @@ a.shortcut-card:hover::after {
 .stat-card span {
     display: block;
     color: var(--muted);
-    font-size: 0.9rem;
+    font-size: var(--text-sm);
 }
 
 .stat-card strong {
     display: block;
     margin-top: 0.45rem;
-    font-size: 1.8rem;
+    font-size: var(--text-2xl);
     font-family: var(--font-display);
 }
 
@@ -163,12 +163,12 @@ a.shortcut-card:hover::after {
 
 .stat-card.with-icon .stat-card-label {
     color: var(--muted);
-    font-size: 0.85rem;
+    font-size: var(--text-sm);
 }
 
 .stat-card.with-icon strong {
     margin-top: 0;
-    font-size: 1.7rem;
+    font-size: var(--text-2xl);
     line-height: 1.15;
 }
 
@@ -185,7 +185,7 @@ a.shortcut-card:hover::after {
 
 .workflow-card h3 {
     margin: 0;
-    font-size: 1.06rem;
+    font-size: var(--text-body);
     line-height: 1.45;
 }
 
@@ -211,7 +211,7 @@ a.shortcut-card:hover::after {
 
 .paper-card h3 {
     margin: 0.8rem 0 0.35rem;
-    font-size: 1.2rem;
+    font-size: var(--text-lg);
     line-height: 1.35;
 }
 
@@ -261,7 +261,7 @@ a.shortcut-card:hover::after {
 .paper-list-head h3 {
     margin: 0;
     min-width: 0;
-    font-size: 1.12rem;
+    font-size: var(--text-section);
     line-height: 1.4;
 }
 
@@ -300,14 +300,14 @@ a.shortcut-card:hover::after {
 
 .paper-list-meta-label {
     color: var(--muted);
-    font-size: 0.72rem;
+    font-size: var(--text-2xs);
     letter-spacing: 0.04em;
 }
 
 .paper-list-meta-value {
     min-width: 0;
     color: var(--ink);
-    font-size: 0.92rem;
+    font-size: var(--text-ui);
     line-height: 1.45;
 }
 
@@ -352,7 +352,7 @@ a.shortcut-card:hover::after {
 }
 
 .paper-list-mode.compact .paper-list-head h3 {
-    font-size: 0.95rem;
+    font-size: var(--text-ui);
     line-height: 1.4;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -361,12 +361,12 @@ a.shortcut-card:hover::after {
 
 .paper-list-mode.compact .status-pill {
     padding: 0.18rem 0.55rem;
-    font-size: 0.72rem;
+    font-size: var(--text-2xs);
 }
 
 .paper-list-mode.compact .paper-list-meta {
     gap: 0.35rem 0.85rem;
-    font-size: 0.82rem;
+    font-size: var(--text-sm);
     color: var(--muted);
 }
 
@@ -381,13 +381,13 @@ a.shortcut-card:hover::after {
 }
 
 .paper-list-mode.compact .paper-list-meta-label {
-    font-size: 0.72rem;
+    font-size: var(--text-2xs);
     letter-spacing: 0;
     text-transform: none;
 }
 
 .paper-list-mode.compact .paper-list-meta-value {
-    font-size: 0.85rem;
+    font-size: var(--text-sm);
 }
 
 .paper-list-mode.compact .paper-list-meta-file {
@@ -566,7 +566,7 @@ a.shortcut-card:hover::after {
 
 .tag-card-meta {
     color: var(--muted);
-    font-size: 0.88rem;
+    font-size: var(--text-sm);
     line-height: 1.45;
 }
 
@@ -579,7 +579,7 @@ a.shortcut-card:hover::after {
     border-radius: 999px;
     background: rgba(var(--accent-rgb), 0.12);
     color: var(--accent-deep);
-    font-size: 0.84rem;
+    font-size: var(--text-sm);
     font-weight: 700;
 }
 
@@ -682,7 +682,7 @@ a.shortcut-card:hover::after {
 
 .recent-paper-head h3 {
     margin: 0;
-    font-size: 1.06rem;
+    font-size: var(--text-body);
     line-height: 1.45;
 }
 
@@ -691,9 +691,184 @@ a.shortcut-card:hover::after {
     flex-wrap: wrap;
     gap: 0.65rem;
     color: var(--muted);
-    font-size: 0.92rem;
+    font-size: var(--text-ui);
 }
 
 .recent-paper-notice {
     margin: 0;
+}
+
+/* ===== Paper detail modal (PaperViewer) ===== */
+
+#paperModalBody {
+    /* Matches the .modal-dialog padding so the action bar can bleed to its edges. */
+    --paper-detail-pad: 1.4rem;
+}
+
+.paper-detail-head {
+    display: grid;
+    gap: var(--space-1);
+    padding-right: 3rem;
+}
+
+.paper-detail-head h2 {
+    margin: 0;
+    font-family: var(--font-display);
+    font-size: var(--text-section);
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+}
+
+.paper-detail-meta {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    min-width: 0;
+    margin: 0;
+    color: var(--muted);
+    font-size: var(--text-sm);
+}
+
+.paper-detail-authors {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.paper-detail-meta-tail {
+    display: inline-flex;
+    flex: 0 0 auto;
+    gap: var(--space-2);
+    white-space: nowrap;
+}
+
+.paper-detail-meta .status-pill {
+    flex: 0 0 auto;
+    padding: 0.1rem 0.5rem;
+    font-size: var(--text-xs);
+    font-weight: 600;
+}
+
+.paper-detail-quiet {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1) var(--space-2);
+    min-width: 0;
+    margin: 0;
+    color: var(--muted);
+    font-size: var(--text-xs);
+}
+
+.paper-detail-file {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.paper-detail-notice {
+    margin: var(--space-3) 0 0;
+}
+
+.paper-detail-actions {
+    position: sticky;
+    bottom: calc(-1 * var(--paper-detail-pad));
+    z-index: 2;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+    margin: var(--space-4) calc(-1 * var(--paper-detail-pad)) calc(-1 * var(--paper-detail-pad));
+    padding: var(--space-3) var(--paper-detail-pad);
+    border-top: 1px solid var(--line);
+    background: var(--modal-bg);
+}
+
+.paper-detail-actions .btn {
+    min-height: var(--control-height-sm);
+    padding: 0.4rem 0.85rem;
+    font-size: var(--text-sm);
+}
+
+.paper-detail-actions .paper-detail-delete {
+    margin-left: auto;
+}
+
+/* Tag chip input: chips plus a borderless text field inside a form-input frame. */
+.tag-chip-input {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-1);
+    min-height: var(--control-height);
+    padding: var(--space-1) var(--space-2);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-control);
+    background: var(--panel-strong);
+    cursor: text;
+}
+
+.tag-chip-input:focus-within {
+    border-color: rgba(var(--accent-rgb), 0.5);
+    box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.12);
+}
+
+.tag-chip-input:has(.tag-chip-input-text:focus-visible) {
+    outline: 2px solid var(--accent-deep);
+    outline-offset: 2px;
+}
+
+.tag-chip {
+    gap: var(--space-1);
+    padding: 0.15rem 0.3rem 0.15rem 0.6rem;
+    color: var(--ink);
+}
+
+.tag-chip-remove {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.25rem;
+    height: 1.25rem;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: none;
+    color: var(--muted);
+    font-size: var(--text-ui);
+    line-height: 1;
+    cursor: pointer;
+}
+
+.tag-chip-remove:hover {
+    background: rgba(var(--ink-rgb), 0.08);
+    color: var(--ink);
+}
+
+.tag-chip-input-text {
+    flex: 1 1 6rem;
+    min-width: 6rem;
+    min-height: 2rem;
+    padding: 0 var(--space-1);
+    border: 0;
+    background: transparent;
+    color: var(--ink);
+    font: inherit;
+    font-size: var(--text-body);
+}
+
+.tag-chip-input-text:focus,
+.tag-chip-input-text:focus-visible {
+    outline: none;
+}
+
+@media (max-width: 720px) {
+    #paperModalBody {
+        --paper-detail-pad: 1rem;
+    }
+
+    .paper-detail-actions .paper-detail-delete {
+        margin-left: 0;
+    }
 }

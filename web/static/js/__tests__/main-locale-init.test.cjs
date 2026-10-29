@@ -27,6 +27,8 @@ test('page rendering waits for translations while navigation is enhanced immedia
     vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'main.js'), 'utf8'), context);
     vm.runInContext(`
         AppNav.init = () => record('navigation');
+        AppActionMenus.init = () => {};
+        AppGlobalDrop.init = () => {};
         AppNavigationHotkeys.init = () => record('hotkeys');
         AppUpdateNotice.init = () => record('updates');
     `, context);

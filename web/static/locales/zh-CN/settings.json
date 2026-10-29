@@ -589,7 +589,7 @@
     "settings.integration.extension_step4": "在扩展选项页填写 CiteBox 网页服务地址和访问 Token，再测试连接。",
 
     "settings.research.title": "文献搜索服务 API",
-    "settings.research.desc": "配置 Semantic Scholar 与 PubMed / NCBI 的访问凭据。Semantic Scholar 用于 /research 文献搜索页；PubMed 用于 AI 助手外部搜索。",
+    "settings.research.desc": "配置 Semantic Scholar 与 PubMed / NCBI 的访问凭据。Semantic Scholar 用于“文献搜索”页面；PubMed 用于 AI 助手的外部检索。",
     "settings.research.s2.label": "Semantic Scholar API key",
     "settings.research.s2.hint": "未填写时使用匿名速率（约 1 req/s）。保存后立即生效。",
     "settings.research.pubmed.api_key": "PubMed / NCBI API key",

@@ -34,6 +34,11 @@ class FakeButton {
         this.dataset = { shortcutId: shortcutId };
         this.classList = new FakeClassList();
         this.listeners = {};
+        this.attributes = {};
+    }
+
+    setAttribute(name, value) {
+        this.attributes[name] = String(value);
     }
 
     addEventListener(eventName, handler) {
@@ -163,4 +168,37 @@ test('Composer submit resets a one-turn shortcut after sending', () => {
     assert.deepEqual(sentPayloads[1], {
         content: 'second question',
     });
+});
+
+test('shortcut buttons expose a description and pressed state', () => {
+    const { Composer, SHORTCUT_SPECS } = loadComposerModule();
+    const shortcutRoot = new FakeShortcutRoot(SHORTCUT_SPECS.map((spec) => spec.id));
+    const composer = Object.create(Composer);
+    composer.init({ input: { value: '', focus() {} }, shortcutRoot });
+
+    SHORTCUT_SPECS.forEach((spec) => {
+        assert.ok(spec.descI18nKey, spec.id);
+        assert.ok(shortcutRoot.innerHTML.includes('data-i18n-title="' + spec.descI18nKey + '"'));
+    });
+    assert.ok(shortcutRoot.innerHTML.includes('aria-pressed="false"'));
+
+    const libraryButton = shortcutRoot.buttons.find((button) => button.dataset.shortcutId === 'library_search');
+    libraryButton.click();
+    assert.equal(libraryButton.attributes['aria-pressed'], 'true');
+    libraryButton.click();
+    assert.equal(libraryButton.attributes['aria-pressed'], 'false');
+    assert.equal(composer.activeShortcutId, '');
+});
+
+test('setActiveShortcut ignores unknown ids', () => {
+    const { Composer, SHORTCUT_SPECS } = loadComposerModule();
+    const shortcutRoot = new FakeShortcutRoot(SHORTCUT_SPECS.map((spec) => spec.id));
+    const composer = Object.create(Composer);
+    composer.init({ input: { value: '', focus() {} }, shortcutRoot });
+
+    composer.setActiveShortcut('paper_read');
+    assert.equal(composer.activeShortcutId, 'paper_read');
+    composer.setActiveShortcut('nope');
+    assert.equal(composer.activeShortcutId, '');
+    assert.equal(shortcutRoot.querySelectorAll('.is-active').length, 0);
 });

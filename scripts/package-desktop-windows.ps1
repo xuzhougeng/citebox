@@ -111,7 +111,9 @@ Quick start:
 1. Run the installer.
 2. Launch CiteBox from the Start Menu or desktop shortcut.
 
-Default account: citebox / citebox123
+The desktop window signs in automatically. The account password (default
+citebox / citebox123) only protects the local port used by integrations;
+change it in Settings > Account.
 Binary architecture: $hostArch
 
 Desktop mode stores data in:

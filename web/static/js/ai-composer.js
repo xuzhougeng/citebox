@@ -18,6 +18,8 @@
             intentHint: 'library_search',
             i18nKey: 'ai.intent_library_search',
             fallbackLabel: '查全库',
+            descI18nKey: 'ai.intent_library_search_desc',
+            fallbackDescription: '开启后，下一条消息只在你的文献库中检索并回答（再次点击取消）',
         },
         {
             id: 'external_search_discovery',
@@ -25,6 +27,8 @@
             searchGoalHint: 'discovery',
             i18nKey: 'ai.intent_external_search',
             fallbackLabel: '查外部',
+            descI18nKey: 'ai.intent_external_search_desc',
+            fallbackDescription: '开启后，下一条消息到 PubMed、Semantic Scholar 等外部来源检索相关文献',
         },
         {
             id: 'external_search_evidence',
@@ -32,18 +36,24 @@
             searchGoalHint: 'evidence',
             i18nKey: 'ai.intent_external_evidence',
             fallbackLabel: '找出处',
+            descI18nKey: 'ai.intent_external_evidence_desc',
+            fallbackDescription: '开启后，下一条消息为你给出的论断查找可引用的原始出处',
         },
         {
             id: 'paper_read',
             intentHint: 'paper_read',
             i18nKey: 'ai.intent_paper_read',
             fallbackLabel: '读文献',
+            descI18nKey: 'ai.intent_paper_read_desc',
+            fallbackDescription: '开启后，下一条消息精读已钉住的文献，回答其中的细节',
         },
         {
             id: 'figure_lookup',
             intentHint: 'figure_lookup',
             i18nKey: 'ai.intent_figure_lookup',
             fallbackLabel: '看图/图文',
+            descI18nKey: 'ai.intent_figure_lookup_desc',
+            fallbackDescription: '开启后，下一条消息检索并解读文献中的图片和图注',
         },
     ];
 
@@ -103,10 +113,17 @@
             }
         },
 
+        // Shortcuts are one-turn toggles: the pressed one routes the next
+        // message, then resets. The title is both tooltip and accessible
+        // description, so the short label is not the only cue.
         _renderShortcuts() {
             if (!this.shortcutRoot) return;
             this.shortcutRoot.innerHTML = SHORTCUT_SPECS.map((spec) => (
-                '<button class="ai-intent-shortcut" type="button" data-shortcut-id="' + escapeHtml(spec.id) + '" data-i18n="' + escapeHtml(spec.i18nKey) + '">' +
+                '<button class="ai-intent-shortcut" type="button" aria-pressed="false"' +
+                    ' data-shortcut-id="' + escapeHtml(spec.id) + '"' +
+                    ' data-i18n="' + escapeHtml(spec.i18nKey) + '"' +
+                    ' data-i18n-title="' + escapeHtml(spec.descI18nKey) + '"' +
+                    ' title="' + escapeHtml(translate(spec.descI18nKey, spec.fallbackDescription)) + '">' +
                     escapeHtml(translate(spec.i18nKey, spec.fallbackLabel)) +
                 '</button>'
             )).join('');
@@ -114,15 +131,28 @@
                 button.addEventListener('click', () => {
                     const nextShortcutId = button.dataset.shortcutId || '';
                     const alreadyActive = this.activeShortcutId === nextShortcutId && button.classList.contains('is-active');
-                    this.activeShortcutId = alreadyActive ? '' : nextShortcutId;
-                    this.shortcutRoot.querySelectorAll('.is-active').forEach((el) => el.classList.remove('is-active'));
-                    if (!alreadyActive) {
-                        button.classList.add('is-active');
-                    }
+                    this.setActiveShortcut(alreadyActive ? '' : nextShortcutId);
                     if (this.input) {
                         this.input.focus();
                     }
                 });
+            });
+        },
+
+        setActiveShortcut(shortcutId) {
+            const nextId = shortcutSpecById[shortcutId] ? shortcutId : '';
+            this.activeShortcutId = nextId;
+            if (!this.shortcutRoot) return;
+            this.shortcutRoot.querySelectorAll('[data-shortcut-id]').forEach((button) => {
+                const pressed = !!nextId && button.dataset.shortcutId === nextId;
+                if (pressed) {
+                    button.classList.add('is-active');
+                } else {
+                    button.classList.remove('is-active');
+                }
+                if (typeof button.setAttribute === 'function') {
+                    button.setAttribute('aria-pressed', pressed ? 'true' : 'false');
+                }
             });
         },
 
@@ -135,10 +165,7 @@
             } else {
                 payload = { content: content };
             }
-            this.activeShortcutId = '';
-            if (this.shortcutRoot) {
-                this.shortcutRoot.querySelectorAll('.is-active').forEach((el) => el.classList.remove('is-active'));
-            }
+            this.setActiveShortcut('');
             this.onSend(payload);
         },
     };

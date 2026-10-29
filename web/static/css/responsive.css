@@ -1,20 +1,8 @@
 /* ===== Responsive Styles ===== */
 
-/* Tablet/laptop range — tighten nav padding so 7 visible items + actions fit */
-@media (max-width: 1180px) and (min-width: 1041px) {
-    .nav-links a,
-    .nav-dropdown-toggle {
-        padding: 0.5rem 0.7rem;
-        font-size: 0.95rem;
-    }
-
-    .navbar-content {
-        gap: 0.6rem;
-    }
-}
-
-/* AppNav moves overflow links into More while retaining a single desktop row. */
-@media (max-width: 1040px) and (min-width: 721px) {
+/* Laptop range: tighten nav padding so the six primary links + actions fit;
+   AppNav moves anything that still overflows into More. */
+@media (max-width: 1200px) and (min-width: 721px) {
     .navbar-content {
         gap: 0.6rem;
     }
@@ -30,12 +18,12 @@
     .nav-links a,
     .nav-dropdown-toggle {
         padding: 0.5rem 0.72rem;
-        font-size: 0.95rem;
+        font-size: var(--text-ui);
     }
 }
 
 /* Mid-desktop range — keep 2-column layouts but shrink the sidebar */
-@media (max-width: 1280px) and (min-width: 961px) {
+@media (max-width: 1200px) and (min-width: 961px) {
     .overview-grid {
         grid-template-columns: minmax(0, 1.7fr) minmax(280px, 0.75fr);
         gap: 1.2rem;
@@ -145,7 +133,7 @@
         flex: 1 1 100%;
         flex-direction: column;
         align-items: stretch;
-        background: var(--bg, #fff);
+        background: var(--bg);
         border: 1px solid rgba(var(--ink-rgb), 0.08);
         border-radius: 14px;
         padding: 0.5rem;

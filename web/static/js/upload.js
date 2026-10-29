@@ -56,6 +56,33 @@ const UploadPage = {
             this.loadGroups(),
             this.loadExtractionModeOptions()
         ]);
+        await this.consumeDroppedFiles();
+    },
+
+    // Called by AppGlobalDrop when a PDF is dropped outside the drop zone on
+    // this page; the upload flow handles one file at a time.
+    acceptFiles(files = []) {
+        const [first] = files;
+        if (!first) return;
+        this.setFile(first);
+        if (files.length > 1) {
+            Utils.showToast(t('upload.msg_dropped_first_only', '一次上传一个 PDF，已选中第一个文件'), 'info');
+        }
+        this.form.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    },
+
+    // Files dropped on another page arrive via IndexedDB (see AppGlobalDrop).
+    async consumeDroppedFiles() {
+        const url = new URL(window.location.href);
+        if (url.searchParams.get('dropped') !== '1') return;
+        url.searchParams.delete('dropped');
+        window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
+        if (typeof AppGlobalDrop === 'undefined') return;
+        try {
+            this.acceptFiles(await AppGlobalDrop.take());
+        } catch (error) {
+            Utils.showToast(t('upload.msg_dropped_unavailable', '拖入的文件已失效，请重新选择'), 'error');
+        }
     },
 
     bindEvents() {

@@ -38,7 +38,7 @@
 .hero.compact .eyebrow {
     display: inline-block;
     margin: 0 0.55rem 0 0;
-    font-size: 0.65rem;
+    font-size: var(--text-2xs);
     color: var(--muted);
     vertical-align: 0.18em;
 }
@@ -54,13 +54,13 @@
 .hero.compact .hero-text {
     margin: 0.3rem 0 0;
     max-width: 68rem;
-    font-size: 0.9rem;
+    font-size: var(--text-sm);
     line-height: 1.5;
 }
 
 .hero.compact .hero-inline-links {
     margin: 0.4rem 0 0;
-    font-size: 0.88rem;
+    font-size: var(--text-sm);
 }
 
 .eyebrow {
@@ -68,7 +68,7 @@
     color: var(--accent-deep);
     text-transform: uppercase;
     letter-spacing: 0.18em;
-    font-size: 0.75rem;
+    font-size: var(--text-xs);
     font-weight: 700;
 }
 
@@ -83,7 +83,7 @@
     max-width: 54rem;
     margin: 0.8rem 0 0;
     color: var(--muted);
-    font-size: 1.02rem;
+    font-size: var(--text-body);
     line-height: 1.7;
 }
 
@@ -99,7 +99,7 @@
     gap: 0.55rem;
     margin: 1rem 0 0;
     color: var(--muted);
-    font-size: 0.96rem;
+    font-size: var(--text-ui);
 }
 
 .hero-inline-links a {

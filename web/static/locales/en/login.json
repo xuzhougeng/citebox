@@ -11,8 +11,9 @@
     "login.err_credentials": "Invalid username or password",
     "login.err_failed": "Login failed, please try again later",
     "login.error_default": "Invalid username or password",
-    "login.hint_text": "Use the default credentials for first login. You can change the password on the <strong>Settings</strong> page after logging in.",
-    "login.default_creds_label": "Default credentials",
-    "login.default_creds_value": "citebox / citebox123",
-    "login.footer_text": "CiteBox \u00a9 2024 \u00b7 Collect. Cite. Create."
+    "login.default_password_title": "Change the default password",
+    "login.default_password_text": "You signed in with the built-in default password, which anyone who can reach this server may know. Change it in Settings now.",
+    "login.default_password_change": "Change password",
+    "login.default_password_later": "Later",
+    "login.footer_text": "CiteBox · Collect. Cite. Create."
 }

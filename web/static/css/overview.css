@@ -1,10 +1,11 @@
 :root {
-    --overview-bg: #f7f7f8;
-    --overview-panel-bg: #ffffff;
-    --overview-border: rgba(0, 0, 0, 0.07);
-    --overview-ink: #1f2329;
-    --overview-ink-soft: rgba(31, 35, 41, 0.62);
-    --overview-accent: #4a86ff;
+    /* Follow the app theme instead of a separate gray/blue palette. */
+    --overview-bg: var(--bg);
+    --overview-panel-bg: var(--panel-strong);
+    --overview-border: var(--line);
+    --overview-ink: var(--ink);
+    --overview-ink-soft: var(--muted);
+    --overview-accent: var(--accent);
 }
 
 body {
@@ -20,7 +21,7 @@ body {
     align-items: center;
     gap: 0.7rem;
     padding: 14px 20px;
-    background: #fff;
+    background: var(--overview-panel-bg);
     border-bottom: 1px solid var(--overview-border);
 }
 
@@ -28,7 +29,7 @@ body {
 .overview-divider { color: var(--overview-ink-soft); }
 .overview-title { color: var(--overview-ink-soft); }
 .overview-nav { margin-left: auto; display: flex; gap: 1rem; }
-.overview-nav a { color: var(--overview-ink-soft); text-decoration: none; font-size: 0.9rem; }
+.overview-nav a { color: var(--overview-ink-soft); text-decoration: none; font-size: var(--text-sm); }
 .overview-nav a:hover { color: var(--overview-accent); }
 
 .overview-grid {
@@ -63,25 +64,25 @@ body {
 
 .overview-panel-header h2 {
     margin: 0;
-    font-size: 1.05rem;
+    font-size: var(--text-body);
     font-weight: 600;
 }
 
 .overview-panel-sub {
     margin-left: auto;
     color: var(--overview-ink-soft);
-    font-size: 0.82rem;
+    font-size: var(--text-sm);
 }
 
 .overview-loading,
 .overview-empty,
 .overview-error {
     color: var(--overview-ink-soft);
-    font-size: 0.9rem;
+    font-size: var(--text-sm);
     margin: 0;
 }
 
-.overview-error { color: #c0392b; }
+.overview-error { color: var(--error); }
 
 .overview-list {
     list-style: none;
@@ -93,7 +94,7 @@ body {
 }
 
 .overview-list li {
-    font-size: 0.92rem;
+    font-size: var(--text-ui);
     line-height: 1.45;
 }
 
@@ -113,20 +114,20 @@ body {
     width: 100%;
     max-height: 280px;
     object-fit: contain;
-    background: #f0f1f3;
+    background: var(--bg-soft);
     border-radius: 6px;
     display: block;
 }
 
 .overview-figure-meta {
     margin: 8px 0 4px;
-    font-size: 0.84rem;
+    font-size: var(--text-sm);
     color: var(--overview-ink-soft);
 }
 
 .overview-figure-caption {
     margin: 0;
-    font-size: 0.88rem;
+    font-size: var(--text-sm);
     line-height: 1.5;
     color: var(--overview-ink);
     max-height: 8rem;
@@ -138,7 +139,7 @@ body {
     grid-template-columns: max-content 1fr;
     gap: 6px 12px;
     margin: 0;
-    font-size: 0.9rem;
+    font-size: var(--text-sm);
 }
 
 .overview-status-list dt {

@@ -182,6 +182,7 @@ const PaperNoteViewer = {
         const isPreviewMode = this.noteMode === 'preview';
         const tags = PaperViewer.renderTagChips(paper.tags || []);
         const managementNotePreview = String(paper.notes_text || '').trim();
+        const byline = this.paperByline(paper);
 
         const content = document.createElement('div');
         const pdfURL = new URL(Utils.resourceViewerURL('pdf', paper.pdf_url, window.location.href, { paperId: paper.id }), window.location.origin);
@@ -195,15 +196,16 @@ const PaperNoteViewer = {
                     <div class="note-lightbox-editor-card">
                         <div class="note-lightbox-head">
                             <div class="note-lightbox-head-row">
-                                <div>
-                                    <p class="eyebrow">Paper Notes</p>
+                                <div class="note-lightbox-title">
                                     <h2>${Utils.escapeHTML(paper.title)}</h2>
-                                    <p class="note-lightbox-subtitle">${Utils.escapeHTML(paper.original_filename || '')}</p>
+                                    ${byline ? `<p class="note-lightbox-subtitle note-lightbox-byline" title="${Utils.escapeHTML(byline)}">${Utils.escapeHTML(byline)}</p>` : ''}
                                 </div>
                                 <div class="note-lightbox-mode-switch">
-                                    ${paper.pdf_url ? `<button class="btn btn-outline" type="button" data-paper-note-action="toggle-pdf" aria-pressed="${comparing}">${comparing ? t('shared.paper.hide_pdf', '收起原文') : t('shared.paper.pdf_comparison', '原文对照')}</button>` : ''}
-                                    <button class="btn ${isPreviewMode ? 'btn-outline' : 'btn-primary'}" type="button" data-paper-note-action="set-mode" data-note-mode="write">${t('shared.paper.write_mode', '编辑')}</button>
-                                    <button class="btn ${isPreviewMode ? 'btn-primary' : 'btn-outline'}" type="button" data-paper-note-action="set-mode" data-note-mode="preview">${t('shared.paper.markdown_preview', 'Markdown 预览')}</button>
+                                    ${paper.pdf_url ? `<button class="btn btn-outline btn-small note-lightbox-pdf-toggle" type="button" data-paper-note-action="toggle-pdf" aria-pressed="${comparing}">${comparing ? t('shared.paper.hide_pdf', '收起原文') : t('shared.paper.pdf_comparison', '原文对照')}</button>` : ''}
+                                    <div class="segmented-control note-mode-toggle" role="group">
+                                        <button class="btn" type="button" data-paper-note-action="set-mode" data-note-mode="write" aria-pressed="${isPreviewMode ? 'false' : 'true'}">${t('shared.paper.write_mode', '编辑')}</button>
+                                        <button class="btn" type="button" data-paper-note-action="set-mode" data-note-mode="preview" aria-pressed="${isPreviewMode ? 'true' : 'false'}">${t('shared.paper.markdown_preview', 'Markdown 预览')}</button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -222,8 +224,7 @@ const PaperNoteViewer = {
                         </div>
 
                         ${isPreviewMode ? `
-                            <section class="note-lightbox-render-panel">
-                                <span class="note-lightbox-panel-label">${t('shared.paper.markdown_preview', 'Markdown 预览')}</span>
+                            <section class="note-lightbox-render-panel" aria-label="${t('shared.paper.markdown_preview', 'Markdown 预览')}">
                                 <div class="markdown-preview">${Utils.renderMarkdown(noteText)}</div>
                             </section>
                         ` : `
@@ -235,7 +236,7 @@ const PaperNoteViewer = {
 
                         <div class="figure-notes-actions">
                             <span class="muted">${isPreviewMode ? t('shared.paper.preview_hint', '预览基于当前草稿渲染；切回编辑可继续修改。') : t('shared.paper.save_hint', '支持多行内容，按 Ctrl/Cmd + Enter 可快速保存。')}</span>
-                            <div style="display:flex;gap:0.6rem;flex-wrap:wrap">
+                            <div class="note-lightbox-save-actions">
                                 <button class="btn btn-outline" type="button" data-paper-note-action="save-wolai">${t("shared.paper.save_to_wolai", "保存到 Wolai")}</button>
                                 <button class="btn btn-primary" type="button" data-paper-note-action="save-notes">${t("shared.paper.save_paper_notes", "保存文献笔记")}</button>
                             </div>
@@ -279,6 +280,16 @@ const PaperNoteViewer = {
             this.bindPDFDivider();
         }
         this.pdfPaperID = comparing ? paper.id : null;
+    },
+
+    // paperByline shows "authors · journal · year" under the note title and
+    // falls back to the PDF file name only when no citation metadata exists.
+    paperByline(paper = {}) {
+        const year = (String(paper.published_at || '').match(/\b(1[5-9]|2\d)\d{2}\b/) || [''])[0];
+        const parts = [paper.authors_text, paper.journal, year]
+            .map((value) => String(value || '').trim())
+            .filter(Boolean);
+        return parts.length ? parts.join(' · ') : String(paper.original_filename || '').trim();
     },
 
     bindPDFDivider() {
@@ -641,6 +652,9 @@ const PaperViewer = {
             if (button.dataset.modalAction === 'open-paper-notes') {
                 this.openPaperNotes();
             }
+            if (button.dataset.modalAction === 'remove-tag') {
+                this.removeDraftTag(button.dataset.tagName);
+            }
         });
     },
 
@@ -649,31 +663,6 @@ const PaperViewer = {
             return `<span class="muted">${t('shared.paper.no_tags', '无标签')}</span>`;
         }
         return tags.map((tag) => `<span class="chip" style="--chip-color:${tag.color}">${Utils.escapeHTML(tag.name)}</span>`).join('');
-    },
-
-    renderDOIValue(doi) {
-        const value = String(doi || '').trim();
-        if (!value) {
-            return Utils.escapeHTML(t('shared.paper.no_doi', '未记录'));
-        }
-        const href = `https://doi.org/${encodeURI(value)}`;
-        return `<a href="${href}" target="_blank" rel="noreferrer">${Utils.escapeHTML(value)}</a>`;
-    },
-
-    renderMetaValue(value, emptyKey, emptyFallback) {
-        const normalized = String(value || '').trim();
-        if (!normalized) {
-            return Utils.escapeHTML(t(emptyKey, emptyFallback));
-        }
-        return Utils.escapeHTML(normalized);
-    },
-
-    renderPublishedAtValue(value) {
-        const normalized = String(value || '').trim();
-        if (!normalized) {
-            return Utils.escapeHTML(t('shared.paper.no_published_at', '未记录'));
-        }
-        return Utils.escapeHTML(Utils.formatPartialDate(normalized));
     },
 
     buildUpdatePayload(paper, overrides = {}) {
@@ -786,119 +775,97 @@ const PaperViewer = {
                         <img src="${figure.image_url}" alt="${Utils.escapeHTML(figure.original_name || paper.title)}">
                     </button>
                     <div class="figure-preview-badges">
-                        <span class="figure-badge figure-badge-strong">${t('shared.paper.page_n', '第 {page} 页').replace('{page}', figure.page_number || '-')}</span>
-                        <span class="figure-badge">${Utils.escapeHTML(figure.display_label || `Fig ${figure.figure_index || '-'}`)}</span>
-                        ${figure.parent_figure_id ? `<span class="figure-badge">${t('shared.paper.subfigure', '子图')}</span>` : ''}
-                        ${figure.source === 'manual' ? `<span class="figure-badge">${t('shared.paper.manual_extraction', '人工提取')}</span>` : ''}
+                        <span class="figure-badge figure-badge-strong" title="${Utils.escapeHTML(t('shared.paper.page_n', '第 {page} 页').replace('{page}', figure.page_number || '-'))}">${Utils.escapeHTML([figure.page_number ? t('shared.paper.page_short', 'P{page}').replace('{page}', figure.page_number) : '', figure.display_label || `Fig ${figure.figure_index || '-'}`].filter(Boolean).join(' · '))}</span>
                     </div>
                 </div>
                 <div class="figure-preview-body">
-                    <div class="figure-preview-head">
-                        <span class="figure-preview-label">${t("shared.paper.source_paper", "来源文献")}</span>
-                        <strong class="figure-preview-title">${Utils.escapeHTML(paper.title)}</strong>
-                    </div>
-                    <div class="figure-preview-tags ${figure.tags?.length ? '' : 'is-empty'}">
-                        ${figure.tags?.length ? this.renderTagChips(figure.tags || []) : `<span class="figure-preview-empty">${t('shared.paper.no_tags', '无标签')}</span>`}
-                    </div>
+                    ${figure.tags?.length ? `<div class="figure-preview-tags">${this.renderTagChips(figure.tags || [])}</div>` : ''}
                     <div class="card-actions">
-                        <button class="btn btn-primary" type="button" data-modal-action="preview-figure" data-figure-index="${index}">${t("shared.paper.view_large", "查看大图")}</button>
-                        <button class="btn btn-outline danger" type="button" data-modal-action="delete-figure" data-figure-id="${figure.id}">${t("shared.paper.delete_figure", "删除图片")}</button>
-                        <a class="btn btn-outline" href="${Utils.resourceViewerURL('image', figure.image_url)}">${t('shared.paper.original_image', '原图')}</a>
+                        <a class="btn btn-outline btn-small" href="${Utils.resourceViewerURL('image', figure.image_url)}">${t('shared.paper.original_image', '原图')}</a>
+                        <button class="btn btn-small btn-ghost-danger" type="button" data-modal-action="delete-figure" data-figure-id="${figure.id}">${t("shared.paper.delete_figure", "删除图片")}</button>
                     </div>
                 </div>
             </article>
         `).join('') : `<p class="muted">${Utils.isProcessingStatus(paper.extraction_status) ? t('shared.paper.parsing_in_progress', '后台解析完成后会在这里显示提取图片。') : t('shared.paper.no_extracted_figures', '没有可展示的提取图片。')}</p>`;
 
+        const showStatus = paper.extraction_status && paper.extraction_status !== 'completed';
+        const authorsText = String(paper.authors_text || '').trim();
+        const metaTail = [String(paper.journal || '').trim(), this.publishedYear(paper.published_at)].filter(Boolean);
+        const quietMeta = [
+            paper.original_filename ? `<span class="paper-detail-file" title="${Utils.escapeHTML(paper.original_filename)}">${Utils.escapeHTML(paper.original_filename)}</span>` : '',
+            `<span>${Utils.formatFileSize(paper.file_size || 0)}</span>`,
+            `<span>${t('shared.paper.extracted_figures', '提取图片')} ${figures.length}</span>`
+        ].filter(Boolean).join('<span aria-hidden="true">·</span>');
+        this.tagDraft = (paper.tags || []).map((tag) => ({ name: tag.name || String(tag), color: tag.color || '' }));
+
         this.body.innerHTML = `
-            <div class="detail-head">
-                <div>
-                    <p class="eyebrow">${t("shared.paper.paper_detail", "文献详情")}</p>
-                    <h2>${Utils.escapeHTML(paper.title)}</h2>
-                </div>
-                <span class="status-pill ${statusClass}">
-                    ${Utils.escapeHTML(Utils.statusLabel(paper.extraction_status))}
-                </span>
+            <div class="paper-detail-head">
+                <h2>${Utils.escapeHTML(paper.title)}</h2>
+                ${(authorsText || metaTail.length || showStatus) ? `
+                    <p class="paper-detail-meta">
+                        ${authorsText ? `<span class="paper-detail-authors" title="${Utils.escapeHTML(authorsText)}">${Utils.escapeHTML(authorsText)}</span>` : ''}
+                        ${metaTail.length ? `<span class="paper-detail-meta-tail">${authorsText ? '<span aria-hidden="true">·</span>' : ''}${metaTail.map((part) => Utils.escapeHTML(part)).join('<span aria-hidden="true">·</span>')}</span>` : ''}
+                        ${showStatus ? `<span class="status-pill ${statusClass}">${Utils.escapeHTML(Utils.statusLabel(paper.extraction_status))}</span>` : ''}
+                    </p>
+                ` : ''}
+                <p class="paper-detail-quiet">${quietMeta}</p>
             </div>
 
-            <div class="detail-meta-panel">
-                <div><span>${t("shared.paper.doi_label", "DOI")}</span><strong>${this.renderDOIValue(paper.doi)}</strong></div>
-                <div><span>${t("shared.paper.authors_label", "作者")}</span><strong>${this.renderMetaValue(paper.authors_text, 'shared.paper.no_authors', '未记录')}</strong></div>
-                <div><span>${t("shared.paper.journal_label", "期刊 / 来源")}</span><strong>${this.renderMetaValue(paper.journal, 'shared.paper.no_journal', '未记录')}</strong></div>
-                <div><span>${t("shared.paper.published_at_label", "发表时间")}</span><strong>${this.renderPublishedAtValue(paper.published_at)}</strong></div>
-                <div><span>${t("shared.paper.original_file", "原始文件")}</span><strong>${Utils.escapeHTML(paper.original_filename)}</strong></div>
-                <div><span>${t("shared.paper.pdf_size", "PDF 大小")}</span><strong>${Utils.formatFileSize(paper.file_size || 0)}</strong></div>
-                <div><span>${t("shared.paper.extracted_figures", "提取图片")}</span><strong>${figures.length}</strong></div>
-                <div><span>${t("shared.paper.current_tags", "当前标签")}</span><strong>${this.renderTagChips(paper.tags || [])}</strong></div>
-                <div><span>${t("shared.paper.recent_update", "最近更新")}</span><strong>${Utils.formatDate(paper.updated_at || paper.created_at)}</strong></div>
-            </div>
+            ${showStatus && paper.extractor_message ? `<p class="notice ${statusClass} paper-detail-notice">${Utils.escapeHTML(paper.extractor_message)}</p>` : ''}
 
-            <section class="detail-section detail-editor-section">
-                <div class="section-head">
-                    <h3>${t("shared.paper.edit_info_section", "编辑信息")}</h3>
-                    <span>${t("shared.paper.edit_info_hint", "修改后手动保存")}</span>
-                </div>
-                <form id="paperViewerForm" class="detail-form">
-                    <div class="form-grid detail-form-grid">
-                        <label class="field field-span-2">
-                            <span>${t("shared.paper.title_label", "标题")}</span>
-                            <input id="paperViewerTitle" class="form-input" type="text" value="${Utils.escapeHTML(paper.title)}">
-                        </label>
-                        <label class="field field-span-2">
-                            <span>${t("shared.paper.doi_label", "DOI")}</span>
-                            <input id="paperViewerDOI" class="form-input" type="text" value="${Utils.escapeHTML(paper.doi || '')}" placeholder="${t('shared.paper.doi_placeholder', '例如：10.1038/nature12373 或 https://doi.org/10.1038/nature12373')}" autocomplete="off" spellcheck="false">
-                        </label>
-                        <label class="field field-span-2">
-                            <span>${t("shared.paper.authors_label", "作者")}</span>
-                            <input id="paperViewerAuthors" class="form-input" type="text" value="${Utils.escapeHTML(paper.authors_text || '')}" placeholder="${t('shared.paper.authors_placeholder', '例如：Ada Lovelace, Alan Turing')}" autocomplete="off" spellcheck="false">
-                        </label>
-                        <label class="field">
-                            <span>${t("shared.paper.journal_label", "期刊 / 来源")}</span>
-                            <input id="paperViewerJournal" class="form-input" type="text" value="${Utils.escapeHTML(paper.journal || '')}" placeholder="${t('shared.paper.journal_placeholder', '例如：Nature Communications')}" autocomplete="off" spellcheck="false">
-                        </label>
-                        <label class="field">
-                            <span>${t("shared.paper.published_at_label", "发表时间")}</span>
-                            <input id="paperViewerPublishedAt" class="form-input" type="text" value="${Utils.escapeHTML(paper.published_at || '')}" placeholder="${t('shared.paper.published_at_placeholder', '例如：2023-01-18 或 2023')}" autocomplete="off" spellcheck="false">
-                        </label>
-                        <label class="field">
-                            <span>${t("shared.paper.group_label", "分组")}</span>
-                            <select id="paperViewerGroup" class="form-input">${groupOptions}</select>
-                        </label>
-                        <label class="field">
-                            <span>${t("shared.paper.tags_label", "标签")}</span>
-                            <div class="tag-autocomplete-field">
-                                <input id="paperViewerTags" class="form-input" type="text" value="${Utils.escapeHTML(Utils.joinTags(paper.tags || []))}" placeholder="${t('shared.paper.comma_separated', '逗号分隔')}" autocomplete="off" spellcheck="false">
-                                <div class="tag-autocomplete-panel hidden" data-paper-tag-suggestions></div>
+            <form id="paperViewerForm" class="detail-form paper-detail-form">
+                <div class="form-grid detail-form-grid">
+                    <label class="field field-span-2">
+                        <span>${t("shared.paper.title_label", "标题")}</span>
+                        <input id="paperViewerTitle" class="form-input" type="text" value="${Utils.escapeHTML(paper.title)}">
+                    </label>
+                    <label class="field field-span-2">
+                        <span>${t("shared.paper.authors_label", "作者")}</span>
+                        <input id="paperViewerAuthors" class="form-input" type="text" value="${Utils.escapeHTML(paper.authors_text || '')}" placeholder="${t('shared.paper.authors_placeholder', '例如：Ada Lovelace, Alan Turing')}" autocomplete="off" spellcheck="false">
+                    </label>
+                    <label class="field">
+                        <span>${t("shared.paper.journal_label", "期刊 / 来源")}</span>
+                        <input id="paperViewerJournal" class="form-input" type="text" value="${Utils.escapeHTML(paper.journal || '')}" placeholder="${t('shared.paper.journal_placeholder', '例如：Nature Communications')}" autocomplete="off" spellcheck="false">
+                    </label>
+                    <label class="field">
+                        <span>${t("shared.paper.published_at_label", "发表时间")}</span>
+                        <input id="paperViewerPublishedAt" class="form-input" type="text" value="${Utils.escapeHTML(paper.published_at || '')}" placeholder="${t('shared.paper.published_at_placeholder', '例如：2023-01-18 或 2023')}" autocomplete="off" spellcheck="false">
+                    </label>
+                    <label class="field field-span-2">
+                        <span>${t("shared.paper.doi_label", "DOI")}</span>
+                        <input id="paperViewerDOI" class="form-input" type="text" value="${Utils.escapeHTML(paper.doi || '')}" placeholder="${t('shared.paper.doi_placeholder', '例如：10.1038/nature12373 或 https://doi.org/10.1038/nature12373')}" autocomplete="off" spellcheck="false">
+                    </label>
+                    <label class="field">
+                        <span>${t("shared.paper.group_label", "分组")}</span>
+                        <select id="paperViewerGroup" class="form-input">${groupOptions}</select>
+                    </label>
+                    <div class="field">
+                        <label for="paperViewerTags">${t("shared.paper.tags_label", "标签")}</label>
+                        <div class="tag-autocomplete-field">
+                            <div class="tag-chip-input" data-paper-tag-box>
+                                ${this.renderTagDraftChips()}
+                                <input id="paperViewerTags" class="tag-chip-input-text" type="text" value="" placeholder="${t('shared.paper.comma_separated', '逗号分隔')}" autocomplete="off" spellcheck="false">
                             </div>
-                        </label>
-                        <label class="field field-span-2">
-                            <span>${t("shared.paper.abstract_label", "摘要")}</span>
-                            <textarea id="paperViewerAbstract" class="form-textarea" rows="4" placeholder="${t('shared.paper.abstract_placeholder', '为这篇文献补充摘要或核心结论')}">${Utils.escapeHTML(paper.abstract_text || '')}</textarea>
-                        </label>
-                        <label class="field field-span-2">
-                            <span>${t("shared.paper.management_notes", "管理笔记")}</span>
-                            <textarea id="paperViewerNotes" class="form-textarea" rows="4" placeholder="${t('shared.paper.notes_placeholder', '记录这篇文献的整理备注、迁移说明或管理信息')}">${Utils.escapeHTML(paper.notes_text || '')}</textarea>
-                        </label>
-                        <div class="field field-span-2">
-                            <span>${t("shared.paper.paper_notes_label", "文献笔记")}</span>
-                            <button class="figure-note-inline-trigger ${paperNotePreview ? '' : 'is-empty'}" type="button" data-modal-action="open-paper-notes" aria-label="${t('shared.paper.open_notes', '打开笔记')}">
-                                <span class="figure-note-inline-text">${Utils.escapeHTML(paperNotePreview || t('shared.paper.paper_notes_empty_trigger', '还没有文献笔记，点击后在独立笔记面板中查看和编辑。'))}</span>
-                                <span class="figure-note-inline-action">${t("shared.paper.open_notes", "打开笔记")}</span>
-                            </button>
+                            <div class="tag-autocomplete-panel hidden" data-paper-tag-suggestions></div>
                         </div>
                     </div>
-                    <div class="detail-actions">
-                        <button class="btn btn-primary" type="submit">${t("shared.paper.save", "保存")}</button>
-                        <button class="btn btn-outline" type="button" data-modal-action="refresh-doi-metadata" ${this.refreshingDOIMetadata ? 'disabled' : ''}>${refreshDOIMetadataLabel}</button>
-                        <a class="btn btn-outline" href="/manual?paper_id=${paper.id}" target="_blank" rel="noreferrer">${t("shared.paper.manual_annotation", "手动标注")}</a>
-                        ${(paper.extraction_status === 'failed' || paper.extraction_status === 'cancelled') ? `<button class="btn btn-outline" type="button" data-modal-action="reextract-paper">${t("shared.paper.reparse", "重新解析")}</button>` : ''}
-                        <button class="btn btn-outline danger" type="button" data-modal-action="delete-paper">${t("shared.paper.delete_paper", "删除文献")}</button>
-                        <a class="btn btn-outline" href="/ai?paper_id=${paper.id}">${t('shared.paper.ask_ai', '在 AI 中追问 →')}</a>
-                        <a class="btn btn-outline" href="${Utils.resourceViewerURL('pdf', paper.pdf_url, window.location.href, { paperId: paper.id })}">${t('shared.paper.open_pdf', '打开 PDF')}</a>
+                    <label class="field field-span-2">
+                        <span>${t("shared.paper.abstract_label", "摘要")}</span>
+                        <textarea id="paperViewerAbstract" class="form-textarea" rows="4" placeholder="${t('shared.paper.abstract_placeholder', '为这篇文献补充摘要或核心结论')}">${Utils.escapeHTML(paper.abstract_text || '')}</textarea>
+                    </label>
+                    <label class="field field-span-2">
+                        <span>${t("shared.paper.management_notes", "管理笔记")}</span>
+                        <textarea id="paperViewerNotes" class="form-textarea" rows="3" placeholder="${t('shared.paper.notes_placeholder', '记录这篇文献的整理备注、迁移说明或管理信息')}">${Utils.escapeHTML(paper.notes_text || '')}</textarea>
+                    </label>
+                    <div class="field field-span-2">
+                        <span>${t("shared.paper.paper_notes_label", "文献笔记")}</span>
+                        <button class="figure-note-inline-trigger ${paperNotePreview ? '' : 'is-empty'}" type="button" data-modal-action="open-paper-notes" aria-label="${t('shared.paper.open_notes', '打开笔记')}">
+                            <span class="figure-note-inline-text">${Utils.escapeHTML(paperNotePreview || t('shared.paper.paper_notes_empty_trigger', '还没有文献笔记，点击后在独立笔记面板中查看和编辑。'))}</span>
+                            <span class="figure-note-inline-action">${t("shared.paper.open_notes", "打开笔记")}</span>
+                        </button>
                     </div>
-                </form>
-            </section>
-
-            ${paper.extractor_message ? `<p class="notice ${statusClass}">${Utils.escapeHTML(paper.extractor_message)}</p>` : ''}
+                </div>
+            </form>
 
             <section class="detail-section">
                 <div class="section-head">
@@ -928,7 +895,7 @@ const PaperViewer = {
                 <div class="pdf-text-preview">
                     ${paper.pdf_text ? `
                         <pre class="pdf-text-snippet" data-native-context-menu="true">${Utils.escapeHTML(paper.pdf_text.substring(0, 1000))}${paper.pdf_text.length > 1000 ? '\n...' : ''}</pre>
-                        <p class="pdf-text-meta">共 ${paper.pdf_text.length.toLocaleString()} ${t("shared.paper.characters", "字符")}</p>
+                        <p class="pdf-text-meta">${paper.pdf_text.length.toLocaleString()} ${t("shared.paper.characters", "字符")}</p>
                     ` : `
                         <div class="pdf-text-empty">
                             <p class="muted">${t('shared.paper.no_pdf_text_hint', '暂无 PDF 原文，可直接从当前 PDF 提取，之后再查看、编辑或切换 Markdown 预览。')}</p>
@@ -937,14 +904,141 @@ const PaperViewer = {
                     `}
                 </div>
             </section>
+
+            <div class="paper-detail-actions">
+                <button class="btn btn-primary" type="submit" form="paperViewerForm">${t("shared.paper.save", "保存")}</button>
+                <button class="btn btn-outline" type="button" data-modal-action="refresh-doi-metadata" ${this.refreshingDOIMetadata ? 'disabled' : ''}>${refreshDOIMetadataLabel}</button>
+                <a class="btn btn-outline" href="/manual?paper_id=${paper.id}" target="_blank" rel="noreferrer">${t("shared.paper.manual_annotation", "手动标注")}</a>
+                ${(paper.extraction_status === 'failed' || paper.extraction_status === 'cancelled') ? `<button class="btn btn-outline" type="button" data-modal-action="reextract-paper">${t("shared.paper.reparse", "重新解析")}</button>` : ''}
+                <a class="btn btn-outline" href="/ai?paper_id=${paper.id}">${t('shared.paper.ask_ai', '在 AI 中追问 →')}</a>
+                <a class="btn btn-outline" href="${Utils.resourceViewerURL('pdf', paper.pdf_url, window.location.href, { paperId: paper.id })}">${t('shared.paper.open_pdf', '打开 PDF')}</a>
+                <button class="btn btn-ghost-danger paper-detail-delete" type="button" data-modal-action="delete-paper">${t("shared.paper.delete_paper", "删除文献")}</button>
+            </div>
         `;
 
         Utils.mergeScopedTagCatalog?.('paper', paper.tags || []);
-        this.paperTagAutocomplete = Utils.bindCommaSeparatedTagInputAutocomplete?.({
-            input: this.body.querySelector('#paperViewerTags'),
-            panel: this.body.querySelector('[data-paper-tag-suggestions]'),
-            scope: 'paper'
-        }) || null;
+        this.bindTagChipInput();
+    },
+
+    publishedYear(value) {
+        const raw = String(value || '').trim();
+        const match = raw.match(/\b(\d{4})\b/);
+        return match ? match[1] : raw;
+    },
+
+    renderTagDraftChips() {
+        const removeLabel = t('btn.delete', '删除');
+        return (this.tagDraft || []).map((tag) => `
+            <span class="chip tag-chip" ${tag.color ? `style="--chip-color:${Utils.escapeHTML(tag.color)}"` : ''}>
+                <span>${Utils.escapeHTML(tag.name)}</span>
+                <button type="button" class="tag-chip-remove" data-modal-action="remove-tag" data-tag-name="${Utils.escapeHTML(tag.name)}" aria-label="${Utils.escapeHTML(`${removeLabel} ${tag.name}`)}">×</button>
+            </span>
+        `).join('');
+    },
+
+    refreshTagDraftChips() {
+        const box = this.body?.querySelector('[data-paper-tag-box]');
+        if (!box) return;
+        box.querySelectorAll('.tag-chip').forEach((chip) => chip.remove());
+        const input = box.querySelector('#paperViewerTags');
+        input?.insertAdjacentHTML('beforebegin', this.renderTagDraftChips());
+    },
+
+    addDraftTags(names = []) {
+        const known = new Set((this.tagDraft || []).map((tag) => tag.name.toLowerCase()));
+        const catalog = typeof Utils.tagCatalog === 'function' ? Utils.tagCatalog('paper') : null;
+        let changed = false;
+        names.map((name) => String(name || '').trim()).filter(Boolean).forEach((name) => {
+            const key = name.toLowerCase();
+            if (known.has(key)) return;
+            known.add(key);
+            const existing = catalog?.get?.(key);
+            this.tagDraft.push({ name: existing?.name || name, color: existing?.color || '' });
+            changed = true;
+        });
+        if (changed) this.refreshTagDraftChips();
+    },
+
+    removeDraftTag(name) {
+        const key = String(name || '').toLowerCase();
+        this.tagDraft = (this.tagDraft || []).filter((tag) => tag.name.toLowerCase() !== key);
+        this.refreshTagDraftChips();
+        this.body?.querySelector('#paperViewerTags')?.focus();
+    },
+
+    // Tag names from the chips plus anything still typed in the text field.
+    currentTagNames() {
+        const pending = Utils.splitTags(String(this.body?.querySelector('#paperViewerTags')?.value || '').replace(/，/g, ','));
+        const names = (this.tagDraft || []).map((tag) => tag.name);
+        const seen = new Set(names.map((name) => name.toLowerCase()));
+        pending.forEach((name) => {
+            if (seen.has(name.toLowerCase())) return;
+            seen.add(name.toLowerCase());
+            names.push(name);
+        });
+        return names;
+    },
+
+    bindTagChipInput() {
+        const box = this.body.querySelector('[data-paper-tag-box]');
+        const input = this.body.querySelector('#paperViewerTags');
+        const panel = this.body.querySelector('[data-paper-tag-suggestions]');
+        if (!box || !input) return;
+
+        // Completed segments (before a comma) become chips; the rest stays as the query.
+        input.addEventListener('input', () => {
+            const value = input.value.replace(/，/g, ',');
+            if (!value.includes(',')) return;
+            const segments = value.split(',');
+            const rest = segments.pop();
+            this.addDraftTags(segments);
+            input.value = rest.trimStart();
+        });
+
+        // Registered on the box so the autocomplete's own Enter handling runs first.
+        box.addEventListener('keydown', (event) => {
+            if (event.target !== input || event.defaultPrevented) return;
+            if (event.key === 'Enter' && input.value.trim()) {
+                event.preventDefault();
+                this.addDraftTags(Utils.splitTags(input.value.replace(/，/g, ',')));
+                input.value = '';
+                this.paperTagAutocomplete?.hide?.();
+                return;
+            }
+            if (event.key === 'Backspace' && !input.value && this.tagDraft?.length) {
+                event.preventDefault();
+                this.removeDraftTag(this.tagDraft[this.tagDraft.length - 1].name);
+            }
+        });
+
+        box.addEventListener('click', (event) => {
+            if (event.target === box) input.focus();
+        });
+
+        // The shared autocomplete only knows the text field, so drop suggestions
+        // for tags that are already chips.
+        if (panel && typeof MutationObserver === 'function') {
+            new MutationObserver(() => {
+                const existing = new Set((this.tagDraft || []).map((tag) => tag.name.toLowerCase()));
+                const suggestions = panel.querySelectorAll('[data-tag-autocomplete-suggestion]');
+                suggestions.forEach((button) => {
+                    if (existing.has(String(button.dataset.tagAutocompleteSuggestion || '').toLowerCase())) button.remove();
+                });
+                if (suggestions.length && !panel.querySelector('[data-tag-autocomplete-suggestion]')) {
+                    panel.classList.add('hidden');
+                }
+            }).observe(panel, { childList: true });
+        }
+
+        // Suggestions appear only after the user focuses the field, never on open.
+        input.addEventListener('focus', () => {
+            if (this.paperTagAutocomplete) return;
+            this.paperTagAutocomplete = Utils.bindCommaSeparatedTagInputAutocomplete?.({
+                input,
+                panel,
+                scope: 'paper'
+            }) || null;
+        });
     },
 
     paperFiguresForViewer() {
@@ -997,7 +1091,7 @@ const PaperViewer = {
                     abstract_text: document.getElementById('paperViewerAbstract').value.trim(),
                     notes_text: document.getElementById('paperViewerNotes').value.trim(),
                     group_id: document.getElementById('paperViewerGroup').value ? Number(document.getElementById('paperViewerGroup').value) : null,
-                    tags: Utils.splitTags(document.getElementById('paperViewerTags').value)
+                    tags: this.currentTagNames()
                 })
             );
             this.paper = this.normalizePaperIdentity(payload.paper, this.paper?.id);
@@ -1190,7 +1284,7 @@ const PaperViewer = {
             journal: form.querySelector('#paperViewerJournal')?.value ?? '',
             publishedAt: form.querySelector('#paperViewerPublishedAt')?.value ?? '',
             groupValue: form.querySelector('#paperViewerGroup')?.value ?? '',
-            tags: form.querySelector('#paperViewerTags')?.value ?? '',
+            tags: this.currentTagNames(),
             abstractText: form.querySelector('#paperViewerAbstract')?.value ?? '',
             notesText: form.querySelector('#paperViewerNotes')?.value ?? ''
         };
@@ -1219,7 +1313,16 @@ const PaperViewer = {
         if (journalInput && preserveDOIMetadata) journalInput.value = draft.journal;
         if (publishedAtInput && preserveDOIMetadata) publishedAtInput.value = draft.publishedAt;
         if (groupInput) groupInput.value = draft.groupValue;
-        if (tagsInput) tagsInput.value = draft.tags;
+        if (tagsInput && Array.isArray(draft.tags)) {
+            const catalog = typeof Utils.tagCatalog === 'function' ? Utils.tagCatalog('paper') : null;
+            const colors = new Map((this.tagDraft || []).map((tag) => [tag.name.toLowerCase(), tag.color]));
+            this.tagDraft = draft.tags.map((name) => ({
+                name,
+                color: colors.get(name.toLowerCase()) || catalog?.get?.(name.toLowerCase())?.color || ''
+            }));
+            tagsInput.value = '';
+            this.refreshTagDraftChips();
+        }
         if (abstractInput && preserveDOIMetadata) abstractInput.value = draft.abstractText;
         if (notesInput) notesInput.value = draft.notesText;
     },

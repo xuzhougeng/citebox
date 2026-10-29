@@ -30,7 +30,7 @@
     border: 1px solid rgba(var(--ink-rgb), 0.06);
     color: var(--ink);
     line-height: 1.8;
-    font-size: 0.95rem;
+    font-size: var(--text-ui);
     white-space: pre-wrap;
     word-wrap: break-word;
     overflow: auto;
@@ -41,7 +41,7 @@
 .pdf-text-meta {
     margin: 0.6rem 0 0;
     color: var(--muted);
-    font-size: 0.85rem;
+    font-size: var(--text-sm);
 }
 
 .pdf-text-modal-dialog {
@@ -72,7 +72,7 @@
     border-radius: 999px;
     background: rgba(var(--ink-rgb), 0.06);
     color: var(--muted);
-    font-size: 0.82rem;
+    font-size: var(--text-sm);
     font-weight: 600;
 }
 

@@ -885,6 +885,10 @@ citebox-figure-{id}-transfer-package.zip
 
 - 获取 AI 配置页当前设置
 
+说明：
+
+- 返回的是个人模型配置；当 [Magpie](./magpie.md) 连接有效时额外返回 `runtime_managed: true`，表示运行时由 Magpie 提供文本模型，前端据此不再提示“未填写 API Key”。该字段只读，`PUT` 时会被忽略。
+
 #### `GET /api/ai/settings/defaults`
 
 用途：
@@ -2220,7 +2224,9 @@ Notion API 使用用户在 Notion Developer Portal 创建的个人访问令牌�
 
 - 后端写入会话 Cookie
 - 当 `remember_login=true` 时，还会额外写入长期有效的“记住登录状态” Cookie
-- 返回 `{ "success": true, "message": "登录成功" }`
+- 返回 `{ "success": true, "message": "登录成功", "default_password": false }`
+- `default_password` 为 `true` 表示本次用的是内置默认密码（`citebox123`，即未设置 `ADMIN_PASSWORD` 时的回退值）且尚未修改；登录页据此提示用户去设置页改密码。该字段只在登录成功后返回，匿名访问者无法据此判断默认密码是否可用
+- 桌面版的 WebView 不需要调用此接口：桌面壳在进程内提供的 handler 视为已登录（见 `docs/macos-development.md`）。桌面版附带的 loopback 端口仍按会话 Cookie / 集成令牌鉴权
 
 #### `GET /api/auth/settings`
 
