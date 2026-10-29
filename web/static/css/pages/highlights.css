@@ -30,7 +30,7 @@
 .highlight-quote {
     margin: 0;
     color: var(--ink);
-    font-size: 0.98rem;
+    font-size: var(--text-ui);
     line-height: 1.55;
 }
 
@@ -39,7 +39,7 @@
     flex-wrap: wrap;
     gap: 0.5rem 0.85rem;
     color: var(--muted);
-    font-size: 0.85rem;
+    font-size: var(--text-sm);
 }
 
 .highlight-paper-title {
@@ -54,14 +54,14 @@
     justify-content: flex-end;
 }
 
-@media (min-width: 780px) {
+@media (min-width: 720px) {
     .highlight-card {
         grid-template-columns: minmax(0, 1fr) auto;
         align-items: center;
     }
 }
 
-@media (max-width: 680px) {
+@media (max-width: 720px) {
     .highlights-filters-grid {
         grid-template-columns: 1fr;
     }

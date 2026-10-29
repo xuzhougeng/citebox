@@ -82,6 +82,8 @@ make prepare-web-assets
 
 ## 配置说明
 
+[Magpie 接入](./docs/magpie.md)通过独立配置文件管理运行时文本模型，下一次 AI 操作生效，并保留个人模型设置。
+
 大部分功能都可以在应用内的“设置”页完成配置；如果需要通过环境变量启动，最常用的是这些：
 
 | 变量 | 默认值 | 说明 |
@@ -122,6 +124,7 @@ MCP OAuth 凭据和 API 令牌均只保存在本机；设置接口不会回显�
 
 ## 文档
 
+- [Magpie 模型接入](./docs/magpie.md)
 - [前后端 API 说明](./docs/api.md)
 - [数据库说明](./docs/database.md)
 - [macOS 开发说明](./docs/macos-development.md)

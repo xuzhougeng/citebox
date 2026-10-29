@@ -167,10 +167,31 @@
     font-weight: 700;
 }
 
+.nav-icon-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--control-height-sm);
+    height: var(--control-height-sm);
+    border-radius: var(--radius-control);
+    color: var(--muted);
+    transition: background-color 0.18s ease, color 0.18s ease;
+}
+
+.nav-icon-link:hover {
+    background: rgba(var(--ink-rgb), 0.08);
+    color: var(--ink);
+}
+
+.nav-icon-link.active {
+    background: var(--accent-soft);
+    color: var(--accent-deep);
+}
+
 .logo {
     flex-shrink: 0;
     font-family: var(--font-display);
-    font-size: 1.35rem;
+    font-size: var(--text-xl);
     font-weight: 700;
     letter-spacing: 0.04em;
 }
@@ -227,7 +248,7 @@
     margin: 0;
     padding: 0.4rem;
     list-style: none;
-    background: var(--bg, #fff);
+    background: var(--bg);
     border: 1px solid rgba(var(--ink-rgb), 0.1);
     border-radius: var(--radius-card);
     box-shadow: var(--shadow-floating);
@@ -314,4 +335,34 @@
 .nav-toggle[aria-expanded="true"] .nav-toggle-bar::after {
     top: 0;
     transform: rotate(-45deg);
+}
+
+/* ===== Global PDF drop target ===== */
+
+.global-drop-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    display: grid;
+    place-items: center;
+    padding: var(--space-8);
+    background: rgba(var(--bg-rgb), 0.72);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.12s ease;
+}
+
+.global-drop-overlay.is-visible {
+    opacity: 1;
+}
+
+.global-drop-overlay-card {
+    padding: var(--space-6) var(--space-8);
+    border: 2px dashed var(--accent);
+    border-radius: var(--radius-panel);
+    background: var(--panel-strong);
+    color: var(--ink);
+    font-size: var(--text-section);
+    font-weight: 600;
+    box-shadow: var(--shadow-floating);
 }

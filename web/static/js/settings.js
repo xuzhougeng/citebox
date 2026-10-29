@@ -132,7 +132,6 @@ const SettingsPage = {
         this.integrationSettings = null;
         this.desktopCloseSettingsSection = document.getElementById('desktopCloseSettingsSection');
         this.desktopCloseActionSelect = document.getElementById('desktopCloseActionSelect');
-        this.desktopCloseSummary = document.getElementById('desktopCloseSummary');
         this.desktopCloseStatus = document.getElementById('desktopCloseStatus');
         this.versionSummary = document.getElementById('versionSummary');
         this.checkVersionButton = document.getElementById('checkVersionButton');
@@ -1705,8 +1704,7 @@ const SettingsPage = {
         if (this.desktopCloseActionSelect) {
             this.desktopCloseActionSelect.value = action;
         }
-        this.renderDesktopCloseSummary(action);
-        this.setDesktopCloseStatus(t('settings.desktop_close.status_hint', '修改后立即生效，也会同步影响关闭弹窗里的“记住这次选择”。'));
+        this.setDesktopCloseStatus(this.desktopCloseStatusMessage(action, t('settings.desktop_close.status_hint', '修改后立即生效，也会同步影响关闭弹窗里的“记住这次选择”。')));
     },
 
     async saveDesktopCloseSettings() {
@@ -1725,8 +1723,7 @@ const SettingsPage = {
             const savedAction = this.normalizeDesktopCloseAction(response?.settings?.action);
             this.desktopCloseCurrentAction = savedAction;
             select.value = savedAction;
-            this.renderDesktopCloseSummary(savedAction);
-            this.setDesktopCloseStatus(t('settings.desktop_close.saved', '关闭窗口行为已更新。'), 'success');
+            this.setDesktopCloseStatus(this.desktopCloseStatusMessage(savedAction, t('settings.desktop_close.saved', '关闭窗口行为已更新。')), 'success');
             Utils.showToast(t('settings.desktop_close.saved_toast', '关闭窗口行为已更新'));
         } catch (error) {
             select.value = previousAction;
@@ -2280,10 +2277,10 @@ const SettingsPage = {
         this.setInlineStatus(this.wolaiStatus, message, tone);
     },
 
-    renderDesktopCloseSummary(action) {
-        if (!this.desktopCloseSummary) return;
-
-        this.desktopCloseSummary.textContent = this.desktopCloseActionEffect(this.normalizeDesktopCloseAction(action));
+    // One status line: the effect of the current choice followed by a short note.
+    desktopCloseStatusMessage(action, note = '') {
+        const effect = this.desktopCloseActionEffect(this.normalizeDesktopCloseAction(action));
+        return [effect, String(note || '').trim()].filter(Boolean).join(' ');
     },
 
     renderWolaiResultLink(url) {

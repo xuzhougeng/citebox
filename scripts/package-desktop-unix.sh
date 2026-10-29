@@ -98,7 +98,9 @@ Quick start:
 3. chmod +x citebox-desktop start.sh
 4. ./start.sh
 
-Default account: citebox / citebox123
+The desktop window signs in automatically. The account password (default
+citebox / citebox123) only protects the local port used by integrations;
+change it in Settings > Account.
 Binary architecture: ${HOST_ARCH}
 
 Desktop mode stores data in:

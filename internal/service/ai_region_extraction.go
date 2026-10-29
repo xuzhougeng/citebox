@@ -95,7 +95,7 @@ func (s *AIService) DetectFigureRegions(ctx context.Context, input model.AIFigur
 		return nil, apperr.New(apperr.CodeNotFound, "文献不存在")
 	}
 
-	settings, err := s.GetSettings()
+	settings, err := s.GetRuntimeSettings()
 	if err != nil {
 		return nil, err
 	}

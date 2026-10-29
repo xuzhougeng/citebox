@@ -6,7 +6,7 @@
     gap: 0.55rem;
     min-width: 0;
     color: var(--muted);
-    font-size: 0.95rem;
+    font-size: var(--text-ui);
 }
 
 .field-label-row {
@@ -146,7 +146,7 @@ select.form-input:not([multiple]):not([size]) {
     border-radius: 999px;
     background: rgba(var(--surface-rgb), 0.94);
     color: var(--ink);
-    font-size: 0.85rem;
+    font-size: var(--text-sm);
     font-weight: 700;
     cursor: pointer;
     transition: border-color 0.18s ease, background 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease;
@@ -272,7 +272,7 @@ select.form-input:not([multiple]):not([size]) {
     border: 1px solid rgba(var(--ink-rgb), 0.12);
     background: rgba(var(--ink-rgb), 0.04);
     color: rgba(var(--ink-rgb), 0.78);
-    font-size: 0.82rem;
+    font-size: var(--text-sm);
     font-weight: 700;
     cursor: help;
     outline: none;
@@ -297,7 +297,7 @@ select.form-input:not([multiple]):not([size]) {
     border-radius: var(--radius-card);
     background: var(--tooltip-bg);
     color: var(--tooltip-text);
-    font-size: 0.9rem;
+    font-size: var(--text-sm);
     font-weight: 500;
     line-height: 1.6;
     text-align: left;
@@ -379,7 +379,7 @@ select.form-input:not([multiple]):not([size]) {
 .tag-color-hint {
     margin: -0.15rem 0 0;
     color: var(--muted);
-    font-size: 0.9rem;
+    font-size: var(--text-sm);
     line-height: 1.55;
 }
 

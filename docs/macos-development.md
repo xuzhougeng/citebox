@@ -75,7 +75,7 @@ CiteBox 桌面版基于 Wails v3：应用 handler 在进程内通过 Wails 的�
 当前做法：
 
 - 划词翻译菜单默认避开可编辑元素和 `[data-native-context-menu="true"]`。
-- Wails 在 macOS 上会提供默认的应用菜单和 `Edit` 菜单。
+- `cmd/desktop/menu.go` 自建应用菜单，其中 `编辑` 菜单的撤销/重做/剪切/拷贝/粘贴/全选使用 Wails 的角色项（macOS 上对应 `undo:`/`copy:` 等原生 selector），文本框里的系统快捷键因此可用。
 - 当前桌面桥接中已经增加文本控件的剪贴板读写兜底，用来处理 `Cmd/Ctrl + A/C/X/V`。
 - 图片弹层和图片笔记弹层里的左右切换已显式 `preventDefault()` / `stopPropagation()`。
 
@@ -96,7 +96,7 @@ CiteBox 桌面版基于 Wails v3：应用 handler 在进程内通过 Wails 的�
 
 - `cmd/desktop` 用 Wails 的托盘、窗口、对话框、剪贴板和单实例 API 提供这些能力；`DesktopService` 的方法通过 `window.citeboxDesktop*` 暴露给页面。
 - `desktopbridge.InjectScript` 把页面导航的 3xx 改写成客户端跳转。
-- `desktopbridge.CookieStore` 在 Go 侧代管 cookie；带过期时间的 cookie（记住登录）写入数据库目录下的 `desktop-cookies.json`（权限 0600），重启后仍保持登录。
+- `desktopbridge.CookieStore` 在 Go 侧代管 cookie；带过期时间的 cookie 写入数据库目录下的 `desktop-cookies.json`（权限 0600）。桌面 WebView 本身不再依赖登录 cookie，见下文“桌面端免登录”。
 - `desktopicon` 在 Windows 上显式设置窗口图标。
 
 开发约束：
@@ -137,6 +137,51 @@ CiteBox 桌面版基于 Wails v3：应用 handler 在进程内通过 Wails 的�
 - 如果需要接管 `window.delegate` 或 `app.delegate`，必须保留原 delegate 的 selector 转发，避免把 webview 原生生命周期处理吃掉。
 - 如果恢复窗口后还想清掉状态栏图标，必须先确认不会触发原生崩溃；在没有充分验证前，宁可保留状态栏图标，也不要在恢复链路上主动销毁它。
 
+### 7. 桌面端免登录：只信任进程内 handler
+
+现象：
+
+- 桌面版曾要求对自己进程内的服务输入用户名密码，登录页还显示默认账号密码。
+
+当前做法：
+
+- `app.Server.DesktopHandler()` 用 `middleware.TrustDesktopRequests` 包一层，给请求的 context 打上“来自桌面 WebView”的标记，`AuthMiddleware` 见到标记即视为已登录。`cmd/desktop` 把它交给 Wails 的 asset handler（自定义 URL scheme，进程内调用，不经过 socket）。
+- context 标记无法由客户端伪造（不是 header、cookie 或参数），只有直接调用这个 handler 的代码能拿到。
+- 同时开着的 loopback 监听（`127.0.0.1:随机端口`，供 MCP / 集成 / 浏览器插件使用）仍用 `Server.Serve` 里的普通 handler，照旧要求会话 cookie 或 Bearer 集成令牌。
+- `cmd/desktop/server_tag_guard.go` 让带 Wails `server` 或 `mcp` build tag 的构建直接编译失败：前者会把 asset handler 变成网络 HTTP 服务，后者会开一个能在窗口里执行脚本的网络端点。
+- 桥接脚本在桌面端隐藏设置页里“记住登录状态”和“登出”两项（WebView 始终视为已登录，它们没有意义）；“修改密码”保留，因为它仍保护 loopback 端口和 Web 版。
+
+开发约束：
+
+- 不要把 `DesktopHandler()` 挂到任何 listener 上，也不要把“来自 127.0.0.1”当成免登录依据——本机任何进程都能连 loopback。
+- 新增桌面专用接口时同样走 `DesktopService`，不要为桌面端单独放开鉴权路径。
+
+### 8. 原生菜单、快捷键与标题栏
+
+菜单（`cmd/desktop/menu.go`，标签随界面语言在中文 / 英文之间切换）：
+
+| 菜单 | 项目 | 快捷键 |
+| --- | --- | --- |
+| CiteBox | 关于 CiteBox / 设置…（`/settings`）/ 服务 / 隐藏 / 隐藏其他 / 全部显示 / 退出 | 设置 `Cmd+,`，隐藏 `Cmd+H`，退出 `Cmd+Q` |
+| 文件 | 上传 PDF…（`/upload`）/ 关闭窗口 | `Cmd+O` / `Cmd+W` |
+| 编辑 | 撤销 / 重做 / 剪切 / 拷贝 / 粘贴 / 粘贴并匹配样式 / 删除 / 全选 | 系统默认（`Cmd+Z`、`Shift+Cmd+Z`、`Cmd+X/C/V`、`Cmd+A`） |
+| 显示 | 后退 / 前进 / 重新载入 / 实际大小 / 放大 / 缩小 / 切换全屏幕 /（开发构建）开发者工具 | `Cmd+[` / `Cmd+]` / `Cmd+R` / `Cmd+0` / `Cmd++` / `Cmd+-` / `Ctrl+Cmd+F` / `Option+Cmd+I` |
+| 前往 | 总览 `/`、文献库 `/library`、图片库 `/figures`、笔记 `/notes`、AI 助手 `/ai`、文献搜索 `/research` | `Cmd+1` … `Cmd+6` |
+| 窗口 | 最小化 / 缩放 / 前置全部窗口（Window 角色，系统会列出窗口） | `Cmd+M` |
+| 帮助 | 使用手册（`/manual`）/ 功能说明（`/guide`）/ 反馈问题（系统浏览器打开 GitHub Issues） | |
+
+- 菜单跳转通过 `window.ExecJS("window.location.assign(...)")` / `history.back()` 完成，执行前会把窗口从托盘恢复。
+- “关闭窗口”用 `CloseWindow` 角色（`performClose:`），和红色关闭按钮一样走关闭确认弹窗；“退出”是普通菜单项，直接调用 `shell.quit()`，和托盘菜单的退出一致。
+- “开发者工具”只在开发构建（`buildinfo.Version` 为 `dev`，如 `make run-desktop`）或设置了环境变量 `CITEBOX_DESKTOP_DEVTOOLS=1` 时出现。
+- 菜单语言：启动时取服务端外观设置里的 `language`，没有则用系统首选语言；之后桥接脚本监听 `<html lang>` 的变化（i18n.js 每次加载页面都会设置），通过 `DesktopService.SyncAppearance` 通知 Go 侧，语言变化时重建应用菜单和托盘菜单。
+
+标题栏：
+
+- 主窗口使用 `MacTitleBarHiddenInset`：没有单独的标题栏条，网页顶栏直接位于红绿灯下方。
+- shim 在 macOS 上设置 `window.__CITEBOX_DESKTOP_INSET_TITLEBAR__`，桥接脚本据此给 `<html>` 加 `desktop-mac` class 并注入样式：`.navbar`、`.viewer-toolbar`、`.overview-topbar` 左侧留出红绿灯空间，并设置 `--wails-draggable: drag` 作为拖动区域（双击可缩放窗口）；其中的链接、按钮、输入框等交互元素设为 `--wails-draggable: no-drag`，保证点击正常。页面代码不需要知道这些。
+- 新增顶栏样式的页面时，如果顶栏不是这三个 class 之一，需要把它加到 `internal/desktopbridge/bridge.go` 的 `headers` 列表，否则内容会被红绿灯遮住且窗口无法拖动。
+- 窗口外观跟随应用主题：暗黑主题用 `NSAppearanceNameDarkAqua`，暖色 / 明亮主题用 `NSAppearanceNameAqua`；窗口背景色与各主题的 `--bg` 一致，避免加载时闪白。启动时按服务端保存的主题设置，之后由桥接脚本监听 `<html data-theme>` 变化实时同步（Wails 只在创建窗口时应用 `Mac.Appearance`，运行时通过 `cmd/desktop/native_darwin.go` 调用 `NSWindow setAppearance:`）。
+
 ## 开发时的建议检查清单
 
 - 在 macOS 桌面版里手动点一次站内 PDF、原图、viewer 跳转，确认没有跳出应用或丢失返回状态。
@@ -146,6 +191,7 @@ CiteBox 桌面版基于 Wails v3：应用 handler 在进程内通过 Wails 的�
 - 如果新增了全局键盘事件，分别验证浏览器版和 macOS 桌面版。
 - 如果新增了“打开外链”能力，确认站内仍在应用内打开，站外走系统浏览器。
 - 如果修改了关闭行为、托盘隐藏、Dock 恢复或状态栏菜单，至少验证一次“关闭到托盘 -> Dock 恢复 -> 再次隐藏/恢复 -> 直接退出”。
+- 如果修改了菜单或顶栏：确认顶栏链接可点、空白处可拖动窗口、`Cmd+1…6` / `Cmd+,` / `Cmd+[` 能跳转，切换界面语言和暗黑主题后菜单语言和窗口外观随之变化。
 
 ## 相关历史提交
 

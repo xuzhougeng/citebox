@@ -1,5 +1,5 @@
 // ai-conversation-view.js — main pane: messages, streaming, pin/strict-evidence/export/delete actions.
-// Public API: window.AIReader.view.{init, load, loadDraft, sendCurrentInput, sendPayload, stop, setStrictEvidence, rename}
+// Public API: window.AIReader.view.{init, load, loadDraft, sendCurrentInput, sendPayload, stop, setStrictEvidence, rename, setModelReadiness}
 
 (function () {
     'use strict';
@@ -37,6 +37,7 @@
             rewriteLast: false,
             rewriteOriginalMessageID: null,
             streaming: null,         // { abortController, assistantBubbleEl, accText: '', userBubbleEl }
+            modelReadiness: null,    // see AIReader.emptyState.assessModelReadiness
         },
 
         init(els) {
@@ -133,6 +134,7 @@
             if (!s.conversationId || !els.exportModal) return;
             const btn = els.exportBtn;
             const original = btn ? btn.textContent : '';
+            const wasDisabled = btn ? !!btn.disabled : false;
             if (btn) {
                 btn.disabled = true;
                 btn.textContent = translate('ai.btn_exporting_conversation', '导出中...');
@@ -153,7 +155,7 @@
                 }
             } finally {
                 if (btn) {
-                    btn.disabled = false;
+                    btn.disabled = wasDisabled;
                     btn.textContent = original;
                 }
             }
@@ -396,6 +398,7 @@
                 this._toggleSendingState(false);
                 s.streaming = null;
                 this._clearRewriteMode({ keepInput: true });
+                this._syncHeaderActions();
             }
         },
 
@@ -482,6 +485,70 @@
                     this._dispatchCitationHydration(assistantByID[id], citationsByID[id]);
                 });
                 this._decorateLastUserMessage();
+                this._renderEmptyState();
+            }
+            this._syncHeaderActions();
+        },
+
+        // Export needs saved messages; delete needs a saved conversation.
+        _syncHeaderActions() {
+            const s = this._state;
+            if (!s.els) return;
+            const saved = !!s.conversationId;
+            const hasMessages = Array.isArray(s.messages) && s.messages.length > 0;
+            if (s.els.exportBtn) s.els.exportBtn.disabled = !(saved && hasMessages);
+            if (s.els.deleteBtn) s.els.deleteBtn.disabled = !saved;
+        },
+
+        setModelReadiness(readiness) {
+            const s = this._state;
+            s.modelReadiness = readiness || null;
+            if (this._emptyStateEl()) this._renderEmptyState();
+        },
+
+        _emptyStateEl() {
+            const s = this._state;
+            if (!s.els || !s.els.conversation || typeof s.els.conversation.querySelector !== 'function') return null;
+            return s.els.conversation.querySelector(':scope > [data-ai-empty-state]');
+        },
+
+        _removeEmptyState() {
+            const el = this._emptyStateEl();
+            if (el) el.remove();
+        },
+
+        _renderEmptyState() {
+            const s = this._state;
+            this._removeEmptyState();
+            if (!s.els || !s.els.conversation || s.streaming) return;
+            if (Array.isArray(s.messages) && s.messages.length > 0) return;
+            if (s.els.conversation.querySelector('.ai-message')) return;
+            const emptyState = window.AIReader && window.AIReader.emptyState;
+            if (!emptyState || typeof emptyState.render !== 'function') return;
+            const self = this;
+            emptyState.render(s.els.conversation, {
+                readiness: s.modelReadiness,
+                onPickExample: function (example) { self._applyExamplePrompt(example); },
+            });
+        },
+
+        _applyExamplePrompt(example) {
+            const s = this._state;
+            const input = s.els && s.els.questionInput;
+            if (!input || !example) return;
+            input.value = example.text || '';
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            const composer = window.AIReader && window.AIReader.composer;
+            if (composer && typeof composer.setActiveShortcut === 'function') {
+                composer.setActiveShortcut(example.shortcutId || '');
+            }
+            input.focus();
+            const emptyState = window.AIReader && window.AIReader.emptyState;
+            const range = emptyState && typeof emptyState.placeholderRange === 'function'
+                ? emptyState.placeholderRange(input.value)
+                : null;
+            if (range && typeof input.setSelectionRange === 'function') {
+                input.setSelectionRange(range[0], range[1]);
             }
         },
 
@@ -489,6 +556,7 @@
             // build a div, append to els.conversation, return ref
             const s = this._state;
             if (!s.els || !s.els.conversation) return null;
+            this._removeEmptyState();
             const div = document.createElement('div');
             div.className = 'ai-message ai-message-' + (message.role === 'assistant' ? 'assistant' : 'user');
             if (message.id) div.dataset.messageId = String(message.id);
@@ -714,6 +782,7 @@
                     history.replaceState({}, '', url.toString());
                 } catch (e) { /* ignore */ }
                 document.dispatchEvent(new CustomEvent('ai-reader:conversation-changed'));
+                this._syncHeaderActions();
                 // Re-render pin chips now that the draft has a real conversation ID
                 // so the "+ pin" affordance appears without requiring a page reload.
                 if (window.AIReader && window.AIReader.pin && typeof window.AIReader.pin.setPinned === 'function') {
@@ -1168,6 +1237,7 @@
         _appendNotice(text) {
             const s = this._state;
             if (!s.els || !s.els.conversation) return;
+            this._removeEmptyState();
             const div = document.createElement('div');
             div.className = 'ai-message ai-message-system';
             const inner = document.createElement('div');

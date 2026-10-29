@@ -43,15 +43,41 @@
             window.AIReader.settings = this.settings;
             window.AIReader.externalSourcesEnabled = this.externalSourcesEnabled;
 
+            // Dynamic labels (shortcuts, empty state) need the locale.
+            const i18n = window.CiteBoxI18n;
+            if (i18n && typeof i18n.whenReady === 'function') {
+                try { await i18n.whenReady(); } catch (e) { /* fall back to built-in copy */ }
+            }
+
             // Fire-and-forget: cache the library so the @ palette can offer
             // every paper, not just the ones already pinned.
             this._loadAllPapers();
 
             this._initModules();
+            this._applyModelReadiness();
             this._initSidebarToggle();
             this._bindTitleRename();
             this._bindQuestionMirror();
             await this._dispatchEntry();
+        },
+
+        // Tell the empty conversation whether the assistant model can answer.
+        // Codex readiness needs a status round-trip, so it reports "checking"
+        // first and updates the view when the status arrives.
+        _applyModelReadiness() {
+            const emptyState = window.AIReader && window.AIReader.emptyState;
+            const view = window.AIReader && window.AIReader.view;
+            if (!emptyState || !view || typeof view.setModelReadiness !== 'function') return;
+            const settings = this.settings;
+            view.setModelReadiness(emptyState.assessModelReadiness(settings, undefined));
+            const model = emptyState.resolveAssistantModel(settings);
+            if (!model || String(model.provider || '').trim() !== 'codex') return;
+            fetch('/api/ai/codex/status')
+                .then((res) => (res.ok ? res.json() : null))
+                .catch(() => null)
+                .then((status) => {
+                    view.setModelReadiness(emptyState.assessModelReadiness(settings, status || null));
+                });
         },
 
         // Collapsible conversation sidebar: the toggle class lives on

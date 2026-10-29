@@ -289,3 +289,25 @@ test('coverage restores without becoming a generic result card or hiding tool ca
     assert.equal(usage.attached_images, 0);
     assert.equal(slot.innerHTML, 'tool cards');
 });
+
+test('header actions stay disabled until the conversation is saved and has messages', () => {
+    const view = loadView();
+    const subject = Object.create(view);
+    const exportBtn = { disabled: false };
+    const deleteBtn = { disabled: false };
+    subject._state = { els: { exportBtn, deleteBtn }, conversationId: null, messages: [] };
+
+    subject._syncHeaderActions();
+    assert.equal(exportBtn.disabled, true);
+    assert.equal(deleteBtn.disabled, true);
+
+    subject._state.conversationId = 7;
+    subject._syncHeaderActions();
+    assert.equal(exportBtn.disabled, true);
+    assert.equal(deleteBtn.disabled, false);
+
+    subject._state.messages = [{ id: 1, role: 'user', content: 'hi' }];
+    subject._syncHeaderActions();
+    assert.equal(exportBtn.disabled, false);
+    assert.equal(deleteBtn.disabled, false);
+});

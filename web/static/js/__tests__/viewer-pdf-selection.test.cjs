@@ -1085,3 +1085,81 @@ test('PDF target annotation lookup handles unsafe selector IDs without CSS.escap
     assert.equal(marker.classList.contains('is-target-highlight'), true);
     assert.equal(viewer.pdfState.targetAnnotationApplied, true);
 });
+
+test('PDF viewer shows the paper title instead of the stored filename', async () => {
+    const requested = [];
+    const { context, viewer } = loadViewerPage(null, {
+        API: {
+            async getPaper(id) {
+                requested.push(id);
+                return { id: 42, title: 'A Readable Paper Title', original_filename: 'original.pdf' };
+            },
+        },
+    });
+    viewer.title = { textContent: '', title: '' };
+    viewer.pdfState = { ...viewer.defaultPDFState(), loadToken: 3 };
+
+    const name = await viewer.loadPDFPaperTitle({ paperId: '42', name: 'PDF 文档' }, 3);
+
+    assert.deepEqual(requested, ['42']);
+    assert.equal(name, 'A Readable Paper Title');
+    assert.equal(viewer.title.textContent, 'A Readable Paper Title');
+    assert.equal(context.document.title, 'A Readable Paper Title - CiteBox');
+});
+
+test('PDF viewer falls back to the original filename and hides generated names', async () => {
+    const { viewer } = loadViewerPage(null, {
+        API: {
+            async getPaper() {
+                return { title: '', original_filename: 'original-upload.pdf' };
+            },
+        },
+    });
+    viewer.title = { textContent: '', title: '' };
+    viewer.pdfState = { ...viewer.defaultPDFState(), loadToken: 1 };
+    assert.equal(await viewer.loadPDFPaperTitle({ paperId: '7', name: 'PDF 文档' }, 1), 'original-upload.pdf');
+
+    const { context: resolveContext, viewer: resolveViewer } = loadViewerPage(null);
+    resolveContext.window.location.search = '?kind=pdf&src=%2Ffiles%2Fpapers%2Fpaper_1793242466908863000.pdf';
+    const resource = resolveViewer.resolveResource();
+    assert.equal(resource.name, 'PDF 文档');
+    assert.equal(resource.fileName, '');
+});
+
+test('PDF reading fit caps the rendered page width on wide windows', () => {
+    const { viewer } = loadViewerPage(null);
+    const pageView = { viewport: { width: 0 } };
+    const pdfViewer = {
+        currentPageNumber: 1,
+        _scale: 1,
+        get currentScale() { return this._scale; },
+        set currentScale(value) { this._scale = value; pageView.viewport.width = 612 * (96 / 72) * value; },
+        set currentScaleValue(value) {
+            if (value === 'page-width') this.currentScale = 1300 / (612 * (96 / 72));
+        },
+        getPageView() { return pageView; },
+    };
+    viewer.pdfState = { ...viewer.defaultPDFState(), pdfViewer, fitMode: 'reading' };
+
+    viewer.applyPDFViewerScale();
+    assert.ok(Math.abs(pageView.viewport.width - viewer.pdfReadingMaxWidth) < 0.5, `page width ${pageView.viewport.width}`);
+
+    viewer.pdfState.fitMode = 'width';
+    viewer.applyPDFViewerScale();
+    assert.ok(Math.abs(pageView.viewport.width - 1300) < 0.5);
+});
+
+test('PDF keyboard shortcuts map pages and zoom without hijacking selection keys', () => {
+    const { viewer } = loadViewerPage(null);
+    const action = (init) => viewer.pdfShortcutAction({ ctrlKey: false, metaKey: false, altKey: false, shiftKey: false, ...init });
+    assert.equal(action({ key: 'PageDown' }), 'next');
+    assert.equal(action({ key: 'PageUp' }), 'prev');
+    assert.equal(action({ key: 'ArrowRight' }), 'next-arrow');
+    assert.equal(action({ key: 'ArrowLeft', shiftKey: true }), '');
+    assert.equal(action({ key: '=', metaKey: true }), 'zoom-in');
+    assert.equal(action({ key: '-', ctrlKey: true }), 'zoom-out');
+    assert.equal(action({ key: '0', ctrlKey: true }), 'fit');
+    assert.equal(action({ key: 'c', metaKey: true }), '');
+    assert.equal(viewer.isEditableKeyTarget({ tagName: 'INPUT' }), true);
+    assert.equal(viewer.isEditableKeyTarget({ tagName: 'DIV' }), false);
+});

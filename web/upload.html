@@ -7,6 +7,55 @@
     <link rel="icon" type="image/svg+xml" href="/static/img/citebox-icon.svg">
     <script>(function(){var d=document.documentElement;try{var t=localStorage.getItem("citebox_theme");if(t&&t!=="warm")d.setAttribute("data-theme",t);var l=localStorage.getItem("citebox_lang")||"zh-CN";d.lang=l;if(l!=="zh-CN")d.setAttribute("data-lang-loading","1");}catch(e){}})()</script>
     <link rel="stylesheet" href="/static/css/style.css">
+    <style>
+        .upload-page .collection-header {
+            margin-bottom: var(--space-4);
+        }
+
+        .upload-page-subtitle {
+            flex-basis: 100%;
+            margin: 0;
+            color: var(--muted);
+            font-size: var(--text-sm);
+            line-height: 1.6;
+        }
+
+        .upload-form-layout {
+            grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+            align-items: start;
+            gap: var(--space-6);
+        }
+
+        .upload-form-column {
+            display: grid;
+            gap: var(--space-4);
+            min-width: 0;
+        }
+
+        .upload-form-row {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+            gap: var(--space-4);
+        }
+
+        .upload-form-layout .submit-row,
+        .upload-form-layout .detail-section {
+            margin-top: 0;
+        }
+
+        @media (max-width: 960px) {
+            .upload-form-layout {
+                grid-template-columns: minmax(0, 1fr);
+                gap: var(--space-4);
+            }
+        }
+
+        @media (max-width: 560px) {
+            .upload-form-row {
+                grid-template-columns: minmax(0, 1fr);
+            }
+        }
+    </style>
 </head>
 <body>
     <nav class="navbar">
@@ -31,81 +80,81 @@
         </div>
     </nav>
 
-    <main class="page-shell narrow">
-        <section class="hero compact">
-            <div>
-                <p class="eyebrow" data-i18n="upload.eyebrow">文献上传</p>
-                <h1 data-i18n="upload.hero_title">上传 PDF，生成新的文献条目</h1>
-                <p class="hero-text" data-i18n="upload.hero_text">
-                    上传后的处理方式由"PDF 提取配置"决定。手工方案只保存全文；内置 LLM 和标准 pdffigx 会继续自动提图。
-                </p>
-            </div>
-        </section>
+    <main class="page-shell upload-page">
+        <header class="collection-header">
+            <h1 data-i18n="upload.hero_title">上传 PDF</h1>
+            <p class="upload-page-subtitle" data-i18n="upload.hero_text">上传本地 PDF 或通过 DOI 导入文献；入库后按“PDF 提取配置”自动提取全文和图片。</p>
+        </header>
 
         <section class="upload-card">
-            <form id="paperUploadForm" class="upload-form">
+            <form id="paperUploadForm" class="upload-form upload-form-layout">
                 <input id="pdfInput" type="file" accept="application/pdf,.pdf" hidden>
 
-                <div class="detail-section upload-source-panel">
-                    <div class="upload-source-switch" role="tablist" aria-label="上传来源切换">
-                        <button class="btn btn-primary" type="button" data-upload-source-mode="file" aria-pressed="true" data-i18n="upload.source_mode_file">本地 PDF</button>
-                        <button class="btn btn-outline" type="button" data-upload-source-mode="doi" aria-pressed="false" data-i18n="upload.source_mode_doi">DOI 导入</button>
-                    </div>
-                    <p id="sourceModeHint" class="muted" data-i18n="upload.source_mode_hint_file">从本地选择 PDF 文件，上传后按当前解析配置入库。</p>
-                </div>
-
-                <div id="fileSourceSection" class="upload-source-panel">
-                    <div id="dropArea" class="drop-zone" tabindex="0">
-                        <p class="drop-title" data-i18n="upload.drop_title">拖拽 PDF 到这里</p>
-                        <p class="drop-subtitle" data-i18n="upload.drop_subtitle">或点击选择一篇文献</p>
+                <div class="upload-form-column">
+                    <div class="detail-section upload-source-panel">
+                        <div class="upload-source-switch" role="tablist" aria-label="上传来源切换" data-i18n-aria-label="upload.source_switch_label">
+                            <button class="btn btn-primary" type="button" data-upload-source-mode="file" aria-pressed="true" data-i18n="upload.source_mode_file">本地 PDF</button>
+                            <button class="btn btn-outline" type="button" data-upload-source-mode="doi" aria-pressed="false" data-i18n="upload.source_mode_doi">DOI 导入</button>
+                        </div>
+                        <p id="sourceModeHint" class="muted" data-i18n="upload.source_mode_hint_file">从本地选择 PDF 文件，上传后按当前解析配置入库。</p>
                     </div>
 
-                    <div id="selectedFile" class="selected-file empty">
-                        <span data-i18n="upload.no_file_selected">尚未选择 PDF</span>
+                    <div id="fileSourceSection" class="upload-source-panel">
+                        <div id="dropArea" class="drop-zone" tabindex="0">
+                            <p class="drop-title" data-i18n="upload.drop_title">拖拽 PDF 到这里</p>
+                            <p class="drop-subtitle" data-i18n="upload.drop_subtitle">或点击选择一篇文献</p>
+                        </div>
+
+                        <div id="selectedFile" class="selected-file empty">
+                            <span data-i18n="upload.no_file_selected">尚未选择 PDF</span>
+                        </div>
+                    </div>
+
+                    <div id="doiSourceSection" class="detail-section upload-source-panel hidden">
+                        <label class="field">
+                            <span data-i18n="upload.label_doi">DOI</span>
+                            <input id="doiInput" class="form-input" type="text" data-i18n-placeholder="upload.placeholder_doi" placeholder="例如：10.1038/nature12373 或 https://doi.org/10.1038/nature12373" autocomplete="off" spellcheck="false">
+                            <span class="muted" data-i18n="upload.doi_hint">系统会优先从 Open Access 来源检索并自动导入可下载的 PDF。</span>
+                        </label>
                     </div>
                 </div>
 
-                <div id="doiSourceSection" class="detail-section upload-source-panel hidden">
-                    <label class="field">
-                        <span data-i18n="upload.label_doi">DOI</span>
-                        <input id="doiInput" class="form-input" type="text" data-i18n-placeholder="upload.placeholder_doi" placeholder="例如：10.1038/nature12373 或 https://doi.org/10.1038/nature12373" autocomplete="off" spellcheck="false">
-                        <span class="muted" data-i18n="upload.doi_hint">系统会优先从 Open Access 来源检索并自动导入可下载的 PDF。</span>
-                    </label>
-                </div>
-
-                <div class="form-grid">
+                <div class="upload-form-column">
                     <label class="field">
                         <span data-i18n="upload.label_title">标题</span>
                         <input id="titleInput" class="form-input" type="text" data-i18n-placeholder="upload.placeholder_title" placeholder="默认使用文件名生成标题">
                     </label>
-                    <label class="field">
-                        <span data-i18n="upload.label_group">分组</span>
-                        <select id="groupSelect" class="form-input">
-                            <option value="" data-i18n="upload.no_group">暂不分组</option>
-                        </select>
-                    </label>
-                </div>
 
-                <label class="field">
-                    <span data-i18n="upload.label_tags">标签</span>
-                    <div class="tag-autocomplete-field">
-                        <input id="tagsInput" class="form-input" type="text" data-i18n-placeholder="upload.placeholder_tags" placeholder="多个标签用逗号分隔，例如：review, stem-cell, atlasing" autocomplete="off" spellcheck="false">
-                        <div id="tagsInputSuggestions" class="tag-autocomplete-panel hidden"></div>
+                    <div class="upload-form-row">
+                        <label class="field">
+                            <span data-i18n="upload.label_group">分组</span>
+                            <select id="groupSelect" class="form-input">
+                                <option value="" data-i18n="upload.no_group">暂不分组</option>
+                            </select>
+                        </label>
+
+                        <label class="field">
+                            <span data-i18n="upload.label_tags">标签</span>
+                            <div class="tag-autocomplete-field">
+                                <input id="tagsInput" class="form-input" type="text" data-i18n-placeholder="upload.placeholder_tags" placeholder="多个标签用逗号分隔，例如：review, stem-cell, atlasing" autocomplete="off" spellcheck="false">
+                                <div id="tagsInputSuggestions" class="tag-autocomplete-panel hidden"></div>
+                            </div>
+                        </label>
                     </div>
-                </label>
 
-                <label class="field">
-                    <span data-i18n="upload.label_extraction_mode">上传处理方式</span>
-                    <select id="extractionModeSelect" class="form-input">
-                        <option value="auto" data-i18n="upload.mode_auto">自动标注</option>
-                        <option value="manual" data-i18n="upload.mode_manual">手工标注</option>
-                    </select>
-                    <span id="extractionModeHint" class="muted" data-i18n="upload.mode_hint_default">默认使用自动标注；也可以切到手工标注自行框选图片。</span>
-                </label>
+                    <label class="field">
+                        <span data-i18n="upload.label_extraction_mode">上传处理方式</span>
+                        <select id="extractionModeSelect" class="form-input">
+                            <option value="auto" data-i18n="upload.mode_auto">自动标注</option>
+                            <option value="manual" data-i18n="upload.mode_manual">手工标注</option>
+                        </select>
+                        <span id="extractionModeHint" class="muted" data-i18n="upload.mode_hint_default">默认使用自动标注；也可以切到手工标注自行框选图片。</span>
+                    </label>
 
-                <div class="submit-row">
-                    <button id="submitUploadBtn" class="btn btn-primary" type="submit" data-i18n="upload.btn_upload">上传文献</button>
-                    <a class="btn btn-outline" href="/library" data-i18n="upload.btn_back_library">返回文献库</a>
+                    <div class="submit-row">
+                        <button id="submitUploadBtn" class="btn btn-primary" type="submit" data-i18n="upload.btn_upload">上传文献</button>
+                        <a class="btn btn-outline" href="/library" data-i18n="upload.btn_back_library">返回文献库</a>
+                    </div>
                 </div>
             </form>
         </section>

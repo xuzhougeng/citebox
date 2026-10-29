@@ -10,6 +10,11 @@ import (
 	"github.com/xuzhougeng/citebox/internal/service"
 )
 
+// builtinAdminPassword is the password config.Load falls back to when
+// ADMIN_PASSWORD is unset. Signing in with it means the password was never
+// changed, so the login page asks the user to change it.
+const builtinAdminPassword = "citebox123"
+
 type AuthHandler struct {
 	libraryService *service.LibraryService
 	sessionManager *service.SessionManager
@@ -71,6 +76,9 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	sendJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"message": "登录成功",
+		// Only reported after a successful sign-in, so it tells an anonymous
+		// visitor nothing about whether the built-in password still works.
+		"default_password": req.Password == builtinAdminPassword,
 	})
 }
 

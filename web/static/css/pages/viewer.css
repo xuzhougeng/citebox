@@ -38,7 +38,7 @@
 
 .detail-meta-panel span {
     color: var(--muted);
-    font-size: 0.86rem;
+    font-size: var(--text-sm);
 }
 
 .detail-section {

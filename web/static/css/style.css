@@ -12,51 +12,51 @@
  */
 
 /* ===== 1. Variables ===== */
-@import url('variables.css');
+@import url('variables.css?v=20261028-design');
 
 /* ===== 2. Base ===== */
-@import url('base.css');
+@import url('base.css?v=20261028-design');
 
 /* ===== 3. Layout ===== */
-@import url('layout.css');
+@import url('layout.css?v=20261028-design');
 
 /* ===== 4. Components ===== */
-@import url('components/button.css');
-@import url('components/card.css');
-@import url('components/chip.css');
-@import url('components/form.css');
-@import url('components/hero.css');
-@import url('components/pagination.css');
-@import url('components/notice.css');
-@import url('components/dropzone.css');
+@import url('components/button.css?v=20261028-design');
+@import url('components/card.css?v=20261028-design');
+@import url('components/chip.css?v=20261028-design');
+@import url('components/form.css?v=20261028-design');
+@import url('components/hero.css?v=20261028-design');
+@import url('components/pagination.css?v=20261028-design');
+@import url('components/notice.css?v=20261028-design');
+@import url('components/dropzone.css?v=20261028-design');
 
 /* ===== 5. Features ===== */
-@import url('features/modal.css');
-@import url('features/lightbox.css');
-@import url('features/ai.css?v=20260501-p3');
-@import url("features/ai-sidebar.css?v=20260805a");
-@import url('features/figure-ai.css');
-@import url('features/manual.css');
-@import url('features/markdown.css');
-@import url('features/boxes.css');
-@import url('features/pdf-text.css');
-@import url('features/translate.css');
+@import url('features/modal.css?v=20261028-design');
+@import url('features/lightbox.css?v=20261028-design');
+@import url('features/ai.css?v=20261028-design');
+@import url('features/ai-sidebar.css?v=20261028-design');
+@import url('features/figure-ai.css?v=20261028-design');
+@import url('features/manual.css?v=20261028-design');
+@import url('features/markdown.css?v=20261028-design');
+@import url('features/boxes.css?v=20261028-design');
+@import url('features/pdf-text.css?v=20261028-design');
+@import url('features/translate.css?v=20261028-design');
 
 /* ===== 6. Pages ===== */
-@import url('pages/home.css');
-@import url('pages/library.css');
-@import url('pages/figures.css');
-@import url('pages/palettes.css');
-@import url('pages/notes.css');
-@import url('pages/collections.css');
-@import url('pages/highlights.css');
-@import url('pages/viewer.css');
-@import url('pages/note-editor.css');
-@import url('pages/settings.css?v=20260502-categories');
-@import url('pages/research.css');
+@import url('pages/home.css?v=20261028-design');
+@import url('pages/library.css?v=20261028-design');
+@import url('pages/figures.css?v=20261028-design');
+@import url('pages/palettes.css?v=20261028-design');
+@import url('pages/notes.css?v=20261028-design');
+@import url('pages/collections.css?v=20261028-design');
+@import url('pages/highlights.css?v=20261028-design');
+@import url('pages/viewer.css?v=20261028-design');
+@import url('pages/note-editor.css?v=20261028-design');
+@import url('pages/settings.css?v=20261028-design');
+@import url('pages/research.css?v=20261028-design');
 
 /* ===== 7. Responsive ===== */
-@import url('responsive.css');
+@import url('responsive.css?v=20261028-design');
 
 /* ===== Utility Classes ===== */
 .hidden {

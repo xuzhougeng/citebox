@@ -153,6 +153,7 @@ const FigureViewer = {
             const captionInput = event.target.closest('#figureCaptionInput');
             if (captionInput) {
                 this.captionDraft = captionInput.value;
+                this.refreshCaptionSaveState();
                 return;
             }
 
@@ -366,6 +367,7 @@ const FigureViewer = {
         this.onMetaChanged = options.onMetaChanged;
         this.loadingPage = false;
         this.captionDraft = '';
+        this.captionSavedFigureID = 0;
         this.paletteRequestState = this.defaultPaletteRequestState();
         this.resetViewportState();
         this.resetCropState();
@@ -1065,6 +1067,7 @@ const FigureViewer = {
         this.currentFigure = this.figures?.[this.index];
         if (previousFigureID !== Number(this.currentFigure?.id || 0)) {
             this.tagInputDraft = '';
+            this.captionSavedFigureID = 0;
         }
         if (forceDraftFromFigure || typeof this.captionDraft !== 'string') {
             this.captionDraft = this.currentFigure?.caption || '';
@@ -1606,7 +1609,30 @@ const FigureViewer = {
         }
     },
 
+    isCaptionDirty() {
+        if (!this.currentFigure) return false;
+        return String(this.currentFigureCaptionDraft() || '').trim() !== String(this.currentFigure.caption || '').trim();
+    },
+
+    // Caption edits are saved explicitly (unlike tags), so the button only
+    // enables once the draft differs from the stored caption.
+    refreshCaptionSaveState() {
+        const button = this.body?.querySelector('[data-figure-meta-action="save-caption"]');
+        const status = this.body?.querySelector('[data-figure-caption-status]');
+        if (!button && !status) return;
+        const dirty = this.isCaptionDirty();
+        const justSaved = !dirty && Number(this.captionSavedFigureID || 0) === Number(this.currentFigure?.id || 0);
+        if (button) button.disabled = !dirty;
+        if (status) {
+            status.classList.toggle('is-dirty', dirty);
+            status.textContent = dirty
+                ? t('shared.figure.caption_unsaved', '有未保存的修改')
+                : (justSaved ? t('msg.save_success', '已保存') : '');
+        }
+    },
+
     async saveCaptionFromInput() {
+        if (!this.isCaptionDirty()) return;
         await this.updateCurrentFigureCaption(this.currentFigureCaptionDraft(), t('shared.figure.caption_saved', '图片说明已保存'));
     },
 
@@ -1632,6 +1658,7 @@ const FigureViewer = {
                 caption,
                 notes_text: this.currentFigureNotesDraft()
             });
+            this.captionSavedFigureID = figureID;
             this.clearFigureAIState(figureID);
             this.syncPaperMetadata(payload.paper);
             Utils.showToast(successMessage);
@@ -1837,10 +1864,7 @@ const FigureViewer = {
             return `
                 <section class="figure-lightbox-subfigure is-subfigure-view">
                     <div class="figure-lightbox-ai-head">
-                        <div>
-                            <p class="eyebrow">Subfigure</p>
-                            <h3>${t("shared.figure.subfigure_palette", "子图配色")}</h3>
-                        </div>
+                        <h3>${t("shared.figure.subfigure_palette", "子图配色")}</h3>
                         <span class="figure-subfigure-count">${t("shared.figure.only_palette_info", "仅保留配色相关信息")}</span>
                     </div>
                     <div class="figure-subfigure-summary is-compact">
@@ -1860,24 +1884,18 @@ const FigureViewer = {
 
         const countLabel = loading ? t('shared.figure.loading', '加载中...') : `${subfigures.length} ${t('shared.paper.n_figures', '张')}`;
         if (!workspaceOpen) {
-            const countBadge = loading ? '...' : String(subfigures.length);
             return `
                 <section class="figure-lightbox-subfigure is-entry">
-                    <button
-                        class="figure-subfigure-entry-trigger"
-                        type="button"
-                        data-figure-action="toggle-subfigure-crop"
-                        aria-label="${t('shared.figure.subfigure_entry_title', '打开子图提取或查看')}"
-                    >
-                        <div class="figure-subfigure-entry">
-                            <div class="figure-subfigure-entry-copy">
-                                <p class="eyebrow">${t("shared.figure.subfigure_label", "子图")}</p>
-                                <strong>${t("shared.figure.subfigure_entry_title", "子图提取或查看")}</strong>
-                                <span>${t("shared.figure.subfigure_entry_hint", "点击后进入工作台，查看已有子图或继续提取新的区域。")}</span>
-                            </div>
-                            <span class="figure-subfigure-entry-count">${Utils.escapeHTML(countBadge)}</span>
+                    <div class="figure-subfigure-entry">
+                        <div class="figure-subfigure-entry-copy">
+                            <strong>
+                                ${t("shared.figure.subfigure_entry_title", "子图提取或查看")}
+                                <span class="figure-subfigure-entry-count">${Utils.escapeHTML(countLabel)}</span>
+                            </strong>
+                            <span>${t("shared.figure.subfigure_entry_hint", "点击后进入工作台，查看已有子图或继续提取新的区域。")}</span>
                         </div>
-                    </button>
+                        <button class="btn btn-outline btn-small" type="button" data-figure-action="toggle-subfigure-crop">${t('shared.figure.open_subfigure_workspace', '打开工作台')}</button>
+                    </div>
                 </section>
             `;
         }
@@ -1885,10 +1903,7 @@ const FigureViewer = {
         return `
             <section class="figure-lightbox-subfigure is-workspace">
                 <div class="figure-lightbox-ai-head">
-                    <div>
-                        <p class="eyebrow">Subfigure</p>
-                        <h3>${t("shared.figure.subfigure_workspace_title", "子图提取工作台")}</h3>
-                    </div>
+                    <h3>${t("shared.figure.subfigure_workspace_title", "子图提取工作台")}</h3>
                     <span class="figure-subfigure-count">${t('shared.figure.n_loaded', '已有 {count}').replace('{count}', countLabel)}</span>
                 </div>
                 <div class="figure-subfigure-summary">
@@ -2980,6 +2995,7 @@ const FigureViewer = {
                             <div class="figure-notes-actions figure-caption-actions">
                                 <span class="muted">${t('shared.figure.caption_hint', 'caption 会参与检索；按 Ctrl/Cmd + Enter 可快速保存。')}</span>
                                 <div class="figure-caption-action-group">
+                                    <span class="figure-caption-status" data-figure-caption-status aria-live="polite"></span>
                                     <button class="btn btn-outline btn-small" type="button" data-figure-meta-action="translate-caption">${t("shared.figure.translate_caption", "翻译说明")}</button>
                                     <button class="btn btn-outline btn-small" type="button" data-figure-meta-action="save-caption">${t("shared.figure.save_caption", "保存说明")}</button>
                                 </div>
@@ -2990,7 +3006,6 @@ const FigureViewer = {
 
                 <aside class="figure-lightbox-side">
                     <div class="figure-lightbox-head">
-                        <p class="eyebrow">Image Library</p>
                         <h2>${Utils.escapeHTML(figure.paper_title)}</h2>
                     </div>
 
@@ -3017,7 +3032,7 @@ const FigureViewer = {
                                             <input id="figurePaperTagInput" class="form-input" type="text" placeholder="${t('shared.figure.add_tag_placeholder', '添加标签')}" value="${Utils.escapeHTML(this.tagInputDraft || '')}" autocomplete="off" spellcheck="false">
                                             <div class="figure-tag-autocomplete hidden" data-figure-tag-suggestions></div>
                                         </div>
-                                        <button class="btn btn-outline btn-small" type="button" data-figure-meta-action="add-tag" aria-label="添加标签">+</button>
+                                        <button class="btn btn-outline btn-small" type="button" data-figure-meta-action="add-tag" aria-label="${t('shared.figure.add_tag_placeholder', '添加标签')}">+</button>
                                     </div>
                                     <div class="figure-tag-presets">
                                         <span class="figure-tag-presets-label">${t("shared.figure.quick_tags", "快捷标签")}</span>
@@ -3029,7 +3044,7 @@ const FigureViewer = {
                             </div>
                             <div class="figure-lightbox-meta-item figure-lightbox-meta-item-editable">
                                 <span>${t("shared.figure.figure_notes_label", "图片笔记")}</span>
-                                <button class="figure-note-inline-trigger ${notePreview ? '' : 'is-empty'}" type="button" data-figure-meta-action="open-notes" aria-label="打开图片笔记编辑器">
+                                <button class="figure-note-inline-trigger ${notePreview ? '' : 'is-empty'}" type="button" data-figure-meta-action="open-notes" aria-label="${t('shared.figure.open_notes', '打开笔记')}">
                                     <span class="figure-note-inline-text">${Utils.escapeHTML(notePreview || t('shared.figure.figure_notes_empty_trigger', '还没有图片笔记，点击后在独立笔记面板中编辑。'))}</span>
                                     <span class="figure-note-inline-action">${t("shared.figure.open_notes", "打开笔记")}</span>
                                 </button>
@@ -3039,18 +3054,21 @@ const FigureViewer = {
                         <div class="figure-lightbox-actions">
                             <button class="btn btn-primary" type="button" data-figure-action="open-paper">${t("shared.figure.view_source_paper", "查看来源文献")}</button>
                             <a class="btn btn-outline" href="${Utils.resourceViewerURL('image', figure.image_url)}">${t('shared.figure.open_original', '打开原图')}</a>
-                            <button class="btn btn-outline" type="button" data-figure-action="download-image">${t('shared.figure.download_image', '下载图片')}</button>
-                            <button class="btn btn-outline" type="button" data-figure-action="export-paper-notes">${t('shared.figure.export_paper_notes', '导出本文图片笔记')}</button>
-                            <button class="btn btn-outline" type="button" data-figure-action="download-transfer-package">${t('shared.figure.download_transfer_package', '下载迁移包')}</button>
-                            <button class="btn btn-primary" type="button" data-figure-action="send-to-figure-library">${t('shared.figure.send_to_figure_library', '发送到 Figure Library')}</button>
+                            <details class="action-menu open-up">
+                                <summary class="btn btn-outline">${t('nav.more', '更多')}</summary>
+                                <div class="action-menu-list">
+                                    <button class="action-menu-item" type="button" data-figure-action="download-image">${t('shared.figure.download_image', '下载图片')}</button>
+                                    <button class="action-menu-item" type="button" data-figure-action="export-paper-notes">${t('shared.figure.export_paper_notes', '导出本文图片笔记')}</button>
+                                    <div class="action-menu-separator"></div>
+                                    <button class="action-menu-item" type="button" data-figure-action="download-transfer-package">${t('shared.figure.download_transfer_package', '下载迁移包')}</button>
+                                    <button class="action-menu-item" type="button" data-figure-action="send-to-figure-library">${t('shared.figure.send_to_figure_library', '发送到 Figure Library')}</button>
+                                </div>
+                            </details>
                         </div>
 
                         <section class="figure-lightbox-ai">
                             <div class="figure-lightbox-ai-head">
-                                <div>
-                                    <p class="eyebrow">AI Shortcut</p>
-                                    <h3>${t("shared.figure.ai_quick_assist", "快速辅助阅读")}</h3>
-                                </div>
+                                <h3>${t("shared.figure.ai_quick_assist", "快速辅助阅读")}</h3>
                             </div>
                             <div class="figure-lightbox-ai-actions" data-figure-ai-actions>${this.renderAIActionButtons()}</div>
                             <div class="figure-lightbox-ai-panel" data-figure-ai-panel>${this.renderAIResultPanel()}</div>
@@ -3069,6 +3087,7 @@ const FigureViewer = {
             }
         }
         this.refreshFigureTagSuggestions();
+        this.refreshCaptionSaveState();
         this.refreshFigureInterpretationModal();
     },
 

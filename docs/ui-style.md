@@ -16,9 +16,15 @@ Define shared values in `web/static/css/variables.css` and reuse them in compone
 | `--control-height` | 3rem, standard buttons and single-line fields |
 | `--control-height-sm` | 2.25rem, row actions and compact toolbars |
 | `--space-1/2/3/4/6/8` | 4/8/12/16/24/32px at the default root font size |
-| `--text-sm/body/section/title` | Supporting text, body, section heading, page title |
+| `--text-2xs/xs/sm/ui/body` | 0.72/0.78/0.875/0.95/1rem: badges, captions, supporting text, controls, body |
+| `--text-section/lg/xl/2xl/title` | 1.125/1.25/1.5/1.75rem and fluid page title |
 | `--shadow` | Subtle surface separation |
 | `--shadow-floating` | Dialogs, menus, and floating content |
+
+Component CSS must not contain hex colors, raw `rgb()` triples (pure black and
+white scrims excepted), literal `rem`/`px` font sizes, or breakpoints other than
+560, 720, 960 and 1200px. `scripts/tests/css-tokens.test.js` enforces this in
+`make test-js`.
 
 `--radius` and `--radius-sm` remain aliases for existing consumers. Keep circles,
 pills, selection markers, and specialized viewer geometry appropriate to their
@@ -48,7 +54,30 @@ Figure thumbnails contain the entire image. Badges occupy their own strip above
 the image so they do not cover figure labels or axes. Full image previews use
 plain surfaces without decorative gradients or rounded clipping of image corners.
 
+## Page headers and actions
+
+Every page uses the collection header: a short `<h1>` (the navigation label),
+contextual actions, and an optional native `details.collection-help` for longer
+explanations. Do not use hero cards or eyebrow labels on application pages; the
+login page and the guide are the only marketing-style surfaces.
+
+Each surface has at most one filled primary button. Put further secondary and
+destructive actions in the shared overflow menu
+(`details.action-menu > summary + .action-menu-list > .action-menu-item`, styled in
+`components/button.css` and dismissed by `AppActionMenus` in `main.js`). A
+destructive action that stays visible uses `.btn-ghost-danger` at the trailing
+edge, never between other actions. Show item status only when it carries
+information (processing or failed), and show configuration notices once per page
+rather than on every item. Disable actions that have nothing to act on.
+
 ## Navigation and interaction
+
+The header holds six primary destinations (overview, library, figures, notes,
+AI, literature search) with highlights, palettes, groups and tags under More,
+plus a settings gear and the upload action. Language and theme live in
+Settings > General. Digit hotkeys 1-6 follow the primary order and 9 opens
+Settings; the desktop menu mirrors them with Cmd+1-6. Dropping a PDF anywhere
+opens the upload page with the file selected.
 
 `AppNav` measures the available desktop width and moves excess primary links into
 More. It moves the existing DOM nodes, preserves each route and the active state,

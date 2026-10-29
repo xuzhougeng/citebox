@@ -74,23 +74,23 @@ const BrowserUI = {
 
     renderFigureNotePreview(noteText = '', emptyText = '', options = {}) {
         const { interactive = false } = options;
-        const resolvedEmptyText = emptyText || t('figures.note_empty_text', '还没有笔记，可把 AI 解读或人工观察先记在这里。');
         const interactiveClass = interactive ? ' figure-preview-note-action' : '';
         const interactiveAttrs = interactive ? ' data-action="note" role="button" tabindex="0"' : '';
         const normalized = String(noteText || '').replace(/\s+/g, ' ').trim();
         if (!normalized) {
+            // Cards stay quiet when there is no note unless a caller asks for a placeholder.
+            if (!emptyText) return '';
             return `
                 <div class="figure-preview-note is-empty${interactiveClass}"${interactiveAttrs}>
                     <span class="figure-preview-note-label">${Utils.escapeHTML(t('figures.label_figure_note', '图片笔记'))}</span>
-                    <p class="figure-preview-note-text">${Utils.escapeHTML(resolvedEmptyText)}</p>
+                    <p class="figure-preview-note-text">${Utils.escapeHTML(emptyText)}</p>
                 </div>
             `;
         }
 
-        const excerpt = normalized.length > 120 ? `${normalized.slice(0, 120)}...` : normalized;
+        const excerpt = normalized.length > 240 ? `${normalized.slice(0, 240)}...` : normalized;
         return `
-            <div class="figure-preview-note${interactiveClass}"${interactiveAttrs}>
-                <span class="figure-preview-note-label">${Utils.escapeHTML(t('figures.label_figure_note', '图片笔记'))}</span>
+            <div class="figure-preview-note${interactiveClass}"${interactiveAttrs} title="${Utils.escapeHTML(t('figures.label_view_notes', '查看笔记'))}">
                 <p class="figure-preview-note-text">${Utils.escapeHTML(excerpt)}</p>
             </div>
         `;
@@ -108,9 +108,14 @@ const BrowserUI = {
         const hasPalette = Number(figure.palette_count || 0) > 0 || (figure.palette_colors || []).length > 0;
         const mediaLabel = mediaAction === 'note' ? t('figures.label_view_notes', '查看笔记') : t('figures.label_view_large', '查看大图');
         const figureLabel = figure.display_label || `Fig ${figure.figure_index || '-'}`;
+        const positionLabel = [
+            figure.page_number ? t('figures.badge_page_short', 'P{page}').replace('{page}', figure.page_number) : '',
+            figureLabel
+        ].filter(Boolean).join(' · ');
         const notePreview = showNotesPreview
             ? BrowserUI.renderFigureNotePreview(figure.notes_text, emptyNotesText, { interactive: true })
             : '';
+        const hasTags = Boolean(figure.tags?.length);
 
         return `
             <article class="figure-preview-card" data-paper-id="${figure.paper_id}" data-figure-index="${index}">
@@ -119,13 +124,10 @@ const BrowserUI = {
                         <img src="${figure.image_url}" alt="${Utils.escapeHTML(figure.paper_title || t('figures.label_extracted_image', '提取图片'))}">
                     </button>
                     <div class="figure-preview-badges">
-                        <span class="figure-badge figure-badge-strong">${Utils.escapeHTML(t('figures.badge_page', '第 {page} 页').replace('{page}', figure.page_number || '-'))}</span>
-                        <span class="figure-badge">${Utils.escapeHTML(figureLabel)}</span>
-                        ${hasNotes ? `<span class="figure-badge figure-badge-accent">${Utils.escapeHTML(t('figures.badge_has_notes', '有笔记'))}</span>` : ''}
-                        ${hasPalette ? `<span class="figure-badge figure-badge-accent">${Utils.escapeHTML(t('figures.badge_has_palette', '有配色'))}</span>` : ''}
-                        ${figure.parent_figure_id ? `<span class="figure-badge">${Utils.escapeHTML(t('figures.badge_subfigure', '子图'))}</span>` : ''}
-                        ${figure.source === 'manual' ? `<span class="figure-badge">${Utils.escapeHTML(t('figures.badge_manual', '人工提取'))}</span>` : ''}
+                        <span class="figure-badge figure-badge-strong" title="${Utils.escapeHTML(t('figures.badge_page', '第 {page} 页').replace('{page}', figure.page_number || '-'))}">${Utils.escapeHTML(positionLabel)}</span>
                         ${figure.figure_type === 'graphical_abstract' ? `<span class="figure-badge figure-badge-accent">${Utils.escapeHTML(t('figures.badge_graphical_abstract', '图形摘要'))}</span>` : ''}
+                        ${hasNotes ? `<span class="figure-badge figure-badge-indicator">${Utils.escapeHTML(t('figures.badge_has_notes', '有笔记'))}</span>` : ''}
+                        ${hasPalette ? `<span class="figure-badge figure-badge-indicator">${Utils.escapeHTML(t('figures.badge_has_palette', '有配色'))}</span>` : ''}
                     </div>
                 </div>
                 <div class="figure-preview-body">
@@ -136,9 +138,7 @@ const BrowserUI = {
                             <a class="figure-preview-origin-link" href="${Utils.resourceViewerURL('image', figure.image_url)}">${Utils.escapeHTML(t('figures.label_original', '原图'))}</a>
                         </div>
                     </div>
-                    <div class="figure-preview-tags ${figure.tags?.length ? '' : 'is-empty'}">
-                        ${figure.tags?.length ? BrowserUI.renderTagChips(figure.tags || []) : `<span class="figure-preview-empty">${Utils.escapeHTML(t('figures.label_no_tags', '无标签'))}</span>`}
-                    </div>
+                    ${hasTags ? `<div class="figure-preview-tags">${BrowserUI.renderTagChips(figure.tags)}</div>` : ''}
                     ${notePreview}
                 </div>
             </article>
@@ -223,7 +223,7 @@ function createFigureCollectionActions(options = {}) {
 }
 
 const FiguresPage = {
-    state: { page: 1, pageSize: 8, totalPages: 0, filters: { keyword: '', group_id: '', tag_id: '', figure_type: '', sort_by: 'created_at' } },
+    state: { page: 1, pageSize: 24, totalPages: 0, filters: { keyword: '', group_id: '', tag_id: '', figure_type: '', sort_by: 'created_at' } },
 
     async init() {
         PaperViewer.init();
@@ -360,22 +360,38 @@ const FiguresPage = {
         return API.listFigures(this.buildFigureParams(page));
     },
 
+    // Shows the result count plus only the filters that differ from their defaults.
+    renderSummary(total) {
+        const filters = this.state.filters;
+        const activeFilters = [];
+        const addFilter = (labelKey, labelFallback, value) => {
+            if (!value) return;
+            const label = t(labelKey, labelFallback);
+            activeFilters.push(t('figures.summary_filter', '{label}：{value}').replace('{label}', label).replace('{value}', value));
+        };
+        addFilter('label.keyword', '关键词', filters.keyword);
+        if (filters.group_id) addFilter('figures.filter_group', '来源分组', this.groupFilter.selectedOptions[0]?.textContent?.trim());
+        if (filters.tag_id) addFilter('figures.filter_tag', '图片标签', this.tagFilter.selectedOptions[0]?.textContent?.trim());
+        if (filters.figure_type && this.typeFilter) addFilter('figures.filter_type', '图片类型', this.typeFilter.selectedOptions[0]?.textContent?.trim());
+
+        const countText = t('figures.summary_total', '共 {count} 张图片').replace('{count}', total);
+        return `
+            <span class="figure-results-count">${Utils.escapeHTML(countText)}</span>
+            ${activeFilters.map((text) => `<span class="figure-results-filter">${Utils.escapeHTML(text)}</span>`).join('')}
+        `;
+    },
+
     renderFigureResults(payload, page = this.state.page) {
         const figures = payload.figures || [];
         const totalPages = payload.total_pages || 0;
         this.state.page = totalPages ? Math.min(page, totalPages) : 1;
         this.figures = figures;
         this.state.totalPages = totalPages;
-        this.summaryStrip.innerHTML = `
-            <div class="stat-card"><span>${Utils.escapeHTML(t('figures.stat_results', '筛选结果'))}</span><strong>${payload.total || 0}</strong></div>
-            <div class="stat-card"><span>${Utils.escapeHTML(t('figures.stat_current_page', '当前页图片'))}</span><strong>${figures.length}</strong></div>
-            <div class="stat-card"><span>${Utils.escapeHTML(t('figures.stat_group_filter', '来源分组筛选'))}</span><strong>${Utils.escapeHTML(this.groupFilter.selectedOptions[0]?.textContent || t('figures.filter_all_groups', '全部分组'))}</strong></div>
-            <div class="stat-card"><span>${Utils.escapeHTML(t('figures.stat_tag_filter', '图片标签筛选'))}</span><strong>${Utils.escapeHTML(this.tagFilter.selectedOptions[0]?.textContent || t('figures.filter_all_tags', '全部图片标签'))}</strong></div>
-        `;
+        this.summaryStrip.innerHTML = this.renderSummary(payload.total || 0);
         this.pageControls.innerHTML = this.state.totalPages > 1 ? `
-            <button class="btn btn-outline" type="button" data-page-step="-1" ${this.state.page <= 1 ? 'disabled' : ''}>${Utils.escapeHTML(t('figures.btn_prev_page', '上一页'))}</button>
+            <button class="btn btn-outline btn-small" type="button" data-page-step="-1" ${this.state.page <= 1 ? 'disabled' : ''}>${Utils.escapeHTML(t('figures.btn_prev_page', '上一页'))}</button>
             <span class="figure-page-indicator">${Utils.escapeHTML(t('figures.page_indicator', '第 {current} / {total} 页').replace('{current}', this.state.page).replace('{total}', this.state.totalPages))}</span>
-            <button class="btn btn-outline" type="button" data-page-step="1" ${this.state.page >= this.state.totalPages ? 'disabled' : ''}>${Utils.escapeHTML(t('figures.btn_next_page', '下一页'))}</button>
+            <button class="btn btn-outline btn-small" type="button" data-page-step="1" ${this.state.page >= this.state.totalPages ? 'disabled' : ''}>${Utils.escapeHTML(t('figures.btn_next_page', '下一页'))}</button>
         ` : '';
         this.grid.innerHTML = figures.length
             ? figures.map((figure, index) => BrowserUI.renderFigureCard(figure, index, {
@@ -743,9 +759,7 @@ const PalettesPage = {
         this.state.totalPages = totalPages;
         this.summaryStrip.innerHTML = `
             <div class="stat-card"><span>${Utils.escapeHTML(t('palettes.stat_saved', '已保存配色'))}</span><strong>${payload.total || 0}</strong></div>
-            <div class="stat-card"><span>${Utils.escapeHTML(t('palettes.stat_current_page', '当前页'))}</span><strong>${palettes.length}</strong></div>
-            <div class="stat-card"><span>${Utils.escapeHTML(t('palettes.stat_group', '来源分组'))}</span><strong>${Utils.escapeHTML(this.groupFilter.selectedOptions[0]?.textContent || t('palettes.filter_all_groups', '全部分组'))}</strong></div>
-            <div class="stat-card"><span>${Utils.escapeHTML(t('palettes.stat_sort', '排序方式'))}</span><strong>${Utils.escapeHTML(this.currentSortLabel())}</strong></div>
+            ${this.groupFilter.value ? `<div class="stat-card"><span>${Utils.escapeHTML(t('palettes.stat_group', '来源分组'))}</span><strong>${Utils.escapeHTML(this.groupFilter.selectedOptions[0]?.textContent || '')}</strong></div>` : ''}
         `;
         this.pageControls.innerHTML = this.state.totalPages > 1 ? `
             <button class="btn btn-outline" type="button" data-page-step="-1" ${this.state.page <= 1 ? 'disabled' : ''}>${Utils.escapeHTML(t('palettes.btn_prev_page', '上一页'))}</button>
@@ -1607,36 +1621,44 @@ const NotesPage = {
             await this.load(1);
         });
         this.grid.addEventListener('click', async (event) => {
-            const action = event.target.closest('[data-action]');
             const card = event.target.closest('[data-note-kind]');
-            if (!card || !action) return;
+            if (!card) return;
+            const actionElement = event.target.closest('[data-action]');
+            // Clicking anywhere else on the row opens the note editor; menus,
+            // links and other controls keep their own behavior, and selecting
+            // excerpt text does not open the modal.
+            if (!actionElement && event.target.closest('a, button, summary, details, input, select, textarea')) return;
+            if (!actionElement && String(window.getSelection?.() || '').trim()) return;
+            const actionName = actionElement ? actionElement.dataset.action : 'note';
+            const menu = actionElement?.closest('details.action-menu');
+            if (menu) menu.open = false;
 
             if (card.dataset.noteKind === 'paper') {
                 const paperID = Number(card.dataset.paperId);
-                if (action.dataset.action === 'note') {
+                if (actionName === 'note') {
                     await this.openPaperNote(paperID);
                     return;
                 }
-                if (action.dataset.action === 'paper') {
+                if (actionName === 'paper') {
                     await this.openPaper(paperID);
                     return;
                 }
-                if (action.dataset.action === 'ai') {
+                if (actionName === 'ai') {
                     window.location.href = `/ai?paper_id=${paperID}`;
                 }
                 return;
             }
 
             const index = Number(card.dataset.figureIndex);
-            if (action.dataset.action === 'note') {
+            if (actionName === 'note') {
                 await this.figureActions.openNote(index);
                 return;
             }
-            if (action.dataset.action === 'preview') {
+            if (actionName === 'preview') {
                 await this.figureActions.openPreview(index);
                 return;
             }
-            if (action.dataset.action === 'paper') {
+            if (actionName === 'paper') {
                 await this.figureActions.openPaper(card.dataset.paperId);
             }
         });
@@ -1773,13 +1795,8 @@ const NotesPage = {
         this.state.page = totalPages ? Math.min(page, totalPages) : 1;
         this.papers = papers;
         this.state.totalPages = totalPages;
-        const totalChars = papers.reduce((sum, p) => sum + String(p.paper_notes_text || '').trim().length, 0);
-        const avgChars = papers.length ? Math.round(totalChars / papers.length) : 0;
         this.summaryStrip.innerHTML = `
             <div class="stat-card"><span>${Utils.escapeHTML(t('notes.stat_papers_with_notes', '带笔记文献'))}</span><strong>${payload.total || 0}</strong></div>
-            <div class="stat-card"><span>${Utils.escapeHTML(t('notes.stat_current_page', '本页条目'))}</span><strong>${papers.length}</strong></div>
-            <div class="stat-card"><span>${Utils.escapeHTML(t('notes.stat_chars_on_page', '本页字数'))}</span><strong>${totalChars.toLocaleString()}</strong></div>
-            <div class="stat-card"><span>${Utils.escapeHTML(t('notes.stat_avg_chars', '平均字数'))}</span><strong>${avgChars.toLocaleString()}</strong></div>
         `;
         this.renderPageControls();
         this.grid.innerHTML = papers.length
@@ -1789,28 +1806,40 @@ const NotesPage = {
     },
 
     renderPaperNoteRow(paper) {
-        const noteText = String(paper.paper_notes_text || '').trim().replace(/\s+/g, ' ');
-        const preview = noteText.length > 320 ? noteText.slice(0, 320) + '...' : noteText;
+        const preview = Utils.markdownToPlainText(paper.paper_notes_text || '', { maxLength: 320 });
         const tags = BrowserUI.renderTagChips(paper.tags || []);
 
         return `
             <article class="note-row note-row-paper" data-note-kind="paper" data-paper-id="${paper.id}">
                 <div class="note-row-body">
                     <div class="note-row-head">
-                        <span class="note-row-source" data-action="paper" role="button">${Utils.escapeHTML(paper.title)}</span>
+                        <button class="note-row-source" type="button" data-action="note">${Utils.escapeHTML(paper.title)}</button>
                         <span class="note-row-page">${Utils.escapeHTML(paper.group_name || t('notes.meta_no_group', '未分组'))} · ${Utils.escapeHTML(t('notes.meta_figures', '图片'))} ${paper.figure_count || 0}</span>
                     </div>
-                    <div class="note-row-text" data-action="note" role="button">${Utils.escapeHTML(preview) || `<span class="muted">${Utils.escapeHTML(t('notes.label_empty_note', '空笔记'))}</span>`}</div>
+                    <div class="note-row-text">${Utils.escapeHTML(preview) || `<span class="muted">${Utils.escapeHTML(t('notes.label_empty_note', '空笔记'))}</span>`}</div>
                     <div class="note-row-foot">
                         <div class="note-row-tags">${tags}</div>
                         <div class="note-row-actions">
                             <button class="btn btn-small btn-outline" type="button" data-action="note">${Utils.escapeHTML(t('notes.btn_edit_note', '编辑笔记'))}</button>
-                            <button class="btn btn-small btn-outline" type="button" data-action="paper">${Utils.escapeHTML(t('notes.btn_paper_detail', '文献详情'))}</button>
-                            <button class="btn btn-small btn-outline" type="button" data-action="ai">${Utils.escapeHTML(t('notes.btn_ai_reader', 'AI 助手'))}</button>
+                            ${this.renderRowMenu([
+                                { action: 'paper', label: t('notes.btn_paper_detail', '文献详情') },
+                                { action: 'ai', label: t('notes.btn_ai_reader', 'AI 助手') }
+                            ])}
                         </div>
                     </div>
                 </div>
             </article>
+        `;
+    },
+
+    renderRowMenu(items = []) {
+        return `
+            <details class="action-menu">
+                <summary class="btn btn-outline btn-small" aria-label="${Utils.escapeHTML(t('notes.btn_more_actions', '更多操作'))}">${Utils.escapeHTML(t('notes.btn_more', '更多'))}</summary>
+                <div class="action-menu-list">
+                    ${items.map((item) => `<button type="button" class="action-menu-item" data-action="${item.action}">${Utils.escapeHTML(item.label)}</button>`).join('')}
+                </div>
+            </details>
         `;
     },
 
@@ -1820,13 +1849,8 @@ const NotesPage = {
         this.state.page = totalPages ? Math.min(page, totalPages) : 1;
         this.figures = figures;
         this.state.totalPages = totalPages;
-        const totalChars = figures.reduce((sum, f) => sum + String(f.notes_text || '').trim().length, 0);
-        const avgChars = figures.length ? Math.round(totalChars / figures.length) : 0;
         this.summaryStrip.innerHTML = `
             <div class="stat-card"><span>${Utils.escapeHTML(t('notes.stat_figures_with_notes', '带笔记图片'))}</span><strong>${payload.total || 0}</strong></div>
-            <div class="stat-card"><span>${Utils.escapeHTML(t('notes.stat_current_page', '本页条目'))}</span><strong>${figures.length}</strong></div>
-            <div class="stat-card"><span>${Utils.escapeHTML(t('notes.stat_chars_on_page', '本页字数'))}</span><strong>${totalChars.toLocaleString()}</strong></div>
-            <div class="stat-card"><span>${Utils.escapeHTML(t('notes.stat_avg_chars', '平均字数'))}</span><strong>${avgChars.toLocaleString()}</strong></div>
         `;
         this.renderPageControls();
         this.grid.innerHTML = figures.length
@@ -1836,8 +1860,7 @@ const NotesPage = {
     },
 
     renderFigureNoteRow(figure, index) {
-        const noteText = String(figure.notes_text || '').trim().replace(/\s+/g, ' ');
-        const preview = noteText.length > 280 ? noteText.slice(0, 280) + '...' : noteText;
+        const preview = Utils.markdownToPlainText(figure.notes_text || '', { maxLength: 280 });
         const tags = BrowserUI.renderTagChips(figure.tags || []);
         const figureLabel = figure.display_label || `Fig ${figure.figure_index || '-'}`;
 
@@ -1850,16 +1873,18 @@ const NotesPage = {
                 </div>
                 <div class="note-row-body">
                     <div class="note-row-head">
-                        <span class="note-row-source" data-action="paper" role="button">${Utils.escapeHTML(figure.paper_title)}</span>
+                        <button class="note-row-source" type="button" data-action="note">${Utils.escapeHTML(figure.paper_title)}</button>
                         <span class="note-row-page">${Utils.escapeHTML(t('notes.label_page', '第 {page} 页').replace('{page}', figure.page_number || '-'))} · ${Utils.escapeHTML(figureLabel)}</span>
                     </div>
-                    <div class="note-row-text" data-action="note" role="button">${Utils.escapeHTML(preview) || `<span class="muted">${Utils.escapeHTML(t('notes.label_empty_note', '空笔记'))}</span>`}</div>
+                    <div class="note-row-text">${Utils.escapeHTML(preview) || `<span class="muted">${Utils.escapeHTML(t('notes.label_empty_note', '空笔记'))}</span>`}</div>
                     <div class="note-row-foot">
                         <div class="note-row-tags">${tags}</div>
                         <div class="note-row-actions">
                             <button class="btn btn-small btn-outline" type="button" data-action="note">${Utils.escapeHTML(t('notes.btn_edit_note', '编辑笔记'))}</button>
-                            <button class="btn btn-small btn-outline" type="button" data-action="preview">${Utils.escapeHTML(t('notes.btn_view_large', '大图'))}</button>
-                            <button class="btn btn-small btn-outline" type="button" data-action="paper">${Utils.escapeHTML(t('notes.btn_paper', '文献'))}</button>
+                            ${this.renderRowMenu([
+                                { action: 'preview', label: t('notes.btn_view_large', '大图') },
+                                { action: 'paper', label: t('notes.btn_paper_detail', '文献详情') }
+                            ])}
                         </div>
                     </div>
                 </div>

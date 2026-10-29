@@ -36,7 +36,11 @@ const ResourceViewerPage = {
             this.applyImageTransform();
         });
         document.addEventListener('keydown', (event) => {
-            this.handleEscapeKey(event);
+            if (event.key === 'Escape') {
+                this.handleEscapeKey(event);
+                return;
+            }
+            this.handlePDFShortcutKey(event);
         });
         this.stage?.addEventListener('wheel', (event) => {
             const viewport = event.target.closest('[data-viewer-viewport]');
@@ -97,6 +101,53 @@ const ResourceViewerPage = {
         this.close({ deferNavigation: true });
     },
 
+    isEditableKeyTarget(target) {
+        if (!target) return false;
+        if (target.isContentEditable) return true;
+        const tagName = String(target.tagName || '').toLowerCase();
+        return tagName === 'input' || tagName === 'textarea' || tagName === 'select';
+    },
+
+    pdfShortcutAction(event) {
+        const key = String(event?.key || '');
+        const hasCommand = Boolean(event?.ctrlKey || event?.metaKey);
+        if (hasCommand && !event.altKey) {
+            if (key === '+' || key === '=') return 'zoom-in';
+            if (key === '-' || key === '_') return 'zoom-out';
+            if (key === '0') return 'fit';
+            return '';
+        }
+        if (hasCommand || event?.altKey || event?.shiftKey) return '';
+        if (key === 'PageDown') return 'next';
+        if (key === 'PageUp') return 'prev';
+        if (key === 'ArrowRight') return 'next-arrow';
+        if (key === 'ArrowLeft') return 'prev-arrow';
+        return '';
+    },
+
+    handlePDFShortcutKey(event) {
+        if (!this.pdfState?.pdfViewer || !this.pdfControls || this.pdfControls.hidden) return false;
+        if (event.defaultPrevented || event.isComposing) return false;
+        if (this.isEditableKeyTarget(event.target)) return false;
+        if (this.hasOpenTranslateDialog() || this.hasOpenPDFAIAskDialog()) return false;
+        let action = this.pdfShortcutAction(event);
+        if (!action) return false;
+        if (action === 'next-arrow' || action === 'prev-arrow') {
+            // Keep native horizontal scrolling when the zoomed page is wider than the viewport.
+            const scroll = this.stage?.querySelector('[data-pdf-scroll]');
+            if (scroll && scroll.scrollWidth > scroll.clientWidth + 1) return false;
+            action = action === 'next-arrow' ? 'next' : 'prev';
+        }
+        event.preventDefault();
+        const currentPage = this.pdfState.pageNumber || 1;
+        if (action === 'next') this.goToPDFPage(currentPage + 1);
+        if (action === 'prev') this.goToPDFPage(currentPage - 1);
+        if (action === 'zoom-in') this.setPDFScale((this.pdfState.scale || 1) * 1.2);
+        if (action === 'zoom-out') this.setPDFScale((this.pdfState.scale || 1) / 1.2);
+        if (action === 'fit') this.resetPDFFitMode();
+        return true;
+    },
+
     hasOpenTranslateDialog() {
         return Boolean(document.querySelector?.('.translate-dialog-overlay:not(.hidden)'));
     },
@@ -147,13 +198,53 @@ const ResourceViewerPage = {
             this.kindLabel.textContent = t('viewer.err_kind_label', '文件查看');
             this.title.textContent = t('viewer.err_cannot_open', '无法打开资源');
             this.stage.className = 'viewer-stage';
+            this.renderResourceError(error);
+        }
+    },
+
+    // renderResourceError shows a localized, actionable message. Address
+    // validation errors are already localized and shown as-is; load failures
+    // (network, PDF worker or module import errors) get a generic message with
+    // retry / open-original actions and keep the raw text in a collapsed detail.
+    renderResourceError(error) {
+        let resource = null;
+        try {
+            resource = this.resolveResource();
+        } catch (_) {
+            resource = null;
+        }
+        const technical = String(error?.message || '').trim();
+        if (!resource) {
             this.stage.innerHTML = `
-                <div class="viewer-empty">
+                <div class="viewer-empty" role="alert">
                     <h1>${t('viewer.err_cannot_open_title', '无法打开这个资源')}</h1>
-                    <p>${this.escapeHTML(error.message || t('viewer.err_invalid_resource', '资源地址无效或不受支持。'))}</p>
+                    <p>${this.escapeHTML(technical || t('viewer.err_invalid_resource', '资源地址无效或不受支持。'))}</p>
                 </div>
             `;
+            return;
         }
+        const message = resource.kind === 'pdf'
+            ? t('viewer.err_load_failed_pdf', 'PDF 阅读器没有加载成功，可能是网络中断或组件加载失败。请重试，或直接打开原文件。')
+            : t('viewer.err_load_failed', '资源没有加载成功，可能是网络中断。请重试，或直接打开原文件。');
+        this.stage.innerHTML = `
+            <div class="viewer-empty" role="alert">
+                <h1>${t('viewer.err_cannot_open_title', '无法打开这个资源')}</h1>
+                <p>${this.escapeHTML(message)}</p>
+                <div class="viewer-empty-actions">
+                    <button class="btn btn-primary" type="button" data-viewer-retry>${t('viewer.err_retry', '重试')}</button>
+                    <a class="btn btn-outline" href="${this.escapeHTML(resource.href)}" target="_blank" rel="noopener">${t('viewer.err_open_original', '打开原文件')}</a>
+                </div>
+                ${technical ? `
+                    <details class="viewer-empty-detail">
+                        <summary>${t('viewer.err_technical_detail', '技术信息')}</summary>
+                        <code>${this.escapeHTML(technical)}</code>
+                    </details>
+                ` : ''}
+            </div>
+        `;
+        this.stage.querySelector('[data-viewer-retry]')?.addEventListener('click', () => {
+            void this.render();
+        });
     },
 
     bindPDFControls() {
@@ -178,9 +269,8 @@ const ResourceViewerPage = {
             await this.setPDFScale((this.pdfState.scale || 1) * 1.2);
         });
         this.pdfFitButton?.addEventListener('click', async () => {
-            this.pdfState.fitMode = true;
-            this.applyPDFViewerScale();
-            this.syncPDFToolbar();
+            // Toggle between full page width and the default comfortable reading width.
+            this.resetPDFFitMode(this.pdfState.fitMode === 'width' ? 'reading' : 'width');
         });
     },
 
@@ -231,7 +321,7 @@ const ResourceViewerPage = {
             pageNumber: 1,
             pageCount: 0,
             scale: 1,
-            fitMode: true,
+            fitMode: 'reading',
             selectionText: '',
             selectionClientRect: null,
             highlights: [],
@@ -330,7 +420,7 @@ const ResourceViewerPage = {
             loadToken,
             pageNumber: this.initialPDFPageNumber(),
             scale: this.isNarrowPDFViewport() ? 0.9 : 1,
-            fitMode: !this.isNarrowPDFViewport(),
+            fitMode: this.isNarrowPDFViewport() ? false : 'reading',
             highlights: [],
             targetAnnotationId: this.initialPDFAnnotationID(resource),
             targetAnnotationApplied: false,
@@ -351,6 +441,7 @@ const ResourceViewerPage = {
             this.pdfDetailLink.hidden = false;
         }
         this.loadPDFAnnotations(resource, loadToken);
+        this.loadPDFPaperTitle(resource, loadToken);
 
         const loaded = await this.loadPDFDocument(resource.href, loadToken);
         if (!loaded || !this.isCurrentPDFLoad(loadToken)) {
@@ -372,6 +463,36 @@ const ResourceViewerPage = {
     initialPDFPageNumber() {
         const page = Number(new URLSearchParams(window.location.search).get('page') || 1);
         return page > 0 ? Math.floor(page) : 1;
+    },
+
+    setViewerDocumentName(name, label = '') {
+        const displayName = String(name || '').trim();
+        if (!displayName) return;
+        if (this.title) this.title.textContent = displayName;
+        if (this.title) this.title.title = displayName;
+        document.title = `${displayName} - CiteBox`;
+        if (label && this.kindLabel) this.kindLabel.textContent = label;
+    },
+
+    async loadPDFPaperTitle(resource, loadToken) {
+        const paperId = this.currentPDFPaperID(resource);
+        const fallback = resource?.name || t('viewer.label_pdf_default', 'PDF 文档');
+        if (!paperId || typeof API === 'undefined' || typeof API.getPaper !== 'function') {
+            this.setViewerDocumentName(fallback);
+            return fallback;
+        }
+        let name = '';
+        try {
+            const response = await API.getPaper(paperId);
+            const paper = response?.paper || response || {};
+            name = String(paper.title || '').trim() || String(paper.original_filename || '').trim();
+        } catch (error) {
+            name = '';
+        }
+        if (!this.isCurrentPDFLoad(loadToken)) return '';
+        const displayName = name || resource?.fileName || fallback;
+        this.setViewerDocumentName(displayName);
+        return displayName;
     },
 
     initialPDFAnnotationID(resource = null) {
@@ -527,11 +648,38 @@ const ResourceViewerPage = {
         this.syncPDFToolbar();
     },
 
+    // Widest rendered page (CSS px) for the default fit, so text lines stay readable on wide windows.
+    pdfReadingMaxWidth: 960,
+
+    pdfReadingWidthScale(pdfViewer) {
+        const fitScale = Number(pdfViewer?.currentScale) || 0;
+        if (!fitScale) return 0;
+        const pageIndex = Math.max((pdfViewer.currentPageNumber || 1) - 1, 0);
+        const pageView = typeof pdfViewer.getPageView === 'function' ? pdfViewer.getPageView(pageIndex) : null;
+        const pageWidth = Number(pageView?.viewport?.width || pageView?.width) || 0;
+        if (!pageWidth || pageWidth <= this.pdfReadingMaxWidth) return 0;
+        return this.clampPDFScale(fitScale * this.pdfReadingMaxWidth / pageWidth);
+    },
+
+    resetPDFFitMode(mode = 'reading') {
+        if (!this.pdfState?.pdfViewer) return;
+        this.pdfState.fitMode = mode === 'width' ? 'width' : 'reading';
+        this.applyPDFViewerScale();
+        this.clearPDFSelection();
+        this.syncPDFToolbar();
+    },
+
     applyPDFViewerScale() {
         const pdfViewer = this.pdfState.pdfViewer;
         if (!pdfViewer) return;
         if (this.pdfState.fitMode) {
             pdfViewer.currentScaleValue = 'page-width';
+            if (this.pdfState.fitMode === 'reading') {
+                const readingScale = this.pdfReadingWidthScale(pdfViewer);
+                if (readingScale && readingScale < pdfViewer.currentScale) {
+                    pdfViewer.currentScale = readingScale;
+                }
+            }
             this.pdfState.scale = pdfViewer.currentScale || this.pdfState.scale || 1;
             return;
         }
@@ -567,6 +715,9 @@ const ResourceViewerPage = {
         }
         if (this.pdfZoomLabel) {
             this.pdfZoomLabel.textContent = `${Math.round((this.pdfState.scale || 1) * 100)}%`;
+        }
+        if (this.pdfFitButton) {
+            this.pdfFitButton.setAttribute('aria-pressed', this.pdfState.fitMode === 'width' ? 'true' : 'false');
         }
     },
 
@@ -1434,12 +1585,17 @@ const ResourceViewerPage = {
             if (!url.pathname.startsWith('/files/papers/')) {
                 throw new Error(t('viewer.err_pdf_only', '当前仅支持打开文献 PDF 资源。'));
             }
+            const paperId = String(params.get('paper_id') || '').trim();
+            const fileName = this.filenameFromURL(url);
+            // Stored files use generated names; never show them while the paper title can be fetched.
+            const internalName = /^paper_\d+\.pdf$/i.test(fileName);
             return {
                 kind,
                 href: url.href,
                 label: t('viewer.label_pdf', 'PDF 查看'),
-                name: this.filenameFromURL(url) || t('viewer.label_pdf_default', 'PDF 文档'),
-                paperId: String(params.get('paper_id') || '').trim(),
+                name: (paperId || internalName || !fileName) ? t('viewer.label_pdf_default', 'PDF 文档') : fileName,
+                fileName: internalName ? '' : fileName,
+                paperId,
                 annotationId: String(params.get('annotation_id') || '').trim()
             };
         }

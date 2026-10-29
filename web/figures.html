@@ -42,11 +42,11 @@
             </details>
         </header>
 
-        <section class="filters-card collection-filters" aria-label="筛选条件" data-i18n-aria-label="shared.collection.filters">
-            <div class="filters-grid filters-grid-five">
-                <label class="field">
+        <section class="filters-card collection-filters filter-panel" aria-label="筛选条件" data-i18n-aria-label="shared.collection.filters">
+            <div class="filter-panel-primary">
+                <label class="field filter-panel-search">
                     <span data-i18n="label.keyword">关键词</span>
-                    <input id="figureKeywordInput" class="form-input" type="text" placeholder="文献标题、图片说明、标签、笔记" data-i18n-placeholder="figures.filter_keyword_placeholder">
+                    <input id="figureKeywordInput" class="form-input" type="text" placeholder="搜索标题、图注、笔记" data-i18n-placeholder="figures.filter_keyword_placeholder">
                 </label>
                 <label class="field">
                     <span data-i18n="figures.filter_group">来源分组</span>
@@ -60,30 +60,34 @@
                         <option value="" data-i18n="figures.filter_all_tags">全部图片标签</option>
                     </select>
                 </label>
-                <label class="field">
-                    <span data-i18n="figures.filter_type">图片类型</span>
-                    <select id="figureTypeFilter" class="form-input">
-                        <option value="" data-i18n="figures.filter_all_types">全部类型</option>
-                        <option value="figure" data-i18n="figures.type_figure">Figure</option>
-                        <option value="graphical_abstract" data-i18n="figures.type_graphical_abstract">Graphical Abstract</option>
-                    </select>
-                </label>
-                <label class="field">
-                    <span data-i18n="figures.filter_sort">排序方式</span>
-                    <select id="figureSortFilter" class="form-input">
-                        <option value="created_at" data-i18n="figures.sort_created_at">按图片创建时间</option>
-                        <option value="paper_created_at_figure_index" data-i18n="figures.sort_paper_created_at">按文献创建时间，文献内按 Fig 顺序</option>
-                    </select>
-                </label>
             </div>
+            <details class="filter-more">
+                <summary class="filter-more-toggle">
+                    <span data-i18n="figures.filter_more">更多筛选</span>
+                </summary>
+                <div class="filter-more-grid">
+                    <label class="field">
+                        <span data-i18n="figures.filter_type">图片类型</span>
+                        <select id="figureTypeFilter" class="form-input">
+                            <option value="" data-i18n="figures.filter_all_types">全部类型</option>
+                            <option value="figure" data-i18n="figures.type_figure">Figure</option>
+                            <option value="graphical_abstract" data-i18n="figures.type_graphical_abstract">Graphical Abstract</option>
+                        </select>
+                    </label>
+                    <label class="field">
+                        <span data-i18n="figures.filter_sort">排序方式</span>
+                        <select id="figureSortFilter" class="form-input">
+                            <option value="created_at" data-i18n="figures.sort_created_at">按图片创建时间</option>
+                            <option value="paper_created_at_figure_index" data-i18n="figures.sort_paper_created_at">按文献创建时间，文献内按 Fig 顺序</option>
+                        </select>
+                    </label>
+                </div>
+            </details>
         </section>
 
         <section class="figure-results-shell">
-            <section id="figureSummaryStrip" class="summary-strip collection-summary"></section>
             <div class="figure-results-head">
-                <div>
-                    <h2 data-i18n="figures.shelf_title">图片库</h2>
-                </div>
+                <div id="figureSummaryStrip" class="figure-results-summary" aria-live="polite"></div>
                 <button id="exportFigureNotesButton" class="btn btn-outline btn-small" type="button" data-i18n="shared.figure.export_notes">导出图片笔记</button>
                 <div id="figurePageControls" class="figure-page-controls"></div>
             </div>

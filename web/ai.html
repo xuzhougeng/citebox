@@ -6,7 +6,7 @@
     <title>AI 助手 - CiteBox</title>
     <link rel="icon" type="image/svg+xml" href="/static/img/citebox-icon.svg">
     <script>(function(){var d=document.documentElement;try{var t=localStorage.getItem("citebox_theme");if(t&&t!=="warm")d.setAttribute("data-theme",t);var l=localStorage.getItem("citebox_lang")||"zh-CN";d.lang=l;if(l!=="zh-CN")d.setAttribute("data-lang-loading","1");}catch(e){}})()</script>
-    <link rel="stylesheet" href="/static/css/style.css?v=ai-20260805a">
+    <link rel="stylesheet" href="/static/css/style.css?v=ai-20261028a">
 </head>
 <body>
     <nav class="navbar">
@@ -46,7 +46,7 @@
             <div id="aiSidebarEmpty" class="ai-sidebar-empty" hidden>
                 <p data-i18n="ai.sidebar_empty">还没有对话。点 + 新对话开始。</p>
             </div>
-            <button id="aiMoreConversations" class="btn btn-outline ai-sidebar-more" type="button" data-i18n="ai.btn_more_conversations">更多对话</button>
+            <button id="aiMoreConversations" class="btn btn-outline ai-sidebar-more" type="button" hidden data-i18n="ai.btn_more_conversations">更多对话</button>
         </aside>
 
         <button id="aiSidebarExpand" class="ai-sidebar-expand" type="button"
@@ -61,8 +61,8 @@
                 </div>
                 <div class="ai-main-actions">
                     <button id="aiPdfPanelToggle" class="btn btn-outline btn-small" type="button" data-i18n="ai.pdf_panel_toggle">预览 PDF</button>
-                    <button id="aiExportConversation" class="btn btn-outline btn-small" type="button" data-i18n="ai.btn_export_conversation">对话导出</button>
-                    <button id="aiDeleteConversation" class="btn btn-outline btn-small" type="button" data-i18n="ai.btn_delete_conversation">删除</button>
+                    <button id="aiExportConversation" class="btn btn-outline btn-small" type="button" disabled data-i18n="ai.btn_export_conversation">对话导出</button>
+                    <button id="aiDeleteConversation" class="btn btn-outline btn-small" type="button" disabled data-i18n="ai.btn_delete_conversation">删除</button>
                 </div>
             </header>
 
@@ -80,8 +80,7 @@
                             <span data-i18n="ai.external_evidence">外部搜索</span>
                         </label>
                     </div>
-                    <div id="aiIntentShortcuts" class="ai-intent-shortcuts" aria-label="AI 任务快捷入口" data-i18n-aria-label="ai.intent_shortcuts_label"></div>
-                    <p id="aiRolePromptHint" class="ai-role-prompt-hint" data-i18n="ai.role_prompt_hint">输入 @ 唤起选择面板。</p>
+                    <div id="aiIntentShortcuts" class="ai-intent-shortcuts" role="group" aria-label="单次任务模式（作用于下一条消息）" data-i18n-aria-label="ai.intent_shortcuts_label"></div>
                 </div>
                 <label class="field ai-question-field">
                     <span class="ai-question-label" data-i18n="ai.question_label">想让 AI 帮你什么？</span>
@@ -89,7 +88,7 @@
                     <div class="ai-question-input-wrap">
                         <div id="aiQuestionMirror" class="ai-question-mirror" aria-hidden="true"></div>
                         <textarea id="aiQuestionInput" class="form-textarea ai-question-input" rows="2" data-i18n-placeholder="ai.question_placeholder" placeholder="输入 @ 切换文献或调用角色…" spellcheck="false"></textarea>
-                        <div id="aiMentionPopover" class="ai-mention-popover" role="listbox" aria-label="@ 选项" hidden></div>
+                        <div id="aiMentionPopover" class="ai-mention-popover" role="listbox" aria-label="@ 选项" data-i18n-aria-label="ai.mention_popover_label" hidden></div>
                     </div>
                 </label>
                 <div class="ai-composer-bottom">
@@ -153,15 +152,16 @@
     <script src="/static/js/ai-mention-tags.js?v=20260503-ai-image-ui"></script>
     <script src="/static/js/ai-mention.js?v=20260501-p4"></script>
     <script src="/static/js/ai-pin.js?v=20260804c"></script>
-    <script src="/static/js/ai-conversations.js?v=20260501-p3-conversations"></script>
-    <script src="/static/js/ai-composer.js"></script>
+    <script src="/static/js/ai-conversations.js?v=20261028-more"></script>
+    <script src="/static/js/ai-composer.js?v=20261028-toggles"></script>
     <script src="/static/js/ai-message-list.js"></script>
     <script src="/static/js/ai-process-strip.js?v=20260501-1"></script>
     <script src="/static/js/ai-result-cards.js?v=20260912-context-coverage"></script>
-    <script src="/static/js/ai-conversation-view.js?v=20260913-context-history"></script>
+    <script src="/static/js/ai-empty-state.js?v=20261028"></script>
+    <script src="/static/js/ai-conversation-view.js?v=20261028-empty-state"></script>
     <script src="/static/js/ai-evidence.js"></script>
     <script src="/static/js/ai-pdf-panel.js?v=20260805a"></script>
-    <script src="/static/js/ai-reader.js?v=20260912-context-coverage"></script>
+    <script src="/static/js/ai-reader.js?v=20261028-empty-state"></script>
     <script src="/static/js/translate.js"></script>
 </body>
 </html>

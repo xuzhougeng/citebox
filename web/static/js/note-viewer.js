@@ -385,14 +385,15 @@ const NoteViewer = {
                     <div class="note-lightbox-editor-card">
                         <div class="note-lightbox-head">
                             <div class="note-lightbox-head-row">
-                                <div>
-                                    <p class="eyebrow">Figure Notes</p>
+                                <div class="note-lightbox-title">
                                     <h2>${Utils.escapeHTML(figure.paper_title)}</h2>
                                     <p class="note-lightbox-subtitle">${t('shared.figure.page_n', '第 {page} 页').replace('{page}', figure.page_number || '-')} · ${Utils.escapeHTML(figure.display_label || `Fig ${figure.figure_index || '-'}`)}${figure.parent_figure_id ? ` · ${t('shared.note.from_parent', '来自')} ${Utils.escapeHTML(figure.parent_display_label || `Fig ${figure.figure_index || '-'}`)}` : ''}${figure.source === 'manual' ? ` · ${t('shared.note.manual_extraction', '人工提取')}` : ''}</p>
                                 </div>
                                 <div class="note-lightbox-mode-switch">
-                                    <button class="btn ${isPreviewMode ? 'btn-outline' : 'btn-primary'}" type="button" data-note-action="set-mode" data-note-mode="write">${t('shared.note.write_mode', '编辑')}</button>
-                                    <button class="btn ${isPreviewMode ? 'btn-primary' : 'btn-outline'}" type="button" data-note-action="set-mode" data-note-mode="preview">${t('shared.note.markdown_preview', 'Markdown 预览')}</button>
+                                    <div class="segmented-control note-mode-toggle" role="group">
+                                        <button class="btn" type="button" data-note-action="set-mode" data-note-mode="write" aria-pressed="${isPreviewMode ? 'false' : 'true'}">${t('shared.note.write_mode', '编辑')}</button>
+                                        <button class="btn" type="button" data-note-action="set-mode" data-note-mode="preview" aria-pressed="${isPreviewMode ? 'true' : 'false'}">${t('shared.note.markdown_preview', 'Markdown 预览')}</button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -411,8 +412,7 @@ const NoteViewer = {
                         </div>
 
                         ${isPreviewMode ? `
-                            <section class="note-lightbox-render-panel">
-                                <span class="note-lightbox-panel-label">${t('shared.note.markdown_preview', 'Markdown 预览')}</span>
+                            <section class="note-lightbox-render-panel" aria-label="${t('shared.note.markdown_preview', 'Markdown 预览')}">
                                 <div class="markdown-preview">${Utils.renderMarkdown(noteText)}</div>
                             </section>
                         ` : `
@@ -423,7 +423,7 @@ const NoteViewer = {
                         `}
                         <div class="figure-notes-actions">
                             <span class="muted">${isPreviewMode ? t('shared.note.preview_hint', '预览基于当前草稿渲染；切回编辑可继续修改。') : t('shared.note.save_hint', '支持多行内容，按 Ctrl/Cmd + Enter 可快速保存。')}</span>
-                            <div style="display:flex;gap:0.6rem;flex-wrap:wrap">
+                            <div class="note-lightbox-save-actions">
                                 <button class="btn btn-outline" type="button" data-note-action="save-notion">${t('shared.note.save_to_notion', '保存到 Notion')}</button>
                                 <button class="btn btn-outline" type="button" data-note-action="save-wolai">${t('shared.note.save_to_wolai', '保存到 Wolai')}</button>
                                 <button class="btn btn-primary" type="button" data-note-action="save-notes">${t('shared.note.save_notes', '保存笔记')}</button>

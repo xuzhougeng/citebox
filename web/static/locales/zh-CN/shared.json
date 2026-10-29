@@ -403,5 +403,11 @@
     "shared.figure.batch_connection_lost": "连接中断，正在重新读取任务进度。",
     "shared.figure.batch_resume": "继续未完成项",
     "shared.figure.batch_new": "新建任务",
-    "shared.figure.batch_background": "后台继续"
+    "shared.figure.batch_background": "后台继续",
+
+    "shared.drop.only_pdf": "只能拖入 PDF 文件",
+    "shared.drop.release_to_upload": "松开即可上传 PDF",
+    "shared.figure.caption_unsaved": "有未保存的修改",
+    "shared.figure.open_subfigure_workspace": "打开工作台",
+    "shared.paper.page_short": "P{page}"
 }

@@ -114,3 +114,109 @@
     color: var(--accent-deep);
     border-color: var(--line);
 }
+
+/* Quiet destructive action, for use inside menus or at the trailing edge. */
+.btn-ghost-danger {
+    background: none;
+    border-color: transparent;
+    color: var(--error);
+}
+
+.btn-ghost-danger:hover:not(:disabled) {
+    background: rgba(var(--error-rgb), 0.08);
+    border-color: transparent;
+}
+
+/* Overflow menu: <details class="action-menu"><summary class="btn ...">…</summary>
+   <div class="action-menu-list"><button class="action-menu-item">…</button></div></details> */
+.action-menu {
+    position: relative;
+    display: inline-block;
+}
+
+.action-menu > summary {
+    list-style: none;
+    cursor: pointer;
+}
+
+.action-menu > summary::-webkit-details-marker {
+    display: none;
+}
+
+.action-menu-list {
+    position: absolute;
+    z-index: 40;
+    right: 0;
+    top: calc(100% + var(--space-1));
+    display: grid;
+    min-width: 11rem;
+    padding: var(--space-1);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-card);
+    background: var(--panel-strong);
+    box-shadow: var(--shadow-floating);
+}
+
+.action-menu.align-start .action-menu-list {
+    right: auto;
+    left: 0;
+}
+
+.action-menu.open-up .action-menu-list {
+    top: auto;
+    bottom: calc(100% + var(--space-1));
+}
+
+.action-menu-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    width: 100%;
+    min-height: var(--control-height-sm);
+    padding: 0 var(--space-3);
+    border: 0;
+    border-radius: calc(var(--radius-card) - 4px);
+    background: none;
+    color: var(--ink);
+    font: inherit;
+    font-size: var(--text-sm);
+    text-align: left;
+    text-decoration: none;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.action-menu-item:hover,
+.action-menu-item:focus-visible {
+    background: var(--accent-soft);
+}
+
+.action-menu-item.danger {
+    color: var(--error);
+}
+
+.action-menu-item.danger:hover,
+.action-menu-item.danger:focus-visible {
+    background: rgba(var(--error-rgb), 0.08);
+}
+
+.action-menu-separator {
+    height: 1px;
+    margin: var(--space-1) 0;
+    background: var(--line);
+}
+
+.action-menu > summary::after {
+    content: "";
+    width: 0.4em;
+    height: 0.4em;
+    margin-left: var(--space-1);
+    border-right: 1.5px solid currentColor;
+    border-bottom: 1.5px solid currentColor;
+    transform: translateY(-0.15em) rotate(45deg);
+    opacity: 0.7;
+}
+
+.action-menu.no-caret > summary::after {
+    content: none;
+}

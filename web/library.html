@@ -45,22 +45,11 @@
             </details>
         </header>
 
-        <section class="filters-card collection-filters" aria-label="筛选条件" data-i18n-aria-label="shared.collection.filters">
-            <div class="filters-grid">
-                <label class="field">
+        <section class="filters-card collection-filters filter-panel" aria-label="筛选条件" data-i18n-aria-label="shared.collection.filters">
+            <div class="filter-panel-primary">
+                <label class="field filter-panel-search">
                     <span data-i18n="library.filter_keyword">关键词</span>
                     <input id="keywordInput" class="form-input" type="text" data-i18n-placeholder="library.filter_keyword_placeholder" placeholder="标题、摘要、正文或 DOI">
-                </label>
-                <label class="field">
-                    <span data-i18n="library.filter_author">作者</span>
-                    <input id="authorInput" class="form-input" type="text" data-i18n-placeholder="library.filter_author_placeholder" placeholder="作者姓名">
-                </label>
-                <label class="field">
-                    <span data-i18n="library.filter_scope">检索范围</span>
-                    <select id="keywordScopeFilter" class="form-input">
-                        <option value="full_text" data-i18n="library.scope_full_text">全文 + DOI</option>
-                        <option value="title_abstract" data-i18n="library.scope_title_abstract">标题 + 摘要 + DOI</option>
-                    </select>
                 </label>
                 <label class="field">
                     <span data-i18n="library.filter_group">分组</span>
@@ -74,29 +63,49 @@
                         <option value="" data-i18n="library.filter_all_tags">全部文献标签</option>
                     </select>
                 </label>
-                <label class="field">
-                    <span data-i18n="library.filter_status">解析状态</span>
-                    <select id="statusFilter" class="form-input">
-                        <option value="" data-i18n="library.filter_all_status">全部状态</option>
-                        <option value="queued" data-i18n="status.queued">等待解析</option>
-                        <option value="running" data-i18n="status.running">解析中</option>
-                        <option value="completed" data-i18n="status.completed">已完成</option>
-                        <option value="failed" data-i18n="status.failed">解析失败</option>
-                        <option value="cancelled" data-i18n="status.cancelled">已取消</option>
-                    </select>
-                </label>
-                <label class="field">
-                    <span data-i18n="library.filter_sort">排序方式</span>
-                    <select id="sortFilter" class="form-input">
-                        <option value="created_at" data-i18n="library.sort_created">按文献创建时间</option>
-                        <option value="updated_at" data-i18n="library.sort_updated">按文献更新时间</option>
-                    </select>
-                </label>
             </div>
+            <details id="libraryFilterMore" class="filter-more">
+                <summary class="filter-more-toggle">
+                    <span data-i18n="library.filter_more">更多筛选</span>
+                    <span id="libraryFilterMoreCount" class="filter-more-count" hidden></span>
+                </summary>
+                <div class="filter-more-grid">
+                    <label class="field">
+                        <span data-i18n="library.filter_author">作者</span>
+                        <input id="authorInput" class="form-input" type="text" data-i18n-placeholder="library.filter_author_placeholder" placeholder="作者姓名">
+                    </label>
+                    <label class="field">
+                        <span data-i18n="library.filter_scope">检索范围</span>
+                        <select id="keywordScopeFilter" class="form-input">
+                            <option value="full_text" data-i18n="library.scope_full_text">全文 + DOI</option>
+                            <option value="title_abstract" data-i18n="library.scope_title_abstract">标题 + 摘要 + DOI</option>
+                        </select>
+                    </label>
+                    <label class="field">
+                        <span data-i18n="library.filter_status">解析状态</span>
+                        <select id="statusFilter" class="form-input">
+                            <option value="" selected data-i18n="library.filter_all_status">全部状态</option>
+                            <option value="queued" data-i18n="status.queued">等待解析</option>
+                            <option value="running" data-i18n="status.running">解析中</option>
+                            <option value="completed" data-i18n="status.completed">已完成</option>
+                            <option value="failed" data-i18n="status.failed">解析失败</option>
+                            <option value="cancelled" data-i18n="status.cancelled">已取消</option>
+                        </select>
+                    </label>
+                    <label class="field">
+                        <span data-i18n="library.filter_sort">排序方式</span>
+                        <select id="sortFilter" class="form-input">
+                            <option value="created_at" data-i18n="library.sort_created">按文献创建时间</option>
+                            <option value="updated_at" data-i18n="library.sort_updated">按文献更新时间</option>
+                        </select>
+                    </label>
+                </div>
+            </details>
         </section>
 
         <section class="library-shell">
             <div id="libraryResultMeta" class="library-result-meta"></div>
+            <div id="libraryExtractionHint" class="page-hint" hidden></div>
             <div id="paperList" class="paper-grid paper-list-mode"></div>
             <div id="pagination" class="pagination"></div>
         </section>

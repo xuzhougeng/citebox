@@ -34,9 +34,14 @@ const CiteBoxTheme = {
             dot.classList.toggle('active', dot.dataset.theme === theme);
         });
 
-        setTimeout(function() {
+        var done = function() {
             document.documentElement.classList.remove('theme-transition');
-        }, 400);
+        };
+        if (typeof window.requestAnimationFrame === 'function') {
+            window.requestAnimationFrame(function() { window.requestAnimationFrame(done); });
+        } else {
+            setTimeout(done, 50);
+        }
     },
 
     // The desktop app starts its embedded server on a random loopback port,
@@ -98,8 +103,9 @@ const CiteBoxTheme = {
         navbar.insertBefore(switcher, navbar.firstChild);
     },
 
+    // Theme is chosen in Settings > General; the header no longer carries a
+    // switcher. injectSwitcher stays available for pages that opt in.
     init() {
-        this.injectSwitcher();
         this.syncFromServer();
     }
 };

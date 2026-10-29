@@ -1,10 +1,10 @@
 {
     "_title": "Upload PDF - CiteBox",
-    "upload.eyebrow": "Upload",
-    "upload.hero_title": "Upload a PDF to create a new reference entry",
-    "upload.hero_text": "Processing depends on your PDF extraction settings. Manual mode saves full text only; built-in LLM and pdffigx will also extract figures.",
+    "upload.hero_title": "Upload PDF",
+    "upload.hero_text": "Upload a local PDF or import by DOI. Full text and figures are extracted according to your PDF extraction settings.",
     "upload.source_mode_file": "Local PDF",
     "upload.source_mode_doi": "Import by DOI",
+    "upload.source_switch_label": "Upload source",
     "upload.source_mode_hint_file": "Choose a local PDF file and ingest it with the current extraction settings.",
     "upload.source_mode_hint_doi": "Enter a DOI and the system will look for an Open Access PDF and import it automatically.",
     "upload.drop_title": "Drop PDF here",
@@ -81,5 +81,7 @@
     "upload.sync_figure_done": "Built-in AI added {0} figures.",
     "upload.sync_figure_toast": "AI added {0} figures",
     "upload.sync_figure_none": "Built-in AI scanning complete, but no main figures found. You can still add figures manually.",
-    "upload.sync_figure_error": "Built-in AI figure detection failed"
+    "upload.sync_figure_error": "Built-in AI figure detection failed",
+    "upload.msg_dropped_first_only": "One PDF at a time; the first file is selected",
+    "upload.msg_dropped_unavailable": "The dropped file is no longer available; please choose it again"
 }

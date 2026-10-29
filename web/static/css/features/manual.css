@@ -30,7 +30,7 @@
 .manual-page-figures-head h3 {
     margin: 0;
     font-family: var(--font-display);
-    font-size: 1.02rem;
+    font-size: var(--text-body);
 }
 
 .manual-stage-actions,
@@ -42,7 +42,7 @@
 
 .manual-hint {
     color: var(--muted);
-    font-size: 0.94rem;
+    font-size: var(--text-ui);
     line-height: 1.6;
 }
 
@@ -79,7 +79,7 @@
     border: 1px dashed rgba(var(--ink-rgb), 0.12);
     background: rgba(var(--bg-rgb), 0.48);
     color: var(--muted);
-    font-size: 0.9rem;
+    font-size: var(--text-sm);
     line-height: 1.6;
 }
 
@@ -138,7 +138,7 @@
     border-radius: 16px;
     background: rgba(var(--surface-rgb), 0.9);
     color: var(--muted);
-    font-size: 0.95rem;
+    font-size: var(--text-ui);
     line-height: 1.5;
 }
 
@@ -175,7 +175,7 @@
     border-radius: 999px;
     background: rgba(var(--ink-rgb), 0.82);
     color: var(--on-accent);
-    font-size: 0.74rem;
+    font-size: var(--text-2xs);
     font-weight: 700;
     line-height: 1;
 }
@@ -228,7 +228,7 @@
 .manual-selection-head span {
     margin-top: 0.22rem;
     color: var(--muted);
-    font-size: 0.86rem;
+    font-size: var(--text-sm);
 }
 
 .manual-selection-meta {
@@ -243,7 +243,7 @@
     background: rgba(var(--ink-rgb), 0.06);
     color: var(--muted);
     font-family: "SFMono-Regular", "Menlo", "Monaco", monospace;
-    font-size: 0.77rem;
+    font-size: var(--text-xs);
 }
 
 .manual-selection-caption {
@@ -259,9 +259,9 @@
     padding: 0.35rem 0.45rem;
     border: 1px solid rgba(var(--ink-rgb), 0.18);
     border-radius: 8px;
-    background: var(--surface, #fff);
-    color: var(--ink, #333);
-    font-size: 0.85rem;
+    background: var(--panel-strong);
+    color: var(--ink);
+    font-size: var(--text-sm);
     text-align: center;
     -moz-appearance: textfield;
     appearance: textfield;
@@ -275,5 +275,5 @@
 
 .manual-page-jump-input:focus {
     outline: none;
-    border-color: var(--accent, #c17f59);
+    border-color: var(--accent);
 }

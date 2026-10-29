@@ -1,7 +1,9 @@
 if (typeof window.t !== 'function') window.t = function(k,f){return f||k};
 
 const AppNav = {
-    SECONDARY_HREFS: ['/highlights', '/palettes', '/groups', '/tags', '/settings'],
+    PRIMARY_ORDER: ['/', '/library', '/figures', '/notes', '/ai', '/research'],
+    SECONDARY_HREFS: ['/highlights', '/palettes', '/groups', '/tags'],
+    SETTINGS_ICON: '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>',
 
     init() {
         const navLinks = document.querySelector('.nav-links');
@@ -9,6 +11,7 @@ const AppNav = {
         if (navLinks.dataset.navEnhanced === '1') return;
         navLinks.dataset.navEnhanced = '1';
 
+        this.moveSettingsToActions(navLinks);
         this.reorderPrimary(navLinks);
         this.buildDropdown(navLinks);
         this.buildMobileToggle(navLinks);
@@ -16,19 +19,35 @@ const AppNav = {
         this.bindGlobalDismiss();
     },
 
-    // Place "文献搜索" (/research) immediately after "AI 助手" (/ai). The shared HTML
-    // template lists them in the opposite order; doing the move here keeps every
-    // page's <nav> in sync without touching 13 separate files.
+    // Settings is an app-level destination, not a library view: show it as a
+    // gear next to the upload action instead of burying it under "More".
+    moveSettingsToActions(navLinks) {
+        const link = navLinks.querySelector('a[href="/settings"]');
+        const actions = document.querySelector('.nav-actions');
+        if (!link || !actions) return;
+        const label = link.textContent.trim() || '设置';
+        const gear = document.createElement('a');
+        gear.href = '/settings';
+        gear.className = 'nav-icon-link' + (link.classList.contains('active') ? ' active' : '');
+        gear.setAttribute('aria-label', label);
+        gear.setAttribute('title', label);
+        gear.setAttribute('data-i18n-aria-label', 'nav.settings');
+        gear.setAttribute('data-i18n-title', 'nav.settings');
+        if (link.classList.contains('active')) gear.setAttribute('aria-current', 'page');
+        gear.innerHTML = this.SETTINGS_ICON;
+        link.closest('li')?.remove();
+        actions.insertBefore(gear, actions.firstChild);
+    },
+
+    // The shared HTML template lists links in an older order; sorting here keeps
+    // every page's <nav> in sync without touching each file.
     reorderPrimary(navLinks) {
-        const researchLink = navLinks.querySelector('a[href="/research"]');
-        const aiLink = navLinks.querySelector('a[href="/ai"]');
-        if (!researchLink || !aiLink) return;
-        const researchLi = researchLink.closest('li');
-        const aiLi = aiLink.closest('li');
-        if (!researchLi || !aiLi) return;
-        if (aiLi.nextElementSibling !== researchLi) {
-            aiLi.after(researchLi);
-        }
+        const items = Array.from(navLinks.children).filter((el) => el.tagName === 'LI');
+        const rank = (li) => {
+            const index = this.PRIMARY_ORDER.indexOf(li.querySelector('a')?.getAttribute('href'));
+            return index === -1 ? this.PRIMARY_ORDER.length : index;
+        };
+        items.sort((a, b) => rank(a) - rank(b)).forEach((li) => navLinks.appendChild(li));
     },
 
     buildDropdown(navLinks) {
@@ -141,7 +160,7 @@ const AppNav = {
                 const used = children.reduce((sum, item) => sum + item.getBoundingClientRect().width, 0);
                 return used + gap * Math.max(0, children.length - 1) <= available + 1;
             };
-            const priority = ['/', '/research', '/figures', '/notes', '/ai', '/library'];
+            const priority = ['/research', '/', '/notes', '/figures', '/ai', '/library'];
             const candidates = [...this._primaryItems].sort((a, b) => {
                 const rank = (item) => priority.indexOf(item.querySelector('a')?.getAttribute('href'));
                 return rank(a) - rank(b);
@@ -255,17 +274,157 @@ const AppNav = {
     }
 };
 
+// Dropping a PDF anywhere in the app hands it to the upload page. Files cannot
+// survive navigation, so the dropped File is parked in IndexedDB and the
+// upload page picks it up via ?dropped=1 (see UploadPage.consumeDroppedFiles).
+const AppGlobalDrop = {
+    DB_NAME: 'citebox-dropped-files',
+    STORE: 'files',
+
+    init() {
+        if (this.initialized || !document.querySelector('.navbar')) return;
+        this.initialized = true;
+        let depth = 0;
+
+        const hasFiles = (event) => Array.from(event.dataTransfer?.types || []).includes('Files');
+        const ownDropzone = (event) => Boolean(event.target.closest?.('.dropzone, .drop-zone, [data-dropzone]'));
+
+        document.addEventListener('dragenter', (event) => {
+            if (!hasFiles(event) || ownDropzone(event)) return;
+            depth += 1;
+            this.showOverlay();
+        });
+        document.addEventListener('dragleave', (event) => {
+            if (!hasFiles(event)) return;
+            depth = Math.max(0, depth - 1);
+            if (depth === 0) this.hideOverlay();
+        });
+        document.addEventListener('dragover', (event) => {
+            if (!hasFiles(event) || ownDropzone(event)) return;
+            event.preventDefault();
+            event.dataTransfer.dropEffect = 'copy';
+        });
+        document.addEventListener('drop', async (event) => {
+            if (!hasFiles(event)) return;
+            depth = 0;
+            this.hideOverlay();
+            if (ownDropzone(event)) return;
+            event.preventDefault();
+            const files = Array.from(event.dataTransfer.files || []).filter((file) =>
+                file.type === 'application/pdf' || /\.pdf$/i.test(file.name));
+            if (!files.length) {
+                if (typeof Utils !== 'undefined') Utils.showToast(t('shared.drop.only_pdf', '只能拖入 PDF 文件'), 'error');
+                return;
+            }
+            if (typeof UploadPage !== 'undefined' && typeof UploadPage.acceptFiles === 'function') {
+                UploadPage.acceptFiles(files);
+                return;
+            }
+            try {
+                await this.park(files);
+                window.location.href = '/upload?dropped=1';
+            } catch (error) {
+                window.location.href = '/upload';
+            }
+        });
+    },
+
+    showOverlay() {
+        if (!this.overlay) {
+            this.overlay = document.createElement('div');
+            this.overlay.className = 'global-drop-overlay';
+            this.overlay.setAttribute('aria-hidden', 'true');
+            this.overlay.innerHTML = `<div class="global-drop-overlay-card">${t('shared.drop.release_to_upload', '松开即可上传 PDF')}</div>`;
+            document.body.appendChild(this.overlay);
+        }
+        this.overlay.classList.add('is-visible');
+    },
+
+    hideOverlay() {
+        this.overlay?.classList.remove('is-visible');
+    },
+
+    openDB() {
+        return new Promise((resolve, reject) => {
+            const request = indexedDB.open(this.DB_NAME, 1);
+            request.onupgradeneeded = () => request.result.createObjectStore(this.STORE);
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+        });
+    },
+
+    async park(files) {
+        const db = await this.openDB();
+        await new Promise((resolve, reject) => {
+            const tx = db.transaction(this.STORE, 'readwrite');
+            tx.objectStore(this.STORE).put(files, 'pending');
+            tx.oncomplete = resolve;
+            tx.onerror = () => reject(tx.error);
+        });
+        db.close();
+    },
+
+    async take() {
+        const db = await this.openDB();
+        const files = await new Promise((resolve, reject) => {
+            const tx = db.transaction(this.STORE, 'readwrite');
+            const store = tx.objectStore(this.STORE);
+            const request = store.get('pending');
+            request.onsuccess = () => {
+                store.delete('pending');
+                resolve(request.result || []);
+            };
+            request.onerror = () => reject(request.error);
+        });
+        db.close();
+        return files;
+    }
+};
+
+// Closes open <details class="action-menu"> overflow menus on outside click,
+// Escape, or after an item is chosen. Works for menus rendered at any time.
+const AppActionMenus = {
+    init() {
+        if (this.initialized) return;
+        this.initialized = true;
+
+        document.addEventListener('click', (event) => {
+            const item = event.target.closest('.action-menu-item');
+            document.querySelectorAll('details.action-menu[open]').forEach((menu) => {
+                if (!menu.contains(event.target) || (item && menu.contains(item))) {
+                    menu.removeAttribute('open');
+                }
+            });
+        });
+
+        document.addEventListener('toggle', (event) => {
+            const menu = event.target;
+            if (!(menu instanceof HTMLDetailsElement) || !menu.classList.contains('action-menu') || !menu.open) return;
+            document.querySelectorAll('details.action-menu[open]').forEach((other) => {
+                if (other !== menu) other.removeAttribute('open');
+            });
+        }, true);
+
+        document.addEventListener('keydown', (event) => {
+            if (event.key !== 'Escape') return;
+            const open = document.querySelector('details.action-menu[open]');
+            if (!open) return;
+            event.stopPropagation();
+            open.removeAttribute('open');
+            open.querySelector('summary')?.focus();
+        }, true);
+    }
+};
+
 const AppNavigationHotkeys = {
     routes: [
         { key: '1', path: '/', i18n: 'nav.overview', fallback: '总览' },
         { key: '2', path: '/library', i18n: 'nav.library', fallback: '文献库' },
         { key: '3', path: '/figures', i18n: 'nav.figures', fallback: '图片库' },
-        { key: '4', path: '/palettes', i18n: 'nav.palettes', fallback: '配色库' },
-        { key: '5', path: '/groups', i18n: 'nav.groups', fallback: '分组' },
-        { key: '6', path: '/tags', i18n: 'nav.tags', fallback: '标签' },
-        { key: '7', path: '/notes', i18n: 'nav.notes', fallback: '笔记' },
-        { key: '8', path: '/ai', i18n: 'nav.ai', fallback: 'AI 助手' },
-        { key: '9', path: '/settings', i18n: 'nav.settings', fallback: '配置' }
+        { key: '4', path: '/notes', i18n: 'nav.notes', fallback: '笔记' },
+        { key: '5', path: '/ai', i18n: 'nav.ai', fallback: 'AI 助手' },
+        { key: '6', path: '/research', i18n: 'nav.research', fallback: '文献搜索' },
+        { key: '9', path: '/settings', i18n: 'nav.settings', fallback: '设置' }
     ],
 
     init() {
@@ -479,6 +638,8 @@ function restorePendingModalState() {
 document.addEventListener('DOMContentLoaded', async () => {
     const path = window.location.pathname;
     AppNav.init();
+    AppActionMenus.init();
+    AppGlobalDrop.init();
     if (window.CiteBoxI18n && typeof window.CiteBoxI18n.init === 'function') {
         await window.CiteBoxI18n.init();
     }

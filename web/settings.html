@@ -70,7 +70,6 @@
                             <option value="exit" data-i18n="settings.desktop_close.option_exit">直接退出</option>
                         </select>
                     </label>
-                    <p id="desktopCloseSummary" class="settings-inline-status"></p>
                     <p id="desktopCloseStatus" class="settings-inline-status" role="status"></p>
                 </div>
             </section>
@@ -305,27 +304,27 @@
                         <button id="applyAIAssistantBindingRecommendationButton" class="btn btn-outline" type="button" data-i18n="settings.ai.apply_assistant_binding_recommendation">套用 AI 助手推荐绑定</button>
                     </div>
                     <div class="form-grid">
-                        <label class="field">
+                        <label class="field field-span-2">
                             <span data-i18n="settings.ai.default_model">默认模型</span>
                             <select id="aiDefaultModelSelect" class="form-input"></select>
                         </label>
-                        <label class="field">
+                        <label class="field field-span-2">
                             <span data-i18n="settings.ai.qa_model">通用问答模型</span>
                             <select id="aiQAModelSelect" class="form-input"></select>
                         </label>
-                        <label class="field">
+                        <label class="field field-span-2">
                             <span data-i18n="settings.ai.assistant_master_model">AI 助手 Master 模型</span>
                             <select id="aiAssistantMasterModelSelect" class="form-input"></select>
                         </label>
-                        <label class="field">
+                        <label class="field field-span-2">
                             <span data-i18n="settings.ai.assistant_subagent_model">AI 助手 Sub-Agent 模型</span>
                             <select id="aiAssistantSubagentModelSelect" class="form-input"></select>
                         </label>
-                        <label class="field">
+                        <label class="field field-span-2">
                             <span data-i18n="settings.ai.tag_model">Tag 建议模型</span>
                             <select id="aiTagModelSelect" class="form-input"></select>
                         </label>
-                        <label class="field">
+                        <label class="field field-span-2">
                             <span data-i18n="settings.ai.group_model">分组建议模型</span>
                             <select id="aiGroupModelSelect" class="form-input"></select>
                         </label>
@@ -943,7 +942,7 @@ User Prompt:
             <section id="settings-external-sources" class="manager-card settings-section" data-settings-category="papers">
                 <header class="settings-section-heading">
                     <h2 data-i18n="settings.research.title">文献搜索服务 API</h2>
-                    <p data-i18n="settings.research.desc">配置 Semantic Scholar 与 PubMed / NCBI 凭据，以及 AI 助手外部检索使用的来源。Semantic Scholar 在 API key 非空时自动启用。</p>
+                    <p data-i18n="settings.research.desc">配置 Semantic Scholar 与 PubMed / NCBI 的访问凭据。Semantic Scholar 用于“文献搜索”页面；PubMed 用于 AI 助手的外部检索。</p>
                 </header>
                 <form id="researchSettingsForm" class="manager-form">
                     <div class="form-grid">
@@ -964,8 +963,10 @@ User Prompt:
                             <input id="settings-pubmed-tool" class="form-input" type="text" autocomplete="off" />
                         </label>
                     </div>
-                    <p class="muted" data-i18n="settings.research.s2.hint">未填写时使用匿名速率（约 1 req/s）。Semantic Scholar 的启用由本字段控制，非空即启用。</p>
-                    <p class="muted" data-i18n="settings.research.pubmed.hint">PubMed 始终启用，可留空使用匿名访问；填写 NCBI API key 后可获得更高请求额度。</p>
+                    <div class="settings-hint-stack">
+                        <p class="muted" data-i18n="settings.research.s2.hint">未填写时使用匿名速率（约 1 req/s）。保存后立即生效。</p>
+                        <p class="muted" data-i18n="settings.research.pubmed.hint">PubMed 可留空使用匿名访问；填写 NCBI API key 后可获得更高请求额度。</p>
+                    </div>
                     <div class="submit-row">
                         <button class="btn btn-primary" type="submit" data-i18n="settings.research.save_btn">保存文献搜索配置</button>
                     </div>

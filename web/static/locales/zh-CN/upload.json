@@ -1,10 +1,10 @@
 {
     "_title": "上传 PDF - CiteBox",
-    "upload.eyebrow": "文献上传",
-    "upload.hero_title": "上传 PDF，生成新的文献条目",
-    "upload.hero_text": "上传后的处理方式由\u201cPDF 提取配置\u201d决定。手工方案只保存全文；内置 LLM 和标准 pdffigx 会继续自动提图。",
+    "upload.hero_title": "上传 PDF",
+    "upload.hero_text": "上传本地 PDF 或通过 DOI 导入文献；入库后按“PDF 提取配置”自动提取全文和图片。",
     "upload.source_mode_file": "本地 PDF",
     "upload.source_mode_doi": "DOI 导入",
+    "upload.source_switch_label": "上传来源",
     "upload.source_mode_hint_file": "从本地选择 PDF 文件，上传后按当前解析配置入库。",
     "upload.source_mode_hint_doi": "输入 DOI 后，系统会优先从 Open Access 来源自动检索并导入 PDF。",
     "upload.drop_title": "拖拽 PDF 到这里",
@@ -81,5 +81,7 @@
     "upload.sync_figure_done": "内置 AI 已自动录入 {0} 张图片。",
     "upload.sync_figure_toast": "AI 已自动录入 {0} 张图片",
     "upload.sync_figure_none": "内置 AI 已完成坐标识别，但没有找到可保存的主图；你仍可继续手工标注。",
-    "upload.sync_figure_error": "内置 AI 图片坐标提取失败"
+    "upload.sync_figure_error": "内置 AI 图片坐标提取失败",
+    "upload.msg_dropped_first_only": "一次上传一个 PDF，已选中第一个文件",
+    "upload.msg_dropped_unavailable": "拖入的文件已失效，请重新选择"
 }

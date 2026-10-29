@@ -163,7 +163,9 @@ Browser extension:
   extension. Load it via chrome://extensions (developer mode); see
   extension/README.md for details.
 
-Default account: citebox / citebox123
+The desktop window signs in automatically. The account password (default
+citebox / citebox123) only protects the local port used by integrations;
+change it in Settings > Account.
 Desktop mode stores data in:
 - ~/Library/Application Support/CiteBox/
 

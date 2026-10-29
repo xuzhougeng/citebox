@@ -26,6 +26,7 @@ import (
 	"github.com/xuzhougeng/citebox/internal/desktopbridge"
 	"github.com/xuzhougeng/citebox/internal/desktopicon"
 	"github.com/xuzhougeng/citebox/internal/logging"
+	"github.com/xuzhougeng/citebox/internal/model"
 )
 
 const (
@@ -86,7 +87,7 @@ func main() {
 		},
 		Services: []application.Service{application.NewService(&DesktopService{shell: shell})},
 		Assets: application.AssetOptions{
-			Handler:        desktopbridge.InjectScript(desktopbridge.WithCookieStore(appHandler, cookies), shimScript+bridgeScript),
+			Handler:        desktopbridge.InjectScript(desktopbridge.WithCookieStore(appHandler, cookies), shimScript()+bridgeScript),
 			DisableLogging: true,
 		},
 		Mac: application.MacOptions{
@@ -137,14 +138,29 @@ func main() {
 	}()
 
 	shell.server = server
-	appHandler.set(server.Handler())
+	// The webview is served in-process and counts as signed in; the loopback
+	// listener above keeps the plain handler, which still requires a session
+	// or an integration token.
+	appHandler.set(server.DesktopHandler())
+
+	theme, lang := startupAppearance(server, logger)
+	shell.dark = theme == model.AppearanceThemeDark
+	shell.lang = lang
+	wailsApp.Menu.Set(buildApplicationMenu(shell, lang))
 
 	shell.window = wailsApp.Window.NewWithOptions(application.WebviewWindowOptions{
-		Name:   "main",
-		Title:  desktopAppName,
-		Width:  windowWidth,
-		Height: windowHeight,
-		URL:    "/",
+		Name:             "main",
+		Title:            desktopAppName,
+		Width:            windowWidth,
+		Height:           windowHeight,
+		URL:              "/",
+		BackgroundColour: themeBackground(theme),
+		Mac: application.MacWindow{
+			// The web header sits under the traffic lights; the bridge script
+			// pads it and makes it the window's drag area.
+			TitleBar:   application.MacTitleBarHiddenInset,
+			Appearance: macAppearance(theme),
+		},
 		Linux: application.LinuxWindow{
 			Icon: iconPNG,
 		},
@@ -162,11 +178,7 @@ func main() {
 		shell.tray.SetIcon(trayPNG)
 	}
 	shell.tray.SetTooltip(desktopAppName)
-	trayMenu := wailsApp.NewMenu()
-	trayMenu.Add("Open " + desktopAppName).OnClick(func(*application.Context) { shell.restore() })
-	trayMenu.AddSeparator()
-	trayMenu.Add("Quit " + desktopAppName).OnClick(func(*application.Context) { shell.quit() })
-	shell.tray.SetMenu(trayMenu)
+	shell.tray.SetMenu(buildTrayMenu(shell, lang))
 	shell.tray.OnClick(shell.restore)
 	shell.tray.OnRightClick(shell.tray.OpenMenu)
 
@@ -192,6 +204,74 @@ type desktopShell struct {
 	tray     *application.SystemTray
 	server   *app.Server
 	quitting atomic.Bool
+
+	appearanceMu sync.Mutex
+	dark         bool
+	lang         string
+}
+
+// syncAppearance follows the theme and UI language the page reports: the
+// native window turns dark with the dark theme, and the menus are rebuilt
+// when the language changes.
+func (s *desktopShell) syncAppearance(theme string, lang string) {
+	dark := theme == model.AppearanceThemeDark
+	lang = normalizeMenuLang(lang)
+
+	s.appearanceMu.Lock()
+	darkChanged := dark != s.dark
+	langChanged := lang != "" && lang != s.lang
+	s.dark = dark
+	if langChanged {
+		s.lang = lang
+	}
+	s.appearanceMu.Unlock()
+
+	if darkChanged {
+		setWindowDarkAppearance(s.window, dark)
+		s.window.SetBackgroundColour(themeBackground(theme))
+	}
+	if langChanged {
+		s.app.Menu.Set(buildApplicationMenu(s, lang))
+		s.tray.SetMenu(buildTrayMenu(s, lang))
+	}
+}
+
+// startupAppearance returns the stored theme and the menu language: the
+// stored UI language, else the system language.
+func startupAppearance(server *app.Server, logger *slog.Logger) (string, string) {
+	theme, lang := "", ""
+	if settings, err := server.GetAppearanceSettings(); err != nil {
+		logger.Warn("failed to read appearance settings", "error", err)
+	} else if settings != nil {
+		theme, lang = settings.Theme, settings.Language
+	}
+	if normalizeMenuLang(lang) == "" {
+		lang = systemLanguage()
+	}
+	if lang = normalizeMenuLang(lang); lang == "" {
+		lang = menuLangEn
+	}
+	return theme, lang
+}
+
+// themeBackground matches --bg of each theme in web/static/css/variables.css,
+// so the window does not flash a different colour before the page paints.
+func themeBackground(theme string) application.RGBA {
+	switch theme {
+	case model.AppearanceThemeDark:
+		return application.NewRGB(0x18, 0x1a, 0x1e)
+	case model.AppearanceThemeLight:
+		return application.NewRGB(0xf2, 0xf4, 0xf8)
+	default:
+		return application.NewRGB(0xf2, 0xeb, 0xde)
+	}
+}
+
+func macAppearance(theme string) application.MacAppearanceType {
+	if theme == model.AppearanceThemeDark {
+		return application.NSAppearanceNameDarkAqua
+	}
+	return application.NSAppearanceNameAqua
 }
 
 func (s *desktopShell) minimizeToTray() {
