@@ -424,18 +424,19 @@ func buildAIServices(
 		ai_external.SourcePubMed:          ai_external.PubMedAdapter{Client: pubmedClient},
 		ai_external.SourceSemanticScholar: ai_external.SemanticScholarAdapter{SearchService: researchSvc},
 	})
-	libraryPlanner := ai_assistant.NewLLMLibrarySearchPlanner(aiSvc, aiSvc)
-	libraryClassifier := ai_assistant.NewLLMLibraryPaperClassifier(aiSvc, aiSvc)
-	externalPlanner := ai_assistant.NewLLMExternalSearchPlanner(aiSvc, aiSvc)
-	externalClassifier := ai_assistant.NewLLMExternalPaperClassifier(aiSvc, aiSvc)
+	runtimeSettings := aiSvc.RuntimeSettings()
+	libraryPlanner := ai_assistant.NewLLMLibrarySearchPlanner(runtimeSettings, aiSvc)
+	libraryClassifier := ai_assistant.NewLLMLibraryPaperClassifier(runtimeSettings, aiSvc)
+	externalPlanner := ai_assistant.NewLLMExternalSearchPlanner(runtimeSettings, aiSvc)
+	externalClassifier := ai_assistant.NewLLMExternalPaperClassifier(runtimeSettings, aiSvc)
 	remoteMCP := service.NewRemoteMCPService(repo.Setting, cfg.StorageDir)
 	assistantOrchestrator := ai_assistant.NewOrchestrator(ai_assistant.ToolSet{
 		LibrarySearch:  ai_assistant.NewLibrarySearchToolWithAgents(repo.Paper, libraryPlanner, libraryClassifier),
 		ExternalSearch: ai_assistant.NewExternalSearchToolWithAgents(aiExternalSvc, externalPlanner, externalClassifier),
 		PaperRead:      ai_assistant.NewPaperReadTool(repo.Paper),
 		FigureLookup:   ai_assistant.NewFigureLookupToolWithPapers(ai_assistant.NewRepositoryFigureSearcher(repo.Figure), repo.Paper),
-		RemoteMCP:      ai_assistant.NewMCPTool(remoteMCP, aiSvc, aiSvc),
-	}).WithPlanner(ai_assistant.NewLLMRetrievalPlanner(aiSvc, aiSvc)).WithEvidenceJudge(ai_assistant.NewLLMEvidenceJudge(aiSvc, aiSvc))
+		RemoteMCP:      ai_assistant.NewMCPTool(remoteMCP, runtimeSettings, aiSvc),
+	}).WithPlanner(ai_assistant.NewLLMRetrievalPlanner(runtimeSettings, aiSvc)).WithEvidenceJudge(ai_assistant.NewLLMEvidenceJudge(runtimeSettings, aiSvc))
 	imageStorage := ai_image_gen.NewStorage(cfg.AIGeneratedDir())
 	imageGenService := ai_image_gen.NewService(ai_image_gen.ServiceDeps{
 		Repo:       aiGeneratedImageRepoAdapter{libRepo: repo},
@@ -444,14 +445,14 @@ func buildAIServices(
 		API:        ai_image_gen.NewClient(http.DefaultClient),
 		LoadInputs: aiSvc.LoadImageGenInputs,
 		GetSettings: func() (model.AIImageGenSettings, model.AISettings, error) {
-			s, err := aiSvc.GetSettings()
+			s, err := aiSvc.GetRuntimeSettings()
 			if err != nil {
 				return model.AIImageGenSettings{}, model.AISettings{}, err
 			}
 			return s.ImageGen, *s, nil
 		},
 	})
-	aiConvService := ai_conversation.New(repo.AIConversation, repo.Paper, aiSvc, aiSvc, aiExternalSvc, logger.With("component", "ai_conversation"), assistantOrchestrator).
+	aiConvService := ai_conversation.New(repo.AIConversation, repo.Paper, runtimeSettings, aiSvc, aiExternalSvc, logger.With("component", "ai_conversation"), assistantOrchestrator).
 		WithImageGen(imageGenService).
 		WithImageStorage(imageStorage).
 		WithFigureContextLoader(aiSvc)

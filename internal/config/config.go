@@ -6,9 +6,12 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"github.com/xuzhougeng/citebox/internal/magpie"
 )
 
 type Config struct {
+	MagpieConfigPath        string
 	ServerPort              string
 	UploadDir               string
 	StorageDir              string
@@ -37,6 +40,7 @@ type Config struct {
 
 func Load() *Config {
 	return &Config{
+		MagpieConfigPath:        magpie.DefaultPath(),
 		ServerPort:              getEnv("SERVER_PORT", "8080"),
 		UploadDir:               getEnv("UPLOAD_DIR", "./uploads"),
 		StorageDir:              getEnv("STORAGE_DIR", "./data/library"),

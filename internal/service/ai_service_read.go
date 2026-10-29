@@ -30,7 +30,7 @@ func (s *AIService) Translate(ctx context.Context, input model.AITranslateReques
 		return nil, apperr.New(apperr.CodeInvalidArgument, "缺少需要翻译的文本")
 	}
 
-	settings, err := s.GetSettings()
+	settings, err := s.GetRuntimeSettings()
 	if err != nil {
 		return nil, err
 	}
@@ -145,7 +145,7 @@ func (s *AIService) prepareRead(input model.AIReadRequest, structuredOutput bool
 		return nil, apperr.New(apperr.CodeInvalidArgument, "paper_id 无效")
 	}
 
-	settings, err := s.GetSettings()
+	settings, err := s.GetRuntimeSettings()
 	if err != nil {
 		return nil, err
 	}

@@ -37,7 +37,7 @@ func (s *AIService) RewriteTextForTTS(ctx context.Context, text string) (string,
 		return "", apperr.New(apperr.CodeInvalidArgument, "缺少需要优化的 TTS 文本")
 	}
 
-	settings, err := s.GetSettings()
+	settings, err := s.GetRuntimeSettings()
 	if err != nil {
 		return "", err
 	}

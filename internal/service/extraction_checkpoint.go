@@ -16,7 +16,7 @@ func (s *LibraryService) extractionCheckpointHash(aiSvc *AIService, paperID int6
 	if err != nil {
 		return "", err
 	}
-	settings, err := aiSvc.GetSettings()
+	settings, err := aiSvc.GetRuntimeSettings()
 	if err != nil {
 		return "", err
 	}
