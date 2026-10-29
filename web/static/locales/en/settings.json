@@ -89,7 +89,7 @@
     "settings.desktop_close.option_ask": "Ask every time",
     "settings.desktop_close.option_minimize": "Minimize to tray",
     "settings.desktop_close.option_exit": "Exit directly",
-    "settings.desktop_close.status_hint": "Changes take effect immediately and also control the \"Remember this choice\" option in the close prompt.",
+    "settings.desktop_close.status_hint": "Changes take effect immediately and also control the \"Don't ask again\" option in the close prompt.",
     "settings.desktop_close.saving": "Saving close behavior...",
     "settings.desktop_close.saved": "Close behavior updated.",
     "settings.desktop_close.saved_toast": "Close behavior updated",
