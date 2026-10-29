@@ -53,9 +53,8 @@ func (j *LLMEvidenceJudge) JudgeEvidence(ctx context.Context, query string, cita
 	if err != nil {
 		return nil, err
 	}
-	runtime := assistantSubagentSettings(*settings)
-	runtime.MaxOutputTokens = 2000
-	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	runtime := deadlineSubagentSettings(*settings, 2000)
+	ctx, cancel := context.WithTimeout(ctx, max(20*time.Second, runtime.HelperTimeout))
 	defer cancel()
 	raw, _, err := j.caller.CallProviderGeneric(ctx, runtime, evidenceJudgePrompt, string(input))
 	if err != nil {

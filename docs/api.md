@@ -889,6 +889,45 @@ citebox-figure-{id}-transfer-package.zip
 
 - 返回的是个人模型配置；当 [Magpie](./magpie.md) 连接有效时额外返回 `runtime_managed: true`，表示运行时由 Magpie 提供文本模型，前端据此不再提示“未填写 API Key”。该字段只读，`PUT` 时会被忽略。
 
+#### `GET /api/ai/settings/magpie`
+
+用途：
+
+- 获取 Magpie 当前提供的文本模型信息，供设置页显示和选择思考强度
+
+响应示例：
+
+```json
+{
+  "connected": true,
+  "model": "provider/model",
+  "context_tokens": 400000,
+  "max_output_tokens": 128000,
+  "reasoning_efforts": ["low", "medium", "high"],
+  "default_reasoning_effort": "medium",
+  "reasoning_effort": "high"
+}
+```
+
+说明：
+
+- 不返回网关地址和密钥。未接入时只返回 `connected: false` 和空的 `reasoning_efforts`。
+- `reasoning_effort` 是下一次请求实际发送的档位；`reasoning_efforts` 为空时不发送，使用供应商默认。`max_output_tokens` 未知时为 8192。
+
+#### `PUT /api/ai/settings/magpie`
+
+请求体：
+
+```json
+{
+  "reasoning_effort": "high"
+}
+```
+
+说明：
+
+- 只保存在 `magpie_settings` 中，不修改个人模型配置。值必须是当前模型 `reasoning_efforts` 之一，否则返回 400；空字符串恢复默认档位。未接入 Magpie 时返回错误。返回值同 `GET`。
+
 #### `GET /api/ai/settings/defaults`
 
 用途：

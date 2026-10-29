@@ -80,6 +80,18 @@
                     <p data-i18n="settings.ai.model_desc">添加或编辑 AI 模型。修改会自动保存。</p>
                 </header>
                 <div class="manager-form">
+                    <div id="aiMagpiePanel" class="hidden">
+                        <h3 data-i18n="settings.ai.magpie_title">Magpie 接入</h3>
+                        <p class="muted" data-i18n="settings.ai.magpie_desc">Magpie 正在提供文本模型，最大输出和可选思考强度取自所选模型。思考强度只保存在 CiteBox，不改动下方个人模型配置，下一次 AI 操作生效。</p>
+                        <div id="aiMagpieSummary" class="settings-summary-box" aria-live="polite"></div>
+                        <div class="form-grid">
+                            <label class="field field-span-2">
+                                <span data-i18n="settings.ai.magpie_reasoning_effort">思考强度</span>
+                                <select id="aiMagpieReasoningEffortSelect" class="form-input"></select>
+                            </label>
+                        </div>
+                        <p id="aiMagpieStatus" class="settings-inline-status" role="status"></p>
+                    </div>
                     <div id="aiModelList" class="manager-list"></div>
 
                     <div class="submit-row">
@@ -1186,7 +1198,7 @@ User Prompt:
     <script src="/static/js/api.js"></script>
     <script src="/static/js/settings-anchor.js"></script>
     <script src="/static/js/codex-model-capabilities.js"></script>
-    <script src="/static/js/settings.js?v=20260912-context-coverage"></script>
+    <script src="/static/js/settings.js?v=20261029-magpie-effort"></script>
     <script src="/static/js/zotero-settings.js"></script>
     <script src="/static/js/figure-library-settings.js"></script>
     <script src="/static/js/translate.js"></script>

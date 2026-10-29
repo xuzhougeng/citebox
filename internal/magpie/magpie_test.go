@@ -3,6 +3,7 @@ package magpie
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -51,5 +52,46 @@ func TestMagpieLoadSwitchDisconnect(t *testing.T) {
 	}
 	if _, ok := Load(file); ok {
 		t.Fatal("empty restored file is connected")
+	}
+}
+
+func TestMagpieModelInfo(t *testing.T) {
+	base := `{"baseURL":"http://localhost/v1","apiKey":"test-key","model":"p/reasoner"`
+	c, ok := Parse([]byte(base + `,"modelInfo":{"id":"p/reasoner","context":400000,"output":128000,"efforts":["low","medium","high"]}}`))
+	if !ok || c.Info == nil || c.Info.Context != 400000 || c.Info.Output != 128000 || !reflect.DeepEqual(c.Info.Efforts, []string{"low", "medium", "high"}) {
+		t.Fatalf("matching snapshot: %+v", c.Info)
+	}
+	if !c.Info.SupportsEffort("high") || c.Info.SupportsEffort("max") || c.Info.SupportsEffort("") {
+		t.Fatal("effort membership")
+	}
+	c, ok = Parse([]byte(base + `,"modelInfo":{"id":"p/reasoner","efforts":["high"]}}`))
+	if !ok || c.Info == nil || c.Info.Output != 0 || c.Info.Context != 0 {
+		t.Fatalf("partial snapshot: %+v", c.Info)
+	}
+	// A stale or malformed snapshot is ignored, never the connection itself.
+	for _, info := range []string{
+		`{"id":"p/other","output":128000,"efforts":["high"]}`,
+		`{"output":128000}`,
+		`null`, `[]`, `"p/reasoner"`, `{"id":7}`,
+		`{"id":"p/reasoner","output":0}`,
+		`{"id":"p/reasoner","output":-1}`,
+		`{"id":"p/reasoner","output":8192.5}`,
+		`{"id":"p/reasoner","context":4294967296}`,
+		`{"id":"p/reasoner","context":"400000"}`,
+		`{"id":"p/reasoner","efforts":"high"}`,
+		`{"id":"p/reasoner","efforts":["high",false]}`,
+		`{"id":"p/reasoner","efforts":["High"]}`,
+		`{"id":"p/reasoner","efforts":["bad value"]}`,
+	} {
+		c, ok := Parse([]byte(base + `,"modelInfo":` + info + `}`))
+		if !ok || c.Model != "p/reasoner" || c.APIKey != "test-key" {
+			t.Fatalf("modelInfo %s invalidated the connection", info)
+		}
+		if c.Info != nil {
+			t.Fatalf("modelInfo %s was used: %+v", info, c.Info)
+		}
+	}
+	if c, ok := Parse([]byte(base + `}`)); !ok || c.Info != nil {
+		t.Fatal("missing snapshot")
 	}
 }

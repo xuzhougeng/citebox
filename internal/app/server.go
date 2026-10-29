@@ -827,6 +827,17 @@ func buildHandlerWithAIServices(
 		}
 	})
 
+	mux.HandleFunc("/api/ai/settings/magpie", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			aiHandler.GetMagpieSettings(w, r)
+		case http.MethodPut:
+			aiHandler.UpdateMagpieSettings(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
 	mux.HandleFunc("/api/ai/settings/prompts", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodPut:
