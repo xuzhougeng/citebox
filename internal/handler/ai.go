@@ -35,6 +35,32 @@ func (h *AIHandler) GetSettings(w http.ResponseWriter, r *http.Request) {
 	}{settings, h.service.RuntimeManaged()})
 }
 
+// GetMagpieSettings describes the Magpie-supplied model without credentials.
+func (h *AIHandler) GetMagpieSettings(w http.ResponseWriter, r *http.Request) {
+	runtime, err := h.service.MagpieRuntime()
+	if err != nil {
+		sendError(w, err)
+		return
+	}
+	sendJSON(w, http.StatusOK, runtime)
+}
+
+// UpdateMagpieSettings saves the in-app reasoning effort for the Magpie
+// connection; it never touches the personal model settings.
+func (h *AIHandler) UpdateMagpieSettings(w http.ResponseWriter, r *http.Request) {
+	var req model.AIMagpieSettingsUpdate
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		sendError(w, apperr.New(apperr.CodeInvalidArgument, "请求体格式错误"))
+		return
+	}
+	runtime, err := h.service.UpdateMagpieReasoningEffort(req.ReasoningEffort)
+	if err != nil {
+		sendError(w, err)
+		return
+	}
+	sendJSON(w, http.StatusOK, runtime)
+}
+
 func (h *AIHandler) GetDefaultSettings(w http.ResponseWriter, r *http.Request) {
 	sendJSON(w, http.StatusOK, model.DefaultAISettings())
 }

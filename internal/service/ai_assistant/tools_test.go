@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/xuzhougeng/citebox/internal/model"
 	"github.com/xuzhougeng/citebox/internal/service/ai_external"
@@ -256,12 +257,14 @@ func (p stubAISettingsProvider) GetSettings() (*model.AISettings, error) {
 type stubNonStreamCaller struct {
 	output       string
 	settingsSeen model.AISettings
+	deadline     time.Time
 	systemPrompt string
 	userPrompt   string
 }
 
 func (c *stubNonStreamCaller) CallProviderGeneric(ctx context.Context, settings model.AISettings, systemPrompt, userPrompt string) (string, string, error) {
 	c.settingsSeen = settings
+	c.deadline, _ = ctx.Deadline()
 	c.systemPrompt = systemPrompt
 	c.userPrompt = userPrompt
 	return c.output, "", nil

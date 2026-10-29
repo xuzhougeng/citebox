@@ -40,6 +40,10 @@ const SettingsPage = {
         this.translatePromptInput = document.getElementById('aiTranslatePromptInput');
         this.ttsPromptInput = document.getElementById('aiTTSPromptInput');
         this.aiModelAutosaveStatus = document.getElementById('aiModelAutosaveStatus');
+        this.magpiePanel = document.getElementById('aiMagpiePanel');
+        this.magpieSummary = document.getElementById('aiMagpieSummary');
+        this.magpieReasoningEffortSelect = document.getElementById('aiMagpieReasoningEffortSelect');
+        this.magpieStatus = document.getElementById('aiMagpieStatus');
         this.aiAutosaveStatuses = Array.from(document.querySelectorAll('[data-ai-autosave-status]'));
         this.aiPromptSaveStatus = document.getElementById('aiPromptSaveStatus');
         this.translatePromptSaveStatus = document.getElementById('translatePromptSaveStatus');
@@ -397,6 +401,12 @@ const SettingsPage = {
         this.aiSettingsForm.addEventListener('submit', (event) => {
             event.preventDefault();
         });
+        this.magpieReasoningEffortSelect?.addEventListener('change', () => this.saveMagpieReasoningEffort());
+        // Magpie switches models outside CiteBox; refresh the offered levels on return.
+        window.addEventListener('focus', () => {
+            this.setInlineStatus(this.magpieStatus, '');
+            this.loadMagpieSettings();
+        });
         this.addAIModelButton.addEventListener('click', async () => {
             await this.addAIModel();
         });
@@ -719,6 +729,7 @@ const SettingsPage = {
             await Promise.all([
                 this.loadAppearancePreferences(),
                 this.loadAISettings(),
+                this.loadMagpieSettings(),
                 this.loadExtractorSettings(),
                 this.loadWolaiSettings(),
                 this.loadMCPSettings(),
@@ -759,6 +770,56 @@ const SettingsPage = {
         this.setAIPromptSaveStatus(t('settings.ai.prompt_save_hint', '提示词修改后需点击保存。'));
         this.setFigureGroupPromptSaveStatus(t('settings.ai.figure_group_prompt_save_hint', '图片与分组 Prompt 修改后需点击保存。'));
         this.setTranslatePromptSaveStatus(t('settings.ai.translate_prompt_save_hint', '翻译 Prompt 修改后需点击保存。'));
+    },
+
+    async loadMagpieSettings() {
+        if (!this.magpiePanel) return;
+        try {
+            this.renderMagpieSettings(await API.getMagpieSettings());
+        } catch (_error) {
+            this.renderMagpieSettings({ connected: false });
+        }
+    },
+
+    renderMagpieSettings(runtime = {}) {
+        const connected = runtime?.connected === true;
+        this.magpiePanel.classList.toggle('hidden', !connected);
+        if (!connected) return;
+        const tokens = (value) => Number(value) > 0
+            ? Number(value).toLocaleString()
+            : t('settings.ai.magpie_unknown', '未知');
+        this.magpieSummary.innerHTML = [
+            [t('settings.ai.magpie_model', '模型'), runtime.model || ''],
+            [t('settings.ai.magpie_context', '上下文容量'), tokens(runtime.context_tokens)],
+            [t('settings.ai.magpie_max_output', '最大输出 Token'), tokens(runtime.max_output_tokens)]
+        ].map(([label, value]) => `<div><span>${Utils.escapeHTML(label)}</span><strong>${Utils.escapeHTML(value)}</strong></div>`).join('');
+
+        // Only the levels the selected model supports; none known means the
+        // provider default is used and there is nothing to choose.
+        const efforts = Array.isArray(runtime.reasoning_efforts) ? runtime.reasoning_efforts : [];
+        const select = this.magpieReasoningEffortSelect;
+        select.innerHTML = efforts.length
+            ? efforts.map((effort) => {
+                const label = effort === runtime.default_reasoning_effort
+                    ? t('settings.ai.magpie_effort_default', '{0}（默认）').replace('{0}', effort)
+                    : effort;
+                return `<option value="${Utils.escapeHTML(effort)}">${Utils.escapeHTML(label)}</option>`;
+            }).join('')
+            : `<option value="">${Utils.escapeHTML(t('settings.ai.magpie_effort_provider_default', '模型未提供可选档位，使用供应商默认'))}</option>`;
+        select.disabled = efforts.length === 0;
+        select.value = efforts.includes(runtime.reasoning_effort) ? runtime.reasoning_effort : (efforts[0] || '');
+    },
+
+    async saveMagpieReasoningEffort() {
+        const effort = this.magpieReasoningEffortSelect.value;
+        this.setInlineStatus(this.magpieStatus, t('settings.ai.magpie_saving', '正在保存思考强度...'), 'saving');
+        try {
+            this.renderMagpieSettings(await API.updateMagpieSettings({ reasoning_effort: effort }));
+            this.setInlineStatus(this.magpieStatus, t('settings.ai.magpie_saved', '思考强度已保存，下一次 AI 操作生效。'), 'success');
+        } catch (error) {
+            this.setInlineStatus(this.magpieStatus, t('settings.ai.magpie_save_failed', '保存失败：{0}').replace('{0}', error.message), 'error');
+            await this.loadMagpieSettings();
+        }
     },
 
     applyAISettings(settings = {}, options = {}) {

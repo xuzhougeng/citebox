@@ -328,6 +328,27 @@ func assistantSubagentSettings(settings model.AISettings) model.AISettings {
 	))
 }
 
+// subagentReasoningAllowance leaves room for reasoning tokens, which count
+// against the output limit, before a helper call's short JSON answer.
+const subagentReasoningAllowance = 4096
+
+// deadlineSubagentSettings prepares a helper call that must answer within a
+// hard deadline. Under Magpie it uses the lighter reasoning level and, when a
+// level is sent, enough output room for reasoning plus the JSON answer.
+func deadlineSubagentSettings(settings model.AISettings, maxOutput int) model.AISettings {
+	runtime := assistantSubagentSettings(settings)
+	limit := runtime.MaxOutputTokens
+	runtime.MaxOutputTokens = maxOutput
+	if runtime.LightReasoningEffort == "" {
+		return runtime
+	}
+	runtime.ReasoningEffort = runtime.LightReasoningEffort
+	if limit > maxOutput {
+		runtime.MaxOutputTokens = min(maxOutput+subagentReasoningAllowance, limit)
+	}
+	return runtime
+}
+
 func assistantSettingsWithSceneModel(settings model.AISettings, modelID string) model.AISettings {
 	modelID = strings.TrimSpace(modelID)
 	if modelID == "" {

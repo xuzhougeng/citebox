@@ -1,5 +1,7 @@
 package model
 
+import "time"
+
 type AIProvider string
 
 const (
@@ -118,6 +120,27 @@ type AISettings struct {
 	PinPapersLimit      int                   `json:"pin_papers_limit"`
 	ContextBudgetTokens int                   `json:"context_budget_tokens"`
 	ImageGen            AIImageGenSettings    `json:"image_gen"`
+	// Runtime-only adjustments for short helper calls with hard deadlines
+	// (retrieval planning, evidence grading); never stored. An empty level
+	// keeps ReasoningEffort and a zero timeout keeps each call's default.
+	LightReasoningEffort string        `json:"-"`
+	HelperTimeout        time.Duration `json:"-"`
+}
+
+// AIMagpieRuntime describes the text model Magpie supplies, without its
+// gateway credentials. ReasoningEffort is the level the next request sends.
+type AIMagpieRuntime struct {
+	Connected              bool     `json:"connected"`
+	Model                  string   `json:"model,omitempty"`
+	ContextTokens          int      `json:"context_tokens,omitempty"`
+	MaxOutputTokens        int      `json:"max_output_tokens,omitempty"`
+	ReasoningEfforts       []string `json:"reasoning_efforts"`
+	DefaultReasoningEffort string   `json:"default_reasoning_effort,omitempty"`
+	ReasoningEffort        string   `json:"reasoning_effort,omitempty"`
+}
+
+type AIMagpieSettingsUpdate struct {
+	ReasoningEffort string `json:"reasoning_effort"`
 }
 
 type AIReadRequest struct {

@@ -456,6 +456,20 @@ const API = {
         });
     },
 
+    getMagpieSettings() {
+        return requestJSON(`${API_BASE}/ai/settings/magpie`);
+    },
+
+    updateMagpieSettings(data) {
+        return requestJSON(`${API_BASE}/ai/settings/magpie`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        });
+    },
+
     getCodexStatus() {
         return requestJSON(`${API_BASE}/ai/codex/status`);
     },

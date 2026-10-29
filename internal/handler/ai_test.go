@@ -8,7 +8,9 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/xuzhougeng/citebox/internal/config"
@@ -194,5 +196,40 @@ func TestUpdateModelSettingsAcceptsImageGenPayload(t *testing.T) {
 	}
 	if settings.ImageGen.Size != "1536x1024" || settings.ImageGen.Quality != "medium" {
 		t.Fatalf("image_gen settings = %+v, want persisted payload", settings.ImageGen)
+	}
+}
+
+func TestMagpieSettingsExposeModelFactsWithoutCredentials(t *testing.T) {
+	handler, _, repo, cfg := newAIHandlerForTest(t)
+	cfg.MagpieConfigPath = filepath.Join(t.TempDir(), "magpie.json")
+	connection := `{"baseURL":"http://127.0.0.1:3425/v1","apiKey":"gateway-secret","model":"p/reasoner",` +
+		`"modelInfo":{"id":"p/reasoner","context":400000,"output":128000,"efforts":["low","medium","high"]}}`
+	if err := os.WriteFile(cfg.MagpieConfigPath, []byte(connection), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	recorder := httptest.NewRecorder()
+	handler.UpdateMagpieSettings(recorder, httptest.NewRequest(http.MethodPut, "/api/ai/settings/magpie", bytes.NewBufferString(`{"reasoning_effort":"high"}`)))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("PUT status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	recorder = httptest.NewRecorder()
+	handler.GetMagpieSettings(recorder, httptest.NewRequest(http.MethodGet, "/api/ai/settings/magpie", nil))
+	body := recorder.Body.String()
+	var runtime model.AIMagpieRuntime
+	if err := json.Unmarshal([]byte(body), &runtime); err != nil || runtime.ReasoningEffort != "high" || runtime.MaxOutputTokens != 128000 {
+		t.Fatalf("GET body = %s, err = %v", body, err)
+	}
+	if strings.Contains(body, "gateway-secret") || strings.Contains(body, "3425") {
+		t.Fatalf("credentials exposed: %s", body)
+	}
+	if saved, _ := repo.GetAppSetting("magpie_settings"); strings.Contains(saved, "gateway-secret") {
+		t.Fatal("gateway key stored")
+	}
+
+	recorder = httptest.NewRecorder()
+	handler.UpdateMagpieSettings(recorder, httptest.NewRequest(http.MethodPut, "/api/ai/settings/magpie", bytes.NewBufferString(`{"reasoning_effort":"max"}`)))
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("unsupported effort status = %d", recorder.Code)
 	}
 }

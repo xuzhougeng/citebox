@@ -3,9 +3,11 @@ package ai_assistant
 import (
 	"context"
 	"errors"
+	"github.com/xuzhougeng/citebox/internal/model"
 	"github.com/xuzhougeng/citebox/internal/service/research"
 	"strings"
 	"testing"
+	"time"
 )
 
 type sequencePlanner struct {
@@ -86,4 +88,43 @@ func TestPlanningInputIsBoundedWithoutMutatingHistory(t *testing.T) {
 	if len(out.History[0].Content) > 1510 || len(input.History[0].Content) != 2000 {
 		t.Fatal("history not safely bounded")
 	}
+}
+
+func TestDeadlineHelpersUseLightMagpieEffort(t *testing.T) {
+	magpie := model.AISettings{Model: "p/reasoner", ReasoningEffort: "high", LightReasoningEffort: "low", MaxOutputTokens: 128000, HelperTimeout: 45 * time.Second}
+	personal := model.AISettings{Model: "personal", ReasoningEffort: "high", MaxOutputTokens: 16000}
+	plan := `{"intent":"library_search","scope":"library","resolved_query":"q","search_terms":["q"]}`
+	evidence := []Citation{{I: 1, Source: "local", Snippet: research.Snippet{Text: "result", Origin: "original"}}}
+	for _, tc := range []struct {
+		settings    model.AISettings
+		effort      string
+		plan, judge int
+		deadline    time.Duration
+	}{
+		// Magpie: lighter level, with room for reasoning before the JSON answer.
+		{magpie, "low", 1200 + subagentReasoningAllowance, 2000 + subagentReasoningAllowance, 45 * time.Second},
+		{model.AISettings{ReasoningEffort: "high", LightReasoningEffort: "low", MaxOutputTokens: 3000}, "low", 3000, 3000, 20 * time.Second},
+		// Personal settings keep their level, budgets and deadlines.
+		{personal, "high", 1200, 2000, 20 * time.Second},
+	} {
+		caller := &stubNonStreamCaller{output: plan}
+		if _, err := NewLLMRetrievalPlanner(stubAISettingsProvider{settings: tc.settings}, caller).PlanRetrieval(context.Background(), RetrievalPlanningInput{Question: "q"}); err != nil {
+			t.Fatal(err)
+		}
+		if caller.settingsSeen.ReasoningEffort != tc.effort || caller.settingsSeen.MaxOutputTokens != tc.plan || !nearDeadline(caller.deadline, tc.deadline) {
+			t.Fatalf("planner %s: effort=%s max=%d deadline=%v", tc.settings.Model, caller.settingsSeen.ReasoningEffort, caller.settingsSeen.MaxOutputTokens, time.Until(caller.deadline))
+		}
+		caller.output = `{"assessments":[]}`
+		if _, err := NewLLMEvidenceJudge(stubAISettingsProvider{settings: tc.settings}, caller).JudgeEvidence(context.Background(), "q", evidence); err != nil {
+			t.Fatal(err)
+		}
+		if caller.settingsSeen.ReasoningEffort != tc.effort || caller.settingsSeen.MaxOutputTokens != tc.judge || !nearDeadline(caller.deadline, tc.deadline) {
+			t.Fatalf("judge %s: effort=%s max=%d deadline=%v", tc.settings.Model, caller.settingsSeen.ReasoningEffort, caller.settingsSeen.MaxOutputTokens, time.Until(caller.deadline))
+		}
+	}
+}
+
+func nearDeadline(deadline time.Time, want time.Duration) bool {
+	left := time.Until(deadline)
+	return left <= want && left > want-5*time.Second
 }

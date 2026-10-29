@@ -64,9 +64,8 @@ func (p *LLMRetrievalPlanner) PlanRetrieval(ctx context.Context, in RetrievalPla
 	if err != nil {
 		return RetrievalPlan{}, err
 	}
-	runtime := assistantSubagentSettings(*settings)
-	runtime.MaxOutputTokens = 1200
-	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	runtime := deadlineSubagentSettings(*settings, 1200)
+	ctx, cancel := context.WithTimeout(ctx, max(20*time.Second, runtime.HelperTimeout))
 	defer cancel()
 	raw, _, err := p.caller.CallProviderGeneric(ctx, runtime, retrievalPlannerPrompt, string(input))
 	if err != nil {
