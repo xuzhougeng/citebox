@@ -2,14 +2,14 @@
 
 ## Project Structure & Module Organization
 
-CiteBox is a Go + SQLite application with a native HTML/CSS/JavaScript frontend. Main entrypoints live in `cmd/server` and `cmd/desktop`. Core backend layers are under `internal/`: `handler` (HTTP), `service` (business logic), `repository` (SQLite), `model`, `config`, and shared app wiring in `internal/app`. External-tool integration adds `internal/integration` (read-only research-context facade, tokens, settings) and `internal/mcpserver` (loopback-only HTTP MCP adapter exposing that facade). Frontend pages are in `web/`, with shared assets in `web/static/`. The browser extension (Zotero-Connector-style one-click paper import) lives in `extension/` as a build-step-free Manifest V3 extension. The official Zotero Local API connector lives in `internal/zotero` plus the Settings page import wizard. Packaging scripts live in `scripts/`, build targets in `Makefile`, and longer-form docs in `docs/`.
+CiteBox is a Go + SQLite application with a native HTML/CSS/JavaScript frontend. Main entrypoints live in `cmd/server` and `cmd/desktop` (a Wails v3 shell that serves the app handler in-process; shared webview glue lives in `internal/desktopbridge`). Core backend layers are under `internal/`: `handler` (HTTP), `service` (business logic), `repository` (SQLite), `model`, `config`, and shared app wiring in `internal/app`. External-tool integration adds `internal/integration` (read-only research-context facade, tokens, settings) and `internal/mcpserver` (loopback-only HTTP MCP adapter exposing that facade). Frontend pages are in `web/`, with shared assets in `web/static/`. The browser extension (Zotero-Connector-style one-click paper import) lives in `extension/` as a build-step-free Manifest V3 extension. The official Zotero Local API connector lives in `internal/zotero` plus the Settings page import wizard. Packaging scripts live in `scripts/`, build targets in `Makefile`, and longer-form docs in `docs/`.
 
 ## Build, Test, and Development Commands
 
 - `make run`: start the web server at `http://localhost:8080`.
 - `make run-desktop`: launch the desktop client with embedded local server.
 - `make build` / `make build-desktop`: compile server or desktop binaries into `bin/`.
-- `make test`: run the Go test suite, skipping `cmd/desktop` and `internal/desktopruntime` (they need GTK/WebKit headers; use `make build-desktop` to compile them).
+- `make test`: run the Go test suite, skipping `cmd/desktop` (the Wails v3 shell needs GTK/WebKit headers on Linux; use `make build-desktop` to compile it).
 - `make test-js`: run frontend and script Node tests (`node --test`).
 - `make test-js-syntax`: syntax-check frontend, extension, and test JavaScript.
 - `make ci`: run the same checks as `.github/workflows/ci.yml` (Go tests, JS syntax, Node tests).

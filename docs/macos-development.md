@@ -2,7 +2,7 @@
 
 ## 背景
 
-CiteBox 桌面版的运行方式是“本地 HTTP 服务 + 原生 WebView”。这套模式在 Windows 上通常比较接近浏览器心智，但在 macOS 上会出现更多平台差异：链接跳转、`window.open`、资源查看、下载、编辑菜单、右键菜单、快捷键和窗口焦点都可能和预期不同。
+CiteBox 桌面版基于 Wails v3：应用 handler 在进程内通过 Wails 的自定义协议交给原生 WebView（macOS 上是 WKWebView）。这套模式在 Windows 上通常比较接近浏览器心智，但在 macOS 上会出现更多平台差异：链接跳转、`window.open`、资源查看、下载、编辑菜单、右键菜单、快捷键和窗口焦点都可能和预期不同。
 
 这份文档用于沉淀已经踩过的坑，避免后续功能继续重复回归。
 
@@ -17,9 +17,9 @@ CiteBox 桌面版的运行方式是“本地 HTTP 服务 + 原生 WebView”。�
 
 当前做法：
 
-- 在 [internal/desktopruntime/configure_darwin.go](../internal/desktopruntime/configure_darwin.go) 注入 `desktopBridgeScript`。
+- [internal/desktopbridge](../internal/desktopbridge/bridge.go) 的桥接脚本由 `desktopbridge.InjectScript` 注入到每个 HTML 页面的 `<head>` 开头。
 - 同源站内路由统一改为应用内原地跳转。
-- 外部链接统一走 `citeboxDesktopOpenExternal`，由 `NSWorkspace` 打开系统浏览器。
+- 外部链接统一走 `citeboxDesktopOpenExternal`，由 Wails 的 `Browser.OpenURL` 打开系统浏览器。
 
 开发约束：
 
@@ -56,7 +56,7 @@ CiteBox 桌面版的运行方式是“本地 HTTP 服务 + 原生 WebView”。�
 当前做法：
 
 - 前端统一走 `Utils.saveBlobDownload()`。
-- 如果桌面端注入了 `citeboxDesktopSaveFile`，则转成 base64 后走原生保存面板 `NSSavePanel`。
+- 如果桌面端注入了 `citeboxDesktopSaveFile`，则转成 base64 后走 Wails 的原生保存对话框。
 - 浏览器环境才退回到 `a[download]`。
 
 开发约束：
@@ -75,7 +75,7 @@ CiteBox 桌面版的运行方式是“本地 HTTP 服务 + 原生 WebView”。�
 当前做法：
 
 - 划词翻译菜单默认避开可编辑元素和 `[data-native-context-menu="true"]`。
-- macOS runtime 会安装原生 `Edit` 菜单，并在启动时处理窗口焦点。
+- Wails 在 macOS 上会提供默认的应用菜单和 `Edit` 菜单。
 - 当前桌面桥接中已经增加文本控件的剪贴板读写兜底，用来处理 `Cmd/Ctrl + A/C/X/V`。
 - 图片弹层和图片笔记弹层里的左右切换已显式 `preventDefault()` / `stopPropagation()`。
 
@@ -90,18 +90,24 @@ CiteBox 桌面版的运行方式是“本地 HTTP 服务 + 原生 WebView”。�
 现象：
 
 - WebView 本身不负责应用菜单、窗口焦点、系统打开外链、保存对话框、应用图标等完整桌面能力。
+- Wails 的自定义协议在 macOS 上有两处和浏览器不同：WKWebView 不跟随 handler 返回的 3xx 重定向（会直接显示响应体），也不保存响应里的 `Set-Cookie`。
 
 当前做法：
 
-- `desktopruntime.Configure()` 负责安装 App 菜单、Edit 菜单、窗口激活、外链打开、文件保存等桥接。
-- `desktopicon` 负责在 macOS 上设置应用图标。
+- `cmd/desktop` 用 Wails 的托盘、窗口、对话框、剪贴板和单实例 API 提供这些能力；`DesktopService` 的方法通过 `window.citeboxDesktop*` 暴露给页面。
+- `desktopbridge.InjectScript` 把页面导航的 3xx 改写成客户端跳转。
+- `desktopbridge.CookieStore` 在 Go 侧代管 cookie；带过期时间的 cookie（记住登录）写入数据库目录下的 `desktop-cookies.json`（权限 0600），重启后仍保持登录。
+- `desktopicon` 在 Windows 上显式设置窗口图标。
 
 开发约束：
 
 - 只要是“浏览器原生能做，但桌面 WebView 不稳定”的能力，优先考虑补一个原生 bridge，而不是继续堆前端绕路逻辑。
-- 新增桌面能力时，优先放在 `internal/desktopruntime` 或 `internal/desktopicon` 这类平台桥接层，不要把平台分支散落到页面脚本里。
+- 新增桌面能力时，优先在 `cmd/desktop` 的 `DesktopService` 里用 Wails API 实现，再在 shim 里映射成 `window.citeboxDesktop*`，不要把平台分支散落到页面脚本里。
+- 前端不要依赖 `document.cookie`；桌面端的 cookie 只存在于 Go 侧。
 
 ### 6. “最小化到托盘”不是普通最小化，根因在 macOS 窗口状态机
+
+> 以下记录的是旧 cgo/webview_go 实现踩过的坑。现在托盘、隐藏、Dock reopen 都由 Wails 处理：隐藏时显示托盘图标，恢复时隐藏它（`SystemTray.Show/Hide`）。迁移时已用 `scripts/macos-desktop-ui-smoke.zsh smoke`、连续多次“隐藏到托盘 → 点托盘恢复”（隐藏前文本框保持焦点）以及托盘菜单退出验证过不再崩溃；改动这条链路时仍需重跑这些检查。
 
 现象：
 

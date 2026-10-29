@@ -69,7 +69,8 @@ Windows 的 `.exe` 在打进 zip 或 NSIS 安装包之前，用 SSL.com eSigner 
 
 桌面客户端入口位于 `cmd/desktop`，当前实现方式是：
 
-- 启动本地内置 HTTP 服务
+- 基于 Wails v3，在进程内直接把应用 handler 交给系统 WebView，不再经过本地端口加载页面
+- 同时保留一个 `127.0.0.1` 随机端口的本地服务，供 MCP 等外部工具连接
 - 用原生 WebView 打开 CiteBox，而不是外部浏览器
 - 默认把数据写入用户配置目录，例如 Linux 下为 `~/.config/CiteBox/`
 
@@ -127,17 +128,17 @@ dist/citebox-desktop-windows-{version}.exe
 
 ### Linux 依赖
 
-Linux 桌面版依赖系统 WebView 运行时，构建机和运行机都需要以下库：
+Linux 桌面版依赖系统 WebView 运行时，构建机和运行机都需要以下库。Wails 在 Linux 上默认用 GTK4，我们通过 `-tags gtk3` 构建（`make build-desktop` 和打包脚本会自动加上），因此需要 GTK3 和 webkit2gtk-4.1：
 
 ```bash
 pkg-config --exists gtk+-3.0
-pkg-config --exists webkit2gtk-4.0
+pkg-config --exists webkit2gtk-4.1
 ```
 
 如果缺失，可安装：
 
 ```bash
-sudo apt install libgtk-3-dev libwebkit2gtk-4.0-dev
+sudo apt install libgtk-3-dev libwebkit2gtk-4.1-dev
 ```
 
 ### Windows 说明
@@ -388,7 +389,7 @@ rm -f data/library.db-shm data/library.db-wal
 
 **解决：**
 ```bash
-sudo apt install libgtk-3-dev libwebkit2gtk-4.0-dev
+sudo apt install libgtk-3-dev libwebkit2gtk-4.1-dev
 ```
 
 ---

@@ -2,9 +2,9 @@
 
 .PHONY: build run dev build-desktop run-desktop build-windows build-darwin build-linux package-windows package-darwin package-linux package-desktop-windows package-desktop-darwin package-desktop-linux prepare-web-assets clean test test-go test-js test-js-syntax test-ps ci version help
 
-# cmd/desktop and internal/desktopruntime need GTK/WebKit headers.
-# Compile them with `make build-desktop`.
-GO_TEST_PACKAGES=$(shell go list ./... | grep -vE '/cmd/desktop$$|/internal/desktopruntime$$')
+# cmd/desktop (the Wails shell) needs GTK/WebKit headers on Linux.
+# Compile it with `make build-desktop`.
+GO_TEST_PACKAGES=$(shell go list ./... | grep -vE '/cmd/desktop$$')
 JS_CHECK_SOURCES=web/static/js/*.js extension/*.js web/static/js/__tests__/*.cjs scripts/tests/*.js
 JS_TEST_SOURCES=web/static/js/__tests__/*.test.cjs scripts/tests/*.test.js
 
@@ -18,8 +18,14 @@ BUILDINFO_PKG=github.com/xuzhougeng/citebox/internal/buildinfo
 LDFLAGS=-ldflags "-s -w -X $(BUILDINFO_PKG).Version=$(VERSION) -X $(BUILDINFO_PKG).BuildTime=$(BUILD_TIME)"
 DESKTOP_LDFLAGS=$(LDFLAGS)
 
+DESKTOP_TAGS=
+
 ifeq ($(OS),Windows_NT)
 DESKTOP_LDFLAGS=-ldflags "-s -w -H windowsgui -X $(BUILDINFO_PKG).Version=$(VERSION) -X $(BUILDINFO_PKG).BuildTime=$(BUILD_TIME)"
+else ifeq ($(shell uname -s),Linux)
+# Build Wails against GTK3 + webkit2gtk-4.1 instead of its GTK4 default,
+# matching internal/desktopicon and the distros we package for.
+DESKTOP_TAGS=-tags gtk3
 endif
 
 # =============================================================================
@@ -37,10 +43,10 @@ dev: prepare-web-assets
 
 build-desktop:
 	@mkdir -p bin
-	go build $(DESKTOP_LDFLAGS) -o bin/$(DESKTOP_BINARY_NAME) ./cmd/desktop
+	go build $(DESKTOP_TAGS) $(DESKTOP_LDFLAGS) -o bin/$(DESKTOP_BINARY_NAME) ./cmd/desktop
 
 run-desktop:
-	go run ./cmd/desktop
+	go run $(DESKTOP_TAGS) ./cmd/desktop
 
 prepare-web-assets:
 	go run ./scripts/fetch_pdfjs.go web/static/vendor/pdfjs
@@ -369,7 +375,7 @@ help:
 	@echo "  make run            - Run development server"
 	@echo "  make dev            - Prepare PDF.js assets, then run development server"
 	@echo "  make prepare-web-assets - Download PDF.js runtime assets for source runs"
-	@echo "  make test           - Run Go tests (skips cmd/desktop and internal/desktopruntime)"
+	@echo "  make test           - Run Go tests (skips cmd/desktop)"
 	@echo "  make test-js        - Run frontend and script Node tests"
 	@echo "  make test-js-syntax - Syntax-check JavaScript sources"
 	@echo "  make test-ps        - Run Windows Authenticode signer tests"

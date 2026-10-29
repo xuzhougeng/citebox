@@ -35,14 +35,24 @@ BUILD_TIME="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
 BUILDINFO_PKG="github.com/xuzhougeng/citebox/internal/buildinfo"
 FITZ_LIB="third_party/go-fitz/libs/libmupdf_${GOOS_VALUE}_${HOST_ARCH}.a"
 GO_BUILD_CMD=(go build -trimpath)
+BUILD_TAGS=()
+
+# Wails defaults to GTK4 on Linux; build against GTK3 + webkit2gtk-4.1.
+if [[ "${GOOS_VALUE}" == "linux" ]]; then
+    BUILD_TAGS+=(gtk3)
+fi
 
 if [[ "${CITEBOX_FORCE_NOCGO:-}" == "1" ]]; then
     printf '%s\n' "CITEBOX_FORCE_NOCGO=1, building desktop package with -tags nocgo"
-    GO_BUILD_CMD+=(-tags nocgo)
+    BUILD_TAGS+=(nocgo)
 elif [[ ! -f "${FITZ_LIB}" ]]; then
     printf '%s\n' "MuPDF static libraries are required at ${FITZ_LIB}." >&2
     printf '%s\n' "Run scripts/prepare-go-fitz-libs.sh before packaging or set CITEBOX_FORCE_NOCGO=1 explicitly." >&2
     exit 1
+fi
+
+if [[ ${#BUILD_TAGS[@]} -gt 0 ]]; then
+    GO_BUILD_CMD+=(-tags "$(IFS=,; printf '%s' "${BUILD_TAGS[*]}")")
 fi
 
 rm -rf "${PACKAGE_DIR}"

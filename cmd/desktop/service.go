@@ -4,10 +4,40 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 
 	"github.com/xuzhougeng/citebox/internal/model"
 )
+
+// shimScript maps the window.citeboxDesktop* functions the bridge script
+// expects onto DesktopService methods, so the shared bridge and the pages
+// stay unchanged. Wails's runtime.js is an ES module, so it is loaded with a
+// dynamic import from this classic script.
+const shimScript = `(function() {
+    const runtime = import('/wails/runtime.js');
+    const call = (method) => (...args) => runtime.then((wails) => wails.Call.ByName('main.DesktopService.' + method, ...args));
+    window.citeboxDesktopOpenExternal = call('OpenExternal');
+    window.citeboxDesktopMinimizeToTray = call('MinimizeToTray');
+    window.citeboxDesktopExitApp = call('ExitApp');
+    window.citeboxDesktopGetClosePreference = call('GetClosePreference');
+    window.citeboxDesktopSetClosePreference = call('SetClosePreference');
+    window.citeboxDesktopReadClipboardText = call('ReadClipboardText');
+    window.citeboxDesktopWriteClipboardText = call('WriteClipboardText');
+    window.citeboxDesktopSaveFile = call('SaveFile');
+
+    // Page errors are invisible without a web inspector, so send them to the
+    // desktop log.
+    const logError = call('LogFrontendError');
+    window.addEventListener('error', (event) => {
+        void logError(location.pathname, String(event.message || event.error || 'error')).catch(() => {});
+    });
+    window.addEventListener('unhandledrejection', (event) => {
+        const reason = event.reason;
+        void logError(location.pathname, String((reason && (reason.stack || reason.message)) || reason)).catch(() => {});
+    });
+})();
+`
 
 // DesktopService backs the window.citeboxDesktop* functions the bridge script
 // expects. The JS shim calls each method by name through the Wails runtime.
@@ -41,6 +71,10 @@ func (d *DesktopService) SetClosePreference(action string) (string, error) {
 		return model.DesktopCloseActionAsk, err
 	}
 	return settings.Action, nil
+}
+
+func (d *DesktopService) LogFrontendError(page string, message string) {
+	slog.Warn("frontend error", "page", page, "message", message)
 }
 
 func (d *DesktopService) ReadClipboardText() (string, error) {

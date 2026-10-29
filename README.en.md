@@ -30,10 +30,10 @@ A Semantic Scholar API key can be set in Settings → External APIs, or provided
 
 ## Stack
 
-- Go 1.21+
+- Go 1.26+
 - SQLite
 - Native HTML / CSS / JavaScript
-- `webview_go` desktop shell
+- Wails v3 desktop shell
 
 ## Quick Start
 

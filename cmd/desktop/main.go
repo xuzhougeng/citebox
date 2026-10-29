@@ -1,29 +1,39 @@
+// Command desktop is the CiteBox desktop client. It runs the app server
+// in-process and shows it in a Wails v3 window, with a tray icon, a close
+// prompt and Dock reopen handled by Wails.
 package main
 
 import (
+	"bytes"
 	"errors"
+	"image/png"
 	"log/slog"
 	"net"
 	"net/http"
 	"os"
-	"time"
+	"path/filepath"
+	"runtime"
+	"sync"
+	"sync/atomic"
 
-	webview "github.com/webview/webview_go"
+	"github.com/wailsapp/wails/v3/pkg/application"
+	"github.com/wailsapp/wails/v3/pkg/events"
 
 	"github.com/xuzhougeng/citebox/internal/app"
+	"github.com/xuzhougeng/citebox/internal/appicon"
 	"github.com/xuzhougeng/citebox/internal/config"
 	"github.com/xuzhougeng/citebox/internal/desktopapp"
+	"github.com/xuzhougeng/citebox/internal/desktopbridge"
 	"github.com/xuzhougeng/citebox/internal/desktopicon"
-	"github.com/xuzhougeng/citebox/internal/desktopinstance"
-	"github.com/xuzhougeng/citebox/internal/desktopruntime"
 	"github.com/xuzhougeng/citebox/internal/logging"
-	"github.com/xuzhougeng/citebox/internal/model"
 )
 
 const (
 	desktopAppName = "CiteBox"
+	desktopAppID   = "com.xuzhougeng.citebox"
 	windowWidth    = 1440
 	windowHeight   = 960
+	trayIconSize   = 64
 )
 
 func main() {
@@ -36,33 +46,60 @@ func main() {
 		os.Exit(1)
 	}
 
-	instanceManager, err := desktopinstance.Acquire(desktopAppName)
-	if err != nil {
-		var alreadyRunningErr *desktopinstance.AlreadyRunningError
-		if errors.As(err, &alreadyRunningErr) {
-			if alreadyRunningErr.SignalErr != nil {
-				logger.Warn("desktop instance already running but activation request failed", "error", alreadyRunningErr.SignalErr)
-			} else {
-				logger.Info("desktop instance already running; requested existing window activation")
-			}
-			os.Exit(0)
-		}
-
-		logger.Error("failed to initialize desktop single-instance guard", "error", err)
-		os.Exit(1)
-	}
-	defer func() {
-		if err := instanceManager.Close(); err != nil {
-			logger.Warn("failed to close desktop single-instance guard", "error", err)
-		}
-	}()
-
 	webRoot, err := desktopapp.ResolveWebRoot()
 	if err != nil {
 		logger.Error("failed to resolve desktop web assets", "error", err)
 		os.Exit(1)
 	}
-	logger.Info("desktop web assets ready", "web_root", webRoot)
+
+	bridgeScript, err := desktopbridge.Script()
+	if err != nil {
+		logger.Error("failed to build desktop bridge script", "error", err)
+		os.Exit(1)
+	}
+
+	iconPNG, err := renderIconPNG(appicon.DefaultSize)
+	if err != nil {
+		logger.Warn("failed to render app icon", "error", err)
+	}
+	trayPNG, err := renderIconPNG(trayIconSize)
+	if err != nil {
+		logger.Warn("failed to render tray icon", "error", err)
+	}
+
+	cookies := desktopbridge.NewCookieStore(filepath.Join(filepath.Dir(cfg.DatabasePath), "desktop-cookies.json"), logger)
+
+	// Wails exits a second instance inside application.New, so build the app
+	// before the server: a second launch must not open the database. The
+	// handler is filled in once the server exists.
+	appHandler := &lazyHandler{}
+	var closeServer func()
+
+	shell := &desktopShell{}
+	wailsApp := application.New(application.Options{
+		Name: desktopAppName,
+		Icon: iconPNG,
+		OnShutdown: func() {
+			if closeServer != nil {
+				closeServer()
+			}
+		},
+		Services: []application.Service{application.NewService(&DesktopService{shell: shell})},
+		Assets: application.AssetOptions{
+			Handler:        desktopbridge.InjectScript(desktopbridge.WithCookieStore(appHandler, cookies), shimScript+bridgeScript),
+			DisableLogging: true,
+		},
+		Mac: application.MacOptions{
+			ApplicationShouldTerminateAfterLastWindowClosed: false,
+		},
+		SingleInstance: &application.SingleInstanceOptions{
+			UniqueID: desktopAppID,
+			OnSecondInstanceLaunch: func(application.SecondInstanceData) {
+				shell.restore()
+			},
+		},
+	})
+	shell.app = wailsApp
 
 	server, err := app.NewServer(app.Options{
 		Config:      cfg,
@@ -74,102 +111,145 @@ func main() {
 		logger.Error("failed to initialize desktop server", "error", err)
 		os.Exit(1)
 	}
+	var closeOnce sync.Once
+	closeServer = func() {
+		closeOnce.Do(func() {
+			if err := server.Close(); err != nil {
+				logger.Warn("failed to close desktop server", "error", err)
+				return
+			}
+			logger.Info("desktop server closed")
+		})
+	}
+	defer closeServer()
 
+	// The window is served in-process, but the loopback listener stays so
+	// external tools (MCP, integrations) can still reach the local server.
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		logger.Error("failed to open local listener", "error", err)
-		_ = server.Close()
 		os.Exit(1)
 	}
-
-	serverErrCh := make(chan error, 1)
 	go func() {
-		serverErrCh <- server.Serve(listener)
-	}()
-
-	baseURL := "http://" + listener.Addr().String()
-	if err := waitForServerReady(baseURL+"/login", 5*time.Second); err != nil {
-		logger.Error("desktop server did not become ready", "error", err)
-		_ = server.Close()
-		<-serverErrCh
-		os.Exit(1)
-	}
-
-	w := webview.New(false)
-	defer w.Destroy()
-
-	iconAssets, err := desktopicon.EnsureAssets(desktopAppName)
-	if err != nil {
-		logger.Warn("failed to prepare desktop icon assets", "error", err)
-	} else if err := desktopicon.ApplyWindowIcon(w.Window(), iconAssets); err != nil {
-		logger.Warn("failed to apply desktop icon", "error", err)
-	}
-
-	go func() {
-		if err := <-serverErrCh; err != nil {
-			logger.Error("desktop server stopped unexpectedly", "error", err)
-			w.Terminate()
+		if err := server.Serve(listener); err != nil {
+			logger.Error("desktop loopback server stopped", "error", err)
 		}
 	}()
 
-	w.SetTitle(desktopAppName)
-	w.SetSize(windowWidth, windowHeight, webview.HintNone)
-	if err := desktopruntime.Configure(w, desktopAppName, iconAssets, desktopruntime.ClosePreferenceStore{
-		Get: func() (string, error) {
-			settings, err := server.GetDesktopCloseSettings()
-			if err != nil {
-				return model.DesktopCloseActionAsk, err
-			}
-			return settings.Action, nil
+	shell.server = server
+	appHandler.set(server.Handler())
+
+	shell.window = wailsApp.Window.NewWithOptions(application.WebviewWindowOptions{
+		Name:   "main",
+		Title:  desktopAppName,
+		Width:  windowWidth,
+		Height: windowHeight,
+		URL:    "/",
+		Linux: application.LinuxWindow{
+			Icon: iconPNG,
 		},
-		Set: func(action string) (string, error) {
-			settings, err := server.UpdateDesktopCloseSettings(model.DesktopCloseSettings{Action: action})
-			if err != nil {
-				return model.DesktopCloseActionAsk, err
-			}
-			return settings.Action, nil
-		},
-	}); err != nil {
-		logger.Warn("failed to configure desktop runtime integrations", "error", err)
-	}
-	instanceManager.SetActivateHandler(func() {
-		w.Dispatch(func() {
-			if err := desktopruntime.ActivateWindow(w.Window()); err != nil {
-				logger.Warn("failed to activate existing desktop window", "error", err)
-			}
-		})
 	})
-	w.Navigate(baseURL)
-	w.Run()
+	shell.window.RegisterHook(events.Common.WindowClosing, func(event *application.WindowEvent) {
+		if shell.quitting.Load() {
+			return
+		}
+		event.Cancel()
+		shell.window.ExecJS(`window.__citeboxDesktopOpenClosePrompt && window.__citeboxDesktopOpenClosePrompt();`)
+	})
 
-	if err := instanceManager.Close(); err != nil {
-		logger.Warn("failed to close desktop single-instance guard", "error", err)
+	shell.tray = wailsApp.SystemTray.New()
+	if trayPNG != nil {
+		shell.tray.SetIcon(trayPNG)
 	}
+	shell.tray.SetTooltip(desktopAppName)
+	trayMenu := wailsApp.NewMenu()
+	trayMenu.Add("Open " + desktopAppName).OnClick(func(*application.Context) { shell.restore() })
+	trayMenu.AddSeparator()
+	trayMenu.Add("Quit " + desktopAppName).OnClick(func(*application.Context) { shell.quit() })
+	shell.tray.SetMenu(trayMenu)
+	shell.tray.OnClick(shell.restore)
+	shell.tray.OnRightClick(shell.tray.OpenMenu)
 
-	if err := server.Close(); err != nil {
-		logger.Warn("failed to close desktop server", "error", err)
+	// Like the cgo shell, the tray icon only exists while the window is hidden.
+	wailsApp.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) {
+		shell.tray.Hide()
+		if runtime.GOOS == "windows" {
+			applyWindowsWindowIcon(shell.window, logger)
+		}
+	})
+	wailsApp.Event.OnApplicationEvent(events.Mac.ApplicationShouldHandleReopen, func(*application.ApplicationEvent) {
+		shell.restore()
+	})
+
+	if err := wailsApp.Run(); err != nil {
+		logger.Error("desktop app stopped with error", "error", err)
 	}
 }
 
-func waitForServerReady(url string, timeout time.Duration) error {
-	deadline := time.Now().Add(timeout)
-	client := &http.Client{
-		Timeout: 500 * time.Millisecond,
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			return http.ErrUseLastResponse
-		},
-	}
+type desktopShell struct {
+	app      *application.App
+	window   *application.WebviewWindow
+	tray     *application.SystemTray
+	server   *app.Server
+	quitting atomic.Bool
+}
 
-	for time.Now().Before(deadline) {
-		response, err := client.Get(url)
-		if err == nil {
-			_ = response.Body.Close()
-			if response.StatusCode >= 200 && response.StatusCode < 500 {
-				return nil
-			}
+func (s *desktopShell) minimizeToTray() {
+	s.tray.Show()
+	s.window.Hide()
+}
+
+func (s *desktopShell) restore() {
+	s.window.Show()
+	s.window.Focus()
+	s.tray.Hide()
+}
+
+func (s *desktopShell) quit() {
+	s.quitting.Store(true)
+	s.app.Quit()
+}
+
+// applyWindowsWindowIcon sets the title-bar and taskbar icon explicitly, since
+// Wails only reads it from the executable's resources.
+func applyWindowsWindowIcon(window *application.WebviewWindow, logger *slog.Logger) {
+	assets, err := desktopicon.EnsureAssets(desktopAppName)
+	if err != nil {
+		logger.Warn("failed to prepare desktop icon assets", "error", err)
+		return
+	}
+	application.InvokeSync(func() {
+		if err := desktopicon.ApplyWindowIcon(window.NativeWindow(), assets); err != nil {
+			logger.Warn("failed to apply desktop icon", "error", err)
 		}
-		time.Sleep(100 * time.Millisecond)
-	}
+	})
+}
 
-	return errors.New("timeout waiting for local server")
+// lazyHandler serves 503 until the app server is ready.
+type lazyHandler struct {
+	handler atomic.Pointer[http.Handler]
+}
+
+func (l *lazyHandler) set(h http.Handler) {
+	l.handler.Store(&h)
+}
+
+func (l *lazyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	h := l.handler.Load()
+	if h == nil {
+		http.Error(w, "CiteBox is starting", http.StatusServiceUnavailable)
+		return
+	}
+	(*h).ServeHTTP(w, r)
+}
+
+func renderIconPNG(size int) ([]byte, error) {
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, appicon.Render(size)); err != nil {
+		return nil, err
+	}
+	if buf.Len() == 0 {
+		return nil, errors.New("empty icon")
+	}
+	return buf.Bytes(), nil
 }

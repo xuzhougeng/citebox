@@ -30,10 +30,10 @@ Semantic Scholar API key 可在 设置 → 外部 API 里填写，或通过 `S2_
 
 ## 技术栈
 
-- Go 1.21+
+- Go 1.26+
 - SQLite
 - 原生 HTML / CSS / JavaScript
-- `webview_go` 桌面壳
+- Wails v3 桌面壳
 
 ## 快速开始
 

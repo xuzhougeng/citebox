@@ -1,4 +1,4 @@
-package main
+package desktopbridge
 
 import (
 	"bytes"
@@ -10,35 +10,21 @@ import (
 	"strings"
 )
 
-const bridgeScriptPath = "/__citebox_desktop/bridge.js"
-
-// shimScript maps the window.citeboxDesktop* functions the bridge script
-// expects onto DesktopService methods, so the shared bridge and the pages
-// stay unchanged. Wails's runtime.js is an ES module, so it is loaded with a
-// dynamic import from this classic script.
-const shimScript = `(function() {
-    const runtime = import('/wails/runtime.js');
-    const call = (method) => (...args) => runtime.then((wails) => wails.Call.ByName('main.DesktopService.' + method, ...args));
-    window.citeboxDesktopOpenExternal = call('OpenExternal');
-    window.citeboxDesktopMinimizeToTray = call('MinimizeToTray');
-    window.citeboxDesktopExitApp = call('ExitApp');
-    window.citeboxDesktopGetClosePreference = call('GetClosePreference');
-    window.citeboxDesktopSetClosePreference = call('SetClosePreference');
-    window.citeboxDesktopReadClipboardText = call('ReadClipboardText');
-    window.citeboxDesktopWriteClipboardText = call('WriteClipboardText');
-    window.citeboxDesktopSaveFile = call('SaveFile');
-})();
-`
+// ScriptPath is where InjectScript serves the injected script.
+const ScriptPath = "/__citebox_desktop/bridge.js"
 
 var headTagPattern = regexp.MustCompile(`(?i)<head[^>]*>`)
 
-// injectBridge serves the bridge script and adds a <script> tag for it to the
-// start of every HTML page, which stands in for webview_go's Init().
-func injectBridge(next http.Handler, script string) http.Handler {
-	scriptTag := []byte(`<script src="` + bridgeScriptPath + `"></script>`)
+// InjectScript serves script at ScriptPath and adds a <script> tag for it to
+// the start of every HTML page, so it runs before the page's own scripts.
+// Navigation redirects become client-side redirects, because the macOS
+// webview renders the body of a 3xx from a custom-scheme handler instead of
+// following it.
+func InjectScript(next http.Handler, script string) http.Handler {
+	scriptTag := []byte(`<script src="` + ScriptPath + `"></script>`)
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == bridgeScriptPath {
+		if r.URL.Path == ScriptPath {
 			w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
 			w.Header().Set("Cache-Control", "no-store")
 			_, _ = w.Write([]byte(script))
