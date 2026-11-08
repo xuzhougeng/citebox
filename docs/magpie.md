@@ -11,7 +11,7 @@ magpie plugin add /absolute/path/to/magpie-agents/packages/agent-citebox
 magpie citebox magpie/provider/model
 ```
 
-将 `provider/model` 换成 Magpie 中可用的模型，并保持网关运行。npm 包发布后，也可以用 `magpie plugin add @xuzhougeng/magpie-agent-citebox@alpha` 安装。
+将 `provider/model` 换成 Magpie 中可用的模型，并保持网关运行。npm 包发布后，也可以用 `magpie plugin add @hoptoper/magpie-agent-citebox@alpha` 安装。
 
 接入和切换在下一次 AI 操作生效，不需要重启 CiteBox。正在运行的操作保留已有配置快照。断开时执行一次 `magpie citebox default`，后续操作恢复之前的配置。
 
