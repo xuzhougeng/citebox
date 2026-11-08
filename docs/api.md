@@ -189,6 +189,8 @@ AI 流式阅读通过：
 - Web 上传页在 `manual` 模式下会默认调用浏览器 `pdf.js` 提取全文，并通过 `POST /api/papers/{id}/pdf-text` 保存
 - 即便当前没有配置自动解析模型，只要能上传到手工流程，仍会走这条浏览器端全文提取链路
 - 当全局 `extractor_profile` 设为 `manual` 时，前端上传和微信上传都会默认落到这条“只提全文、不自动提图”的流程
+- `pdf` 部件存在但为 0 字节时返回 `400 invalid_argument`，提示「上传请求未收到文件内容（「文件名」收到 0 字节）」；这表示文件内容没有随请求送达，与 PDF 本身损坏（「PDF 内容为空」等）区分开。同样的检查也用于 Zotero 的 `pdf` 上传和 `POST /api/database/import` 的 `database` 字段
+- 桌面端会在页面内把含文件的 `FormData` 重新编码成内存中的 multipart 字节再发送，因为 webview（Windows 上的 WebView2 已确认）转交给进程内处理器的请求体会丢掉文件部件的内容（见 `docs/troubleshooting/desktop-upload-empty-file.md`）
 
 #### `POST /api/papers/import-by-doi`
 

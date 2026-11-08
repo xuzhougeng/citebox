@@ -96,9 +96,9 @@ func (h *PaperHandler) Upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	file, header, err := r.FormFile("pdf")
+	file, header, err := formFile(r, "pdf", "缺少 PDF 文件")
 	if err != nil {
-		sendError(w, apperr.New(apperr.CodeInvalidArgument, "缺少 PDF 文件"))
+		sendError(w, err)
 		return
 	}
 	defer file.Close()

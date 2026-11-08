@@ -57,9 +57,9 @@ func (h *DatabaseHandler) Import(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	file, header, err := r.FormFile("database")
+	file, header, err := formFile(r, "database", "缺少数据库文件")
 	if err != nil {
-		sendError(w, apperr.New(apperr.CodeInvalidArgument, "缺少数据库文件"))
+		sendError(w, err)
 		return
 	}
 	defer file.Close()

@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"mime/multipart"
 	"net"
 	"net/http"
 	"strconv"
@@ -19,6 +21,24 @@ func sendJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(data)
+}
+
+// formFile returns the uploaded file in field. A part that arrives with no
+// bytes gets its own error: it means the client did not send the file
+// contents (issue #73), not that the file itself is broken.
+func formFile(r *http.Request, field, missingMessage string) (multipart.File, *multipart.FileHeader, error) {
+	file, header, err := r.FormFile(field)
+	if err != nil {
+		return nil, nil, apperr.New(apperr.CodeInvalidArgument, missingMessage)
+	}
+	if header.Size == 0 {
+		file.Close()
+		return nil, nil, apperr.New(apperr.CodeInvalidArgument, fmt.Sprintf(
+			"上传请求未收到文件内容（「%s」收到 0 字节），文件本身通常没有问题；请重试，或用浏览器打开本地地址上传",
+			header.Filename,
+		))
+	}
+	return file, header, nil
 }
 
 func sendError(w http.ResponseWriter, err error) {

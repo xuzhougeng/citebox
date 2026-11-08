@@ -3,9 +3,16 @@
 package desktopbridge
 
 import (
+	_ "embed"
 	"encoding/json"
 	"fmt"
 )
+
+// uploadBodyScript re-encodes FormData uploads into in-memory bytes, because
+// the desktop webviews drop file-backed request body parts (issue #73).
+//
+//go:embed upload_body.js
+var uploadBodyScript string
 
 var internalRoutes = []string{
 	"/",
@@ -783,5 +790,5 @@ func Script() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("marshal desktop routes: %w", err)
 	}
-	return fmt.Sprintf(scriptTemplate, string(routesJSON)), nil
+	return fmt.Sprintf(scriptTemplate, string(routesJSON)) + "\n" + uploadBodyScript, nil
 }

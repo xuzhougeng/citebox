@@ -182,3 +182,42 @@ func TestScriptAddsTitleBarDragAndAppearanceSync(t *testing.T) {
 		}
 	}
 }
+
+func TestScriptReencodesFormDataUploads(t *testing.T) {
+	script, err := Script()
+	if err != nil {
+		t.Fatalf("Script() error = %v", err)
+	}
+	for _, want := range []string{"citeboxDesktopFetch", "multipart/form-data; boundary="} {
+		if !strings.Contains(script, want) {
+			t.Fatalf("Script() is missing %q", want)
+		}
+	}
+}
+
+func TestWithUnknownBodyLengthMarksUndeclaredBodies(t *testing.T) {
+	var got int64
+	handler := WithUnknownBodyLength(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got = r.ContentLength
+	}))
+
+	// Wails v3.0.0 on Windows: a body, but no Content-Length and ContentLength 0.
+	req := httptest.NewRequest(http.MethodPost, "/api/papers", io.NopCloser(strings.NewReader("data")))
+	req.ContentLength = 0
+	handler.ServeHTTP(httptest.NewRecorder(), req)
+	if got != -1 {
+		t.Fatalf("ContentLength = %d, want -1 for an undeclared body", got)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/", nil)
+	handler.ServeHTTP(httptest.NewRecorder(), req)
+	if got != 0 {
+		t.Fatalf("ContentLength = %d, want 0 for no body", got)
+	}
+
+	req = httptest.NewRequest(http.MethodPost, "/api/papers", strings.NewReader("data"))
+	handler.ServeHTTP(httptest.NewRecorder(), req)
+	if got != 4 {
+		t.Fatalf("ContentLength = %d, want the declared 4", got)
+	}
+}
