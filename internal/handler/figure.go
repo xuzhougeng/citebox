@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -27,9 +28,9 @@ func (h *FigureHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tagID, err := optionalInt64(r.URL.Query().Get("tag_id"))
+	tagIDs, tagMode, err := parseFigureTagFilter(r.URL.Query())
 	if err != nil {
-		sendError(w, apperr.New(apperr.CodeInvalidArgument, "tag_id 无效"))
+		sendError(w, err)
 		return
 	}
 
@@ -47,7 +48,8 @@ func (h *FigureHandler) List(w http.ResponseWriter, r *http.Request) {
 	result, err := h.service.ListFigures(model.FigureFilter{
 		Keyword:    strings.TrimSpace(r.URL.Query().Get("keyword")),
 		GroupID:    groupID,
-		TagID:      tagID,
+		TagIDs:     tagIDs,
+		TagMode:    tagMode,
 		FigureType: figureTypeParam,
 		HasNotes:   hasNotesValue == "1" || strings.EqualFold(hasNotesValue, "true"),
 		SortBy:     strings.TrimSpace(r.URL.Query().Get("sort_by")),
@@ -60,6 +62,43 @@ func (h *FigureHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sendJSON(w, http.StatusOK, result)
+}
+
+// parseFigureTagFilter reads tag_id (repeated and/or comma-separated) and
+// tag_mode (all|any, default all) from a figure query string.
+func parseFigureTagFilter(q url.Values) ([]int64, string, error) {
+	var ids []int64
+	seen := map[int64]struct{}{}
+	for _, raw := range q["tag_id"] {
+		for _, part := range strings.Split(raw, ",") {
+			part = strings.TrimSpace(part)
+			if part == "" {
+				continue
+			}
+			id, err := strconv.ParseInt(part, 10, 64)
+			if err != nil || id <= 0 {
+				return nil, "", apperr.New(apperr.CodeInvalidArgument, "tag_id 无效")
+			}
+			if _, ok := seen[id]; ok {
+				continue
+			}
+			seen[id] = struct{}{}
+			ids = append(ids, id)
+		}
+	}
+	if len(ids) > model.MaxFigureFilterTags {
+		return nil, "", apperr.New(apperr.CodeInvalidArgument, fmt.Sprintf("tag_id 最多 %d 个", model.MaxFigureFilterTags))
+	}
+
+	mode := strings.ToLower(strings.TrimSpace(q.Get("tag_mode")))
+	switch mode {
+	case "":
+		mode = model.FigureTagModeAll
+	case model.FigureTagModeAll, model.FigureTagModeAny:
+	default:
+		return nil, "", apperr.New(apperr.CodeInvalidArgument, "tag_mode 无效，应为 all 或 any")
+	}
+	return ids, mode, nil
 }
 
 func (h *FigureHandler) Delete(w http.ResponseWriter, r *http.Request) {

@@ -348,9 +348,9 @@ func (f *Facade) makeFigureSearch(p SearchLibraryParams, notesOnly bool) func(of
 			PageSize: limit,
 		}
 		if len(p.Tags) > 0 {
-			// 与文献检索一致，仅应用第一个标签
-			tagID := p.Tags[0]
-			filter.TagID = &tagID
+			// 图片支持多标签交集：结果需同时带有全部标签
+			filter.TagIDs = append([]int64(nil), p.Tags...)
+			filter.TagMode = model.FigureTagModeAll
 		}
 		resp, err := f.library.ListFigures(filter)
 		if err != nil {

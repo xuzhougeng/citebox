@@ -226,7 +226,7 @@ HTTP 层错误：
 
 - `entity_types`：可选，为空表示全部四类；取值 `paper` / `figure` / `note` / `annotation`。
 - `group_id`：可选，仅作用于 paper/figure。
-- `tags`：可选，标签 ID 数组；**当前只应用第一个标签**。
+- `tags`：可选，标签 ID 数组；图片结果需同时带有全部标签（交集），文献结果**当前只应用第一个标签**。
 - `updated_after`：可选，RFC3339；按批次后置过滤（见“已知限制”）。
 - `cursor`：可选，上一页响应里的 `next_cursor`。
 - `limit`：可选，默认 20，最大 100。

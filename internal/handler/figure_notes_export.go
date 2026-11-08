@@ -13,7 +13,13 @@ import (
 func (h *FigureHandler) ExportNotes(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	filter := model.FigureFilter{Keyword: strings.TrimSpace(q.Get("keyword")), SortBy: q.Get("sort_by"), HasNotes: q.Get("has_notes") == "1" || q.Get("has_notes") == "true"}
-	for key, target := range map[string]**int64{"paper_id": &filter.PaperID, "group_id": &filter.GroupID, "tag_id": &filter.TagID} {
+	tagIDs, tagMode, err := parseFigureTagFilter(q)
+	if err != nil {
+		sendError(w, err)
+		return
+	}
+	filter.TagIDs, filter.TagMode = tagIDs, tagMode
+	for key, target := range map[string]**int64{"paper_id": &filter.PaperID, "group_id": &filter.GroupID} {
 		id, err := optionalInt64(q.Get(key))
 		if err != nil || (id != nil && *id <= 0) {
 			sendError(w, apperr.New(apperr.CodeInvalidArgument, key+" is invalid"))
