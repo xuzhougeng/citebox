@@ -647,7 +647,7 @@ func TestUpdateFigureTagsOnlyAffectsTargetFigure(t *testing.T) {
 		t.Fatalf("ListTags() figure_count = %d, want 1", tags[0].FigureCount)
 	}
 
-	figures, total, err := repo.ListFigures(model.FigureFilter{TagID: &tags[0].ID})
+	figures, total, err := repo.ListFigures(model.FigureFilter{TagIDs: []int64{tags[0].ID}})
 	if err != nil {
 		t.Fatalf("ListFigures(tag filter) error = %v", err)
 	}

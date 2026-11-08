@@ -541,7 +541,8 @@ AI 流式阅读通过：
 | --- | --- | --- |
 | `keyword` | string | 文献标题、caption、图片笔记、图片标签搜索 |
 | `group_id` | int | 来源分组 |
-| `tag_id` | int | 图片标签 |
+| `tag_id` | int，可多值 | 图片标签。支持重复参数 `tag_id=1&tag_id=2` 或逗号分隔 `tag_id=1,2`（两种可混用，自动去重）；最多 20 个，非正整数返回 400 |
+| `tag_mode` | string | 多标签匹配方式：`all`（默认，交集，图片需同时带有全部标签）或 `any`（并集，带有任一标签即可）；其他值返回 400 |
 | `figure_type` | string | 按图片类型过滤：`figure`（普通图片）、`graphical_abstract`（图形摘要）；不传不过滤 |
 | `has_notes` | bool | 仅显示带图片笔记的图片 |
 | `sort_by` | string | 可选：`updated_at` 按图片更新时间倒序；`created_at` 按图片创建时间倒序；`paper_created_at_figure_index` 按文献创建时间倒序，文献内按 `Fig 1`、`Fig 2` 顺序 |
@@ -565,7 +566,7 @@ AI 流式阅读通过：
 
 #### `GET /api/figures/export-notes`
 
-导出图片笔记 ZIP。支持 `paper_id`（单篇文献）、`keyword`、`group_id`、`tag_id`、`figure_type`、`sort_by`，筛选语义与图片库一致；导出覆盖所有分页，忽略 `page` / `page_size`。默认包含无笔记图片，`has_notes=1` 或 `true` 可仅保留有笔记图片。`language=en` 输出英文标题，默认中文。
+导出图片笔记 ZIP。支持 `paper_id`（单篇文献）、`keyword`、`group_id`、`tag_id`（可多值）、`tag_mode`、`figure_type`、`sort_by`，筛选语义与图片库一致；导出覆盖所有分页，忽略 `page` / `page_size`。默认包含无笔记图片，`has_notes=1` 或 `true` 可仅保留有笔记图片。`language=en` 输出英文标题，默认中文。
 
 响应为 `application/zip`，附件名 `citebox-figure-notes.zip`。包内包含 `README.md` 目录、`figures/figure-{id}.md` 和 `images/figure-{id}.{ext}`。Markdown 使用相对图片路径，包含图注、已保存的图片笔记、文献标题、DOI、作者、期刊、发表日期、分组、图片标签、页码和 CiteBox ID；笔记原始 Markdown 保留。范围与图片库一样仅含主图，不额外展开子图。图片和图注保留原文献来源。
 

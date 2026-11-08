@@ -222,8 +222,17 @@ function createFigureCollectionActions(options = {}) {
     };
 }
 
+// Accepts an array, a single id, or a comma-separated list; returns unique non-empty string ids.
+function normalizeFigureTagIDs(value) {
+    const items = Array.isArray(value) ? value : String(value ?? '').split(',');
+    return [...new Set(items.map((item) => String(item ?? '').trim()).filter(Boolean))];
+}
+
 const FiguresPage = {
-    state: { page: 1, pageSize: 24, totalPages: 0, filters: { keyword: '', group_id: '', tag_id: '', figure_type: '', sort_by: 'created_at' } },
+    state: { page: 1, pageSize: 24, totalPages: 0, filters: { keyword: '', group_id: '', tag_ids: [], tag_mode: 'all', figure_type: '', sort_by: 'created_at' } },
+    tags: [],
+    tagQuery: '',
+    loadSeq: 0,
 
     async init() {
         PaperViewer.init();
@@ -231,6 +240,11 @@ const FiguresPage = {
         NoteViewer.init();
         this.cache();
         this.bind();
+        // Deep links may preselect tags: ?tag_id=1&tag_id=2 or ?tag_id=1,2 plus optional tag_mode=any.
+        const query = new URLSearchParams(window.location.search || '');
+        if (query.has('tag_id')) {
+            this.setTagSelection(query.getAll('tag_id').join(','), query.get('tag_mode'));
+        }
         await Promise.all([this.loadGroups(), this.loadTags()]);
         await this.load();
     },
@@ -239,6 +253,13 @@ const FiguresPage = {
         this.keywordInput = document.getElementById('figureKeywordInput');
         this.groupFilter = document.getElementById('figureGroupFilter');
         this.tagFilter = document.getElementById('figureTagFilter');
+        this.tagToggle = document.getElementById('figureTagFilterToggle');
+        this.tagValue = document.getElementById('figureTagFilterValue');
+        this.tagPopover = document.getElementById('figureTagFilterPopover');
+        this.tagSearch = document.getElementById('figureTagFilterSearch');
+        this.tagModeGroup = document.getElementById('figureTagFilterMode');
+        this.tagList = document.getElementById('figureTagFilterList');
+        this.tagClear = document.getElementById('figureTagFilterClear');
         this.typeFilter = document.getElementById('figureTypeFilter');
         this.sortFilter = document.getElementById('figureSortFilter');
         this.summaryStrip = document.getElementById('figureSummaryStrip');
@@ -250,7 +271,7 @@ const FiguresPage = {
     bind() {
         document.getElementById('exportFigureNotesButton')?.addEventListener('click', () => {
             FigureViewer.openNotesExport({
-                ...this.state.filters,
+                ...this.buildFilterParams(),
                 keyword: this.keywordInput.value.trim()
             });
         });
@@ -282,10 +303,7 @@ const FiguresPage = {
             this.state.filters.group_id = this.groupFilter.value;
             await this.load(1);
         });
-        this.tagFilter.addEventListener('change', async () => {
-            this.state.filters.tag_id = this.tagFilter.value;
-            await this.load(1);
-        });
+        this.bindTagFilter();
         if (this.typeFilter) {
             this.typeFilter.addEventListener('change', async () => {
                 this.state.filters.figure_type = this.typeFilter.value;
@@ -336,23 +354,217 @@ const FiguresPage = {
         `).join('');
     },
 
+    bindTagFilter() {
+        this.tagToggle.addEventListener('click', () => {
+            if (this.isTagPopoverOpen()) {
+                this.closeTagPopover();
+            } else {
+                this.openTagPopover();
+            }
+        });
+        this.tagToggle.addEventListener('keydown', (event) => {
+            if (event.key === 'ArrowDown' && !this.isTagPopoverOpen()) {
+                event.preventDefault();
+                this.openTagPopover();
+            }
+        });
+        this.tagSearch.addEventListener('input', () => {
+            this.tagQuery = this.tagSearch.value;
+            this.renderTagOptions();
+        });
+        this.tagSearch.addEventListener('keydown', async (event) => {
+            if (event.key === 'ArrowDown') {
+                event.preventDefault();
+                this.tagList.querySelector('input[type="checkbox"]')?.focus();
+                return;
+            }
+            if (event.key === 'Enter') {
+                // Enter toggles the first visible match so search-then-pick works without the mouse.
+                event.preventDefault();
+                const first = this.tagList.querySelector('input[type="checkbox"]');
+                if (!first) return;
+                first.checked = !first.checked;
+                await this.toggleTag(first.value, first.checked);
+            }
+        });
+        this.tagList.addEventListener('change', async (event) => {
+            const checkbox = event.target.closest('input[type="checkbox"]');
+            if (!checkbox) return;
+            await this.toggleTag(checkbox.value, checkbox.checked);
+        });
+        this.tagList.addEventListener('keydown', (event) => {
+            if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+            const boxes = [...this.tagList.querySelectorAll('input[type="checkbox"]')];
+            const index = boxes.indexOf(event.target);
+            if (index < 0) return;
+            event.preventDefault();
+            const next = index + (event.key === 'ArrowDown' ? 1 : -1);
+            if (next < 0) {
+                this.tagSearch.focus();
+                return;
+            }
+            boxes[Math.min(next, boxes.length - 1)].focus();
+        });
+        this.tagModeGroup.addEventListener('change', async (event) => {
+            const radio = event.target.closest('input[name="figureTagMode"]');
+            if (!radio) return;
+            this.state.filters.tag_mode = radio.value === 'any' ? 'any' : 'all';
+            await this.applyTagFilter();
+        });
+        this.tagClear.addEventListener('click', async () => {
+            this.state.filters.tag_ids = [];
+            this.state.filters.tag_mode = 'all';
+            this.tagQuery = '';
+            this.tagSearch.value = '';
+            this.renderTagOptions();
+            this.tagSearch.focus();
+            await this.applyTagFilter();
+        });
+        document.addEventListener('click', (event) => {
+            if (this.isTagPopoverOpen() && !this.tagFilter.contains(event.target)) {
+                this.closeTagPopover();
+            }
+        });
+        document.addEventListener('keydown', (event) => {
+            if (event.key !== 'Escape' || !this.isTagPopoverOpen()) return;
+            event.preventDefault();
+            this.closeTagPopover({ restoreFocus: true });
+        });
+        // Close when keyboard focus leaves the control. A null relatedTarget is ignored
+        // because WebKit does not focus checkboxes on click.
+        this.tagFilter.addEventListener('focusout', (event) => {
+            if (event.relatedTarget && !this.tagFilter.contains(event.relatedTarget)) {
+                this.closeTagPopover();
+            }
+        });
+    },
+
+    isTagPopoverOpen() {
+        return Boolean(this.tagPopover && !this.tagPopover.hidden);
+    },
+
+    openTagPopover() {
+        this.renderTagOptions();
+        this.tagPopover.hidden = false;
+        this.tagToggle.setAttribute('aria-expanded', 'true');
+        this.tagFilter.classList.add('is-open');
+        this.tagSearch.focus();
+    },
+
+    closeTagPopover({ restoreFocus = false } = {}) {
+        if (!this.isTagPopoverOpen()) return;
+        this.tagPopover.hidden = true;
+        this.tagToggle.setAttribute('aria-expanded', 'false');
+        this.tagFilter.classList.remove('is-open');
+        if (restoreFocus) this.tagToggle.focus();
+    },
+
+    async toggleTag(tagID, checked) {
+        const id = String(tagID);
+        const selected = this.state.filters.tag_ids.filter((item) => item !== id);
+        if (checked) selected.push(id);
+        this.state.filters.tag_ids = selected;
+        if (selected.length < 2) this.state.filters.tag_mode = 'all';
+        await this.applyTagFilter();
+    },
+
+    async applyTagFilter() {
+        this.updateTagControls();
+        await this.load(1);
+    },
+
+    // Replaces the selection from an incoming value (array, single id, or comma list).
+    setTagSelection(value, mode = 'all') {
+        this.state.filters.tag_ids = normalizeFigureTagIDs(value);
+        this.state.filters.tag_mode = mode === 'any' && this.state.filters.tag_ids.length > 1 ? 'any' : 'all';
+        this.updateTagControls();
+    },
+
+    selectedTagNames() {
+        const byID = new Map((this.tags || []).map((tag) => [String(tag.id), tag.name]));
+        return this.state.filters.tag_ids.map((id) => byID.get(id) || `#${id}`);
+    },
+
+    renderTagOptions() {
+        if (!this.tagList) return;
+        const query = String(this.tagQuery || '').trim().toLowerCase();
+        const selected = new Set(this.state.filters.tag_ids);
+        const tags = (this.tags || []).filter((tag) => !query || String(tag.name || '').toLowerCase().includes(query));
+        if (!tags.length) {
+            const message = (this.tags || []).length
+                ? t('figures.filter_tag_no_match', '没有匹配的标签')
+                : t('figures.filter_tag_empty', '暂无图片标签');
+            this.tagList.innerHTML = `<p class="tag-multi-filter-empty">${Utils.escapeHTML(message)}</p>`;
+            return;
+        }
+        this.tagList.innerHTML = tags.map((tag) => {
+            const id = String(tag.id);
+            return `
+                <label class="tag-multi-filter-option">
+                    <input type="checkbox" value="${Utils.escapeHTML(id)}" ${selected.has(id) ? 'checked' : ''}>
+                    <span class="tag-multi-filter-swatch" ${tag.color ? `style="--chip-color:${Utils.escapeHTML(tag.color)}"` : ''} aria-hidden="true"></span>
+                    <span class="tag-multi-filter-name">${Utils.escapeHTML(tag.name)}</span>
+                </label>
+            `;
+        }).join('');
+    },
+
+    updateTagControls() {
+        if (!this.tagValue) return;
+        const { tag_ids: tagIDs, tag_mode: tagMode } = this.state.filters;
+        const names = this.selectedTagNames();
+        const separator = t('figures.summary_tag_separator', '、');
+        let label = t('figures.filter_all_tags', '全部图片标签');
+        if (names.length === 1 || names.length === 2) {
+            label = names.join(separator);
+        } else if (names.length > 2) {
+            label = t('figures.filter_tags_count', '已选 {count} 个标签').replace('{count}', names.length);
+        }
+        this.tagValue.textContent = label;
+        this.tagToggle.title = names.join(separator);
+        this.tagFilter.classList.toggle('has-selection', tagIDs.length > 0);
+        this.tagModeGroup.hidden = tagIDs.length < 2;
+        this.tagModeGroup.querySelectorAll('input[name="figureTagMode"]').forEach((radio) => {
+            radio.checked = radio.value === tagMode;
+        });
+        this.tagClear.disabled = tagIDs.length === 0;
+    },
+
     async loadTags() {
         const payload = await API.listTags({ scope: 'figure' });
-        const selected = String(this.state.filters.tag_id || '');
-        this.tagFilter.innerHTML = `<option value="">${Utils.escapeHTML(t('figures.filter_all_tags', '全部图片标签'))}</option>` + (payload.tags || []).map((tag) => `
-            <option value="${tag.id}" ${String(tag.id) === selected ? 'selected' : ''}>${Utils.escapeHTML(tag.name)}</option>
-        `).join('');
+        this.tags = payload.tags || [];
+        // Drop selections whose tag no longer exists (for example after a tag was deleted).
+        const known = new Set(this.tags.map((tag) => String(tag.id)));
+        const kept = this.state.filters.tag_ids.filter((id) => known.has(id));
+        if (kept.length !== this.state.filters.tag_ids.length) {
+            this.setTagSelection(kept, this.state.filters.tag_mode);
+        }
+        this.updateTagControls();
+        if (this.isTagPopoverOpen()) this.renderTagOptions();
+    },
+
+    // Filter params shared by the figure list and the notes export.
+    buildFilterParams() {
+        const filters = this.state.filters;
+        const tagIDs = normalizeFigureTagIDs(filters.tag_ids);
+        const params = {
+            keyword: filters.keyword,
+            group_id: filters.group_id,
+            tag_id: tagIDs.join(','),
+            figure_type: filters.figure_type || '',
+            sort_by: filters.sort_by
+        };
+        if (filters.tag_mode === 'any' && tagIDs.length > 1) {
+            params.tag_mode = 'any';
+        }
+        return params;
     },
 
     buildFigureParams(page = this.state.page) {
         return {
             page,
             page_size: this.state.pageSize,
-            keyword: this.state.filters.keyword,
-            group_id: this.state.filters.group_id,
-            tag_id: this.state.filters.tag_id,
-            figure_type: this.state.filters.figure_type || '',
-            sort_by: this.state.filters.sort_by
+            ...this.buildFilterParams()
         };
     },
 
@@ -371,7 +583,13 @@ const FiguresPage = {
         };
         addFilter('label.keyword', '关键词', filters.keyword);
         if (filters.group_id) addFilter('figures.filter_group', '来源分组', this.groupFilter.selectedOptions[0]?.textContent?.trim());
-        if (filters.tag_id) addFilter('figures.filter_tag', '图片标签', this.tagFilter.selectedOptions[0]?.textContent?.trim());
+        if (filters.tag_ids.length) {
+            const tagNames = this.selectedTagNames().join(t('figures.summary_tag_separator', '、'));
+            const tagText = filters.tag_mode === 'any' && filters.tag_ids.length > 1
+                ? t('figures.summary_tag_any', '{tags}（任一满足）').replace('{tags}', tagNames)
+                : tagNames;
+            addFilter('figures.filter_tag', '图片标签', tagText);
+        }
         if (filters.figure_type && this.typeFilter) addFilter('figures.filter_type', '图片类型', this.typeFilter.selectedOptions[0]?.textContent?.trim());
 
         const countText = t('figures.summary_total', '共 {count} 张图片').replace('{count}', total);
@@ -404,10 +622,14 @@ const FiguresPage = {
     },
 
     async load(page = this.state.page) {
+        // Rapid filter changes can overlap; only the latest request may render.
+        const seq = ++this.loadSeq;
         try {
             const payload = await this.fetchFigurePage(page);
+            if (seq !== this.loadSeq) return;
             this.renderFigureResults(payload, page);
         } catch (error) {
+            if (seq !== this.loadSeq) return;
             Utils.showToast(error.message, 'error');
         }
     }

@@ -498,9 +498,19 @@ func buildFigureWhere(filter model.FigureFilter) (string, []interface{}) {
 		conditions = append(conditions, "pf.paper_id = ?")
 		args = append(args, *filter.PaperID)
 	}
-	if filter.TagID != nil && *filter.TagID > 0 {
-		conditions = append(conditions, "EXISTS (SELECT 1 FROM figure_tags ft WHERE ft.figure_id = pf.id AND ft.tag_id = ?)")
-		args = append(args, *filter.TagID)
+	if tagIDs := positiveUniqueIDs(filter.TagIDs); len(tagIDs) > 0 {
+		placeholders := strings.TrimSuffix(strings.Repeat("?,", len(tagIDs)), ",")
+		for _, id := range tagIDs {
+			args = append(args, id)
+		}
+		if filter.TagMode == model.FigureTagModeAny || len(tagIDs) == 1 {
+			conditions = append(conditions, "EXISTS (SELECT 1 FROM figure_tags ft WHERE ft.figure_id = pf.id AND ft.tag_id IN ("+placeholders+"))")
+		} else {
+			// figure_tags has PRIMARY KEY (figure_id, tag_id), so COUNT(*) equals
+			// the number of distinct requested tags a figure carries.
+			conditions = append(conditions, "pf.id IN (SELECT ft.figure_id FROM figure_tags ft WHERE ft.tag_id IN ("+placeholders+") GROUP BY ft.figure_id HAVING COUNT(*) = ?)")
+			args = append(args, len(tagIDs))
+		}
 	}
 	if figureType := strings.TrimSpace(filter.FigureType); figureType != "" {
 		conditions = append(conditions, "pf.figure_type = ?")
@@ -511,6 +521,23 @@ func buildFigureWhere(filter model.FigureFilter) (string, []interface{}) {
 	}
 
 	return " WHERE " + strings.Join(conditions, " AND "), args
+}
+
+// positiveUniqueIDs drops non-positive and duplicate IDs, keeping input order.
+func positiveUniqueIDs(ids []int64) []int64 {
+	result := make([]int64, 0, len(ids))
+	seen := make(map[int64]struct{}, len(ids))
+	for _, id := range ids {
+		if id <= 0 {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		result = append(result, id)
+	}
+	return result
 }
 
 // buildFigureOrderBy 构建图片排序

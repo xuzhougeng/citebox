@@ -54,16 +54,27 @@ type SubfigureExtractionRegion struct {
 	Label     string  `json:"label,omitempty"`
 }
 
+const (
+	FigureTagModeAll = "all"
+	FigureTagModeAny = "any"
+)
+
+// MaxFigureFilterTags caps how many tags one figure query may combine.
+const MaxFigureFilterTags = 20
+
 type FigureFilter struct {
-	Keyword    string `json:"keyword"`
-	PaperID    *int64 `json:"paper_id,omitempty"`
-	GroupID    *int64 `json:"group_id,omitempty"`
-	TagID      *int64 `json:"tag_id,omitempty"`
-	FigureType string `json:"figure_type,omitempty"`
-	HasNotes   bool   `json:"has_notes,omitempty"`
-	SortBy     string `json:"sort_by,omitempty"`
-	Page       int    `json:"page"`
-	PageSize   int    `json:"page_size"`
+	Keyword string `json:"keyword"`
+	PaperID *int64 `json:"paper_id,omitempty"`
+	GroupID *int64 `json:"group_id,omitempty"`
+	// TagIDs filters by figure tags; TagMode decides whether a figure must
+	// carry every tag (FigureTagModeAll, the default) or any one of them.
+	TagIDs     []int64 `json:"tag_ids,omitempty"`
+	TagMode    string  `json:"tag_mode,omitempty"`
+	FigureType string  `json:"figure_type,omitempty"`
+	HasNotes   bool    `json:"has_notes,omitempty"`
+	SortBy     string  `json:"sort_by,omitempty"`
+	Page       int     `json:"page"`
+	PageSize   int     `json:"page_size"`
 }
 
 type FigureListResponse struct {

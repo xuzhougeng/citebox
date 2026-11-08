@@ -281,7 +281,7 @@ func toolDefinitions() []map[string]any {
 					"query":         map[string]any{"type": "string", "description": "Full-text keyword"},
 					"entity_types":  map[string]any{"type": "array", "items": map[string]any{"type": "string", "enum": entityTypes}, "description": "Entity types to search; defaults to all"},
 					"group_id":      map[string]any{"type": "integer", "description": "Restrict papers/figures to a group"},
-					"tags":          map[string]any{"type": "array", "items": map[string]any{"type": "integer"}, "description": "Tag IDs; currently only the first tag is applied"},
+					"tags":          map[string]any{"type": "array", "items": map[string]any{"type": "integer"}, "description": "Tag IDs; figure results must carry every listed tag, paper results currently use only the first tag"},
 					"updated_after": map[string]any{"type": "string", "format": "date-time", "description": "RFC3339; post-filtered per batch"},
 					"cursor":        map[string]any{"type": "string", "description": "Opaque cursor from a previous response"},
 					"limit":         map[string]any{"type": "integer", "description": "Max items (default 20, max 100)"},

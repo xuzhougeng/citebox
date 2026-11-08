@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/xuzhougeng/citebox/internal/model"
@@ -164,13 +165,17 @@ func (s *stubLibraryPlanner) PlanLibrarySearch(ctx context.Context, query string
 }
 
 type stubLibraryClassifier struct {
+	// mu guards seen: LibrarySearchTool classifies hits concurrently.
+	mu      sync.Mutex
 	seen    []LibraryPaperClassificationInput
 	results map[int64]LibraryPaperClassificationResult
 	err     error
 }
 
 func (s *stubLibraryClassifier) ClassifyLibraryPaper(ctx context.Context, in LibraryPaperClassificationInput) (LibraryPaperClassificationResult, error) {
+	s.mu.Lock()
 	s.seen = append(s.seen, in)
+	s.mu.Unlock()
 	if s.err != nil {
 		return LibraryPaperClassificationResult{}, s.err
 	}

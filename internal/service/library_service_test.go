@@ -537,7 +537,7 @@ func TestUpdateFigureTagsOnlyTouchesSelectedFigure(t *testing.T) {
 	}
 
 	tagID := updated.Figures[0].Tags[0].ID
-	result, err := svc.ListFigures(model.FigureFilter{TagID: &tagID})
+	result, err := svc.ListFigures(model.FigureFilter{TagIDs: []int64{tagID}})
 	if err != nil {
 		t.Fatalf("ListFigures() error = %v", err)
 	}
