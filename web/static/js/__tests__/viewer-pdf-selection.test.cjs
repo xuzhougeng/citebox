@@ -271,9 +271,29 @@ test('PDF toolbar paper action opens AI with the current paper id', async () => 
     assert.equal(viewer.pdfDetailLink.hidden, false);
 });
 
+// A Map stand-in that does not inherit from the host Map, so the test starts
+// without getOrInsertComputed even on runtimes (Node 26+) that ship it natively.
+class LegacyMap {
+    constructor() {
+        this.store = new Map();
+    }
+
+    has(key) {
+        return this.store.has(key);
+    }
+
+    get(key) {
+        return this.store.get(key);
+    }
+
+    set(key, value) {
+        this.store.set(key, value);
+        return this;
+    }
+}
+
 test('ensurePDFViewerCompatibility adds Map getOrInsertComputed for bundled PDF.js viewer', () => {
-    class TestMap extends Map {}
-    const { context, viewer } = loadViewerPage(null, { Map: TestMap });
+    const { context, viewer } = loadViewerPage(null, { Map: LegacyMap });
     assert.equal(typeof context.Map.prototype.getOrInsertComputed, 'undefined');
 
     viewer.ensurePDFViewerCompatibility();
@@ -291,6 +311,19 @@ test('ensurePDFViewerCompatibility adds Map getOrInsertComputed for bundled PDF.
     assert.equal(first, 'key-value');
     assert.equal(second, 'key-value');
     assert.equal(calls, 1);
+});
+
+test('ensurePDFViewerCompatibility keeps an existing native getOrInsertComputed', () => {
+    class NativeMap extends LegacyMap {}
+    const native = function getOrInsertComputed() {
+        return 'native';
+    };
+    NativeMap.prototype.getOrInsertComputed = native;
+    const { context, viewer } = loadViewerPage(null, { Map: NativeMap });
+
+    viewer.ensurePDFViewerCompatibility();
+
+    assert.equal(context.Map.prototype.getOrInsertComputed, native);
 });
 
 test('Escape clears an open PDF selection menu before closing the viewer', () => {
