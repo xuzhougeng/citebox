@@ -115,9 +115,9 @@ func (h *ZoteroHandler) Ingest(w http.ResponseWriter, r *http.Request) {
 		sendError(w, apperr.Wrap(apperr.CodeInvalidArgument, "解析上传表单失败", err))
 		return
 	}
-	file, header, err := r.FormFile("pdf")
+	file, header, err := formFile(r, "pdf", "缺少 PDF 文件")
 	if err != nil {
-		sendError(w, apperr.New(apperr.CodeInvalidArgument, "缺少 PDF 文件"))
+		sendError(w, err)
 		return
 	}
 	defer file.Close()
@@ -176,9 +176,9 @@ func (h *ZoteroHandler) Runs(w http.ResponseWriter, r *http.Request) {
 			sendError(w, apperr.Wrap(apperr.CodeInvalidArgument, "解析上传表单失败", err))
 			return
 		}
-		file, header, err := r.FormFile("pdf")
+		file, header, err := formFile(r, "pdf", "缺少 PDF 文件")
 		if err != nil {
-			sendError(w, apperr.New(apperr.CodeInvalidArgument, "缺少 PDF 文件"))
+			sendError(w, err)
 			return
 		}
 		defer file.Close()

@@ -87,7 +87,7 @@ func main() {
 		},
 		Services: []application.Service{application.NewService(&DesktopService{shell: shell})},
 		Assets: application.AssetOptions{
-			Handler:        desktopbridge.InjectScript(desktopbridge.WithCookieStore(appHandler, cookies), shimScript()+bridgeScript),
+			Handler:        desktopbridge.WithUnknownBodyLength(desktopbridge.InjectScript(desktopbridge.WithCookieStore(appHandler, cookies), shimScript()+bridgeScript)),
 			DisableLogging: true,
 		},
 		Mac: application.MacOptions{

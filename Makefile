@@ -5,7 +5,7 @@
 # cmd/desktop (the Wails shell) needs GTK/WebKit headers on Linux.
 # Compile it with `make build-desktop`.
 GO_TEST_PACKAGES=$(shell go list ./... | grep -vE '/cmd/desktop$$')
-JS_CHECK_SOURCES=web/static/js/*.js extension/*.js web/static/js/__tests__/*.cjs scripts/tests/*.js
+JS_CHECK_SOURCES=web/static/js/*.js extension/*.js internal/desktopbridge/*.js web/static/js/__tests__/*.cjs scripts/tests/*.js
 JS_TEST_SOURCES=web/static/js/__tests__/*.test.cjs scripts/tests/*.test.js
 
 BINARY_NAME=citebox
