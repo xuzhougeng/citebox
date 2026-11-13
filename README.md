@@ -2,6 +2,8 @@
 
 # CiteBox
 
+>  CiteBox目前的大部分功能已经被[WispPaper](https://github.com/xuzhougeng/WispPaper) 实现，后续也主要以WispPaper开发为主，如果更关注图片库可以继续使用CiteBox，如果关注文献收集和写作，可以直接下载WispPaper
+
 > Collect. Cite. Create.
 
 CiteBox 是一个面向论文整理与图片阅读的本地优先工作台，基于 Go、SQLite 和原生 HTML/CSS/JavaScript 构建，同时提供 Web 服务端和桌面客户端两种运行方式。
